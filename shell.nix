@@ -3,5 +3,6 @@
 (pkgs.mkShell.override { stdenv = pkgs.clangStdenv; }) {
   buildInputs = with pkgs; [
     python3
+    (pkgs.callPackage ./aptos.nix {})
   ];
 }
