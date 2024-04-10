@@ -1,0 +1,10 @@
+# Move Build Output
+build/
+
+# Move coverage and tracing information
+.trace
+*.mvcov
+
+# Aptos CLI / local testnet files
+.aptos
+**/*.rdb
