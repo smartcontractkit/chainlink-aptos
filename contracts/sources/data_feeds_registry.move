@@ -1,16 +1,15 @@
 module chainlink::data_feeds_registry {
     use std::account::{Self};
     use std::error;
+    use std::event;
+    use std::signer;
     use std::simple_map::{Self, SimpleMap};
     use std::string::{Self, String, utf8};
+    use std::vector::{Self};
 
+    // TODO: figure out link_address, router, verifier_proxy
     struct DataFeedsRegistry has key, store, drop {
         signer_cap: account::SignerCapability,
-
-        link_address: address,
-        router: address,
-        // TODO: separate verifier proxy for verify_bulk()?
-        verifier_proxy: address,
 
         feeds: SimpleMap<vector<u8>, Feed>,
         configs: SimpleMap<vector<u8>, Config>,
@@ -20,21 +19,18 @@ module chainlink::data_feeds_registry {
 
     struct Feed has key, store, drop {
         description: String,
-        configId: vector<u8>,
+        config_id: vector<u8>,
         upkeep: address,
         upkeep_requested: bool,
         // TODO: int256 in solidity contract
-        benchmark: u128,
+        benchmark: u256,
         report: vector<u8>,
-        // TODO: uint256 in solidity contract
-        observation_timestamp: u128,
+        observation_timestamp: u256,
     }
 
     struct Config has key, store, drop {
-        // TODO: uint256 in solidity contract
-        deviation_threshold: u128,
-        // TODO: uint256 in solidity contract
-        staleness_seconds: u128,
+        deviation_threshold: u256,
+        staleness_seconds: u256,
     }
 
     #[event]
@@ -46,10 +42,8 @@ module chainlink::data_feeds_registry {
     #[event]
     struct FeedConfigSet has drop, store {
         config_id: vector<u8>,
-        // TODO: uint256 in solidity contract
-        deviation_threshold: u128,
-        // TODO: uint256 in solidity contract
-        staleness_seconds: u128,
+        deviation_threshold: u256,
+        staleness_seconds: u256,
     }
 
     #[event]
@@ -75,18 +69,15 @@ module chainlink::data_feeds_registry {
     struct FeedUpdated has drop, store {
         feed_id: vector<u8>,
         timestamp: address,
-        // TODO: int256 in solidity contract
-        benchmark: u128,
+        benchmark: u256,
         report: vector<u8>
     }
 
     #[event]
     struct StaleReport has drop, store {
         feed_id: vector<u8>,
-        // TODO: uint256 in solidity contract
-        latest_timestamp: u128,
-        // TODO: uint256 in solidity contract
-        report_timestamp: u128,
+        latest_timestamp: u256,
+        report_timestamp: u256,
     }
 
     #[event]
@@ -108,9 +99,12 @@ module chainlink::data_feeds_registry {
     }
 
     struct OwnerCapability has key, store {}
+    struct SetFeedsCapability has key, store, copy {}
+    struct RequestUpkeepCapability has key, store, copy {}
+    struct FetchDataCapability has key, store, copy {}
 
     const ENOT_OWNER: u64 = 1;
-    const EDUPLICATE_FEED_IDS: u64 = 2;
+    const EDUPLICATE_ELEMENTS: u64 = 2;
     const EFEED_EXISTS: u64 = 3;
     const EFEED_NOT_CONFIGURED: u64 = 4;
     const EINVALID_UPKEEP: u64 = 5;
@@ -118,24 +112,98 @@ module chainlink::data_feeds_registry {
     const EUNAUTHORIZED_ROUTER_OPERATION: u64 = 7;
     const EUNEQUAL_ARRAY_LENGTHS: u64 = 8;
 
+    const RESOURCE_ACCOUNT: address = @chainlink;
+
     fun assert_is_owner(addr: address) {
         assert!(exists<OwnerCapability>(addr), error::invalid_argument(ENOT_OWNER))
     }
 
-    public fun initialize(account: &signer, link_address: address, router: address, verifier_proxy: address): (OwnerCapability) {
-        // this raises if the resource account already exists.
-        let (resource_account, signer_cap) = account::create_resource_account(account, b"DataFeedsRegistry");
+    fun assert_no_duplicates<T>(a: &vector<T>) {
+        let len = vector::length(a);
+        for (i in 0..len) {
+            for (j in (i + 1)..len) {
+                assert!(vector::borrow(a, i) != vector::borrow(a, j), error::invalid_argument(EDUPLICATE_ELEMENTS));
+            }
+        }
+    }
+
+    fun init_module(deployer_account: &signer) {
+        let (resource_account, signer_cap) = account::create_resource_account(deployer_account, b"DataFeedsRegistry");
+
         move_to(&resource_account, DataFeedsRegistry {
             signer_cap: signer_cap,
-            link_address: link_address,
-            router: router,
-            verifier_proxy: verifier_proxy,
             feeds: simple_map::new(),
             configs: simple_map::new(),
             upkeep_feed_id_set: simple_map::new(),
         });
 
-        // TODO: move OwnerCapability into `account` instead?
-        OwnerCapability{}
+        // give caps to the deployer for now
+        move_to(deployer_account, OwnerCapability{});
+    }
+
+    //public fun add_set_feeds_cap(account: &signer, target: address) {
+        //assert_is_owner(signer::address_of(account));
+        //move_to(target, SetFeedsCapability{});
+    //}
+
+    //public fun add_request_upkeep_cap(account: &signer, target: address) {
+        //assert_is_owner(signer::address_of(account));
+        //move_to(target, RequestUpkeepCapability{});
+    //}
+
+    //public fun add_fetch_data_cap(account: &signer, target: address) {
+        //assert_is_owner(signer::address_of(account));
+        //move_to(target, RequestUpkeepCapability{});
+    //}
+
+    //public fun initialize(account: &signer, link_address: address, router: address, verifier_proxy: address): (OwnerCapability, SetFeedsCapability, RequestUpkeepCapability, FetchDataCapability) {
+        //// this raises if the resource account already exists.
+        //let (resource_account, signer_cap) = account::create_resource_account(account, b"DataFeedsRegistry");
+
+        //// TODO: move OwnerCapability into `account` instead?
+        //(OwnerCapability{}, SetFeedsCapability{}, RequestUpkeepCapability{}, FetchDataCapability{})
+    //}
+
+    public fun set_feeds(account: &signer, feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>, upkeep: address) acquires DataFeedsRegistry {
+        let addr = signer::address_of(account);
+
+        // TODO: allow OwnerCapability?
+        assert!(exists<SetFeedsCapability>(addr), error::invalid_argument(ENOT_OWNER));
+
+        assert_no_duplicates(&feed_ids);
+
+        assert!(vector::length(&feed_ids) == vector::length(&descriptions), error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS));
+
+        assert!(upkeep != @0x0, error::invalid_argument(EINVALID_UPKEEP));
+
+        let registry = borrow_global_mut<DataFeedsRegistry>(RESOURCE_ACCOUNT);
+
+        vector::zip(feed_ids, descriptions, |feed_id, description|{
+            let feed = Feed {
+                description: description,
+                config_id: config_id,
+                upkeep: upkeep,
+                upkeep_requested: false,
+                benchmark: 0,
+                report: vector::empty(),
+                observation_timestamp: 0
+            };
+            simple_map::add(&mut registry.feeds, feed_id, feed);
+
+            if (simple_map::contains_key(&registry.upkeep_feed_id_set, &upkeep)) {
+                let upkeep_feed_ids = simple_map::borrow_mut(&mut registry.upkeep_feed_id_set, &upkeep);
+                vector::push_back(upkeep_feed_ids, feed_id);
+            } else {
+                let upkeep_feed_ids = vector[feed_id];
+                simple_map::add(&mut registry.upkeep_feed_id_set, upkeep, upkeep_feed_ids);
+            };
+
+            event::emit(FeedSet {
+                feed_id: feed_id,
+                description: description,
+                config_id: config_id,
+                upkeep: upkeep,
+            });
+        });
     }
 }
