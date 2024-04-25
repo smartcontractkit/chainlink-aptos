@@ -9,7 +9,7 @@ module chainlink::data_feeds_registry {
 
     // TODO: figure out link_address, router, verifier_proxy
     struct DataFeedsRegistry has key, store, drop {
-        signer_cap: account::SignerCapability,
+        owner_address: address,
 
         feeds: SimpleMap<vector<u8>, Feed>,
         configs: SimpleMap<vector<u8>, Config>,
@@ -98,11 +98,6 @@ module chainlink::data_feeds_registry {
         upkeep: address,
     }
 
-    struct OwnerCapability has key, store {}
-    struct SetFeedsCapability has key, store, copy {}
-    struct RequestUpkeepCapability has key, store, copy {}
-    struct FetchDataCapability has key, store, copy {}
-
     const ENOT_OWNER: u64 = 1;
     const EDUPLICATE_ELEMENTS: u64 = 2;
     const EFEED_EXISTS: u64 = 3;
@@ -112,10 +107,8 @@ module chainlink::data_feeds_registry {
     const EUNAUTHORIZED_ROUTER_OPERATION: u64 = 7;
     const EUNEQUAL_ARRAY_LENGTHS: u64 = 8;
 
-    const RESOURCE_ACCOUNT: address = @chainlink;
-
-    fun assert_is_owner(addr: address) {
-        assert!(exists<OwnerCapability>(addr), error::invalid_argument(ENOT_OWNER))
+    fun assert_is_owner(registry: &DataFeedsRegistry, target_address: address) {
+        assert!(registry.owner_address == target_address, error::invalid_argument(ENOT_OWNER));
     }
 
     fun assert_no_duplicates<T>(a: &vector<T>) {
@@ -127,56 +120,27 @@ module chainlink::data_feeds_registry {
         }
     }
 
-    fun init_module(deployer_account: &signer) {
-        let (resource_account, signer_cap) = account::create_resource_account(deployer_account, b"DataFeedsRegistry");
+    public entry fun initialize(resource_account: &signer, owner_address: address) {
+        move_to(resource_account, DataFeedsRegistry {
+            owner_address: owner_address,
 
-        move_to(&resource_account, DataFeedsRegistry {
-            signer_cap: signer_cap,
             feeds: simple_map::new(),
             configs: simple_map::new(),
             upkeep_feed_id_set: simple_map::new(),
         });
-
-        // give caps to the deployer for now
-        move_to(deployer_account, OwnerCapability{});
     }
 
-    //public fun add_set_feeds_cap(account: &signer, target: address) {
-        //assert_is_owner(signer::address_of(account));
-        //move_to(target, SetFeedsCapability{});
-    //}
+    public entry fun set_feeds(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>, upkeep: address) acquires DataFeedsRegistry {
+        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
 
-    //public fun add_request_upkeep_cap(account: &signer, target: address) {
-        //assert_is_owner(signer::address_of(account));
-        //move_to(target, RequestUpkeepCapability{});
-    //}
-
-    //public fun add_fetch_data_cap(account: &signer, target: address) {
-        //assert_is_owner(signer::address_of(account));
-        //move_to(target, RequestUpkeepCapability{});
-    //}
-
-    //public fun initialize(account: &signer, link_address: address, router: address, verifier_proxy: address): (OwnerCapability, SetFeedsCapability, RequestUpkeepCapability, FetchDataCapability) {
-        //// this raises if the resource account already exists.
-        //let (resource_account, signer_cap) = account::create_resource_account(account, b"DataFeedsRegistry");
-
-        //// TODO: move OwnerCapability into `account` instead?
-        //(OwnerCapability{}, SetFeedsCapability{}, RequestUpkeepCapability{}, FetchDataCapability{})
-    //}
-
-    public fun set_feeds(account: &signer, feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>, upkeep: address) acquires DataFeedsRegistry {
-        let addr = signer::address_of(account);
-
-        // TODO: allow OwnerCapability?
-        assert!(exists<SetFeedsCapability>(addr), error::invalid_argument(ENOT_OWNER));
+        // TODO: this is a permissioned to the router address in solidity contracts
+        assert_is_owner(registry, signer::address_of(account));
 
         assert_no_duplicates(&feed_ids);
 
         assert!(vector::length(&feed_ids) == vector::length(&descriptions), error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS));
 
         assert!(upkeep != @0x0, error::invalid_argument(EINVALID_UPKEEP));
-
-        let registry = borrow_global_mut<DataFeedsRegistry>(RESOURCE_ACCOUNT);
 
         vector::zip(feed_ids, descriptions, |feed_id, description|{
             let feed = Feed {
@@ -207,14 +171,12 @@ module chainlink::data_feeds_registry {
         });
     }
 
-    public fun remove_feeds(account: &signer, feed_ids: vector<vector<u8>>) acquires DataFeedsRegistry {
-        let addr = signer::address_of(account);
+    public entry fun remove_feeds(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>) acquires DataFeedsRegistry {
+        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
 
-        assert_is_owner(addr);
+        assert_is_owner(registry, signer::address_of(account));
 
         assert_no_duplicates(&feed_ids);
-
-        let registry = borrow_global_mut<DataFeedsRegistry>(RESOURCE_ACCOUNT);
 
         vector::for_each(feed_ids, |feed_id| {
             assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
@@ -228,5 +190,42 @@ module chainlink::data_feeds_registry {
                 simple_map::remove(&mut registry.upkeep_feed_id_set, &feed.upkeep);
             }
         });
+    }
+
+    public entry fun set_feed_configs(account: &signer, registry_address: address, config_ids: vector<vector<u8>>, deviation_thresholds: vector<u256>, staleness_seconds: vector<u256>) acquires DataFeedsRegistry {
+        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+
+        assert_is_owner(registry, signer::address_of(account));
+
+        let len = vector::length(&config_ids);
+        assert!(len == vector::length(&deviation_thresholds), error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS));
+        assert!(len == vector::length(&staleness_seconds), error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS));
+
+        // TODO: the solidity contract does not check that no duplicates exist in config_ids, so we
+        // reverse first to match the behavior of allowing setting the same config more than once,
+        // and that the latest provided config is the one that ultimately gets set.
+
+        vector::reverse(&mut config_ids);
+        vector::reverse(&mut deviation_thresholds);
+        vector::reverse(&mut staleness_seconds);
+
+        while (len > 0) {
+            let config_id = vector::pop_back(&mut config_ids);
+            let deviation_threshold = vector::pop_back(&mut deviation_thresholds);
+            let staleness_seconds = vector::pop_back(&mut staleness_seconds);
+
+            simple_map::upsert(&mut registry.configs, config_id, Config {
+                deviation_threshold: deviation_threshold,
+                staleness_seconds: staleness_seconds,
+            });
+
+            event::emit(FeedConfigSet {
+                config_id: config_id,
+                deviation_threshold: deviation_threshold,
+                staleness_seconds: staleness_seconds,
+            });
+
+            len = len - 1;
+        }
     }
 }
