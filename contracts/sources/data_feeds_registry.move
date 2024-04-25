@@ -10,6 +10,7 @@ module chainlink::data_feeds_registry {
     // TODO: figure out link_address, router, verifier_proxy
     struct DataFeedsRegistry has key, store, drop {
         owner_address: address,
+        router_address: address,
 
         feeds: SimpleMap<vector<u8>, Feed>,
         configs: SimpleMap<vector<u8>, Config>,
@@ -112,6 +113,23 @@ module chainlink::data_feeds_registry {
         assert!(registry.owner_address == target_address, error::invalid_argument(ENOT_OWNER));
     }
 
+    fun assert_is_owner_or_router(registry: &DataFeedsRegistry, target_address: address) {
+        assert!(registry.owner_address == target_address || registry.router_address == target_address, error::invalid_argument(EUNAUTHORIZED_ROUTER_OPERATION));
+    }
+
+    fun assert_authorized_data_fetch(registry: &DataFeedsRegistry, target_address: address, feed_ids: &vector<vector<u8>>) {
+        if (registry.owner_address == target_address || registry.router_address == target_address) {
+            return
+        };
+
+        assert!(simple_map::contains_key(&registry.upkeep_feed_id_set, &target_address), error::invalid_argument(EUNAUTHORIZED_DATA_FETCH));
+
+        let upkeep_feed_ids = simple_map::borrow(&registry.upkeep_feed_id_set, &target_address);
+        vector::for_each_ref(feed_ids, |feed_id| {
+            assert!(vector::contains(upkeep_feed_ids, feed_id), error::invalid_argument(EUNAUTHORIZED_DATA_FETCH));
+        });
+    }
+
     fun assert_no_duplicates<T>(a: &vector<T>) {
         let len = vector::length(a);
         for (i in 0..len) {
@@ -121,9 +139,11 @@ module chainlink::data_feeds_registry {
         }
     }
 
-    public entry fun initialize(resource_account: &signer, owner_address: address) {
+    public entry fun initialize(resource_account: &signer, owner_address: address, router_address: address) {
         move_to(resource_account, DataFeedsRegistry {
+            // TODO: functionality to update owner and router addresses
             owner_address: owner_address,
+            router_address: router_address,
 
             feeds: simple_map::new(),
             configs: simple_map::new(),
@@ -134,8 +154,7 @@ module chainlink::data_feeds_registry {
     public entry fun set_feeds(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>, upkeep: address) acquires DataFeedsRegistry {
         let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
 
-        // TODO: this is a permissioned to the router address in solidity contracts
-        assert_is_owner(registry, signer::address_of(account));
+        assert_is_owner_or_router(registry, signer::address_of(account));
 
         assert_no_duplicates(&feed_ids);
 
@@ -283,10 +302,10 @@ module chainlink::data_feeds_registry {
             feed.upkeep = upkeep;
 
             let prev_upkeep_feed_ids = simple_map::borrow_mut(&mut registry.upkeep_feed_id_set, &prev_upkeep);
-            vector::remove_value(prev_upkeep_feed_ids, feed_id);
+            vector::remove_value(prev_upkeep_feed_ids, &feed_id);
             if (vector::is_empty(prev_upkeep_feed_ids)) {
                 simple_map::remove(&mut registry.upkeep_feed_id_set, &prev_upkeep);
-            }
+            };
 
             if (simple_map::contains_key(&registry.upkeep_feed_id_set, &upkeep)) {
                 let upkeep_feed_ids = simple_map::borrow_mut(&mut registry.upkeep_feed_id_set, &upkeep);
@@ -303,9 +322,114 @@ module chainlink::data_feeds_registry {
         });
     }
 
-    public entry fun request_upkeep(account: &signer, registry_address: address) acquires DataFeedsRegistry {
-        // TODO: figure out if we need to implement this
-        // TODO: this needs to allow for only the router to make the call, after processing the
-        // fee. create a resource account address from the router and validate the caller?
+    public entry fun request_upkeep(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>) acquires DataFeedsRegistry {
+        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+
+        assert_is_owner_or_router(registry, signer::address_of(account));
+
+        vector::for_each(feed_ids, |feed_id| {
+            assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
+
+            let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
+            feed.upkeep_requested = true;
+
+            event::emit(UpkeepRequested {
+                feed_id: feed_id,
+            });
+        });
+    }
+
+    public entry fun perform_upkeep(account: &signer, registry_address: address, perform_data: vector<u8>) {
+        // TODO: this function requires extracting the benchmarks from the reports, fee management,
+        // signature validation (if needed on this layer), and then finally updating the feeds.
+    }
+
+    public fun get_benchmarks(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>): (vector<u256>, vector<u256>) acquires DataFeedsRegistry {
+        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+
+        assert_authorized_data_fetch(registry, signer::address_of(account), &feed_ids);
+
+        let benchmarks = vector[];
+        let observation_timestamps = vector[];
+
+        vector::for_each(feed_ids, |feed_id| {
+            assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
+
+            let feed = simple_map::borrow(&registry.feeds, &feed_id);
+            vector::push_back(&mut benchmarks, feed.benchmark);
+            vector::push_back(&mut observation_timestamps, feed.observation_timestamp);
+        });
+
+        return (benchmarks, observation_timestamps)
+    }
+
+    public fun get_reports(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>): (vector<vector<u8>>, vector<u256>) acquires DataFeedsRegistry {
+        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+
+        assert_authorized_data_fetch(registry, signer::address_of(account), &feed_ids);
+
+        let reports = vector[];
+        let observation_timestamps = vector[];
+
+        vector::for_each(feed_ids, |feed_id| {
+            assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
+
+            let feed = simple_map::borrow(&registry.feeds, &feed_id);
+            vector::push_back(&mut reports, feed.report);
+            vector::push_back(&mut observation_timestamps, feed.observation_timestamp);
+        });
+
+        return (reports, observation_timestamps)
+    }
+
+    public fun get_feed_metadata(registry_address: address, feed_ids: vector<vector<u8>>): (vector<String>, vector<vector<u8>>, vector<u256>, vector<u256>, vector<bool>) acquires DataFeedsRegistry {
+        let descriptions = vector[];
+        let config_ids = vector[];
+        let deviation_thresholds = vector[];
+        let staleness_seconds = vector[];
+        let upkeeps_requested = vector[];
+
+        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+
+        vector::for_each(feed_ids, |feed_id| {
+            assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
+
+            let feed = simple_map::borrow(&registry.feeds, &feed_id);
+            vector::push_back(&mut descriptions, feed.description);
+            vector::push_back(&mut config_ids, feed.config_id);
+            vector::push_back(&mut upkeeps_requested, feed.upkeep_requested);
+
+            let config = simple_map::borrow(&registry.configs, &feed.config_id);
+            vector::push_back(&mut deviation_thresholds, config.deviation_threshold);
+            vector::push_back(&mut staleness_seconds, config.staleness_seconds);
+        });
+
+        return (descriptions, config_ids, deviation_thresholds, staleness_seconds, upkeeps_requested)
+    }
+
+    public fun get_feed_configs(registry_address: address, config_ids: vector<vector<u8>>): (vector<u256>, vector<u256>) acquires DataFeedsRegistry {
+        let deviation_thresholds = vector[];
+        let staleness_seconds = vector[];
+
+        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+
+        vector::for_each(config_ids, |config_id| {
+            assert!(simple_map::contains_key(&registry.configs, &config_id), error::invalid_argument(ECONFIG_NOT_CONFIGURED));
+
+            let config = simple_map::borrow(&registry.configs, &config_id);
+            vector::push_back(&mut deviation_thresholds, config.deviation_threshold);
+            vector::push_back(&mut staleness_seconds, config.staleness_seconds);
+        });
+
+        return (deviation_thresholds, staleness_seconds)
+    }
+
+    public fun get_upkeep_feed_ids(registry_address: address, upkeep: address): (vector<vector<u8>>) acquires DataFeedsRegistry {
+        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+
+        assert!(simple_map::contains_key(&registry.upkeep_feed_id_set, &upkeep), error::invalid_argument(EINVALID_UPKEEP));
+
+        let upkeep_feed_ids = simple_map::borrow(&registry.upkeep_feed_id_set, &upkeep);
+        return *upkeep_feed_ids
     }
 }
