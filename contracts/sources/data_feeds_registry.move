@@ -206,4 +206,27 @@ module chainlink::data_feeds_registry {
             });
         });
     }
+
+    public fun remove_feeds(account: &signer, feed_ids: vector<vector<u8>>) acquires DataFeedsRegistry {
+        let addr = signer::address_of(account);
+
+        assert_is_owner(addr);
+
+        assert_no_duplicates(&feed_ids);
+
+        let registry = borrow_global_mut<DataFeedsRegistry>(RESOURCE_ACCOUNT);
+
+        vector::for_each(feed_ids, |feed_id| {
+            assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
+            let (_, feed) = simple_map::remove(&mut registry.feeds, &feed_id);
+
+            // must exist since we always create the map entry in set_feeds.
+            let upkeep_feed_ids = simple_map::borrow_mut(&mut registry.upkeep_feed_id_set, &feed.upkeep);
+
+            vector::remove_value(upkeep_feed_ids, &feed_id);
+            if (vector::is_empty(upkeep_feed_ids)) {
+                simple_map::remove(&mut registry.upkeep_feed_id_set, &feed.upkeep);
+            }
+        });
+    }
 }
