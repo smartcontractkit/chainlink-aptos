@@ -69,7 +69,7 @@ module chainlink::data_feeds_registry {
     #[event]
     struct FeedUpdated has drop, store {
         feed_id: vector<u8>,
-        timestamp: address,
+        timestamp: u256,
         benchmark: u256,
         report: vector<u8>
     }
@@ -99,6 +99,7 @@ module chainlink::data_feeds_registry {
         upkeep: address,
     }
 
+    // Errors
     const ENOT_OWNER: u64 = 1;
     const EDUPLICATE_ELEMENTS: u64 = 2;
     const EFEED_EXISTS: u64 = 3;
@@ -108,6 +109,12 @@ module chainlink::data_feeds_registry {
     const EUNAUTHORIZED_DATA_FETCH: u64 = 7;
     const EUNAUTHORIZED_ROUTER_OPERATION: u64 = 8;
     const EUNEQUAL_ARRAY_LENGTHS: u64 = 9;
+    const EINVALID_REPORT: u64 = 10;
+
+    // Schema types
+    const BLOCK_PREMIUM_SCHEMA: u16 = 1;
+    const BASIC_SCHEMA: u16 = 2;
+    const PREMIUM_SCHEMA: u16 = 3;
 
     fun assert_is_owner(registry: &DataFeedsRegistry, target_address: address) {
         assert!(registry.owner_address == target_address, error::invalid_argument(ENOT_OWNER));
@@ -339,9 +346,66 @@ module chainlink::data_feeds_registry {
         });
     }
 
-    public entry fun perform_upkeep(account: &signer, registry_address: address, perform_data: vector<u8>) {
+    fun from_u32(data: &vector<u8>, offset: u64): u32 {
+        let ret: u32 = 0;
+        for (i in 0..4) {
+            let value = *vector::borrow(data, offset + i);
+            ret = (ret << 8) | (value as u32);
+        };
+        return ret
+    }
+
+    fun from_i192(data: &vector<u8>, offset: u64): u256 {
+        let ret: u256 = 0;
+        for (i in 0..24) {
+            let value = *vector::borrow(data, offset + i);
+            ret = (ret << 8) | (value as u256);
+        };
+        return ret
+    }
+
+    public entry fun perform_upkeep(account: &signer, registry_address: address, report_datas: vector<vector<u8>>) acquires DataFeedsRegistry {
         // TODO: this function requires extracting the benchmarks from the reports, fee management,
         // signature validation (if needed on this layer), and then finally updating the feeds.
+        // TODO: this assumes report_data is directly provided here, which probably won't be the
+        // case.
+
+        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+
+        vector::for_each(report_datas, |report_data| {
+            let feed_id = vector::slice(&report_data, 0, 32);
+            assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
+            let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
+
+            let schema = (*vector::borrow(&feed_id, 0) as u16) << 8 | (*vector::borrow(&feed_id, 1) as u16);
+
+            let observation_timestamp: u32;
+            let benchmark_price: u256;
+            if (schema == BASIC_SCHEMA) {
+                observation_timestamp = from_u32(&report_data, 8);
+                benchmark_price = from_i192(&report_data, 64);
+            } else if (schema == PREMIUM_SCHEMA) {
+                observation_timestamp = from_u32(&report_data, 8);
+                benchmark_price = from_i192(&report_data, 64);
+            } else if (schema == BLOCK_PREMIUM_SCHEMA) {
+                observation_timestamp = from_u32(&report_data, 4);
+                benchmark_price = from_i192(&report_data, 8);
+            } else {
+                abort error::invalid_argument(EINVALID_REPORT)
+            };
+
+            feed.observation_timestamp = (observation_timestamp as u256);
+            feed.benchmark = benchmark_price;
+            feed.report = report_data;
+            feed.upkeep_requested = false;
+
+            event::emit(FeedUpdated {
+                feed_id: feed_id,
+                timestamp: (observation_timestamp as u256),
+                benchmark: benchmark_price,
+                report: report_data,
+            });
+        });
     }
 
     public fun get_benchmarks(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>): (vector<u256>, vector<u256>) acquires DataFeedsRegistry {
