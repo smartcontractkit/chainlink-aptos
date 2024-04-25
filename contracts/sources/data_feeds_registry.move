@@ -102,10 +102,11 @@ module chainlink::data_feeds_registry {
     const EDUPLICATE_ELEMENTS: u64 = 2;
     const EFEED_EXISTS: u64 = 3;
     const EFEED_NOT_CONFIGURED: u64 = 4;
-    const EINVALID_UPKEEP: u64 = 5;
-    const EUNAUTHORIZED_DATA_FETCH: u64 = 6;
-    const EUNAUTHORIZED_ROUTER_OPERATION: u64 = 7;
-    const EUNEQUAL_ARRAY_LENGTHS: u64 = 8;
+    const ECONFIG_NOT_CONFIGURED: u64 = 5;
+    const EINVALID_UPKEEP: u64 = 6;
+    const EUNAUTHORIZED_DATA_FETCH: u64 = 7;
+    const EUNAUTHORIZED_ROUTER_OPERATION: u64 = 8;
+    const EUNEQUAL_ARRAY_LENGTHS: u64 = 9;
 
     fun assert_is_owner(registry: &DataFeedsRegistry, target_address: address) {
         assert!(registry.owner_address == target_address, error::invalid_argument(ENOT_OWNER));
@@ -143,6 +144,8 @@ module chainlink::data_feeds_registry {
         assert!(upkeep != @0x0, error::invalid_argument(EINVALID_UPKEEP));
 
         vector::zip(feed_ids, descriptions, |feed_id, description|{
+            assert!(!simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_EXISTS));
+
             let feed = Feed {
                 description: description,
                 config_id: config_id,
@@ -201,13 +204,11 @@ module chainlink::data_feeds_registry {
         assert!(len == vector::length(&deviation_thresholds), error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS));
         assert!(len == vector::length(&staleness_seconds), error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS));
 
-        // TODO: the solidity contract does not check that no duplicates exist in config_ids, so we
-        // reverse first to match the behavior of allowing setting the same config more than once,
-        // and that the latest provided config is the one that ultimately gets set.
-
-        vector::reverse(&mut config_ids);
-        vector::reverse(&mut deviation_thresholds);
-        vector::reverse(&mut staleness_seconds);
+        // TODO: the solidity contract does not check that no duplicates exist in config_ids,
+        // but we do it here which allows us to iterate through config_ids in reverse order.
+        // should we need to remove this precondition, we can consider vector::reverse'ing the
+        // vectors first, similar to vector::zip.
+        assert_no_duplicates(&config_ids);
 
         while (len > 0) {
             let config_id = vector::pop_back(&mut config_ids);
@@ -227,5 +228,84 @@ module chainlink::data_feeds_registry {
 
             len = len - 1;
         }
+    }
+
+    public entry fun update_descriptions(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>, descriptions: vector<String>) acquires DataFeedsRegistry {
+        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+
+        assert_is_owner(registry, signer::address_of(account));
+
+        assert!(vector::length(&feed_ids) == vector::length(&descriptions), error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS));
+
+        vector::zip(feed_ids, descriptions, |feed_id, description|{
+            assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
+
+            let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
+            feed.description = description;
+
+            event::emit(FeedDescriptionUpdated {
+                feed_id: feed_id,
+                description: description,
+            });
+        });
+    }
+
+    public entry fun update_feed_config_id(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>, config_id: vector<u8>) acquires DataFeedsRegistry {
+        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+
+        assert_is_owner(registry, signer::address_of(account));
+
+        // TODO: not in the solidity contract, but we make sure that the config exists first.
+        assert!(simple_map::contains_key(&registry.configs, &config_id), error::invalid_argument(ECONFIG_NOT_CONFIGURED));
+
+        vector::for_each(feed_ids, |feed_id| {
+            let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
+            feed.config_id = config_id;
+
+            event::emit(FeedConfigIdUpdated {
+                feed_id: feed_id,
+                config_id: config_id,
+            });
+        });
+    }
+
+    public entry fun update_upkeep(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>, upkeep: address) acquires DataFeedsRegistry {
+        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+
+        assert_is_owner(registry, signer::address_of(account));
+
+        assert!(upkeep != @0x0, error::invalid_argument(EINVALID_UPKEEP));
+
+        vector::for_each(feed_ids, |feed_id| {
+            let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
+            let prev_upkeep = feed.upkeep;
+
+            feed.upkeep = upkeep;
+
+            let prev_upkeep_feed_ids = simple_map::borrow_mut(&mut registry.upkeep_feed_id_set, &prev_upkeep);
+            vector::remove_value(prev_upkeep_feed_ids, feed_id);
+            if (vector::is_empty(prev_upkeep_feed_ids)) {
+                simple_map::remove(&mut registry.upkeep_feed_id_set, &prev_upkeep);
+            }
+
+            if (simple_map::contains_key(&registry.upkeep_feed_id_set, &upkeep)) {
+                let upkeep_feed_ids = simple_map::borrow_mut(&mut registry.upkeep_feed_id_set, &upkeep);
+                vector::push_back(upkeep_feed_ids, feed_id);
+            } else {
+                let upkeep_feed_ids = vector[feed_id];
+                simple_map::add(&mut registry.upkeep_feed_id_set, upkeep, upkeep_feed_ids);
+            };
+
+            event::emit(UpkeepUpdated {
+                feed_id: feed_id,
+                upkeep: upkeep,
+            });
+        });
+    }
+
+    public entry fun request_upkeep(account: &signer, registry_address: address) acquires DataFeedsRegistry {
+        // TODO: figure out if we need to implement this
+        // TODO: this needs to allow for only the router to make the call, after processing the
+        // fee. create a resource account address from the router and validate the caller?
     }
 }
