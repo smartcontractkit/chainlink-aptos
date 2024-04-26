@@ -4,7 +4,7 @@ module chainlink::data_feeds_registry {
     use std::signer;
     use std::simple_map::{Self, SimpleMap};
     use std::string::String;
-    use std::vector::{Self};
+    use std::vector;
 
     // TODO: figure out link_address, router, verifier_proxy
     struct DataFeedsRegistry has key, store, drop {
@@ -146,6 +146,7 @@ module chainlink::data_feeds_registry {
     }
 
     public entry fun initialize(resource_account: &signer, owner_address: address, router_address: address) {
+        // TODO: retrieve signer cap?
         move_to(resource_account, DataFeedsRegistry {
             // TODO: functionality to update owner and router addresses
             owner_address: owner_address,
