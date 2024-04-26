@@ -1,10 +1,9 @@
 module chainlink::data_feeds_registry {
-    use std::account::{Self};
     use std::error;
     use std::event;
     use std::signer;
     use std::simple_map::{Self, SimpleMap};
-    use std::string::{Self, String, utf8};
+    use std::string::String;
     use std::vector::{Self};
 
     // TODO: figure out link_address, router, verifier_proxy
@@ -352,7 +351,7 @@ module chainlink::data_feeds_registry {
             let value = *vector::borrow(data, offset + i);
             ret = (ret << 8) | (value as u32);
         };
-        return ret
+        ret
     }
 
     fun from_i192(data: &vector<u8>, offset: u64): u256 {
@@ -361,14 +360,15 @@ module chainlink::data_feeds_registry {
             let value = *vector::borrow(data, offset + i);
             ret = (ret << 8) | (value as u256);
         };
-        return ret
+        ret
     }
 
-    public entry fun perform_upkeep(account: &signer, registry_address: address, report_datas: vector<vector<u8>>) acquires DataFeedsRegistry {
+    public entry fun perform_upkeep(_account: &signer, registry_address: address, report_datas: vector<vector<u8>>) acquires DataFeedsRegistry {
         // TODO: this function requires extracting the benchmarks from the reports, fee management,
         // signature validation (if needed on this layer), and then finally updating the feeds.
         // TODO: this assumes report_data is directly provided here, which probably won't be the
         // case.
+        // TODO: this requires some validation of the caller.
 
         let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
 
@@ -424,7 +424,7 @@ module chainlink::data_feeds_registry {
             vector::push_back(&mut observation_timestamps, feed.observation_timestamp);
         });
 
-        return (benchmarks, observation_timestamps)
+        (benchmarks, observation_timestamps)
     }
 
     public fun get_reports(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>): (vector<vector<u8>>, vector<u256>) acquires DataFeedsRegistry {
@@ -443,7 +443,7 @@ module chainlink::data_feeds_registry {
             vector::push_back(&mut observation_timestamps, feed.observation_timestamp);
         });
 
-        return (reports, observation_timestamps)
+        (reports, observation_timestamps)
     }
 
     public fun get_feed_metadata(registry_address: address, feed_ids: vector<vector<u8>>): (vector<String>, vector<vector<u8>>, vector<u256>, vector<u256>, vector<bool>) acquires DataFeedsRegistry {
@@ -468,7 +468,7 @@ module chainlink::data_feeds_registry {
             vector::push_back(&mut staleness_seconds, config.staleness_seconds);
         });
 
-        return (descriptions, config_ids, deviation_thresholds, staleness_seconds, upkeeps_requested)
+        (descriptions, config_ids, deviation_thresholds, staleness_seconds, upkeeps_requested)
     }
 
     public fun get_feed_configs(registry_address: address, config_ids: vector<vector<u8>>): (vector<u256>, vector<u256>) acquires DataFeedsRegistry {
@@ -485,7 +485,7 @@ module chainlink::data_feeds_registry {
             vector::push_back(&mut staleness_seconds, config.staleness_seconds);
         });
 
-        return (deviation_thresholds, staleness_seconds)
+        (deviation_thresholds, staleness_seconds)
     }
 
     public fun get_upkeep_feed_ids(registry_address: address, upkeep: address): (vector<vector<u8>>) acquires DataFeedsRegistry {
@@ -494,6 +494,6 @@ module chainlink::data_feeds_registry {
         assert!(simple_map::contains_key(&registry.upkeep_feed_id_set, &upkeep), error::invalid_argument(EINVALID_UPKEEP));
 
         let upkeep_feed_ids = simple_map::borrow(&registry.upkeep_feed_id_set, &upkeep);
-        return *upkeep_feed_ids
+        *upkeep_feed_ids
     }
 }
