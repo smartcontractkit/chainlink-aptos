@@ -33,6 +33,29 @@ module chainlink::data_feeds_registry {
         staleness_seconds: u256,
     }
 
+    struct BenchmarkResult {
+        benchmark: u256,
+        observation_timestamp: u256
+    }
+
+    struct ReportResult {
+        report: vector<u8>,
+        observation_timestamp: u256,
+    }
+
+    struct FeedMetadataResult {
+        description: String,
+        config_id: vector<u8>,
+        deviation_threshold: u256,
+        staleness_seconds: u256,
+        upkeep_requested: bool,
+    }
+
+    struct FeedConfigResult {
+        deviation_thresholds: u256,
+        staleness_seconds: u256,
+    }
+
     #[event]
     struct FeedConfigIdUpdated has drop, store {
         feed_id: vector<u8>,
@@ -409,84 +432,85 @@ module chainlink::data_feeds_registry {
         });
     }
 
-    public fun get_benchmarks(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>): (vector<u256>, vector<u256>) acquires DataFeedsRegistry {
+    public fun get_benchmarks(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>): vector<BenchmarkResult> acquires DataFeedsRegistry {
         let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
 
         assert_authorized_data_fetch(registry, signer::address_of(account), &feed_ids);
 
-        let benchmarks = vector[];
-        let observation_timestamps = vector[];
+        let ret = vector[];
 
         vector::for_each(feed_ids, |feed_id| {
             assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
 
             let feed = simple_map::borrow(&registry.feeds, &feed_id);
-            vector::push_back(&mut benchmarks, feed.benchmark);
-            vector::push_back(&mut observation_timestamps, feed.observation_timestamp);
+            vector::push_back(&mut ret, BenchmarkResult {
+                benchmark: feed.benchmark,
+                observation_timestamp: feed.observation_timestamp
+            });
         });
 
-        (benchmarks, observation_timestamps)
+        ret
     }
 
-    public fun get_reports(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>): (vector<vector<u8>>, vector<u256>) acquires DataFeedsRegistry {
+    public fun get_reports(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>): vector<ReportResult> acquires DataFeedsRegistry {
         let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
 
         assert_authorized_data_fetch(registry, signer::address_of(account), &feed_ids);
 
-        let reports = vector[];
-        let observation_timestamps = vector[];
+        let ret = vector[];
 
         vector::for_each(feed_ids, |feed_id| {
             assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
 
             let feed = simple_map::borrow(&registry.feeds, &feed_id);
-            vector::push_back(&mut reports, feed.report);
-            vector::push_back(&mut observation_timestamps, feed.observation_timestamp);
+            vector::push_back(&mut ret, ReportResult {
+                report: feed.report,
+                observation_timestamp: feed.observation_timestamp
+            });
         });
 
-        (reports, observation_timestamps)
+        ret
     }
 
-    public fun get_feed_metadata(registry_address: address, feed_ids: vector<vector<u8>>): (vector<String>, vector<vector<u8>>, vector<u256>, vector<u256>, vector<bool>) acquires DataFeedsRegistry {
-        let descriptions = vector[];
-        let config_ids = vector[];
-        let deviation_thresholds = vector[];
-        let staleness_seconds = vector[];
-        let upkeeps_requested = vector[];
-
+    public fun get_feed_metadata(registry_address: address, feed_ids: vector<vector<u8>>): vector<FeedMetadataResult> acquires DataFeedsRegistry {
         let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+
+        let ret = vector[];
 
         vector::for_each(feed_ids, |feed_id| {
             assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
 
             let feed = simple_map::borrow(&registry.feeds, &feed_id);
-            vector::push_back(&mut descriptions, feed.description);
-            vector::push_back(&mut config_ids, feed.config_id);
-            vector::push_back(&mut upkeeps_requested, feed.upkeep_requested);
-
             let config = simple_map::borrow(&registry.configs, &feed.config_id);
-            vector::push_back(&mut deviation_thresholds, config.deviation_threshold);
-            vector::push_back(&mut staleness_seconds, config.staleness_seconds);
+
+            vector::push_back(&mut ret, FeedMetadataResult {
+                description: feed.description,
+                config_id: feed.config_id,
+                deviation_threshold: config.deviation_threshold,
+                staleness_seconds: config.staleness_seconds,
+                upkeep_requested: feed.upkeep_requested
+            });
         });
 
-        (descriptions, config_ids, deviation_thresholds, staleness_seconds, upkeeps_requested)
+        ret
     }
 
-    public fun get_feed_configs(registry_address: address, config_ids: vector<vector<u8>>): (vector<u256>, vector<u256>) acquires DataFeedsRegistry {
-        let deviation_thresholds = vector[];
-        let staleness_seconds = vector[];
-
+    public fun get_feed_configs(registry_address: address, config_ids: vector<vector<u8>>): vector<FeedConfigResult> acquires DataFeedsRegistry {
         let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+
+        let ret = vector[];
 
         vector::for_each(config_ids, |config_id| {
             assert!(simple_map::contains_key(&registry.configs, &config_id), error::invalid_argument(ECONFIG_NOT_CONFIGURED));
 
             let config = simple_map::borrow(&registry.configs, &config_id);
-            vector::push_back(&mut deviation_thresholds, config.deviation_threshold);
-            vector::push_back(&mut staleness_seconds, config.staleness_seconds);
+            vector::push_back(&mut ret, FeedConfigResult {
+                deviation_thresholds: config.deviation_threshold,
+                staleness_seconds: config.staleness_seconds,
+            });
         });
 
-        (deviation_thresholds, staleness_seconds)
+        ret
     }
 
     public fun get_upkeep_feed_ids(registry_address: address, upkeep: address): (vector<vector<u8>>) acquires DataFeedsRegistry {
