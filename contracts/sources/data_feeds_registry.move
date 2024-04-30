@@ -33,17 +33,18 @@ module chainlink::data_feeds_registry {
         staleness_seconds: u256,
     }
 
-    struct BenchmarkResult {
+    // TODO: are tuples cleaner than requiring getters?
+    struct BenchmarkResult has store, drop {
         benchmark: u256,
         observation_timestamp: u256
     }
 
-    struct ReportResult {
+    struct ReportResult has store, drop {
         report: vector<u8>,
         observation_timestamp: u256,
     }
 
-    struct FeedMetadataResult {
+    struct FeedMetadataResult has store, drop, key {
         description: String,
         config_id: vector<u8>,
         deviation_threshold: u256,
@@ -51,8 +52,8 @@ module chainlink::data_feeds_registry {
         upkeep_requested: bool,
     }
 
-    struct FeedConfigResult {
-        deviation_thresholds: u256,
+    struct FeedConfigResult has store, drop {
+        deviation_threshold: u256,
         staleness_seconds: u256,
     }
 
@@ -505,7 +506,7 @@ module chainlink::data_feeds_registry {
 
             let config = simple_map::borrow(&registry.configs, &config_id);
             vector::push_back(&mut ret, FeedConfigResult {
-                deviation_thresholds: config.deviation_threshold,
+                deviation_threshold: config.deviation_threshold,
                 staleness_seconds: config.staleness_seconds,
             });
         });
@@ -520,5 +521,49 @@ module chainlink::data_feeds_registry {
 
         let upkeep_feed_ids = simple_map::borrow(&registry.upkeep_feed_id_set, &upkeep);
         *upkeep_feed_ids
+    }
+
+    public fun read_benchmark_value(result: &BenchmarkResult): u256 {
+        result.benchmark
+    }
+
+    public fun read_benchmark_timestamp(result: &BenchmarkResult): u256 {
+        result.observation_timestamp
+    }
+
+    public fun read_report_value(result: &ReportResult): vector<u8> {
+        result.report
+    }
+
+    public fun read_report_timestamp(result: &ReportResult): u256 {
+        result.observation_timestamp
+    }
+
+    public fun read_feed_metadata_description(result: &FeedMetadataResult): String {
+        result.description
+    }
+
+    public fun read_feed_metadata_config_id(result: &FeedMetadataResult): vector<u8> {
+        result.config_id
+    }
+
+    public fun read_feed_metadata_deviation_threshold(result: &FeedMetadataResult): u256 {
+        result.deviation_threshold
+    }
+
+    public fun read_feed_metadata_staleness_seconds(result: &FeedMetadataResult): u256 {
+        result.staleness_seconds
+    }
+
+    public fun read_feed_metadata_upkeep_requested(result: &FeedMetadataResult): bool {
+        result.upkeep_requested
+    }
+
+    public fun read_feed_config_deviation_threshold(result: &FeedConfigResult): u256 {
+        result.deviation_threshold
+    }
+
+    public fun read_feed_config_staleness_seconds(result: &FeedConfigResult): u256 {
+        result.staleness_seconds
     }
 }
