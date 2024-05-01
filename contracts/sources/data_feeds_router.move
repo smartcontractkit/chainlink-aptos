@@ -58,8 +58,8 @@ module chainlink::data_feeds_router {
         let signer_cap = resource_account::retrieve_resource_account_cap(resource_account, owner_address);
 
         move_to(resource_account, DataFeedsRouter {
-            owner_address: owner_address,
-            signer_cap: signer_cap,
+            owner_address,
+            signer_cap,
 
             feed_id_to_registry_address: simple_map::new(),
         });

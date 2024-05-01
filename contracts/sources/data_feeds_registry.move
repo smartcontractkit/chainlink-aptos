@@ -173,8 +173,8 @@ module chainlink::data_feeds_registry {
         // TODO: retrieve signer cap?
         move_to(resource_account, DataFeedsRegistry {
             // TODO: functionality to update owner and router addresses
-            owner_address: owner_address,
-            router_address: router_address,
+            owner_address,
+            router_address,
 
             feeds: simple_map::new(),
             configs: simple_map::new(),
@@ -197,9 +197,9 @@ module chainlink::data_feeds_registry {
             assert!(!simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_EXISTS));
 
             let feed = Feed {
-                description: description,
-                config_id: config_id,
-                upkeep: upkeep,
+                description,
+                config_id,
+                upkeep,
                 upkeep_requested: false,
                 benchmark: 0,
                 report: vector::empty(),
@@ -216,10 +216,10 @@ module chainlink::data_feeds_registry {
             };
 
             event::emit(FeedSet {
-                feed_id: feed_id,
-                description: description,
-                config_id: config_id,
-                upkeep: upkeep,
+                feed_id,
+                description,
+                config_id,
+                upkeep,
             });
         });
     }
@@ -271,9 +271,9 @@ module chainlink::data_feeds_registry {
             });
 
             event::emit(FeedConfigSet {
-                config_id: config_id,
-                deviation_threshold: deviation_threshold,
-                staleness_seconds: staleness_seconds,
+                config_id,
+                deviation_threshold,
+                staleness_seconds,
             });
 
             len = len - 1;
@@ -294,8 +294,8 @@ module chainlink::data_feeds_registry {
             feed.description = description;
 
             event::emit(FeedDescriptionUpdated {
-                feed_id: feed_id,
-                description: description,
+                feed_id,
+                description,
             });
         });
     }
@@ -313,8 +313,8 @@ module chainlink::data_feeds_registry {
             feed.config_id = config_id;
 
             event::emit(FeedConfigIdUpdated {
-                feed_id: feed_id,
-                config_id: config_id,
+                feed_id,
+                config_id,
             });
         });
     }
@@ -347,8 +347,8 @@ module chainlink::data_feeds_registry {
             };
 
             event::emit(UpkeepUpdated {
-                feed_id: feed_id,
-                upkeep: upkeep,
+                feed_id,
+                upkeep,
             });
         });
     }
@@ -365,7 +365,7 @@ module chainlink::data_feeds_registry {
             feed.upkeep_requested = true;
 
             event::emit(UpkeepRequested {
-                feed_id: feed_id,
+                feed_id,
             });
         });
     }
@@ -425,7 +425,7 @@ module chainlink::data_feeds_registry {
             feed.upkeep_requested = false;
 
             event::emit(FeedUpdated {
-                feed_id: feed_id,
+                feed_id,
                 timestamp: (observation_timestamp as u256),
                 benchmark: benchmark_price,
                 report: report_data,
