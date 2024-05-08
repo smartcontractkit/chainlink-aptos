@@ -170,42 +170,47 @@ func (a *AptosTxm) broadcastLoop() {
 }
 
 func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
-	ledgerInfo, err := a.client.LedgerInfo()
+	client, err := a.GetClient()
 	if err != nil {
-		a.logger.Errorw("failed to fetch ledger info: %+v", err)
+		a.logger.Errorw("failed to get client", "error", err)
+	}
+
+	ledgerInfo, err := client.LedgerInfo()
+	if err != nil {
+		a.logger.Errorw("failed to fetch ledger info", "error", err)
 		return
 	}
 
 	fromAddress, err := txbuilder.NewAccountAddressFromHex(tx.FromAddress)
 	if err != nil {
-		a.logger.Errorw("failed to convert account address: %+v", err)
+		a.logger.Errorw("failed to convert account address", "error", err)
 		return
 	}
 
 	txStore := a.accountStore.GetTxStore(tx.FromAddress)
 	if txStore == nil {
-		accountData, err := a.client.GetAccount(tx.FromAddress)
+		accountData, err := client.GetAccount(tx.FromAddress)
 		if err != nil {
-			a.logger.Errorw("failed to fetch account data: %+v", err)
+			a.logger.Errorw("failed to fetch account data", "error", err)
 			return
 		}
 		newTxStore, err := a.accountStore.CreateTxStore(tx.FromAddress, accountData.SequenceNumber)
 		if err != nil {
-			a.logger.Errorw("failed to create tx store for %s: %+v", tx.FromAddress, err)
+			a.logger.Errorw("failed to create tx store", "fromAddress", tx.FromAddress, "error", err)
 			return
 		}
 		txStore = newTxStore
 	}
 
-	gasPrice, err := a.client.EstimateGasPrice()
+	gasPrice, err := client.EstimateGasPrice()
 	if err != nil {
-		a.logger.Errorw("failed to estimate gas price: %+v", err)
+		a.logger.Errorw("failed to estimate gas price", "error", err)
 		return
 	}
 
 	moduleId, err := txbuilder.NewModuleIdFromString(tx.ContractAddress + "::" + tx.ModuleName)
 	if err != nil {
-		a.logger.Errorw("failed to generatee module id: %+v", err)
+		a.logger.Errorw("failed to generate module id", "error", err)
 		return
 	}
 
@@ -228,13 +233,13 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		GasUnitPrice: gasPrice,
 		// TODO: handle expiry
 		ExpirationTimestampSecs: ledgerInfo.LedgerTimestamp + 600,
-		ChainId:                 uint8(a.client.ChainId()),
+		ChainId:                 uint8(client.ChainId()),
 	}
 
 	builder := txbuilder.NewTransactionBuilderEd25519(func(sm txbuilder.SigningMessage) []byte {
 		signature, err := a.keystore.Sign(context.Background(), tx.FromAddress, sm)
 		if err != nil {
-			a.logger.Errorw("failed to sign message from %s: %+v", tx.FromAddress, err)
+			a.logger.Errorw("failed to sign message", "fromAddress", tx.FromAddress, "error", err)
 			// return an empty signature, allow builder.Sign to fail on the next step.
 			return []byte{}
 		}
@@ -243,18 +248,21 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 
 	signedTx, err := builder.Sign(rawTx)
 	if err != nil {
-		a.logger.Errorw("failed to sign transaction: %+v", err)
+		a.logger.Errorw("failed to sign transaction", "error", err)
 		return
 	}
 
-	clientTx, err := a.client.SubmitSignedBCSTransaction(signedTx)
+	clientTx, err := client.SubmitSignedBCSTransaction(signedTx)
 	if err != nil {
-		a.logger.Errorw("failed to submit signed transaction: %+v", err)
+		a.logger.Errorw("failed to submit signed transaction", "error", err)
 		return
 	}
 
-	a.logger.Infow("DEBUG: submitted %+v", clientTx)
-	txStore.AddUnconfirmed(nonce, clientTx.Hash, uint64(time.Now().Unix()), tx)
+	a.logger.Infow("DEBUG: submitted", "tx", clientTx)
+	err = txStore.AddUnconfirmed(nonce, clientTx.Hash, uint64(time.Now().Unix()), tx)
+	if err != nil {
+		a.logger.Errorw("failed to add unconfirmed tx", "txHash", clientTx.Hash, "error", err)
+	}
 }
 
 func (a *AptosTxm) confirmLoop() {
