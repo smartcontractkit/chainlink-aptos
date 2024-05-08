@@ -85,7 +85,7 @@ func (a *AptosTxm) Close() error {
 	})
 }
 
-func (a *AptosTxm) Enqueue(fromAddress, publicKey, function string, paramTypes []string, paramValues []any) error {
+func (a *AptosTxm) Enqueue(fromAddress, publicKey, function string, typeArgs []string, paramTypes []string, paramValues []any) error {
 	ed25519PublicKey, err := hexToEd25519PublicKey(publicKey)
 	if err != nil {
 		return fmt.Errorf("failed to convert public key: %+w", err)
@@ -95,17 +95,24 @@ func (a *AptosTxm) Enqueue(fromAddress, publicKey, function string, paramTypes [
 	if len(functionTokens) != 3 {
 		return fmt.Errorf("unexpected function name, expected 3 tokens, got %d", len(functionTokens))
 	}
+	if len(paramTypes) != len(paramValues) {
+		return fmt.Errorf("length of param types and param values do not match")
+	}
 
 	contractAddress := functionTokens[0]
 	moduleName := functionTokens[1]
 	functionName := functionTokens[2]
 
 	typeTags := []txbuilder.TypeTag{}
-	bcsValues := [][]byte{}
-
-	if len(paramTypes) != len(paramValues) {
-		return fmt.Errorf("length of types and values do not match")
+	for _, typeArg := range typeArgs {
+		typeTag, err := createTypeTag(typeArg)
+		if err != nil {
+			return fmt.Errorf("failed to parse type argument %s: %+w", typeArg, err)
+		}
+		typeTags = append(typeTags, typeTag)
 	}
+
+	bcsValues := [][]byte{}
 
 	for i := 0; i < len(paramTypes); i++ {
 		typeName := paramTypes[i]
@@ -121,7 +128,6 @@ func (a *AptosTxm) Enqueue(fromAddress, publicKey, function string, paramTypes [
 			return fmt.Errorf("failed to serialize value %s: %+w", typeValue, err)
 		}
 
-		typeTags = append(typeTags, typeTag)
 		bcsValues = append(bcsValues, bcsValue)
 	}
 
