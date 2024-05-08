@@ -7,6 +7,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coming-chat/go-aptos/aptosclient"
 	"golang.org/x/crypto/sha3"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
@@ -41,7 +43,8 @@ func TestTxmLocal(t *testing.T) {
 	require.NoError(t, err)
 	logger.Debugw("Started Aptos node")
 
-	// TODO: use faucet and fund
+	err = fundWithFaucet(logger, accountAddress, "http://172.254.0.101:8081")
+	require.NoError(t, err)
 
 	keystore := newTestKeystore(t, accountAddress, privateKey)
 
@@ -79,6 +82,19 @@ func loadAccountFromEnv(t *testing.T, logger logger.Logger) (ed25519.PrivateKey,
 
 	return privateKey, publicKey, accountAddress
 }
+func fundWithFaucet(logger logger.Logger, address, faucetUrl string) error {
+	// The faucet takes a while to startup, so add some retries.
+	for i := 0; i < 30; i++ {
+		txHashes, err := aptosclient.FaucetFundAccount("0x"+address, 100*100000000, faucetUrl)
+		if err == nil {
+			logger.Debugw("Funded using faucet", "txHashes", txHashes)
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	return errors.New("failed to fund with faucet")
+}
 
 func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, keystore loop.Keystore, accountAddress string, publicKey ed25519.PublicKey, iterations int) {
 	txm := New(logger, keystore, config)
@@ -99,6 +115,13 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, keyst
 
 	// TODO: error check that the contract was successfully deployed
 	logger.Debugw("Deployed test contract")
+
+	// Get the current version so that we can find the transactions quickly after incrementing.
+	client, err := txm.GetClient()
+	require.NoError(t, err)
+	ledgerInfo, err := client.LedgerInfo()
+	require.NoError(t, err)
+	logger.Debugw("Fetched ledger info", "currentVersion", ledgerInfo.LedgerVersion)
 
 	expectedValue := 0
 	for i := 0; i < iterations; i++ {
