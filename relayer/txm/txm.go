@@ -279,7 +279,36 @@ func (a *AptosTxm) confirmLoop() {
 }
 
 func (a *AptosTxm) checkUnconfirmed() {
+	client, err := a.GetClient()
+	if err != nil {
+		a.logger.Errorw("failed to load client", "error", err)
+		return
+	}
+	allUnconfirmedTxs := a.accountStore.GetAllUnconfirmed()
+	for accountAddress, unconfirmedTxs := range allUnconfirmedTxs {
+		for _, unconfirmedTx := range unconfirmedTxs {
+			hash := unconfirmedTx.Hash
 
+			chainTx, err := client.GetTransactionByHash(hash)
+			if err != nil {
+				// TODO: check expiry?
+				a.logger.Errorw("failed to check for transaction", "hash", hash, "error", err)
+				continue
+
+			}
+
+			if chainTx.Type == "pending_transaction" {
+				// TODO: check expiry?
+				continue
+			}
+
+			a.logger.Debugw("transaction confirmed", "hash", hash, "type", chainTx.Type)
+
+			if err := a.accountStore.GetTxStore(accountAddress).Confirm(unconfirmedTx.Nonce, hash); err != nil {
+				a.logger.Errorw("failed to confirm tx in TxStore", "hash", hash, "accountAddress", accountAddress, "error", err)
+			}
+		}
+	}
 }
 
 func (a *AptosTxm) InflightCount() (int, int) {
