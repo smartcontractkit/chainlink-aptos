@@ -135,7 +135,6 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, keyst
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	// TODO: error check that the contract was successfully deployed
 	logger.Debugw("Deployed test contract")
 
 	// Get the current version so that we can find the transactions quickly after incrementing.
@@ -212,6 +211,8 @@ func deployTestContract(t *testing.T, txm *AptosTxm, fromAddress, publicKeyHex s
 	)
 	require.NoError(t, err)
 
+	// TODO: check account module to make sure it was published.
+
 	err = txm.Enqueue(
 		fromAddress,
 		publicKeyHex,
@@ -220,6 +221,8 @@ func deployTestContract(t *testing.T, txm *AptosTxm, fromAddress, publicKeyHex s
 		[]string{},
 		[]any{})
 	require.NoError(t, err)
+
+	// TODO: check account resource to make sure it was initialized.
 }
 
 type testKeystore struct {
