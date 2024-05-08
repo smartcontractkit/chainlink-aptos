@@ -46,6 +46,10 @@ func TestTxmLocal(t *testing.T) {
 	err = fundWithFaucet(logger, accountAddress, "http://172.254.0.101:8081")
 	require.NoError(t, err)
 
+	rpcUrl := "http://172.254.0.101:8080"
+	err = waitForAccountFunded(logger, accountAddress, rpcUrl)
+	require.NoError(t, err)
+
 	keystore := newTestKeystore(t, accountAddress, privateKey)
 
 	config := AptosTxmConfig{
@@ -87,13 +91,31 @@ func fundWithFaucet(logger logger.Logger, address, faucetUrl string) error {
 	for i := 0; i < 30; i++ {
 		txHashes, err := aptosclient.FaucetFundAccount("0x"+address, 100*100000000, faucetUrl)
 		if err == nil {
-			logger.Debugw("Funded using faucet", "txHashes", txHashes)
+			logger.Debugw("Funded using faucet", "address", address, "txHashes", txHashes)
 			return nil
 		}
 		time.Sleep(2 * time.Second)
 	}
 
 	return errors.New("failed to fund with faucet")
+}
+
+func waitForAccountFunded(logger logger.Logger, address, rpcUrl string) error {
+	client, err := aptosclient.Dial(context.Background(), rpcUrl)
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < 30; i++ {
+		_, err := client.GetAccount(address)
+		if err == nil {
+			logger.Debugw("Account ready after funding", "address", address)
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	return errors.New("failed to wait for account to be funded")
 }
 
 func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, keystore loop.Keystore, accountAddress string, publicKey ed25519.PublicKey, iterations int) {
@@ -154,6 +176,19 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, keyst
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
+
+	resource, err := client.GetAccountResource(accountAddress, "0x"+accountAddress+"::counter::Counter", 0)
+	require.NoError(t, err)
+
+	value, ok := resource.Data["value"]
+	require.True(t, ok)
+
+	valueStr, ok := value.(string)
+	require.True(t, ok)
+
+	logger.Debugw("Read counter value", "value", valueStr)
+
+	require.Equal(t, fmt.Sprintf("%d", expectedValue), valueStr)
 }
 
 func deployTestContract(t *testing.T, txm *AptosTxm, fromAddress, publicKeyHex string) {
