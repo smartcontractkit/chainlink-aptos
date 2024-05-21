@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coming-chat/go-aptos/aptosclient"
-	txbuilder "github.com/coming-chat/go-aptos/transaction_builder"
+	"github.com/aptos-labs/aptos-go-sdk"
+	aptoscrypto "github.com/aptos-labs/aptos-go-sdk/crypto"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
@@ -31,7 +31,7 @@ type AptosTxm struct {
 	done          sync.WaitGroup
 	stop          chan struct{}
 
-	client *aptosclient.RestClient
+	client *aptos.NodeClient
 }
 
 func New(lgr logger.Logger, keystore loop.Keystore, config AptosTxmConfig) *AptosTxm {
@@ -58,9 +58,9 @@ func (a *AptosTxm) HealthReport() map[string]error {
 	return map[string]error{a.Name(): a.starter.Healthy()}
 }
 
-func (a *AptosTxm) GetClient() (*aptosclient.RestClient, error) {
+func (a *AptosTxm) GetClient() (*aptos.NodeClient, error) {
 	if a.client == nil {
-		client, err := aptosclient.Dial(context.Background(), a.config.RPCUrl)
+		client, err := aptos.NewNodeClient(a.config.RPCUrl, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -103,7 +103,7 @@ func (a *AptosTxm) Enqueue(fromAddress, publicKey, function string, typeArgs []s
 	moduleName := functionTokens[1]
 	functionName := functionTokens[2]
 
-	typeTags := []txbuilder.TypeTag{}
+	typeTags := []aptos.TypeTag{}
 	for _, typeArg := range typeArgs {
 		typeTag, err := createTypeTag(typeArg)
 		if err != nil {
@@ -173,28 +173,43 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	client, err := a.GetClient()
 	if err != nil {
 		a.logger.Errorw("failed to get client", "error", err)
-	}
-
-	ledgerInfo, err := client.LedgerInfo()
-	if err != nil {
-		a.logger.Errorw("failed to fetch ledger info", "error", err)
 		return
 	}
 
-	fromAddress, err := txbuilder.NewAccountAddressFromHex(tx.FromAddress)
+	// this is cached within NodeClient after the first successful invocation.
+	chainId, err := client.GetChainId()
 	if err != nil {
-		a.logger.Errorw("failed to convert account address", "error", err)
+		a.logger.Errorw("failed to get chain id", "error", err)
+		return
+	}
+
+	fromAddress := &aptos.AccountAddress{}
+	err = fromAddress.ParseStringRelaxed(tx.FromAddress)
+	if err != nil {
+		a.logger.Errorw("failed to convert from address", "error", err)
+		return
+	}
+
+	contractAddress := &aptos.AccountAddress{}
+	err = contractAddress.ParseStringRelaxed(tx.ContractAddress)
+	if err != nil {
+		a.logger.Errorw("failed to convert contract address", "error", err)
 		return
 	}
 
 	txStore := a.accountStore.GetTxStore(tx.FromAddress)
 	if txStore == nil {
-		accountData, err := client.GetAccount(tx.FromAddress)
+		accountInfo, err := client.Account(*fromAddress)
 		if err != nil {
 			a.logger.Errorw("failed to fetch account data", "error", err)
 			return
 		}
-		newTxStore, err := a.accountStore.CreateTxStore(tx.FromAddress, accountData.SequenceNumber)
+		sequenceNumber, err := accountInfo.SequenceNumber()
+		if err != nil {
+			a.logger.Errorw("failed to decode sequence number", "sequenceNumberStr", accountInfo.SequenceNumberStr, "error", err)
+			return
+		}
+		newTxStore, err := a.accountStore.CreateTxStore(tx.FromAddress, sequenceNumber)
 		if err != nil {
 			a.logger.Errorw("failed to create tx store", "fromAddress", tx.FromAddress, "error", err)
 			return
@@ -202,66 +217,106 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		txStore = newTxStore
 	}
 
-	gasPrice, err := client.EstimateGasPrice()
+	gasInfo, err := client.EstimateGasPrice()
 	if err != nil {
-		a.logger.Errorw("failed to estimate gas price", "error", err)
+		a.logger.Errorw("failed to retrieve estimated gas price", "error", err)
 		return
 	}
 
-	moduleId, err := txbuilder.NewModuleIdFromString(tx.ContractAddress + "::" + tx.ModuleName)
+	nodeInfo, err := client.Info()
 	if err != nil {
-		a.logger.Errorw("failed to generate module id", "error", err)
+		a.logger.Errorw("failed to fetch ledger info", "error", err)
+		return
+	}
+	ledgerTimestamp := nodeInfo.LedgerTimestamp()
+	if ledgerTimestamp == 0 {
+		a.logger.Errorw("failed to fetch ledger timestamp", "nodeInfo", nodeInfo)
 		return
 	}
 
-	payload := txbuilder.TransactionPayloadEntryFunction{
-		ModuleName:   *moduleId,
-		FunctionName: txbuilder.Identifier(tx.FunctionName),
-		TyArgs:       tx.TypeTags,
-		Args:         tx.BcsValues,
+	moduleId := aptos.ModuleId{
+		Address: *contractAddress,
+		Name:    tx.ModuleName,
+	}
+
+	payload := aptos.TransactionPayload{
+		Payload: &aptos.EntryFunction{
+			Module:   moduleId,
+			Function: tx.FunctionName,
+			ArgTypes: tx.TypeTags,
+			Args:     tx.BcsValues,
+		},
 	}
 
 	nonce := txStore.GetNextNonce()
 
-	rawTx := &txbuilder.RawTransaction{
+	rawTx := aptos.RawTransaction{
 		Sender:         *fromAddress,
 		SequenceNumber: nonce,
 		Payload:        payload,
 		// TODO: gas amount estimation? we use the default as per aptos-ts-sdk for now.
 		// https://github.com/aptos-labs/aptos-ts-sdk/blob/32d4360740392782c1368647f89ba62e1b6a2cb3/src/utils/const.ts#L21
 		MaxGasAmount: 200000,
-		GasUnitPrice: gasPrice,
+		// TODO: on retry, consider using PrioritizedGasEstimate
+		GasUnitPrice: gasInfo.GasEstimate,
 		// TODO: handle expiry
-		ExpirationTimestampSecs: ledgerInfo.LedgerTimestamp + 600,
-		ChainId:                 uint8(client.ChainId()),
+		ExpirationTimestampSeconds: ledgerTimestamp + uint64(600),
+		ChainId:                    chainId,
 	}
 
-	builder := txbuilder.NewTransactionBuilderEd25519(func(sm txbuilder.SigningMessage) []byte {
-		signature, err := a.keystore.Sign(context.Background(), tx.FromAddress, sm)
-		if err != nil {
-			a.logger.Errorw("failed to sign message", "fromAddress", tx.FromAddress, "error", err)
-			// return an empty signature, allow builder.Sign to fail on the next step.
-			return []byte{}
-		}
-		return signature
-	}, tx.PublicKey)
-
-	signedTx, err := builder.Sign(rawTx)
+	signingMessage, err := rawTx.SigningMessage()
 	if err != nil {
-		a.logger.Errorw("failed to sign transaction", "error", err)
+		a.logger.Errorw("failed to create signing message", "error", err)
 		return
 	}
 
-	clientTx, err := client.SubmitSignedBCSTransaction(signedTx)
+	signature, err := a.keystore.Sign(context.Background(), tx.FromAddress, signingMessage)
+	if err != nil {
+		a.logger.Errorw("failed to sign message", "fromAddress", tx.FromAddress, "error", err)
+		return
+	}
+
+	publicKey := aptoscrypto.Ed25519PublicKey{}
+	err = publicKey.FromBytes([]byte(tx.PublicKey))
+	if err != nil {
+		a.logger.Errorw("failed to deserialize public key", "error", err)
+		return
+	}
+	authenticator := &aptoscrypto.Ed25519Authenticator{
+		PublicKey: publicKey,
+	}
+	copy(authenticator.Signature[:], signature[:])
+
+	signedTx := &aptos.SignedTransaction{
+		Transaction: rawTx,
+		Authenticator: aptoscrypto.Authenticator{
+			Kind: aptoscrypto.AuthenticatorEd25519,
+			Auth: authenticator,
+		},
+	}
+
+	submitResponse, err := client.SubmitTransaction(signedTx)
 	if err != nil {
 		a.logger.Errorw("failed to submit signed transaction", "error", err)
 		return
 	}
 
-	a.logger.Infow("DEBUG: submitted", "tx", clientTx)
-	err = txStore.AddUnconfirmed(nonce, clientTx.Hash, uint64(time.Now().Unix()), tx)
+	a.logger.Infow("DEBUG: submitted", "tx", submitResponse)
+
+	submitHash, ok := submitResponse["hash"]
+	if !ok {
+		a.logger.Errorw("failed to read submitted tx hash")
+		return
+	}
+
+	submitHashStr, ok := submitHash.(string)
+	if !ok {
+		a.logger.Errorw("failed to stringify tx hash", "hash", submitHash)
+		return
+	}
+	err = txStore.AddUnconfirmed(nonce, submitHashStr, uint64(time.Now().Unix()), tx)
 	if err != nil {
-		a.logger.Errorw("failed to add unconfirmed tx", "txHash", clientTx.Hash, "error", err)
+		a.logger.Errorw("failed to add unconfirmed tx", "txHash", submitHashStr, "error", err)
 	}
 }
 
@@ -303,20 +358,31 @@ func (a *AptosTxm) checkUnconfirmed() {
 		for _, unconfirmedTx := range unconfirmedTxs {
 			hash := unconfirmedTx.Hash
 
-			chainTx, err := client.GetTransactionByHash(hash)
+			chainTx, err := client.TransactionByHash(hash)
 			if err != nil {
 				// TODO: check expiry?
 				a.logger.Errorw("failed to check for transaction", "hash", hash, "error", err)
 				continue
-
 			}
 
-			if chainTx.Type == "pending_transaction" {
+			txType, ok := chainTx["type"]
+			if !ok {
+				a.logger.Errorw("failed to check transaction type", "chainTx", chainTx)
+				continue
+			}
+
+			txTypeStr, ok := txType.(string)
+			if !ok {
+				a.logger.Errorw("failed to convert transaction type to string", "chainTx", chainTx)
+				continue
+			}
+
+			if txTypeStr == "pending_transaction" {
 				// TODO: check expiry?
 				continue
 			}
 
-			a.logger.Debugw("transaction confirmed", "hash", hash, "type", chainTx.Type)
+			a.logger.Debugw("transaction confirmed", "hash", hash, "type", txTypeStr)
 
 			if err := a.accountStore.GetTxStore(accountAddress).Confirm(unconfirmedTx.Nonce, hash); err != nil {
 				a.logger.Errorw("failed to confirm tx in TxStore", "hash", hash, "accountAddress", accountAddress, "error", err)

@@ -3,7 +3,7 @@ package txm
 import (
 	"crypto/ed25519"
 
-	txbuilder "github.com/coming-chat/go-aptos/transaction_builder"
+	"github.com/aptos-labs/aptos-go-sdk"
 )
 
 type AptosTx struct {
@@ -12,7 +12,7 @@ type AptosTx struct {
 	ContractAddress string
 	ModuleName      string
 	FunctionName    string
-	TypeTags        []txbuilder.TypeTag
+	TypeTags        []aptos.TypeTag
 	BcsValues       [][]byte
 	Attempt         uint64
 }
