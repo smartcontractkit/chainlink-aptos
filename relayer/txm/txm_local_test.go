@@ -7,7 +7,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -94,17 +93,12 @@ func fundWithFaucet(logger logger.Logger, client *aptos.NodeClient, address apto
 		return fmt.Errorf("failed to create faucet client: %+w", err)
 	}
 
-	// The faucet takes a while to startup, so add some retries.
-	for i := 0; i < 30; i++ {
-		err := faucetClient.Fund(address, 100*100000000)
-		if err == nil {
-			logger.Debugw("Funded using faucet", "address", address.String())
-			return nil
-		}
-		time.Sleep(2 * time.Second)
+	if err := faucetClient.Fund(address, 100*100000000); err != nil {
+		return fmt.Errorf("failed to fund with faucet: %+w", err)
 	}
 
-	return errors.New("failed to fund with faucet")
+	logger.Debugw("Funded using faucet", "address", address.String())
+	return nil
 }
 
 func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, keystore loop.Keystore, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, iterations int) {
