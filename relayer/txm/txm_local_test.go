@@ -51,9 +51,6 @@ func TestTxmLocal(t *testing.T) {
 	err = fundWithFaucet(logger, client, accountAddress, "http://172.254.0.101:8081")
 	require.NoError(t, err)
 
-	//err = waitForAccountFunded(logger, accountAddress, rpcUrl)
-	//require.NoError(t, err)
-
 	keystore := newTestKeystore(t, accountAddress.String(), privateKey)
 
 	config := AptosTxmConfig{
@@ -109,19 +106,6 @@ func fundWithFaucet(logger logger.Logger, client *aptos.NodeClient, address apto
 
 	return errors.New("failed to fund with faucet")
 }
-
-//func waitForAccountFunded(logger logger.Logger, address, rpcUrl string) error {
-//for i := 0; i < 30; i++ {
-//_, err := client.Account(address)
-//if err == nil {
-//logger.Debugw("Account ready after funding", "address", address)
-//return nil
-//}
-//time.Sleep(2 * time.Second)
-//}
-
-//return errors.New("failed to wait for account to be funded")
-//}
 
 func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, keystore loop.Keystore, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, iterations int) {
 	txm := New(logger, keystore, config)
