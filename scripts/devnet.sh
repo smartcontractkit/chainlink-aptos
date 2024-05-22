@@ -56,7 +56,8 @@ while true; do
     prev_output="${output}"
   fi
 
-  if [[ $output == *"Node API is ready"* ]]; then
+  # Wait for "Setup is complete" message, which means both the Node endpoint and the Faucet endpoint is ready.
+  if [[ $output == *"Setup is complete"* ]]; then
     echo ""
     echo "${container_name} is ready."
     break
