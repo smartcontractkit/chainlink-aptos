@@ -5,10 +5,10 @@
     python3
     (pkgs.callPackage ./aptos.nix {})
 
-    go_1_21
+    go_1_22
     gopls
     delve
-    (golangci-lint.override { buildGoModule = buildGo121Module; })
+    (golangci-lint.override { buildGoModule = buildGo122Module; })
     gotools
   ];
 }
