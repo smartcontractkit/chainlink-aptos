@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/sha3"
 
@@ -88,6 +89,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, keyst
 	expectedValue := 0
 	for i := 0; i < iterations; i++ {
 		err := txm.Enqueue(
+			uuid.New(),
 			accountAddress.String(),
 			publicKeyHex,
 			accountAddress.String()+"::counter::increment",
@@ -98,6 +100,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, keyst
 		expectedValue += 1
 
 		err = txm.Enqueue(
+			uuid.New(),
 			accountAddress.String(),
 			publicKeyHex,
 			accountAddress.String()+"::counter::increment_mult",
@@ -141,6 +144,7 @@ func deployTestContract(t *testing.T, txm *AptosTxm, fromAddress, publicKeyHex s
 	packageMetadataBytes, moduleBytecodeBytes := testutils.GetTestContract(t, fromAddress)
 
 	err := txm.Enqueue(
+		uuid.New(),
 		fromAddress,
 		publicKeyHex,
 		"0x1::code::publish_package_txn",
@@ -153,6 +157,7 @@ func deployTestContract(t *testing.T, txm *AptosTxm, fromAddress, publicKeyHex s
 	// TODO: check account module to make sure it was published.
 
 	err = txm.Enqueue(
+		uuid.New(),
 		fromAddress,
 		publicKeyHex,
 		fromAddress+"::counter::initialize",
