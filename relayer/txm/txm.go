@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -12,10 +13,12 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 	aptosapi "github.com/aptos-labs/aptos-go-sdk/api"
 	aptoscrypto "github.com/aptos-labs/aptos-go-sdk/crypto"
+	"github.com/google/uuid"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
+	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 )
 
@@ -26,7 +29,10 @@ type AptosTxm struct {
 	keystore loop.Keystore
 	config   AptosTxmConfig
 
-	broadcastChan chan *AptosTx
+	transactions     map[uuid.UUID]*AptosTx
+	transactionsLock sync.RWMutex
+
+	broadcastChan chan uuid.UUID
 	accountStore  *AccountStore
 	starter       utils.StartStopOnce
 	done          sync.WaitGroup
@@ -41,7 +47,9 @@ func New(lgr logger.Logger, keystore loop.Keystore, config AptosTxmConfig) *Apto
 		keystore: keystore,
 		config:   config,
 
-		broadcastChan: make(chan *AptosTx, config.BroadcastChanSize),
+		transactions: map[uuid.UUID]*AptosTx{},
+
+		broadcastChan: make(chan uuid.UUID, config.BroadcastChanSize),
 		accountStore:  NewAccountStore(),
 		stop:          make(chan struct{}),
 	}
@@ -86,7 +94,18 @@ func (a *AptosTxm) Close() error {
 	})
 }
 
-func (a *AptosTxm) Enqueue(fromAddress, publicKey, function string, typeArgs []string, paramTypes []string, paramValues []any) error {
+func (a *AptosTxm) Enqueue(transactionID uuid.UUID, fromAddress, publicKey, function string, typeArgs []string, paramTypes []string, paramValues []any) error {
+	if transactionID == uuid.Nil {
+		transactionID = uuid.New()
+	} else {
+		a.transactionsLock.Lock()
+		_, transactionExists := a.transactions[transactionID]
+		a.transactionsLock.Unlock()
+		if transactionExists {
+			return nil
+		}
+	}
+
 	ed25519PublicKey, err := hexToEd25519PublicKey(publicKey)
 	if err != nil {
 		return fmt.Errorf("failed to convert public key: %+w", err)
@@ -133,6 +152,9 @@ func (a *AptosTxm) Enqueue(fromAddress, publicKey, function string, typeArgs []s
 	}
 
 	tx := &AptosTx{
+		ID: transactionID,
+		// TODO: clean up old transactions in the map by timestamp.
+		Timestamp:       uint64(time.Now().Unix()),
 		FromAddress:     fromAddress,
 		PublicKey:       ed25519PublicKey,
 		ContractAddress: contractAddress,
@@ -140,15 +162,35 @@ func (a *AptosTxm) Enqueue(fromAddress, publicKey, function string, typeArgs []s
 		FunctionName:    functionName,
 		TypeTags:        typeTags,
 		BcsValues:       bcsValues,
+		Status:          commontypes.Unconfirmed,
 	}
 
+	a.transactionsLock.Lock()
+	a.transactions[transactionID] = tx
+	a.transactionsLock.Unlock()
+
 	select {
-	case a.broadcastChan <- tx:
+	case a.broadcastChan <- transactionID:
 	default:
 		return fmt.Errorf("failed to enqueue transaction: %+v", tx)
 	}
 
 	return nil
+}
+
+func (a *AptosTxm) GetStatus(transactionID uuid.UUID) (commontypes.TransactionStatus, error) {
+	if transactionID == uuid.Nil {
+		return commontypes.Unknown, errors.New("nil transaction id")
+	}
+
+	a.transactionsLock.Lock()
+	defer a.transactionsLock.Unlock()
+	tx, ok := a.transactions[transactionID]
+	if !ok {
+		return commontypes.Unknown, errors.New("no such transaction")
+	}
+
+	return tx.Status, nil
 }
 
 func (a *AptosTxm) broadcastLoop() {
@@ -160,7 +202,14 @@ func (a *AptosTxm) broadcastLoop() {
 	a.logger.Debugw("broadcastLoop: started")
 	for {
 		select {
-		case tx := <-a.broadcastChan:
+		case transactionID := <-a.broadcastChan:
+			a.transactionsLock.Lock()
+			tx, ok := a.transactions[transactionID]
+			a.transactionsLock.Unlock()
+			if !ok {
+				a.logger.Errorw("failed to find transaction", "transactionID", transactionID)
+				continue
+			}
 			a.signAndBroadcast(tx)
 
 		case <-a.stop:
@@ -366,6 +415,8 @@ func (a *AptosTxm) checkUnconfirmed() {
 			}
 
 			a.logger.Debugw("transaction confirmed", "hash", hash, "type", chainTx.Type)
+
+			unconfirmedTx.Tx.Status = commontypes.Finalized
 
 			if err := a.accountStore.GetTxStore(accountAddress).Confirm(unconfirmedTx.Nonce, hash); err != nil {
 				a.logger.Errorw("failed to confirm tx in TxStore", "hash", hash, "accountAddress", accountAddress, "error", err)
