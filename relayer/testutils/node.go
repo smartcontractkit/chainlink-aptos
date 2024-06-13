@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 )
 
 // Finds the closest git repo root, assuming that a directory with a .git directory is a git repo.
@@ -49,4 +50,12 @@ func StartAptosNode() error {
 	}
 
 	return nil
+}
+
+func GetAptosNodeIpAddress() string {
+	if runtime.GOOS == "darwin" {
+		return "127.0.0.1"
+	} else {
+		return "172.254.0.101"
+	}
 }

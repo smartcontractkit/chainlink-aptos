@@ -41,11 +41,14 @@ func TestTxmLocal(t *testing.T) {
 	require.NoError(t, err)
 	logger.Debugw("Started Aptos node")
 
-	rpcUrl := "http://172.254.0.101:8080/v1"
+	nodeIpAddress := testutils.GetAptosNodeIpAddress()
+
+	rpcUrl := fmt.Sprintf("http://%s:8080/v1", nodeIpAddress)
 	client, err := aptos.NewNodeClient(rpcUrl, 0)
 	require.NoError(t, err)
 
-	err = testutils.FundWithFaucet(logger, client, accountAddress, "http://172.254.0.101:8081")
+	faucetUrl := fmt.Sprintf("http://%s:8081", nodeIpAddress)
+	err = testutils.FundWithFaucet(logger, client, accountAddress, faucetUrl)
 	require.NoError(t, err)
 
 	keystore := testutils.NewTestKeystore(t, accountAddress.String(), privateKey)
