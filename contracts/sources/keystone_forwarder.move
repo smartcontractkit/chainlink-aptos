@@ -73,10 +73,15 @@ module chainlink::keystone_forwarder {
 
     use aptos_std::smart_table::{SmartTable,Self};
 
+    struct ConfigId has key, store, drop, copy {
+        don_id: u32,
+        config_version: u32,
+    }
+
     struct State has key {
         signer_cap: SignerCapability,
-        // don_id => config
-        configs: SmartTable<u32, Config>,
+        // (don_id, config_version) => config
+        configs: SmartTable<ConfigId, Config>,
 
         reports: SmartTable<vector<u8>, address>
     }
@@ -90,7 +95,6 @@ module chainlink::keystone_forwarder {
     #[event]
     struct ReportProcessed has drop, store {
         receiver: address,
-        workflow_owner: vector<u8>,
         workflow_execution_id: vector<u8>,
     }
 
@@ -106,15 +110,24 @@ module chainlink::keystone_forwarder {
         });
     }
 
-    public entry fun set_config(don_id: u32, f: u8, oracles: vector<vector<u8>>) acquires State {
+    public entry fun set_config(don_id: u32, config_version: u32, f: u8, oracles: vector<vector<u8>>) acquires State {
         let state = borrow_global_mut<State>(@forwarder);
         // TODO: assert owner
-        smart_table::upsert(&mut state.configs, don_id, Config {
+
+        // TODO: f checks etc
+        smart_table::upsert(&mut state.configs, ConfigId {don_id, config_version}, Config {
             f,
             oracles: vector::map(oracles, |oracle| {
                 ed25519::new_unvalidated_public_key_from_bytes(oracle)
             })
         });
+    }
+
+    public entry fun clear_config(don_id: u32, config_version: u32, f: u8, oracles: vector<vector<u8>>) acquires State {
+        let state = borrow_global_mut<State>(@forwarder);
+        // TODO: assert owner
+
+        smart_table::remove(&mut state.configs, ConfigId {don_id, config_version});
     }
 
     use aptos_std::aptos_hash::keccak256;
@@ -125,40 +138,48 @@ module chainlink::keystone_forwarder {
         public_key: ed25519::UnvalidatedPublicKey, // TODO: pass signer index rather than key to save on space and gas
     }
 
-    inline fun report_id(receiver: address, workflow_execution_id: vector<u8>): vector<u8> {
+    inline fun transmission_id(receiver: address, workflow_execution_id: vector<u8>, report_id: u16): vector<u8> {
         let id = vector[];
         vector::append(&mut id, bcs::to_bytes(&receiver));
         vector::append(&mut id, workflow_execution_id);
+        vector::append(&mut id, bcs::to_bytes(&report_id));
         // TODO: spec to assert on key lengths
         id
     }
 
     // receiver_authority is a resource account owned by the receiver
     // TODO: a method to register these accounts
-    public fun validate_report(receiver_authority: &signer, report: vector<u8>, signatures: vector<Signature>): (vector<u8>, vector<u8>, vector<u8>) acquires State {
+    public fun validate_report(receiver_authority: &signer, report: vector<u8>, report_context: vector<u8>, signatures: vector<Signature>): (vector<u8>, vector<u8>) acquires State {
         let state = borrow_global_mut<State>(@forwarder);
 
         // parse out report metadata
-        // workflow_id | don_id | workflow_execution_id | workflow_owner
-        let workflow_id = vector::slice(&report, 0, 32);
-        let don_id = vector::slice(&report, 32, 36);
+        // version | workflow_execution_id | timestamp | don_id | config_version | ...
+        let workflow_execution_id = vector::slice(&report, 1, 33);
+        // _timestamp
+        let don_id = vector::slice(&report, 37, 41);
         let don_id = aptos_std::from_bcs::to_u32(don_id);
-        let workflow_execution_id = vector::slice(&report, 36, 58);
-        let workflow_owner = vector::slice(&report, 58, 78);
-        let data = vector::slice(&report, 78, vector::length(&report));
+        let config_version = vector::slice(&report, 41, 45);
+        let config_version = aptos_std::from_bcs::to_u32(config_version);
+        let report_id = vector::slice(&report, 107, 109);
+        let report_id = aptos_std::from_bcs::to_u16(report_id);
+        let metadata = vector::slice(&report, 45, 109);
+        let data = vector::slice(&report, 109, vector::length(&report));
 
         // this will revert if don_id doesn't exist
-        let config = smart_table::borrow(&state.configs, don_id);
+        let config = smart_table::borrow(&state.configs, ConfigId { don_id, config_version });
 
         // check if report was already delivered
-        let report_id = report_id(signer::address_of(receiver_authority), workflow_execution_id);
-        let processed = smart_table::contains(&state.reports, report_id);
+        let transmission_id = transmission_id(signer::address_of(receiver_authority), workflow_execution_id, report_id);
+        let processed = smart_table::contains(&state.reports, transmission_id);
         assert!(!processed, E_ALREADY_PROCESSED);
 
         let required_signatures = (config.f as u64) + 1;
         assert!(vector::length(&signatures) == required_signatures, error::invalid_argument(E_INVALID_SIGNATURE_COUNT));
 
+        // keccak256(keccak256(report), report_context)
         let msg = keccak256(report);
+        vector::append(&mut msg, report_context);
+        let msg = keccak256(msg);
 
         let signed = bit_vector::new(vector::length(&signatures));
 
@@ -182,25 +203,31 @@ module chainlink::keystone_forwarder {
         // mark as delivered
         // TODO: can't have transmitter address since passed through receiver -> receiver has to be called
         // without signer
-        smart_table::add(&mut state.reports, report_id, receiver);
+        smart_table::add(&mut state.reports, transmission_id, receiver);
 
         event::emit(ReportProcessed {
             receiver,
-            workflow_owner,
             workflow_execution_id,
         });
 
-        (workflow_id, workflow_owner, data)
+        (metadata, data)
     }
 
-    public fun get_transmitter(receiver: address, workflow_execution_id: vector<u8>): Option<address> acquires State {
+    public fun get_transmission_state(receiver: address, workflow_execution_id: vector<u8>, report_id: u16): bool acquires State {
         let state = borrow_global_mut<State>(@forwarder);
-        let report_id = report_id(receiver, workflow_execution_id);
+        let transmission_id = transmission_id(receiver, workflow_execution_id, report_id);
 
-        if (!smart_table::contains(&mut state.reports, report_id)) {
+        return !smart_table::contains(&mut state.reports, transmission_id)
+    }
+
+    public fun get_transmitter(receiver: address, workflow_execution_id: vector<u8>, report_id: u16): Option<address> acquires State {
+        let state = borrow_global_mut<State>(@forwarder);
+        let transmission_id = transmission_id(receiver, workflow_execution_id, report_id);
+
+        if (!smart_table::contains(&mut state.reports, transmission_id)) {
             return option::none()
         };
-        option::some(*smart_table::borrow(&mut state.reports, report_id))
+        option::some(*smart_table::borrow(&mut state.reports, transmission_id))
     }
 
     #[test_only]
@@ -217,6 +244,7 @@ module chainlink::keystone_forwarder {
     #[test_only]
     struct OracleSet has drop {
         don_id: u32,
+        config_version: u32,
         f: u8,
         oracles: vector<vector<u8>>,
         signers: vector<ed25519::SecretKey>,
@@ -236,6 +264,7 @@ module chainlink::keystone_forwarder {
         };
         OracleSet {
             don_id,
+            config_version: 1,
             f,
             oracles,
             signers,
@@ -243,8 +272,12 @@ module chainlink::keystone_forwarder {
     }
 
     #[test_only]
-    fun sign_report(config: &OracleSet, report: vector<u8>): vector<Signature> {
+    fun sign_report(config: &OracleSet, report: vector<u8>, report_context: vector<u8>): vector<Signature> {
+        // keccak256(keccak256(report), report_context)
         let msg = keccak256(report);
+        vector::append(&mut msg, report_context);
+        let msg = keccak256(msg);
+
         let signatures = vector[];
         let required_signatures = config.f + 1;
         for (i in 0..required_signatures) {
@@ -272,25 +305,39 @@ module chainlink::keystone_forwarder {
         let config = generate_oracle_set();
 
         // configure DON
-        set_config(config.don_id, config.f, config.oracles);
+        set_config(config.don_id, config.config_version, config.f, config.oracles);
 
         // generate report
+        let version = 1;
+        let timestamp: u32 = 1;
         let workflow_id = x"6d795f6964000000000000000000000000000000000000000000000000000000";
+        let workflow_name = x"000000000000DEADBEEF";
         let workflow_owner = x"0000000000000000000000000000000000000051";
+        let report_id = x"0001";
         let execution_id = x"6d795f657865637574696f6e5f69640000000000000000000000000000000000";
         let mercury_reports = vector[x"010203", x"aabbcc"];
 
         let report = vector[];
-        vector::append(&mut report, workflow_id);
-        vector::append(&mut report, bcs::to_bytes(&config.don_id));
+        // header
+        vector::push_back(&mut report, version);
         vector::append(&mut report, execution_id);
+        vector::append(&mut report, bcs::to_bytes(&timestamp));
+        vector::append(&mut report, bcs::to_bytes(&config.don_id));
+        vector::append(&mut report, bcs::to_bytes(&config.config_version));
+        // metadata
+        vector::append(&mut report, workflow_id);
+        vector::append(&mut report, workflow_name);
         vector::append(&mut report, workflow_owner);
+        vector::append(&mut report, report_id);
+        // report
         vector::append(&mut report, bcs::to_bytes(&mercury_reports));
 
+        let report_context = x"a0b0000000000000000000000000000000000000000000000000000000000000";
+
         // sign report
-        let signatures = sign_report(&config, report);
+        let signatures = sign_report(&config, report, report_context);
 
         // call entrypoint
-        validate_report(&deployer, report, signatures);
+        validate_report(&deployer, report, report_context, signatures);
     }
 }
