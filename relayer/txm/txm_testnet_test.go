@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
+
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/testutils"
 )
 
 func TestTxmDevnet(t *testing.T) {
@@ -19,12 +21,12 @@ func TestTxmTestnet(t *testing.T) {
 func runTestnetTest(t *testing.T, rpcUrl string) {
 	logger := logger.Test(t)
 
-	privateKey, publicKey, accountAddress := loadAccountFromEnv(t, logger)
+	privateKey, publicKey, accountAddress := testutils.LoadAccountFromEnv(t, logger)
 	if privateKey == nil {
 		t.Fatal("PRIVATE_KEY or ADDRESS environment variable is not set")
 	}
 
-	keystore := newTestKeystore(t, accountAddress, privateKey)
+	keystore := testutils.NewTestKeystore(t, accountAddress, privateKey)
 
 	config := AptosTxmConfig{
 		RPCUrl:            rpcUrl,
