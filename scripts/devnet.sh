@@ -33,7 +33,7 @@ listen_args=()
 # On linux, we can connect to the container ip directly.
 if [ "$(uname)" = "Darwin" ]; then
 	echo "Listening on all interfaces on MacOS"
-  listen_args+=("-p" "0.0.0.0:8080:8080", "-p", "0.0.0.0:8081:8081")
+  listen_args+=("-p" "0.0.0.0:8080:8080" "-p" "0.0.0.0:8081:8081")
 fi
 
 docker run \
