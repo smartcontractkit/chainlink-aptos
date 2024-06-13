@@ -29,7 +29,7 @@ module chainlink::keystone_forwarder {
     const RECEIVER_SEED: vector<u8> = b"receiver";
 
     public entry fun register(receiver: &signer) {
-        let (resource_account, signer_cap) = account::create_resource_account(receiver, RECEIVER_SEED);
+        let (_resource_account, signer_cap) = account::create_resource_account(receiver, RECEIVER_SEED);
         let state = Receiver { signer_cap };
         move_to(receiver, state)
     }
@@ -135,7 +135,7 @@ module chainlink::keystone_forwarder {
 
     // receiver_authority is a resource account owned by the receiver
     // TODO: a method to register these accounts
-    public fun validate_report(receiver_authority: &signer, report: vector<u8>, signatures: vector<Signature>) acquires State {
+    public fun validate_report(receiver_authority: &signer, report: vector<u8>, signatures: vector<Signature>): (vector<u8>, vector<u8>, vector<u8>) acquires State {
         let state = borrow_global_mut<State>(@forwarder);
 
         // parse out report metadata
@@ -145,6 +145,7 @@ module chainlink::keystone_forwarder {
         let don_id = aptos_std::from_bcs::to_u32(don_id);
         let workflow_execution_id = vector::slice(&report, 36, 58);
         let workflow_owner = vector::slice(&report, 58, 78);
+        let data = vector::slice(&report, 78, vector::length(&report));
 
         // this will revert if don_id doesn't exist
         let config = smart_table::borrow(&state.configs, don_id);
@@ -187,7 +188,9 @@ module chainlink::keystone_forwarder {
             receiver,
             workflow_owner,
             workflow_execution_id,
-        })
+        });
+
+        (workflow_id, workflow_owner, data)
     }
 
     public fun get_transmitter(receiver: address, workflow_execution_id: vector<u8>): Option<address> acquires State {
@@ -211,22 +214,19 @@ module chainlink::keystone_forwarder {
         init_module(resource_account);
     }
 
-    #[test (
-        deployer = @0xcafe,
-        forwarder = @0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5,
-        // aptos_framework = @aptos_framework
-    )]
-    public entry fun test_happy_path(
-        deployer: signer,
-        forwarder: signer,
-        // aptos_framework: signer
-    ) acquires State {
-        set_up_test(&deployer, &forwarder);
+    #[test_only]
+    struct OracleSet has drop {
+        don_id: u32,
+        f: u8,
+        oracles: vector<vector<u8>>,
+        signers: vector<ed25519::SecretKey>,
+    }
 
+    #[test_only]
+    fun generate_oracle_set(): OracleSet {
         let don_id = 0;
         let f = 1;
 
-        // generate oracle set
         let signers = vector[];
         let oracles = vector[];
         for (i in 0..31) {
@@ -234,9 +234,45 @@ module chainlink::keystone_forwarder {
             vector::push_back(&mut signers, sk);
             vector::push_back(&mut oracles, ed25519::validated_public_key_to_bytes(&pk));
         };
+        OracleSet {
+            don_id,
+            f,
+            oracles,
+            signers,
+        }
+    }
+
+    #[test_only]
+    fun sign_report(config: &OracleSet, report: vector<u8>): vector<Signature> {
+        let msg = keccak256(report);
+        let signatures = vector[];
+        let required_signatures = config.f + 1;
+        for (i in 0..required_signatures) {
+            let signer = vector::borrow(&config.signers, (i as u64));
+            let public_key = ed25519::new_unvalidated_public_key_from_bytes(*vector::borrow(&config.oracles, (i as u64)));
+            let sig = ed25519::sign_arbitrary_bytes(signer, msg);
+            vector::push_back(&mut signatures, Signature {
+                sig,
+                public_key,
+            });
+        };
+        signatures
+    }
+
+    #[test (
+        deployer = @0xcafe,
+        forwarder = @0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5,
+    )]
+    public entry fun test_happy_path(
+        deployer: signer,
+        forwarder: signer,
+    ) acquires State {
+        set_up_test(&deployer, &forwarder);
+
+        let config = generate_oracle_set();
 
         // configure DON
-        set_config(don_id, f, oracles);
+        set_config(config.don_id, config.f, config.oracles);
 
         // generate report
         let workflow_id = x"6d795f6964000000000000000000000000000000000000000000000000000000";
@@ -246,23 +282,13 @@ module chainlink::keystone_forwarder {
 
         let report = vector[];
         vector::append(&mut report, workflow_id);
-        vector::append(&mut report, bcs::to_bytes(&don_id));
+        vector::append(&mut report, bcs::to_bytes(&config.don_id));
         vector::append(&mut report, execution_id);
         vector::append(&mut report, workflow_owner);
+        vector::append(&mut report, bcs::to_bytes(&mercury_reports));
 
         // sign report
-        let msg = keccak256(report);
-        let signatures = vector[];
-        let required_signatures = f + 1;
-        for (i in 0..required_signatures) {
-            let signer = vector::borrow(&signers, (i as u64));
-            let public_key = ed25519::new_unvalidated_public_key_from_bytes(*vector::borrow(&oracles, (i as u64)));
-            let sig = ed25519::sign_arbitrary_bytes(signer, msg);
-            vector::push_back(&mut signatures, Signature {
-                sig,
-                public_key,
-            });
-        };
+        let signatures = sign_report(&config, report);
 
         // call entrypoint
         validate_report(&deployer, report, signatures);
