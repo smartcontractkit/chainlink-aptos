@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
+	aptosapi "github.com/aptos-labs/aptos-go-sdk/api"
 	aptoscrypto "github.com/aptos-labs/aptos-go-sdk/crypto"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
@@ -282,18 +283,23 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		a.logger.Errorw("failed to deserialize public key", "error", err)
 		return
 	}
-	authenticator := &aptoscrypto.Ed25519Authenticator{
-		PublicKey: publicKey,
-	}
-	copy(authenticator.Signature[:], signature[:])
 
-	signedTx := &aptos.SignedTransaction{
-		Transaction: rawTx,
-		Authenticator: aptoscrypto.Authenticator{
-			Kind: aptoscrypto.AuthenticatorEd25519,
-			Auth: authenticator,
-		},
+	sig := aptoscrypto.Ed25519Signature{}
+	err = sig.FromBytes(signature)
+	if err != nil {
+		a.logger.Errorw("failed to deserialize signature", "error", err)
+		return
 	}
+
+	authenticator := &aptoscrypto.Ed25519Authenticator{
+		PubKey: &publicKey,
+		Sig:    &sig,
+	}
+
+	signedTx, err := rawTx.SignedTransactionWithAuthenticator(&aptoscrypto.AccountAuthenticator{
+		Variant: aptoscrypto.AccountAuthenticatorEd25519,
+		Auth:    authenticator,
+	})
 
 	submitResponse, err := client.SubmitTransaction(signedTx)
 	if err != nil {
@@ -303,20 +309,9 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 
 	a.logger.Infow("DEBUG: submitted", "tx", submitResponse)
 
-	submitHash, ok := submitResponse["hash"]
-	if !ok {
-		a.logger.Errorw("failed to read submitted tx hash")
-		return
-	}
-
-	submitHashStr, ok := submitHash.(string)
-	if !ok {
-		a.logger.Errorw("failed to stringify tx hash", "hash", submitHash)
-		return
-	}
-	err = txStore.AddUnconfirmed(nonce, submitHashStr, uint64(time.Now().Unix()), tx)
+	err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, uint64(time.Now().Unix()), tx)
 	if err != nil {
-		a.logger.Errorw("failed to add unconfirmed tx", "txHash", submitHashStr, "error", err)
+		a.logger.Errorw("failed to add unconfirmed tx", "txHash", submitResponse.Hash, "error", err)
 	}
 }
 
@@ -365,24 +360,12 @@ func (a *AptosTxm) checkUnconfirmed() {
 				continue
 			}
 
-			txType, ok := chainTx["type"]
-			if !ok {
-				a.logger.Errorw("failed to check transaction type", "chainTx", chainTx)
-				continue
-			}
-
-			txTypeStr, ok := txType.(string)
-			if !ok {
-				a.logger.Errorw("failed to convert transaction type to string", "chainTx", chainTx)
-				continue
-			}
-
-			if txTypeStr == "pending_transaction" {
+			if chainTx.Type == aptosapi.TransactionVariantPendingTransaction {
 				// TODO: check expiry?
 				continue
 			}
 
-			a.logger.Debugw("transaction confirmed", "hash", hash, "type", txTypeStr)
+			a.logger.Debugw("transaction confirmed", "hash", hash, "type", chainTx.Type)
 
 			if err := a.accountStore.GetTxStore(accountAddress).Confirm(unconfirmedTx.Nonce, hash); err != nil {
 				a.logger.Errorw("failed to confirm tx in TxStore", "hash", hash, "accountAddress", accountAddress, "error", err)
