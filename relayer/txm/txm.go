@@ -14,6 +14,7 @@ import (
 	aptosapi "github.com/aptos-labs/aptos-go-sdk/api"
 	aptoscrypto "github.com/aptos-labs/aptos-go-sdk/crypto"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/sha3"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
@@ -109,6 +110,14 @@ func (a *AptosTxm) Enqueue(transactionID uuid.UUID, fromAddress, publicKey, func
 	ed25519PublicKey, err := hexToEd25519PublicKey(publicKey)
 	if err != nil {
 		return fmt.Errorf("failed to convert public key: %+w", err)
+	}
+
+	if fromAddress == "" {
+		// If the address is not specified, we assume the public key is for its corresponding address
+		// and not for an address with a rotated authentication key.
+		authKey := sha3.Sum256(append([]byte(ed25519PublicKey), 0x00))
+		accountAddress := aptos.AccountAddress(authKey)
+		fromAddress = accountAddress.String()
 	}
 
 	functionTokens := strings.Split(function, "::")
@@ -233,6 +242,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		return
 	}
 
+	// TODO: parse FromAddress and ContractAddress on Enqueue.
 	fromAddress := &aptos.AccountAddress{}
 	err = fromAddress.ParseStringRelaxed(tx.FromAddress)
 	if err != nil {
