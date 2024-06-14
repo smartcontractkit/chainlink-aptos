@@ -17,6 +17,7 @@ module chainlink::keystone_forwarder {
     const E_INVALID_SIGNATURE_COUNT: u64 = 4;
     const E_INVALID_SIGNATURE: u64 = 5;
     const E_ALREADY_PROCESSED: u64 = 6;
+    const E_UNAUTHORIZED: u64 = 7;
 
     struct Receiver has key {
         signer_cap: account::SignerCapability
@@ -37,6 +38,8 @@ module chainlink::keystone_forwarder {
     }
 
     struct State has key {
+        owner: address,
+
         signer_cap: SignerCapability,
         // (don_id, config_version) => config
         configs: SmartTable<ConfigId, Config>,
@@ -57,20 +60,20 @@ module chainlink::keystone_forwarder {
     }
 
     fun init_module(resource_signer: &signer) {
-        // TODO: save owner
-
         let signer_cap = resource_account::retrieve_resource_account_cap(resource_signer, @deployer);
 
         move_to(resource_signer, State {
+            owner: @deployer,
             configs: smart_table::new(),
             reports: smart_table::new(),
             signer_cap,
         });
     }
 
-    public entry fun set_config(don_id: u32, config_version: u32, f: u8, oracles: vector<vector<u8>>) acquires State {
+    public entry fun set_config(authority: &signer, don_id: u32, config_version: u32, f: u8, oracles: vector<vector<u8>>) acquires State {
         let state = borrow_global_mut<State>(@forwarder);
-        // TODO: assert owner
+
+        assert!(state.owner == signer::address_of(authority), E_UNAUTHORIZED);
 
         // TODO: f checks etc
         smart_table::upsert(&mut state.configs, ConfigId {don_id, config_version}, Config {
@@ -81,9 +84,10 @@ module chainlink::keystone_forwarder {
         });
     }
 
-    public entry fun clear_config(don_id: u32, config_version: u32, f: u8, oracles: vector<vector<u8>>) acquires State {
+    public entry fun clear_config(authority: &signer, don_id: u32, config_version: u32, f: u8, oracles: vector<vector<u8>>) acquires State {
         let state = borrow_global_mut<State>(@forwarder);
-        // TODO: assert owner
+
+        assert!(state.owner == signer::address_of(authority), E_UNAUTHORIZED);
 
         smart_table::remove(&mut state.configs, ConfigId {don_id, config_version});
     }
@@ -263,7 +267,7 @@ module chainlink::keystone_forwarder {
         let config = generate_oracle_set();
 
         // configure DON
-        set_config(config.don_id, config.config_version, config.f, config.oracles);
+        set_config(&deployer, config.don_id, config.config_version, config.f, config.oracles);
 
         // generate report
         let version = 1;
