@@ -26,7 +26,7 @@ func runTestnetTest(t *testing.T, rpcUrl string) {
 		t.Fatal("PRIVATE_KEY or ADDRESS environment variable is not set")
 	}
 
-	keystore := testutils.NewTestKeystore(t, accountAddress, privateKey)
+	keystore := testutils.NewTestKeystore(t, accountAddress.String(), privateKey)
 
 	config := AptosTxmConfig{
 		RPCUrl:            rpcUrl,
