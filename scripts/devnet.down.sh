@@ -8,10 +8,10 @@ if [ -z "$dpid" ]
 then
     echo "No docker devnet container running.";
 else
-    docker kill $dpid;
-    docker rm $dpid;
+    docker kill $dpid || true;
+    docker rm $dpid || docker rm --force $dpid;
 fi
 
-docker network rm chainlink-aptos.network
+docker network rm --force chainlink-aptos.network
 
 echo "Cleanup finished."
