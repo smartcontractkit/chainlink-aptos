@@ -232,6 +232,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	client, err := a.GetClient()
 	if err != nil {
 		a.logger.Errorw("failed to get client", "error", err)
+		tx.Status = commontypes.Fatal
 		return
 	}
 
@@ -239,6 +240,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	chainId, err := client.GetChainId()
 	if err != nil {
 		a.logger.Errorw("failed to get chain id", "error", err)
+		tx.Status = commontypes.Fatal
 		return
 	}
 
@@ -247,6 +249,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	err = fromAddress.ParseStringRelaxed(tx.FromAddress)
 	if err != nil {
 		a.logger.Errorw("failed to convert from address", "error", err)
+		tx.Status = commontypes.Fatal
 		return
 	}
 
@@ -254,6 +257,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	err = contractAddress.ParseStringRelaxed(tx.ContractAddress)
 	if err != nil {
 		a.logger.Errorw("failed to convert contract address", "error", err)
+		tx.Status = commontypes.Fatal
 		return
 	}
 
@@ -262,16 +266,19 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		accountInfo, err := client.Account(*fromAddress)
 		if err != nil {
 			a.logger.Errorw("failed to fetch account data", "error", err)
+			tx.Status = commontypes.Fatal
 			return
 		}
 		sequenceNumber, err := accountInfo.SequenceNumber()
 		if err != nil {
 			a.logger.Errorw("failed to decode sequence number", "sequenceNumberStr", accountInfo.SequenceNumberStr, "error", err)
+			tx.Status = commontypes.Fatal
 			return
 		}
 		newTxStore, err := a.accountStore.CreateTxStore(tx.FromAddress, sequenceNumber)
 		if err != nil {
 			a.logger.Errorw("failed to create tx store", "fromAddress", tx.FromAddress, "error", err)
+			tx.Status = commontypes.Fatal
 			return
 		}
 		txStore = newTxStore
@@ -280,17 +287,20 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	gasInfo, err := client.EstimateGasPrice()
 	if err != nil {
 		a.logger.Errorw("failed to retrieve estimated gas price", "error", err)
+		tx.Status = commontypes.Fatal
 		return
 	}
 
 	nodeInfo, err := client.Info()
 	if err != nil {
 		a.logger.Errorw("failed to fetch ledger info", "error", err)
+		tx.Status = commontypes.Fatal
 		return
 	}
 	ledgerTimestamp := nodeInfo.LedgerTimestamp()
 	if ledgerTimestamp == 0 {
 		a.logger.Errorw("failed to fetch ledger timestamp", "nodeInfo", nodeInfo)
+		tx.Status = commontypes.Fatal
 		return
 	}
 
@@ -327,12 +337,14 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	signingMessage, err := rawTx.SigningMessage()
 	if err != nil {
 		a.logger.Errorw("failed to create signing message", "error", err)
+		tx.Status = commontypes.Fatal
 		return
 	}
 
 	signature, err := a.keystore.Sign(context.Background(), tx.FromAddress, signingMessage)
 	if err != nil {
 		a.logger.Errorw("failed to sign message", "fromAddress", tx.FromAddress, "error", err)
+		tx.Status = commontypes.Fatal
 		return
 	}
 
@@ -340,6 +352,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	err = publicKey.FromBytes([]byte(tx.PublicKey))
 	if err != nil {
 		a.logger.Errorw("failed to deserialize public key", "error", err)
+		tx.Status = commontypes.Fatal
 		return
 	}
 
@@ -347,6 +360,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	err = sig.FromBytes(signature)
 	if err != nil {
 		a.logger.Errorw("failed to deserialize signature", "error", err)
+		tx.Status = commontypes.Fatal
 		return
 	}
 
@@ -363,14 +377,17 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	submitResponse, err := client.SubmitTransaction(signedTx)
 	if err != nil {
 		a.logger.Errorw("failed to submit signed transaction", "error", err)
+		tx.Status = commontypes.Fatal
 		return
 	}
 
-	a.logger.Infow("DEBUG: submitted", "tx", submitResponse)
+	a.logger.Debugw("submitted tx", "submitResponse", submitResponse)
 
 	err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, uint64(time.Now().Unix()), tx)
 	if err != nil {
+		// TODO: figure out what to do here.
 		a.logger.Errorw("failed to add unconfirmed tx", "txHash", submitResponse.Hash, "error", err)
+		tx.Status = commontypes.Fatal
 	}
 }
 
