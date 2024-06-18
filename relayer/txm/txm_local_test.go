@@ -53,8 +53,9 @@ func TestTxmLocal(t *testing.T) {
 	keystore.AddKey(privateKey)
 
 	config := AptosTxmConfig{
-		BroadcastChanSize: 100,
-		ConfirmPollSecs:   2,
+		BroadcastChanSize:    100,
+		ConfirmPollSecs:      2,
+		SimulateTransactions: true,
 	}
 
 	runTxmTest(t, logger, config, rpcUrl, keystore, accountAddress, publicKey, 10)

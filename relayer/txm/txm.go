@@ -25,6 +25,9 @@ import (
 
 var _ services.Service = &AptosTxm{}
 
+// https://github.com/aptos-labs/aptos-ts-sdk/blob/32d4360740392782c1368647f89ba62e1b6a2cb3/src/utils/const.ts#L21
+const DEFAULT_MAX_GAS_AMOUNT = 200000
+
 type AptosTxm struct {
 	logger   logger.Logger
 	keystore loop.Keystore
@@ -248,15 +251,9 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 
 	txStore := a.accountStore.GetTxStore(tx.FromAddress.String())
 	if txStore == nil {
-		accountInfo, err := client.Account(tx.FromAddress)
+		sequenceNumber, err := a.getSequenceNumber(client, tx.FromAddress)
 		if err != nil {
-			a.logger.Errorw("failed to fetch account data", "error", err)
-			tx.Status = commontypes.Fatal
-			return
-		}
-		sequenceNumber, err := accountInfo.SequenceNumber()
-		if err != nil {
-			a.logger.Errorw("failed to decode sequence number", "sequenceNumberStr", accountInfo.SequenceNumberStr, "error", err)
+			a.logger.Errorw("failed to get sequence number", "error", err)
 			tx.Status = commontypes.Fatal
 			return
 		}
@@ -309,14 +306,31 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		Sender:         tx.FromAddress,
 		SequenceNumber: nonce,
 		Payload:        payload,
-		// TODO: gas amount estimation? we use the default as per aptos-ts-sdk for now.
-		// https://github.com/aptos-labs/aptos-ts-sdk/blob/32d4360740392782c1368647f89ba62e1b6a2cb3/src/utils/const.ts#L21
-		MaxGasAmount: 200000,
+		MaxGasAmount:   DEFAULT_MAX_GAS_AMOUNT,
 		// TODO: on retry, consider using PrioritizedGasEstimate
 		GasUnitPrice: gasInfo.GasEstimate,
 		// TODO: handle expiry
 		ExpirationTimestampSeconds: ledgerTimestamp + uint64(600),
 		ChainId:                    chainId,
+	}
+
+	publicKey := aptoscrypto.Ed25519PublicKey{}
+	err = publicKey.FromBytes([]byte(tx.PublicKey))
+	if err != nil {
+		a.logger.Errorw("failed to deserialize public key", "error", err)
+		tx.Status = commontypes.Fatal
+		return
+	}
+
+	// (if enabled) simulate tx to estimate gas
+	if a.config.SimulateTransactions {
+		estiamtedGas, err := a.estimateGas(client, rawTx, fromAddress, publicKey)
+		if err != nil {
+			// do not error on failed estimate gas as it could fail due to conflicting in-flight txs
+			a.logger.Infow("failed to estimate gas, using default max gas amount", "maxGasAmount", DEFAULT_MAX_GAS_AMOUNT, "error", err)
+		} else {
+			rawTx.MaxGasAmount = estiamtedGas
+		}
 	}
 
 	signingMessage, err := rawTx.SigningMessage()
@@ -329,14 +343,6 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	signature, err := a.keystore.Sign(context.Background(), fmt.Sprintf("%064x", tx.PublicKey), signingMessage)
 	if err != nil {
 		a.logger.Errorw("failed to sign message", "fromAddress", tx.FromAddress, "error", err)
-		tx.Status = commontypes.Fatal
-		return
-	}
-
-	publicKey := aptoscrypto.Ed25519PublicKey{}
-	err = publicKey.FromBytes([]byte(tx.PublicKey))
-	if err != nil {
-		a.logger.Errorw("failed to deserialize public key", "error", err)
 		tx.Status = commontypes.Fatal
 		return
 	}
@@ -440,6 +446,63 @@ func (a *AptosTxm) checkUnconfirmed() {
 
 func (a *AptosTxm) InflightCount() (int, int) {
 	return len(a.broadcastChan), a.accountStore.GetTotalInflightCount()
+}
+
+func (a *AptosTxm) getSequenceNumber(client *aptos.NodeClient, address aptos.AccountAddress) (uint64, error) {
+	accountInfo, err := client.Account(address)
+	if err != nil {
+		a.logger.Errorw("failed to fetch account data", "error", err)
+		return 0, err
+	}
+	sequenceNumber, err := accountInfo.SequenceNumber()
+	if err != nil {
+		a.logger.Errorw("failed to decode sequence number", "sequenceNumberStr", accountInfo.SequenceNumberStr, "error", err)
+		return 0, err
+	}
+	return sequenceNumber, nil
+}
+
+type mockSimulationSigner struct {
+	aptoscrypto.Ed25519PrivateKey
+	pubKey aptoscrypto.Ed25519PublicKey
+}
+
+func (key *mockSimulationSigner) PubKey() aptoscrypto.PublicKey {
+	return &key.pubKey
+}
+
+func (a *AptosTxm) estimateGas(client *aptos.NodeClient, rawTx aptos.RawTransaction, fromAddress *aptos.AccountAddress, publicKey aptoscrypto.Ed25519PublicKey) (uint64, error) {
+	// testing: remove later
+	rawTx.MaxGasAmount = 0
+
+	// need to fetch latest sequence number on-chain since we could have other in-flight txs which results in an error SEQUENCE_NUMBER_TOO_NEW
+	sequenceNumber, err := a.getSequenceNumber(client, *fromAddress)
+	if err != nil {
+		a.logger.Errorw("failed to get sequence number", "error", err)
+		return 0, err
+	}
+	rawTx.SequenceNumber = sequenceNumber
+
+	// build mock signer for simulation
+	signerForSimulation := &aptos.Account{Signer: &mockSimulationSigner{pubKey: publicKey}}
+
+	simulateTxResp, err := client.SimulateTransaction(&rawTx, any(signerForSimulation).(aptos.TransactionSigner), aptos.EstimateMaxGasAmount(true))
+	if err != nil {
+		a.logger.Debugw("failed to simulate transaction", "error", err)
+		return 0, err
+	}
+	if !*(simulateTxResp[0].TxnSuccess()) {
+		if (simulateTxResp)[0].VmStatus == "SEQUENCE_NUMBER_TOO_OLD" {
+			// race condition with tx confirmation incrementing the sequence number, retry
+			return a.estimateGas(client, rawTx, fromAddress, publicKey)
+		}
+		a.logger.Debugw("simulated transaction not successful", "vmStatus", simulateTxResp[0].VmStatus)
+		return 0, fmt.Errorf("simulated transaction not successful: %v", simulateTxResp[0].VmStatus)
+	}
+
+	// todo: configurable multiplier?
+	// fixed multiplier of 1.25 to account for potential discrepancies in gas estimation
+	return uint64(float64(simulateTxResp[0].GasUsed) * 1.25), nil
 }
 
 func hexToEd25519PublicKey(hexKey string) (ed25519.PublicKey, error) {

@@ -2,6 +2,8 @@ cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMT
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/aptos-labs/aptos-go-sdk v0.3.0 h1:V4eup+NFVKTPh64kyZnnFIfED//bm/oMTcs7pM7Rv8s=
 github.com/aptos-labs/aptos-go-sdk v0.3.0/go.mod h1:zLAajWwzVfY69x0agGEO2fL8Cr1vlSflHqpoWDWl6Ng=
+github.com/aptos-labs/aptos-go-sdk v0.4.0 h1:CzakYWj3JkotwtURbNMTHqEOHKgj7jANsZ/2avKhSVo=
+github.com/aptos-labs/aptos-go-sdk v0.4.0/go.mod h1:zLAajWwzVfY69x0agGEO2fL8Cr1vlSflHqpoWDWl6Ng=
 github.com/bahlo/generic-list-go v0.2.0 h1:5sz/EEAK+ls5wF+NeqDpk5+iNdMDXrh3z3nPnH1Wvgk=
 github.com/bahlo/generic-list-go v0.2.0/go.mod h1:2KvAjgMlE5NNynlg/5iLrrCCZ2+5xWbdbCW3pNTGyYg=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
