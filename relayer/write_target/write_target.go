@@ -1,0 +1,72 @@
+package write_target
+
+import (
+	"context"
+	"fmt"
+
+	chain "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chain"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chainreader"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chainwriter"
+
+	"github.com/smartcontractkit/chainlink-common/pkg/logger"
+	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
+)
+
+func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Logger) (*WriteTarget, error) {
+	// generate ID based on chain selector
+	// id := fmt.Sprintf("write_%v@1.0.0", chain.ID())
+	// chainName, err := chainselectors.NameFromChainId(chain.ID().Uint64())
+	// if err == nil {
+	// 	id = fmt.Sprintf("write_%v@1.0.0", chainName)
+	// }
+
+	id := fmt.Sprintf("write_aptos@1.0.0")
+
+	config := chain.Config().Workflow
+
+	rpcURL := chain.Config().Nodes[0].URL.String() // TODO:
+
+	// Initialize a reader to check whether a value was already transmitted on chain
+	cr := chainreader.NewChainReader(logger.Named(lggr, "ChainReader"), rpcURL, chainreader.ChainReaderConfig{
+		Modules: map[string]*chainreader.ChainReaderModule{
+			"forwarder": {
+				Functions: map[string]*chainreader.ChainReaderFunction{
+					"getTransmitter": {
+						Params: []chainreader.ChainReaderFunctionParam{},
+					},
+				},
+			},
+		},
+	})
+	// if err != nil {
+	// 	return nil, err
+	// }
+	err := cr.Bind(ctx, []commontypes.BoundContract{{
+		Address: config.ForwarderAddress,
+		Name:    "forwarder",
+	}})
+	if err != nil {
+		return nil, err
+	}
+
+	chainWriterConfig := chainwriter.ChainWriterConfig{
+		Modules: map[string]*chainwriter.ChainWriterModule{
+			"forwarder": {
+				Functions: map[string]*chainwriter.ChainWriterFunction{
+					"report": {
+						PublicKey:   config.FromAddress,
+						FromAddress: config.FromAddress,
+						Params:      []chainwriter.ChainWriterFunctionParam{},
+					},
+				},
+			},
+		},
+	}
+
+	cw := chainwriter.NewChainWriter(logger.Named(lggr, "ChainWriter"), chain.TxManager(), chainWriterConfig)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	return NewWriteTarget(lggr, id, cr, cw, config.ForwarderAddress), nil
+}

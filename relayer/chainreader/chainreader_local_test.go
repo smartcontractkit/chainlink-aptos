@@ -79,7 +79,7 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 	packageMetadataBytes, moduleBytecodeBytes := testutils.GetEchoContract(t, accountAddress.String())
 
 	err = txmgr.Enqueue(
-		uuid.New(),
+		uuid.New().String(),
 		accountAddress.String(),
 		publicKeyHex,
 		"0x1::code::publish_package_txn",

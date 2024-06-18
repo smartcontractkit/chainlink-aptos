@@ -6,6 +6,7 @@ toolchain go1.22.0
 
 require (
 	github.com/aptos-labs/aptos-go-sdk v0.3.0
+	github.com/ethereum/go-ethereum v1.14.5
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-plugin v1.6.0
 	github.com/mitchellh/mapstructure v1.5.0
@@ -27,7 +28,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
-	github.com/ethereum/go-ethereum v1.14.5 // indirect
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.5.0 // indirect
 	github.com/go-json-experiment/json v0.0.0-20231102232822-2e55bd4e08b0 // indirect
