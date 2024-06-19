@@ -324,12 +324,12 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 
 	// (if enabled) simulate tx to estimate gas
 	if a.config.SimulateTransactions {
-		estiamtedGas, err := a.estimateGas(client, rawTx, fromAddress, publicKey)
+		estimatedGas, err := a.estimateGas(client, rawTx, fromAddress, publicKey)
 		if err != nil {
 			// do not error on failed estimate gas as it could fail due to conflicting in-flight txs
 			a.logger.Infow("failed to estimate gas, using default max gas amount", "maxGasAmount", DEFAULT_MAX_GAS_AMOUNT, "error", err)
 		} else {
-			rawTx.MaxGasAmount = estiamtedGas
+			rawTx.MaxGasAmount = estimatedGas
 		}
 	}
 
