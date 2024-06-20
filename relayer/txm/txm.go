@@ -27,6 +27,7 @@ var _ services.Service = &AptosTxm{}
 
 // https://github.com/aptos-labs/aptos-ts-sdk/blob/32d4360740392782c1368647f89ba62e1b6a2cb3/src/utils/const.ts#L21
 const DEFAULT_MAX_GAS_AMOUNT = 200000
+const MAX_SIMULATE_ATTEMPTS = 5
 
 type AptosTxm struct {
 	logger   logger.Logger
@@ -478,34 +479,40 @@ func (key *mockSimulationSigner) PubKey() aptoscrypto.PublicKey {
 }
 
 func (a *AptosTxm) estimateGas(client *aptos.NodeClient, rawTx aptos.RawTransaction, fromAddress *aptos.AccountAddress, publicKey aptoscrypto.Ed25519PublicKey) (uint64, error) {
-	// need to fetch latest sequence number on-chain since we could have other in-flight txs which results in an error SEQUENCE_NUMBER_TOO_NEW
-	sequenceNumber, err := a.getSequenceNumber(client, *fromAddress)
-	if err != nil {
-		a.logger.Errorw("failed to get sequence number", "error", err)
-		return 0, err
-	}
-	rawTx.SequenceNumber = sequenceNumber
-
 	// build mock signer for simulation
 	signerForSimulation := &aptos.Account{Signer: &mockSimulationSigner{pubKey: publicKey}}
 
-	simulateTxResp, err := client.SimulateTransaction(&rawTx, any(signerForSimulation).(aptos.TransactionSigner), aptos.EstimateMaxGasAmount(true))
-	if err != nil {
-		a.logger.Debugw("failed to simulate transaction", "error", err)
-		return 0, err
-	}
-	if !*(simulateTxResp[0].TxnSuccess()) {
-		if (simulateTxResp)[0].VmStatus == "SEQUENCE_NUMBER_TOO_OLD" {
-			// race condition with tx confirmation incrementing the sequence number, retry
-			return a.estimateGas(client, rawTx, fromAddress, publicKey)
+	var gasUsed uint64
+	attempt := 1
+	for attempt <= MAX_SIMULATE_ATTEMPTS {
+		// need to fetch latest sequence number on-chain since we could have other in-flight txs which results in an error SEQUENCE_NUMBER_TOO_NEW
+		sequenceNumber, err := a.getSequenceNumber(client, *fromAddress)
+		if err != nil {
+			a.logger.Errorw("failed to get sequence number", "error", err)
+			return 0, err
 		}
-		a.logger.Debugw("simulated transaction not successful", "vmStatus", simulateTxResp[0].VmStatus)
-		return 0, fmt.Errorf("simulated transaction not successful: %v", simulateTxResp[0].VmStatus)
+		rawTx.SequenceNumber = sequenceNumber
+
+		simulateTxResp, err := client.SimulateTransaction(&rawTx, any(signerForSimulation).(aptos.TransactionSigner), aptos.EstimateMaxGasAmount(true))
+		if err != nil {
+			a.logger.Debugw("failed to simulate transaction", "error", err)
+			return 0, err
+		}
+		if !*(simulateTxResp[0].TxnSuccess()) {
+			if (simulateTxResp)[0].VmStatus == "SEQUENCE_NUMBER_TOO_OLD" {
+				// race condition with tx confirmation incrementing the sequence number, retry
+				attempt++
+				continue
+			}
+			a.logger.Debugw("simulated transaction not successful", "vmStatus", simulateTxResp[0].VmStatus)
+			return 0, fmt.Errorf("simulated transaction not successful: %v", simulateTxResp[0].VmStatus)
+		}
+		gasUsed = simulateTxResp[0].GasUsed
 	}
 
 	// todo: configurable multiplier?
 	// fixed multiplier of 1.25 to account for potential discrepancies in gas estimation
-	return uint64(float64(simulateTxResp[0].GasUsed) * 1.25), nil
+	return uint64(float64(gasUsed) * 1.25), nil
 }
 
 func hexToEd25519PublicKey(hexKey string) (ed25519.PublicKey, error) {
