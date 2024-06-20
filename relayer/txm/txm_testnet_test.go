@@ -11,11 +11,11 @@ import (
 )
 
 func TestTxmDevnet(t *testing.T) {
-	runTestnetTest(t, "https://api.devnet.aptoslabs.com")
+	runTestnetTest(t, "https://api.devnet.aptoslabs.com/v1")
 }
 
 func TestTxmTestnet(t *testing.T) {
-	runTestnetTest(t, "https://api.testnet.aptoslabs.com")
+	runTestnetTest(t, "https://api.testnet.aptoslabs.com/v1")
 }
 
 func runTestnetTest(t *testing.T, rpcUrl string) {
