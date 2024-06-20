@@ -12,7 +12,7 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk/bcs"
 )
 
-func createTypeTag(typeName string) (aptos.TypeTag, error) {
+func CreateTypeTag(typeName string) (aptos.TypeTag, error) {
 	switch typeName {
 	case "u8":
 		return aptos.TypeTag{Value: &aptos.U8Tag{}}, nil
@@ -27,7 +27,7 @@ func createTypeTag(typeName string) (aptos.TypeTag, error) {
 	default:
 		if strings.HasPrefix(typeName, "vector<") && strings.HasSuffix(typeName, ">") {
 			innerTypeName := strings.TrimSuffix(strings.TrimPrefix(typeName, "vector<"), ">")
-			innerTypeTag, err := createTypeTag(innerTypeName)
+			innerTypeTag, err := CreateTypeTag(innerTypeName)
 			if err != nil {
 				return aptos.TypeTag{}, err
 			}
@@ -62,7 +62,7 @@ func createTypeTag(typeName string) (aptos.TypeTag, error) {
 				structTypeTags := []aptos.TypeTag{}
 				for _, token := range innerTypeTokens {
 					token = strings.TrimSpace(token)
-					tokenTypeTag, err := createTypeTag(token)
+					tokenTypeTag, err := CreateTypeTag(token)
 					if err != nil {
 						return aptos.TypeTag{}, fmt.Errorf("invalid struct type token: %s", token)
 					}
@@ -89,7 +89,7 @@ func createTypeTag(typeName string) (aptos.TypeTag, error) {
 	}
 }
 
-func createBcsValue(typeTag aptos.TypeTag, typeValue any) ([]byte, error) {
+func CreateBcsValue(typeTag aptos.TypeTag, typeValue any) ([]byte, error) {
 	serializer := &bcs.Serializer{}
 	err := serializeArg(typeValue, typeTag, serializer)
 	if err != nil {

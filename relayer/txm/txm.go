@@ -129,7 +129,7 @@ func (a *AptosTxm) Enqueue(transactionID uuid.UUID, fromAddress, publicKey, func
 
 	typeTags := []aptos.TypeTag{}
 	for _, typeArg := range typeArgs {
-		typeTag, err := createTypeTag(typeArg)
+		typeTag, err := CreateTypeTag(typeArg)
 		if err != nil {
 			return fmt.Errorf("failed to parse type argument %s: %+w", typeArg, err)
 		}
@@ -142,12 +142,12 @@ func (a *AptosTxm) Enqueue(transactionID uuid.UUID, fromAddress, publicKey, func
 		typeName := paramTypes[i]
 		typeValue := paramValues[i]
 
-		typeTag, err := createTypeTag(typeName)
+		typeTag, err := CreateTypeTag(typeName)
 		if err != nil {
 			return fmt.Errorf("failed to parse type %s: %+w", typeName, err)
 		}
 
-		bcsValue, err := createBcsValue(typeTag, typeValue)
+		bcsValue, err := CreateBcsValue(typeTag, typeValue)
 		if err != nil {
 			return fmt.Errorf("failed to serialize value %s: %+w", typeValue, err)
 		}
