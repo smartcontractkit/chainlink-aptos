@@ -493,6 +493,7 @@ func (a *AptosTxm) estimateGas(client *aptos.NodeClient, rawTx aptos.RawTransact
 		}
 		rawTx.SequenceNumber = sequenceNumber
 
+		a.logger.Debugw("simulating transaction", "attempt", attempt, "sequenceNumber", sequenceNumber)
 		simulateTxResp, err := client.SimulateTransaction(&rawTx, any(signerForSimulation).(aptos.TransactionSigner), aptos.EstimateMaxGasAmount(true))
 		if err != nil {
 			a.logger.Debugw("failed to simulate transaction", "error", err)
@@ -501,13 +502,14 @@ func (a *AptosTxm) estimateGas(client *aptos.NodeClient, rawTx aptos.RawTransact
 		if !*(simulateTxResp[0].TxnSuccess()) {
 			if (simulateTxResp)[0].VmStatus == "SEQUENCE_NUMBER_TOO_OLD" {
 				// race condition with tx confirmation incrementing the sequence number, retry
-				attempt++
+				attempt = attempt + 1
 				continue
 			}
 			a.logger.Debugw("simulated transaction not successful", "vmStatus", simulateTxResp[0].VmStatus)
 			return 0, fmt.Errorf("simulated transaction not successful: %v", simulateTxResp[0].VmStatus)
 		}
 		gasUsed = simulateTxResp[0].GasUsed
+		break
 	}
 
 	// todo: configurable multiplier?
