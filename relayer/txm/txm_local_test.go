@@ -53,9 +53,8 @@ func TestTxmLocal(t *testing.T) {
 	keystore.AddKey(privateKey)
 
 	config := AptosTxmConfig{
-		BroadcastChanSize:    100,
-		ConfirmPollSecs:      2,
-		SimulateTransactions: true,
+		BroadcastChanSize: 100,
+		ConfirmPollSecs:   2,
 	}
 
 	runTxmTest(t, logger, config, rpcUrl, keystore, accountAddress, publicKey, 10)
@@ -95,7 +94,9 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 			accountAddress.String()+"::counter::increment",
 			[]string{},
 			[]string{"address"},
-			[]any{accountAddress})
+			[]any{accountAddress},
+			true,
+		)
 		require.NoError(t, err)
 		expectedValue += 1
 
@@ -106,7 +107,9 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 			accountAddress.String()+"::counter::increment_mult",
 			[]string{},
 			[]string{"address", "u64", "u64"},
-			[]any{accountAddress, uint64(3), uint64(4)})
+			[]any{accountAddress, uint64(3), uint64(4)},
+			true,
+		)
 		require.NoError(t, err)
 		expectedValue += 3 * 4
 	}
@@ -137,6 +140,7 @@ func deployTestContract(t *testing.T, txm *AptosTxm, fromAddress, publicKeyHex s
 		/* typeArgs= */ []string{},
 		/* paramTypes= */ []string{"vector<u8>", "vector<vector<u8>>"},
 		/* paramValues= */ []any{packageMetadataBytes, [][]byte{moduleBytecodeBytes}},
+		/* simulateTx= */ true,
 	)
 	require.NoError(t, err)
 
@@ -149,7 +153,9 @@ func deployTestContract(t *testing.T, txm *AptosTxm, fromAddress, publicKeyHex s
 		fromAddress+"::counter::initialize",
 		[]string{},
 		[]string{},
-		[]any{})
+		[]any{},
+		true,
+	)
 	require.NoError(t, err)
 
 	// TODO: check account resource to make sure it was initialized.

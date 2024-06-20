@@ -93,7 +93,7 @@ func (a *AptosTxm) Close() error {
 	})
 }
 
-func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, function string, typeArgs []string, paramTypes []string, paramValues []any) error {
+func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, function string, typeArgs []string, paramTypes []string, paramValues []any, simulateTx bool) error {
 	if transactionID == "" {
 		transactionID = uuid.New().String()
 	} else {
@@ -170,6 +170,11 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 		return fmt.Errorf("failed to parse contract address: %+w", err)
 	}
 
+	checker := TransmitCheckerSpec{}
+	if simulateTx {
+		checker.CheckerType = TransmitCheckerTypeSimulate
+	}
+
 	tx := &AptosTx{
 		ID: transactionID,
 		// TODO: clean up old transactions in the map by timestamp.
@@ -182,6 +187,7 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 		TypeTags:        typeTags,
 		BcsValues:       bcsValues,
 		Status:          commontypes.Unconfirmed,
+		Checker:         checker,
 	}
 
 	a.transactionsLock.Lock()
@@ -322,8 +328,8 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		return
 	}
 
-	// (if enabled) simulate tx to estimate gas
-	if a.config.SimulateTransactions {
+	// (if enabled for tx) simulate tx to estimate gas
+	if tx.Checker.CheckerType == TransmitCheckerTypeSimulate {
 		estimatedGas, err := a.estimateGas(client, rawTx, fromAddress, publicKey)
 		if err != nil {
 			// do not error on failed estimate gas as it could fail due to conflicting in-flight txs
@@ -472,9 +478,6 @@ func (key *mockSimulationSigner) PubKey() aptoscrypto.PublicKey {
 }
 
 func (a *AptosTxm) estimateGas(client *aptos.NodeClient, rawTx aptos.RawTransaction, fromAddress *aptos.AccountAddress, publicKey aptoscrypto.Ed25519PublicKey) (uint64, error) {
-	// testing: remove later
-	rawTx.MaxGasAmount = 0
-
 	// need to fetch latest sequence number on-chain since we could have other in-flight txs which results in an error SEQUENCE_NUMBER_TOO_NEW
 	sequenceNumber, err := a.getSequenceNumber(client, *fromAddress)
 	if err != nil {

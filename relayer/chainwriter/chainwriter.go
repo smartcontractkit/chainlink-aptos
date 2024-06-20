@@ -116,7 +116,9 @@ func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, 
 		fmt.Sprintf("%s::%s::%s", toAddress, moduleName, functionName),
 		/* typeArgs= */ []string{},
 		paramTypes,
-		paramValues)
+		paramValues,
+		/* simulateTx= */ true, // TODO: how to make this configurable if chainwriter has a fixed interface?
+	)
 
 	if err != nil {
 		a.logger.Errorw("failed to enqueue transaction", "transactionID", transactionID, "contractName", contractName, "method", method, "toAddress", toAddress, "error", err)

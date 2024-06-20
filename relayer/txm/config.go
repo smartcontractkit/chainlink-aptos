@@ -1,7 +1,6 @@
 package txm
 
 type AptosTxmConfig struct {
-	BroadcastChanSize    uint
-	ConfirmPollSecs      uint
-	SimulateTransactions bool
+	BroadcastChanSize uint
+	ConfirmPollSecs   uint
 }
