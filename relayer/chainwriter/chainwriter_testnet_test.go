@@ -11,11 +11,11 @@ import (
 )
 
 func TestChainWriterDevnet(t *testing.T) {
-	runTestnetTest(t, "https://api.devnet.aptoslabs.com")
+	runTestnetTest(t, testutils.DevnetUrl)
 }
 
 func TestChainWriterTestnet(t *testing.T) {
-	runTestnetTest(t, "https://api.testnet.aptoslabs.com")
+	runTestnetTest(t, testutils.TestnetUrl)
 }
 
 func runTestnetTest(t *testing.T, rpcUrl string) {
