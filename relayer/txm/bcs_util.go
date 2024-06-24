@@ -16,6 +16,8 @@ func CreateTypeTag(typeName string) (aptos.TypeTag, error) {
 	switch typeName {
 	case "u8":
 		return aptos.TypeTag{Value: &aptos.U8Tag{}}, nil
+	case "u32":
+		return aptos.TypeTag{Value: &aptos.U32Tag{}}, nil
 	case "u64":
 		return aptos.TypeTag{Value: &aptos.U64Tag{}}, nil
 	case "u128":
