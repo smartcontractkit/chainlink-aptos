@@ -29,10 +29,9 @@ func runTestnetTest(t *testing.T, rpcUrl string) {
 	keystore := testutils.NewTestKeystore(t, accountAddress.String(), privateKey)
 
 	config := AptosTxmConfig{
-		RPCUrl:            rpcUrl,
 		BroadcastChanSize: 100,
 		ConfirmPollSecs:   2,
 	}
 
-	runTxmTest(t, logger, config, keystore, accountAddress, publicKey, 5)
+	runTxmTest(t, logger, config, rpcUrl, keystore, accountAddress, publicKey, 5)
 }

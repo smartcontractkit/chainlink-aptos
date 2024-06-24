@@ -42,18 +42,24 @@ type AptosTxm struct {
 	client *aptos.NodeClient
 }
 
-func New(lgr logger.Logger, keystore loop.Keystore, config AptosTxmConfig) *AptosTxm {
+func New(lgr logger.Logger, keystore loop.Keystore, config AptosTxmConfig, getClient func() (*aptos.NodeClient, error)) (*AptosTxm, error) {
+	client, err := getClient()
+	if err != nil {
+		return nil, err
+	}
+
 	return &AptosTxm{
 		logger:   logger.Named(lgr, "AptosTxm"),
 		keystore: keystore,
 		config:   config,
+		client:   client,
 
 		transactions: map[uuid.UUID]*AptosTx{},
 
 		broadcastChan: make(chan uuid.UUID, config.BroadcastChanSize),
 		accountStore:  NewAccountStore(),
 		stop:          make(chan struct{}),
-	}
+	}, nil
 }
 
 func (a *AptosTxm) Name() string {
@@ -66,17 +72,6 @@ func (a *AptosTxm) Ready() error {
 
 func (a *AptosTxm) HealthReport() map[string]error {
 	return map[string]error{a.Name(): a.starter.Healthy()}
-}
-
-func (a *AptosTxm) GetClient() (*aptos.NodeClient, error) {
-	if a.client == nil {
-		client, err := aptos.NewNodeClient(a.config.RPCUrl, 0)
-		if err != nil {
-			return nil, err
-		}
-		a.client = client
-	}
-	return a.client, nil
 }
 
 func (a *AptosTxm) Start(ctx context.Context) error {
@@ -229,12 +224,7 @@ func (a *AptosTxm) broadcastLoop() {
 }
 
 func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
-	client, err := a.GetClient()
-	if err != nil {
-		a.logger.Errorw("failed to get client", "error", err)
-		tx.Status = commontypes.Fatal
-		return
-	}
+	client := a.client
 
 	// this is cached within NodeClient after the first successful invocation.
 	chainId, err := client.GetChainId()
@@ -419,11 +409,7 @@ func (a *AptosTxm) confirmLoop() {
 }
 
 func (a *AptosTxm) checkUnconfirmed() {
-	client, err := a.GetClient()
-	if err != nil {
-		a.logger.Errorw("failed to load client", "error", err)
-		return
-	}
+	client := a.client
 	allUnconfirmedTxs := a.accountStore.GetAllUnconfirmed()
 	for accountAddress, unconfirmedTxs := range allUnconfirmedTxs {
 		for _, unconfirmedTx := range unconfirmedTxs {

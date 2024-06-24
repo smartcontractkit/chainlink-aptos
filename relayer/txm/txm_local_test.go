@@ -55,17 +55,20 @@ func TestTxmLocal(t *testing.T) {
 	keystore := testutils.NewTestKeystore(t, accountAddress.String(), privateKey)
 
 	config := AptosTxmConfig{
-		RPCUrl:            rpcUrl,
 		BroadcastChanSize: 100,
 		ConfirmPollSecs:   2,
 	}
 
-	runTxmTest(t, logger, config, keystore, accountAddress, publicKey, 10)
+	runTxmTest(t, logger, config, rpcUrl, keystore, accountAddress, publicKey, 10)
 }
 
-func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, keystore loop.Keystore, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, iterations int) {
-	txm := New(logger, keystore, config)
-	err := txm.Start(context.Background())
+func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcURL string, keystore loop.Keystore, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, iterations int) {
+	client, err := aptos.NewNodeClient(rpcURL, 0) // TODO: chainId
+	require.NoError(t, err)
+	getClient := func() (*aptos.NodeClient, error) { return client, nil }
+	txm, err := New(logger, keystore, config, getClient)
+	require.NoError(t, err)
+	err = txm.Start(context.Background())
 	require.NoError(t, err)
 
 	publicKeyHex := hex.EncodeToString([]byte(publicKey))
@@ -83,8 +86,6 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, keyst
 	logger.Debugw("Deployed test contract")
 
 	// Get the current version so that we can find the transactions quickly after incrementing.
-	client, err := txm.GetClient()
-	require.NoError(t, err)
 
 	expectedValue := 0
 	for i := 0; i < iterations; i++ {

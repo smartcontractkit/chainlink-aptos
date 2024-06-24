@@ -1,4 +1,4 @@
-//go:build integration
+// aaset go:build integration
 
 package chainwriter
 
@@ -57,17 +57,21 @@ func TestChainWriterLocal(t *testing.T) {
 	runChainWriterTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey, 3)
 }
 
-func runChainWriterTest(t *testing.T, logger logger.Logger, rpcUrl string, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey, iterations int) {
+func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey, iterations int) {
 	keystore := testutils.NewTestKeystore(t, accountAddress.String(), privateKey)
 
+	client, err := aptos.NewNodeClient(rpcURL, 0) // TODO: chainId
+	require.NoError(t, err)
+	getClient := func() (*aptos.NodeClient, error) { return client, nil }
+
 	txmConfig := txm.AptosTxmConfig{
-		RPCUrl:            rpcUrl,
 		BroadcastChanSize: 100,
 		ConfirmPollSecs:   2,
 	}
 
-	txmgr := txm.New(logger, keystore, txmConfig)
-	err := txmgr.Start(context.Background())
+	txmgr, err := txm.New(logger, keystore, txmConfig, getClient)
+	require.NoError(t, err)
+	err = txmgr.Start(context.Background())
 	require.NoError(t, err)
 
 	publicKeyHex := hex.EncodeToString([]byte(publicKey))
@@ -218,7 +222,7 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 		waitForTransaction(t, chainWriter, id, 10)
 	}
 
-	client, err := txmgr.GetClient()
+	client, err = getClient()
 	require.NoError(t, err)
 
 	resource, err := client.AccountResource(accountAddress, accountAddress.String()+"::counter::Counter")
