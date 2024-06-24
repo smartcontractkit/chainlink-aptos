@@ -8,6 +8,11 @@ import (
 	"runtime"
 )
 
+const (
+	TestnetUrl = "https://api.testnet.aptoslabs.com/v1"
+	DevnetUrl  = "https://api.devnet.aptoslabs.com/v1"
+)
+
 // Finds the closest git repo root, assuming that a directory with a .git directory is a git repo.
 func findGitRoot() (string, error) {
 	currentDir, err := os.Getwd()
