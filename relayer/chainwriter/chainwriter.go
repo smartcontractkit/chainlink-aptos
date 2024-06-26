@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
@@ -29,7 +28,7 @@ func NewChainWriter(lgr logger.Logger, txm *txm.AptosTxm, config ChainWriterConf
 	}
 }
 
-func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, method string, args any, transactionID uuid.UUID, toAddress string, meta *commontypes.TxMeta, value big.Int) error {
+func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, method string, args any, transactionID string, toAddress string, meta *commontypes.TxMeta, value *big.Int) error {
 	moduleConfig, ok := a.config.Modules[contractName]
 	if !ok {
 		return fmt.Errorf("no such contract: %s", contractName)
@@ -95,7 +94,7 @@ func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, 
 	return nil
 }
 
-func (a *aptosChainWriter) GetTransactionStatus(ctx context.Context, transactionID uuid.UUID) (commontypes.TransactionStatus, error) {
+func (a *aptosChainWriter) GetTransactionStatus(ctx context.Context, transactionID string) (commontypes.TransactionStatus, error) {
 	return a.txm.GetStatus(transactionID)
 }
 

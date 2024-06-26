@@ -1,4 +1,4 @@
-// aaset go:build integration
+// go:build integration
 
 package chainwriter
 
@@ -145,7 +145,7 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 
 	packageMetadataBytes, moduleBytecodeBytes := testutils.GetTestContract(t, accountAddress.String())
 
-	publishId := uuid.New()
+	publishId := uuid.New().String()
 	publishPackageArgs := struct {
 		PackageMetadata []byte
 		ModuleBytecode  [][]byte
@@ -161,11 +161,11 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 		publishId,
 		"0x1",
 		/* meta= */ nil,
-		*big.NewInt(0))
+		big.NewInt(0))
 	require.NoError(t, err)
 	waitForTransaction(t, chainWriter, publishId, 10)
 
-	initializeId := uuid.New()
+	initializeId := uuid.New().String()
 	err = chainWriter.SubmitTransaction(
 		context.Background(),
 		"testContract",
@@ -174,14 +174,14 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 		initializeId,
 		accountAddress.String(),
 		/* meta= */ nil,
-		*big.NewInt(0))
+		big.NewInt(0))
 	require.NoError(t, err)
 	waitForTransaction(t, chainWriter, initializeId, 10)
 
-	incrementIds := []uuid.UUID{}
+	incrementIds := []string{}
 	expectedValue := 0
 	for i := 0; i < iterations; i++ {
-		incrementId := uuid.New()
+		incrementId := uuid.New().String()
 		err = chainWriter.SubmitTransaction(
 			context.Background(),
 			"testContract",
@@ -190,12 +190,12 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 			incrementId,
 			accountAddress.String(),
 			/* meta= */ nil,
-			*big.NewInt(0))
+			big.NewInt(0))
 		require.NoError(t, err)
 		incrementIds = append(incrementIds, incrementId)
 		expectedValue += 1
 
-		incrementMultId := uuid.New()
+		incrementMultId := uuid.New().String()
 		incrementMultArgs := struct {
 			MultiplierA uint64
 			MultiplierB uint64
@@ -211,7 +211,7 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 			incrementMultId,
 			accountAddress.String(),
 			/* meta= */ nil,
-			*big.NewInt(0))
+			big.NewInt(0))
 		require.NoError(t, err)
 		incrementIds = append(incrementIds, incrementMultId)
 		expectedValue += 3 * 4
@@ -245,7 +245,7 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 	require.Equal(t, fmt.Sprintf("%d", expectedValue), valueStr)
 }
 
-func waitForTransaction(t *testing.T, chainWriter commontypes.ChainWriter, id uuid.UUID, waitSecs int) {
+func waitForTransaction(t *testing.T, chainWriter commontypes.ChainWriter, id string, waitSecs int) {
 	for i := 1; i <= waitSecs; i++ {
 		status, err := chainWriter.GetTransactionStatus(context.Background(), id)
 		require.NoError(t, err)

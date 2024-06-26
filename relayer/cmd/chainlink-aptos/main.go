@@ -9,6 +9,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
+	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer"
 	chain "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chain"
@@ -55,7 +56,7 @@ type pluginRelayer struct {
 // [github.com/smartcontractkit/chainlink-common/pkg/loop.PluginRelayer]
 // loopKs must be an implementation that can construct a aptos keystore adapter
 // [github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm.NewKeystoreAdapter]
-func (c *pluginRelayer) NewRelayer(ctx context.Context, rawConfig string, loopKs loop.Keystore) (loop.Relayer, error) {
+func (c *pluginRelayer) NewRelayer(ctx context.Context, rawConfig string, loopKs loop.Keystore, capRegistry core.CapabilitiesRegistry) (loop.Relayer, error) {
 	d := toml.NewDecoder(strings.NewReader(rawConfig))
 	d.DisallowUnknownFields()
 	var cfg struct {

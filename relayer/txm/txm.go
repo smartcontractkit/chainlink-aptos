@@ -30,10 +30,10 @@ type AptosTxm struct {
 	keystore loop.Keystore
 	config   AptosTxmConfig
 
-	transactions     map[uuid.UUID]*AptosTx
+	transactions     map[string]*AptosTx
 	transactionsLock sync.RWMutex
 
-	broadcastChan chan uuid.UUID
+	broadcastChan chan string
 	accountStore  *AccountStore
 	starter       utils.StartStopOnce
 	done          sync.WaitGroup
@@ -54,9 +54,9 @@ func New(lgr logger.Logger, keystore loop.Keystore, config AptosTxmConfig, getCl
 		config:   config,
 		client:   client,
 
-		transactions: map[uuid.UUID]*AptosTx{},
+		transactions: map[string]*AptosTx{},
 
-		broadcastChan: make(chan uuid.UUID, config.BroadcastChanSize),
+		broadcastChan: make(chan string, config.BroadcastChanSize),
 		accountStore:  NewAccountStore(),
 		stop:          make(chan struct{}),
 	}, nil
@@ -90,9 +90,9 @@ func (a *AptosTxm) Close() error {
 	})
 }
 
-func (a *AptosTxm) Enqueue(transactionID uuid.UUID, fromAddress, publicKey, function string, typeArgs []string, paramTypes []string, paramValues []any) error {
-	if transactionID == uuid.Nil {
-		transactionID = uuid.New()
+func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, function string, typeArgs []string, paramTypes []string, paramValues []any) error {
+	if transactionID == "" {
+		transactionID = uuid.New().String()
 	} else {
 		a.transactionsLock.Lock()
 		_, transactionExists := a.transactions[transactionID]
@@ -182,8 +182,8 @@ func (a *AptosTxm) Enqueue(transactionID uuid.UUID, fromAddress, publicKey, func
 	return nil
 }
 
-func (a *AptosTxm) GetStatus(transactionID uuid.UUID) (commontypes.TransactionStatus, error) {
-	if transactionID == uuid.Nil {
+func (a *AptosTxm) GetStatus(transactionID string) (commontypes.TransactionStatus, error) {
+	if transactionID == "" {
 		return commontypes.Unknown, errors.New("nil transaction id")
 	}
 
