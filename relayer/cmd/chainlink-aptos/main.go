@@ -59,23 +59,28 @@ type pluginRelayer struct {
 func (c *pluginRelayer) NewRelayer(ctx context.Context, rawConfig string, loopKs loop.Keystore, capRegistry core.CapabilitiesRegistry) (loop.Relayer, error) {
 	d := toml.NewDecoder(strings.NewReader(rawConfig))
 	d.DisallowUnknownFields()
-	var cfg struct {
-		Aptos config.TOMLConfig
-	}
+	var cfg config.TOMLConfig
 	if err := d.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to decode config toml: %w:\n\t%s", err, rawConfig)
 	}
+	cfg.SetDefaults()
 
 	opts := chain.ChainOpts{
 		Logger:   c.Logger,
 		KeyStore: loopKs,
 	}
 
-	chain, err := chain.NewChain(&cfg.Aptos, opts)
+	chain, err := chain.NewChain(&cfg, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chain: %w", err)
 	}
-	ra := &loop.RelayerAdapter{Relayer: relayer.NewRelayer(c.Logger, chain), RelayerExt: chain}
+
+	relay, err := relayer.NewRelayer(c.Logger, chain, capRegistry)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create relay: %w", err)
+	}
+
+	ra := &loop.RelayerAdapter{Relayer: relay, RelayerExt: chain}
 
 	c.SubService(ra)
 

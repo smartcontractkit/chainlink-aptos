@@ -1,3 +1,5 @@
 .direnv/
 # local config
 .helix/
+# local aptos config
+.aptos/

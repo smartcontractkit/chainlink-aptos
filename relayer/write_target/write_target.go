@@ -24,10 +24,13 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 
 	config := chain.Config().Workflow
 
-	rpcURL := chain.Config().Nodes[0].URL.String() // TODO:
+	client, err := chain.GetClient()
+	if err != nil {
+		return nil, err
+	}
 
 	// Initialize a reader to check whether a value was already transmitted on chain
-	cr := chainreader.NewChainReader(logger.Named(lggr, "ChainReader"), rpcURL, chainreader.ChainReaderConfig{
+	cr := chainreader.NewChainReader(logger.Named(lggr, "ChainReader"), client, chainreader.ChainReaderConfig{
 		Modules: map[string]*chainreader.ChainReaderModule{
 			"forwarder": {
 				Functions: map[string]*chainreader.ChainReaderFunction{
@@ -41,7 +44,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	// if err != nil {
 	// 	return nil, err
 	// }
-	err := cr.Bind(ctx, []commontypes.BoundContract{{
+	err = cr.Bind(ctx, []commontypes.BoundContract{{
 		Address: config.ForwarderAddress,
 		Name:    "forwarder",
 	}})

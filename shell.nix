@@ -10,5 +10,7 @@
     delve
     (golangci-lint.override { buildGoModule = buildGo122Module; })
     gotools
+
+    postgresql_15
   ];
 }

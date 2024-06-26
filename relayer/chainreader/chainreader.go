@@ -25,7 +25,7 @@ type aptosChainReader struct {
 	client *aptos.NodeClient
 }
 
-func NewChainReader(lgr logger.Logger, config ChainReaderConfig, client *aptos.NodeClient) types.ContractReader {
+func NewChainReader(lgr logger.Logger, client *aptos.NodeClient, config ChainReaderConfig) types.ContractReader {
 	return &aptosChainReader{
 		logger:          logger.Named(lgr, "AptosChainReader"),
 		client:          client,

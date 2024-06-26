@@ -28,6 +28,7 @@ type Chain interface {
 	Config() *config.TOMLConfig
 
 	TxManager() *txm.AptosTxm
+	GetClient() (*aptos.NodeClient, error)
 }
 
 type ChainOpts struct {
@@ -65,9 +66,9 @@ type chain struct {
 
 func NewChain(cfg *config.TOMLConfig, opts ChainOpts) (Chain, error) {
 	if !cfg.IsEnabled() {
-		return nil, fmt.Errorf("cannot create new chain with ID %s: chain is disabled", *cfg.ChainID)
+		return nil, fmt.Errorf("cannot create new chain with ID %s: chain is disabled", cfg.ChainID)
 	}
-	c, err := newChain(*cfg.ChainID, cfg, opts.KeyStore, opts.Logger)
+	c, err := newChain(cfg.ChainID, cfg, opts.KeyStore, opts.Logger)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +84,7 @@ func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logg
 	}
 
 	getClient := func() (*aptos.NodeClient, error) {
-		return ch.getClient()
+		return ch.GetClient()
 	}
 
 	var err error
@@ -111,8 +112,8 @@ func (c *chain) ChainID() string {
 	return c.id
 }
 
-// getClient returns a client, randomly selecting one from available and valid nodes
-func (c *chain) getClient() (*aptos.NodeClient, error) {
+// GetClient returns a client, randomly selecting one from available and valid nodes
+func (c *chain) GetClient() (*aptos.NodeClient, error) {
 	var node *config.Node
 	var err error
 	var client *aptos.NodeClient
@@ -123,9 +124,9 @@ func (c *chain) getClient() (*aptos.NodeClient, error) {
 	// #nosec
 	index := rand.Perm(len(nodes)) // list of node indexes to try
 	for _, i := range index {
-		node := nodes[i]
+		node = nodes[i]
 		// create client and check
-		client, err = aptos.NewNodeClient(c.cfg.RPCURL.String(), 0) // TODO: chainId
+		client, err = aptos.NewNodeClient(node.URL.String(), 0) // TODO: chainId
 		// if error, try another node
 		if err != nil {
 			c.lggr.Warnw("failed to create node", "name", node.Name, "aptos-url", node.URL, "err", err.Error())

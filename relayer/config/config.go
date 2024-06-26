@@ -58,8 +58,9 @@ func (cs TOMLConfigs) validateKeys() (err error) {
 	// Unique chain IDs
 	chainIDs := config.UniqueStrings{}
 	for i, c := range cs {
-		if chainIDs.IsDupe(c.ChainID) {
-			err = errors.Join(err, config.NewErrDuplicate(fmt.Sprintf("%d.ChainID", i), *c.ChainID))
+		if chainIDs.IsDupe(&c.ChainID) {
+			err = errors.Join(err, config.NewErrDuplicate(fmt.Sprintf("%d.ChainID", i), c.ChainID))
+
 		}
 	}
 
@@ -86,47 +87,43 @@ func (cs TOMLConfigs) validateKeys() (err error) {
 	return
 }
 
-func (cs *TOMLConfigs) SetFrom(fs *TOMLConfigs) (err error) {
-	if err1 := fs.validateKeys(); err1 != nil {
-		return err1
-	}
-	for _, f := range *fs {
-		if f.ChainID == nil {
-			*cs = append(*cs, f)
-		} else if i := slices.IndexFunc(*cs, func(c *TOMLConfig) bool {
-			return c.ChainID != nil && *c.ChainID == *f.ChainID
-		}); i == -1 {
-			*cs = append(*cs, f)
-		} else {
-			(*cs)[i].SetFrom(f)
-		}
-	}
-	return
-}
+// func (cs *TOMLConfigs) SetFrom(fs *TOMLConfigs) (err error) {
+// 	if err1 := fs.validateKeys(); err1 != nil {
+// 		return err1
+// 	}
+// 	for _, f := range *fs {
+// 		if f.ChainID == nil {
+// 			*cs = append(*cs, f)
+// 		} else if i := slices.IndexFunc(*cs, func(c *TOMLConfig) bool {
+// 			return c.ChainID != nil && *c.ChainID == *f.ChainID
+// 		}); i == -1 {
+// 			*cs = append(*cs, f)
+// 		} else {
+// 			(*cs)[i].SetFrom(f)
+// 		}
+// 	}
+// 	return
+// }
 
 type TOMLConfig struct {
 	// Do not access directly. Use [IsEnabled]
-	Enabled *bool
-	ChainID *string
-	RPCURL  *config.URL
+	Enabled bool
+	ChainID string
 	Chain
 	Nodes Nodes
 }
 
 func (c *TOMLConfig) IsEnabled() bool {
-	return c.Enabled == nil || *c.Enabled
+	return c.Enabled
 }
 
 func (c *TOMLConfig) SetFrom(f *TOMLConfig) {
-	if f.Enabled != nil {
-		c.Enabled = f.Enabled
-	}
-	if f.ChainID != nil {
-		c.ChainID = f.ChainID
-	}
-	if f.RPCURL != nil {
-		c.RPCURL = f.RPCURL
-	}
+	// if f.Enabled != nil {
+	// 	c.Enabled = f.Enabled
+	// }
+	// if f.ChainID != nil {
+	// 	c.ChainID = f.ChainID
+	// }
 	setFromChain(&c.Chain, &f.Chain)
 	c.Nodes.SetFrom(&f.Nodes)
 }
@@ -138,9 +135,7 @@ func setFromChain(c, f *Chain) {
 }
 
 func (c *TOMLConfig) ValidateConfig() (err error) {
-	if c.ChainID == nil {
-		err = errors.Join(err, config.ErrMissing{Name: "ChainID", Msg: "required for all chains"})
-	} else if *c.ChainID == "" {
+	if c.ChainID == "" {
 		err = errors.Join(err, config.ErrEmpty{Name: "ChainID", Msg: "required for all chains"})
 	}
 

@@ -16,35 +16,29 @@ set -e pipefail
 bash "${dir}/devnet.down.sh"
 
 
-network_name="chainlink-aptos.network"
+network_name="chainlink"
 
-if ! docker network inspect "$network_name" >/dev/null 2>&1; then
-    docker network create --subnet=172.254.0.0/24 "$network_name"
-    echo "Docker network '$network_name' created successfully."
-fi
+# if ! docker network inspect "$network_name" >/dev/null 2>&1; then
+#     docker network create --subnet=172.254.0.0/24 "$network_name"
+#     echo "Docker network '$network_name' created successfully."
+# fi
 
 temp_dir=$(mktemp -d)
 
-container_ip="172.254.0.101"
+# container_ip="172.254.0.101"
 
 echo "Starting ${container_name} (${container_ip})"
 
-listen_args=()
-# On linux, we can connect to the container ip directly.
-if [ "$(uname)" = "Darwin" ]; then
-	echo "Listening on all interfaces on MacOS"
-  listen_args+=("-p" "0.0.0.0:8080:8080" "-p" "0.0.0.0:8081:8081")
-fi
-
 docker run \
-  "${listen_args[@]}" \
   -d \
+  -p 127.0.0.1:8080:8080 \
+  -p 127.0.0.1:8081:8081 \
   --platform linux/amd64 \
   --name "${container_name}" \
-  --ip "${container_ip}" \
   --network "${network_name}" \
   "${container_image}" \
   aptos node run-local-testnet --with-faucet --force-restart --bind-to 0.0.0.0
+  # --ip "${container_ip}" \
 
 echo "Waiting for ${container_name} container to become ready.."
 start_time=$(date +%s)

@@ -1,0 +1,43 @@
+type = "workflow"
+schemaVersion = 1
+name = "Keystone Aptos Feeds Workflow"
+forwardingAllowed = false
+workflowId = "15c631d295ef5e32deb99a10ee6804bc4af1385568f9b3363f6552ac6dbb2ce0"
+workflow = """
+name: "0000ETHBTC"
+owner: "0x00000000000000000000000000000000000000aa"
+triggers:
+ - id: "mock-streams-trigger@1.0.0"
+   config:
+     maxFrequencyMs: 5000
+     feedIds:
+       - "0x1111111111111111111100000000000000000000000000000000000000000000"
+
+consensus:
+ - id: "offchain_reporting@1.0.0"
+   ref: "aptos_feeds"
+   inputs:
+     observations:
+       - "$(trigger.outputs)"
+   config:
+     report_id: "0001"
+     aggregation_method: "data_feeds"
+     aggregation_config:
+       allowedPartialStaleness: "0.5"
+       feeds:
+         "0x1111111111111111111100000000000000000000000000000000000000000000":
+           deviation: "0.05"
+           heartbeat: 3600
+     encoder: "EVM"
+     encoder_config:
+       abi: "(bytes32 FeedID, uint224 Price, uint32 Timestamp)[] Reports"
+
+targets:
+ - id: "write_aptos@1.0.0" # TODO: annotate with devnet
+   inputs:
+     signed_report: "$(aptos_feeds.outputs)" # TODO: annotate with devnet
+   config:
+     address: "0x680084f7347baFfb5C323c2982dfC90e04F9F918"
+     deltaStage: "45s"
+     schedule: "oneAtATime"
+"""

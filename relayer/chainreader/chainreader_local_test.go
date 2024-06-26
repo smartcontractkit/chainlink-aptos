@@ -155,7 +155,7 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 		},
 	}
 
-	chainReader := NewChainReader(logger, config, client)
+	chainReader := NewChainReader(logger, client, config)
 	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{{
 		Name:    "testContract",
 		Address: accountAddress.String(),
