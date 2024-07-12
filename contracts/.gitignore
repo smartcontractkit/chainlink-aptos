@@ -1,5 +1,6 @@
 # Move Build Output
-build/
+*/build/
+*/contract_address.txt
 
 # Move coverage and tracing information
 .trace

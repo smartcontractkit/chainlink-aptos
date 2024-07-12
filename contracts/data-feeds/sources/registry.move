@@ -1,4 +1,4 @@
-module chainlink::data_feeds_registry {
+module data_feeds::registry {
     use std::error;
     use std::event;
     use std::signer;
@@ -6,8 +6,11 @@ module chainlink::data_feeds_registry {
     use std::string::String;
     use std::vector;
 
+    use aptos_framework::object::{Self};
+    use aptos_framework::aptos_account;
+
     // TODO: figure out link_address, router, verifier_proxy
-    struct DataFeedsRegistry has key, store, drop {
+    struct Registry has key, store, drop {
         owner_address: address,
         router_address: address,
 
@@ -30,6 +33,8 @@ module chainlink::data_feeds_registry {
 
     struct Config has key, store, drop {
         deviation_threshold: u256,
+
+        // TODO: shrink down to u64?
         staleness_seconds: u256,
     }
 
@@ -55,6 +60,11 @@ module chainlink::data_feeds_registry {
     struct FeedConfigResult has store, drop {
         deviation_threshold: u256,
         staleness_seconds: u256,
+    }
+
+    #[event]
+    struct Initialized has drop, store {
+        address: address,
     }
 
     #[event]
@@ -139,15 +149,15 @@ module chainlink::data_feeds_registry {
     const BASIC_SCHEMA: u16 = 2;
     const PREMIUM_SCHEMA: u16 = 3;
 
-    fun assert_is_owner(registry: &DataFeedsRegistry, target_address: address) {
+    fun assert_is_owner(registry: &Registry, target_address: address) {
         assert!(registry.owner_address == target_address, error::invalid_argument(ENOT_OWNER));
     }
 
-    fun assert_is_owner_or_router(registry: &DataFeedsRegistry, target_address: address) {
+    fun assert_is_owner_or_router(registry: &Registry, target_address: address) {
         assert!(registry.owner_address == target_address || registry.router_address == target_address, error::invalid_argument(EUNAUTHORIZED_ROUTER_OPERATION));
     }
 
-    fun assert_authorized_data_fetch(registry: &DataFeedsRegistry, target_address: address, feed_ids: &vector<vector<u8>>) {
+    fun assert_authorized_data_fetch(registry: &Registry, target_address: address, feed_ids: &vector<vector<u8>>) {
         if (registry.owner_address == target_address || registry.router_address == target_address) {
             return
         };
@@ -169,9 +179,19 @@ module chainlink::data_feeds_registry {
         }
     }
 
-    public entry fun initialize(resource_account: &signer, owner_address: address, router_address: address) {
-        // TODO: retrieve signer cap?
-        move_to(resource_account, DataFeedsRegistry {
+    public entry fun initialize(owner_address: address, router_address: address) {
+        let constructor_ref = object::create_object(owner_address);
+        let object_address = object::address_from_constructor_ref(&constructor_ref);
+
+        // Create an account alongside the object.
+        aptos_account::create_account(object_address);
+
+        // Store an ExtendRef alongside the object.
+        let object_signer = object::generate_signer(&constructor_ref);
+        let _extend_ref = object::generate_extend_ref(&constructor_ref);
+        // TODO: store extend_ref?
+
+        move_to(&object_signer, Registry {
             // TODO: functionality to update owner and router addresses
             owner_address,
             router_address,
@@ -180,10 +200,18 @@ module chainlink::data_feeds_registry {
             configs: simple_map::new(),
             upkeep_feed_id_set: simple_map::new(),
         });
+
+        event::emit<Initialized>(
+            Initialized {
+                address: object_address,
+            },
+        );
     }
 
-    public entry fun set_feeds(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>, upkeep: address) acquires DataFeedsRegistry {
-        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+    public entry fun set_feeds(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>, upkeep: address) acquires Registry {
+        let registry = borrow_global_mut<Registry>(registry_address);
+
+        // TODO: address to object, compare object owner
 
         assert_is_owner_or_router(registry, signer::address_of(account));
 
@@ -224,8 +252,8 @@ module chainlink::data_feeds_registry {
         });
     }
 
-    public entry fun remove_feeds(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>) acquires DataFeedsRegistry {
-        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+    public entry fun remove_feeds(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>) acquires Registry {
+        let registry = borrow_global_mut<Registry>(registry_address);
 
         assert_is_owner(registry, signer::address_of(account));
 
@@ -245,8 +273,8 @@ module chainlink::data_feeds_registry {
         });
     }
 
-    public entry fun set_feed_configs(account: &signer, registry_address: address, config_ids: vector<vector<u8>>, deviation_thresholds: vector<u256>, staleness_seconds: vector<u256>) acquires DataFeedsRegistry {
-        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+    public entry fun set_feed_configs(account: &signer, registry_address: address, config_ids: vector<vector<u8>>, deviation_thresholds: vector<u256>, staleness_seconds: vector<u256>) acquires Registry {
+        let registry = borrow_global_mut<Registry>(registry_address);
 
         assert_is_owner(registry, signer::address_of(account));
 
@@ -280,8 +308,8 @@ module chainlink::data_feeds_registry {
         }
     }
 
-    public entry fun update_descriptions(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>, descriptions: vector<String>) acquires DataFeedsRegistry {
-        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+    public entry fun update_descriptions(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>, descriptions: vector<String>) acquires Registry {
+        let registry = borrow_global_mut<Registry>(registry_address);
 
         assert_is_owner(registry, signer::address_of(account));
 
@@ -300,8 +328,8 @@ module chainlink::data_feeds_registry {
         });
     }
 
-    public entry fun update_feed_config_id(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>, config_id: vector<u8>) acquires DataFeedsRegistry {
-        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+    public entry fun update_feed_config_id(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>, config_id: vector<u8>) acquires Registry {
+        let registry = borrow_global_mut<Registry>(registry_address);
 
         assert_is_owner(registry, signer::address_of(account));
 
@@ -319,8 +347,8 @@ module chainlink::data_feeds_registry {
         });
     }
 
-    public entry fun update_upkeep(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>, upkeep: address) acquires DataFeedsRegistry {
-        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+    public entry fun update_upkeep(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>, upkeep: address) acquires Registry {
+        let registry = borrow_global_mut<Registry>(registry_address);
 
         assert_is_owner(registry, signer::address_of(account));
 
@@ -353,8 +381,8 @@ module chainlink::data_feeds_registry {
         });
     }
 
-    public entry fun request_upkeep(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>) acquires DataFeedsRegistry {
-        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+    public entry fun request_upkeep(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>) acquires Registry {
+        let registry = borrow_global_mut<Registry>(registry_address);
 
         assert_is_owner_or_router(registry, signer::address_of(account));
 
@@ -388,14 +416,14 @@ module chainlink::data_feeds_registry {
         ret
     }
 
-    public entry fun perform_upkeep(_account: &signer, registry_address: address, report_datas: vector<vector<u8>>) acquires DataFeedsRegistry {
+    public entry fun perform_upkeep(_account: &signer, registry_address: address, report_datas: vector<vector<u8>>) acquires Registry {
         // TODO: this function requires extracting the benchmarks from the reports, fee management,
         // signature validation (if needed on this layer), and then finally updating the feeds.
         // TODO: this assumes report_data is directly provided here, which probably won't be the
         // case.
         // TODO: this requires some validation of the caller.
 
-        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+        let registry = borrow_global_mut<Registry>(registry_address);
 
         vector::for_each(report_datas, |report_data| {
             let feed_id = vector::slice(&report_data, 0, 32);
@@ -433,8 +461,8 @@ module chainlink::data_feeds_registry {
         });
     }
 
-    public fun get_benchmarks(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>): vector<BenchmarkResult> acquires DataFeedsRegistry {
-        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+    public fun get_benchmarks(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>): vector<BenchmarkResult> acquires Registry {
+        let registry = borrow_global_mut<Registry>(registry_address);
 
         assert_authorized_data_fetch(registry, signer::address_of(account), &feed_ids);
 
@@ -453,8 +481,8 @@ module chainlink::data_feeds_registry {
         ret
     }
 
-    public fun get_reports(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>): vector<ReportResult> acquires DataFeedsRegistry {
-        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+    public fun get_reports(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>): vector<ReportResult> acquires Registry {
+        let registry = borrow_global_mut<Registry>(registry_address);
 
         assert_authorized_data_fetch(registry, signer::address_of(account), &feed_ids);
 
@@ -473,8 +501,8 @@ module chainlink::data_feeds_registry {
         ret
     }
 
-    public fun get_feed_metadata(registry_address: address, feed_ids: vector<vector<u8>>): vector<FeedMetadataResult> acquires DataFeedsRegistry {
-        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+    public fun get_feed_metadata(registry_address: address, feed_ids: vector<vector<u8>>): vector<FeedMetadataResult> acquires Registry {
+        let registry = borrow_global_mut<Registry>(registry_address);
 
         let ret = vector[];
 
@@ -496,8 +524,8 @@ module chainlink::data_feeds_registry {
         ret
     }
 
-    public fun get_feed_configs(registry_address: address, config_ids: vector<vector<u8>>): vector<FeedConfigResult> acquires DataFeedsRegistry {
-        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+    public fun get_feed_configs(registry_address: address, config_ids: vector<vector<u8>>): vector<FeedConfigResult> acquires Registry {
+        let registry = borrow_global_mut<Registry>(registry_address);
 
         let ret = vector[];
 
@@ -514,8 +542,8 @@ module chainlink::data_feeds_registry {
         ret
     }
 
-    public fun get_upkeep_feed_ids(registry_address: address, upkeep: address): (vector<vector<u8>>) acquires DataFeedsRegistry {
-        let registry = borrow_global_mut<DataFeedsRegistry>(registry_address);
+    public fun get_upkeep_feed_ids(registry_address: address, upkeep: address): (vector<vector<u8>>) acquires Registry {
+        let registry = borrow_global_mut<Registry>(registry_address);
 
         assert!(simple_map::contains_key(&registry.upkeep_feed_id_set, &upkeep), error::invalid_argument(EINVALID_UPKEEP));
 

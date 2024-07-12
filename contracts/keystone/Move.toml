@@ -1,0 +1,19 @@
+[package]
+name = "Chainlink Keystone"
+version = "1.0.0"
+authors = []
+
+[addresses]
+keystone = "_"
+owner = "_"
+
+[dev-addresses]
+keystone = "0x100"
+owner = "0xcafe"
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-core.git"
+rev = "mainnet"
+subdir = "aptos-move/framework/aptos-framework"
+
+[dev-dependencies]

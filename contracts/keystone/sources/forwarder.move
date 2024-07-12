@@ -1,7 +1,6 @@
-module chainlink::keystone_forwarder {
-    use aptos_framework::account::{Self, SignerCapability};
+module keystone::forwarder {
+    use aptos_framework::account::{Self};
     use aptos_framework::object::{Self, ExtendRef};
-    use aptos_framework::resource_account;
     use aptos_std::smart_table::{SmartTable,Self};
 
     use std::error;
@@ -81,7 +80,7 @@ module chainlink::keystone_forwarder {
     }
 
     fun get_state_addr(): address {
-        object::create_object_address(&@forwarder, APP_OBJECT_SEED)
+        object::create_object_address(&@keystone, APP_OBJECT_SEED)
     }
 
     public entry fun set_config(authority: &signer, don_id: u32, config_version: u32, f: u8, oracles: vector<vector<u8>>) acquires State {
@@ -269,14 +268,13 @@ module chainlink::keystone_forwarder {
 
     #[test (
         owner = @0xcafe,
-        forwarder = @forwarder,
-        chainlink = @forwarder,
+        account = @keystone,
     )]
     public entry fun test_happy_path(
         owner: signer,
-        forwarder: signer,
+        account: signer,
     ) acquires State {
-        set_up_test(&owner, &forwarder);
+        set_up_test(&owner, &account);
 
         let config = generate_oracle_set();
 
