@@ -1,5 +1,6 @@
 module chainlink::keystone_forwarder {
     use aptos_framework::account::{Self, SignerCapability};
+    use aptos_framework::object::{Self, ExtendRef};
     use aptos_framework::resource_account;
     use aptos_std::smart_table::{SmartTable,Self};
 
@@ -18,6 +19,8 @@ module chainlink::keystone_forwarder {
     const E_INVALID_SIGNATURE: u64 = 5;
     const E_ALREADY_PROCESSED: u64 = 6;
     const E_UNAUTHORIZED: u64 = 7;
+
+    const APP_OBJECT_SEED: vector<u8> = b"FORWARDER";
 
     struct Receiver has key {
         signer_cap: account::SignerCapability
@@ -40,7 +43,8 @@ module chainlink::keystone_forwarder {
     struct State has key {
         owner: address,
 
-        signer_cap: SignerCapability,
+        extend_ref: ExtendRef,
+
         // (don_id, config_version) => config
         configs: SmartTable<ConfigId, Config>,
 
@@ -59,19 +63,29 @@ module chainlink::keystone_forwarder {
         workflow_execution_id: vector<u8>,
     }
 
-    fun init_module(resource_signer: &signer) {
-        let signer_cap = resource_account::retrieve_resource_account_cap(resource_signer, @deployer);
+    fun init_module(account: &signer) {
+        let constructor_ref = object::create_named_object(
+            account,
+            APP_OBJECT_SEED,
+        );
 
-        move_to(resource_signer, State {
-            owner: @deployer,
+        let extend_ref = object::generate_extend_ref(&constructor_ref);
+        let app_signer = &object::generate_signer(&constructor_ref);
+
+        move_to(app_signer, State {
+            owner: @owner, // TODO: how to handle this
             configs: smart_table::new(),
             reports: smart_table::new(),
-            signer_cap,
+            extend_ref,
         });
     }
 
+    fun get_state_addr(): address {
+        object::create_object_address(&@forwarder, APP_OBJECT_SEED)
+    }
+
     public entry fun set_config(authority: &signer, don_id: u32, config_version: u32, f: u8, oracles: vector<vector<u8>>) acquires State {
-        let state = borrow_global_mut<State>(@forwarder);
+        let state = borrow_global_mut<State>(get_state_addr());
 
         assert!(state.owner == signer::address_of(authority), E_UNAUTHORIZED);
 
@@ -85,7 +99,7 @@ module chainlink::keystone_forwarder {
     }
 
     public entry fun clear_config(authority: &signer, don_id: u32, config_version: u32, f: u8, oracles: vector<vector<u8>>) acquires State {
-        let state = borrow_global_mut<State>(@forwarder);
+        let state = borrow_global_mut<State>(get_state_addr());
 
         assert!(state.owner == signer::address_of(authority), E_UNAUTHORIZED);
 
@@ -112,7 +126,7 @@ module chainlink::keystone_forwarder {
     // receiver_authority is a resource account owned by the receiver
     // TODO: a method to register these accounts
     public fun validate_report(receiver_authority: &signer, report: vector<u8>, report_context: vector<u8>, signatures: vector<Signature>): (vector<u8>, vector<u8>) acquires State {
-        let state = borrow_global_mut<State>(@forwarder);
+        let state = borrow_global_mut<State>(get_state_addr());
 
         // parse out report metadata
         // version | workflow_execution_id | timestamp | don_id | config_version | ...
@@ -176,14 +190,14 @@ module chainlink::keystone_forwarder {
     }
 
     public fun get_transmission_state(receiver: address, workflow_execution_id: vector<u8>, report_id: u16): bool acquires State {
-        let state = borrow_global_mut<State>(@forwarder);
+        let state = borrow_global_mut<State>(get_state_addr());
         let transmission_id = transmission_id(receiver, workflow_execution_id, report_id);
 
         return !smart_table::contains(&mut state.reports, transmission_id)
     }
 
     public fun get_transmitter(receiver: address, workflow_execution_id: vector<u8>, report_id: u16): Option<address> acquires State {
-        let state = borrow_global_mut<State>(@forwarder);
+        let state = borrow_global_mut<State>(get_state_addr());
         let transmission_id = transmission_id(receiver, workflow_execution_id, report_id);
 
         if (!smart_table::contains(&mut state.reports, transmission_id)) {
@@ -193,14 +207,13 @@ module chainlink::keystone_forwarder {
     }
 
     #[test_only]
-    public entry fun set_up_test(deployer: &signer, resource_account: &signer) {
+    public entry fun set_up_test(owner: &signer, account: &signer) {
         use std::vector;
 
-        account::create_account_for_test(signer::address_of(deployer));
+        account::create_account_for_test(signer::address_of(owner));
+        account::create_account_for_test(signer::address_of(account));
 
-        // create a resource account from the origin account, mocking the module publishing process
-        resource_account::create_resource_account(deployer, vector::empty<u8>(), vector::empty<u8>());
-        init_module(resource_account);
+        init_module(account);
     }
 
     #[test_only]
@@ -255,19 +268,20 @@ module chainlink::keystone_forwarder {
     }
 
     #[test (
-        deployer = @0xcafe,
-        forwarder = @0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5,
+        owner = @0xcafe,
+        forwarder = @forwarder,
+        chainlink = @forwarder,
     )]
     public entry fun test_happy_path(
-        deployer: signer,
+        owner: signer,
         forwarder: signer,
     ) acquires State {
-        set_up_test(&deployer, &forwarder);
+        set_up_test(&owner, &forwarder);
 
         let config = generate_oracle_set();
 
         // configure DON
-        set_config(&deployer, config.don_id, config.config_version, config.f, config.oracles);
+        set_config(&owner, config.don_id, config.config_version, config.f, config.oracles);
 
         // generate report
         let version = 1;
@@ -300,6 +314,6 @@ module chainlink::keystone_forwarder {
         let signatures = sign_report(&config, report, report_context);
 
         // call entrypoint
-        validate_report(&deployer, report, report_context, signatures);
+        validate_report(&owner, report, report_context, signatures);
     }
 }
