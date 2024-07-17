@@ -12,5 +12,6 @@
     gotools
 
     postgresql_15
+    jq
   ];
 }

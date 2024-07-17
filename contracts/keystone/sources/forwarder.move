@@ -134,6 +134,7 @@ module keystone::forwarder {
     // TODO: a method to register these accounts
     // TODO: combine report_context | report
     // TODO: signatures passed in as vec<u8> and parsed into Signature
+    // TODO: could someone frontrun and consume the report? validate_report needs to validate what the targetted receiver was
     public fun validate_report(receiver_authority: &signer, report: vector<u8>, report_context: vector<u8>, signatures: vector<Signature>): (vector<u8>, vector<u8>) acquires State {
         let state = borrow_global_mut<State>(get_state_addr());
 

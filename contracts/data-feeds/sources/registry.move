@@ -416,8 +416,10 @@ module data_feeds::registry {
         ret
     }
 
+    // Keystone receiver function interface
     public entry fun on_report(account: &signer, registry_address: address, raw_report: vector<u8>, signatures: vector<vector<u8>>) acquires Registry {
         // TODO: how would we resolve a registry_address? this would have to be looked up
+        // pass registry into the consensus phase, prefixed to the report
         let registry = borrow_global_mut<Registry>(registry_address);
 
         let authority = account;// TODO, use some other signer made for registry

@@ -1,8 +1,10 @@
 # Local development setup
 
+Aptos scripts require `aptos` CLI, `jq` and `curl`.
+
 Create a shared network for the containers
 ```
-podman network create chainlink
+docker network create chainlink
 ```
 
 Build a core image with plugins (OCR3 capability) and the aptos relayer
@@ -18,9 +20,26 @@ scripts/devnet.sh
 scripts/core.sh
 ```
 
-Switch to the main chainlink repo:
+`contracts/`
 
-Add two node configs under `core/scripts/keystone/.cache`
+Publish Aptos modules
+
+```
+aptos init --network local --assume-yes
+scripts/publish.sh
+```
+
+Deploy feed `0x1111111111111111111100000000000000000000000000000000000000000000`
+
+```
+scripts/deploy.sh
+```
+
+Switch to the `chainlink` repo:
+
+`core/scripts/keystone`:
+
+Add two node lists under `.cache`
 
 (Ports from the node are forwarded so that host can talk to them if running in rootless containers to which DNS can't be resolved)
 
@@ -42,16 +61,7 @@ http://chainlink.core.4:50103 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
 http://chainlink.core.5:50104 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
 ```
 
-`core/scripts/functions:`
-
-```
-go run . fetch-keys  --nodes ../keystone/.cache/NodeList.local.txt --chainid 1337
-cp PublicKeys.json ../keystone/.cache
-```
-
-`core/scripts/keystone`:
-
-Remove any old `artifacts/`
+Remove any old `artifacts/` and `.cache/PublicKeys.json`
 
 Add a test key and fund it
 ```
@@ -73,7 +83,7 @@ go run main.go deploy-contracts --ocrfile=ocr_config.json --chainid=1337 --ethur
 
 go run main.go deploy-jobspecs --chainid=1337 --p2pport=6691 --onlyreplay=false
 
-go run main.go deploy-workflows --workflow=../../../../chainlink-internal-integrations/aptos/scripts/workflow.yml
+go run main.go deploy-workflows --workflow=../../../../chainlink-internal-integrations/aptos/scripts/workflow.toml
 ```
 
 To remove workflows:
@@ -82,8 +92,27 @@ To remove workflows:
 go run main.go delete-workflows
 ```
 
-THEN: restart the nodes via scripts/core.sh again, just in case
+Then restart the core node, the workflows don't seem to shut down otherwise.
 
+Switch back to the `aptos` repository.
+
+`contracts/`
+
+Fund all the nodes
+
+```
+export ORACLE_ACCOUNTS=$(cat ../../../chainlink/core/scripts/keystone/.cache/PublicKeys.json | jq -r '.[].AptosAccount')
+echo $ORACLE_ACCOUNTS | xargs -L1 aptos account fund-with-faucet --account
+```
+
+Configure the keystone forwarder to accept reports from the nodes
+
+```
+export ORACLE_PUBKEYS=$(cat ../../../chainlink/core/scripts/keystone/.cache/PublicKeys.json | jq '.[].OCR2OnchainPublicKey' | paste -sd ",")
+scripts/set_config.sh
+```
+
+TODO: need to edit core.sh with transmitter key
 
 # Tips
 
@@ -92,3 +121,13 @@ Access `chainlink` CLI directly in a container of a node
 ```
 podman exec chainlink.core.1 chainlink admin login -f /tmp/api_credentials --bypass-version-check
 ```
+
+# TODO
+
+- make contract address files sourceable, use them to source address data for core node
+- TODO: default write target to the main key in the node to avoid having to deploy one
+- restart core nodes with proper addresses
+- fund aptos accounts `aptos account fund-with-faucet --account <>`
+
+TODO: can't compute transmission_id, since offchain it's the receiver module address, but onchain that could be manipulated
+the solution would be that each receiver needs to register it's own resource_account that would be bound to it's own addr
