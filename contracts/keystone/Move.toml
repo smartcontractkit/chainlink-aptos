@@ -1,5 +1,5 @@
 [package]
-name = "Chainlink Keystone"
+name = "ChainlinkKeystone"
 version = "1.0.0"
 authors = []
 
@@ -11,9 +11,7 @@ owner = "_"
 keystone = "0x100"
 owner = "0xcafe"
 
-[dependencies.AptosFramework]
-git = "https://github.com/aptos-labs/aptos-core.git"
-rev = "mainnet"
-subdir = "aptos-move/framework/aptos-framework"
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "mainnet", subdir = "aptos-move/framework/aptos-framework" }
 
 [dev-dependencies]

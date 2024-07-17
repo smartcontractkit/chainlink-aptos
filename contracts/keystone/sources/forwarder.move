@@ -18,6 +18,7 @@ module keystone::forwarder {
     const E_INVALID_SIGNATURE: u64 = 5;
     const E_ALREADY_PROCESSED: u64 = 6;
     const E_UNAUTHORIZED: u64 = 7;
+    const E_MALFORMED_SIGNATURE: u64 = 8;
 
     const APP_OBJECT_SEED: vector<u8> = b"FORWARDER";
 
@@ -97,7 +98,7 @@ module keystone::forwarder {
         });
     }
 
-    public entry fun clear_config(authority: &signer, don_id: u32, config_version: u32, f: u8, oracles: vector<vector<u8>>) acquires State {
+    public entry fun clear_config(authority: &signer, don_id: u32, config_version: u32) acquires State {
         let state = borrow_global_mut<State>(get_state_addr());
 
         assert!(state.owner == signer::address_of(authority), E_UNAUTHORIZED);
@@ -113,6 +114,13 @@ module keystone::forwarder {
         public_key: ed25519::UnvalidatedPublicKey, // TODO: pass signer index rather than key to save on space and gas
     }
 
+    public fun signature_from_bytes(bytes: vector<u8>): Signature {
+        assert!(vector::length(&bytes) == 96, error::invalid_argument(E_MALFORMED_SIGNATURE));
+        let sig = ed25519::new_signature_from_bytes(vector::slice(&bytes, 0, 64));
+        let public_key = ed25519::new_unvalidated_public_key_from_bytes(vector::slice(&bytes, 64, 96));
+        Signature { sig, public_key }
+    }
+
     inline fun transmission_id(receiver: address, workflow_execution_id: vector<u8>, report_id: u16): vector<u8> {
         let id = vector[];
         vector::append(&mut id, bcs::to_bytes(&receiver));
@@ -124,6 +132,8 @@ module keystone::forwarder {
 
     // receiver_authority is a resource account owned by the receiver
     // TODO: a method to register these accounts
+    // TODO: combine report_context | report
+    // TODO: signatures passed in as vec<u8> and parsed into Signature
     public fun validate_report(receiver_authority: &signer, report: vector<u8>, report_context: vector<u8>, signatures: vector<Signature>): (vector<u8>, vector<u8>) acquires State {
         let state = borrow_global_mut<State>(get_state_addr());
 

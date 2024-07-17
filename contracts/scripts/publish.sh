@@ -30,7 +30,7 @@ aptos move run --function-id "$KEYSTONE_ADDR::forwarder::set_config" --assume-ye
  OUTPUT=$(aptos move create-object-and-publish-package \
   --package-dir data-feeds \
   --address-name data_feeds \
-  --named-addresses data_feeds=$PUBLISHER_ADDR \
+  --named-addresses data_feeds=$PUBLISHER_ADDR,keystone=$KEYSTONE_ADDR \
   --profile $PUBLISHER_PROFILE \
  --assume-yes)
 
