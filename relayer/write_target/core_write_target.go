@@ -99,28 +99,29 @@ func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.Capabi
 	}
 	// TODO: validate encoded report is prefixed with workflowID and executionID that match the request meta
 
-	rawExecutionID, err := hex.DecodeString(request.Metadata.WorkflowExecutionID)
-	if err != nil {
-		return nil, err
-	}
+	// TODO: concat rawReport and ReportContext
+	// rawExecutionID, err := hex.DecodeString(request.Metadata.WorkflowExecutionID)
+	// if err != nil {
+	// 	return nil, err
+	// }
 	// Check whether value was already transmitted on chain
-	queryInputs := struct {
-		Receiver            string
-		WorkflowExecutionID []byte
-		ReportId            []byte
-	}{
-		Receiver:            reqConfig.Address,
-		WorkflowExecutionID: rawExecutionID,
-		ReportId:            inputs.ID,
-	}
-	var transmitter common.Address
-	if err = cap.cr.GetLatestValue(ctx, "forwarder", "getTransmitter", queryInputs, &transmitter); err != nil {
-		return nil, err
-	}
-	if transmitter != common.HexToAddress("0x0") {
-		cap.lggr.Infow("WriteTarget report already onchain - returning without a tranmission attempt", "executionID", request.Metadata.WorkflowExecutionID)
-		return success(), nil
-	}
+	// queryInputs := struct {
+	// 	Receiver            string
+	// 	WorkflowExecutionID []byte
+	// 	ReportId            []byte
+	// }{
+	// 	Receiver:            reqConfig.Address,
+	// 	WorkflowExecutionID: rawExecutionID,
+	// 	ReportId:            inputs.ID,
+	// }
+	// var transmitter common.Address
+	// if err = cap.cr.GetLatestValue(ctx, "forwarder", "getTransmitter", queryInputs, &transmitter); err != nil {
+	// 	return nil, err
+	// }
+	// if transmitter != common.HexToAddress("0x0") {
+	// 	cap.lggr.Infow("WriteTarget report already onchain - returning without a tranmission attempt", "executionID", request.Metadata.WorkflowExecutionID)
+	// 	return success(), nil
+	// }
 
 	cap.lggr.Infow("WriteTarget non-empty report - attempting to push to txmgr", "request", request, "reportLen", len(inputs.Report), "reportContextLen", len(inputs.Context), "nSignatures", len(inputs.Signatures), "executionID", request.Metadata.WorkflowExecutionID)
 	txID, err := uuid.NewUUID() // NOTE: CW expects us to generate an ID, rather than return one
@@ -132,18 +133,15 @@ func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.Capabi
 	// `nil` values, including for slices. Until the bug is fixed we need to ensure that there are no
 	// `nil` values passed in the request.
 	req := struct {
-		Receiver      string
-		RawReport     []byte
-		ReportContext []byte
-		Signatures    [][]byte
-	}{reqConfig.Address, inputs.Report, inputs.Context, inputs.Signatures}
+		RawReport  []byte
+		Signatures [][]byte
+	}{
+		RawReport:  append(inputs.Context, inputs.Report...),
+		Signatures: inputs.Signatures,
+	}
 
 	if req.RawReport == nil {
 		req.RawReport = make([]byte, 0)
-	}
-
-	if req.ReportContext == nil {
-		req.ReportContext = make([]byte, 0)
 	}
 
 	if req.Signatures == nil {
@@ -153,7 +151,8 @@ func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.Capabi
 
 	meta := commontypes.TxMeta{WorkflowExecutionID: &request.Metadata.WorkflowExecutionID}
 	value := big.NewInt(0)
-	if err := cap.cw.SubmitTransaction(ctx, "forwarder", "report", req, txID.String(), cap.forwarderAddress, &meta, value); err != nil {
+	// On Aptos we have to invert the call due to static dispatch: receiver::on_report() -> forwarder::validate_report()
+	if err := cap.cw.SubmitTransaction(ctx, "receiver", "onReport", req, txID.String(), reqConfig.Address, &meta, value); err != nil {
 		return nil, err
 	}
 	cap.lggr.Debugw("Transaction submitted", "request", request, "transaction", txID)

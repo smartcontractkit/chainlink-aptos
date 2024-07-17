@@ -49,7 +49,7 @@ ChainID = "localnet"
 
 [Aptos.Workflow]
 ForwarderAddress = "0x1"
-FromAddress = "0x1"
+PublicKey = ""
 
 [[Aptos.Nodes]]
 Name = 'primary'
