@@ -423,9 +423,7 @@ module data_feeds::registry {
         // case.
         // TODO: this requires some validation of the caller.
 
-        let registry = borrow_global_mut<Registry>(registry_address);
-
-        vector::for_each(report_datas, |report_data| {
+        vector::for_each(reports, |report_data| {
             let feed_id = vector::slice(&report_data, 0, 32);
             assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
             let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
@@ -466,19 +464,15 @@ module data_feeds::registry {
 
         assert_authorized_data_fetch(registry, signer::address_of(account), &feed_ids);
 
-        let ret = vector[];
-
-        vector::for_each(feed_ids, |feed_id| {
+        vector::map(feed_ids, |feed_id| {
             assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
 
             let feed = simple_map::borrow(&registry.feeds, &feed_id);
-            vector::push_back(&mut ret, BenchmarkResult {
+            BenchmarkResult {
                 benchmark: feed.benchmark,
                 observation_timestamp: feed.observation_timestamp
-            });
-        });
-
-        ret
+            }
+        })
     }
 
     public fun get_reports(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>): vector<ReportResult> acquires Registry {
@@ -486,60 +480,48 @@ module data_feeds::registry {
 
         assert_authorized_data_fetch(registry, signer::address_of(account), &feed_ids);
 
-        let ret = vector[];
-
-        vector::for_each(feed_ids, |feed_id| {
+        vector::map(feed_ids, |feed_id| {
             assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
 
             let feed = simple_map::borrow(&registry.feeds, &feed_id);
-            vector::push_back(&mut ret, ReportResult {
+            ReportResult {
                 report: feed.report,
                 observation_timestamp: feed.observation_timestamp
-            });
-        });
-
-        ret
+            }
+        })
     }
 
     public fun get_feed_metadata(registry_address: address, feed_ids: vector<vector<u8>>): vector<FeedMetadataResult> acquires Registry {
         let registry = borrow_global_mut<Registry>(registry_address);
 
-        let ret = vector[];
-
-        vector::for_each(feed_ids, |feed_id| {
+        vector::map(feed_ids, |feed_id| {
             assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
 
             let feed = simple_map::borrow(&registry.feeds, &feed_id);
             let config = simple_map::borrow(&registry.configs, &feed.config_id);
 
-            vector::push_back(&mut ret, FeedMetadataResult {
+            FeedMetadataResult {
                 description: feed.description,
                 config_id: feed.config_id,
                 deviation_threshold: config.deviation_threshold,
                 staleness_seconds: config.staleness_seconds,
                 upkeep_requested: feed.upkeep_requested
-            });
-        });
-
-        ret
+            }
+        })
     }
 
     public fun get_feed_configs(registry_address: address, config_ids: vector<vector<u8>>): vector<FeedConfigResult> acquires Registry {
         let registry = borrow_global_mut<Registry>(registry_address);
 
-        let ret = vector[];
-
-        vector::for_each(config_ids, |config_id| {
+        vector::map(config_ids, |config_id| {
             assert!(simple_map::contains_key(&registry.configs, &config_id), error::invalid_argument(ECONFIG_NOT_CONFIGURED));
 
             let config = simple_map::borrow(&registry.configs, &config_id);
-            vector::push_back(&mut ret, FeedConfigResult {
+            FeedConfigResult {
                 deviation_threshold: config.deviation_threshold,
                 staleness_seconds: config.staleness_seconds,
-            });
-        });
-
-        ret
+            }
+        })
     }
 
     public fun get_upkeep_feed_ids(registry_address: address, upkeep: address): (vector<vector<u8>>) acquires Registry {
