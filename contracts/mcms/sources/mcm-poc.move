@@ -1,10 +1,12 @@
 module mcms::multisig {
-    use std::error;
     use std::signer;
     use std::vector;
+    use std::option;
     use std::event;
+    use std::bcs;
     use std::simple_map::{SimpleMap,Self};
     use std::resource_account;
+    use std::secp256k1;
     use std::aptos_hash::keccak256;
     use aptos_framework::multisig_account;
     use aptos_framework::account;
@@ -14,6 +16,14 @@ module mcms::multisig {
     // MCM Consts
     const NUM_GROUPS: u8 = 32;
     const MAX_NUM_SIGNERS: u8 = 200;
+    // equivalent to address(0x0) in Solidity
+    const ZERO_EVM_ADDRESS: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    // equivalent to initializing empty uint8[NUM_GROUPS] in Solidity
+    const VEC_NUM_GROUPS: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    // keccak256("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA")
+    const MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA: vector<u8> = x"e6b82be989101b4eb519770114b997b97b3c8707515286748a871717f0e4ea1c";
+    // keccak256("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP")
+    const MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP: vector<u8> = x"08d275622006c4ca82d03f498e90163cafd53c663a48470c3b52ac8bfbd9f52c";
 
     // Error Codes
     const ERR: u64 = 0; // generic error
@@ -27,6 +37,13 @@ module mcms::multisig {
     const EWRONG_NONCE: u64 = 7;
     // set_root errors
     const EVALID_UNTIL_EXPIRED: u64 = 8;
+    const EINVALID_SIGNER: u64 = 9;
+    const EMISSING_CONFIG: u64 = 10;
+    const EINSUFFICIENT_SIGNERS: u64 = 11;
+    const EPROOF_CANNOT_BE_VERIFIED: u64 = 12;
+    const EPENDING_OPS: u64 = 13;
+    const EWRONG_PRE_OP_COUNT: u64 = 14;
+    const EWRONG_POST_OP_COUNT: u64 = 15;
     // set_config errors
     const EINVALID_NUM_SIGNERS: u64 = 9;
     const ESIGNER_GROUPS_LEN_MISMATCH: u64 = 10;
@@ -40,6 +57,9 @@ module mcms::multisig {
     const ESIGNER_ADDR_MUST_BE_INCREASING: u64 = 18;
     // miscellanous
     const ECMP_VECTORS_DIFF_LEN: u64 = 100;
+    const EINVALID_V_SIGNATURE: u64 = 101;
+    const EFAILED_ECDSA_RECOVER: u64 = 102;
+    const EINVALID_ROOT_LEN: u64 = 103;
 
     // MCM Structs
     struct RootMetadata has key, store, copy, drop {
@@ -50,13 +70,7 @@ module mcms::multisig {
         override_previous_root: bool
     }
 
-    struct Signature has store, drop {
-        v: u8,
-        r: vector<u8>,
-        s: vector<u8>
-    }
-
-    struct Op has store, drop {
+    struct Op has copy, drop {
         chain_id: u256,
         multisig: address,
         nonce: u64,
@@ -65,13 +79,13 @@ module mcms::multisig {
         data: vector<u8>
     }
 
-    struct Signer has key, store, copy, drop {
+    struct Signer has store, copy, drop {
         addr: vector<u8>,
         index: u8, // index of signer in s_config.signers
         group: u8 // 0 <= group < NUM_GROUPS. Each signer can only be in one group.
     }
 
-    struct Config has key, store, copy, drop {
+    struct Config has store, copy, drop {
         signers: vector<Signer>,
 
         // group_quorums[i] stores the quorum for the i-th signer group. Any group with
@@ -87,7 +101,7 @@ module mcms::multisig {
         group_parents: vector<u8>
     }
 
-    struct ExpiringRootAndOpCount has key, store, drop {
+    struct ExpiringRootAndOpCount has store, drop {
         root: vector<u8>,
         valid_until: u64,
         op_count: u64
@@ -116,6 +130,21 @@ module mcms::multisig {
     struct ConfigSet has drop, store {
         config: Config,
         is_root_cleared: bool
+    }
+
+    #[event]
+    struct NewRoot has drop, store {
+        root: vector<u8>,
+        valid_until: u64,
+        metadata: RootMetadata
+    }
+
+    #[event]
+    struct OpExecuted has drop, store {
+        nonce: u64,
+        to: address,
+        data: vector<u8>,
+        value: u256
     }
 
 
@@ -189,38 +218,106 @@ module mcms::multisig {
         pre_op_count: u64,
         post_op_count: u64,
         override_previous_root: bool,
-        _metadata_proof: vector<vector<u8>>,
-        _signatures: vector<vector<u8>>
+        metadata_proof: vector<vector<u8>>,
+        signatures: vector<vector<u8>>
     ) acquires MCMState {
-        let state = borrow_global_mut<MCMState>(resource_acc_addr);
-        let signed_hash = compute_eth_message_hash(root, valid_until);
-
-        // check if hash has been seen already
-        assert!(simple_map::contains_key(&mut state.s_seen_signed_hashes, &signed_hash) == false, EALREADY_SEEN_HASH);
-
-        // verify ECDSA signatures on (root, valid_until) and ensure that the root group is successful
-
-        // verify valid_until against current timestamp
-        assert!(timestamp::now_microseconds() > valid_until, EVALID_UNTIL_EXPIRED);
-
-
-        // verify metadata proof, chain id, multisig addr, op counts
-
-        // save details to contract state     
-        simple_map::add(&mut state.s_seen_signed_hashes, signed_hash, true);
-        state.s_expiring_root_and_op_count = ExpiringRootAndOpCount {
-            root,
-            valid_until,
-            op_count: pre_op_count
-        };
-        state.s_root_metadata = RootMetadata { 
+        let metadata = RootMetadata { 
             chain_id,
             multisig,
             pre_op_count,
             post_op_count,
             override_previous_root
         };
+        let state = borrow_global_mut<MCMState>(resource_acc_addr);
+        // also checks root = 32 bytes
+        let signed_hash = compute_eth_message_hash(root, valid_until);
 
+        // check if hash has been seen already
+        assert!(simple_map::contains_key(&mut state.s_seen_signed_hashes, &signed_hash) == false, EALREADY_SEEN_HASH);
+
+        // verify valid_until against current timestamp
+        assert!(timestamp::now_seconds() <= valid_until, EVALID_UNTIL_EXPIRED);
+
+        // verify chain id
+        assert!(metadata.chain_id == (chain_id::get() as u256), EWRONG_CHAIN_ID);
+
+        // verify mcms address
+        assert!(metadata.multisig == resource_acc_addr, EWRONG_MULTISIG);
+
+        // verify op counts
+        let op_count = state.s_expiring_root_and_op_count.op_count;
+        // don't allow a new root to be set if there are still outstanding ops that have not been
+        // executed, unless overridePreviousRoot is set
+        assert!(override_previous_root || op_count == state.s_root_metadata.post_op_count, EPENDING_OPS);
+        // the signers are responsible for tracking opCount offchain and ensuring that
+        // preOpCount equals to opCount and preOpCount <= postOpCount 
+        assert!(op_count == metadata.pre_op_count, EWRONG_PRE_OP_COUNT);
+        assert!(metadata.pre_op_count <= metadata.post_op_count, EWRONG_POST_OP_COUNT);
+
+        // verify metadata proof
+        {
+            let hashed_leaf: vector<u8> = hash_metadata_leaf(metadata);
+            assert!(verify_merkle_proof(metadata_proof, root, hashed_leaf), EPROOF_CANNOT_BE_VERIFIED);
+        };
+
+        // verify ECDSA signatures on (root, valid_until) and ensure that the root group is successful
+        {
+            // verify sigs and count number of signers in each group
+            let signer: Signer;
+            let prev_address: vector<u8> = ZERO_EVM_ADDRESS;
+            let group_vote_counts: vector<u8> = right_pad_vec(vector[], NUM_GROUPS);
+            vector::for_each(signatures, |signature| {
+                let signer_addr = ecdsa_recover_evm_addr(signed_hash, signature);
+                // the off-chain system is required to sort the signatures by the
+                // signer address in an increasing order
+                assert!(vector_u8_gt(signer_addr, prev_address), ESIGNER_ADDR_MUST_BE_INCREASING);
+                prev_address = signer_addr;
+
+                assert!(simple_map::contains_key(&state.s_signers, &signer_addr), EINVALID_SIGNER);
+                signer = *simple_map::borrow(&state.s_signers, &signer_addr);
+
+                // check group quorums
+                let group: u8 = signer.group;
+                while (true) {
+                    let group_vote_count = vector::borrow_mut(&mut group_vote_counts, (group as u64));
+                    *group_vote_count = *group_vote_count + 1;
+
+                    let quorum = vector::borrow(&state.s_config.group_quorums, (group as u64));
+                    if (*group_vote_count != *quorum) {
+                        // bail out unless we just hit the quorum. we only hit each quorum once,
+                        // so we never move on to the parent of a group more than once.
+                        break;
+                    };
+
+                    if (group == 0) {
+                        // root group reached
+                        break;
+                    };
+
+                    // group quorum reached, restart loop and check parent group
+                    group = *vector::borrow(&state.s_config.group_parents, (group as u64));
+                };
+            });
+
+            // the group at the root of the tree (with index 0) determines whether the vote passed,
+            // we cannot proceed if it isn't configured with a valid (non-zero) quorum
+            let root_group_quorum = vector::borrow(&state.s_config.group_quorums, 0);
+            assert!(*root_group_quorum != 0, EMISSING_CONFIG);
+
+            // check root group reached quorum
+            let root_group_vote_count = vector::borrow(&group_vote_counts, 0);
+            assert!(*root_group_vote_count >= *root_group_quorum, EINSUFFICIENT_SIGNERS);
+        };
+
+        // save details to contract state     
+        simple_map::add(&mut state.s_seen_signed_hashes, signed_hash, true);
+        state.s_expiring_root_and_op_count = ExpiringRootAndOpCount {
+            root,
+            valid_until,
+            op_count: metadata.pre_op_count
+        };
+        state.s_root_metadata = metadata;
+        event::emit(NewRoot { root, valid_until, metadata });
     }
 
     // note: unlike MCM on EVM chains, this function does not actually execute the transaction,
@@ -228,24 +325,37 @@ module mcms::multisig {
     public entry fun execute(
         resource_acc_addr: address,
         chain_id: u256,
+        multisig: address,
         nonce: u64,
-        _to: address,
-        _value: u256,
+        to: address,
+        value: u256,
         data: vector<u8>,
-        _proof: vector<vector<u8>>
+        proof: vector<vector<u8>>
     ) acquires MCMState {
         let state = borrow_global_mut<MCMState>(resource_acc_addr);
+        let op = Op {
+            chain_id,
+            multisig,
+            nonce,
+            to,
+            value,
+            data
+        };
 
         // op validations
-        assert!(state.s_root_metadata.post_op_count <= state.s_expiring_root_and_op_count.op_count, EPOST_OP_COUNT_REACHED);
+        assert!(state.s_root_metadata.post_op_count > state.s_expiring_root_and_op_count.op_count, EPOST_OP_COUNT_REACHED);
 
-        assert!(chain_id == (chain_id::get() as u256), EWRONG_CHAIN_ID);
+        assert!(op.chain_id == (chain_id::get() as u256), EWRONG_CHAIN_ID);
 
-        assert!(timestamp::now_microseconds() > state.s_expiring_root_and_op_count.valid_until, EROOT_EXPIRED);
+        assert!(op.multisig == resource_acc_addr, EWRONG_MULTISIG);
 
-        assert!(nonce == state.s_expiring_root_and_op_count.op_count, EWRONG_NONCE);
+        assert!(timestamp::now_seconds() <= state.s_expiring_root_and_op_count.valid_until, EROOT_EXPIRED);
+
+        assert!(op.nonce == state.s_expiring_root_and_op_count.op_count, EWRONG_NONCE);
 
         // verify op exists in merkle tree
+        let hashed_leaf: vector<u8> = hash_op_leaf(op);
+        assert!(verify_merkle_proof(proof, state.s_expiring_root_and_op_count.root, hashed_leaf), EPROOF_CANNOT_BE_VERIFIED);
 
         // increment op_count
         state.s_expiring_root_and_op_count.op_count = state.s_expiring_root_and_op_count.op_count + 1;
@@ -256,6 +366,13 @@ module mcms::multisig {
         let multisig_addr = get_multisig_addr(resource_acc_addr);
         let multisig_signer = multisig_signer(resource_acc_addr);
         multisig_account::create_transaction(&multisig_signer, multisig_addr, data);
+
+        event::emit(OpExecuted {
+            nonce: op.nonce,
+            to: op.to,
+            data: op.data,
+            value: op.value
+        })
     }
 
     public entry fun set_config(
@@ -316,7 +433,7 @@ module mcms::multisig {
         };
 
         // remove old signer addresses
-        let state = borrow_global_mut<MCMState>(resource_acc_addr); // todo: can get from resource_account?
+        let state = borrow_global_mut<MCMState>(resource_acc_addr);
         let old_signers = state.s_config.signers;
         vector::for_each(old_signers, |signer| {
             simple_map::remove(&mut state.s_signers, &signer.addr);
@@ -330,12 +447,14 @@ module mcms::multisig {
 
         // check signer addresses are in increasing order and save signers to state
         // evm zero address (20 bytes of 0) is the smallest address possible
-        let prev_signer_addr: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let prev_signer_addr: vector<u8> = ZERO_EVM_ADDRESS;
         let i = 0;
         while (i < vector::length(&signer_addresses)) {
             let signer_addr = vector::borrow(&signer_addresses, (i as u64));
-            // this has a nice side effect of checking that each signer address is 20 bytes
-            // and all signers are distinct
+            // this line checks:
+            // - signer address is exactly 20 bytes
+            // - signer is distinct
+            // - signer address is in increasing order
             assert!(vector_u8_gt(*signer_addr, prev_signer_addr), ESIGNER_ADDR_MUST_BE_INCREASING);
 
             let signer = Signer {
@@ -359,7 +478,7 @@ module mcms::multisig {
             };
             state.s_root_metadata = RootMetadata {
                 chain_id: (chain_id::get() as u256),
-                multisig: @chainlink,
+                multisig: resource_acc_addr,
                 pre_op_count: op_count,
                 post_op_count: op_count,
                 override_previous_root: true
@@ -372,8 +491,8 @@ module mcms::multisig {
     // Internal functions
 
     fun init_multisig_internal(resource_account: &signer, signer_cap: account::SignerCapability) {
-        let resource_account_addr = signer::address_of(resource_account);
-        let multisig_addr = multisig_account::get_next_multisig_account_address(resource_account_addr);
+        let resource_acc_addr = signer::address_of(resource_account);
+        let multisig_addr = multisig_account::get_next_multisig_account_address(resource_acc_addr);
 
         // create multisig account with resource account as sole owner and quorum of 1
         multisig_account::create(resource_account, 1, vector[], vector[]);
@@ -381,29 +500,46 @@ module mcms::multisig {
         // initialize storage and save multisig address and signer cap
         move_to(resource_account, MCMState { 
             s_signers: simple_map::new(),
-            s_config: Config { signers: vector[], group_quorums: vector[], group_parents: vector[] },
+            s_config: Config { signers: vector[], group_quorums: VEC_NUM_GROUPS, group_parents: VEC_NUM_GROUPS },
             s_seen_signed_hashes: simple_map::new(),
             s_expiring_root_and_op_count: ExpiringRootAndOpCount { root: vector[], valid_until: 0, op_count: 0 },
-            s_root_metadata: RootMetadata { chain_id: 0, multisig: multisig_addr, pre_op_count: 0, post_op_count: 0, override_previous_root: false },
+            s_root_metadata: RootMetadata { chain_id: 0, multisig: resource_acc_addr, pre_op_count: 0, post_op_count: 0, override_previous_root: false },
             addr: multisig_addr,
             signer_cap
         });
     }
 
+    fun ecdsa_recover_evm_addr(eth_signed_message_hash: vector<u8>, signature: vector<u8>): vector<u8> {
+        // ensure signature has correct length - (r,s,v) concatenated = 65 bytes
+        assert!(vector::length(&signature) == 65, ERR);
+        // extract v from signature
+        let v = vector::pop_back(&mut signature);
+        // convert 64 byte signature into ECDSASignature struct
+        let sig = secp256k1::ecdsa_signature_from_bytes(signature);
+        // Aptos uses the rust libsecp256k1 parse() under the hood which has a different numbering scheme
+        // see: https://docs.rs/libsecp256k1/latest/libsecp256k1/struct.RecoveryId.html#method.parse_rpc
+        assert!(v >= 27 && v < 27 + 4, EINVALID_V_SIGNATURE);
+        let v = v - 27;
+
+        // retrieve signer public key
+        let public_key = aptos_std::secp256k1::ecdsa_recover(
+            eth_signed_message_hash,
+            v,
+            &sig,
+        );
+        assert!(option::is_some(&public_key), EFAILED_ECDSA_RECOVER);
+
+        // return last 20 bytes of hashed public key as the recovered ethereum address
+        let public_key_bytes = secp256k1::ecdsa_raw_public_key_to_bytes(&option::extract(&mut public_key));
+        std::vector::trim((&mut keccak256(public_key_bytes)), 12) // trims publicKeyBytes to 12 bytes, returns trimmed last 20 bytes
+    }
+
     fun compute_eth_message_hash(root: vector<u8>, valid_until: u64): vector<u8> {
         // abi.encode(root, valid_until)
-        let valid_until_bytes = u64_to_bytes(valid_until);
-        let len_valid_until = vector::length(&valid_until_bytes);
-        let bytes_to_pad = 32 - len_valid_until;
-        let padded_valid_until: vector<u8> = vector[];
-        let i = 0;
-        while (i < bytes_to_pad) {
-            vector::push_back(&mut padded_valid_until, 0);
-            i = i + 1;
-        };
-        vector::append<u8>(&mut padded_valid_until, valid_until_bytes);
-        let abi_encoded_params = &mut root;
-        vector::append(abi_encoded_params, padded_valid_until);
+        let valid_until_bytes = left_pad_vec(uint_to_bytes(valid_until), 32);
+        assert!(vector::length(&root) == 32, EINVALID_ROOT_LEN); // root should be 32 bytes
+        let abi_encoded_params = &mut root; 
+        vector::append(abi_encoded_params, valid_until_bytes);
 
         // keccak256(abi_encoded_params)
         let hashed_encoded_params = keccak256(*abi_encoded_params);
@@ -415,17 +551,97 @@ module mcms::multisig {
         keccak256(*hash)
     }
 
+    // computes keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA, metadata))
+    fun hash_metadata_leaf(metadata: RootMetadata): vector<u8> {
+        let chain_id = left_pad_vec(uint_to_bytes(metadata.chain_id), 32);
+        let multisig = bcs::to_bytes(&metadata.multisig);
+        let pre_op_count = left_pad_vec(uint_to_bytes(metadata.pre_op_count), 32);
+        let post_op_count = left_pad_vec(uint_to_bytes(metadata.post_op_count), 32);
+        // let override_previous_root = left_pad_vec(uint_to_bytes(metadata.override_previous_root as u8), 32);
+        let override_previous_root: vector<u8>;
+        if (metadata.override_previous_root) {
+            override_previous_root = vector[1];
+        } else {
+            override_previous_root = vector[0];
+        };
+        
+        let hash_preimage: vector<u8> = vector[];
+        vector::append(&mut hash_preimage, MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA);
+        vector::append(&mut hash_preimage, chain_id);
+        vector::append(&mut hash_preimage, multisig);
+        vector::append(&mut hash_preimage, pre_op_count);
+        vector::append(&mut hash_preimage, post_op_count);
+        vector::append(&mut hash_preimage, left_pad_vec(override_previous_root, 32));
+        // since we are using this in a merkle tree/proof, hash_preimage should be greater than 64 bytes
+        // to prevent collisions with internal nodes. the above operations already guarantee this so no need to check.
+        keccak256(hash_preimage)
+    }
+
+    // computes keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP, op))
+    fun hash_op_leaf(op: Op): vector<u8> {
+        let chain_id = left_pad_vec(uint_to_bytes(op.chain_id), 32);
+        let multisig = bcs::to_bytes(&op.multisig);
+        let nonce = left_pad_vec(uint_to_bytes(op.nonce), 32);
+        let to = bcs::to_bytes(&op.to);
+        let value = left_pad_vec(uint_to_bytes(op.value), 32);
+
+        // prepend c0, data_len to data
+        let data = left_pad_vec(vector[0xc0], 32); // todo: where does this value comes from?
+        let data_len = vector::length(&op.data);
+        vector::append(&mut data, left_pad_vec(uint_to_bytes(data_len), 32));
+        
+        let padded_data: vector<u8>;
+        if (data_len % 32 == 0) {
+            // data len is already multiple of 32, no padding needed
+            padded_data = op.data
+        } else {
+            // right pad op.data to multiple of 32 bytes
+            padded_data = right_pad_vec(op.data, ((data_len / 32 + 1) * 32 as u8));
+        };
+        vector::append(&mut data, padded_data);
+
+        let hash_preimage: vector<u8> = vector[];
+        vector::append(&mut hash_preimage, MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP);
+        vector::append(&mut hash_preimage, left_pad_vec(vector[0x40], 32)); // todo: why does abi.encode add this?
+        vector::append(&mut hash_preimage, chain_id);
+        vector::append(&mut hash_preimage, multisig);
+        vector::append(&mut hash_preimage, nonce);
+        vector::append(&mut hash_preimage, to);
+        vector::append(&mut hash_preimage, value);
+        vector::append(&mut hash_preimage, data);
+        // since we are using this in a merkle tree/proof, hash_preimage should be greater than 64 bytes
+        // to prevent collisions with internal nodes. the above operations already guarantee this so no need to check.
+        // hash_preimage
+        keccak256(hash_preimage)
+    }
+
+    fun verify_merkle_proof(proof: vector<vector<u8>>, root: vector<u8>, leaf: vector<u8>): bool {
+        let computed_hash = leaf;
+        vector::for_each(proof, |proof_element| {
+            let left = computed_hash;
+            let right = proof_element;
+            if (vector_u8_gt(computed_hash, proof_element)) {
+                left = proof_element;
+                right = computed_hash;
+            };
+            let hash_input: vector<u8> = left;
+            vector::append(&mut hash_input, right);
+            computed_hash = keccak256(hash_input);
+        });
+        computed_hash == root
+    }
+
     // retrieve signer for multisig account - should be protected with appropriate guards
     fun multisig_signer(resource_acc_addr: address): signer acquires MCMState {
         assert!(exists<MCMState>(resource_acc_addr), ENO_MULTISIG);
         account::create_signer_with_capability(&borrow_global<MCMState>(resource_acc_addr).signer_cap)
     }
 
-    // helper function to convert u64 to bytes
+    // helper function to convert any input type to bytes
     // note: does not remove leading zero bytes, however this is fine as we are using this in the
-    // context of compute_eth_message_hash which left zero-pads valid_until to 32 bytes anyway.
-    fun u64_to_bytes(int: u64): vector<u8> {
-        let bcs_bytes = std::bcs::to_bytes(&int);
+    // context of computing hashes where we left pad to 32 bytes anyway.
+    fun uint_to_bytes<T: drop>(input: T): vector<u8> {
+        let bcs_bytes = bcs::to_bytes(&input);
         vector::reverse(&mut bcs_bytes);
         bcs_bytes
     }
@@ -447,12 +663,29 @@ module mcms::multisig {
         padded
     }
 
+    // helper function to left pad a vector<u8> with zero bytes to a specified length
+    // this function returns the input if the input length is already equal to or greater than num_bytes
+    fun left_pad_vec(input: vector<u8>, num_bytes: u8): vector<u8> {
+        let len = vector::length(&input);
+        if (len >= (num_bytes as u64)) {
+            return input;
+        };
+        let bytes_to_pad = (num_bytes as u64) - len;
+        let padded: vector<u8> = vector[];
+        let i = 0;
+        while (i < bytes_to_pad) {
+            vector::push_back(&mut padded, 0);
+            i = i + 1;
+        };
+        vector::append(&mut padded, input);
+        padded
+    }
+
     // helper function to compare two vector<u8> values. expects both vectors to be of equal length.
     // returns true if a > b, false otherwise
     fun vector_u8_gt(a: vector<u8>, b: vector<u8>): bool {
-        let len_a = vector::length(&a);
-        let len_b = vector::length(&b);
-        assert!(len_a == len_b, ECMP_VECTORS_DIFF_LEN);
+        let len = vector::length(&a);
+        assert!(len == vector::length(&b), ECMP_VECTORS_DIFF_LEN);
 
         // reverse vectors to compare from most significant bytes first
         let rev_a = copy a;
@@ -485,7 +718,7 @@ module mcms::multisig {
     #[test_only]
     const PAYLOAD: vector<u8> = vector[1, 2, 3]; // test tx payload, not actually executed
     #[test_only]
-    const SEED: vector<u8> = b"test";
+    const SEED: vector<u8> = b"test"; // generates resource acc 0x71288d09b030c68d57f9572a2bb227cf367bf27b6def209d443eb307d67e9991
     #[test_only]
     const CHAIN_ID: u8 = 123;
     #[test_only]
@@ -501,11 +734,56 @@ module mcms::multisig {
 
     // test config: 2-of-3 multisig
     #[test_only]
+    const SIGNERS: vector<vector<u8>> = vector[
+        x"5d72a8afF77B44a61B4D34B498620c3589286faC",
+        x"9078166BbB5013ed711419d8E7d3491014546106",
+        x"90E762d2F9B0D70506cba13eBe8E92492Dd7e0Bb"
+    ];
+    #[test_only]
     const SIGNER_GROUPS: vector<u8> = vector[1, 2, 3];
     #[test_only]
     const GROUP_QUORUMS: vector<u8> = vector[2, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
     #[test_only]
     const GROUP_PARENTS: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+    // test set root params
+    #[test_only]
+    const ROOT: vector<u8> = x"fcf14fd078e4e8f752630c50be8cbc83e980bae51258f1d5024a49a869e5defd";
+    #[test_only]
+    const VALID_UNTIL: u64 = 1000 + 10; // TIMESTAMP + 10
+    #[test_only]
+    const PRE_OP_COUNT: u64 = 0;
+    #[test_only]
+    const POST_OP_COUNT: u64 = 2;
+    #[test_only]
+    const METADATA_PROOF: vector<vector<u8>> = vector[
+        x"26714aee666408b1911d100ae1e60d3d87f50b8296a7ec1355f8355e46c76bf7",
+        x"d018b6a7f3a490a079ee0d2d8d4414ed069bfdda7c2e636b6f0c0b0f16395e25"
+    ];
+    // cannot generate secp256k1 signatures in Move for testing so need to hard code
+    #[test_only]
+    const SIGNATURES: vector<vector<u8>> = vector[
+        x"376f31d9158b9c826f0852eb3bf6253e122a0dc2c5458ca3e459d529a452cbd7345240c264784062b0d5aed7d2708ff2b0747bd7f9ec1b229e76be8ed74184681C",
+        x"42b18cf094e16300d4a3eb596654fda5b6ce4743f50c41dc8bb2d693bf85609b316c83a456221453d4141376034aaf5203f40f8d2c35fef1361464d6fb46c9461B",
+        x"4b888f1bcd3ec0a265742414846d6611c1d00eb07bb2239221e2ebe8a670d82d513d9e5008a082760fda4dcc377104e3a2ebad97ac4293bbad4d202d2df5d4ed1C"
+    ];
+
+    // test execute params
+    const LEAVES: vector<vector<u8>> = vector[
+        x"41b85720395efa4be9ac975c3c09e2b93a2143d5e633f5fec123504d024e9125", // metadata
+        x"26714aee666408b1911d100ae1e60d3d87f50b8296a7ec1355f8355e46c76bf7", // op1
+        x"5a180adbca1c382bf533fc5eb37713f80a6758a4d87e87d667fda31744c612c0", // op2
+        x"51ed0f4b1cda0ec4913675df9a8fa1240fbfe5d2d9503346eded5fd3c6f56e8b"  // op3
+    ];
+    const OP_PROOF_LEAF_1: vector<vector<u8>> = vector[
+        x"41b85720395efa4be9ac975c3c09e2b93a2143d5e633f5fec123504d024e9125",
+        x"d018b6a7f3a490a079ee0d2d8d4414ed069bfdda7c2e636b6f0c0b0f16395e25"
+    ];
+    const OP1_VALUE: u256 = 100;
+    const OP1_NONCE: u64 = 0;
+    // abi.encodeWithSignature("executableMethod(uint256,uint256,uint256)",1,2,0x123456789abcdef)
+    const OP1_DATA: vector<u8> = x"bc90e2d9000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000123456789abcdef";
+
 
     #[test_only]
     fun setup(account: &signer, framework: &signer): (signer, address) {
@@ -532,26 +810,55 @@ module mcms::multisig {
         (resource, resource_acc_addr)
     }
 
+    // helper struct for execute args in tests
+    #[test_only]
+    struct ExecuteArgs has drop {
+        chain_id: u256,
+        multisig: address,
+        nonce: u64,
+        to: address,
+        value: u256,
+        data: vector<u8>,
+        proof: vector<vector<u8>>
+    }
+
+    #[test_only]
+    fun default_execute_args(resource_acc_addr: address): ExecuteArgs {
+        ExecuteArgs {
+            chain_id: (CHAIN_ID as u256),
+            multisig: resource_acc_addr,
+            nonce: OP1_NONCE,
+            to: resource_acc_addr,
+            value: OP1_VALUE,
+            data: OP1_DATA,
+            proof: OP_PROOF_LEAF_1
+        }
+    }
+
+    #[test_only]
+    fun call_execute(resource_acc_addr: address, args: ExecuteArgs) acquires MCMState {
+        execute(resource_acc_addr, args.chain_id, args.multisig, args.nonce, args.to, args.value, args.data, args.proof);
+    }
+
     #[test(account = @0xabc, framework = @aptos_framework)]
     public entry fun test_e2e(account: &signer, framework: &signer) acquires MCMState  {
         let (resource, resource_acc_addr) = setup(account, framework);
         let owner_addr = signer::address_of(account);
         
         // set config
-        let signer_addr = vector[ADDR1, ADDR2, ADDR3];
-        set_config(&resource, resource_acc_addr, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(&resource, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
         
         // set root
-        let root = vector[1, 2, 3];
-        let valid_until = TIMESTAMP + 10;
-        set_root(resource_acc_addr, root, valid_until, (CHAIN_ID as u256), owner_addr, 0, 0, false, vector[], vector[]);
+        let set_root_args = default_set_root_args(resource_acc_addr);
+        call_set_root(resource_acc_addr, set_root_args);
 
         // check pending txs on the wrapped multisig
         let pending_txs = get_pending_transactions(resource_acc_addr);
         assert!(vector::length(&pending_txs) == 0, 0);
 
         // execute op (creates transaction on multisig)
-        execute(resource_acc_addr, (CHAIN_ID as u256), 0, owner_addr, 0, PAYLOAD, vector[]);
+        let execute_args = default_execute_args(resource_acc_addr);
+        call_execute(resource_acc_addr, execute_args);
 
         // check pending txs on the wrapped multisig
         let pending_txs = get_pending_transactions(resource_acc_addr);
@@ -562,14 +869,266 @@ module mcms::multisig {
         assert!(multisig_account::can_be_executed(multisig_address, 1), 2);
     }
 
+    //// set_root tests ////
+    
+    // helper struct for set_root args in tests
+    #[test_only]
+    struct SetRootArgs has drop {
+        root: vector<u8>,
+        valid_until: u64,
+        chain_id: u256,
+        multisig: address,
+        pre_op_count: u64,
+        post_op_count: u64,
+        override_previous_root: bool,
+        metadata_proof: vector<vector<u8>>,
+        signatures: vector<vector<u8>>
+    }
+
+    #[test_only]
+    fun default_set_root_args(resource_acc_addr: address): SetRootArgs {
+        SetRootArgs {
+            root: ROOT,
+            valid_until: VALID_UNTIL,
+            chain_id: (CHAIN_ID as u256), 
+            multisig: resource_acc_addr,
+            pre_op_count:  PRE_OP_COUNT,
+            post_op_count: POST_OP_COUNT,
+            override_previous_root: false,
+            metadata_proof: METADATA_PROOF,
+            signatures: SIGNATURES
+        }
+    }
+
+    #[test_only]
+    fun call_set_root(resource_acc_addr: address, args: SetRootArgs) acquires MCMState {
+        set_root(resource_acc_addr, args.root, args.valid_until, args.chain_id, args.multisig, args.pre_op_count, args.post_op_count, args.override_previous_root, args.metadata_proof, args.signatures);
+    }
+
+    // test helper function to generate the merkle root for given metadata
+    #[test_only]
+    fun compute_root(metadata: RootMetadata): vector<u8> {
+        let leaf = hash_metadata_leaf(metadata);
+        let computed_hash = leaf;
+        vector::for_each(METADATA_PROOF, |proof_element| {
+            let left = computed_hash;
+            let right = proof_element;
+            if (vector_u8_gt(computed_hash, proof_element)) {
+                left = proof_element;
+                right = computed_hash;
+            };
+            let hash_input: vector<u8> = left;
+            vector::append(&mut hash_input, right);
+            computed_hash = keccak256(hash_input);
+        });
+        computed_hash
+    }
+
+    #[test(account = @0xabc, framework = @aptos_framework)]
+    #[expected_failure(abort_code = EALREADY_SEEN_HASH)]
+    public entry fun test_set_root__already_seen_hash(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
+        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        
+        // first call success
+        let set_root_args = default_set_root_args(resource_acc_addr);
+        call_set_root(resource_acc_addr, set_root_args);
+
+        // second call should fail as the hash has already been seen
+        let set_root_args2 = default_set_root_args(resource_acc_addr);
+        call_set_root(resource_acc_addr, set_root_args2);
+    }
+    
+    #[test(account = @0xabc, framework = @aptos_framework)]
+    #[expected_failure(abort_code = EVALID_UNTIL_EXPIRED)]
+    public entry fun test_set_root__valid_until_expired(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
+        let set_root_args = default_set_root_args(resource_acc_addr);
+        set_root_args.valid_until = TIMESTAMP - 1; // set valid_until to a time in the past
+        call_set_root(resource_acc_addr, set_root_args);
+    }
+
+    #[test(account = @0xabc, framework = @aptos_framework)]
+    #[expected_failure(abort_code = EINVALID_ROOT_LEN)]
+    public entry fun test_set_root__invalid_root_len(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
+        let invalid_root = x"8ad6edb34398f637ca17e46b0b51ce50e18f56287aa0bf728ae3b5c4119c16";
+        let set_root_args = default_set_root_args(resource_acc_addr);
+        set_root_args.root = invalid_root;
+        call_set_root(resource_acc_addr, set_root_args);
+    }
+
+    #[test(account = @0xabc, framework = @aptos_framework)]
+    #[expected_failure(abort_code = EWRONG_CHAIN_ID)]
+    public entry fun test_set_root__invalid_chain_id(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
+        let set_root_args = default_set_root_args(resource_acc_addr);
+        set_root_args.chain_id = 111; // wrong chain id
+        call_set_root(resource_acc_addr, set_root_args);
+    }
+
+    #[test(account = @0xabc, framework = @aptos_framework)]
+    #[expected_failure(abort_code = EWRONG_MULTISIG)]
+    public entry fun test_set_root__invalid_multisig_addr(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
+        let set_root_args = default_set_root_args(resource_acc_addr);
+        set_root_args.multisig = @0x12345; // wrong multisig address
+        call_set_root(resource_acc_addr, set_root_args);
+    }
+
+    #[test(account = @0xabc, framework = @aptos_framework)]
+    #[expected_failure(abort_code = EPENDING_OPS)]
+    public entry fun test_set_root__pending_ops(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
+        // modify state to add pending ops
+        let state = borrow_global_mut<MCMState>(resource_acc_addr);
+        state.s_expiring_root_and_op_count = ExpiringRootAndOpCount {
+            root: ROOT,
+            valid_until: VALID_UNTIL,
+            op_count: 1
+        };
+        state.s_root_metadata.post_op_count = 2;
+
+        let set_root_args = default_set_root_args(resource_acc_addr);
+        call_set_root(resource_acc_addr, set_root_args);
+    }
+
+    #[test(account = @0xabc, framework = @aptos_framework)]
+    #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
+    public entry fun test_set_root__override_previous_root(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
+        // modify state to add pending ops
+        let state = borrow_global_mut<MCMState>(resource_acc_addr);
+        state.s_expiring_root_and_op_count = ExpiringRootAndOpCount {
+            root: ROOT,
+            valid_until: VALID_UNTIL,
+            op_count: 0
+        };
+        state.s_root_metadata.post_op_count = 2;
+
+        let set_root_args = default_set_root_args(resource_acc_addr);
+        set_root_args.override_previous_root = true;
+        call_set_root(resource_acc_addr, set_root_args);
+        // since we only have one set of hardcoded signatures to work with, we dont bother generating a new root
+        // and just expect this test to fail at proof validation, which happens after the pending ops check
+    }
+
+    #[test(account = @0xabc, framework = @aptos_framework)]
+    #[expected_failure(abort_code = EWRONG_PRE_OP_COUNT)]
+    public entry fun test_set_root__wrong_pre_op_count(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
+        let set_root_args = default_set_root_args(resource_acc_addr);
+        set_root_args.pre_op_count = 1; // wrong pre op count, should equal op count (0)
+        call_set_root(resource_acc_addr, set_root_args);
+    }
+
+    #[test(account = @0xabc, framework = @aptos_framework)]
+    #[expected_failure(abort_code = EWRONG_POST_OP_COUNT)]
+    public entry fun test_set_root__wrong_post_op_count(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
+        let state = borrow_global_mut<MCMState>(resource_acc_addr);
+        state.s_expiring_root_and_op_count = ExpiringRootAndOpCount {
+            root: ROOT,
+            valid_until: VALID_UNTIL,
+            op_count: 1
+        };
+        state.s_root_metadata.post_op_count = 1;
+
+        let set_root_args = default_set_root_args(resource_acc_addr);
+        set_root_args.pre_op_count = PRE_OP_COUNT + 1; // correct pre op count after state updates
+        set_root_args.post_op_count = PRE_OP_COUNT; // post op count should be >= pre op count
+        call_set_root(resource_acc_addr, set_root_args);
+    }
+
+    #[test(account = @0xabc, framework = @aptos_framework)]
+    #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
+    public entry fun test_set_root__empty_metadata_proof(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
+        let set_root_args = default_set_root_args(resource_acc_addr);
+        set_root_args.metadata_proof = vector[]; // empty proof
+        call_set_root(resource_acc_addr, set_root_args);
+    }
+
+    #[test(account = @0xabc, framework = @aptos_framework)]
+    #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
+    public entry fun test_set_root__metadata_not_consistent_with_proof(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
+        let set_root_args = default_set_root_args(resource_acc_addr);
+        set_root_args.post_op_count = POST_OP_COUNT + 1; // post op count modified
+        call_set_root(resource_acc_addr, set_root_args);
+    }
+
+    #[test(account = @0xabc, framework = @aptos_framework)]
+    #[expected_failure(abort_code = EMISSING_CONFIG)]
+    public entry fun test_set_root__config_not_set(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
+        let set_root_args = default_set_root_args(resource_acc_addr);
+        set_root_args.signatures = vector[]; // no signatures
+        call_set_root(resource_acc_addr, set_root_args);
+    }
+
+    #[test(account = @0xabc, framework = @aptos_framework)]
+    #[expected_failure(abort_code = ESIGNER_ADDR_MUST_BE_INCREASING)]
+    public entry fun test_set_root__out_of_order_signatures(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
+        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        let set_root_args = default_set_root_args(resource_acc_addr);
+        let sig0 = vector::borrow(&set_root_args.signatures, 0);
+        let sig1 = vector::borrow(&set_root_args.signatures, 1);
+        let sig2 = vector::borrow(&set_root_args.signatures, 2);
+        set_root_args.signatures = vector[*sig0, *sig2, *sig1]; // shuffle signature order
+        call_set_root(resource_acc_addr, set_root_args);
+    }
+
+    #[test(account = @0xabc, framework = @aptos_framework)]
+    #[expected_failure(abort_code = EINVALID_SIGNER)]
+    public entry fun test_set_root__signature_from_invalid_signer(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
+        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        let set_root_args = default_set_root_args(resource_acc_addr);
+        let invalid_signer_sig = x"bb7f7e44b8d9c8f978c255c7efd6abb64e8fa9a33dcb6db2e2203d8aacd51dd471113ca6c8d1ed56bb0395f0bef0daf2fae6ef2cb5c86c57d148c7de473383461B";
+        set_root_args.signatures = vector[invalid_signer_sig]; // add signature from invalid signer
+        call_set_root(resource_acc_addr, set_root_args);
+    }
+
+    #[test(account = @0xabc, framework = @aptos_framework)]
+    #[expected_failure(abort_code = EINSUFFICIENT_SIGNERS)]
+    public entry fun test_set_root__signer_quorum_not_met(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
+        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        let set_root_args = default_set_root_args(resource_acc_addr);
+        let signer1 = vector::borrow(&set_root_args.signatures, 0);
+        set_root_args.signatures = vector[*signer1]; // only 1 signature, quorum is 2
+        call_set_root(resource_acc_addr, set_root_args);
+    }
+
+    #[test(account = @0xabc, framework = @aptos_framework)]
+    public entry fun test_set_root__success(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
+        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        let set_root_args = default_set_root_args(resource_acc_addr);
+
+        call_set_root(resource_acc_addr, set_root_args);
+
+        let (root, valid_until) = get_root(resource_acc_addr);
+        assert!(root == ROOT, 0);
+        assert!(valid_until == VALID_UNTIL, 1);
+        let root_metadata = get_root_metadata(resource_acc_addr);
+        assert!(root_metadata.chain_id == (CHAIN_ID as u256), 2);
+        assert!(root_metadata.multisig == resource_acc_addr, 3);
+        assert!(root_metadata.pre_op_count == PRE_OP_COUNT, 4);
+        assert!(root_metadata.post_op_count == POST_OP_COUNT, 5);
+        assert!(root_metadata.override_previous_root == false, 6);
+    }
+
     //// set_config tests ////
     
     // todo: test revert on non owner caller
     
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EINVALID_NUM_SIGNERS)]
-    public entry fun test_set_config_invalid_number_of_signers(account: &signer, framework: &signer) acquires MCMState  {
-        let (resource, resource_acc_addr) = setup(account, framework);
+    public entry fun test_set_config__invalid_number_of_signers(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
          // empty signer addresses and groups
         let signer_addr = vector[];
         let signer_group = vector[];
@@ -578,8 +1137,8 @@ module mcms::multisig {
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_ADDR_MUST_BE_INCREASING)]
-    public entry fun test_set_config_signers_must_be_distinct(account: &signer, framework: &signer) acquires MCMState  {
-        let (resource, resource_acc_addr) = setup(account, framework);
+    public entry fun test_set_config__signers_must_be_distinct(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
         // same signer address twice
         let signer_addr = vector[ADDR1, ADDR2, ADDR2];
         set_config(account, resource_acc_addr, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
@@ -587,8 +1146,8 @@ module mcms::multisig {
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_ADDR_MUST_BE_INCREASING)]
-    public entry fun test_set_config_signers_must_be_increasing(account: &signer, framework: &signer) acquires MCMState  {
-        let (resource, resource_acc_addr) = setup(account, framework);
+    public entry fun test_set_config__signers_must_be_increasing(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
         // signer addresses out of order
         let signer_addr = vector[ADDR1, ADDR3, ADDR2];
         set_config(account, resource_acc_addr, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
@@ -596,8 +1155,8 @@ module mcms::multisig {
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = ECMP_VECTORS_DIFF_LEN)]
-    public entry fun test_set_config_invalid_signer_address(account: &signer, framework: &signer) acquires MCMState  {
-        let (resource, resource_acc_addr) = setup(account, framework);
+    public entry fun test_set_config__invalid_signer_address(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
         // signer address not 20 bytes
         let invalid_signer_addr = x"E37ca797F7fCCFbd9bb3bf8f812F19C3184df1";
         let signer_addr = vector[ADDR1, ADDR2, invalid_signer_addr];
@@ -606,8 +1165,8 @@ module mcms::multisig {
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EOUT_OF_BOUNDS_GROUP)]
-    public entry fun test_set_config_out_of_bounds_signer_group(account: &signer, framework: &signer) acquires MCMState  {
-        let (resource, resource_acc_addr) = setup(account, framework);
+    public entry fun test_set_config__out_of_bounds_signer_group(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // signer group out of bounds
         let signer_groups = vector[1, 2, NUM_GROUPS];
@@ -616,8 +1175,8 @@ module mcms::multisig {
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EOUT_OF_BOUNDS_GROUP_QUORUM)]
-    public entry fun test_set_config_out_of_bounds_group_quorum(account: &signer, framework: &signer) acquires MCMState  {
-        let (resource, resource_acc_addr) = setup(account, framework);
+    public entry fun test_set_config__out_of_bounds_group_quorum(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group quorum out of bounds (greater than num signers)
         let group_quorums = right_pad_vec(vector[2, 1, 1, MAX_NUM_SIGNERS + 1], NUM_GROUPS);
@@ -626,8 +1185,8 @@ module mcms::multisig {
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EGROUP_TREE_NOT_WELL_FORMED)]
-    public entry fun test_set_config_root_is_not_its_own_parent(account: &signer, framework: &signer) acquires MCMState  {
-        let (resource, resource_acc_addr) = setup(account, framework);
+    public entry fun test_set_config__root_is_not_its_own_parent(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group parent of root is group 1 (should be itself = group 0)
         let group_parents = right_pad_vec(vector[1], NUM_GROUPS);
@@ -636,8 +1195,8 @@ module mcms::multisig {
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EGROUP_TREE_NOT_WELL_FORMED)]
-    public entry fun test_set_config_non_root_is_its_own_parent(account: &signer, framework: &signer) acquires MCMState  {
-        let (resource, resource_acc_addr) = setup(account, framework);
+    public entry fun test_set_config__non_root_is_its_own_parent(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group parent of group 1 is itself (should be lower index group)
         let group_parents = right_pad_vec(vector[0, 1], NUM_GROUPS);
@@ -646,8 +1205,8 @@ module mcms::multisig {
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EGROUP_TREE_NOT_WELL_FORMED)]
-    public entry fun test_set_config_group_parent_higher_index(account: &signer, framework: &signer) acquires MCMState  {
-        let (resource, resource_acc_addr) = setup(account, framework);
+    public entry fun test_set_config__group_parent_higher_index(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group parent of group 1 is group 2 (should be lower index group)
         let group_parents = right_pad_vec(vector[0, 2], NUM_GROUPS);
@@ -656,8 +1215,8 @@ module mcms::multisig {
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EOUT_OF_BOUNDS_GROUP_QUORUM)]
-    public entry fun test_set_config_quorum_cannot_be_met(account: &signer, framework: &signer) acquires MCMState  {
-        let (resource, resource_acc_addr) = setup(account, framework);
+    public entry fun test_set_config__quorum_cannot_be_met(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group quorum of group 0 (root) is 4, which can never be met because there are only three child groups
         let group_quorum = right_pad_vec(vector[4, 1, 1, 1], NUM_GROUPS);
@@ -666,8 +1225,8 @@ module mcms::multisig {
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_IN_DISABLED_GROUP)]
-    public entry fun test_set_config_signer_in_disabled_group(account: &signer, framework: &signer) acquires MCMState  {
-        let (resource, resource_acc_addr) = setup(account, framework);
+    public entry fun test_set_config__signer_in_disabled_group(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group 31 is disabled (quorum = 0) but signer 3 is in group 31
         let signer_groups = vector[1, 2, 31];
@@ -676,8 +1235,8 @@ module mcms::multisig {
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_GROUPS_LEN_MISMATCH)]
-    public entry fun test_set_config_signer_group_len_mismatch(account: &signer, framework: &signer) acquires MCMState  {
-        let (resource, resource_acc_addr) = setup(account, framework);
+    public entry fun test_set_config__signer_group_len_mismatch(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // len of signer groups does not match len of signers
         let signer_groups = vector[1, 2, 3, 3];
@@ -685,8 +1244,8 @@ module mcms::multisig {
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
-    public entry fun test_set_config_success(account: &signer, framework: &signer) acquires MCMState  {
-        let (resource, resource_acc_addr) = setup(account, framework);
+    public entry fun test_set_config__success(account: &signer, framework: &signer) acquires MCMState  {
+        let (_, resource_acc_addr) = setup(account, framework);
 
         // manually modify root state to check for modifications
         let state = borrow_global_mut<MCMState>(resource_acc_addr);
@@ -741,7 +1300,7 @@ module mcms::multisig {
         assert!(valid_until == 0, 21);
         let metadata = get_root_metadata(resource_acc_addr);
         assert!(metadata.chain_id == (CHAIN_ID as u256), 22);
-        assert!(metadata.multisig == @chainlink, 23);
+        assert!(metadata.multisig == resource_acc_addr, 23);
         assert!(metadata.pre_op_count == 5, 24);
         assert!(metadata.post_op_count == 5, 25);
         assert!(metadata.override_previous_root, 26);
@@ -750,26 +1309,38 @@ module mcms::multisig {
     //// utility function tests ////
 
     #[test]
-    public entry fun test_u64_to_bytes() {
-        let large_num: u64 = 1748317727; // hex = 0x6835361F
-        let bytes = u64_to_bytes(large_num);
+    public entry fun test_utils__ecdsa_recover_evm_addr() {
+        let eth_signed_message_hash = x"910cd291f5281f5bf25d8a83962f282b6c2bdf831f079dfcb84480f922abd2e1";
+        let signature = x"45283a6239b1b559a910e97f79a52bab1605e8bd952c4b4e0720ed9b1e9e96712acab6f5f946bfa3dfa61f47705aff6e2f17f6ad83d484857bb119a06ba1f0e71C";
+        let recovered_addr = ecdsa_recover_evm_addr(eth_signed_message_hash, signature);
+        assert!(recovered_addr == x"16c9fACed8a1e3C6aEA2B654EEca5617eb900EFf", 1);
+    }
+    
+    #[test]
+    public entry fun test_utils__uint_to_bytes() {
+        let large_u64: u64 = 1748317727; // hex = 0x6835361F
+        let bytes = uint_to_bytes(large_u64);
         assert!(bytes == x"000000006835361f", 1);
 
-        let num_with_zero_bytes: u64 = 256; // hex = 0x0100
-        let bytes_with_zero = u64_to_bytes(num_with_zero_bytes);
-        assert!(bytes_with_zero == x"0000000000000100", 2);
+        let u32_with_zero_bytes: u32 = 256; // hex = 0x0100
+        let bytes_with_zero = uint_to_bytes(u32_with_zero_bytes);
+        assert!(bytes_with_zero == x"00000100", 2);
 
-        let num_with_zero_bytes_2: u64 = 262144; // hex = 0x040000
-        let bytes_with_zero_2 = u64_to_bytes(num_with_zero_bytes_2);
-        assert!(bytes_with_zero_2 == x"0000000000040000", 3);
+        let u128_with_zero_bytes_2: u128 = 262144; // hex = 0x040000
+        let bytes_with_zero_2 = uint_to_bytes(u128_with_zero_bytes_2);
+        assert!(bytes_with_zero_2 == x"00000000000000000000000000040000", 3);
+
+        let u256_num: u256 = 262144;
+        let bytes_256 = uint_to_bytes(u256_num);
+        assert!(bytes_256 == x"0000000000000000000000000000000000000000000000000000000000040000", 4);
 
         let max_u64: u64 = 18446744073709551615; // hex = 0xFFFFFFFFFFFFFFFF
-        let bytes_max = u64_to_bytes(max_u64);
+        let bytes_max = uint_to_bytes(max_u64);
         assert!(bytes_max == x"ffffffffffffffff", 4);
     }
 
     #[test]
-    public entry fun test_compute_eth_message_hash() {
+    public entry fun test_utils__compute_eth_message_hash() {
         let root = x"d5ef592d1ad183db43b4980d7ab7ee43a6f6a284988c3e3a23d38c07beb520c7";
         let valid_until = 1748317727;
         let hash = compute_eth_message_hash(root, valid_until);
@@ -778,7 +1349,53 @@ module mcms::multisig {
     }
 
     #[test]
-    public entry fun test_vector_u8_gt() {
+    public entry fun test_utils__hash_metadata_leaf() {
+        let metadata = RootMetadata {
+            chain_id: 1,
+            multisig: @0xabc,
+            pre_op_count: 5,
+            post_op_count: 5,
+            override_previous_root: false
+        };
+        let hash = hash_metadata_leaf(metadata);
+        // test output computed from equivalent solidity function: keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA, metadata))
+        assert!(hash == x"ea6938e5cfa9b72197343db029e3146dec767d24f830eb750252076e439ccffa", 1);
+    }
+
+    #[test(account = @0xabc, framework = @aptos_framework)]
+    public entry fun test_utils__hash_op_leaf(account: &signer, framework: &signer) {
+        let (_, resource_acc_addr) = setup(account, framework);
+        let op = Op {
+            chain_id: (CHAIN_ID as u256),
+            multisig: resource_acc_addr,
+            nonce: OP1_NONCE,
+            to: resource_acc_addr,
+            value: OP1_VALUE,
+            data: OP1_DATA
+        };
+        let hash = hash_op_leaf(op);
+        // test output computed from equivalent solidity function: keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP, op))
+        let expected_hash = vector::borrow(&LEAVES, 1);
+        assert!(hash == *expected_hash, 0);
+    }
+
+    #[test]
+    public entry fun test_utils__verify_merkle_proof() {
+        let root = x"8ad6edb34398f637ca17e46b0b51ce50e18f56287aa0bf728ae3b5c4119c1600";
+        let leaf_hash = x"03783fac2efed8fbc9ad443e592ee30e61d65f471140c10ca155e937b435b760";
+        let proof = vector[
+            x"044852b2a670ade5407e78fb2863c51de9fcb96542a07186fe3aeda6bb8a116d",
+            x"156d92046fd42325cec0997498d663ce343243a1ff530521e60d08407dbb0580",
+            x"01b56d4f1b38f85ac9e8a826fb4d5210446e67a09594146d405f6f09f1a657f2",
+            x"44164eac6b478d58bcff0081e764768c68e20c031ded38f87e823ceff0f76854",
+            x"5b095d44d40824ca630f833c439211a0d8e63a0c2bb646b63b76de7cba9a35be",
+            x"5a97fb1f239d0789fbd9ab71901b0c7c0c0ad8c1530df72ec0a21e72647e5e46"
+        ];
+        assert!(verify_merkle_proof(proof, root, leaf_hash), 1);
+    }
+
+    #[test]
+    public entry fun test_utils__vector_u8_gt() {
         // a > b
         let a = vector[0x08, 0x0, 0x0, 0x0, 0x0];
         let b = vector[0x07, 0x4, 0x4, 0x3, 0x1];
@@ -794,14 +1411,22 @@ module mcms::multisig {
         let f = vector[0x08, 0x0, 0x0, 0x0, 0x1];
         assert!(!vector_u8_gt(e, f), 3);
 
-        
-        assert!(vector_u8_gt(ADDR2, ADDR1), 4);
-        assert!(vector_u8_gt(ADDR3, ADDR2), 5);
-        assert!(vector_u8_gt(ADDR3, ADDR1), 6);
+        let sorted_addresses = vector[
+            x"1D607AAD8aDd843bD3f87602b4D40DDaD477e748",
+            x"2A704Fd168bf117eba7Da3E66aae0E932cc9221e",
+            x"87191E05969b311242a7fF0a93d66Ac8B7B0bbB1",
+            x"C211d666f61afCC311821c5f17E769F6e1515795",
+            x"e0F4758dbD92E2499C95cb2c57bF605be032AF42"
+        ];
+        let prev_address = x"0000000000000000000000000000000000000001";
+        vector::for_each(sorted_addresses, |addr| {
+            assert!(vector_u8_gt(addr, prev_address), 7);
+            prev_address = addr;
+        });
     }
 
     #[test]
-    public entry fun test_right_pad_vec() {
+    public entry fun test_utils__right_pad_vec() {
         let input = vector[0x08, 0x0, 0x0, 0x0, 0x0];
         let padded = right_pad_vec(input, 10);
         assert!(padded == vector[8, 0, 0, 0, 0, 0, 0, 0, 0, 0], 1);
@@ -812,6 +1437,21 @@ module mcms::multisig {
 
         let input3 = vector[0x01, 0x2, 0x3, 0x4, 0x5];
         let padded3 = right_pad_vec(input3, 4);
+        assert!(padded3 == vector[1, 2, 3, 4, 5], 3);
+    }
+
+    #[test]
+    public entry fun test_utils__left_pad_vec() {
+        let input = vector[0x08, 0x0, 0x0, 0x0, 0x0];
+        let padded = left_pad_vec(input, 10);
+        assert!(padded == vector[0, 0, 0, 0, 0, 8, 0, 0, 0, 0], 1);
+
+        let input2 = vector[];
+        let padded2 = left_pad_vec(input2, 5);
+        assert!(padded2 == vector[0, 0, 0, 0, 0], 2);
+
+        let input3 = vector[0x01, 0x2, 0x3, 0x4, 0x5];
+        let padded3 = left_pad_vec(input3, 4);
         assert!(padded3 == vector[1, 2, 3, 4, 5], 3);
     }
 }
