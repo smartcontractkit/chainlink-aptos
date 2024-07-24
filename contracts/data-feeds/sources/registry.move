@@ -9,6 +9,8 @@ module data_feeds::registry {
     use aptos_framework::object::{Self};
     use aptos_framework::aptos_account;
 
+    const APP_OBJECT_SEED: vector<u8> = b"REGISTRY";
+
     // TODO: figure out link_address, router, verifier_proxy
     struct Registry has key, store, drop {
         owner_address: address,
@@ -179,37 +181,38 @@ module data_feeds::registry {
         }
     }
 
-    public entry fun initialize(owner_address: address, router_address: address) {
-        let constructor_ref = object::create_object(owner_address);
+    fun init_module(account: &signer) {
+        let constructor_ref = object::create_named_object(
+            account,
+            APP_OBJECT_SEED,
+        );
         let object_address = object::address_from_constructor_ref(&constructor_ref);
 
         // Create an account alongside the object.
-        aptos_account::create_account(object_address);
+        // aptos_account::create_account(object_address);
 
         // Store an ExtendRef alongside the object.
-        let object_signer = object::generate_signer(&constructor_ref);
         let _extend_ref = object::generate_extend_ref(&constructor_ref);
+        let object_signer = object::generate_signer(&constructor_ref);
         // TODO: store extend_ref?
 
         move_to(&object_signer, Registry {
-            // TODO: functionality to update owner and router addresses
-            owner_address,
-            router_address,
+            // TODO: functionality to update owner
+            owner_address: @owner,
+            router_address: @0x1, // TODO: remove fully
 
             feeds: simple_map::new(),
             configs: simple_map::new(),
             upkeep_feed_id_set: simple_map::new(),
         });
-
-        event::emit<Initialized>(
-            Initialized {
-                address: object_address,
-            },
-        );
     }
 
-    public entry fun set_feeds(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>, upkeep: address) acquires Registry {
-        let registry = borrow_global_mut<Registry>(registry_address);
+    fun get_state_addr(): address {
+        object::create_object_address(&@data_feeds, APP_OBJECT_SEED)
+    }
+
+    public entry fun set_feeds(account: &signer, feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>, upkeep: address) acquires Registry {
+        let registry = borrow_global_mut<Registry>(get_state_addr());
 
         // TODO: address to object, compare object owner
 
@@ -252,8 +255,8 @@ module data_feeds::registry {
         });
     }
 
-    public entry fun remove_feeds(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>) acquires Registry {
-        let registry = borrow_global_mut<Registry>(registry_address);
+    public entry fun remove_feeds(account: &signer, feed_ids: vector<vector<u8>>) acquires Registry {
+        let registry = borrow_global_mut<Registry>(get_state_addr());
 
         assert_is_owner(registry, signer::address_of(account));
 
@@ -273,8 +276,8 @@ module data_feeds::registry {
         });
     }
 
-    public entry fun set_feed_configs(account: &signer, registry_address: address, config_ids: vector<vector<u8>>, deviation_thresholds: vector<u256>, staleness_seconds: vector<u256>) acquires Registry {
-        let registry = borrow_global_mut<Registry>(registry_address);
+    public entry fun set_feed_configs(account: &signer, config_ids: vector<vector<u8>>, deviation_thresholds: vector<u256>, staleness_seconds: vector<u256>) acquires Registry {
+        let registry = borrow_global_mut<Registry>(get_state_addr());
 
         assert_is_owner(registry, signer::address_of(account));
 
@@ -308,8 +311,8 @@ module data_feeds::registry {
         }
     }
 
-    public entry fun update_descriptions(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>, descriptions: vector<String>) acquires Registry {
-        let registry = borrow_global_mut<Registry>(registry_address);
+    public entry fun update_descriptions(account: &signer, feed_ids: vector<vector<u8>>, descriptions: vector<String>) acquires Registry {
+        let registry = borrow_global_mut<Registry>(get_state_addr());
 
         assert_is_owner(registry, signer::address_of(account));
 
@@ -328,8 +331,8 @@ module data_feeds::registry {
         });
     }
 
-    public entry fun update_feed_config_id(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>, config_id: vector<u8>) acquires Registry {
-        let registry = borrow_global_mut<Registry>(registry_address);
+    public entry fun update_feed_config_id(account: &signer, feed_ids: vector<vector<u8>>, config_id: vector<u8>) acquires Registry {
+        let registry = borrow_global_mut<Registry>(get_state_addr());
 
         assert_is_owner(registry, signer::address_of(account));
 
@@ -347,8 +350,8 @@ module data_feeds::registry {
         });
     }
 
-    public entry fun update_upkeep(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>, upkeep: address) acquires Registry {
-        let registry = borrow_global_mut<Registry>(registry_address);
+    public entry fun update_upkeep(account: &signer, feed_ids: vector<vector<u8>>, upkeep: address) acquires Registry {
+        let registry = borrow_global_mut<Registry>(get_state_addr());
 
         assert_is_owner(registry, signer::address_of(account));
 
@@ -381,8 +384,8 @@ module data_feeds::registry {
         });
     }
 
-    public entry fun request_upkeep(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>) acquires Registry {
-        let registry = borrow_global_mut<Registry>(registry_address);
+    public entry fun request_upkeep(account: &signer, feed_ids: vector<vector<u8>>) acquires Registry {
+        let registry = borrow_global_mut<Registry>(get_state_addr());
 
         assert_is_owner_or_router(registry, signer::address_of(account));
 
@@ -417,10 +420,8 @@ module data_feeds::registry {
     }
 
     // Keystone receiver function interface
-    public entry fun on_report(account: &signer, registry_address: address, raw_report: vector<u8>, signatures: vector<vector<u8>>) acquires Registry {
-        // TODO: how would we resolve a registry_address? this would have to be looked up
-        // pass registry into the consensus phase, prefixed to the report
-        let registry = borrow_global_mut<Registry>(registry_address);
+    public entry fun on_report(account: &signer, raw_report: vector<u8>, signatures: vector<vector<u8>>) acquires Registry {
+        let registry = borrow_global_mut<Registry>(get_state_addr());
 
         let authority = account;// TODO, use some other signer made for registry
         let report_context = vector::slice(&raw_report, 0, 32);
@@ -475,8 +476,8 @@ module data_feeds::registry {
         });
     }
 
-    public fun get_benchmarks(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>): vector<BenchmarkResult> acquires Registry {
-        let registry = borrow_global_mut<Registry>(registry_address);
+    public fun get_benchmarks(account: &signer, feed_ids: vector<vector<u8>>): vector<BenchmarkResult> acquires Registry {
+        let registry = borrow_global_mut<Registry>(get_state_addr());
 
         assert_authorized_data_fetch(registry, signer::address_of(account), &feed_ids);
 
@@ -491,8 +492,8 @@ module data_feeds::registry {
         })
     }
 
-    public fun get_reports(account: &signer, registry_address: address, feed_ids: vector<vector<u8>>): vector<ReportResult> acquires Registry {
-        let registry = borrow_global_mut<Registry>(registry_address);
+    public fun get_reports(account: &signer, feed_ids: vector<vector<u8>>): vector<ReportResult> acquires Registry {
+        let registry = borrow_global<Registry>(get_state_addr());
 
         assert_authorized_data_fetch(registry, signer::address_of(account), &feed_ids);
 
@@ -507,8 +508,8 @@ module data_feeds::registry {
         })
     }
 
-    public fun get_feed_metadata(registry_address: address, feed_ids: vector<vector<u8>>): vector<FeedMetadataResult> acquires Registry {
-        let registry = borrow_global_mut<Registry>(registry_address);
+    public fun get_feed_metadata(feed_ids: vector<vector<u8>>): vector<FeedMetadataResult> acquires Registry {
+        let registry = borrow_global<Registry>(get_state_addr());
 
         vector::map(feed_ids, |feed_id| {
             assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
@@ -526,8 +527,8 @@ module data_feeds::registry {
         })
     }
 
-    public fun get_feed_configs(registry_address: address, config_ids: vector<vector<u8>>): vector<FeedConfigResult> acquires Registry {
-        let registry = borrow_global_mut<Registry>(registry_address);
+    public fun get_feed_configs(config_ids: vector<vector<u8>>): vector<FeedConfigResult> acquires Registry {
+        let registry = borrow_global<Registry>(get_state_addr());
 
         vector::map(config_ids, |config_id| {
             assert!(simple_map::contains_key(&registry.configs, &config_id), error::invalid_argument(ECONFIG_NOT_CONFIGURED));
@@ -540,8 +541,8 @@ module data_feeds::registry {
         })
     }
 
-    public fun get_upkeep_feed_ids(registry_address: address, upkeep: address): (vector<vector<u8>>) acquires Registry {
-        let registry = borrow_global_mut<Registry>(registry_address);
+    public fun get_upkeep_feed_ids(upkeep: address): (vector<vector<u8>>) acquires Registry {
+        let registry = borrow_global<Registry>(get_state_addr());
 
         assert!(simple_map::contains_key(&registry.upkeep_feed_id_set, &upkeep), error::invalid_argument(EINVALID_UPKEEP));
 
