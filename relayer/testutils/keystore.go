@@ -3,6 +3,7 @@ package testutils
 import (
 	"context"
 	"crypto/ed25519"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -23,7 +24,7 @@ func NewTestKeystore(t *testing.T, address string, privateKey ed25519.PrivateKey
 }
 
 func (tk *TestKeystore) Sign(ctx context.Context, id string, hash []byte) ([]byte, error) {
-	require.Equal(tk.t, tk.address, id)
+	require.Equal(tk.t, fmt.Sprintf("%064x", tk.privateKey.Public()), id)
 
 	// used to check if the account exists.
 	if hash == nil {

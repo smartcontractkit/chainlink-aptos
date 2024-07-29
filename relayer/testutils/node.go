@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 )
 
 const (
@@ -55,12 +54,4 @@ func StartAptosNode() error {
 	}
 
 	return nil
-}
-
-func GetAptosNodeIpAddress() string {
-	if runtime.GOOS == "darwin" {
-		return "127.0.0.1"
-	} else {
-		return "172.254.0.101"
-	}
 }

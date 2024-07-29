@@ -7,7 +7,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 	"testing"
 	"time"
 
@@ -18,6 +17,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
+	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/testutils"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
@@ -43,13 +43,11 @@ func TestChainReaderLocal(t *testing.T) {
 	require.NoError(t, err)
 	logger.Debugw("Started Aptos node")
 
-	nodeIpAddress := testutils.GetAptosNodeIpAddress()
-
-	rpcUrl := fmt.Sprintf("http://%s:8080/v1", nodeIpAddress)
+	rpcUrl := "http://localhost:8080/v1"
 	client, err := aptos.NewNodeClient(rpcUrl, 0)
 	require.NoError(t, err)
 
-	faucetUrl := fmt.Sprintf("http://%s:8081", nodeIpAddress)
+	faucetUrl := "http://localhost:8081"
 	err = testutils.FundWithFaucet(logger, client, accountAddress, faucetUrl)
 	require.NoError(t, err)
 
@@ -162,9 +160,11 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 	}})
 	require.NoError(t, err)
 
+	confidenceLevel := primitives.Finalized
+
 	expectedUint64 := uint64(42)
 	var retUint64 uint64
-	err = chainReader.GetLatestValue(context.Background(), "testContract", "replacementNameEchoU64", struct {
+	err = chainReader.GetLatestValue(context.Background(), "testContract", "replacementNameEchoU64", confidenceLevel, struct {
 		Value1 uint64
 	}{Value1: expectedUint64}, &retUint64)
 	require.NoError(t, err)
@@ -172,7 +172,7 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 
 	expectedTuple := []uint64{11, 22}
 	var retTuple []uint64
-	err = chainReader.GetLatestValue(context.Background(), "testContract", "echo_u32_u64_tuple", struct {
+	err = chainReader.GetLatestValue(context.Background(), "testContract", "echo_u32_u64_tuple", confidenceLevel, struct {
 		Value1 uint32
 		Value2 uint64
 	}{Value1: uint32(expectedTuple[0]), Value2: expectedTuple[1]}, &retTuple)
@@ -181,7 +181,7 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 
 	expectedString := "hello world"
 	var retString string
-	err = chainReader.GetLatestValue(context.Background(), "testContract", "echo_string", struct {
+	err = chainReader.GetLatestValue(context.Background(), "testContract", "echo_string", confidenceLevel, struct {
 		Value1 string
 	}{Value1: expectedString}, &retString)
 	require.NoError(t, err)
@@ -189,15 +189,15 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 
 	expectedSlice := []byte{42, 11, 22, 59}
 	var retSlice []byte
-	err = chainReader.GetLatestValue(context.Background(), "testContract", "echo_byte_vector", struct {
+	err = chainReader.GetLatestValue(context.Background(), "testContract", "echo_byte_vector", confidenceLevel, struct {
 		Value1 []byte
 	}{Value1: expectedSlice}, &retSlice)
 	require.NoError(t, err)
 	require.Equal(t, expectedSlice, retSlice)
 
-	expectedSliceSlice := [][]byte{[]byte{42, 11}, []byte{22, 59}}
+	expectedSliceSlice := [][]byte{{42, 11}, {22, 59}}
 	var retSliceSlice [][]byte
-	err = chainReader.GetLatestValue(context.Background(), "testContract", "echo_byte_vector_vector", struct {
+	err = chainReader.GetLatestValue(context.Background(), "testContract", "echo_byte_vector_vector", confidenceLevel, struct {
 		Value1 [][]byte
 	}{Value1: expectedSliceSlice}, &retSliceSlice)
 	require.NoError(t, err)
