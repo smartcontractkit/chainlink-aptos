@@ -130,6 +130,18 @@ module keystone::forwarder {
         id
     }
 
+    fun to_u16be(data: vector<u8>): u16 {
+        // reverse big endian to little endian
+        vector::reverse(&mut data);
+        aptos_std::from_bcs::to_u16(data)
+    }
+
+    fun to_u32be(data: vector<u8>): u32 {
+        // reverse big endian to little endian
+        vector::reverse(&mut data);
+        aptos_std::from_bcs::to_u32(data)
+    }
+
     // receiver_authority is a resource account owned by the receiver
     // TODO: a method to register these accounts
     // TODO: combine report_context | report
@@ -143,11 +155,11 @@ module keystone::forwarder {
         let workflow_execution_id = vector::slice(&report, 1, 33);
         // _timestamp
         let don_id = vector::slice(&report, 37, 41);
-        let don_id = aptos_std::from_bcs::to_u32(don_id);
+        let don_id = to_u32be(don_id);
         let config_version = vector::slice(&report, 41, 45);
-        let config_version = aptos_std::from_bcs::to_u32(config_version);
+        let config_version = to_u32be(config_version);
         let report_id = vector::slice(&report, 107, 109);
-        let report_id = aptos_std::from_bcs::to_u16(report_id);
+        let report_id = to_u16be(report_id);
         let metadata = vector::slice(&report, 45, 109);
         let data = vector::slice(&report, 109, vector::length(&report));
 
@@ -218,8 +230,6 @@ module keystone::forwarder {
 
     #[test_only]
     public entry fun set_up_test(owner: &signer, account: &signer) {
-        use std::vector;
-
         account::create_account_for_test(signer::address_of(owner));
         account::create_account_for_test(signer::address_of(account));
 
@@ -306,9 +316,22 @@ module keystone::forwarder {
         // header
         vector::push_back(&mut report, version);
         vector::append(&mut report, execution_id);
-        vector::append(&mut report, bcs::to_bytes(&timestamp));
-        vector::append(&mut report, bcs::to_bytes(&config.don_id));
-        vector::append(&mut report, bcs::to_bytes(&config.config_version));
+
+        let bytes = bcs::to_bytes(&timestamp);
+        // convert little-endian to big-endian
+        vector::reverse(&mut bytes);
+        vector::append(&mut report, bytes);
+
+        let bytes = bcs::to_bytes(&config.don_id);
+        // convert little-endian to big-endian
+        vector::reverse(&mut bytes);
+        vector::append(&mut report, bytes);
+
+        let bytes = bcs::to_bytes(&config.config_version);
+        // convert little-endian to big-endian
+        vector::reverse(&mut bytes);
+        vector::append(&mut report, bytes);
+
         // metadata
         vector::append(&mut report, workflow_id);
         vector::append(&mut report, workflow_name);

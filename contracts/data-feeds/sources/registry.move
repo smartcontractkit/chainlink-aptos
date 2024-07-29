@@ -397,7 +397,7 @@ module data_feeds::registry {
         });
     }
 
-    fun from_u32(data: &vector<u8>, offset: u64): u32 {
+    fun to_u32be(data: &vector<u8>, offset: u64): u32 {
         let ret: u32 = 0;
         for (i in 0..4) {
             let value = *vector::borrow(data, offset + i);
@@ -418,6 +418,7 @@ module data_feeds::registry {
     // Keystone receiver function interface
     public entry fun on_report(account: &signer, raw_report: vector<u8>, report_context: vector<u8>, signatures: vector<vector<u8>>) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
+
 
         let authority = account;// TODO, use some other signer made for registry
         // TODO: explore concatting report_context into raw_report
@@ -447,13 +448,13 @@ module data_feeds::registry {
             let observation_timestamp: u32;
             let benchmark_price: u256;
             if (schema == BASIC_SCHEMA) {
-                observation_timestamp = from_u32(&report_data, 8);
+                observation_timestamp = to_u32be(&report_data, 8);
                 benchmark_price = from_i192(&report_data, 64);
             } else if (schema == PREMIUM_SCHEMA) {
-                observation_timestamp = from_u32(&report_data, 8);
+                observation_timestamp = to_u32be(&report_data, 8);
                 benchmark_price = from_i192(&report_data, 64);
             } else if (schema == BLOCK_PREMIUM_SCHEMA) {
-                observation_timestamp = from_u32(&report_data, 4);
+                observation_timestamp = to_u32be(&report_data, 4);
                 benchmark_price = from_i192(&report_data, 8);
             } else {
                 abort error::invalid_argument(EINVALID_REPORT)
