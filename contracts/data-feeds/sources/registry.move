@@ -7,7 +7,6 @@ module data_feeds::registry {
     use std::vector;
 
     use aptos_framework::object::{Self};
-    use aptos_framework::aptos_account;
 
     const APP_OBJECT_SEED: vector<u8> = b"REGISTRY";
 
@@ -187,9 +186,6 @@ module data_feeds::registry {
             APP_OBJECT_SEED,
         );
         let object_address = object::address_from_constructor_ref(&constructor_ref);
-
-        // Create an account alongside the object.
-        // aptos_account::create_account(object_address);
 
         // Store an ExtendRef alongside the object.
         let _extend_ref = object::generate_extend_ref(&constructor_ref);
@@ -420,12 +416,13 @@ module data_feeds::registry {
     }
 
     // Keystone receiver function interface
-    public entry fun on_report(account: &signer, raw_report: vector<u8>, signatures: vector<vector<u8>>) acquires Registry {
+    public entry fun on_report(account: &signer, raw_report: vector<u8>, report_context: vector<u8>, signatures: vector<vector<u8>>) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
 
         let authority = account;// TODO, use some other signer made for registry
-        let report_context = vector::slice(&raw_report, 0, 32);
-        let raw_report = vector::slice(&raw_report, 32, vector::length(&raw_report));
+        // TODO: explore concatting report_context into raw_report
+        // let report_context = vector::slice(&raw_report, 0, 32);
+        // let raw_report = vector::slice(&raw_report, 32, vector::length(&raw_report));
         let signatures = vector::map(signatures, |signature| keystone::forwarder::signature_from_bytes(signature));
         let (_metadata, data) = keystone::forwarder::validate_report(authority, raw_report, report_context, signatures);
         // TODO: slice data into N length reports

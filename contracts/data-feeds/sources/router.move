@@ -4,7 +4,6 @@ module data_feeds::router {
     use std::string::String;
     use std::vector;
 
-    use aptos_framework::aptos_account;
     use aptos_framework::object::{Self, ExtendRef};
 
     use data_feeds::registry::{Self, BenchmarkResult, ReportResult};
@@ -45,9 +44,6 @@ module data_feeds::router {
             APP_OBJECT_SEED,
         );
         let object_address = object::address_from_constructor_ref(&constructor_ref);
-
-        // Create an account alongside the object.
-        // aptos_account::create_account(object_address);
 
         // Store an ExtendRef alongside the object.
         let extend_ref = object::generate_extend_ref(&constructor_ref);
