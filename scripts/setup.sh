@@ -20,8 +20,8 @@ bash "scripts/core.sh"
 
 pushd "../../chainlink/core/scripts/keystone"
 
-rm artefacts/deployed_contracts.json
-rm .cache/PublicKeys.json
+rm artefacts/deployed_contracts.json || true
+rm .cache/PublicKeys.json || true
 
 # Fund deployment key
 geth attach --exec "eth.sendTransaction({from: eth.accounts[0], to: '$ADDRESS', value: 20000000000000000000000})" http://127.0.0.1:8544
