@@ -44,5 +44,5 @@ targets:
    config:
      address: "0xa34b23cdcda186e62aaaf69278baea45e7b12d2690c3f361ee3303e99540f663"
      deltaStage: "45s"
-     # schedule: "oneAtATime"
+     schedule: "oneAtATime"
 """
