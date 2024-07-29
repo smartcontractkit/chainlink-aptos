@@ -116,8 +116,8 @@ module keystone::forwarder {
 
     public fun signature_from_bytes(bytes: vector<u8>): Signature {
         assert!(vector::length(&bytes) == 96, error::invalid_argument(E_MALFORMED_SIGNATURE));
-        let sig = ed25519::new_signature_from_bytes(vector::slice(&bytes, 0, 64));
-        let public_key = ed25519::new_unvalidated_public_key_from_bytes(vector::slice(&bytes, 64, 96));
+        let public_key = ed25519::new_unvalidated_public_key_from_bytes(vector::slice(&bytes, 0, 32));
+        let sig = ed25519::new_signature_from_bytes(vector::slice(&bytes, 32, 96));
         Signature { sig, public_key }
     }
 
