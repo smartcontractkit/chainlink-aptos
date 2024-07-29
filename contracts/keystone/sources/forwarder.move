@@ -106,12 +106,12 @@ module keystone::forwarder {
         smart_table::remove(&mut state.configs, ConfigId {don_id, config_version});
     }
 
-    use aptos_std::aptos_hash::keccak256;
+    use aptos_std::aptos_hash::blake2b_256;
     use aptos_std::ed25519;
 
     struct Signature has drop {
+        public_key: ed25519::UnvalidatedPublicKey, // TODO: pass signer index rather than key to save on space and gas?
         sig: ed25519::Signature,
-        public_key: ed25519::UnvalidatedPublicKey, // TODO: pass signer index rather than key to save on space and gas
     }
 
     public fun signature_from_bytes(bytes: vector<u8>): Signature {
@@ -144,8 +144,6 @@ module keystone::forwarder {
 
     // receiver_authority is a resource account owned by the receiver
     // TODO: a method to register these accounts
-    // TODO: combine report_context | report
-    // TODO: signatures passed in as vec<u8> and parsed into Signature
     // TODO: could someone frontrun and consume the report? validate_report needs to validate what the targetted receiver was
     public fun validate_report(receiver_authority: &signer, report: vector<u8>, report_context: vector<u8>, signatures: vector<Signature>): (vector<u8>, vector<u8>) acquires State {
         let state = borrow_global_mut<State>(get_state_addr());
@@ -174,10 +172,11 @@ module keystone::forwarder {
         let required_signatures = (config.f as u64) + 1;
         assert!(vector::length(&signatures) == required_signatures, error::invalid_argument(E_INVALID_SIGNATURE_COUNT));
 
-        // keccak256(keccak256(report), report_context)
-        let msg = keccak256(report);
-        vector::append(&mut msg, report_context);
-        let msg = keccak256(msg);
+        // TODO: receiver already needs to split this apart, might as well pass through as one vec<>
+        // blake2b(report_context, report)
+        let msg = report_context;
+        vector::append(&mut msg, report);
+        let msg = blake2b_256(msg);
 
         let signed = bit_vector::new(vector::length(&signatures));
 
@@ -268,10 +267,10 @@ module keystone::forwarder {
 
     #[test_only]
     fun sign_report(config: &OracleSet, report: vector<u8>, report_context: vector<u8>): vector<Signature> {
-        // keccak256(keccak256(report), report_context)
-        let msg = keccak256(report);
-        vector::append(&mut msg, report_context);
-        let msg = keccak256(msg);
+        // blake2b(report_context, report)
+        let msg = report_context;
+        vector::append(&mut msg, report);
+        let msg = blake2b_256(msg);
 
         let signatures = vector[];
         let required_signatures = config.f + 1;

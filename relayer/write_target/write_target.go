@@ -73,12 +73,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 						Params: []chainwriter.ChainWriterFunctionParam{
 							{
 								Name:     "RawReport",
-								Type:     "vector<u8>", // metadata | report
-								Required: true,
-							},
-							{
-								Name:     "ReportContext",
-								Type:     "vector<u8>",
+								Type:     "vector<u8>", // report_context | metadata | report
 								Required: true,
 							},
 							{

@@ -100,7 +100,6 @@ func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.Capabi
 	}
 	// TODO: validate encoded report is prefixed with workflowID and executionID that match the request meta
 
-	// TODO: concat rawReport and ReportContext
 	// rawExecutionID, err := hex.DecodeString(request.Metadata.WorkflowExecutionID)
 	// if err != nil {
 	// 	return nil, err
@@ -134,13 +133,11 @@ func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.Capabi
 	// `nil` values, including for slices. Until the bug is fixed we need to ensure that there are no
 	// `nil` values passed in the request.
 	req := struct {
-		RawReport     []byte
-		ReportContext []byte
-		Signatures    [][]byte
+		RawReport  []byte
+		Signatures [][]byte
 	}{
-		RawReport:     inputs.Report,
-		ReportContext: inputs.Context,
-		Signatures:    inputs.Signatures,
+		RawReport:  append(inputs.Context, inputs.Report...),
+		Signatures: inputs.Signatures,
 	}
 
 	if req.RawReport == nil {
