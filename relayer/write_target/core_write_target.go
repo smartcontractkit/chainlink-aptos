@@ -133,9 +133,11 @@ func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.Capabi
 	// `nil` values, including for slices. Until the bug is fixed we need to ensure that there are no
 	// `nil` values passed in the request.
 	req := struct {
+		Receiver   string
 		RawReport  []byte
 		Signatures [][]byte
 	}{
+		Receiver:   reqConfig.Address,
 		RawReport:  append(inputs.Context, inputs.Report...),
 		Signatures: inputs.Signatures,
 	}
@@ -151,8 +153,7 @@ func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.Capabi
 
 	meta := commontypes.TxMeta{WorkflowExecutionID: &request.Metadata.WorkflowExecutionID}
 	value := big.NewInt(0)
-	// On Aptos we have to invert the call due to static dispatch: receiver::on_report() -> forwarder::validate_report()
-	if err := cap.cw.SubmitTransaction(ctx, "receiver", "onReport", req, txID.String(), reqConfig.Address, &meta, value); err != nil {
+	if err := cap.cw.SubmitTransaction(ctx, "forwarder", "report", req, txID.String(), cap.forwarderAddress, &meta, value); err != nil {
 		return nil, err
 	}
 	cap.lggr.Debugw("Transaction submitted", "request", request, "transaction", txID)

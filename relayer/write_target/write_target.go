@@ -58,19 +58,12 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 				Functions: map[string]*chainwriter.ChainWriterFunction{
 					"report": {
 						PublicKey: config.PublicKey,
-						// FromAddress: config.FromAddress,
-						Params: []chainwriter.ChainWriterFunctionParam{},
-					},
-				},
-			},
-			"receiver": {
-				Name: "registry", // TODO: support arbitrary receiver
-				Functions: map[string]*chainwriter.ChainWriterFunction{
-					"onReport": {
-						Name:      "on_report",
-						PublicKey: config.PublicKey,
-						// FromAddress: config.FromAddress,
 						Params: []chainwriter.ChainWriterFunctionParam{
+							{
+								Name:     "Receiver",
+								Type:     "address",
+								Required: true,
+							},
 							{
 								Name:     "RawReport",
 								Type:     "vector<u8>", // report_context | metadata | report

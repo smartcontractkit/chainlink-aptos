@@ -1,12 +1,13 @@
 module data_feeds::registry {
     use std::error;
     use std::event;
+    use std::option;
     use std::signer;
     use std::simple_map::{Self, SimpleMap};
-    use std::string::String;
+    use std::string::{Self, String};
     use std::vector;
 
-    use aptos_framework::object::{Self};
+    use aptos_framework::object::{Self, Object};
 
     const APP_OBJECT_SEED: vector<u8> = b"REGISTRY";
 
@@ -191,6 +192,14 @@ module data_feeds::registry {
         let _extend_ref = object::generate_extend_ref(&constructor_ref);
         let object_signer = object::generate_signer(&constructor_ref);
         // TODO: store extend_ref?
+
+        // register for keystone::forwarder reports
+        let cb = aptos_framework::function_info::new_function_info(
+            account,
+            string::utf8(b"registry"),
+            string::utf8(b"on_report"),
+        );
+        keystone::storage::register(account, cb, new_proof());
 
         move_to(&object_signer, Registry {
             // TODO: functionality to update owner
@@ -415,22 +424,25 @@ module data_feeds::registry {
         aptos_std::from_bcs::to_u256(data)
     }
 
+    struct OnReceive has drop {}
+
+    fun new_proof(): OnReceive {
+      OnReceive {}
+    }
+
     // Keystone receiver function interface
-    public entry fun on_report(account: &signer, raw_report: vector<u8>, signatures: vector<vector<u8>>) acquires Registry {
+    public fun on_report<T: key>(_metadata: Object<T>): option::Option<u128>  acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
 
-        // TODO: validate report's workflow_id
-
-        let authority = account;// TODO, use some other signer made for registry
-        let report_context = vector::slice(&raw_report, 0, 96);
-        let raw_report = vector::slice(&raw_report, 96, vector::length(&raw_report));
-        let signatures = vector::map(signatures, |signature| keystone::forwarder::signature_from_bytes(signature));
-        let (_metadata, data) = keystone::forwarder::validate_report(authority, raw_report, report_context, signatures);
+        // TODO: validate report's workflow_id via metadata
+        let data = keystone::storage::retrieve(new_proof());
 
         let (feed_ids, reports) = parse_raw_report(data);
         vector::zip(feed_ids, reports, |feed_id, report| {
             perform_upkeep(registry, feed_id, report);
         });
+
+        option::none()
     }
 
     // TODO: remove pub, currently for tests

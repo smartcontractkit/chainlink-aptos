@@ -22,19 +22,6 @@ module keystone::forwarder {
 
     const APP_OBJECT_SEED: vector<u8> = b"FORWARDER";
 
-    struct Receiver has key {
-        signer_cap: account::SignerCapability
-    }
-
-    /// To generate resource account
-    const RECEIVER_SEED: vector<u8> = b"receiver";
-
-    public entry fun register(receiver: &signer) {
-        let (_resource_account, signer_cap) = account::create_resource_account(receiver, RECEIVER_SEED);
-        let state = Receiver { signer_cap };
-        move_to(receiver, state)
-    }
-
     struct ConfigId has key, store, drop, copy {
         don_id: u32,
         config_version: u32,
@@ -130,6 +117,23 @@ module keystone::forwarder {
         id
     }
 
+    /// The dispatch call knows both storage and indirectly the callback, thus the separate module.
+    fun dispatch(address: address, data: vector<u8>) {
+        let metadata = keystone::storage::insert(address, data);
+        aptos_framework::dispatchable_fungible_asset::derived_supply(metadata);
+    }
+
+    public entry fun report(transmitter: &signer, receiver: address, raw_report: vector<u8>, signatures: vector<vector<u8>>): bool acquires State {
+        let report_context = vector::slice(&raw_report, 0, 96);
+        let raw_report = vector::slice(&raw_report, 96, vector::length(&raw_report));
+        let signatures = vector::map(signatures, |signature| signature_from_bytes(signature));
+
+        let (_metadata, data) = validate_report(transmitter, receiver, raw_report, report_context, signatures);
+        dispatch(receiver, data); // TODO: pass metadata through
+        // TODO: unable to catch failure here
+        true
+    }
+
     fun to_u16be(data: vector<u8>): u16 {
         // reverse big endian to little endian
         vector::reverse(&mut data);
@@ -142,10 +146,7 @@ module keystone::forwarder {
         aptos_std::from_bcs::to_u32(data)
     }
 
-    // receiver_authority is a resource account owned by the receiver
-    // TODO: a method to register these accounts
-    // TODO: could someone frontrun and consume the report? validate_report needs to validate what the targetted receiver was
-    public fun validate_report(receiver_authority: &signer, report: vector<u8>, report_context: vector<u8>, signatures: vector<Signature>): (vector<u8>, vector<u8>) acquires State {
+    fun validate_report(transmitter: &signer, receiver: address, report: vector<u8>, report_context: vector<u8>, signatures: vector<Signature>): (vector<u8>, vector<u8>) acquires State {
         let state = borrow_global_mut<State>(get_state_addr());
 
         // parse out report metadata
@@ -165,14 +166,14 @@ module keystone::forwarder {
         let config = smart_table::borrow(&state.configs, ConfigId { don_id, config_version });
 
         // check if report was already delivered
-        let transmission_id = transmission_id(signer::address_of(receiver_authority), workflow_execution_id, report_id);
+        let transmission_id = transmission_id(receiver, workflow_execution_id, report_id);
         let processed = smart_table::contains(&state.reports, transmission_id);
         assert!(!processed, E_ALREADY_PROCESSED);
 
         let required_signatures = (config.f as u64) + 1;
         assert!(vector::length(&signatures) == required_signatures, error::invalid_argument(E_INVALID_SIGNATURE_COUNT));
 
-        // TODO: receiver already needs to split this apart, might as well pass through as one vec<>
+        // TODO: transmit already needs to split this apart, might as well pass through as one vec<>
         // blake2b(report_context, report)
         let msg = report_context;
         vector::append(&mut msg, report);
@@ -196,11 +197,8 @@ module keystone::forwarder {
 
         });
 
-        let receiver = signer::address_of(receiver_authority);
         // mark as delivered
-        // TODO: can't have transmitter address since passed through receiver -> receiver has to be called
-        // without signer
-        smart_table::add(&mut state.reports, transmission_id, receiver);
+        smart_table::add(&mut state.reports, transmission_id, signer::address_of(transmitter));
 
         event::emit(ReportProcessed {
             receiver,
@@ -345,6 +343,6 @@ module keystone::forwarder {
         let signatures = sign_report(&config, report, report_context);
 
         // call entrypoint
-        validate_report(&owner, report, report_context, signatures);
+        validate_report(&owner, signer::address_of(&account), report, report_context, signatures);
     }
 }

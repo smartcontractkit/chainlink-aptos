@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 CONTAINER_VERSION="latest"
+KEYSTONE_ADDR=$(cat "$(dirname -- "$0")"/../contracts/keystone/contract_address.txt)
 
 # Check if .env file exists in the parent directory
 if [ -f "../.env" ]; then
@@ -48,7 +49,7 @@ Enabled = true
 ChainID = "localnet"
 
 [Aptos.Workflow]
-ForwarderAddress = "0x1"
+ForwarderAddress = "$KEYSTONE_ADDR"
 PublicKey = ""
 
 [[Aptos.Nodes]]
