@@ -1,5 +1,4 @@
 module keystone::forwarder {
-    use aptos_framework::account::{Self};
     use aptos_framework::object::{Self, ExtendRef};
     use aptos_std::smart_table::{SmartTable,Self};
 
@@ -123,7 +122,7 @@ module keystone::forwarder {
         aptos_framework::dispatchable_fungible_asset::derived_supply(metadata);
     }
 
-    public entry fun report(transmitter: &signer, receiver: address, raw_report: vector<u8>, signatures: vector<vector<u8>>): bool acquires State {
+    public entry fun report(transmitter: &signer, receiver: address, raw_report: vector<u8>, signatures: vector<vector<u8>>) acquires State {
         let report_context = vector::slice(&raw_report, 0, 96);
         let raw_report = vector::slice(&raw_report, 96, vector::length(&raw_report));
         let signatures = vector::map(signatures, |signature| signature_from_bytes(signature));
@@ -131,7 +130,6 @@ module keystone::forwarder {
         let (_metadata, data) = validate_report(transmitter, receiver, raw_report, report_context, signatures);
         dispatch(receiver, data); // TODO: pass metadata through
         // TODO: unable to catch failure here
-        true
     }
 
     fun to_u16be(data: vector<u8>): u16 {
@@ -208,22 +206,27 @@ module keystone::forwarder {
         (metadata, data)
     }
 
+    #[view]
     public fun get_transmission_state(receiver: address, workflow_execution_id: vector<u8>, report_id: u16): bool acquires State {
-        let state = borrow_global_mut<State>(get_state_addr());
+        let state = borrow_global<State>(get_state_addr());
         let transmission_id = transmission_id(receiver, workflow_execution_id, report_id);
 
-        return !smart_table::contains(&mut state.reports, transmission_id)
+        return smart_table::contains(&state.reports, transmission_id)
     }
 
+    #[view]
     public fun get_transmitter(receiver: address, workflow_execution_id: vector<u8>, report_id: u16): Option<address> acquires State {
-        let state = borrow_global_mut<State>(get_state_addr());
+        let state = borrow_global<State>(get_state_addr());
         let transmission_id = transmission_id(receiver, workflow_execution_id, report_id);
 
-        if (!smart_table::contains(&mut state.reports, transmission_id)) {
+        if (!smart_table::contains(&state.reports, transmission_id)) {
             return option::none()
         };
-        option::some(*smart_table::borrow(&mut state.reports, transmission_id))
+        option::some(*smart_table::borrow(&state.reports, transmission_id))
     }
+
+    #[test_only]
+    use aptos_framework::account::{Self};
 
     #[test_only]
     public entry fun set_up_test(owner: &signer, account: &signer) {
