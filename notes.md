@@ -69,11 +69,8 @@ Access `chainlink` CLI directly in a container of a node
 podman exec chainlink.core.1 chainlink admin login -f /tmp/api_credentials --bypass-version-check
 ```
 
-# TODO
 
-- TODO: workflow target address needs to use deployed contract address
-- make contract address files sourceable, use them to source address data for core node
-- restart core nodes with proper addresses
-
-TODO: can't compute transmission_id, since offchain it's the receiver module address, but onchain that could be manipulated
-the solution would be that each receiver needs to register it's own resource_account that would be bound to it's own addr
+Inspect round:
+```
+curl http://127.0.0.1:8080/v1/transactions/by_hash/0xe69848c6fe69b57b4feb763e720db12ea16dd214d8007995090a18ca52a82bb4 | jq '.events[] | select(.type | contains("FeedUpdated"))'
+```

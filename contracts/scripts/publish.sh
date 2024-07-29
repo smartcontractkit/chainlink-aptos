@@ -6,7 +6,6 @@ PUBLISHER_ADDR=0x$(aptos config show-profiles --profile=$PUBLISHER_PROFILE | gre
 
 # deploy keystone forwarder
 
-# TODO: make publisher also owner?
 OUTPUT=$(aptos move create-object-and-publish-package \
   --package-dir keystone \
   --address-name keystone \

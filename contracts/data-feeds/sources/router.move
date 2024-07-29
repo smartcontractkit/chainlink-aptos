@@ -15,21 +15,7 @@ module data_feeds::router {
         owner_address: address,
     }
 
-    // TODO: add mechanism for distribution
-    struct NonbillableAccessCapability has drop, store {}
-
-    #[event]
-    struct NonbillableUserAdded has drop, store {
-        user: address
-    }
-
-    #[event]
-    struct NonbillableUserRemoved has drop, store {
-        user: address
-    }
-
-    const EUNAUTHORIZED_NONBILLABLE_ACCESS: u64 = 0;
-    const ENOT_OWNER: u64 = 1;
+    const ENOT_OWNER: u64 = 0;
 
     fun assert_is_owner(router: &Router, target_address: address) {
         assert!(router.owner_address == target_address, error::invalid_argument(ENOT_OWNER));
@@ -42,7 +28,6 @@ module data_feeds::router {
         );
         let _object_address = object::address_from_constructor_ref(&constructor_ref);
 
-        // Store an ExtendRef alongside the object.
         let extend_ref = object::generate_extend_ref(&constructor_ref);
         let object_signer = object::generate_signer(&constructor_ref);
 
@@ -58,25 +43,11 @@ module data_feeds::router {
 
     public fun get_benchmarks(_authority: &signer, feed_ids: vector<vector<u8>>, _billing_data: vector<u8>): vector<Benchmark> acquires Router {
         let _router = borrow_global<Router>(get_state_addr());
-        // TODO: handle billing
-
-        registry::get_benchmarks_unchecked(feed_ids)
-    }
-
-    public fun get_benchmarks_nonbillable(feed_ids: vector<vector<u8>>, _cap: &NonbillableAccessCapability): vector<Benchmark> acquires Router {
-        let _router = borrow_global<Router>(get_state_addr());
 
         registry::get_benchmarks_unchecked(feed_ids)
     }
 
     public fun get_reports(_authority: &signer, feed_ids: vector<vector<u8>>, _billing_data: vector<u8>): vector<Report> acquires Router {
-        let _router = borrow_global<Router>(get_state_addr());
-        // TODO: handle billing
-
-        registry::get_reports_unchecked(feed_ids)
-    }
-
-    public fun get_reports_nonbillable(feed_ids: vector<vector<u8>>, _cap: &NonbillableAccessCapability): vector<Report> acquires Router {
         let _router = borrow_global<Router>(get_state_addr());
 
         registry::get_reports_unchecked(feed_ids)
@@ -93,8 +64,6 @@ module data_feeds::router {
     public entry fun configure_feeds(authority: &signer, feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>, _fee_config_id: vector<u8>) acquires Router {
         let router = borrow_global<Router>(get_state_addr());
         assert_is_owner(router, signer::address_of(authority));
-
-        // TODO: set new fee config
 
         registry::set_feeds_unchecked(feed_ids, descriptions, config_id);
     }

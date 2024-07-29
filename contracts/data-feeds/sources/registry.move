@@ -138,7 +138,6 @@ module data_feeds::registry {
         );
         let _object_address = object::address_from_constructor_ref(&constructor_ref);
 
-        // Store an ExtendRef alongside the object.
         let extend_ref = object::generate_extend_ref(&constructor_ref);
         let object_signer = object::generate_signer(&constructor_ref);
 
