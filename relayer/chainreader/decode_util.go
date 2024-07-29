@@ -83,6 +83,7 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 			bi.SetString(str, 16)
 			return bi, nil
 		}
+	default:
 	}
 
 	return nil, fmt.Errorf("unsupported target type for hex string conversion: %v", t.Kind())
@@ -137,6 +138,7 @@ func numericStringHook(f reflect.Type, t reflect.Type, data interface{}) (interf
 			}
 			return bi, nil
 		}
+	default:
 	}
 
 	return nil, fmt.Errorf("unsupported target type for numeric string conversion: %v", t.Kind())
@@ -168,6 +170,7 @@ func booleanHook(f reflect.Type, t reflect.Type, data interface{}) (interface{},
 			}
 			return big.NewInt(0), nil
 		}
+	default:
 	}
 
 	return nil, fmt.Errorf("unsupported target type for boolean conversion: %v", t.Kind())
@@ -210,6 +213,7 @@ func overflowFloat(t reflect.Type, x float64) bool {
 		return overflowFloat32(x)
 	case reflect.Float64:
 		return false
+	default:
 	}
 	panic("reflect: OverflowFloat of non-float type " + t.String())
 }
@@ -228,6 +232,7 @@ func overflowInt(t reflect.Type, x int64) bool {
 		bitSize := t.Size() * 8
 		trunc := (x << (64 - bitSize)) >> (64 - bitSize)
 		return x != trunc
+	default:
 	}
 	panic("reflect: OverflowInt of non-int type " + t.String())
 }
@@ -239,6 +244,7 @@ func overflowUint(t reflect.Type, x uint64) bool {
 		bitSize := t.Size() * 8
 		trunc := (x << (64 - bitSize)) >> (64 - bitSize)
 		return x != trunc
+	default:
 	}
 	panic("reflect: OverflowUint of non-uint type " + t.String())
 }

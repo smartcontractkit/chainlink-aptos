@@ -191,7 +191,7 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 			big.NewInt(0))
 		require.NoError(t, err)
 		incrementIds = append(incrementIds, incrementId)
-		expectedValue += 1
+		expectedValue++
 
 		incrementMultId := uuid.New().String()
 		incrementMultArgs := struct {
@@ -253,8 +253,8 @@ func waitForTransaction(t *testing.T, chainWriter commontypes.ChainWriter, id st
 		} else if status == commontypes.Finalized {
 			return
 		} else {
-			t.Fatal(fmt.Sprintf("failed to wait for transaction %s, got status %d", id, status))
+			t.Fatalf("failed to wait for transaction %s, got status %d", id, status)
 		}
 	}
-	t.Fatal(fmt.Sprintf("timed out waiting for transaction %s", id))
+	t.Fatalf("timed out waiting for transaction %s", id)
 }

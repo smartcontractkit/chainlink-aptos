@@ -78,15 +78,14 @@ func CreateTypeTag(typeName string) (aptos.TypeTag, error) {
 						TypeParams: structTypeTags,
 					},
 				}, nil
-			} else {
-				return aptos.TypeTag{
-					Value: &aptos.StructTag{
-						Address: *parsedContractAddress,
-						Module:  moduleName,
-						Name:    structName,
-					},
-				}, nil
 			}
+			return aptos.TypeTag{
+				Value: &aptos.StructTag{
+					Address: *parsedContractAddress,
+					Module:  moduleName,
+					Name:    structName,
+				},
+			}, nil
 		}
 	}
 }
@@ -219,13 +218,14 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 				serializer.WriteString(v)
 				return nil
 			}
+		default:
 		}
 
 		rv := reflect.ValueOf(argVal)
 		kindstring := rv.Kind().String()
 		print(kindstring)
 		if rv.Kind() != reflect.Array && rv.Kind() != reflect.Slice {
-			return errors.New("Invalid vector args.")
+			return errors.New("invalid vector args")
 		}
 		length := rv.Len()
 		serializer.Uleb128(uint32(length))
@@ -245,7 +245,7 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 			return nil
 		}
 	default:
-		return errors.New("Unsupported arg type.")
+		return errors.New("unsupported arg type")
 	}
-	return fmt.Errorf("Invalid argument %v.", argVal)
+	return fmt.Errorf("invalid argument: %v", argVal)
 }

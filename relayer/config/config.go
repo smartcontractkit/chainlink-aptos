@@ -60,7 +60,6 @@ func (cs TOMLConfigs) validateKeys() (err error) {
 	for i, c := range cs {
 		if chainIDs.IsDupe(&c.ChainID) {
 			err = errors.Join(err, config.NewErrDuplicate(fmt.Sprintf("%d.ChainID", i), c.ChainID))
-
 		}
 	}
 

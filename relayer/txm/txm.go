@@ -363,6 +363,11 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		Variant: aptoscrypto.AccountAuthenticatorEd25519,
 		Auth:    authenticator,
 	})
+	if err != nil {
+		a.logger.Errorw("failed to sign transaction", "error", err)
+		tx.Status = commontypes.Fatal
+		return
+	}
 
 	submitResponse, err := client.SubmitTransaction(signedTx)
 	if err != nil {

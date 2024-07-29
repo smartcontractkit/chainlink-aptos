@@ -25,11 +25,11 @@ type relayer struct {
 func NewRelayer(lggr logger.Logger, chain chain.Chain, capRegistry core.CapabilitiesRegistry) (*relayer, error) {
 	ctx := context.TODO()
 
-	cap, err := write_target.NewAptosWriteTarget(ctx, chain, lggr)
+	capability, err := write_target.NewAptosWriteTarget(ctx, chain, lggr)
 	if err != nil {
 		return nil, err
 	}
-	if err = capRegistry.Add(ctx, cap); err != nil {
+	if err = capRegistry.Add(ctx, capability); err != nil {
 		return nil, err
 	}
 
