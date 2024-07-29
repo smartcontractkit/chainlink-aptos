@@ -146,9 +146,9 @@ module data_feeds::registry {
     const EINVALID_REPORT: u64 = 10;
 
     // Schema types
-    const BLOCK_PREMIUM_SCHEMA: u16 = 1;
-    const BASIC_SCHEMA: u16 = 2;
-    const PREMIUM_SCHEMA: u16 = 3;
+    const SCHEMA_V1: u16 = 1;
+    const SCHEMA_V2: u16 = 2;
+    const SCHEMA_V3: u16 = 3;
 
     fun assert_is_owner(registry: &Registry, target_address: address) {
         assert!(registry.owner_address == target_address, error::invalid_argument(ENOT_OWNER));
@@ -397,89 +397,116 @@ module data_feeds::registry {
         });
     }
 
-    fun to_u32be(data: &vector<u8>, offset: u64): u32 {
-        let ret: u32 = 0;
-        for (i in 0..4) {
-            let value = *vector::borrow(data, offset + i);
-            ret = (ret << 8) | (value as u32);
-        };
-        ret
+    fun to_u16be(data: vector<u8>): u16 {
+        // reverse big endian to little endian
+        vector::reverse(&mut data);
+        aptos_std::from_bcs::to_u16(data)
     }
 
-    fun from_i192(data: &vector<u8>, offset: u64): u256 {
-        let ret: u256 = 0;
-        for (i in 0..24) {
-            let value = *vector::borrow(data, offset + i);
-            ret = (ret << 8) | (value as u256);
-        };
-        ret
+    fun to_u32be(data: vector<u8>): u32 {
+        // reverse big endian to little endian
+        vector::reverse(&mut data);
+        aptos_std::from_bcs::to_u32(data)
+    }
+
+    fun to_u256be(data: vector<u8>): u256 {
+        // reverse big endian to little endian
+        vector::reverse(&mut data);
+        aptos_std::from_bcs::to_u256(data)
     }
 
     // Keystone receiver function interface
     public entry fun on_report(account: &signer, raw_report: vector<u8>, signatures: vector<vector<u8>>) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
 
+        // TODO: validate report's workflow_id
+
         let authority = account;// TODO, use some other signer made for registry
-        let report_context = vector::slice(&raw_report, 0, 32);
-        let raw_report = vector::slice(&raw_report, 32, vector::length(&raw_report));
+        let report_context = vector::slice(&raw_report, 0, 96);
+        let raw_report = vector::slice(&raw_report, 96, vector::length(&raw_report));
         let signatures = vector::map(signatures, |signature| keystone::forwarder::signature_from_bytes(signature));
         let (_metadata, data) = keystone::forwarder::validate_report(authority, raw_report, report_context, signatures);
-        // TODO: slice data into N length reports
-        let reports = vector[data];
-        perform_upkeep(registry, reports);
+
+        let (feed_ids, reports) = parse_raw_report(data);
+        vector::zip(feed_ids, reports, |feed_id, report| {
+            perform_upkeep(registry, feed_id, report);
+        });
     }
 
-    fun perform_upkeep(registry: &mut Registry, reports: vector<vector<u8>>) {
-        // TODO: this function requires extracting the benchmarks from the reports, fee management,
-        // signature validation (if needed on this layer), and then finally updating the feeds.
-        // TODO: this assumes report_data is directly provided here, which probably won't be the
-        // case.
-        // TODO: this requires some validation of the caller.
+    // TODO: remove pub, currently for tests
+    // slice data into N length reports
+    fun parse_raw_report(data: vector<u8>): (vector<vector<u8>>, vector<vector<u8>>) {
+        let offset = 0;
+        assert!(to_u256be(vector::slice(&data, offset, offset + 32)) == 32, 32);
+        offset = offset + 32;
 
-        vector::for_each(reports, |report_data| {
-            let feed_id = vector::slice(&report_data, 0, 32);
-            assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
-            let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
+        let count = to_u256be(vector::slice(&data, offset, offset + 32));
+        offset = offset + 32;
 
-            let schema = (*vector::borrow(&feed_id, 0) as u16) << 8 | (*vector::borrow(&feed_id, 1) as u16);
+        for (i in 0..count) {
+            // skip len * offsets table
+            offset = offset + 32;
+        };
 
-            let observation_timestamp: u32;
-            let benchmark_price: u256;
-            if (schema == BASIC_SCHEMA) {
-                observation_timestamp = to_u32be(&report_data, 8);
-                benchmark_price = from_i192(&report_data, 64);
-            } else if (schema == PREMIUM_SCHEMA) {
-                observation_timestamp = to_u32be(&report_data, 8);
-                benchmark_price = from_i192(&report_data, 64);
-            } else if (schema == BLOCK_PREMIUM_SCHEMA) {
-                observation_timestamp = to_u32be(&report_data, 4);
-                benchmark_price = from_i192(&report_data, 8);
-            } else {
-                abort error::invalid_argument(EINVALID_REPORT)
-            };
+        let feed_ids = vector[];
+        let reports = vector[];
 
-            feed.observation_timestamp = (observation_timestamp as u256);
-            feed.benchmark = benchmark_price;
-            feed.report = report_data;
-            feed.upkeep_requested = false;
+        for (i in 0..count) {
+            let feed_id = vector::slice(&data, offset, offset + 32);
+            vector::push_back(&mut feed_ids, feed_id);
+            offset = offset + 32;
 
-            event::emit(FeedUpdated {
-                feed_id,
-                timestamp: (observation_timestamp as u256),
-                benchmark: benchmark_price,
-                report: report_data,
-            });
+            assert!(to_u256be(vector::slice(&data, offset, offset + 32)) == 64, 64);
+            offset = offset + 32;
+
+            let len = (to_u256be(vector::slice(&data, offset, offset + 32)) as u64);
+            offset = offset + 32;
+
+            let report = vector::slice(&data, offset, offset + len);
+            vector::push_back(&mut reports, report);
+            offset = offset + len;
+        };
+
+        (feed_ids, reports)
+    }
+
+    fun perform_upkeep(registry: &mut Registry, feed_id: vector<u8>, report_data: vector<u8>) {
+        assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
+        let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
+
+        let report_feed_id = vector::slice(&report_data, 0, 32);
+        // schema is based on first two bytes of the feed id
+        let schema = to_u16be(vector::slice(&report_feed_id, 0, 2));
+
+        let observation_timestamp: u32;
+        let benchmark_price: u256;
+        if (schema == SCHEMA_V3) {
+            observation_timestamp = to_u32be(vector::slice(&report_data, 64+32-4, 64+32));
+            // TODO: aptos has no signed integer types, so can't parse as i196
+            benchmark_price = to_u256be(vector::slice(&report_data, 96, 128));
+        } else {
+            abort error::invalid_argument(EINVALID_REPORT)
+        };
+
+        feed.observation_timestamp = (observation_timestamp as u256);
+        feed.benchmark = benchmark_price;
+        feed.report = report_data;
+        feed.upkeep_requested = false;
+
+        event::emit(FeedUpdated {
+            feed_id,
+            timestamp: (observation_timestamp as u256),
+            benchmark: benchmark_price,
+            report: report_data,
         });
     }
 
     public fun get_benchmarks(account: &signer, feed_ids: vector<vector<u8>>): vector<BenchmarkResult> acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
-
         assert_authorized_data_fetch(registry, signer::address_of(account), &feed_ids);
-
+        
         vector::map(feed_ids, |feed_id| {
             assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
-
             let feed = simple_map::borrow(&registry.feeds, &feed_id);
             BenchmarkResult {
                 benchmark: feed.benchmark,
@@ -490,7 +517,6 @@ module data_feeds::registry {
 
     public fun get_reports(account: &signer, feed_ids: vector<vector<u8>>): vector<ReportResult> acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());
-
         assert_authorized_data_fetch(registry, signer::address_of(account), &feed_ids);
 
         vector::map(feed_ids, |feed_id| {
@@ -588,5 +614,58 @@ module data_feeds::registry {
 
     public fun read_feed_config_staleness_seconds(result: &FeedConfigResult): u256 {
         result.staleness_seconds
+    }
+
+   #[test]
+    public entry fun test_parse_raw_report() {
+        // request_context = 00018463f564e082c55b7237add2a03bd6b3c35789d38be0f6964d9aba82f1a8000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000
+        // metadata = 1019256d85b84c7ba85cd9b7bb94fe15b73d7ec99e3cc0f470ee5dd2a1eaac88c000000000000000000000000bc3a8582cc08d3df797ab13a6c567eadb2517b3f0f931b7145b218016bf9dde43030303045544842544300000000000000000000000000000000000000aa00010
+        // 0000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000001c
+        // raw report =
+        // 0000000000000000000000000000000000000000000000000000000000000020 32
+        // 0000000000000000000000000000000000000000000000000000000000000002 len=2
+        // 0000000000000000000000000000000000000000000000000000000000000040 offset
+        // 00000000000000000000000000000000000000000000000000000000000001c0 offset
+        // 0003111111111111111100000000000000000000000000000000000000000000 feed_id
+        // 0000000000000000000000000000000000000000000000000000000000000040 offset
+        // 0000000000000000000000000000000000000000000000000000000000000120 len=228
+        // 0003111111111111111100000000000000000000000000000000000000000000
+        // 0000000000000000000000000000000000000000000000000000000066b3a12c
+        // 0000000000000000000000000000000000000000000000000000000066b3a12c
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 0000000000000000000000000000000000000000000000000000000066c2e36c
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 0003222222222222222200000000000000000000000000000000000000000000 feed_id
+        // 0000000000000000000000000000000000000000000000000000000000000040 offset
+        // 0000000000000000000000000000000000000000000000000000000000000120 len=228
+        // 0003222222222222222200000000000000000000000000000000000000000000 
+        // 0000000000000000000000000000000000000000000000000000000066b3a12c
+        // 0000000000000000000000000000000000000000000000000000000066b3a12c
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 0000000000000000000000000000000000000000000000000000000066c2e36c
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+
+        let data = x"00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000001c000031111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000012000031111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800032222222222222222000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000012000032222222222222222000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a8";
+
+        let (feed_ids, reports) = parse_raw_report(data);
+        std::debug::print(&feed_ids);
+        std::debug::print(&reports);
+
+        assert!(feed_ids == vector[
+            x"0003111111111111111100000000000000000000000000000000000000000000",
+            x"0003222222222222222200000000000000000000000000000000000000000000"
+        ], 1);
+
+        let expected_reports = vector[
+            x"00031111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a8",
+            x"00032222222222222222000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a8"
+        ];      
+        assert!(reports == expected_reports, 1);
     }
 }
