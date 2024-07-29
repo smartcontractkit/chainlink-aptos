@@ -178,7 +178,7 @@ module keystone::forwarder {
         vector::append(&mut msg, report);
         let msg = blake2b_256(msg);
 
-        let signed = bit_vector::new(vector::length(&signatures));
+        let signed = bit_vector::new(vector::length(&config.oracles));
 
         vector::for_each_ref(&signatures, |signature| {
             let signature: &Signature = signature; // some compiler versions can't infer the type here
