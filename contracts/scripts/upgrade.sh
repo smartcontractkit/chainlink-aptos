@@ -8,7 +8,6 @@ PUBLISHER_ADDR=0x$(aptos config show-profiles --profile=$PUBLISHER_PROFILE | gre
 
 KEYSTONE_ADDR=$(cat keystone/contract_address.txt)
 
-# TODO: make publisher also owner?
 aptos move upgrade-object-package \
   --package-dir keystone \
   --object-address $KEYSTONE_ADDR \
