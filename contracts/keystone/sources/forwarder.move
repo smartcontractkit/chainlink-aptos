@@ -73,7 +73,7 @@ module keystone::forwarder {
         let app_signer = &object::generate_signer(&constructor_ref);
 
         move_to(app_signer, State {
-            owner: @owner, // TODO: how to handle this, can we just use address of account passed in
+            owner: @owner,
             configs: smart_table::new(),
             reports: smart_table::new(),
             extend_ref,
@@ -256,12 +256,17 @@ module keystone::forwarder {
     }
 
     #[test_only]
-    public entry fun set_up_test(owner: &signer, account: &signer) {
+    public fun init_module_for_testing(publisher: &signer) {
+        init_module(publisher);
+    }
+
+    #[test_only]
+    public entry fun set_up_test(owner: &signer, publisher: &signer) {
         use aptos_framework::account::{Self};
         account::create_account_for_test(signer::address_of(owner));
-        account::create_account_for_test(signer::address_of(account));
+        account::create_account_for_test(signer::address_of(publisher));
 
-        init_module(account);
+        init_module(publisher);
     }
 
     #[test_only]
@@ -317,13 +322,13 @@ module keystone::forwarder {
 
     #[test (
         owner = @0xcafe,
-        account = @keystone,
+        publisher = @keystone,
     )]
     public entry fun test_happy_path(
         owner: signer,
-        account: signer,
+        publisher: signer,
     ) acquires State {
-        set_up_test(&owner, &account);
+        set_up_test(&owner, &publisher);
 
         let config = generate_oracle_set();
 
@@ -374,6 +379,6 @@ module keystone::forwarder {
         let signatures = sign_report(&config, report, report_context);
 
         // call entrypoint
-        validate_report(&owner, signer::address_of(&account), report, report_context, signatures);
+        validate_report(&owner, signer::address_of(&publisher), report, report_context, signatures);
     }
 }
