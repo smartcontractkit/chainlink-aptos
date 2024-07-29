@@ -152,11 +152,9 @@ module keystone::forwarder {
     }
 
     public entry fun report(transmitter: &signer, receiver: address, raw_report: vector<u8>, signatures: vector<vector<u8>>) acquires State {
-        let report_context = vector::slice(&raw_report, 0, 96);
-        let raw_report = vector::slice(&raw_report, 96, vector::length(&raw_report));
         let signatures = vector::map(signatures, |signature| signature_from_bytes(signature));
 
-        let (metadata, data) = validate_report(transmitter, receiver, raw_report, report_context, signatures);
+        let (metadata, data) = validate_report(transmitter, receiver, raw_report, signatures);
         // NOTE: unable to catch failure here
         dispatch(receiver, metadata, data);
     }
@@ -173,8 +171,11 @@ module keystone::forwarder {
         aptos_std::from_bcs::to_u32(data)
     }
 
-    fun validate_report(transmitter: &signer, receiver: address, report: vector<u8>, report_context: vector<u8>, signatures: vector<Signature>): (vector<u8>, vector<u8>) acquires State {
+    fun validate_report(transmitter: &signer, receiver: address, raw_report: vector<u8>, signatures: vector<Signature>): (vector<u8>, vector<u8>) acquires State {
         let state = borrow_global_mut<State>(get_state_addr());
+
+        // report_context = vector::slice(&raw_report, 0, 96);
+        let report = vector::slice(&raw_report, 96, vector::length(&raw_report));
 
         // parse out report metadata
         // version | workflow_execution_id | timestamp | don_id | config_version | ...
@@ -200,11 +201,8 @@ module keystone::forwarder {
         let required_signatures = (config.f as u64) + 1;
         assert!(vector::length(&signatures) == required_signatures, error::invalid_argument(E_INVALID_SIGNATURE_COUNT));
 
-        // TODO: transmit already needs to split this apart, might as well pass through as one vec<>
-        // blake2b(report_context, report)
-        let msg = report_context;
-        vector::append(&mut msg, report);
-        let msg = blake2b_256(msg);
+        // blake2b(report_context | report)
+        let msg = blake2b_256(raw_report);
 
         let signed = bit_vector::new(vector::length(&config.oracles));
 
@@ -373,12 +371,17 @@ module keystone::forwarder {
         // report
         vector::append(&mut report, bcs::to_bytes(&mercury_reports));
 
-        let report_context = x"a0b0000000000000000000000000000000000000000000000000000000000000";
+        let report_context = x"a0b000000000000000000000000000000000000000000000000000000000000a0b000000000000000000000000000000000000000000000000000000000000a0b000000000000000000000000000000000000000000000000000000000000000";
+        assert!(vector::length(&report_context) == 96, 1);
+
+        let raw_report = vector[];
+        vector::append(&mut raw_report, report_context);
+        vector::append(&mut raw_report, report);
 
         // sign report
         let signatures = sign_report(&config, report, report_context);
 
         // call entrypoint
-        validate_report(&owner, signer::address_of(&publisher), report, report_context, signatures);
+        validate_report(&owner, signer::address_of(&publisher), raw_report, signatures);
     }
 }
