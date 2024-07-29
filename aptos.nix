@@ -4,11 +4,11 @@
 
 stdenv.mkDerivation rec {
   name = "aptos-${version}";
-  version = "3.5.0";
+  version = "4.0.0";
 
   src = fetchzip {
     url = "https://github.com/aptos-labs/aptos-core/releases/download/aptos-cli-v${version}/aptos-cli-${version}-Ubuntu-22.04-x86_64.zip";
-    sha256 = "sha256-BW516fZvyw4tnFi6jFeSlXEhcUJy7eGLvhKT5hNxX34=";
+    sha256 = "sha256-xBX8I5VuJ0SxGXsTdKoJu9n9al1CA3LudT3klVWL+Oc=";
   };
 
   nativeBuildInputs = [
