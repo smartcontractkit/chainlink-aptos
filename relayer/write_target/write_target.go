@@ -34,8 +34,25 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 		Modules: map[string]*chainreader.ChainReaderModule{
 			"forwarder": {
 				Functions: map[string]*chainreader.ChainReaderFunction{
-					"getTransmitter": {
-						Params: []chainreader.ChainReaderFunctionParam{},
+					"getTransmissionState": {
+						Name: "get_transmission_state",
+						Params: []chainreader.ChainReaderFunctionParam{
+							{
+								Name:     "Receiver",
+								Type:     "address",
+								Required: true,
+							},
+							{
+								Name:     "WorkflowExecutionID",
+								Type:     "vector<u8>",
+								Required: true,
+							},
+							{
+								Name:     "ReportID",
+								Type:     "u16",
+								Required: true,
+							},
+						},
 					},
 				},
 			},

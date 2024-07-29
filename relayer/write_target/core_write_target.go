@@ -4,6 +4,7 @@ package write_target
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -15,6 +16,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/consensus/ocr3/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
+	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 	"github.com/smartcontractkit/chainlink-common/pkg/values"
 )
 
@@ -100,28 +102,29 @@ func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.Capabi
 	}
 	// TODO: validate encoded report is prefixed with workflowID and executionID that match the request meta
 
-	// rawExecutionID, err := hex.DecodeString(request.Metadata.WorkflowExecutionID)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	rawExecutionID, err := hex.DecodeString(request.Metadata.WorkflowExecutionID)
+	if err != nil {
+		return nil, err
+	}
 	// Check whether value was already transmitted on chain
-	// queryInputs := struct {
-	// 	Receiver            string
-	// 	WorkflowExecutionID []byte
-	// 	ReportId            []byte
-	// }{
-	// 	Receiver:            reqConfig.Address,
-	// 	WorkflowExecutionID: rawExecutionID,
-	// 	ReportId:            inputs.ID,
-	// }
-	// var transmitter common.Address
-	// if err = cap.cr.GetLatestValue(ctx, "forwarder", "getTransmitter", queryInputs, &transmitter); err != nil {
-	// 	return nil, err
-	// }
-	// if transmitter != common.HexToAddress("0x0") {
-	// 	cap.lggr.Infow("WriteTarget report already onchain - returning without a tranmission attempt", "executionID", request.Metadata.WorkflowExecutionID)
-	// 	return success(), nil
-	// }
+	reportID, _ := binary.Uvarint(inputs.ID)
+	queryInputs := struct {
+		Receiver            string
+		WorkflowExecutionID []byte
+		ReportID            uint16
+	}{
+		Receiver:            reqConfig.Address,
+		WorkflowExecutionID: rawExecutionID,
+		ReportID:            uint16(reportID),
+	}
+	var transmitted bool
+	if err = cap.cr.GetLatestValue(ctx, "forwarder", "getTransmissionState", primitives.Unconfirmed, queryInputs, &transmitted); err != nil {
+		return nil, err
+	}
+	if transmitted == true {
+		cap.lggr.Infow("WriteTarget report already onchain - returning without a tranmission attempt", "executionID", request.Metadata.WorkflowExecutionID)
+		return success(), nil
+	}
 
 	cap.lggr.Infow("WriteTarget non-empty report - attempting to push to txmgr", "request", request, "reportLen", len(inputs.Report), "reportContextLen", len(inputs.Context), "nSignatures", len(inputs.Signatures), "executionID", request.Metadata.WorkflowExecutionID)
 	txID, err := uuid.NewUUID() // NOTE: CW expects us to generate an ID, rather than return one
