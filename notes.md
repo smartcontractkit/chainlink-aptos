@@ -79,7 +79,6 @@ Deploy keystone contracts, OCR3 capability jobspecs and the test Aptos workflow
 
 ```
 go run main.go deploy-contracts --ocrfile=ocr_config.json --chainid=1337 --ethurl=http://localhost:8544 --accountkey=$ACCOUNT_KEY
-# go run main.go deploy-contracts --ocrfile=ocr_config.json --chainid=1337 --ethurl=http://localhost:8544 --accountkey=$ACCOUNT_KEY --onlysetconfig=true --skipfunding=true
 
 go run main.go deploy-jobspecs --chainid=1337 --p2pport=6691 --onlyreplay=false
 
@@ -108,7 +107,7 @@ echo $ORACLE_ACCOUNTS | xargs -L1 aptos account fund-with-faucet --account
 Configure the keystone forwarder to accept reports from the nodes
 
 ```
-export ORACLE_PUBKEYS=$(cat ../../../chainlink/core/scripts/keystone/.cache/PublicKeys.json | jq '.[].OCR2OnchainPublicKey' | paste -sd ",")
+export ORACLE_PUBKEYS=$(cat ../../../chainlink/core/scripts/keystone/.cache/PublicKeys.json | jq '.[].AptosOnchainPublicKey' | paste -sd ",")
 scripts/set_config.sh
 ```
 
@@ -124,10 +123,9 @@ podman exec chainlink.core.1 chainlink admin login -f /tmp/api_credentials --byp
 
 # TODO
 
+- TODO: workflow target address needs to use deployed contract address
 - make contract address files sourceable, use them to source address data for core node
-- TODO: default write target to the main key in the node to avoid having to deploy one
 - restart core nodes with proper addresses
-- fund aptos accounts `aptos account fund-with-faucet --account <>`
 
 TODO: can't compute transmission_id, since offchain it's the receiver module address, but onchain that could be manipulated
 the solution would be that each receiver needs to register it's own resource_account that would be bound to it's own addr
