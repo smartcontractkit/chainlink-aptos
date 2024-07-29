@@ -140,8 +140,12 @@ for ((i = 1; i <= NODE_COUNT; i++)); do
 		"${image_name}" \
 		-c \
 		"echo -e \"${api_email}\\n${api_password}\" > /tmp/api_credentials && chainlink node start --api /tmp/api_credentials"
+done
 
-	echo "Waiting for core container to become ready.."
+echo "Waiting for core containers to become ready.."
+for ((i = 1; i <= NODE_COUNT; i++)); do
+	container_name_docker="${container_name}.$i"
+
 	start_time=$(date +%s)
 	prev_output=""
 	while true; do
