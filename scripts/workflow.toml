@@ -4,7 +4,7 @@ name = "Keystone Aptos Feeds Workflow"
 forwardingAllowed = false
 workflowId = "15c631d295ef5e32deb99a10ee6804bc4af1385568f9b3363f6552ac6dbb2ce0"
 workflow = """
-name: "0000ETHBTC"
+name: "0000FOOBAR"
 owner: "0x00000000000000000000000000000000000000aa"
 triggers:
  - id: "mock-streams-trigger@1.0.0"
