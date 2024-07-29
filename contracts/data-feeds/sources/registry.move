@@ -550,4 +550,31 @@ module data_feeds::registry {
         ];      
         assert!(reports == expected_reports, 1);
     }
+
+    #[test_only]
+    public entry fun set_up_test(publisher: &signer, keystone: &signer) {
+        use aptos_framework::account::{Self};
+        account::create_account_for_test(signer::address_of(publisher));
+
+        keystone::forwarder::init_module_for_testing(keystone);
+        keystone::storage::init_module_for_testing(keystone);
+
+        init_module(publisher);
+    }
+
+    #[test(owner = @0xcafe, publisher = @data_feeds, keystone = @keystone)]
+    public entry fun test_set_feed_configs(
+        owner: signer,
+        publisher: signer,
+        keystone: signer,
+    ) acquires Registry {
+        set_up_test(&publisher, &keystone);
+
+        set_feed_configs(
+            &owner,
+            vector[],
+            vector[],
+            vector[],
+        );
+    }
 }
