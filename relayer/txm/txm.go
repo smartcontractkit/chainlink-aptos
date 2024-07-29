@@ -331,7 +331,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		return
 	}
 
-	signature, err := a.keystore.Sign(context.Background(), tx.FromAddress, signingMessage)
+	signature, err := a.keystore.Sign(context.Background(), fmt.Sprintf("%064x", tx.PublicKey), signingMessage)
 	if err != nil {
 		a.logger.Errorw("failed to sign message", "fromAddress", tx.FromAddress, "error", err)
 		tx.Status = commontypes.Fatal
