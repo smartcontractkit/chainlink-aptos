@@ -162,76 +162,73 @@ module mcms::multisig {
     }
 
 
-    // TODO: replace resource acc addr params with fixed address alias to be defined at deployment in Move.toml
-
     // MCM Getters 
 
     #[view]
-    public fun get_config(resource_acc_addr: address): Config acquires MCMState {
-        borrow_global<MCMState>(resource_acc_addr).s_config
+    public fun get_config(): Config acquires MCMState {
+        borrow_global<MCMState>(@mcms).s_config
     }
 
     #[view]
-    public fun get_op_count(resource_acc_addr: address): u64 acquires MCMState {
-        borrow_global<MCMState>(resource_acc_addr).s_expiring_root_and_op_count.op_count
+    public fun get_op_count(): u64 acquires MCMState {
+        borrow_global<MCMState>(@mcms).s_expiring_root_and_op_count.op_count
     }
 
     #[view]
-    public fun get_root(resource_acc_addr: address): (vector<u8>, u64) acquires MCMState {
-        let state = borrow_global<MCMState>(resource_acc_addr);
+    public fun get_root(): (vector<u8>, u64) acquires MCMState {
+        let state = borrow_global<MCMState>(@mcms);
         (state.s_expiring_root_and_op_count.root, state.s_expiring_root_and_op_count.valid_until)
     }
 
     #[view]
-    public fun get_root_metadata(resource_acc_addr: address): RootMetadata acquires MCMState {
-        borrow_global<MCMState>(resource_acc_addr).s_root_metadata
+    public fun get_root_metadata(): RootMetadata acquires MCMState {
+        borrow_global<MCMState>(@mcms).s_root_metadata
     }
 
     // Ownable getters
 
     #[view]
-    public fun owner(resource_acc_addr: address): address acquires MCMState {
-        borrow_global<MCMState>(resource_acc_addr).owner
+    public fun owner(): address acquires MCMState {
+        borrow_global<MCMState>(@mcms).owner
     }
     
     // Getters to help manage the wrapped extended multisig account
 
     #[view]
-    public fun get_multisig_addr(resource_acc_addr: address): address acquires MCMState {
-        assert!(exists<MCMState>(resource_acc_addr), ENO_MULTISIG);
-        borrow_global<MCMState>(resource_acc_addr).addr
+    public fun get_multisig_addr(): address acquires MCMState {
+        assert!(exists<MCMState>(@mcms), ENO_MULTISIG);
+        borrow_global<MCMState>(@mcms).addr
     }
 
     #[view]
-    public fun get_pending_transactions(resource_acc_addr: address): vector<multisig_account::MultisigTransaction> acquires MCMState {
-        multisig_account::get_pending_transactions(get_multisig_addr(resource_acc_addr))
+    public fun get_pending_transactions(): vector<multisig_account::MultisigTransaction> acquires MCMState {
+        multisig_account::get_pending_transactions(get_multisig_addr())
     }
 
     #[view]
-    public fun get_transaction(resource_acc_addr: address, sequence_number: u64): multisig_account::MultisigTransaction acquires MCMState {
-        multisig_account::get_transaction(get_multisig_addr(resource_acc_addr), sequence_number)
+    public fun get_transaction(sequence_number: u64): multisig_account::MultisigTransaction acquires MCMState {
+        multisig_account::get_transaction(get_multisig_addr(), sequence_number)
     }
 
     #[view]
-    public fun get_last_resolved_sequence_number(resource_acc_addr: address): u64 acquires MCMState {
-        multisig_account::last_resolved_sequence_number(get_multisig_addr(resource_acc_addr))
+    public fun get_last_resolved_sequence_number(): u64 acquires MCMState {
+        multisig_account::last_resolved_sequence_number(get_multisig_addr())
     }
 
     #[view]
-    public fun get_next_sequence_number(resource_acc_addr: address): u64 acquires MCMState {
-        multisig_account::next_sequence_number(get_multisig_addr(resource_acc_addr))
+    public fun get_next_sequence_number(): u64 acquires MCMState {
+        multisig_account::next_sequence_number(get_multisig_addr())
     }
 
     // MCM Functions
 
-    public entry fun init(resource_account: &signer, owner_address: address) {
-        // todo: this assumes that the passed in owner address owns the resource account.
-        let signer_cap = resource_account::retrieve_resource_account_cap(resource_account, owner_address);
-        init_multisig_internal(resource_account, signer_cap, owner_address);
+    // todo: how to enforce that this can only be called once? does retrieve_resource_account_cap already ensure this?
+    public entry fun init(resource_account: &signer) {
+        let signer_cap = resource_account::retrieve_resource_account_cap(resource_account, @mcms_deployer);
+        init_multisig_internal(resource_account, signer_cap);
     }
 
     public entry fun set_root(
-        resource_acc_addr: address,
         root: vector<u8>,
         valid_until: u64,
         chain_id: u256,
@@ -249,7 +246,7 @@ module mcms::multisig {
             post_op_count,
             override_previous_root
         };
-        let state = borrow_global_mut<MCMState>(resource_acc_addr);
+        let state = borrow_global_mut<MCMState>(@mcms);
         // also checks root = 32 bytes
         let signed_hash = compute_eth_message_hash(root, valid_until);
 
@@ -263,7 +260,7 @@ module mcms::multisig {
         assert!(metadata.chain_id == (chain_id::get() as u256), EWRONG_CHAIN_ID);
 
         // verify mcms address
-        assert!(metadata.multisig == resource_acc_addr, EWRONG_MULTISIG);
+        assert!(metadata.multisig == @mcms, EWRONG_MULTISIG);
 
         // verify op counts
         let op_count = state.s_expiring_root_and_op_count.op_count;
@@ -344,7 +341,6 @@ module mcms::multisig {
     // note: unlike MCM on EVM chains, this function does not actually execute the transaction,
     // but rather creates the transaction on the multisig account to be executed in a separate tx
     public entry fun execute(
-        resource_acc_addr: address,
         chain_id: u256,
         multisig: address,
         nonce: u64,
@@ -353,7 +349,7 @@ module mcms::multisig {
         data: vector<u8>,
         proof: vector<vector<u8>>
     ) acquires MCMState {
-        let state = borrow_global_mut<MCMState>(resource_acc_addr);
+        let state = borrow_global_mut<MCMState>(@mcms);
         let op = Op {
             chain_id,
             multisig,
@@ -368,7 +364,7 @@ module mcms::multisig {
 
         assert!(op.chain_id == (chain_id::get() as u256), EWRONG_CHAIN_ID);
 
-        assert!(op.multisig == resource_acc_addr, EWRONG_MULTISIG);
+        assert!(op.multisig == @mcms, EWRONG_MULTISIG);
 
         assert!(timestamp::now_seconds() <= state.s_expiring_root_and_op_count.valid_until, EROOT_EXPIRED);
 
@@ -384,8 +380,8 @@ module mcms::multisig {
         // create transaction on multisig account (will already have one approval from creator)
         // todo: investigate if `to` and `value` params are encoded in the `data` payload
         // todo: investigate if `value` is relevant for Aptos at all
-        let multisig_addr = get_multisig_addr(resource_acc_addr);
-        let multisig_signer = multisig_signer(resource_acc_addr);
+        let multisig_addr = get_multisig_addr();
+        let multisig_signer = multisig_signer();
         multisig_account::create_transaction(&multisig_signer, multisig_addr, data);
 
         event::emit(OpExecuted {
@@ -398,14 +394,13 @@ module mcms::multisig {
 
     public entry fun set_config(
         resource_account: &signer,
-        resource_acc_addr: address,
         signer_addresses: vector<vector<u8>>,
         signer_groups: vector<u8>,
         group_quorums: vector<u8>,
         group_parents: vector<u8>,
         clear_root: bool
     ) acquires MCMState {
-        only_owner(resource_account, resource_acc_addr);
+        only_owner(resource_account);
 
         assert!(vector::length(&signer_addresses) != 0 && vector::length(&signer_addresses) <= (MAX_NUM_SIGNERS as u64), EINVALID_NUM_SIGNERS);
         assert!(vector::length(&signer_addresses) == vector::length(&signer_groups), ESIGNER_GROUPS_LEN_MISMATCH);
@@ -454,7 +449,7 @@ module mcms::multisig {
         };
 
         // remove old signer addresses
-        let state = borrow_global_mut<MCMState>(resource_acc_addr);
+        let state = borrow_global_mut<MCMState>(@mcms);
         let old_signers = state.s_config.signers;
         vector::for_each(old_signers, |signer| {
             simple_map::remove(&mut state.s_signers, &signer.addr);
@@ -499,7 +494,7 @@ module mcms::multisig {
             };
             state.s_root_metadata = RootMetadata {
                 chain_id: (chain_id::get() as u256),
-                multisig: resource_acc_addr,
+                multisig: @mcms,
                 pre_op_count: op_count,
                 post_op_count: op_count,
                 override_previous_root: true
@@ -511,16 +506,16 @@ module mcms::multisig {
 
     // Ownable functions
 
-    fun transfer_ownership(resource_account: &signer, resource_acc_addr: address, new_owner: address) acquires MCMState {
-        only_owner(resource_account, resource_acc_addr);
-        let state = borrow_global_mut<MCMState>(resource_acc_addr);
+    fun transfer_ownership(resource_account: &signer, new_owner: address) acquires MCMState {
+        only_owner(resource_account);
+        let state = borrow_global_mut<MCMState>(@mcms);
         state.owner = new_owner;
     }
 
     // Internal functions
 
-    fun init_multisig_internal(resource_account: &signer, signer_cap: account::SignerCapability, owner_address: address) {
-        // derive multisig address
+    fun init_multisig_internal(resource_account: &signer, signer_cap: account::SignerCapability) {
+        // derive internal multisig address
         let resource_acc_addr = signer::address_of(resource_account);
         let multisig_addr = multisig_account::get_next_multisig_account_address(resource_acc_addr);
 
@@ -533,10 +528,10 @@ module mcms::multisig {
             s_config: Config { signers: vector[], group_quorums: VEC_NUM_GROUPS, group_parents: VEC_NUM_GROUPS },
             s_seen_signed_hashes: simple_map::new(),
             s_expiring_root_and_op_count: ExpiringRootAndOpCount { root: vector[], valid_until: 0, op_count: 0 },
-            s_root_metadata: RootMetadata { chain_id: 0, multisig: resource_acc_addr, pre_op_count: 0, post_op_count: 0, override_previous_root: false },
+            s_root_metadata: RootMetadata { chain_id: 0, multisig: @mcms, pre_op_count: 0, post_op_count: 0, override_previous_root: false },
             addr: multisig_addr,
             signer_cap,
-            owner: owner_address
+            owner: @mcms_deployer
         });
     }
 
@@ -662,9 +657,9 @@ module mcms::multisig {
     }
 
     // retrieve signer for multisig account - should be protected with appropriate guards
-    fun multisig_signer(resource_acc_addr: address): signer acquires MCMState {
-        assert!(exists<MCMState>(resource_acc_addr), ENO_MULTISIG);
-        account::create_signer_with_capability(&borrow_global<MCMState>(resource_acc_addr).signer_cap)
+    fun multisig_signer(): signer acquires MCMState {
+        assert!(exists<MCMState>(@mcms), ENO_MULTISIG);
+        account::create_signer_with_capability(&borrow_global<MCMState>(@mcms).signer_cap)
     }
 
     // helper function to convert any input type to bytes
@@ -738,8 +733,8 @@ module mcms::multisig {
         false
     }
 
-    fun only_owner(caller: &signer, resource_acc_addr: address) acquires MCMState {
-        let state = borrow_global<MCMState>(resource_acc_addr);
+    fun only_owner(caller: &signer) acquires MCMState {
+        let state = borrow_global<MCMState>(@mcms);
         assert!(state.owner == signer::address_of(caller), EUNATHORIZED);
     }
 
@@ -829,16 +824,17 @@ module mcms::multisig {
         // setup deployer account for test
         let deployer_addr = signer::address_of(deployer);
         aptos_framework::account::create_account_for_test(deployer_addr);
+        
         // setup test components
         timestamp::set_time_has_started_for_testing(framework);
         timestamp::update_global_time_for_test_secs(TIMESTAMP);
         chain_id::initialize_for_test(framework, CHAIN_ID);
 
-        // create resource account
+        // create resource account from origin account - 0x71288d09b030c68d57f9572a2bb227cf367bf27b6def209d443eb307d67e9991
         let (resource, signer_cap) = account::create_resource_account(deployer, SEED);
 
         // init multisig using internal fn as we cant use retrieve_resource_account_cap in a test (error: ECONTAINER_NOT_PUBLISHED)
-        init_multisig_internal(&resource, signer_cap, deployer_addr);
+        init_multisig_internal(&resource, signer_cap);
 
         // returns resource account address
         signer::address_of(&resource)
@@ -857,12 +853,12 @@ module mcms::multisig {
     }
 
     #[test_only]
-    fun default_execute_args(resource_acc_addr: address): ExecuteArgs {
+    fun default_execute_args(): ExecuteArgs {
         ExecuteArgs {
             chain_id: (CHAIN_ID as u256),
-            multisig: resource_acc_addr,
+            multisig: @mcms,
             nonce: OP1_NONCE,
-            to: resource_acc_addr,
+            to: @mcms,
             value: OP1_VALUE,
             data: OP1_DATA,
             proof: OP_PROOF_LEAF_1
@@ -870,45 +866,45 @@ module mcms::multisig {
     }
 
     #[test_only]
-    fun call_execute(resource_acc_addr: address, args: ExecuteArgs) acquires MCMState {
-        execute(resource_acc_addr, args.chain_id, args.multisig, args.nonce, args.to, args.value, args.data, args.proof);
+    fun call_execute(args: ExecuteArgs) acquires MCMState {
+        execute(args.chain_id, args.multisig, args.nonce, args.to, args.value, args.data, args.proof);
     }
 
-    #[test(account = @0xabc, framework = @aptos_framework)]
-    public entry fun test_e2e(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+    #[test(deployer = @0xabc, framework = @aptos_framework)]
+    public entry fun test_e2e(deployer: &signer, framework: &signer) acquires MCMState  {
+        setup(deployer, framework);
         
         // set config
-        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(deployer, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
         
         // set root
-        let set_root_args = default_set_root_args(resource_acc_addr);
-        call_set_root(resource_acc_addr, set_root_args);
+        let set_root_args = default_set_root_args();
+        call_set_root(set_root_args);
 
         // check pending txs on the wrapped multisig
-        let pending_txs = get_pending_transactions(resource_acc_addr);
+        let pending_txs = get_pending_transactions();
         assert!(vector::length(&pending_txs) == 0, 0);
 
         // check op count
-        let op_count = get_op_count(resource_acc_addr);
+        let op_count = get_op_count();
         assert!(op_count == 0, 1);
 
         // execute op (creates transaction on multisig)
-        let execute_args = default_execute_args(resource_acc_addr);
-        call_execute(resource_acc_addr, execute_args);
+        let execute_args = default_execute_args();
+        call_execute(execute_args);
 
         // check pending txs on the wrapped multisig
-        let pending_txs = get_pending_transactions(resource_acc_addr);
+        let pending_txs = get_pending_transactions();
         assert!(vector::length(&pending_txs) == 1, 2);
 
         // check op count incremented
-        let op_count = get_op_count(resource_acc_addr);
+        let op_count = get_op_count();
         assert!(op_count == 1, 3);
 
         // check tx can be executed by internal multisig owner (todo: revisit this behaviour)
-        let multisig_address = get_multisig_addr(resource_acc_addr);
+        let multisig_address = get_multisig_addr();
         assert!(multisig_account::can_be_executed(multisig_address, 1), 2);
-        assert!(multisig_account::can_execute(resource_acc_addr, multisig_address, 1), 3);
+        assert!(multisig_account::can_execute(@mcms, multisig_address, 1), 3);
     }
 
     //// set_root tests ////
@@ -928,12 +924,12 @@ module mcms::multisig {
     }
 
     #[test_only]
-    fun default_set_root_args(resource_acc_addr: address): SetRootArgs {
+    fun default_set_root_args(): SetRootArgs {
         SetRootArgs {
             root: ROOT,
             valid_until: VALID_UNTIL,
             chain_id: (CHAIN_ID as u256), 
-            multisig: resource_acc_addr,
+            multisig: @mcms,
             pre_op_count:  PRE_OP_COUNT,
             post_op_count: POST_OP_COUNT,
             override_previous_root: false,
@@ -943,8 +939,8 @@ module mcms::multisig {
     }
 
     #[test_only]
-    fun call_set_root(resource_acc_addr: address, args: SetRootArgs) acquires MCMState {
-        set_root(resource_acc_addr, args.root, args.valid_until, args.chain_id, args.multisig, args.pre_op_count, args.post_op_count, args.override_previous_root, args.metadata_proof, args.signatures);
+    fun call_set_root(args: SetRootArgs) acquires MCMState {
+        set_root(args.root, args.valid_until, args.chain_id, args.multisig, args.pre_op_count, args.post_op_count, args.override_previous_root, args.metadata_proof, args.signatures);
     }
 
     // test helper function to generate the merkle root for given metadata
@@ -969,61 +965,61 @@ module mcms::multisig {
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EALREADY_SEEN_HASH)]
     public entry fun test_set_root__already_seen_hash(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        setup(account, framework);
+        set_config(account, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
         
         // first call success
-        let set_root_args = default_set_root_args(resource_acc_addr);
-        call_set_root(resource_acc_addr, set_root_args);
+        let set_root_args = default_set_root_args();
+        call_set_root(set_root_args);
 
         // second call should fail as the hash has already been seen
-        let set_root_args2 = default_set_root_args(resource_acc_addr);
-        call_set_root(resource_acc_addr, set_root_args2);
+        let set_root_args2 = default_set_root_args();
+        call_set_root(set_root_args2);
     }
     
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EVALID_UNTIL_EXPIRED)]
     public entry fun test_set_root__valid_until_expired(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        let set_root_args = default_set_root_args(resource_acc_addr);
+        setup(account, framework);
+        let set_root_args = default_set_root_args();
         set_root_args.valid_until = TIMESTAMP - 1; // set valid_until to a time in the past
-        call_set_root(resource_acc_addr, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EINVALID_ROOT_LEN)]
     public entry fun test_set_root__invalid_root_len(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         let invalid_root = x"8ad6edb34398f637ca17e46b0b51ce50e18f56287aa0bf728ae3b5c4119c16";
-        let set_root_args = default_set_root_args(resource_acc_addr);
+        let set_root_args = default_set_root_args();
         set_root_args.root = invalid_root;
-        call_set_root(resource_acc_addr, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_CHAIN_ID)]
     public entry fun test_set_root__invalid_chain_id(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        let set_root_args = default_set_root_args(resource_acc_addr);
+        setup(account, framework);
+        let set_root_args = default_set_root_args();
         set_root_args.chain_id = 111; // wrong chain id
-        call_set_root(resource_acc_addr, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_MULTISIG)]
     public entry fun test_set_root__invalid_multisig_addr(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        let set_root_args = default_set_root_args(resource_acc_addr);
+        setup(account, framework);
+        let set_root_args = default_set_root_args();
         set_root_args.multisig = @0x12345; // wrong multisig address
-        call_set_root(resource_acc_addr, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPENDING_OPS)]
     public entry fun test_set_root__pending_ops(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         // modify state to add pending ops
-        let state = borrow_global_mut<MCMState>(resource_acc_addr);
+        let state = borrow_global_mut<MCMState>(@mcms);
         state.s_expiring_root_and_op_count = ExpiringRootAndOpCount {
             root: ROOT,
             valid_until: VALID_UNTIL,
@@ -1031,16 +1027,16 @@ module mcms::multisig {
         };
         state.s_root_metadata.post_op_count = 2;
 
-        let set_root_args = default_set_root_args(resource_acc_addr);
-        call_set_root(resource_acc_addr, set_root_args);
+        let set_root_args = default_set_root_args();
+        call_set_root(set_root_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
     public entry fun test_set_root__override_previous_root(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         // modify state to add pending ops
-        let state = borrow_global_mut<MCMState>(resource_acc_addr);
+        let state = borrow_global_mut<MCMState>(@mcms);
         state.s_expiring_root_and_op_count = ExpiringRootAndOpCount {
             root: ROOT,
             valid_until: VALID_UNTIL,
@@ -1048,9 +1044,9 @@ module mcms::multisig {
         };
         state.s_root_metadata.post_op_count = 2;
 
-        let set_root_args = default_set_root_args(resource_acc_addr);
+        let set_root_args = default_set_root_args();
         set_root_args.override_previous_root = true;
-        call_set_root(resource_acc_addr, set_root_args);
+        call_set_root(set_root_args);
         // since we only have one set of hardcoded signatures to work with, we dont bother generating a new root
         // and just expect this test to fail at proof validation, which happens after the pending ops check
     }
@@ -1058,17 +1054,17 @@ module mcms::multisig {
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_PRE_OP_COUNT)]
     public entry fun test_set_root__wrong_pre_op_count(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        let set_root_args = default_set_root_args(resource_acc_addr);
+        setup(account, framework);
+        let set_root_args = default_set_root_args();
         set_root_args.pre_op_count = 1; // wrong pre op count, should equal op count (0)
-        call_set_root(resource_acc_addr, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_POST_OP_COUNT)]
     public entry fun test_set_root__wrong_post_op_count(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        let state = borrow_global_mut<MCMState>(resource_acc_addr);
+        setup(account, framework);
+        let state = borrow_global_mut<MCMState>(@mcms);
         state.s_expiring_root_and_op_count = ExpiringRootAndOpCount {
             root: ROOT,
             valid_until: VALID_UNTIL,
@@ -1076,88 +1072,88 @@ module mcms::multisig {
         };
         state.s_root_metadata.post_op_count = 1;
 
-        let set_root_args = default_set_root_args(resource_acc_addr);
+        let set_root_args = default_set_root_args();
         set_root_args.pre_op_count = PRE_OP_COUNT + 1; // correct pre op count after state updates
         set_root_args.post_op_count = PRE_OP_COUNT; // post op count should be >= pre op count
-        call_set_root(resource_acc_addr, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
     public entry fun test_set_root__empty_metadata_proof(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        let set_root_args = default_set_root_args(resource_acc_addr);
+        setup(account, framework);
+        let set_root_args = default_set_root_args();
         set_root_args.metadata_proof = vector[]; // empty proof
-        call_set_root(resource_acc_addr, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
     public entry fun test_set_root__metadata_not_consistent_with_proof(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        let set_root_args = default_set_root_args(resource_acc_addr);
+        setup(account, framework);
+        let set_root_args = default_set_root_args();
         set_root_args.post_op_count = POST_OP_COUNT + 1; // post op count modified
-        call_set_root(resource_acc_addr, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EMISSING_CONFIG)]
     public entry fun test_set_root__config_not_set(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        let set_root_args = default_set_root_args(resource_acc_addr);
+        setup(account, framework);
+        let set_root_args = default_set_root_args();
         set_root_args.signatures = vector[]; // no signatures
-        call_set_root(resource_acc_addr, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_ADDR_MUST_BE_INCREASING)]
     public entry fun test_set_root__out_of_order_signatures(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
-        let set_root_args = default_set_root_args(resource_acc_addr);
+        setup(account, framework);
+        set_config(account, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        let set_root_args = default_set_root_args();
         let sig0 = vector::borrow(&set_root_args.signatures, 0);
         let sig1 = vector::borrow(&set_root_args.signatures, 1);
         let sig2 = vector::borrow(&set_root_args.signatures, 2);
         set_root_args.signatures = vector[*sig0, *sig2, *sig1]; // shuffle signature order
-        call_set_root(resource_acc_addr, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EINVALID_SIGNER)]
     public entry fun test_set_root__signature_from_invalid_signer(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
-        let set_root_args = default_set_root_args(resource_acc_addr);
+        setup(account, framework);
+        set_config(account, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        let set_root_args = default_set_root_args();
         let invalid_signer_sig = x"bb7f7e44b8d9c8f978c255c7efd6abb64e8fa9a33dcb6db2e2203d8aacd51dd471113ca6c8d1ed56bb0395f0bef0daf2fae6ef2cb5c86c57d148c7de473383461B";
         set_root_args.signatures = vector[invalid_signer_sig]; // add signature from invalid signer
-        call_set_root(resource_acc_addr, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EINSUFFICIENT_SIGNERS)]
     public entry fun test_set_root__signer_quorum_not_met(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
-        let set_root_args = default_set_root_args(resource_acc_addr);
+        setup(account, framework);
+        set_config(account, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        let set_root_args = default_set_root_args();
         let signer1 = vector::borrow(&set_root_args.signatures, 0);
         set_root_args.signatures = vector[*signer1]; // only 1 signature, quorum is 2
-        call_set_root(resource_acc_addr, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     public entry fun test_set_root__success(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
-        let set_root_args = default_set_root_args(resource_acc_addr);
+        let mcms_addr = setup(account, framework);
+        set_config(account, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        let set_root_args = default_set_root_args();
 
-        call_set_root(resource_acc_addr, set_root_args);
+        call_set_root(set_root_args);
 
-        let (root, valid_until) = get_root(resource_acc_addr);
+        let (root, valid_until) = get_root();
         assert!(root == ROOT, 0);
         assert!(valid_until == VALID_UNTIL, 1);
-        let root_metadata = get_root_metadata(resource_acc_addr);
+        let root_metadata = get_root_metadata();
         assert!(root_metadata.chain_id == (CHAIN_ID as u256), 2);
-        assert!(root_metadata.multisig == resource_acc_addr, 3);
+        assert!(root_metadata.multisig == mcms_addr, 3);
         assert!(root_metadata.pre_op_count == PRE_OP_COUNT, 4);
         assert!(root_metadata.post_op_count == POST_OP_COUNT, 5);
         assert!(root_metadata.override_previous_root == false, 6);
@@ -1168,135 +1164,135 @@ module mcms::multisig {
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EUNATHORIZED)]
     public entry fun test_set_config__caller_is_not_owner(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         let (not_owner, _) = account::create_resource_account(account, b"seed123");
-        set_config(&not_owner, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(&not_owner, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
     }
     
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EINVALID_NUM_SIGNERS)]
     public entry fun test_set_config__invalid_number_of_signers(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
          // empty signer addresses and groups
         let signer_addr = vector[];
         let signer_group = vector[];
-        set_config(account, resource_acc_addr, signer_addr, signer_group, vector[], vector[], false);
+        set_config(account, signer_addr, signer_group, vector[], vector[], false);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_ADDR_MUST_BE_INCREASING)]
     public entry fun test_set_config__signers_must_be_distinct(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         // same signer address twice
         let signer_addr = vector[ADDR1, ADDR2, ADDR2];
-        set_config(account, resource_acc_addr, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(account, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_ADDR_MUST_BE_INCREASING)]
     public entry fun test_set_config__signers_must_be_increasing(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         // signer addresses out of order
         let signer_addr = vector[ADDR1, ADDR3, ADDR2];
-        set_config(account, resource_acc_addr, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(account, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = ECMP_VECTORS_DIFF_LEN)]
     public entry fun test_set_config__invalid_signer_address(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         // signer address not 20 bytes
         let invalid_signer_addr = x"E37ca797F7fCCFbd9bb3bf8f812F19C3184df1";
         let signer_addr = vector[ADDR1, ADDR2, invalid_signer_addr];
-        set_config(account, resource_acc_addr, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(account, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EOUT_OF_BOUNDS_GROUP)]
     public entry fun test_set_config__out_of_bounds_signer_group(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // signer group out of bounds
         let signer_groups = vector[1, 2, NUM_GROUPS];
-        set_config(account, resource_acc_addr, signer_addr, signer_groups, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(account, signer_addr, signer_groups, GROUP_QUORUMS, GROUP_PARENTS, false);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EOUT_OF_BOUNDS_GROUP_QUORUM)]
     public entry fun test_set_config__out_of_bounds_group_quorum(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group quorum out of bounds (greater than num signers)
         let group_quorums = right_pad_vec(vector[2, 1, 1, MAX_NUM_SIGNERS + 1], NUM_GROUPS);
-        set_config(account, resource_acc_addr, signer_addr, SIGNER_GROUPS, group_quorums, GROUP_PARENTS, false);
+        set_config(account, signer_addr, SIGNER_GROUPS, group_quorums, GROUP_PARENTS, false);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EGROUP_TREE_NOT_WELL_FORMED)]
     public entry fun test_set_config__root_is_not_its_own_parent(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group parent of root is group 1 (should be itself = group 0)
         let group_parents = right_pad_vec(vector[1], NUM_GROUPS);
-        set_config(account, resource_acc_addr, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, group_parents, false);
+        set_config(account, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, group_parents, false);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EGROUP_TREE_NOT_WELL_FORMED)]
     public entry fun test_set_config__non_root_is_its_own_parent(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group parent of group 1 is itself (should be lower index group)
         let group_parents = right_pad_vec(vector[0, 1], NUM_GROUPS);
-        set_config(account, resource_acc_addr, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, group_parents, false);
+        set_config(account, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, group_parents, false);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EGROUP_TREE_NOT_WELL_FORMED)]
     public entry fun test_set_config__group_parent_higher_index(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group parent of group 1 is group 2 (should be lower index group)
         let group_parents = right_pad_vec(vector[0, 2], NUM_GROUPS);
-        set_config(account, resource_acc_addr, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, group_parents, false);
+        set_config(account, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, group_parents, false);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EOUT_OF_BOUNDS_GROUP_QUORUM)]
     public entry fun test_set_config__quorum_cannot_be_met(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group quorum of group 0 (root) is 4, which can never be met because there are only three child groups
         let group_quorum = right_pad_vec(vector[4, 1, 1, 1], NUM_GROUPS);
-        set_config(account, resource_acc_addr, signer_addr, SIGNER_GROUPS, group_quorum, GROUP_PARENTS, false);
+        set_config(account, signer_addr, SIGNER_GROUPS, group_quorum, GROUP_PARENTS, false);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_IN_DISABLED_GROUP)]
     public entry fun test_set_config__signer_in_disabled_group(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group 31 is disabled (quorum = 0) but signer 3 is in group 31
         let signer_groups = vector[1, 2, 31];
-        set_config(account, resource_acc_addr, signer_addr, signer_groups, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(account, signer_addr, signer_groups, GROUP_QUORUMS, GROUP_PARENTS, false);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_GROUPS_LEN_MISMATCH)]
     public entry fun test_set_config__signer_group_len_mismatch(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // len of signer groups does not match len of signers
         let signer_groups = vector[1, 2, 3, 3];
-        set_config(account, resource_acc_addr, signer_addr, signer_groups, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(account, signer_addr, signer_groups, GROUP_QUORUMS, GROUP_PARENTS, false);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     public entry fun test_set_config__success(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        let mcms_addr = setup(account, framework);
 
         // manually modify root state to check for modifications
-        let state = borrow_global_mut<MCMState>(resource_acc_addr);
+        let state = borrow_global_mut<MCMState>(@mcms);
         state.s_expiring_root_and_op_count = ExpiringRootAndOpCount {
             root: vector[1, 2, 3],
             valid_until: 9999,
@@ -1312,18 +1308,18 @@ module mcms::multisig {
 
         // test set config with clear_root=false
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
-        set_config(account, resource_acc_addr, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
-        let config = get_config(resource_acc_addr);
+        set_config(account, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        let config = get_config();
         assert!(vector::length(&config.signers) == 3, 1);
         assert!(vector::borrow(&config.signers, 0).addr == ADDR1, 2);
         assert!(vector::borrow(&config.signers, 1).addr == ADDR2, 3);
         assert!(vector::borrow(&config.signers, 2).addr == ADDR3, 4);
         assert!(config.group_quorums == GROUP_QUORUMS, 5);
         assert!(config.group_parents == GROUP_PARENTS, 6);
-        let (root, valid_until) = get_root(resource_acc_addr);
+        let (root, valid_until) = get_root();
         assert!(root == vector[1, 2, 3], 7);
         assert!(valid_until == 9999, 8);
-        let metadata = get_root_metadata(resource_acc_addr);
+        let metadata = get_root_metadata();
         assert!(metadata.chain_id == 1, 9);
         assert!(metadata.multisig == @0xabc, 10);
         assert!(metadata.pre_op_count == 5, 11);
@@ -1335,20 +1331,20 @@ module mcms::multisig {
         let signer_groups = vector[1, 3, 4];
         let group_quorums = right_pad_vec(vector[1, 1, 2, 1, 1], NUM_GROUPS);
         let group_parents = right_pad_vec(vector[0, 0, 0, 2, 2], NUM_GROUPS);
-        set_config(account, resource_acc_addr, signer_addr, signer_groups, group_quorums, group_parents, true);
-        let config = get_config(resource_acc_addr);
+        set_config(account, signer_addr, signer_groups, group_quorums, group_parents, true);
+        let config = get_config();
         assert!(vector::length(&config.signers) == 3, 14);
         assert!(vector::borrow(&config.signers, 0).addr == ADDR1, 15);
         assert!(vector::borrow(&config.signers, 1).addr == ADDR2, 16);
         assert!(vector::borrow(&config.signers, 2).addr == ADDR3, 17);
         assert!(config.group_quorums == group_quorums, 18);
         assert!(config.group_parents == group_parents, 19);
-        let (root, valid_until) = get_root(resource_acc_addr);
+        let (root, valid_until) = get_root();
         assert!(root == vector[], 20);
         assert!(valid_until == 0, 21);
-        let metadata = get_root_metadata(resource_acc_addr);
+        let metadata = get_root_metadata();
         assert!(metadata.chain_id == (CHAIN_ID as u256), 22);
-        assert!(metadata.multisig == resource_acc_addr, 23);
+        assert!(metadata.multisig == mcms_addr, 23);
         assert!(metadata.pre_op_count == 5, 24);
         assert!(metadata.post_op_count == 5, 25);
         assert!(metadata.override_previous_root, 26);
@@ -1359,99 +1355,99 @@ module mcms::multisig {
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPOST_OP_COUNT_REACHED)]
     public entry fun test_execute__root_not_set(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         // since root not set, post op count is 0 which is not greater than current op count (also 0)
-        let execute_args = default_execute_args(resource_acc_addr);
-        call_execute(resource_acc_addr, execute_args);
+        let execute_args = default_execute_args();
+        call_execute(execute_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPOST_OP_COUNT_REACHED)]
     public entry fun test_execute__post_op_count_reached(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
-        call_set_root(resource_acc_addr, default_set_root_args(resource_acc_addr));
+        setup(account, framework);
+        set_config(account, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        call_set_root(default_set_root_args());
         // set current op count to post op count
-        let state = borrow_global_mut<MCMState>(resource_acc_addr);
+        let state = borrow_global_mut<MCMState>(@mcms);
         state.s_expiring_root_and_op_count.op_count = state.s_root_metadata.post_op_count;
-        let execute_args = default_execute_args(resource_acc_addr);
-        call_execute(resource_acc_addr, execute_args);
+        let execute_args = default_execute_args();
+        call_execute(execute_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_CHAIN_ID)]
     public entry fun test_execute__wrong_chain_id(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
-        call_set_root(resource_acc_addr, default_set_root_args(resource_acc_addr));
-        let execute_args = default_execute_args(resource_acc_addr);
+        setup(account, framework);
+        set_config(account, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        call_set_root(default_set_root_args());
+        let execute_args = default_execute_args();
         execute_args.chain_id = 111; // wrong chain id
-        call_execute(resource_acc_addr, execute_args);
+        call_execute(execute_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_MULTISIG)]
     public entry fun test_execute__wrong_multisig_addr(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
-        call_set_root(resource_acc_addr, default_set_root_args(resource_acc_addr));
-        let execute_args = default_execute_args(resource_acc_addr);
+        setup(account, framework);
+        set_config(account, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        call_set_root(default_set_root_args());
+        let execute_args = default_execute_args();
         execute_args.multisig = @0x12345; // wrong multisig address
-        call_execute(resource_acc_addr, execute_args);
+        call_execute(execute_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EROOT_EXPIRED)]
     public entry fun test_execute__root_expired(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
-        call_set_root(resource_acc_addr, default_set_root_args(resource_acc_addr));
+        setup(account, framework);
+        set_config(account, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        call_set_root(default_set_root_args());
         // modify valid until state directly - set valid_until to a time in the past
-        let state = borrow_global_mut<MCMState>(resource_acc_addr);
+        let state = borrow_global_mut<MCMState>(@mcms);
         state.s_expiring_root_and_op_count.valid_until = TIMESTAMP - 1;
-        let execute_args = default_execute_args(resource_acc_addr);
-        call_execute(resource_acc_addr, execute_args);
+        let execute_args = default_execute_args();
+        call_execute(execute_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_NONCE)]
     public entry fun test_execute__wrong_nonce(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
-        call_set_root(resource_acc_addr, default_set_root_args(resource_acc_addr));
-        let execute_args = default_execute_args(resource_acc_addr);
+        setup(account, framework);
+        set_config(account, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        call_set_root(default_set_root_args());
+        let execute_args = default_execute_args();
         execute_args.nonce = execute_args.nonce + 1; // wrong nonce
-        call_execute(resource_acc_addr, execute_args);
+        call_execute(execute_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
     public entry fun test_execute__bad_op_proof(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
-        call_set_root(resource_acc_addr, default_set_root_args(resource_acc_addr));
-        let execute_args = default_execute_args(resource_acc_addr);
+        setup(account, framework);
+        set_config(account, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        call_set_root(default_set_root_args());
+        let execute_args = default_execute_args();
         execute_args.value = execute_args.value + 1; // modify op so proof verification should fail
-        call_execute(resource_acc_addr, execute_args);
+        call_execute(execute_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
     public entry fun test_execute__empty_proof(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
-        set_config(account, resource_acc_addr, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
-        call_set_root(resource_acc_addr, default_set_root_args(resource_acc_addr));
-        let execute_args = default_execute_args(resource_acc_addr);
+        setup(account, framework);
+        set_config(account, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        call_set_root(default_set_root_args());
+        let execute_args = default_execute_args();
         execute_args.proof = vector[]; // empty proof
-        call_execute(resource_acc_addr, execute_args);
+        call_execute(execute_args);
     }
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
     public entry fun test_execute__ops_executed_in_order(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         // modify state to add pending ops
-        let state = borrow_global_mut<MCMState>(resource_acc_addr);
+        let state = borrow_global_mut<MCMState>(@mcms);
         state.s_expiring_root_and_op_count = ExpiringRootAndOpCount {
             root: ROOT,
             valid_until: VALID_UNTIL,
@@ -1459,19 +1455,19 @@ module mcms::multisig {
         };
         state.s_root_metadata.post_op_count = 2;
 
-        let execute_args = default_execute_args(resource_acc_addr);
+        let execute_args = default_execute_args();
         execute_args.nonce = OP1_NONCE + 1; // wrong nonce
-        call_execute(resource_acc_addr, execute_args);
+        call_execute(execute_args);
     }
 
     // todo: test send values
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     public entry fun test_ownable__transfer_ownership(account: &signer, framework: &signer) acquires MCMState  {
-        let resource_acc_addr = setup(account, framework);
+        setup(account, framework);
         let new_owner = @0xdef;
-        transfer_ownership(account, resource_acc_addr, new_owner);
-        let owner = owner(resource_acc_addr);
+        transfer_ownership(account, new_owner);
+        let owner = owner();
         assert!(owner == new_owner, 1);
     }
 
@@ -1534,12 +1530,12 @@ module mcms::multisig {
 
     #[test(account = @0xabc, framework = @aptos_framework)]
     public entry fun test_utils__hash_op_leaf(account: &signer, framework: &signer) {
-        let resource_acc_addr = setup(account, framework);
+        let mcms_addr = setup(account, framework);
         let op = Op {
             chain_id: (CHAIN_ID as u256),
-            multisig: resource_acc_addr,
+            multisig: mcms_addr,
             nonce: OP1_NONCE,
-            to: resource_acc_addr,
+            to: mcms_addr,
             value: OP1_VALUE,
             data: OP1_DATA
         };
