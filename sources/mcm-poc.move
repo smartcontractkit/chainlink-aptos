@@ -1,4 +1,4 @@
-module chainlink::mcm {
+module mcms::multisig {
     use std::error;
     use std::signer;
     use std::vector;
