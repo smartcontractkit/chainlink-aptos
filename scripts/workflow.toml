@@ -12,6 +12,7 @@ triggers:
      maxFrequencyMs: 5000
      feedIds:
        - "0x1111111111111111111100000000000000000000000000000000000000000000"
+       - "0x2222222222222222222200000000000000000000000000000000000000000000"
 
 consensus:
  - id: "offchain_reporting@1.0.0"
@@ -29,10 +30,14 @@ consensus:
          "0x1111111111111111111100000000000000000000000000000000000000000000":
            deviation: "0.05"
            heartbeat: 60
+       feeds:
+         "0x2222222222222222222200000000000000000000000000000000000000000000":
+           deviation: "0.05"
+           heartbeat: 60
      encoder: "EVM"
      encoder_config:
-       abi: "(bytes32 FeedID, uint224 Price, uint32 Timestamp)[] Reports"
-
+       # abi: "(bytes32 FeedID, uint224 Price, uint32 Timestamp)[] Reports"
+       abi: "(bytes32 FeedID, bytes RawReport)[] Reports"
 targets:
  - id: "write_aptos@1.0.0" # TODO: annotate with devnet
    inputs:

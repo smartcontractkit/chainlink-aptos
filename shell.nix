@@ -11,6 +11,8 @@
     (golangci-lint.override { buildGoModule = buildGo122Module; })
     gotools
 
+    go-ethereum
+
     postgresql_15
     jq
   ];
