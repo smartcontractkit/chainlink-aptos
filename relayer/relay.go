@@ -67,6 +67,10 @@ func (r *relayer) NewContractReader(_ []byte) (relaytypes.ContractReader, error)
 	return nil, errors.New("contract reader is not supported for aptos")
 }
 
+func (r *relayer) NewChainWriter(ctx context.Context, config []byte) (relaytypes.ChainWriter, error) {
+	return nil, errors.New("chain writer is not supported for aptos")
+}
+
 func (r *relayer) NewConfigProvider(args relaytypes.RelayArgs) (relaytypes.ConfigProvider, error) {
 	return nil, errors.New("ocr2 is not supported for aptos")
 }

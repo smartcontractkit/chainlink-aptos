@@ -11,6 +11,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
+	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
@@ -58,7 +59,7 @@ func (a *aptosChainReader) Close() error {
 	})
 }
 
-func (a *aptosChainReader) GetLatestValue(ctx context.Context, contractName, method string, params, returnVal any) error {
+func (a *aptosChainReader) GetLatestValue(ctx context.Context, contractName, method string, confidenceLevel primitives.ConfidenceLevel, params, returnVal any) error {
 	toAddress, ok := a.moduleAddresses[contractName]
 	if !ok {
 		return fmt.Errorf("no bound address for module %s", contractName)
@@ -135,6 +136,10 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, contractName, met
 	}
 
 	return decodeAptosJsonValue(data, returnVal)
+}
+
+func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request types.BatchGetLatestValuesRequest) (types.BatchGetLatestValuesResult, error) {
+	return nil, errors.New("not implemented")
 }
 
 func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContract) error {

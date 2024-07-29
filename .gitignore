@@ -3,3 +3,5 @@
 .helix/
 # local aptos config
 .aptos/
+
+*.log
