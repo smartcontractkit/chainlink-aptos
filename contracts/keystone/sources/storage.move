@@ -29,6 +29,7 @@ module keystone::storage {
 
     /// Store the data to dispatch here.
     struct Storage has drop, key {
+        metadata: vector<u8>,
         data: vector<u8>,
     }
 
@@ -60,24 +61,25 @@ module keystone::storage {
 
     /// Insert into this module as the callback needs to retrieve and avoid a cyclical dependency:
     /// engine -> storage and then engine -> callback -> storage
-    public(friend) fun insert(address: address, data: vector<u8>): Object<Metadata> acquires Dispatcher {
+    public(friend) fun insert(address: address, meta: vector<u8>, data: vector<u8>): Object<Metadata> acquires Dispatcher {
         let dispatcher = borrow_global<Dispatcher>(@keystone);
         let typeinfo = *table::borrow(&dispatcher.address_to_typeinfo, address);
         let Entry { metadata, extend_ref } = table::borrow(&dispatcher.dispatcher, typeinfo);
         let obj_signer = object::generate_signer_for_extending(extend_ref);
-        move_to(&obj_signer, Storage { data });
+        move_to(&obj_signer, Storage { data, metadata: meta });
         *metadata
 
     }
 
     /// Second half of the process for retrieving. This happens outside engine to prevent the
     /// cyclical dependency.
-    public fun retrieve<T: drop>(_proof: T): vector<u8> acquires Dispatcher, Storage {
+    public fun retrieve<T: drop>(_proof: T): (vector<u8>, vector<u8>) acquires Dispatcher, Storage {
         let dispatcher = borrow_global<Dispatcher>(@keystone);
         let typeinfo = type_info::type_of<T>();
         let Entry { metadata: _, extend_ref } = table::borrow(&dispatcher.dispatcher, typeinfo);
         let obj_address = object::address_from_extend_ref(extend_ref);
-        move_from<Storage>(obj_address).data
+        let data = move_from<Storage>(obj_address);
+        (data.metadata, data.data)
     }
 
     /// Prepares the dispatch table.

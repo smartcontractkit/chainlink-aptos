@@ -315,7 +315,7 @@ module data_feeds::registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
 
         // TODO: validate report's workflow_id via metadata
-        let data = keystone::storage::retrieve(new_proof());
+        let (metadata, data) = keystone::storage::retrieve(new_proof());
 
         let (feed_ids, reports) = parse_raw_report(data);
         vector::zip(feed_ids, reports, |feed_id, report| {

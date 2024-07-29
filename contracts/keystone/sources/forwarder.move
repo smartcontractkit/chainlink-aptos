@@ -146,9 +146,9 @@ module keystone::forwarder {
     }
 
     /// The dispatch call knows both storage and indirectly the callback, thus the separate module.
-    fun dispatch(address: address, data: vector<u8>) {
-        let metadata = keystone::storage::insert(address, data);
-        aptos_framework::dispatchable_fungible_asset::derived_supply(metadata);
+    fun dispatch(address: address, metadata: vector<u8>, data: vector<u8>) {
+        let meta = keystone::storage::insert(address, metadata, data);
+        aptos_framework::dispatchable_fungible_asset::derived_supply(meta);
     }
 
     public entry fun report(transmitter: &signer, receiver: address, raw_report: vector<u8>, signatures: vector<vector<u8>>) acquires State {
@@ -156,9 +156,9 @@ module keystone::forwarder {
         let raw_report = vector::slice(&raw_report, 96, vector::length(&raw_report));
         let signatures = vector::map(signatures, |signature| signature_from_bytes(signature));
 
-        let (_metadata, data) = validate_report(transmitter, receiver, raw_report, report_context, signatures);
-        dispatch(receiver, data); // TODO: pass metadata through
-        // TODO: unable to catch failure here
+        let (metadata, data) = validate_report(transmitter, receiver, raw_report, report_context, signatures);
+        // NOTE: unable to catch failure here
+        dispatch(receiver, metadata, data);
     }
 
     fun to_u16be(data: vector<u8>): u16 {
