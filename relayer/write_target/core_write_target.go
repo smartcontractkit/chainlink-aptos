@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
+	aptos "github.com/aptos-labs/aptos-go-sdk"
 	"github.com/google/uuid"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
@@ -59,7 +59,8 @@ func parseConfig(rawConfig *values.Map) (config AptosConfig, err error) {
 	if err := rawConfig.UnwrapTo(&config); err != nil {
 		return config, err
 	}
-	if !common.IsHexAddress(config.Address) {
+	address := aptos.AccountAddress{}
+	if err = address.ParseStringRelaxed(config.Address); err != nil {
 		return config, fmt.Errorf("'%v' is not a valid address", config.Address)
 	}
 	return config, nil
