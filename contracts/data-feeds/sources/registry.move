@@ -9,13 +9,13 @@ module data_feeds::registry {
 
     use aptos_framework::object::{Self, ExtendRef, Object};
 
+    friend data_feeds::router;
+
     const APP_OBJECT_SEED: vector<u8> = b"REGISTRY";
 
-    // TODO: figure out router
     struct Registry has key, store, drop {
         extend_ref: ExtendRef,
         owner_address: address,
-        router_address: address,
 
         feeds: SimpleMap<vector<u8>, Feed>,
         configs: SimpleMap<vector<u8>, Config>,
@@ -24,7 +24,6 @@ module data_feeds::registry {
     struct Feed has key, store, drop {
         description: String,
         config_id: vector<u8>,
-        // TODO: int256 in solidity contract
         benchmark: u256,
         report: vector<u8>,
         observation_timestamp: u256,
@@ -111,9 +110,8 @@ module data_feeds::registry {
     const EFEED_EXISTS: u64 = 3;
     const EFEED_NOT_CONFIGURED: u64 = 4;
     const ECONFIG_NOT_CONFIGURED: u64 = 5;
-    const EUNAUTHORIZED_ROUTER_OPERATION: u64 = 6;
-    const EUNEQUAL_ARRAY_LENGTHS: u64 = 7;
-    const EINVALID_REPORT: u64 = 8;
+    const EUNEQUAL_ARRAY_LENGTHS: u64 = 6;
+    const EINVALID_REPORT: u64 = 7;
 
     // Schema types
     const SCHEMA_V1: u16 = 1;
@@ -122,10 +120,6 @@ module data_feeds::registry {
 
     inline fun assert_is_owner(registry: &Registry, target_address: address) {
         assert!(registry.owner_address == target_address, error::permission_denied(ENOT_OWNER));
-    }
-
-    inline fun assert_is_owner_or_router(registry: &Registry, target_address: address) {
-        assert!(registry.owner_address == target_address || registry.router_address == target_address, error::permission_denied(EUNAUTHORIZED_ROUTER_OPERATION));
     }
 
     fun assert_no_duplicates<T>(a: &vector<T>) {
@@ -159,7 +153,6 @@ module data_feeds::registry {
         move_to(&object_signer, Registry {
             owner_address: @owner,
             extend_ref,
-            router_address: @0x1, // TODO: remove fully by using friend functions
 
             feeds: simple_map::new(),
             configs: simple_map::new(),
@@ -170,11 +163,18 @@ module data_feeds::registry {
         object::create_object_address(&@data_feeds, APP_OBJECT_SEED)
     }
 
-    public entry fun set_feeds(account: &signer, feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>) acquires Registry {
+    public entry fun set_feeds(authority: &signer, feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
+        assert_is_owner(registry, signer::address_of(authority));
+        set_feeds_internal(registry, feed_ids, descriptions, config_id);
+    }
 
-        assert_is_owner_or_router(registry, signer::address_of(account));
+    public(friend) fun set_feeds_unchecked(feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>) acquires Registry {
+        let registry = borrow_global_mut<Registry>(get_state_addr());
+        set_feeds_internal(registry, feed_ids, descriptions, config_id);
+    }
 
+    fun set_feeds_internal(registry: &mut Registry, feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>) {
         assert_no_duplicates(&feed_ids);
 
         assert!(vector::length(&feed_ids) == vector::length(&descriptions), error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS));
@@ -199,10 +199,9 @@ module data_feeds::registry {
         });
     }
 
-    public entry fun remove_feeds(account: &signer, feed_ids: vector<vector<u8>>) acquires Registry {
+    public entry fun remove_feeds(authority: &signer, feed_ids: vector<vector<u8>>) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
-
-        assert_is_owner(registry, signer::address_of(account));
+        assert_is_owner(registry, signer::address_of(authority));
 
         assert_no_duplicates(&feed_ids);
 
@@ -212,16 +211,15 @@ module data_feeds::registry {
         });
     }
 
-    public entry fun set_feed_configs(account: &signer, config_ids: vector<vector<u8>>, deviation_thresholds: vector<u256>, staleness_seconds: vector<u256>) acquires Registry {
+    public entry fun set_feed_configs(authority: &signer, config_ids: vector<vector<u8>>, deviation_thresholds: vector<u256>, staleness_seconds: vector<u256>) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
-
-        assert_is_owner(registry, signer::address_of(account));
+        assert_is_owner(registry, signer::address_of(authority));
 
         let len = vector::length(&config_ids);
         assert!(len == vector::length(&deviation_thresholds), error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS));
         assert!(len == vector::length(&staleness_seconds), error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS));
 
-        // TODO: the solidity contract does not check that no duplicates exist in config_ids,
+        // NOTE: the solidity contract does not check that no duplicates exist in config_ids,
         // but we do it here which allows us to iterate through config_ids in reverse order.
         // should we need to remove this precondition, we can consider vector::reverse'ing the
         // vectors first, similar to vector::zip.
@@ -247,10 +245,9 @@ module data_feeds::registry {
         }
     }
 
-    public entry fun update_descriptions(account: &signer, feed_ids: vector<vector<u8>>, descriptions: vector<String>) acquires Registry {
+    public entry fun update_descriptions(authority: &signer, feed_ids: vector<vector<u8>>, descriptions: vector<String>) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
-
-        assert_is_owner(registry, signer::address_of(account));
+        assert_is_owner(registry, signer::address_of(authority));
 
         assert!(vector::length(&feed_ids) == vector::length(&descriptions), error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS));
 
@@ -267,10 +264,9 @@ module data_feeds::registry {
         });
     }
 
-    public entry fun update_feed_config_id(account: &signer, feed_ids: vector<vector<u8>>, config_id: vector<u8>) acquires Registry {
+    public entry fun update_feed_config_id(authority: &signer, feed_ids: vector<vector<u8>>, config_id: vector<u8>) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
-
-        assert_is_owner(registry, signer::address_of(account));
+        assert_is_owner(registry, signer::address_of(authority));
 
         // NOTE: not in the solidity contract, but we make sure that the config exists first.
         assert!(simple_map::contains_key(&registry.configs, &config_id), error::invalid_argument(ECONFIG_NOT_CONFIGURED));
@@ -393,10 +389,18 @@ module data_feeds::registry {
 
     // Getters
 
-    public fun get_benchmarks(account: &signer, feed_ids: vector<vector<u8>>): vector<Benchmark> acquires Registry {
+    public fun get_benchmarks(authority: &signer, feed_ids: vector<vector<u8>>): vector<Benchmark> acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());
-        assert_is_owner_or_router(registry, signer::address_of(account));
-        
+        assert_is_owner(registry, signer::address_of(authority));
+        get_benchmarks_internal(registry, feed_ids)
+    }
+
+    public(friend) fun get_benchmarks_unchecked(feed_ids: vector<vector<u8>>): vector<Benchmark> acquires Registry {
+        let registry = borrow_global<Registry>(get_state_addr());
+        get_benchmarks_internal(registry, feed_ids)
+    }
+
+    fun get_benchmarks_internal(registry: &Registry, feed_ids: vector<vector<u8>>): vector<Benchmark> {
         vector::map(feed_ids, |feed_id| {
             assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
             let feed = simple_map::borrow(&registry.feeds, &feed_id);
@@ -407,10 +411,18 @@ module data_feeds::registry {
         })
     }
 
-    public fun get_reports(account: &signer, feed_ids: vector<vector<u8>>): vector<Report> acquires Registry {
+    public fun get_reports(authority: &signer, feed_ids: vector<vector<u8>>): vector<Report> acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());
-        assert_is_owner_or_router(registry, signer::address_of(account));
+        assert_is_owner(registry, signer::address_of(authority));
+        get_reports_internal(registry, feed_ids)
+    }
 
+    public(friend) fun get_reports_unchecked(feed_ids: vector<vector<u8>>): vector<Report> acquires Registry {
+        let registry = borrow_global<Registry>(get_state_addr());
+        get_reports_internal(registry, feed_ids)
+    }
+
+    fun get_reports_internal(registry: &Registry, feed_ids: vector<vector<u8>>): vector<Report> {
         vector::map(feed_ids, |feed_id| {
             assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
 

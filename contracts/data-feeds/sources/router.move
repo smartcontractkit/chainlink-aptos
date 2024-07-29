@@ -56,44 +56,30 @@ module data_feeds::router {
         object::create_object_address(&@data_feeds, APP_OBJECT_SEED)
     }
 
-    public fun get_benchmarks(_account: &signer, feed_ids: vector<vector<u8>>, _billing_data: vector<u8>): vector<Benchmark> acquires Router {
+    public fun get_benchmarks(_authority: &signer, feed_ids: vector<vector<u8>>, _billing_data: vector<u8>): vector<Benchmark> acquires Router {
+        let _router = borrow_global<Router>(get_state_addr());
         // TODO: handle billing
 
-        let router = borrow_global<Router>(get_state_addr());
-
-        get_benchmarks_internal(router, feed_ids)
+        registry::get_benchmarks_unchecked(feed_ids)
     }
 
     public fun get_benchmarks_nonbillable(feed_ids: vector<vector<u8>>, _cap: &NonbillableAccessCapability): vector<Benchmark> acquires Router {
-        let router = borrow_global<Router>(get_state_addr());
+        let _router = borrow_global<Router>(get_state_addr());
 
-        get_benchmarks_internal(router, feed_ids)
+        registry::get_benchmarks_unchecked(feed_ids)
     }
 
-    fun get_benchmarks_internal(router: &Router, feed_ids: vector<vector<u8>>): vector<Benchmark> {
-        let router_signer = object::generate_signer_for_extending(&router.extend_ref);
-
-        registry::get_benchmarks(&router_signer, feed_ids)
-    }
-
-    public fun get_reports(_account: &signer, feed_ids: vector<vector<u8>>, _billing_data: vector<u8>): vector<Report> acquires Router {
+    public fun get_reports(_authority: &signer, feed_ids: vector<vector<u8>>, _billing_data: vector<u8>): vector<Report> acquires Router {
+        let _router = borrow_global<Router>(get_state_addr());
         // TODO: handle billing
 
-        let router = borrow_global<Router>(get_state_addr());
-
-        get_reports_internal(router, feed_ids)
+        registry::get_reports_unchecked(feed_ids)
     }
 
     public fun get_reports_nonbillable(feed_ids: vector<vector<u8>>, _cap: &NonbillableAccessCapability): vector<Report> acquires Router {
-        let router = borrow_global<Router>(get_state_addr());
+        let _router = borrow_global<Router>(get_state_addr());
 
-        get_reports_internal(router, feed_ids)
-    }
-
-    fun get_reports_internal(router: &Router, feed_ids: vector<vector<u8>>): vector<Report> {
-        let router_signer = object::generate_signer_for_extending(&router.extend_ref);
-
-        registry::get_reports(&router_signer, feed_ids)
+        registry::get_reports_unchecked(feed_ids)
     }
 
     #[view]
@@ -104,12 +90,12 @@ module data_feeds::router {
         vector::map(results, |metadata| registry::get_feed_metadata_description(&metadata))
     }
 
-    public entry fun configure_feeds(account: &signer, feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>, _fee_config_id: vector<u8>) acquires Router {
-        // TODO: set new fee config
+    public entry fun configure_feeds(authority: &signer, feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>, _fee_config_id: vector<u8>) acquires Router {
         let router = borrow_global<Router>(get_state_addr());
-        assert_is_owner(router, signer::address_of(account));
+        assert_is_owner(router, signer::address_of(authority));
 
-        let router_signer = object::generate_signer_for_extending(&router.extend_ref);
-        registry::set_feeds(&router_signer, feed_ids, descriptions, config_id);
+        // TODO: set new fee config
+
+        registry::set_feeds_unchecked(feed_ids, descriptions, config_id);
     }
 }
