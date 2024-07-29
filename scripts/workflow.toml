@@ -21,13 +21,14 @@ consensus:
        - "$(trigger.outputs)"
    config:
      report_id: "0001"
+     key_id: "aptos"
      aggregation_method: "data_feeds"
      aggregation_config:
        allowedPartialStaleness: "0.5"
        feeds:
          "0x1111111111111111111100000000000000000000000000000000000000000000":
            deviation: "0.05"
-           heartbeat: 3600
+           heartbeat: 60
      encoder: "EVM"
      encoder_config:
        abi: "(bytes32 FeedID, uint224 Price, uint32 Timestamp)[] Reports"
@@ -37,7 +38,7 @@ targets:
    inputs:
      signed_report: "$(aptos_feeds.outputs)" # TODO: annotate with devnet
    config:
-     address: "0x680084f7347baFfb5C323c2982dfC90e04F9F918"
+     address: "0xa34b23cdcda186e62aaaf69278baea45e7b12d2690c3f361ee3303e99540f663"
      deltaStage: "45s"
-     schedule: "oneAtATime"
+     # schedule: "oneAtATime"
 """
