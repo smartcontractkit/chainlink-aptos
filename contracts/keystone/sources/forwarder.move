@@ -18,6 +18,11 @@ module keystone::forwarder {
     const E_ALREADY_PROCESSED: u64 = 6;
     const E_UNAUTHORIZED: u64 = 7;
     const E_MALFORMED_SIGNATURE: u64 = 8;
+    const E_FAULT_TOLERANCE_MUST_BE_POSITIVE: u64 = 9;
+    const E_EXCESS_SIGNERS: u64 = 10;
+    const E_INSUFFICIENT_SIGNERS: u64 = 11;
+
+    const MAX_ORACLES: u64 = 31;
 
     const APP_OBJECT_SEED: vector<u8> = b"FORWARDER";
 
@@ -44,14 +49,23 @@ module keystone::forwarder {
     }
 
     #[event]
+    struct ConfigSet has drop, store {
+        don_id: u32,
+        config_version: u32,
+        f: u8,
+        signers: vector<vector<u8>>,
+    }
+
+    #[event]
     struct ReportProcessed has drop, store {
         receiver: address,
         workflow_execution_id: vector<u8>,
+        report_id: u16,
     }
 
-    fun init_module(account: &signer) {
+    fun init_module(publisher: &signer) {
         let constructor_ref = object::create_named_object(
-            account,
+            publisher,
             APP_OBJECT_SEED,
         );
 
@@ -59,14 +73,14 @@ module keystone::forwarder {
         let app_signer = &object::generate_signer(&constructor_ref);
 
         move_to(app_signer, State {
-            owner: @owner, // TODO: how to handle this
+            owner: @owner, // TODO: how to handle this, can we just use address of account passed in
             configs: smart_table::new(),
             reports: smart_table::new(),
             extend_ref,
         });
     }
 
-    fun get_state_addr(): address {
+    inline fun get_state_addr(): address {
         object::create_object_address(&@keystone, APP_OBJECT_SEED)
     }
 
@@ -75,12 +89,22 @@ module keystone::forwarder {
 
         assert!(state.owner == signer::address_of(authority), E_UNAUTHORIZED);
 
-        // TODO: f checks etc
+        assert!(f != 0, error::invalid_argument(E_FAULT_TOLERANCE_MUST_BE_POSITIVE));
+        assert!(vector::length(&oracles) <= MAX_ORACLES, error::invalid_argument(E_EXCESS_SIGNERS));
+        assert!(vector::length(&oracles) >= 3 * (f as u64) + 1, error::invalid_argument(E_INSUFFICIENT_SIGNERS));
+
         smart_table::upsert(&mut state.configs, ConfigId {don_id, config_version}, Config {
             f,
             oracles: vector::map(oracles, |oracle| {
                 ed25519::new_unvalidated_public_key_from_bytes(oracle)
             })
+        });
+
+        event::emit(ConfigSet {
+            don_id,
+            config_version,
+            f,
+            signers: oracles,
         });
     }
 
@@ -90,6 +114,13 @@ module keystone::forwarder {
         assert!(state.owner == signer::address_of(authority), E_UNAUTHORIZED);
 
         smart_table::remove(&mut state.configs, ConfigId {don_id, config_version});
+
+        event::emit(ConfigSet {
+            don_id,
+            config_version,
+            f: 0,
+            signers: vector::empty(),
+        });
     }
 
     use aptos_std::aptos_hash::blake2b_256;
@@ -108,11 +139,9 @@ module keystone::forwarder {
     }
 
     inline fun transmission_id(receiver: address, workflow_execution_id: vector<u8>, report_id: u16): vector<u8> {
-        let id = vector[];
-        vector::append(&mut id, bcs::to_bytes(&receiver));
+        let id = bcs::to_bytes(&receiver);
         vector::append(&mut id, workflow_execution_id);
         vector::append(&mut id, bcs::to_bytes(&report_id));
-        // TODO: spec to assert on key lengths
         id
     }
 
@@ -160,7 +189,7 @@ module keystone::forwarder {
         let metadata = vector::slice(&report, 45, 109);
         let data = vector::slice(&report, 109, vector::length(&report));
 
-        // this will revert if don_id doesn't exist
+        // NOTE: this will revert for us if don_id doesn't exist
         let config = smart_table::borrow(&state.configs, ConfigId { don_id, config_version });
 
         // check if report was already delivered
@@ -201,6 +230,7 @@ module keystone::forwarder {
         event::emit(ReportProcessed {
             receiver,
             workflow_execution_id,
+            report_id,
         });
 
         (metadata, data)
@@ -226,10 +256,8 @@ module keystone::forwarder {
     }
 
     #[test_only]
-    use aptos_framework::account::{Self};
-
-    #[test_only]
     public entry fun set_up_test(owner: &signer, account: &signer) {
+        use aptos_framework::account::{Self};
         account::create_account_for_test(signer::address_of(owner));
         account::create_account_for_test(signer::address_of(account));
 

@@ -11,10 +11,8 @@ module data_feeds::router {
     const APP_OBJECT_SEED: vector<u8> = b"ROUTER";
 
     struct Router has key, store, drop {
-        owner_address: address,
         extend_ref: ExtendRef,
-
-        // TODO: fee manager
+        owner_address: address,
     }
 
     // TODO: add mechanism for distribution
@@ -31,16 +29,15 @@ module data_feeds::router {
     }
 
     const EUNAUTHORIZED_NONBILLABLE_ACCESS: u64 = 0;
-    const ENO_SUCH_FEED: u64 = 1;
-    const ENOT_OWNER: u64 = 2;
+    const ENOT_OWNER: u64 = 1;
 
     fun assert_is_owner(router: &Router, target_address: address) {
         assert!(router.owner_address == target_address, error::invalid_argument(ENOT_OWNER));
     }
 
-    fun init_module(account: &signer) {
+    fun init_module(publisher: &signer) {
         let constructor_ref = object::create_named_object(
-            account,
+            publisher,
             APP_OBJECT_SEED,
         );
         let _object_address = object::address_from_constructor_ref(&constructor_ref);
@@ -48,8 +45,6 @@ module data_feeds::router {
         // Store an ExtendRef alongside the object.
         let extend_ref = object::generate_extend_ref(&constructor_ref);
         let object_signer = object::generate_signer(&constructor_ref);
-
-        // TODO: drop owner_address and just use transfer() on object for ownership transfers?
 
         move_to(&object_signer, Router {
             owner_address: @owner,
@@ -101,6 +96,7 @@ module data_feeds::router {
         registry::get_reports(&router_signer, feed_ids)
     }
 
+    #[view]
     public fun get_descriptions(feed_ids: vector<vector<u8>>): vector<String> acquires Router {
         let _router = borrow_global<Router>(get_state_addr());
 

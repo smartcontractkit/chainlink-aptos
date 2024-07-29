@@ -7,12 +7,13 @@ module data_feeds::registry {
     use std::string::{Self, String};
     use std::vector;
 
-    use aptos_framework::object::{Self, Object};
+    use aptos_framework::object::{Self, ExtendRef, Object};
 
     const APP_OBJECT_SEED: vector<u8> = b"REGISTRY";
 
-    // TODO: figure out link_address, router, verifier_proxy
+    // TODO: figure out router
     struct Registry has key, store, drop {
+        extend_ref: ExtendRef,
         owner_address: address,
         router_address: address,
 
@@ -136,30 +137,29 @@ module data_feeds::registry {
         }
     }
 
-    fun init_module(account: &signer) {
+    fun init_module(publisher: &signer) {
         let constructor_ref = object::create_named_object(
-            account,
+            publisher,
             APP_OBJECT_SEED,
         );
         let _object_address = object::address_from_constructor_ref(&constructor_ref);
 
         // Store an ExtendRef alongside the object.
-        let _extend_ref = object::generate_extend_ref(&constructor_ref);
+        let extend_ref = object::generate_extend_ref(&constructor_ref);
         let object_signer = object::generate_signer(&constructor_ref);
-        // TODO: store extend_ref?
 
-        // register for keystone::forwarder reports
+        // register to receive keystone::forwarder reports
         let cb = aptos_framework::function_info::new_function_info(
-            account,
+            publisher,
             string::utf8(b"registry"),
             string::utf8(b"on_report"),
         );
-        keystone::storage::register(account, cb, new_proof());
+        keystone::storage::register(publisher, cb, new_proof());
 
         move_to(&object_signer, Registry {
-            // TODO: functionality to update owner
             owner_address: @owner,
-            router_address: @0x1, // TODO: remove fully
+            extend_ref,
+            router_address: @0x1, // TODO: remove fully by using friend functions
 
             feeds: simple_map::new(),
             configs: simple_map::new(),
@@ -172,8 +172,6 @@ module data_feeds::registry {
 
     public entry fun set_feeds(account: &signer, feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
-
-        // TODO: address to object, compare object owner
 
         assert_is_owner_or_router(registry, signer::address_of(account));
 
@@ -274,7 +272,7 @@ module data_feeds::registry {
 
         assert_is_owner(registry, signer::address_of(account));
 
-        // TODO: not in the solidity contract, but we make sure that the config exists first.
+        // NOTE: not in the solidity contract, but we make sure that the config exists first.
         assert!(simple_map::contains_key(&registry.configs, &config_id), error::invalid_argument(ECONFIG_NOT_CONFIGURED));
 
         vector::for_each(feed_ids, |feed_id| {
@@ -308,7 +306,7 @@ module data_feeds::registry {
 
     struct OnReceive has drop {}
 
-    fun new_proof(): OnReceive {
+    inline fun new_proof(): OnReceive {
       OnReceive {}
     }
 
@@ -327,7 +325,7 @@ module data_feeds::registry {
         option::none()
     }
 
-    // slice data into N length reports
+    // Parse ETH ABI encoded raw data into multiple reports
     fun parse_raw_report(data: vector<u8>): (vector<vector<u8>>, vector<vector<u8>>) {
         let offset = 0;
         assert!(to_u256be(vector::slice(&data, offset, offset + 32)) == 32, 32);
@@ -375,7 +373,7 @@ module data_feeds::registry {
         let benchmark_price: u256;
         if (schema == SCHEMA_V3) {
             observation_timestamp = to_u32be(vector::slice(&report_data, 64+32-4, 64+32));
-            // TODO: aptos has no signed integer types, so can't parse as i196
+            // NOTE: aptos has no signed integer types, so can't parse as i196, this is a raw representation
             benchmark_price = to_u256be(vector::slice(&report_data, 96, 128));
         } else {
             abort error::invalid_argument(EINVALID_REPORT)
@@ -393,8 +391,10 @@ module data_feeds::registry {
         });
     }
 
+    // Getters
+
     public fun get_benchmarks(account: &signer, feed_ids: vector<vector<u8>>): vector<Benchmark> acquires Registry {
-        let registry = borrow_global_mut<Registry>(get_state_addr());
+        let registry = borrow_global<Registry>(get_state_addr());
         assert_is_owner_or_router(registry, signer::address_of(account));
         
         vector::map(feed_ids, |feed_id| {
@@ -422,6 +422,7 @@ module data_feeds::registry {
         })
     }
 
+    #[view]
     public fun get_feed_metadata(feed_ids: vector<vector<u8>>): vector<FeedMetadata> acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());
 
@@ -440,6 +441,7 @@ module data_feeds::registry {
         })
     }
 
+    #[view]
     public fun get_feed_configs(config_ids: vector<vector<u8>>): vector<FeedConfig> acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());
 
@@ -453,6 +455,8 @@ module data_feeds::registry {
             }
         })
     }
+
+    // Struct accessors
 
     public fun get_benchmark_value(result: &Benchmark): u256 {
         result.benchmark
