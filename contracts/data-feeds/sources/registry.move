@@ -40,7 +40,6 @@ module data_feeds::registry {
         staleness_seconds: u256,
     }
 
-    // TODO: are tuples cleaner than requiring getters?
     struct BenchmarkResult has store, drop {
         benchmark: u256,
         observation_timestamp: u256
@@ -62,11 +61,6 @@ module data_feeds::registry {
     struct FeedConfigResult has store, drop {
         deviation_threshold: u256,
         staleness_seconds: u256,
-    }
-
-    #[event]
-    struct Initialized has drop, store {
-        address: address,
     }
 
     #[event]
