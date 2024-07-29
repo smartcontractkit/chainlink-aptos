@@ -185,7 +185,7 @@ module data_feeds::registry {
             account,
             APP_OBJECT_SEED,
         );
-        let object_address = object::address_from_constructor_ref(&constructor_ref);
+        let _object_address = object::address_from_constructor_ref(&constructor_ref);
 
         // Store an ExtendRef alongside the object.
         let _extend_ref = object::generate_extend_ref(&constructor_ref);
