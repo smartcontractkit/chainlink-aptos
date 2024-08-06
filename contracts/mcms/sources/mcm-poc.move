@@ -450,11 +450,10 @@ module mcms::multisig {
 
         // remove old signer addresses
         let state = borrow_global_mut<MCMState>(@mcms);
-        let old_signers = state.s_config.signers;
-        vector::for_each(old_signers, |signer| {
-            simple_map::remove(&mut state.s_signers, &signer.addr);
-            vector::pop_back(&mut state.s_config.signers);
-        });
+        while (!vector::is_empty(&state.s_config.signers)) {
+            let old_signer: Signer = vector::pop_back(&mut state.s_config.signers);
+            simple_map::remove(&mut state.s_signers, &old_signer.addr);
+        };
         assert!(vector::length(&state.s_config.signers) == 0, ERR);
 
         // save group quorums and parents to state
