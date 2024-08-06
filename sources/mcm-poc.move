@@ -382,7 +382,7 @@ module mcms::multisig {
         // todo: investigate if `value` is relevant for Aptos at all
         let multisig_addr = get_multisig_addr();
         let multisig_signer = multisig_signer();
-        multisig_account::create_transaction(&multisig_signer, multisig_addr, data);
+        multisig_account::create_transaction_with_hash(&multisig_signer, multisig_addr, data);
 
         event::emit(OpExecuted {
             nonce: op.nonce,
