@@ -5,11 +5,11 @@ authors = []
 
 [addresses]
 mcms = "_"
-mcms_deployer = "_"
+owner = "_"
 
 [dev-addresses]
 mcms = "0x100"
-mcms_deployer="0xabc"
+owner = "0xabc"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "mainnet", subdir = "aptos-move/framework/aptos-framework" }
