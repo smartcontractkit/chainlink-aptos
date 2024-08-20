@@ -564,7 +564,7 @@ module mcms::multisig {
     }
 
     fun compute_eth_message_hash(root: vector<u8>, valid_until: u64): vector<u8> {
-        // abi.encode(root, valid_until)
+        // abi.encode(root (bytes32), valid_until)
         let valid_until_bytes = left_pad_vec(uint_to_bytes(valid_until), 32);
         assert!(vector::length(&root) == 32, EINVALID_ROOT_LEN); // root should be 32 bytes
         let abi_encoded_params = &mut root; 
@@ -614,30 +614,23 @@ module mcms::multisig {
         let to = bcs::to_bytes(&op.to);
         let value = left_pad_vec(uint_to_bytes(op.value), 32);
 
-        // prepend c0, data_len to data
-        let data = left_pad_vec(vector[0xc0], 32); // todo: where does this value comes from?
-        let data_len = vector::length(&op.data);
-        vector::append(&mut data, left_pad_vec(uint_to_bytes(data_len), 32));
-        
-        let padded_data: vector<u8>;
-        if (data_len % 32 == 0) {
-            // data len is already multiple of 32, no padding needed
-            padded_data = op.data
-        } else {
-            // right pad op.data to multiple of 32 bytes
-            padded_data = right_pad_vec(op.data, ((data_len / 32 + 1) * 32 as u8));
-        };
-        vector::append(&mut data, padded_data);
-
         let hash_preimage: vector<u8> = vector[];
         vector::append(&mut hash_preimage, MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP);
-        vector::append(&mut hash_preimage, left_pad_vec(vector[0x40], 32)); // todo: why does abi.encode add this?
         vector::append(&mut hash_preimage, chain_id);
         vector::append(&mut hash_preimage, multisig);
         vector::append(&mut hash_preimage, nonce);
         vector::append(&mut hash_preimage, to);
         vector::append(&mut hash_preimage, value);
-        vector::append(&mut hash_preimage, data);
+        vector::append(&mut hash_preimage, op.data);
+
+        // right pad op.data to multiple of 32 bytes
+        // note that we can't use right_pad_vec which takes a u8 as length.
+        let pad_amount = 32 - (vector::length(&op.data) % 32);
+        while (pad_amount > 0) {
+          vector::push_back(&mut hash_preimage, 0);
+          pad_amount = pad_amount - 1;
+        };
+
         // since we are using this in a merkle tree/proof, hash_preimage should be greater than 64 bytes
         // to prevent collisions with internal nodes. the above operations already guarantee this so no need to check.
         keccak256(hash_preimage)
