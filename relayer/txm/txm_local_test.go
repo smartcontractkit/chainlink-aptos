@@ -7,7 +7,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 	"testing"
 	"time"
 
@@ -85,7 +84,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 
 	// Get the current version so that we can find the transactions quickly after incrementing.
 
-	expectedValue := 0
+	expectedValue := uint64(0)
 	for i := 0; i < iterations; i++ {
 		err := txm.Enqueue(
 			uuid.New().String(),
@@ -119,24 +118,10 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	resource, err := client.AccountResource(accountAddress, accountAddress.String()+"::counter::Counter")
-	require.NoError(t, err)
+	counterValue := testutils.ReadCounterValue(t, client, accountAddress)
+	logger.Debugw("Read counter value", "value", counterValue)
 
-	data, ok := resource["data"]
-	require.True(t, ok)
-
-	dataMap, ok := data.(map[string]any)
-	require.True(t, ok)
-
-	value, ok := dataMap["value"]
-	require.True(t, ok)
-
-	valueStr, ok := value.(string)
-	require.True(t, ok)
-
-	logger.Debugw("Read counter value", "value", valueStr)
-
-	require.Equal(t, fmt.Sprintf("%d", expectedValue), valueStr)
+	require.Equal(t, expectedValue, counterValue)
 }
 
 func deployTestContract(t *testing.T, txm *AptosTxm, fromAddress, publicKeyHex string) {
