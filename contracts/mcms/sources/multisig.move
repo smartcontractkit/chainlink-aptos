@@ -78,7 +78,6 @@ module mcms::multisig {
         multisig: address,
         nonce: u64,
         to: address,
-        value: u256,
         data: vector<u8>
     }
 
@@ -161,7 +160,6 @@ module mcms::multisig {
         nonce: u64,
         to: address,
         data: vector<u8>,
-        value: u256
     }
 
 
@@ -341,7 +339,6 @@ module mcms::multisig {
         multisig: address,
         nonce: u64,
         to: address,
-        value: u256,
         data: vector<u8>,
         proof: vector<vector<u8>>
     ) acquires MCMState {
@@ -351,7 +348,6 @@ module mcms::multisig {
             multisig,
             nonce,
             to,
-            value,
             data
         };
 
@@ -374,8 +370,7 @@ module mcms::multisig {
         state.s_expiring_root_and_op_count.op_count = state.s_expiring_root_and_op_count.op_count + 1;
 
         // create transaction on multisig account (will already have one approval from creator)
-        // todo: investigate if `to` and `value` params are encoded in the `data` payload
-        // todo: investigate if `value` is relevant for Aptos at all
+        // todo: investigate if `to` params are encoded in the `data` payload
         let multisig_addr = get_multisig_addr();
         let multisig_signer = multisig_signer();
         multisig_account::create_transaction_with_hash(&multisig_signer, multisig_addr, data);
@@ -384,7 +379,6 @@ module mcms::multisig {
             nonce: op.nonce,
             to: op.to,
             data: op.data,
-            value: op.value
         })
     }
 
@@ -612,7 +606,6 @@ module mcms::multisig {
         let multisig = bcs::to_bytes(&op.multisig);
         let nonce = left_pad_vec(uint_to_bytes(op.nonce), 32);
         let to = bcs::to_bytes(&op.to);
-        let value = left_pad_vec(uint_to_bytes(op.value), 32);
 
         let hash_preimage: vector<u8> = vector[];
         vector::append(&mut hash_preimage, MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP);
@@ -620,7 +613,6 @@ module mcms::multisig {
         vector::append(&mut hash_preimage, multisig);
         vector::append(&mut hash_preimage, nonce);
         vector::append(&mut hash_preimage, to);
-        vector::append(&mut hash_preimage, value);
         vector::append(&mut hash_preimage, op.data);
 
         // right pad op.data to multiple of 32 bytes
@@ -805,7 +797,6 @@ module mcms::multisig {
         x"41b85720395efa4be9ac975c3c09e2b93a2143d5e633f5fec123504d024e9125",
         x"d018b6a7f3a490a079ee0d2d8d4414ed069bfdda7c2e636b6f0c0b0f16395e25"
     ];
-    const OP1_VALUE: u256 = 100;
     const OP1_NONCE: u64 = 0;
     // abi.encodeWithSignature("executableMethod(uint256,uint256,uint256)",1,2,0x123456789abcdef)
     const OP1_DATA: vector<u8> = x"bc90e2d9000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000123456789abcdef";
@@ -839,7 +830,6 @@ module mcms::multisig {
         multisig: address,
         nonce: u64,
         to: address,
-        value: u256,
         data: vector<u8>,
         proof: vector<vector<u8>>
     }
@@ -851,7 +841,6 @@ module mcms::multisig {
             multisig: get_state_addr(),
             nonce: OP1_NONCE,
             to: get_state_addr(),
-            value: OP1_VALUE,
             data: OP1_DATA,
             proof: OP_PROOF_LEAF_1
         }
@@ -859,7 +848,7 @@ module mcms::multisig {
 
     #[test_only]
     fun call_execute(args: ExecuteArgs) acquires MCMState {
-        execute(args.chain_id, args.multisig, args.nonce, args.to, args.value, args.data, args.proof);
+        execute(args.chain_id, args.multisig, args.nonce, args.to, args.data, args.proof);
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
@@ -1419,7 +1408,7 @@ module mcms::multisig {
         set_config(owner, SIGNERS, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
         call_set_root(default_set_root_args());
         let execute_args = default_execute_args();
-        execute_args.value = execute_args.value + 1; // modify op so proof verification should fail
+        execute_args.chain_id = execute_args.chain_id + 1; // modify op so proof verification should fail
         call_execute(execute_args);
     }
 
@@ -1528,7 +1517,6 @@ module mcms::multisig {
             multisig: mcms_addr,
             nonce: OP1_NONCE,
             to: mcms_addr,
-            value: OP1_VALUE,
             data: OP1_DATA
         };
         let hash = hash_op_leaf(op);
