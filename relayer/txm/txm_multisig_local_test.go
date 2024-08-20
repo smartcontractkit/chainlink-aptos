@@ -306,7 +306,6 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 			MultiSig: deployer.accountAddress,
 			Nonce:    0,
 			To:       aptos.AccountZero,
-			Value:    big.NewInt(0),
 			Data:     multisigIncrementPayloadHash[:],
 		},
 		{
@@ -314,7 +313,6 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 			MultiSig: deployer.accountAddress,
 			Nonce:    1,
 			To:       aptos.AccountZero,
-			Value:    big.NewInt(0),
 			Data:     multisigIncrementMultPayloadHash[:],
 		},
 	}
@@ -411,7 +409,6 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 				"address",
 				"u64",
 				"address",
-				"u256",
 				"vector<u8>",
 				"vector<vector<u8>>",
 			},
@@ -420,7 +417,6 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 				op.MultiSig,
 				op.Nonce,
 				op.To,
-				op.Value,
 				op.Data,
 				proof[:],
 			},
@@ -564,7 +560,6 @@ type Op struct {
 	MultiSig aptos.AccountAddress
 	Nonce    uint64
 	To       aptos.AccountAddress
-	Value    *big.Int
 	Data     []byte
 }
 
@@ -607,7 +602,6 @@ func hashOp(op *Op) [32]byte {
 	packed = append(packed, op.MultiSig[:]...)
 	packed = append(packed, common.LeftPadBytes(new(big.Int).SetUint64(op.Nonce).Bytes(), 32)...)
 	packed = append(packed, op.To[:]...)
-	packed = append(packed, common.LeftPadBytes(op.Value.Bytes(), 32)...)
 	packed = append(packed, op.Data...)
 	padAmount := 32 - (len(op.Data) % 32)
 	for i := 0; i < padAmount; i++ {
