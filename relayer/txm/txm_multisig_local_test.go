@@ -25,7 +25,6 @@ import (
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	aptosapi "github.com/aptos-labs/aptos-go-sdk/api"
-	"github.com/aptos-labs/aptos-go-sdk/bcs"
 	aptoscrypto "github.com/aptos-labs/aptos-go-sdk/crypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -257,63 +256,28 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	require.NoError(t, err)
 	chainIdBig := new(big.Int).SetUint64(uint64(chainId))
 
-	multisigIncrementPayload := &aptos.MultisigTransactionPayload{
-		Variant: aptos.MultisigTransactionPayloadVariantEntryFunction,
-		Payload: &aptos.EntryFunction{
-			Module: aptos.ModuleId{
-				Address: counterDeployer.accountAddress,
-				Name:    "counter",
-			},
-			Function: "increment",
-			ArgTypes: []aptos.TypeTag{},
-			Args:     [][]byte{counterDeployer.accountAddress[:]},
+	ops := []Op{
+		{
+			ChainID:     chainIdBig,
+			MultiSig:    deployer.accountAddress,
+			Nonce:       0,
+			To:          counterDeployer.accountAddress,
+			ModuleName:  "counter",
+			Function:    "increment",
+			EncodedArgs: [][]byte{counterDeployer.accountAddress[:]},
 		},
-	}
-
-	multisigIncrementMultPayload := &aptos.MultisigTransactionPayload{
-		Variant: aptos.MultisigTransactionPayloadVariantEntryFunction,
-		Payload: &aptos.EntryFunction{
-			Module: aptos.ModuleId{
-				Address: counterDeployer.accountAddress,
-				Name:    "counter",
-			},
-			Function: "increment_mult",
-			ArgTypes: []aptos.TypeTag{},
-			Args: [][]byte{
+		{
+			ChainID:    chainIdBig,
+			MultiSig:   deployer.accountAddress,
+			Nonce:      1,
+			To:         counterDeployer.accountAddress,
+			ModuleName: "counter",
+			Function:   "increment_mult",
+			EncodedArgs: [][]byte{
 				counterDeployer.accountAddress[:],
 				binary.LittleEndian.AppendUint64(nil, 3),
 				binary.LittleEndian.AppendUint64(nil, 4),
 			},
-		},
-	}
-
-	multisigIncrementPayloadBytes, err := bcs.SerializeSingle(func(ser *bcs.Serializer) {
-		multisigIncrementPayload.MarshalBCS(ser)
-	})
-	require.NoError(t, err)
-
-	multisigIncrementMultPayloadBytes, err := bcs.SerializeSingle(func(ser *bcs.Serializer) {
-		multisigIncrementMultPayload.MarshalBCS(ser)
-	})
-	require.NoError(t, err)
-
-	multisigIncrementPayloadHash := sha3.Sum256(multisigIncrementPayloadBytes)
-	multisigIncrementMultPayloadHash := sha3.Sum256(multisigIncrementMultPayloadBytes)
-
-	ops := []Op{
-		{
-			ChainID:  chainIdBig,
-			MultiSig: deployer.accountAddress,
-			Nonce:    0,
-			To:       aptos.AccountZero,
-			Data:     multisigIncrementPayloadHash[:],
-		},
-		{
-			ChainID:  chainIdBig,
-			MultiSig: deployer.accountAddress,
-			Nonce:    1,
-			To:       aptos.AccountZero,
-			Data:     multisigIncrementMultPayloadHash[:],
 		},
 	}
 
@@ -410,6 +374,8 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 				"u64",
 				"address",
 				"vector<u8>",
+				"vector<u8>",
+				"vector<vector<u8>>",
 				"vector<vector<u8>>",
 			},
 			[]any{
@@ -417,7 +383,9 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 				op.MultiSig,
 				op.Nonce,
 				op.To,
-				op.Data,
+				op.ModuleName,
+				op.Function,
+				op.EncodedArgs,
 				proof[:],
 			},
 		)
@@ -439,14 +407,17 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	executeOp(0)
 	executeOp(1)
 
+	// No info is necessary in the multisig transaction if the payload was already provided, send an empty payload
+	// to execute the ops in sequence.
+	multisigPayload := aptos.TransactionPayload{
+		Payload: &aptos.Multisig{
+			MultisigAddress: aptosMultisigAddress,
+			Payload:         nil,
+		},
+	}
+
 	{
-		multisigIncrementTxPayload := aptos.TransactionPayload{
-			Payload: &aptos.Multisig{
-				MultisigAddress: aptosMultisigAddress,
-				Payload:         multisigIncrementPayload,
-			},
-		}
-		response := broadcastPayload(t, client, keystore, deployer.accountAddress, deployer.publicKey, multisigIncrementTxPayload)
+		response := broadcastPayload(t, client, keystore, deployer.accountAddress, deployer.publicKey, multisigPayload)
 		waitForTx(t, client, response.Hash, time.Second*30)
 		expectedCounterValue = expectedCounterValue + 1
 
@@ -456,13 +427,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	}
 
 	{
-		multisigIncrementMultTxPayload := aptos.TransactionPayload{
-			Payload: &aptos.Multisig{
-				MultisigAddress: aptosMultisigAddress,
-				Payload:         multisigIncrementMultPayload,
-			},
-		}
-		response := broadcastPayload(t, client, keystore, deployer.accountAddress, deployer.publicKey, multisigIncrementMultTxPayload)
+		response := broadcastPayload(t, client, keystore, deployer.accountAddress, deployer.publicKey, multisigPayload)
 		waitForTx(t, client, response.Hash, time.Second*30)
 		expectedCounterValue = expectedCounterValue + (3 * 4)
 
@@ -470,7 +435,6 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		logger.Debugw("Read counter value post increment_mult", "value", counterValue)
 		require.Equal(t, expectedCounterValue, counterValue)
 	}
-
 	// TODO: check mcms state post-execution
 }
 
@@ -556,11 +520,13 @@ type RootMetadata struct {
 }
 
 type Op struct {
-	ChainID  *big.Int
-	MultiSig aptos.AccountAddress
-	Nonce    uint64
-	To       aptos.AccountAddress
-	Data     []byte
+	ChainID     *big.Int
+	MultiSig    aptos.AccountAddress
+	Nonce       uint64
+	To          aptos.AccountAddress
+	ModuleName  string
+	Function    string
+	EncodedArgs [][]byte
 }
 
 func generateMerkleTree(ops []Op, rootMetadata RootMetadata) (MerkleTree, error) {
@@ -602,10 +568,29 @@ func hashOp(op *Op) [32]byte {
 	packed = append(packed, op.MultiSig[:]...)
 	packed = append(packed, common.LeftPadBytes(new(big.Int).SetUint64(op.Nonce).Bytes(), 32)...)
 	packed = append(packed, op.To[:]...)
-	packed = append(packed, op.Data...)
-	padAmount := 32 - (len(op.Data) % 32)
+
+	moduleNameBytes := []byte(op.ModuleName)
+	packed = append(packed, moduleNameBytes...)
+	padAmount := 32 - (len(moduleNameBytes) % 32)
 	for i := 0; i < padAmount; i++ {
 		packed = append(packed, 0)
+	}
+
+	functionBytes := []byte(op.Function)
+	packed = append(packed, functionBytes...)
+	padAmount = 32 - (len(functionBytes) % 32)
+	for i := 0; i < padAmount; i++ {
+		packed = append(packed, 0)
+	}
+
+	packed = append(packed, common.LeftPadBytes(new(big.Int).SetUint64(uint64(len(op.EncodedArgs))).Bytes(), 32)...)
+	for _, arg := range op.EncodedArgs {
+		packed = append(packed, common.LeftPadBytes(new(big.Int).SetUint64(uint64(len(arg))).Bytes(), 32)...)
+		packed = append(packed, arg...)
+		padAmount = 32 - (len(arg) % 32)
+		for i := 0; i < padAmount; i++ {
+			packed = append(packed, 0)
+		}
 	}
 
 	hash := crypto.Keccak256(packed)
