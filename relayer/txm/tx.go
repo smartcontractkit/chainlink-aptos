@@ -11,9 +11,9 @@ import (
 type AptosTx struct {
 	ID              string
 	Timestamp       uint64
-	FromAddress     string
+	FromAddress     aptos.AccountAddress
 	PublicKey       ed25519.PublicKey
-	ContractAddress string
+	ContractAddress aptos.AccountAddress
 	ModuleName      string
 	FunctionName    string
 	TypeTags        []aptos.TypeTag

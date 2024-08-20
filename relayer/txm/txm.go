@@ -155,13 +155,25 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 		bcsValues = append(bcsValues, bcsValue)
 	}
 
+	fromAccountAddress := &aptos.AccountAddress{}
+	err = fromAccountAddress.ParseStringRelaxed(fromAddress)
+	if err != nil {
+		return fmt.Errorf("failed to parse from address: %+w", err)
+	}
+
+	contractAccountAddress := &aptos.AccountAddress{}
+	err = contractAccountAddress.ParseStringRelaxed(contractAddress)
+	if err != nil {
+		return fmt.Errorf("failed to parse contract address: %+w", err)
+	}
+
 	tx := &AptosTx{
 		ID: transactionID,
 		// TODO: clean up old transactions in the map by timestamp.
 		Timestamp:       uint64(time.Now().Unix()),
-		FromAddress:     fromAddress,
+		FromAddress:     *fromAccountAddress,
 		PublicKey:       ed25519PublicKey,
-		ContractAddress: contractAddress,
+		ContractAddress: *contractAccountAddress,
 		ModuleName:      moduleName,
 		FunctionName:    functionName,
 		TypeTags:        typeTags,
@@ -234,26 +246,9 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		return
 	}
 
-	// TODO: parse FromAddress and ContractAddress on Enqueue.
-	fromAddress := &aptos.AccountAddress{}
-	err = fromAddress.ParseStringRelaxed(tx.FromAddress)
-	if err != nil {
-		a.logger.Errorw("failed to convert from address", "error", err)
-		tx.Status = commontypes.Fatal
-		return
-	}
-
-	contractAddress := &aptos.AccountAddress{}
-	err = contractAddress.ParseStringRelaxed(tx.ContractAddress)
-	if err != nil {
-		a.logger.Errorw("failed to convert contract address", "error", err)
-		tx.Status = commontypes.Fatal
-		return
-	}
-
-	txStore := a.accountStore.GetTxStore(tx.FromAddress)
+	txStore := a.accountStore.GetTxStore(tx.FromAddress.String())
 	if txStore == nil {
-		accountInfo, err := client.Account(*fromAddress)
+		accountInfo, err := client.Account(tx.FromAddress)
 		if err != nil {
 			a.logger.Errorw("failed to fetch account data", "error", err)
 			tx.Status = commontypes.Fatal
@@ -265,7 +260,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			tx.Status = commontypes.Fatal
 			return
 		}
-		newTxStore, err := a.accountStore.CreateTxStore(tx.FromAddress, sequenceNumber)
+		newTxStore, err := a.accountStore.CreateTxStore(tx.FromAddress.String(), sequenceNumber)
 		if err != nil {
 			a.logger.Errorw("failed to create tx store", "fromAddress", tx.FromAddress, "error", err)
 			tx.Status = commontypes.Fatal
@@ -295,7 +290,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	}
 
 	moduleId := aptos.ModuleId{
-		Address: *contractAddress,
+		Address: tx.ContractAddress,
 		Name:    tx.ModuleName,
 	}
 
@@ -311,7 +306,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	nonce := txStore.GetNextNonce()
 
 	rawTx := aptos.RawTransaction{
-		Sender:         *fromAddress,
+		Sender:         tx.FromAddress,
 		SequenceNumber: nonce,
 		Payload:        payload,
 		// TODO: gas amount estimation? we use the default as per aptos-ts-sdk for now.
