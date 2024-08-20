@@ -55,7 +55,8 @@ func TestChainReaderLocal(t *testing.T) {
 }
 
 func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
-	keystore := testutils.NewTestKeystore(t, accountAddress.String(), privateKey)
+	keystore := testutils.NewTestKeystore(t)
+	keystore.AddKey(privateKey)
 
 	client, err := aptos.NewNodeClient(rpcUrl, 0)
 	require.NoError(t, err)

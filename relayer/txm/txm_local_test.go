@@ -49,7 +49,8 @@ func TestTxmLocal(t *testing.T) {
 	err = testutils.FundWithFaucet(logger, client, accountAddress, faucetUrl)
 	require.NoError(t, err)
 
-	keystore := testutils.NewTestKeystore(t, accountAddress.String(), privateKey)
+	keystore := testutils.NewTestKeystore(t)
+	keystore.AddKey(privateKey)
 
 	config := AptosTxmConfig{
 		BroadcastChanSize: 100,

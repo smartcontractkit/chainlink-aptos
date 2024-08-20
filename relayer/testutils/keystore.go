@@ -6,34 +6,46 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 )
 
 type TestKeystore struct {
-	t          *testing.T
-	address    string
-	privateKey ed25519.PrivateKey
+	t    *testing.T
+	Keys map[string]ed25519.PrivateKey
 }
 
 var _ loop.Keystore = &TestKeystore{}
 
-func NewTestKeystore(t *testing.T, address string, privateKey ed25519.PrivateKey) *TestKeystore {
-	return &TestKeystore{t: t, address: address, privateKey: privateKey}
+func NewTestKeystore(t *testing.T) *TestKeystore {
+	return &TestKeystore{t: t, Keys: map[string]ed25519.PrivateKey{}}
+}
+
+func (tk *TestKeystore) AddKey(privateKey ed25519.PrivateKey) {
+	publicKey := fmt.Sprintf("%064x", privateKey.Public())
+	if _, ok := tk.Keys[publicKey]; ok {
+		tk.t.Fatal(fmt.Sprintf("Key already exists: %s", publicKey))
+	}
+	tk.Keys[publicKey] = privateKey
 }
 
 func (tk *TestKeystore) Sign(ctx context.Context, id string, hash []byte) ([]byte, error) {
-	require.Equal(tk.t, fmt.Sprintf("%064x", tk.privateKey.Public()), id)
+	privateKey, ok := tk.Keys[id]
+	if !ok {
+		tk.t.Fatal(fmt.Sprintf("No such key: %s", id))
+	}
 
 	// used to check if the account exists.
 	if hash == nil {
 		return nil, nil
 	}
 
-	return ed25519.Sign(tk.privateKey, hash), nil
+	return ed25519.Sign(privateKey, hash), nil
 }
 
 func (tk *TestKeystore) Accounts(ctx context.Context) ([]string, error) {
-	return []string{tk.address}, nil
+	accounts := make([]string, 0, len(tk.Keys))
+	for id := range tk.Keys {
+		accounts = append(accounts, id)
+	}
+	return accounts, nil
 }

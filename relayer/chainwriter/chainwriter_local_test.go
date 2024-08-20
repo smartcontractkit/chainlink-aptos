@@ -56,7 +56,8 @@ func TestChainWriterLocal(t *testing.T) {
 }
 
 func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey, iterations int) {
-	keystore := testutils.NewTestKeystore(t, accountAddress.String(), privateKey)
+	keystore := testutils.NewTestKeystore(t)
+	keystore.AddKey(privateKey)
 
 	client, err := aptos.NewNodeClient(rpcURL, 0) // TODO: chainId
 	require.NoError(t, err)
