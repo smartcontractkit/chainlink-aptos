@@ -22,6 +22,8 @@ func CreateTypeTag(typeName string) (aptos.TypeTag, error) {
 		return aptos.TypeTag{Value: &aptos.U64Tag{}}, nil
 	case "u128":
 		return aptos.TypeTag{Value: &aptos.U128Tag{}}, nil
+	case "u256":
+		return aptos.TypeTag{Value: &aptos.U256Tag{}}, nil
 	case "bool":
 		return aptos.TypeTag{Value: &aptos.BoolTag{}}, nil
 	case "address":
@@ -189,6 +191,27 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 		if v, ok := argVal.(string); ok {
 			if big, ok := big.NewInt(0).SetString(v, 10); ok {
 				serializer.U128(*big)
+				return nil
+			}
+		}
+	case aptos.TypeTagU256:
+		if v, ok := argVal.(*big.Int); ok {
+			serializer.U256(*v)
+			return nil
+		}
+		if v, ok := argVal.(int); ok && v >= 0 {
+			b := big.NewInt(int64(v))
+			serializer.U256(*b)
+			return nil
+		}
+		if v, ok := argVal.(float64); ok && v >= 0 {
+			b := big.NewInt(int64(v))
+			serializer.U256(*b)
+			return nil
+		}
+		if v, ok := argVal.(string); ok {
+			if big, ok := big.NewInt(0).SetString(v, 10); ok {
+				serializer.U256(*big)
 				return nil
 			}
 		}
