@@ -518,8 +518,9 @@ module mcms::multisig {
 
         // derive internal multisig address
         let multisig_addr = multisig_account::get_next_multisig_account_address(resource_address);
-        // create multisig account with resource account as sole owner and quorum of 1
-        multisig_account::create(&resource_signer, 1, vector[], vector[]);
+        // create multisig account with the resource account and @owner as owners, requiring 2 signatures.
+        // this is necessary because we need an EOA account to execute the 0x1::multisig_account transaction.
+        multisig_account::create_with_owners(&resource_signer, vector[@owner], 2, vector[], vector[]);
 
         move_to(&resource_signer, MCMState {
             s_signers: simple_map::new(),
