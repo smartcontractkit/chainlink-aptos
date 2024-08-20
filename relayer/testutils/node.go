@@ -13,7 +13,7 @@ const (
 )
 
 // Finds the closest git repo root, assuming that a directory with a .git directory is a git repo.
-func findGitRoot() (string, error) {
+func FindGitRoot() (string, error) {
 	currentDir, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -35,7 +35,7 @@ func findGitRoot() (string, error) {
 }
 
 func StartAptosNode() error {
-	gitRoot, err := findGitRoot()
+	gitRoot, err := FindGitRoot()
 	if err != nil {
 		return fmt.Errorf("failed to find Git root: %v", err)
 	}
