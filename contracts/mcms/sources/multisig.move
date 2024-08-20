@@ -256,7 +256,7 @@ module mcms::multisig {
         assert!(metadata.chain_id == (chain_id::get() as u256), EWRONG_CHAIN_ID);
 
         // verify mcms address
-        assert!(metadata.multisig == get_state_addr(), EWRONG_MULTISIG);
+        assert!(metadata.multisig == @mcms, EWRONG_MULTISIG);
 
         // verify op counts
         let op_count = state.s_expiring_root_and_op_count.op_count;
@@ -360,7 +360,7 @@ module mcms::multisig {
 
         assert!(op.chain_id == (chain_id::get() as u256), EWRONG_CHAIN_ID);
 
-        assert!(op.multisig == get_state_addr(), EWRONG_MULTISIG);
+        assert!(op.multisig == @mcms, EWRONG_MULTISIG);
 
         assert!(timestamp::now_seconds() <= state.s_expiring_root_and_op_count.valid_until, EROOT_EXPIRED);
 
