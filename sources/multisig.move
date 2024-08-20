@@ -7,6 +7,7 @@ module mcms::multisig {
     use std::simple_map::{SimpleMap,Self};
     use std::secp256k1;
     use std::aptos_hash::keccak256;
+    use std::hash::sha3_256;
     use aptos_framework::multisig_account;
     use aptos_framework::account;
     use aptos_framework::chain_id;
@@ -77,7 +78,9 @@ module mcms::multisig {
         multisig: address,
         nonce: u64,
         to: address,
-        data: vector<u8>
+        module_name: vector<u8>,
+        function: vector<u8>,
+        encoded_args: vector<vector<u8>>,
     }
 
     struct Signer has store, copy, drop {
@@ -157,8 +160,7 @@ module mcms::multisig {
     #[event]
     struct OpExecuted has drop, store {
         nonce: u64,
-        to: address,
-        data: vector<u8>,
+        payload_hash: vector<u8>,
     }
 
 
@@ -338,7 +340,9 @@ module mcms::multisig {
         multisig: address,
         nonce: u64,
         to: address,
-        data: vector<u8>,
+        module_name: vector<u8>,
+        function: vector<u8>,
+        encoded_args: vector<vector<u8>>,
         proof: vector<vector<u8>>
     ) acquires MCMState {
         let state = borrow_global_mut<MCMState>(get_state_addr());
@@ -347,7 +351,9 @@ module mcms::multisig {
             multisig,
             nonce,
             to,
-            data
+            module_name,
+            function,
+            encoded_args,
         };
 
         // op validations
@@ -372,13 +378,50 @@ module mcms::multisig {
         // todo: investigate if `to` params are encoded in the `data` payload
         let multisig_addr = get_multisig_addr();
         let multisig_signer = multisig_signer();
-        multisig_account::create_transaction_with_hash(&multisig_signer, multisig_addr, data);
 
+        let data = vector[];
+        // entry function variant tag
+        serialize_uleb128(0, &mut data);
+
+        vector::append(&mut data, bcs::to_bytes(&op.to));
+        serialize_uleb128(vector::length(&op.module_name), &mut data);
+        vector::append(&mut data, op.module_name);
+        serialize_uleb128(vector::length(&op.function), &mut data);
+        vector::append(&mut data, op.function);
+
+        // empty type args array
+        serialize_uleb128(0, &mut data);
+
+        serialize_uleb128(vector::length(&op.encoded_args), &mut data);
+
+        vector::for_each(op.encoded_args, |encoded_arg| {
+          serialize_uleb128(vector::length(&encoded_arg), &mut data);
+          vector::append(&mut data, encoded_arg);
+        });
+
+        multisig_account::create_transaction(&multisig_signer, multisig_addr, data);
+
+        let payload_hash = sha3_256(data);
         event::emit(OpExecuted {
             nonce: op.nonce,
-            to: op.to,
-            data: op.data,
+            payload_hash: payload_hash,
         })
+    }
+
+    fun serialize_uleb128(value: u64, output: &mut vector<u8>) {
+      if (value == 0) {
+        vector::push_back(output, 0);
+        return
+      };
+
+      while (value != 0) {
+        let byte = ((value & 0x7f) as u8);
+        value = value >> 7;
+        if (value != 0) {
+          byte = byte | 0x80;
+        };
+        vector::push_back(output, byte);
+      };
     }
 
     public entry fun set_config(
@@ -612,15 +655,32 @@ module mcms::multisig {
         vector::append(&mut hash_preimage, multisig);
         vector::append(&mut hash_preimage, nonce);
         vector::append(&mut hash_preimage, to);
-        vector::append(&mut hash_preimage, op.data);
 
-        // right pad op.data to multiple of 32 bytes
-        // note that we can't use right_pad_vec which takes a u8 as length.
-        let pad_amount = 32 - (vector::length(&op.data) % 32);
+        vector::append(&mut hash_preimage, op.module_name);
+        let pad_amount = 32 - (vector::length(&op.module_name) % 32);
         while (pad_amount > 0) {
           vector::push_back(&mut hash_preimage, 0);
           pad_amount = pad_amount - 1;
         };
+
+        vector::append(&mut hash_preimage, op.function);
+        pad_amount = 32 - (vector::length(&op.function) % 32);
+        while (pad_amount > 0) {
+          vector::push_back(&mut hash_preimage, 0);
+          pad_amount = pad_amount - 1;
+        };
+
+        vector::append(&mut hash_preimage, left_pad_vec(uint_to_bytes(vector::length(&op.encoded_args)), 32));
+
+        vector::for_each(op.encoded_args, |encoded_arg| {
+          vector::append(&mut hash_preimage, left_pad_vec(uint_to_bytes(vector::length(&encoded_arg)), 32));
+          vector::append(&mut hash_preimage, encoded_arg);
+          let pad_amount = 32 - (vector::length(&encoded_arg) % 32);
+          while (pad_amount > 0) {
+            vector::push_back(&mut hash_preimage, 0);
+            pad_amount = pad_amount - 1;
+          };
+        });
 
         // since we are using this in a merkle tree/proof, hash_preimage should be greater than 64 bytes
         // to prevent collisions with internal nodes. the above operations already guarantee this so no need to check.
