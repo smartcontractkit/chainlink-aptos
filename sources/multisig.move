@@ -5,7 +5,6 @@ module mcms::multisig {
     use std::event;
     use std::bcs;
     use std::simple_map::{SimpleMap,Self};
-    use std::resource_account;
     use std::secp256k1;
     use std::aptos_hash::keccak256;
     use aptos_framework::multisig_account;
@@ -298,12 +297,12 @@ module mcms::multisig {
                     if (*group_vote_count != *quorum) {
                         // bail out unless we just hit the quorum. we only hit each quorum once,
                         // so we never move on to the parent of a group more than once.
-                        break;
+                        break
                     };
 
                     if (group == 0) {
                         // root group reached
-                        break;
+                        break
                     };
 
                     // group quorum reached, restart loop and check parent group
@@ -664,7 +663,7 @@ module mcms::multisig {
     fun right_pad_vec(input: vector<u8>, num_bytes: u8): vector<u8> {
         let len = vector::length(&input);
         if (len >= (num_bytes as u64)) {
-            return input;
+            return input
         };
         let bytes_to_pad = (num_bytes as u64) - len;
         let padded: vector<u8> = copy input;
@@ -681,7 +680,7 @@ module mcms::multisig {
     fun left_pad_vec(input: vector<u8>, num_bytes: u8): vector<u8> {
         let len = vector::length(&input);
         if (len >= (num_bytes as u64)) {
-            return input;
+            return input
         };
         let bytes_to_pad = (num_bytes as u64) - len;
         let padded: vector<u8> = vector[];
@@ -711,9 +710,9 @@ module mcms::multisig {
             let byte_a = vector::pop_back(&mut rev_a);
             let byte_b = vector::pop_back(&mut rev_b);
             if (byte_a > byte_b) {
-                return true;
+                return true
             } else if (byte_a < byte_b) {
-                return false;
+                return false
             };
         };
 
@@ -961,18 +960,18 @@ module mcms::multisig {
         call_set_root(set_root_args2);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EVALID_UNTIL_EXPIRED)]
-    public entry fun test_set_root__valid_until_expired(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__valid_until_expired(deployer: &signer, framework: &signer) acquires MCMState  {
         setup(deployer, framework);
         let set_root_args = default_set_root_args();
         set_root_args.valid_until = TIMESTAMP - 1; // set valid_until to a time in the past
         call_set_root(set_root_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EINVALID_ROOT_LEN)]
-    public entry fun test_set_root__invalid_root_len(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__invalid_root_len(deployer: &signer, framework: &signer) acquires MCMState  {
         setup(deployer, framework);
         let invalid_root = x"8ad6edb34398f637ca17e46b0b51ce50e18f56287aa0bf728ae3b5c4119c16";
         let set_root_args = default_set_root_args();
@@ -980,27 +979,27 @@ module mcms::multisig {
         call_set_root(set_root_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_CHAIN_ID)]
-    public entry fun test_set_root__invalid_chain_id(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__invalid_chain_id(deployer: &signer, framework: &signer) acquires MCMState  {
         setup(deployer, framework);
         let set_root_args = default_set_root_args();
         set_root_args.chain_id = 111; // wrong chain id
         call_set_root(set_root_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_MULTISIG)]
-    public entry fun test_set_root__invalid_multisig_addr(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__invalid_multisig_addr(deployer: &signer, framework: &signer) acquires MCMState  {
         setup(deployer, framework);
         let set_root_args = default_set_root_args();
         set_root_args.multisig = @0x12345; // wrong multisig address
         call_set_root(set_root_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPENDING_OPS)]
-    public entry fun test_set_root__pending_ops(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__pending_ops(deployer: &signer, framework: &signer) acquires MCMState  {
         setup(deployer, framework);
         // modify state to add pending ops
         let state = borrow_global_mut<MCMState>(get_state_addr());
@@ -1015,9 +1014,9 @@ module mcms::multisig {
         call_set_root(set_root_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
-    public entry fun test_set_root__override_previous_root(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__override_previous_root(deployer: &signer, framework: &signer) acquires MCMState  {
         setup(deployer, framework);
         // modify state to add pending ops
         let state = borrow_global_mut<MCMState>(get_state_addr());
@@ -1035,18 +1034,18 @@ module mcms::multisig {
         // and just expect this test to fail at proof validation, which happens after the pending ops check
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_PRE_OP_COUNT)]
-    public entry fun test_set_root__wrong_pre_op_count(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__wrong_pre_op_count(deployer: &signer, framework: &signer) acquires MCMState  {
         setup(deployer, framework);
         let set_root_args = default_set_root_args();
         set_root_args.pre_op_count = 1; // wrong pre op count, should equal op count (0)
         call_set_root(set_root_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_POST_OP_COUNT)]
-    public entry fun test_set_root__wrong_post_op_count(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__wrong_post_op_count(deployer: &signer, framework: &signer) acquires MCMState  {
         setup(deployer, framework);
         let state = borrow_global_mut<MCMState>(get_state_addr());
         state.s_expiring_root_and_op_count = ExpiringRootAndOpCount {
@@ -1062,27 +1061,27 @@ module mcms::multisig {
         call_set_root(set_root_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
-    public entry fun test_set_root__empty_metadata_proof(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__empty_metadata_proof(deployer: &signer, framework: &signer) acquires MCMState  {
         setup(deployer, framework);
         let set_root_args = default_set_root_args();
         set_root_args.metadata_proof = vector[]; // empty proof
         call_set_root(set_root_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
-    public entry fun test_set_root__metadata_not_consistent_with_proof(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__metadata_not_consistent_with_proof(deployer: &signer, framework: &signer) acquires MCMState  {
         setup(deployer, framework);
         let set_root_args = default_set_root_args();
         set_root_args.post_op_count = POST_OP_COUNT + 1; // post op count modified
         call_set_root(set_root_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EMISSING_CONFIG)]
-    public entry fun test_set_root__config_not_set(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__config_not_set(deployer: &signer, framework: &signer) acquires MCMState  {
         setup(deployer, framework);
         let set_root_args = default_set_root_args();
         set_root_args.signatures = vector[]; // no signatures
@@ -1126,7 +1125,7 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     public entry fun test_set_root__success(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
-        let mcms_addr = setup(deployer, framework);
+        setup(deployer, framework);
         set_config(owner, vector[ADDR1, ADDR2, ADDR3], SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
         let set_root_args = default_set_root_args();
 
@@ -1145,9 +1144,9 @@ module mcms::multisig {
 
     //// set_config tests ////
     
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EUNATHORIZED)]
-    public entry fun test_set_config__caller_is_not_owner(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_config__caller_is_not_owner(deployer: &signer, framework: &signer) acquires MCMState  {
         setup(deployer, framework);
         let (not_owner, _) = account::create_resource_account(deployer, b"seed123");
         set_config(&not_owner, vector[ADDR1, ADDR2, ADDR3], SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
@@ -1336,9 +1335,9 @@ module mcms::multisig {
 
     //// execute tests ////
     
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPOST_OP_COUNT_REACHED)]
-    public entry fun test_execute__root_not_set(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_execute__root_not_set(deployer: &signer, framework: &signer) acquires MCMState  {
         setup(deployer, framework);
         // since root not set, post op count is 0 which is not greater than current op count (also 0)
         let execute_args = default_execute_args();
@@ -1428,7 +1427,7 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
-    public entry fun test_execute__ops_executed_in_order(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_execute__ops_executed_in_order(deployer: &signer, framework: &signer) acquires MCMState  {
         setup(deployer, framework);
         // modify state to add pending ops
         let state = borrow_global_mut<MCMState>(get_state_addr());
@@ -1512,9 +1511,9 @@ module mcms::multisig {
         assert!(hash == x"ea6938e5cfa9b72197343db029e3146dec767d24f830eb750252076e439ccffa", 1);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
-    public entry fun test_utils__hash_op_leaf(deployer: &signer, owner: &signer, framework: &signer) {
-        let mcms_addr = setup(deployer, framework);
+    #[test(deployer = @mcms, framework = @aptos_framework)]
+    public entry fun test_utils__hash_op_leaf(deployer: &signer, framework: &signer) {
+        setup(deployer, framework);
         let op = Op {
             chain_id: (CHAIN_ID as u256),
             multisig: @mcms,
