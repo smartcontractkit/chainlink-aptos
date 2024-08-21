@@ -7,7 +7,6 @@ module mcms::multisig {
     use std::simple_map::{SimpleMap,Self};
     use std::secp256k1;
     use std::aptos_hash::keccak256;
-    use std::hash::sha3_256;
     use aptos_framework::multisig_account;
     use aptos_framework::account;
     use aptos_framework::chain_id;
@@ -77,10 +76,7 @@ module mcms::multisig {
         chain_id: u256,
         multisig: address,
         nonce: u64,
-        to: address,
-        module_name: vector<u8>,
-        function: vector<u8>,
-        encoded_args: vector<vector<u8>>,
+        data: vector<u8>
     }
 
     struct Signer has store, copy, drop {
@@ -160,7 +156,7 @@ module mcms::multisig {
     #[event]
     struct OpExecuted has drop, store {
         nonce: u64,
-        payload_hash: vector<u8>,
+        data: vector<u8>,
     }
 
 
@@ -339,10 +335,7 @@ module mcms::multisig {
         chain_id: u256,
         multisig: address,
         nonce: u64,
-        to: address,
-        module_name: vector<u8>,
-        function: vector<u8>,
-        encoded_args: vector<vector<u8>>,
+        data: vector<u8>,
         proof: vector<vector<u8>>
     ) acquires MCMState {
         let state = borrow_global_mut<MCMState>(get_state_addr());
@@ -350,10 +343,7 @@ module mcms::multisig {
             chain_id,
             multisig,
             nonce,
-            to,
-            module_name,
-            function,
-            encoded_args,
+            data
         };
 
         // op validations
@@ -378,50 +368,12 @@ module mcms::multisig {
         // todo: investigate if `to` params are encoded in the `data` payload
         let multisig_addr = get_multisig_addr();
         let multisig_signer = multisig_signer();
+        multisig_account::create_transaction_with_hash(&multisig_signer, multisig_addr, data);
 
-        let data = vector[];
-        // entry function variant tag
-        serialize_uleb128(0, &mut data);
-
-        vector::append(&mut data, bcs::to_bytes(&op.to));
-        serialize_uleb128(vector::length(&op.module_name), &mut data);
-        vector::append(&mut data, op.module_name);
-        serialize_uleb128(vector::length(&op.function), &mut data);
-        vector::append(&mut data, op.function);
-
-        // empty type args array
-        serialize_uleb128(0, &mut data);
-
-        serialize_uleb128(vector::length(&op.encoded_args), &mut data);
-
-        vector::for_each(op.encoded_args, |encoded_arg| {
-          serialize_uleb128(vector::length(&encoded_arg), &mut data);
-          vector::append(&mut data, encoded_arg);
-        });
-
-        multisig_account::create_transaction(&multisig_signer, multisig_addr, data);
-
-        let payload_hash = sha3_256(data);
         event::emit(OpExecuted {
             nonce: op.nonce,
-            payload_hash: payload_hash,
+            data: op.data,
         })
-    }
-
-    fun serialize_uleb128(value: u64, output: &mut vector<u8>) {
-      if (value == 0) {
-        vector::push_back(output, 0);
-        return
-      };
-
-      while (value != 0) {
-        let byte = ((value & 0x7f) as u8);
-        value = value >> 7;
-        if (value != 0) {
-          byte = byte | 0x80;
-        };
-        vector::push_back(output, byte);
-      };
     }
 
     public entry fun set_config(
@@ -647,40 +599,21 @@ module mcms::multisig {
         let chain_id = left_pad_vec(uint_to_bytes(op.chain_id), 32);
         let multisig = bcs::to_bytes(&op.multisig);
         let nonce = left_pad_vec(uint_to_bytes(op.nonce), 32);
-        let to = bcs::to_bytes(&op.to);
 
         let hash_preimage: vector<u8> = vector[];
         vector::append(&mut hash_preimage, MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP);
         vector::append(&mut hash_preimage, chain_id);
         vector::append(&mut hash_preimage, multisig);
         vector::append(&mut hash_preimage, nonce);
-        vector::append(&mut hash_preimage, to);
+        vector::append(&mut hash_preimage, op.data);
 
-        vector::append(&mut hash_preimage, op.module_name);
-        let pad_amount = 32 - (vector::length(&op.module_name) % 32);
+        // right pad op.data to multiple of 32 bytes
+        // note that we can't use right_pad_vec which takes a u8 as length.
+        let pad_amount = 32 - (vector::length(&op.data) % 32);
         while (pad_amount > 0) {
           vector::push_back(&mut hash_preimage, 0);
           pad_amount = pad_amount - 1;
         };
-
-        vector::append(&mut hash_preimage, op.function);
-        pad_amount = 32 - (vector::length(&op.function) % 32);
-        while (pad_amount > 0) {
-          vector::push_back(&mut hash_preimage, 0);
-          pad_amount = pad_amount - 1;
-        };
-
-        vector::append(&mut hash_preimage, left_pad_vec(uint_to_bytes(vector::length(&op.encoded_args)), 32));
-
-        vector::for_each(op.encoded_args, |encoded_arg| {
-          vector::append(&mut hash_preimage, left_pad_vec(uint_to_bytes(vector::length(&encoded_arg)), 32));
-          vector::append(&mut hash_preimage, encoded_arg);
-          let pad_amount = 32 - (vector::length(&encoded_arg) % 32);
-          while (pad_amount > 0) {
-            vector::push_back(&mut hash_preimage, 0);
-            pad_amount = pad_amount - 1;
-          };
-        });
 
         // since we are using this in a merkle tree/proof, hash_preimage should be greater than 64 bytes
         // to prevent collisions with internal nodes. the above operations already guarantee this so no need to check.
@@ -799,11 +732,11 @@ module mcms::multisig {
 
     // EVM addresses 1 - 3 in ascending order
     #[test_only]
-    const ADDR1: vector<u8> = x"0ed48fa84e07966860648e65ed6961addf38b352";
+    const ADDR1: vector<u8> = x"2069635ab34ee4d99f6ef34407537be69aa99bc3";
     #[test_only]
-    const ADDR2: vector<u8> = x"aa51a13b6237888bd23a2f74a0cbcd48518ca585";
+    const ADDR2: vector<u8> = x"adfd44bce6cf8e7fe34e5db1b8d2e8ff1dc14312";
     #[test_only]
-    const ADDR3: vector<u8> = x"ad8bfdb6166a84155b1844af6fadc5dcd1f4898c";
+    const ADDR3: vector<u8> = x"b95de8d1bea412311e64a25e1fdfd84f08c02cca";
 
     // test config: 2-of-3 multisig
     #[test_only]
@@ -815,7 +748,7 @@ module mcms::multisig {
 
     // test set root params
     #[test_only]
-    const ROOT: vector<u8> = x"05f55a7b4586d4a2c23f48c8ebdc66c15c09595fab958492fa03afe24e62247f";
+    const ROOT: vector<u8> = x"1a96ff82e6d0a7cea26e12f2c6d19ec784e11cb14f19da5e45061e9e254c1c52";
 
     #[test_only]
     const VALID_UNTIL: u64 = 1724809164;
@@ -827,35 +760,36 @@ module mcms::multisig {
 
     #[test_only]
     const METADATA_PROOF: vector<vector<u8>> = vector[
-      x"965719c15949832ab945911095406be8f051a42ec510821843d9abeb63dd004e",
-      x"8650d08a5c5fd003f52c79871136cc9c74079c1711edfe2bdff40b65d9cc6457"
+      x"876ca709f922f97afc2e7722782923bfe9da9c15c236870494e4a21ee385b94b",
+      x"3482dfbe0856d5c5399fe5afae0ba8cf127f4a54b8da6571f061fc933436ec38"
     ];
 
     // cannot generate secp256k1 signatures in Move for testing so need to hard code
     #[test_only]
     const SIGNATURES: vector<vector<u8>> = vector[
-        x"3a8d2cd101d9afeaa3c7e4426a1e431474761505d0b3e987110b5c8f3d7ee6ef76314a9a445a630179f68fa1251e73201e83fc69387d39f74d9cbe9ddc8280641c",
-        x"638e8e12f40c1308cf44024d5cd5bbbf643480bca3b7af5b9285ee66579412aa7cf1f99214aeea46b0138072e5b6f23c40ea13825d5c5dae3390ac0d11e3a6e41b",
-        x"01b3b77fa95dc92d60cea77477dd02fab9fbbc0df729338c570307584f7545a508e8fc55cf24443307a80f32c459a006dce98dad25f4a482a9529d9bae96fe0f1b",
+        x"4cea287be319937950431b32e6b36d358ff62dcc47ee735f1481a7275f8d3d8a7ad5827005270d83f2ba7e45a14c599353213d1c6f2c298365a5d9ba20e00b971b",
+        x"de12f77acccc12615541a8b69b26a6351cd2e225e8177c447bcc6734dd7b736b679f46d6e51d3f3db930f6ff98fb6430d8c50e6deedb28bc7895ba89528fc75c1b",
+        x"8e01e215ec8d7f391884ebf7a4aec05d8c1e40abd3183b6d39202f391f53e0370263c47793c348b0e86c0646d47b256f563fff91029af3eb3fa07c857f0d04901c",
     ];
 
+    #[test_only]
     // test execute params
     const LEAVES: vector<vector<u8>> = vector[
         x"75a7dc4ac036b3e4478b62d3a4fb446b298c9d429c94c10cc8758a052b055bdc", // index 0
-        x"965719c15949832ab945911095406be8f051a42ec510821843d9abeb63dd004e", // index 1
-        x"b49b0d0ff99c8990b8fc69f1608d3680c40b040e8e40b9e0444650682b059776", // index 2
-        x"f9094ef4883f5376be409c2332f45865c940f4c406e330e78a3191d72700a825"  // index 3
+        x"876ca709f922f97afc2e7722782923bfe9da9c15c236870494e4a21ee385b94b", // index 1
+        x"171ec02e28e71b310c020ed2d1d3eb6927c6ade0b52b37f8599390edddc8e6c6", // index 2
+        x"10dfeb49c9a869d351db29caca5f2d31b072d0b3fec3c98f82a70626b1d71875"  // index 3
     ];
-    const OP1_PROOF: vector<vector<u8>> = vector[
-        x"b49b0d0ff99c8990b8fc69f1608d3680c40b040e8e40b9e0444650682b059776",
-        x"a45d7ea81651580bb3d970eb651d622282331d278b39656bb7da346eb3c9dde7"
-    ];
-    const OP1_NONCE: u64 = 0;
-    const OP1_TO: address = @0x9999;
 
-    const OP1_MODULE_NAME: vector<u8> = b"sample_module";
-    const OP1_FUNCTION: vector<u8> = b"sample_function";
-    const OP1_ENCODED_ARGS: vector<vector<u8>> = vector[b"sample data"];
+    #[test_only]
+    const OP1_PROOF: vector<vector<u8>> = vector[
+        x"75a7dc4ac036b3e4478b62d3a4fb446b298c9d429c94c10cc8758a052b055bdc",
+        x"3482dfbe0856d5c5399fe5afae0ba8cf127f4a54b8da6571f061fc933436ec38"
+    ];
+    #[test_only]
+    const OP1_NONCE: u64 = 0;
+    #[test_only]
+    const OP1_DATA: vector<u8> = b"This is exactly 32 bytes long...";
 
 
     #[test_only]
@@ -885,10 +819,7 @@ module mcms::multisig {
         chain_id: u256,
         multisig: address,
         nonce: u64,
-        to: address,
-        module_name: vector<u8>,
-        function: vector<u8>,
-        encoded_args: vector<vector<u8>>,
+        data: vector<u8>,
         proof: vector<vector<u8>>
     }
 
@@ -898,17 +829,14 @@ module mcms::multisig {
             chain_id: (CHAIN_ID as u256),
             multisig: @mcms,
             nonce: OP1_NONCE,
-            to: OP1_TO,
-            module_name: OP1_MODULE_NAME,
-            function: OP1_FUNCTION,
-            encoded_args: OP1_ENCODED_ARGS,
+            data: OP1_DATA,
             proof: OP1_PROOF
         }
     }
 
     #[test_only]
     fun call_execute(args: ExecuteArgs) acquires MCMState {
-        execute(args.chain_id, args.multisig, args.nonce, args.to, args.module_name, args.function, args.encoded_args, args.proof);
+        execute(args.chain_id, args.multisig, args.nonce, args.data, args.proof);
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
@@ -1470,7 +1398,7 @@ module mcms::multisig {
         set_config(owner, vector[ADDR1, ADDR2, ADDR3], SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
         call_set_root(default_set_root_args());
         let execute_args = default_execute_args();
-        execute_args.module_name = b"different_module"; // modify op so proof verification should fail
+        execute_args.data = b"different data"; // modify op so proof verification should fail
         call_execute(execute_args);
     }
 
@@ -1578,14 +1506,11 @@ module mcms::multisig {
             chain_id: (CHAIN_ID as u256),
             multisig: @mcms,
             nonce: OP1_NONCE,
-            to: OP1_TO,
-            module_name: OP1_MODULE_NAME,
-            function: OP1_FUNCTION,
-            encoded_args: OP1_ENCODED_ARGS,
+            data: OP1_DATA,
         };
         let hash = hash_op_leaf(op);
         // test output computed from equivalent solidity function: keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP, op))
-        let expected_hash = vector::borrow(&LEAVES, 3);
+        let expected_hash = vector::borrow(&LEAVES, 1);
         assert!(hash == *expected_hash, 0);
     }
 
