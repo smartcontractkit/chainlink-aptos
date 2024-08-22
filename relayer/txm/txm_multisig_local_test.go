@@ -10,16 +10,10 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"sort"
-	"strings"
 	"testing"
 	"time"
 
@@ -125,7 +119,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	counterDeployerAddress := counterDeployer.accountAddress.String()
 	counterDeployerPublicKeyHex := hex.EncodeToString([]byte(counterDeployer.publicKey))
 
-	multisigPackageMetadataBytes, multisigModuleBytecodeBytes := compileMultisigContract(t, deployerAddress, deployerAddress)
+	multisigPackageMetadataBytes, multisigModuleBytecodeBytes := compileMultisigContract(t, deployer.accountAddress, deployer.accountAddress)
 	counterPackageMetadataBytes, counterModuleBytecodeBytes := testutils.GetCounterContract(t, counterDeployerAddress)
 
 	client, err := aptos.NewNodeClient(rpcURL, 0)
@@ -479,77 +473,16 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	// TODO: check mcms state post-execution
 }
 
-func compileMultisigContract(t *testing.T, deployerAddress string, ownerAddress string) ([]byte, []byte) {
-	outputDir, err := ioutil.TempDir("", "aptos_mcms")
-	if err != nil {
-		t.Fatalf("Failed to create temporary directory: %v", err)
-	}
-	defer os.RemoveAll(outputDir)
+func compileMultisigContract(t *testing.T, deployerAddress, ownerAddress aptos.AccountAddress) ([]byte, []byte) {
+	compileResult := testutils.CompileMovePackage(t, "mcms", map[string]aptos.AccountAddress{
+		"mcms":  deployerAddress,
+		"owner": ownerAddress,
+	})
 
-	gitRoot, err := testutils.FindGitRoot()
-	if err != nil {
-		t.Fatalf("Failed to find git root: %v", err)
-	}
+	bytecode, ok := compileResult.BytecodeModules["multisig.mv"]
+	require.True(t, ok)
 
-	packageDir := filepath.Join(gitRoot, "aptos", "contracts", "mcms")
-
-	if _, err := os.Stat(packageDir); err != nil {
-		t.Fatalf("Could not find mcms contract directory: %v", err)
-	}
-
-	args := []string{
-		"aptos",
-		"move", "compile",
-		"--package-dir", packageDir,
-		"--named-addresses", fmt.Sprintf("mcms=%s,owner=%s", deployerAddress, ownerAddress),
-		"--included-artifacts=all",
-		"--save-metadata",
-		"--output-dir", outputDir,
-	}
-
-	cmd := exec.Command(args[0], args[1:]...)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err = cmd.Run()
-	if err != nil {
-		t.Fatalf("Failed to compile contract: %v\nStderr: %s", err, stderr.String())
-	}
-
-	if stderr.Len() > 0 {
-		t.Logf("Stderr output: %s", stderr.String())
-	}
-
-	var result struct {
-		Result []string `json:"Result"`
-	}
-	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
-		t.Fatalf("Failed to parse compile output: %v", err)
-	}
-
-	if len(result.Result) != 1 || !strings.HasSuffix(result.Result[0], "::multisig") {
-		t.Fatalf("Unexpected compile result: %v", result)
-	}
-
-	// Read bytecode
-	bytecodeFile := filepath.Join(outputDir, "build", "ChainlinkManyChainMultisig", "bytecode_modules", "multisig.mv")
-	bytecode, err := ioutil.ReadFile(bytecodeFile)
-	if err != nil {
-		t.Fatalf("Failed to read bytecode file: %v", err)
-	}
-
-	// Read package metadata
-	// This is a bug, the package metadata file is still saved in the default output directory
-	// ref: https://github.com/aptos-labs/aptos-core/issues/14285
-	metadataFile := filepath.Join(packageDir, "build", "ChainlinkManyChainMultisig", "package-metadata.bcs")
-	metadata, err := ioutil.ReadFile(metadataFile)
-	if err != nil {
-		t.Fatalf("Failed to read package metadata file: %v", err)
-	}
-
-	return metadata, bytecode
+	return compileResult.PackageMetadata, bytecode
 }
 
 type RootMetadata struct {
