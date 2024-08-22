@@ -59,7 +59,7 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 	keystore := testutils.NewTestKeystore(t)
 	keystore.AddKey(privateKey)
 
-	client, err := aptos.NewNodeClient(rpcURL, 0) // TODO: chainId
+	client, err := aptos.NewNodeClient(rpcURL, 0)
 	require.NoError(t, err)
 	getClient := func() (*aptos.NodeClient, error) { return client, nil }
 
@@ -142,15 +142,15 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 
 	chainWriter := NewChainWriter(logger, txmgr, config)
 
-	packageMetadataBytes, moduleBytecodeBytes := testutils.GetCounterContract(t, accountAddress.String())
+	compilationResult := testutils.CompileTestModule(t, accountAddress)
 
 	publishId := uuid.New().String()
 	publishPackageArgs := struct {
 		PackageMetadata []byte
 		ModuleBytecode  [][]byte
 	}{
-		PackageMetadata: packageMetadataBytes,
-		ModuleBytecode:  [][]byte{moduleBytecodeBytes},
+		PackageMetadata: compilationResult.PackageMetadata,
+		ModuleBytecode:  compilationResult.BytecodeModules,
 	}
 	err = chainWriter.SubmitTransaction(
 		context.Background(),

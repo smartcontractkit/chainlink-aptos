@@ -120,7 +120,8 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	counterDeployerPublicKeyHex := hex.EncodeToString([]byte(counterDeployer.publicKey))
 
 	multisigPackageMetadataBytes, multisigModuleBytecodeBytes := compileMultisigContract(t, deployer.accountAddress, deployer.accountAddress)
-	counterPackageMetadataBytes, counterModuleBytecodeBytes := testutils.GetCounterContract(t, counterDeployerAddress)
+
+	compilationResult := testutils.CompileTestModule(t, counterDeployer.accountAddress)
 
 	client, err := aptos.NewNodeClient(rpcURL, 0)
 	require.NoError(t, err)
@@ -156,7 +157,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		"0x1::code::publish_package_txn",
 		/* typeArgs= */ []string{},
 		/* paramTypes= */ []string{"vector<u8>", "vector<vector<u8>>"},
-		/* paramValues= */ []any{counterPackageMetadataBytes, [][]byte{counterModuleBytecodeBytes}},
+		/* paramValues= */ []any{compilationResult.PackageMetadata, compilationResult.BytecodeModules},
 		/* simulateTx= */ true,
 	)
 	require.NoError(t, err)
@@ -479,10 +480,8 @@ func compileMultisigContract(t *testing.T, deployerAddress, ownerAddress aptos.A
 		"owner": ownerAddress,
 	})
 
-	bytecode, ok := compileResult.BytecodeModules["multisig.mv"]
-	require.True(t, ok)
-
-	return compileResult.PackageMetadata, bytecode
+	require.Equal(t, 1, len(compileResult.BytecodeModules))
+	return compileResult.PackageMetadata, compileResult.BytecodeModules[0]
 }
 
 type RootMetadata struct {

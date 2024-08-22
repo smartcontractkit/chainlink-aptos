@@ -70,7 +70,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 	require.NoError(t, err)
 
 	publicKeyHex := hex.EncodeToString([]byte(publicKey))
-	deployTestContract(t, txm, accountAddress.String(), publicKeyHex)
+	deployTestModule(t, txm, accountAddress, publicKeyHex)
 
 	for {
 		queueLen, unconfirmedLen := txm.InflightCount()
@@ -129,17 +129,17 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 	require.Equal(t, expectedValue, counterValue)
 }
 
-func deployTestContract(t *testing.T, txm *AptosTxm, fromAddress, publicKeyHex string) {
-	packageMetadataBytes, moduleBytecodeBytes := testutils.GetCounterContract(t, fromAddress)
+func deployTestModule(t *testing.T, txm *AptosTxm, fromAddress aptos.AccountAddress, publicKeyHex string) {
+	compilationResult := testutils.CompileTestModule(t, fromAddress)
 
 	err := txm.Enqueue(
 		uuid.New().String(),
-		fromAddress,
+		fromAddress.String(),
 		publicKeyHex,
 		"0x1::code::publish_package_txn",
 		/* typeArgs= */ []string{},
 		/* paramTypes= */ []string{"vector<u8>", "vector<vector<u8>>"},
-		/* paramValues= */ []any{packageMetadataBytes, [][]byte{moduleBytecodeBytes}},
+		/* paramValues= */ []any{compilationResult.PackageMetadata, compilationResult.BytecodeModules},
 		/* simulateTx= */ true,
 	)
 	require.NoError(t, err)
@@ -148,9 +148,9 @@ func deployTestContract(t *testing.T, txm *AptosTxm, fromAddress, publicKeyHex s
 
 	err = txm.Enqueue(
 		uuid.New().String(),
-		fromAddress,
+		fromAddress.String(),
 		publicKeyHex,
-		fromAddress+"::counter::initialize",
+		fromAddress.String()+"::counter::initialize",
 		[]string{},
 		[]string{},
 		[]any{},
