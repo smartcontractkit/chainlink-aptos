@@ -171,11 +171,6 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 		return fmt.Errorf("failed to parse contract address: %+w", err)
 	}
 
-	checker := TransmitCheckerSpec{}
-	if simulateTx {
-		checker.CheckerType = TransmitCheckerTypeSimulate
-	}
-
 	tx := &AptosTx{
 		ID: transactionID,
 		// TODO: clean up old transactions in the map by timestamp.
@@ -188,7 +183,7 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 		TypeTags:        typeTags,
 		BcsValues:       bcsValues,
 		Status:          commontypes.Unconfirmed,
-		Checker:         checker,
+		Simulate:        simulateTx,
 	}
 
 	a.transactionsLock.Lock()
@@ -330,7 +325,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	}
 
 	// (if enabled for tx) simulate tx to estimate gas
-	if tx.Checker.CheckerType == TransmitCheckerTypeSimulate {
+	if tx.Simulate {
 		estimatedGas, err := a.estimateGas(client, rawTx, fromAddress, publicKey)
 		if err != nil {
 			// do not error on failed estimate gas as it could fail due to conflicting in-flight txs
@@ -435,7 +430,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 				continue
 			}
 
-			if chainTx.Type == aptosapi.TransactionVariantPendingTransaction {
+			if chainTx.Type == aptosapi.TransactionVariantPending {
 				// TODO: check expiry?
 				continue
 			}
@@ -478,6 +473,16 @@ func (key *mockSimulationSigner) PubKey() aptoscrypto.PublicKey {
 	return &key.pubKey
 }
 
+func (key *mockSimulationSigner) SimulationAuthenticator() *aptoscrypto.AccountAuthenticator {
+	return &aptoscrypto.AccountAuthenticator{
+		Variant: aptoscrypto.AccountAuthenticatorEd25519,
+		Auth: &aptoscrypto.Ed25519Authenticator{
+			PubKey: &key.pubKey,
+			Sig:    &aptoscrypto.Ed25519Signature{},
+		},
+	}
+}
+
 func (a *AptosTxm) estimateGas(client *aptos.NodeClient, rawTx aptos.RawTransaction, fromAddress *aptos.AccountAddress, publicKey aptoscrypto.Ed25519PublicKey) (uint64, error) {
 	// build mock signer for simulation
 	signerForSimulation := &aptos.Account{Signer: &mockSimulationSigner{pubKey: publicKey}}
@@ -509,6 +514,7 @@ func (a *AptosTxm) estimateGas(client *aptos.NodeClient, rawTx aptos.RawTransact
 			return 0, fmt.Errorf("simulated transaction not successful: %v", simulateTxResp[0].VmStatus)
 		}
 		gasUsed = simulateTxResp[0].GasUsed
+		a.logger.Debugw("simulated transaction", "gasUsed", gasUsed)
 		break
 	}
 
