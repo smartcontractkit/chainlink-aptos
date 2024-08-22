@@ -85,6 +85,7 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 		/* typeArgs= */ []string{},
 		/* paramTypes= */ []string{"vector<u8>", "vector<vector<u8>>"},
 		/* paramValues= */ []any{packageMetadataBytes, [][]byte{moduleBytecodeBytes}},
+		/* simulateTx= */ true,
 	)
 	require.NoError(t, err)
 
