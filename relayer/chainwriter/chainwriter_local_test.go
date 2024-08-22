@@ -142,7 +142,7 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 
 	chainWriter := NewChainWriter(logger, txmgr, config)
 
-	packageMetadataBytes, moduleBytecodeBytes := testutils.GetTestContract(t, accountAddress.String())
+	packageMetadataBytes, moduleBytecodeBytes := testutils.GetCounterContract(t, accountAddress.String())
 
 	publishId := uuid.New().String()
 	publishPackageArgs := struct {

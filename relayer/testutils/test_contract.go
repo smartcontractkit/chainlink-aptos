@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func GetTestContract(t *testing.T, moduleAddress string) ([]byte, []byte) {
+func GetCounterContract(t *testing.T, moduleAddress string) ([]byte, []byte) {
 	// returns the metadata and module bytecode for a counter test contract:
 	//
 	// module example::counter {

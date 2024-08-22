@@ -126,7 +126,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	counterDeployerPublicKeyHex := hex.EncodeToString([]byte(counterDeployer.publicKey))
 
 	multisigPackageMetadataBytes, multisigModuleBytecodeBytes := compileMultisigContract(t, deployerAddress, deployerAddress)
-	counterPackageMetadataBytes, counterModuleBytecodeBytes := testutils.GetTestContract(t, counterDeployerAddress)
+	counterPackageMetadataBytes, counterModuleBytecodeBytes := testutils.GetCounterContract(t, counterDeployerAddress)
 
 	client, err := aptos.NewNodeClient(rpcURL, 0)
 	require.NoError(t, err)

@@ -130,7 +130,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 }
 
 func deployTestContract(t *testing.T, txm *AptosTxm, fromAddress, publicKeyHex string) {
-	packageMetadataBytes, moduleBytecodeBytes := testutils.GetTestContract(t, fromAddress)
+	packageMetadataBytes, moduleBytecodeBytes := testutils.GetCounterContract(t, fromAddress)
 
 	err := txm.Enqueue(
 		uuid.New().String(),
