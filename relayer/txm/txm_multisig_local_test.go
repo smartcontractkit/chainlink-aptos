@@ -150,6 +150,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		/* typeArgs= */ []string{},
 		/* paramTypes= */ []string{"vector<u8>", "vector<vector<u8>>"},
 		/* paramValues= */ []any{multisigPackageMetadataBytes, [][]byte{multisigModuleBytecodeBytes}},
+		/* simulateTx= */ true,
 	)
 	require.NoError(t, err)
 
@@ -162,6 +163,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		/* typeArgs= */ []string{},
 		/* paramTypes= */ []string{"vector<u8>", "vector<vector<u8>>"},
 		/* paramValues= */ []any{counterPackageMetadataBytes, [][]byte{counterModuleBytecodeBytes}},
+		/* simulateTx= */ true,
 	)
 	require.NoError(t, err)
 
@@ -172,7 +174,9 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		counterDeployerAddress+"::counter::initialize",
 		[]string{},
 		[]string{},
-		[]any{})
+		[]any{},
+		/* simulateTx= */ true,
+	)
 	require.NoError(t, err)
 
 	// resource account address derived in init_module, creates the multisig account and is one of the signers
@@ -247,7 +251,9 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 				groupQuorums,
 				groupParents,
 				false,
-			})
+			},
+			/* simulateTx= */ true,
+		)
 		require.NoError(t, err)
 
 		// TODO: check for success
@@ -371,7 +377,9 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 				rootMetadata.OverridePreviousRoot,
 				metadataProof,
 				signatures,
-			})
+			},
+			/* simulateTx= */ true,
+		)
 		require.NoError(t, err)
 
 		// TODO: check for success
@@ -416,6 +424,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 				op.Data,
 				proof[:],
 			},
+			/* simulateTx= */ true,
 		)
 		require.NoError(t, err)
 
@@ -810,7 +819,7 @@ func waitForTx(t *testing.T, client *aptos.NodeClient, txHash string, duration t
 	for time.Now().Before(stopTime) {
 		time.Sleep(time.Second * 1)
 		txInfo, err := client.TransactionByHash(txHash)
-		if err == nil && txInfo.Type != aptosapi.TransactionVariantPendingTransaction {
+		if err == nil && txInfo.Type != aptosapi.TransactionVariantPending {
 			return
 		}
 	}
