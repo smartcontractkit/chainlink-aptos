@@ -117,7 +117,7 @@ func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, 
 		/* typeArgs= */ []string{},
 		paramTypes,
 		paramValues,
-		/* simulateTx= */ true, // TODO: how to make this configurable if chainwriter has a fixed interface?
+		/* simulateTx= */ true,
 	)
 
 	if err != nil {

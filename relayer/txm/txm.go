@@ -268,13 +268,6 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		txStore = newTxStore
 	}
 
-	gasInfo, err := client.EstimateGasPrice()
-	if err != nil {
-		a.logger.Errorw("failed to retrieve estimated gas price", "error", err)
-		tx.Status = commontypes.Fatal
-		return
-	}
-
 	nodeInfo, err := client.Info()
 	if err != nil {
 		a.logger.Errorw("failed to fetch ledger info", "error", err)
@@ -308,9 +301,9 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		Sender:         tx.FromAddress,
 		SequenceNumber: nonce,
 		Payload:        payload,
-		MaxGasAmount:   DEFAULT_MAX_GAS_AMOUNT,
-		// TODO: on retry, consider using PrioritizedGasEstimate
-		GasUnitPrice: gasInfo.GasEstimate,
+		// Gas fields populated below.
+		MaxGasAmount: 0,
+		GasUnitPrice: 0,
 		// TODO: handle expiry
 		ExpirationTimestampSeconds: ledgerTimestamp + uint64(600),
 		ChainId:                    chainId,
@@ -326,13 +319,34 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 
 	// (if enabled for tx) simulate tx to estimate gas
 	if tx.Simulate {
-		estimatedGas, err := a.estimateGas(client, rawTx, fromAddress, publicKey)
-		if err != nil {
-			// do not error on failed estimate gas as it could fail due to conflicting in-flight txs
-			a.logger.Infow("failed to estimate gas, using default max gas amount", "maxGasAmount", DEFAULT_MAX_GAS_AMOUNT, "error", err)
+		simulatedTx, err := a.simulateTransaction(client, rawTx, tx.FromAddress, publicKey)
+		if err == nil {
+			// todo: configurable multiplier?
+			// fixed multiplier of 1.25 to account for potential discrepancies in gas estimation
+			rawTx.MaxGasAmount = uint64(float64(simulatedTx.GasUsed) * 1.25)
+			rawTx.GasUnitPrice = simulatedTx.GasUnitPrice
 		} else {
-			rawTx.MaxGasAmount = estimatedGas
+			// do not error on failed estimate gas as it could fail due to conflicting in-flight txs
+			a.logger.Errorw("failed to simulate transaction", "error", err)
 		}
+	}
+
+	if rawTx.GasUnitPrice == 0 {
+		// If simulate was disabled or failed, populate the gas unit price.
+		gasInfo, err := client.EstimateGasPrice()
+		if err != nil {
+			a.logger.Errorw("failed to retrieve estimated gas price", "error", err)
+			tx.Status = commontypes.Fatal
+			return
+		}
+		a.logger.Debugw("estimated gas price", "gasEstimate", gasInfo.GasEstimate, "prioritizedGasEstimate", gasInfo.PrioritizedGasEstimate)
+		// TODO: on retry, consider using PrioritizedGasEstimate
+		rawTx.GasUnitPrice = gasInfo.GasEstimate
+	}
+
+	if rawTx.MaxGasAmount == 0 {
+		rawTx.MaxGasAmount = DEFAULT_MAX_GAS_AMOUNT
+		a.logger.Debugw("using default max gas amount", "maxGasAmount", DEFAULT_MAX_GAS_AMOUNT)
 	}
 
 	signingMessage, err := rawTx.SigningMessage()
@@ -483,44 +497,49 @@ func (key *mockSimulationSigner) SimulationAuthenticator() *aptoscrypto.AccountA
 	}
 }
 
-func (a *AptosTxm) estimateGas(client *aptos.NodeClient, rawTx aptos.RawTransaction, fromAddress *aptos.AccountAddress, publicKey aptoscrypto.Ed25519PublicKey) (uint64, error) {
+func (a *AptosTxm) simulateTransaction(client *aptos.NodeClient, rawTx aptos.RawTransaction, fromAddress aptos.AccountAddress, publicKey aptoscrypto.Ed25519PublicKey) (*aptosapi.UserTransaction, error) {
 	// build mock signer for simulation
 	signerForSimulation := &aptos.Account{Signer: &mockSimulationSigner{pubKey: publicKey}}
 
-	var gasUsed uint64
 	attempt := 1
+	var lastError error
 	for attempt <= MAX_SIMULATE_ATTEMPTS {
 		// need to fetch latest sequence number on-chain since we could have other in-flight txs which results in an error SEQUENCE_NUMBER_TOO_NEW
-		sequenceNumber, err := a.getSequenceNumber(client, *fromAddress)
+		sequenceNumber, err := a.getSequenceNumber(client, fromAddress)
 		if err != nil {
 			a.logger.Errorw("failed to get sequence number", "error", err)
-			return 0, err
+			return nil, err
 		}
 		rawTx.SequenceNumber = sequenceNumber
 
 		a.logger.Debugw("simulating transaction", "attempt", attempt, "sequenceNumber", sequenceNumber)
-		simulateTxResp, err := client.SimulateTransaction(&rawTx, any(signerForSimulation).(aptos.TransactionSigner), aptos.EstimateMaxGasAmount(true))
+		// TODO: consider using EstimatePrioritizedGasUnitPrice(true)
+		txs, err := client.SimulateTransaction(&rawTx, any(signerForSimulation).(aptos.TransactionSigner), aptos.EstimateMaxGasAmount(true), aptos.EstimateGasUnitPrice(true))
 		if err != nil {
 			a.logger.Debugw("failed to simulate transaction", "error", err)
-			return 0, err
+			return nil, err
 		}
-		if !*(simulateTxResp[0].TxnSuccess()) {
-			if (simulateTxResp)[0].VmStatus == "SEQUENCE_NUMBER_TOO_OLD" {
+		if len(txs) < 1 {
+			return nil, errors.New("no simulated transactions returned")
+		}
+		simulateResponse := txs[0]
+		if !*(simulateResponse.TxnSuccess()) {
+			if simulateResponse.VmStatus == "SEQUENCE_NUMBER_TOO_OLD" || simulateResponse.VmStatus == "SEQUENCE_NUMBER_TOO_NEW" {
 				// race condition with tx confirmation incrementing the sequence number, retry
+				lastError = fmt.Errorf("simulate bad status: %v", simulateResponse.VmStatus)
 				attempt = attempt + 1
 				continue
 			}
-			a.logger.Debugw("simulated transaction not successful", "vmStatus", simulateTxResp[0].VmStatus)
-			return 0, fmt.Errorf("simulated transaction not successful: %v", simulateTxResp[0].VmStatus)
+			a.logger.Debugw("simulated transaction unexpected status", "vmStatus", simulateResponse.VmStatus)
+			return nil, fmt.Errorf("simulated transaction unexpected status: %v", simulateResponse.VmStatus)
 		}
-		gasUsed = simulateTxResp[0].GasUsed
-		a.logger.Debugw("simulated transaction", "gasUsed", gasUsed)
-		break
+
+		a.logger.Debugw("simulate transaction successful", "vmStatus", simulateResponse.VmStatus, "gasUsed", simulateResponse.GasUsed, "gasUnitPrice", simulateResponse.GasUnitPrice)
+		return simulateResponse, nil
 	}
 
-	// todo: configurable multiplier?
-	// fixed multiplier of 1.25 to account for potential discrepancies in gas estimation
-	return uint64(float64(gasUsed) * 1.25), nil
+	return nil, fmt.Errorf("simulation attempts failed, last error: %w", lastError)
+
 }
 
 func hexToEd25519PublicKey(hexKey string) (ed25519.PublicKey, error) {
