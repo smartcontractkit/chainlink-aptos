@@ -7,6 +7,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
+	"math/big"
 	"testing"
 	"time"
 
@@ -152,6 +153,14 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 							},
 						},
 					},
+					"echo_u256": {
+						Params: []ChainReaderFunctionParam{
+							{
+								Name: "Value1",
+								Type: "u256",
+							},
+						},
+					},
 				},
 			},
 		},
@@ -206,4 +215,13 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 	}{Value1: expectedSliceSlice}, &retSliceSlice)
 	require.NoError(t, err)
 	require.Equal(t, expectedSliceSlice, retSliceSlice)
+
+	expectedU256, ok := new(big.Int).SetString("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffee", 16)
+	require.True(t, ok)
+	var retU256 *big.Int
+	err = chainReader.GetLatestValue(context.Background(), "testContract", "echo_u256", confidenceLevel, struct {
+		Value1 *big.Int
+	}{Value1: expectedU256}, &retU256)
+	require.NoError(t, err)
+	require.Equal(t, expectedU256, retU256)
 }
