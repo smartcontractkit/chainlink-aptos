@@ -5,7 +5,7 @@ go 1.22
 toolchain go1.22.0
 
 require (
-	github.com/aptos-labs/aptos-go-sdk v0.3.0
+	github.com/aptos-labs/aptos-go-sdk v0.7.0
 	github.com/ethereum/go-ethereum v1.14.5
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-plugin v1.6.0
@@ -18,6 +18,7 @@ require (
 )
 
 require (
+	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.3 // indirect
@@ -40,6 +41,7 @@ require (
 	github.com/hashicorp/go-hclog v1.5.0 // indirect
 	github.com/hashicorp/yamux v0.1.1 // indirect
 	github.com/hasura/go-graphql-client v0.12.1 // indirect
+	github.com/hdevalence/ed25519consensus v0.2.0 // indirect
 	github.com/holiman/uint256 v1.2.4 // indirect
 	github.com/invopop/jsonschema v0.12.0 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
