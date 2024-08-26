@@ -109,8 +109,9 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 		require.NoError(t, err)
 		expectedValue += 1
 
+		incrementMultId := uuid.New().String()
 		err = txm.Enqueue(
-			uuid.New().String(),
+			incrementMultId,
 			accountAddress.String(),
 			publicKeyHex,
 			accountAddress.String()+"::counter::increment_mult",
@@ -121,15 +122,8 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 		)
 		require.NoError(t, err)
 		expectedValue += 3 * 4
-	}
 
-	for {
-		queueLen, unconfirmedLen := txm.InflightCount()
-		logger.Debugw("Inflight count", "queued", queueLen, "unconfirmed", unconfirmedLen)
-		if queueLen == 0 && unconfirmedLen == 0 {
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
+		waitForTxmId(t, txm, incrementMultId, time.Second*15)
 	}
 
 	counterValue := testutils.ReadCounterValue(t, client, accountAddress)
@@ -153,10 +147,9 @@ func deployTestModule(t *testing.T, txm *AptosTxm, fromAddress aptos.AccountAddr
 	)
 	require.NoError(t, err)
 
-	// TODO: check account module to make sure it was published.
-
+	initializeId := uuid.New().String()
 	err = txm.Enqueue(
-		uuid.New().String(),
+		initializeId,
 		fromAddress.String(),
 		publicKeyHex,
 		fromAddress.String()+"::counter::initialize",
@@ -167,7 +160,10 @@ func deployTestModule(t *testing.T, txm *AptosTxm, fromAddress aptos.AccountAddr
 	)
 	require.NoError(t, err)
 
-	// TODO: check account resource to make sure it was initialized.
+	// Wait for transactions to be confirmed
+	waitForTxmId(t, txm, initializeId, time.Second*15)
+}
+
 func waitForTxmId(t *testing.T, txm *AptosTxm, txId string, duration time.Duration) {
 	stopTime := time.Now().Add(duration)
 	for time.Now().Before(stopTime) {
