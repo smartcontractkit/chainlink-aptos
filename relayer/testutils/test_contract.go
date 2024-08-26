@@ -14,6 +14,11 @@ func CompileTestModule(t *testing.T, moduleAddress aptos.AccountAddress) Compila
 	})
 }
 
+func HasCounterResource(client *aptos.NodeClient, counterAddress aptos.AccountAddress) bool {
+	_, err := client.AccountResource(counterAddress, counterAddress.String()+"::counter::Counter")
+	return err == nil
+}
+
 func ReadCounterValue(t *testing.T, client *aptos.NodeClient, counterAddress aptos.AccountAddress) uint64 {
 	resource, err := client.AccountResource(counterAddress, counterAddress.String()+"::counter::Counter")
 	require.NoError(t, err)
