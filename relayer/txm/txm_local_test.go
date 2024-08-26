@@ -71,7 +71,15 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 	require.NoError(t, err)
 
 	publicKeyHex := hex.EncodeToString([]byte(publicKey))
-	deployTestModule(t, txm, accountAddress, publicKeyHex)
+
+	// Check if the counter module and resource already exists. This can occur if we're running on testnet.
+	// We assume that if it's deployed, it's the same version as the one we're testing.
+	if !testutils.HasCounterResource(client, accountAddress) {
+		logger.Debugw("Deploying counter module and initializing resource")
+		deployTestModule(t, txm, accountAddress, publicKeyHex)
+		// Make sure the counter resource was successfully initialized
+		require.True(t, testutils.HasCounterResource(client, accountAddress))
+	}
 
 	for {
 		queueLen, unconfirmedLen := txm.InflightCount()
