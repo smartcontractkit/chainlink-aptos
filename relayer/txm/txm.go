@@ -199,7 +199,7 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 	select {
 	case a.broadcastChan <- transactionID:
 	default:
-		return fmt.Errorf("failed to enqueue transaction: %+v", tx)
+		return fmt.Errorf("failed to enqueue tx: %+v", tx)
 	}
 
 	return nil
@@ -207,14 +207,14 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 
 func (a *AptosTxm) GetStatus(transactionID string) (commontypes.TransactionStatus, error) {
 	if transactionID == "" {
-		return commontypes.Unknown, errors.New("nil transaction id")
+		return commontypes.Unknown, errors.New("nil tx id")
 	}
 
 	a.transactionsLock.Lock()
 	defer a.transactionsLock.Unlock()
 	tx, ok := a.transactions[transactionID]
 	if !ok {
-		return commontypes.Unknown, errors.New("no such transaction")
+		return commontypes.Unknown, errors.New("no such tx")
 	}
 
 	return tx.Status, nil
@@ -234,7 +234,7 @@ func (a *AptosTxm) broadcastLoop() {
 			tx, ok := a.transactions[transactionID]
 			a.transactionsLock.Unlock()
 			if !ok {
-				a.logger.Errorw("failed to find transaction", "transactionID", transactionID)
+				a.logger.Errorw("failed to find tx", "transactionID", transactionID)
 				continue
 			}
 			a.signAndBroadcast(tx)
@@ -520,15 +520,15 @@ func (a *AptosTxm) simulateTransaction(client *aptos.NodeClient, rawTx aptos.Raw
 		}
 		rawTx.SequenceNumber = sequenceNumber
 
-		a.logger.Debugw("simulating transaction", "attempt", attempt, "sequenceNumber", sequenceNumber)
+		a.logger.Debugw("simulating tx", "attempt", attempt, "sequenceNumber", sequenceNumber)
 		// TODO: consider using EstimatePrioritizedGasUnitPrice(true)
 		txs, err := client.SimulateTransaction(&rawTx, signerForSimulation, aptos.EstimateMaxGasAmount(true), aptos.EstimateGasUnitPrice(true))
 		if err != nil {
-			a.logger.Debugw("failed to simulate transaction", "error", err)
+			a.logger.Debugw("failed to simulate tx", "error", err)
 			return nil, err
 		}
 		if len(txs) < 1 {
-			return nil, errors.New("no simulated transactions returned")
+			return nil, errors.New("no simulated tx returned")
 		}
 		simulateResponse := txs[0]
 		if !*(simulateResponse.TxnSuccess()) {
@@ -538,11 +538,11 @@ func (a *AptosTxm) simulateTransaction(client *aptos.NodeClient, rawTx aptos.Raw
 				attempt = attempt + 1
 				continue
 			}
-			a.logger.Debugw("simulated transaction unexpected status", "vmStatus", simulateResponse.VmStatus)
-			return nil, fmt.Errorf("simulated transaction unexpected status: %v", simulateResponse.VmStatus)
+			a.logger.Debugw("simulated tx unexpected status", "vmStatus", simulateResponse.VmStatus)
+			return nil, fmt.Errorf("simulated tx unexpected status: %v", simulateResponse.VmStatus)
 		}
 
-		a.logger.Debugw("simulate transaction successful", "vmStatus", simulateResponse.VmStatus, "gasUsed", simulateResponse.GasUsed, "gasUnitPrice", simulateResponse.GasUnitPrice)
+		a.logger.Debugw("simulate tx successful", "vmStatus", simulateResponse.VmStatus, "gasUsed", simulateResponse.GasUsed, "gasUnitPrice", simulateResponse.GasUnitPrice)
 		return simulateResponse, nil
 	}
 
