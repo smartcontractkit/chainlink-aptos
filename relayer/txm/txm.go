@@ -234,7 +234,7 @@ func (a *AptosTxm) broadcastLoop() {
 			tx, ok := a.transactions[transactionID]
 			a.transactionsLock.Unlock()
 			if !ok {
-				a.logger.Errorw("failed to find tx", "transactionID", transactionID)
+				a.logger.Errorw("failed to find tx", "txID", transactionID)
 				continue
 			}
 			a.signAndBroadcast(tx)
@@ -299,7 +299,6 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		ledgerTimestamp := nodeInfo.LedgerTimestamp()
 		if ledgerTimestamp == 0 {
 			a.logger.Errorw("failed to fetch ledger timestamp", "nodeInfo", nodeInfo)
-			tx.Status = commontypes.Fatal
 			return nil, nonce, errors.New("failed to fetch ledger timestamp")
 		}
 
@@ -317,7 +316,6 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		err = publicKey.FromBytes([]byte(tx.PublicKey))
 		if err != nil {
 			a.logger.Errorw("failed to deserialize public key", "error", err)
-			tx.Status = commontypes.Fatal
 			return nil, nonce, err
 		}
 
@@ -345,7 +343,8 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 
 			a.logger.Debugw("estimated gas price", "gasEstimate", gasInfo.GasEstimate, "prioritizedGasEstimate", gasInfo.PrioritizedGasEstimate)
 
-			if tx.UsePrioritizedFee {
+			// use prioritized fee for sebsequent attempts
+			if tx.Attempt > 0 {
 				rawTx.GasUnitPrice = gasInfo.PrioritizedGasEstimate
 			} else {
 				rawTx.GasUnitPrice = gasInfo.GasEstimate
@@ -502,12 +501,11 @@ func (a *AptosTxm) checkUnconfirmed() {
 
 					unconfirmedTx.Tx.Attempt++
 					if unconfirmedTx.Tx.Attempt > MAX_TX_RETRY_ATTEMPTS {
+						unconfirmedTx.Tx.Status = commontypes.Fatal
 						a.logger.Infow("tx reached max num of retries", "hash", hash)
 						continue
 					}
 
-					// Resubmit with the prioritized gas fee
-					unconfirmedTx.Tx.UsePrioritizedFee = true
 					select {
 					case a.broadcastChan <- unconfirmedTx.Tx.ID:
 					default:

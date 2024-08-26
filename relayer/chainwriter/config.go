@@ -23,7 +23,7 @@ type ChainWriterFunction struct {
 	Params      []ChainWriterFunctionParam
 }
 
-// / An Aptos module function parameter, which will be mapped to a BCS value.
+// An Aptos module function parameter, which will be mapped to a BCS value.
 type ChainWriterFunctionParam struct {
 	// The function parameter name.
 	Name string
