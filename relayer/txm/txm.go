@@ -406,17 +406,18 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 
 		submitResponse, err := client.SubmitTransaction(signedTx)
 		if err != nil {
-			if _, ok := err.(*aptos.HttpError); ok {
+			var httpErr *aptos.HttpError
+			if errors.As(err, &httpErr) {
 				// In case of http errors (>400) wait gracefully and retry
 				// It inlcudes all network-related errors as well as
 				// the pre-execution validation in the Mempool (e.g. old/duplicated nonce)
-				a.logger.Errorw("failed to submit signed tx, retrying..", "error", err)
+				a.logger.Errorw("failed to submit signed tx, retrying..", "error", httpErr)
 				time.Sleep(SUBMIT_DELAY_DURATION * time.Second)
 				attempt++
 				continue
 			} else {
 				// Do not retry on unknown errors
-				a.logger.Errorw("failed to submit signed tx, terminating..", "error", err)
+				a.logger.Errorw("failed to submit signed tx, aborting..", "error", err)
 				tx.Status = commontypes.Fatal
 				break
 			}
