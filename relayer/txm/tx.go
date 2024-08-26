@@ -9,16 +9,17 @@ import (
 )
 
 type AptosTx struct {
-	ID              string
-	Timestamp       uint64
-	FromAddress     aptos.AccountAddress
-	PublicKey       ed25519.PublicKey
-	ContractAddress aptos.AccountAddress
-	ModuleName      string
-	FunctionName    string
-	TypeTags        []aptos.TypeTag
-	BcsValues       [][]byte
-	Attempt         uint64
-	Status          commontypes.TransactionStatus
-	Simulate        bool
+	ID                string
+	Timestamp         uint64
+	FromAddress       aptos.AccountAddress
+	PublicKey         ed25519.PublicKey
+	ContractAddress   aptos.AccountAddress
+	ModuleName        string
+	FunctionName      string
+	TypeTags          []aptos.TypeTag
+	BcsValues         [][]byte
+	Attempt           uint64
+	Status            commontypes.TransactionStatus
+	Simulate          bool
+	UsePrioritizedFee bool
 }
