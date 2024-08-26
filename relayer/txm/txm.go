@@ -29,6 +29,12 @@ var _ services.Service = &AptosTxm{}
 const DEFAULT_MAX_GAS_AMOUNT = 200000
 const MAX_SIMULATE_ATTEMPTS = 5
 
+// todo: add to txm config?
+const MAX_SUBMIT_RETRY_ATTEMPTS = 5
+const SUBMIT_DELAY_DURATION = 5 // seconds
+const TX_EXPIRATION_TIME = 600  // seconds
+const MAX_TX_RETRY_ATTEMPTS = 2
+
 type AptosTxm struct {
 	logger   logger.Logger
 	keystore loop.Keystore
