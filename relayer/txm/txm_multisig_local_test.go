@@ -30,7 +30,6 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
-	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/testutils"
 )
@@ -756,17 +755,4 @@ func waitForTx(t *testing.T, client *aptos.NodeClient, txHash string, duration t
 		}
 	}
 	t.Fatalf("Failed to wait for transaction %s", txHash)
-}
-
-func waitForTxmId(t *testing.T, txm *AptosTxm, txId string, duration time.Duration) {
-	stopTime := time.Now().Add(duration)
-	for time.Now().Before(stopTime) {
-		time.Sleep(time.Second * 1)
-		status, err := txm.GetStatus(txId)
-		require.NoError(t, err)
-		if status != commontypes.Unconfirmed {
-			return
-		}
-	}
-	t.Fatalf("Failed to wait for txmId %s", txId)
 }
