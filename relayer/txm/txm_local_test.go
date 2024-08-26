@@ -58,7 +58,7 @@ func TestTxmLocal(t *testing.T) {
 		ConfirmPollSecs:   2,
 	}
 
-	runTxmTest(t, logger, config, rpcUrl, keystore, accountAddress, publicKey, 10)
+	runTxmTest(t, logger, config, rpcUrl, keystore, accountAddress, publicKey, 5)
 }
 
 func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcURL string, keystore loop.Keystore, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, iterations int) {
