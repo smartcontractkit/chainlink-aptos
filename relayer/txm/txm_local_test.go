@@ -92,9 +92,9 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 
 	logger.Debugw("Deployed test contract")
 
-	// Get the current version so that we can find the transactions quickly after incrementing.
+	// Set the initial counter value as read from the module
+	expectedValue := testutils.ReadCounterValue(t, client, accountAddress)
 
-	expectedValue := uint64(0)
 	for i := 0; i < iterations; i++ {
 		err := txm.Enqueue(
 			uuid.New().String(),
