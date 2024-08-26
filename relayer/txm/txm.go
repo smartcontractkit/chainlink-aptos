@@ -474,25 +474,52 @@ func (a *AptosTxm) confirmLoop() {
 
 func (a *AptosTxm) checkUnconfirmed() {
 	client := a.client
+
+	nodeInfo, err := client.Info()
+	if err != nil {
+		a.logger.Errorw("failed to fetch ledger info", "error", err)
+		return
+	}
+
+	ledgerTimestampInSec := nodeInfo.LedgerTimestamp() / 1000000
 	allUnconfirmedTxs := a.accountStore.GetAllUnconfirmed()
+
 	for accountAddress, unconfirmedTxs := range allUnconfirmedTxs {
 		for _, unconfirmedTx := range unconfirmedTxs {
 			hash := unconfirmedTx.Hash
 
 			chainTx, err := client.TransactionByHash(hash)
-			if err != nil {
-				// TODO: check expiry?
-				a.logger.Errorw("failed to check for transaction", "hash", hash, "error", err)
+			if err != nil || chainTx.Type == aptosapi.TransactionVariantPending {
+				if ledgerTimestampInSec > unconfirmedTx.Timestamp+TX_EXPIRATION_TIME {
+					// LedgerTimestamp dictates expiration, the local node might lag behind
+					// At this point we know the tx won't be committed
+					err = a.accountStore.GetTxStore(accountAddress).Confirm(unconfirmedTx.Nonce, hash)
+					if err != nil {
+						a.logger.Errorw("coudln't confirm expired tx", "error", err)
+						continue
+					}
+
+					unconfirmedTx.Tx.Attempt++
+					if unconfirmedTx.Tx.Attempt > MAX_TX_RETRY_ATTEMPTS {
+						a.logger.Infow("tx reached max num of retries", "hash", hash)
+						continue
+					}
+
+					// Resubmit with the prioritized gas fee
+					unconfirmedTx.Tx.UsePrioritizedFee = true
+					select {
+					case a.broadcastChan <- unconfirmedTx.Tx.ID:
+					default:
+						a.logger.Errorw("failed to enqueue retry tx", "previousHash", unconfirmedTx.Hash)
+					}
+				} else {
+					a.logger.Debugw("tx not found or pending in the mempool", "hash", hash)
+				}
+
 				continue
 			}
 
-			if chainTx.Type == aptosapi.TransactionVariantPending {
-				// TODO: check expiry?
-				continue
-			}
-
-			a.logger.Debugw("transaction confirmed", "hash", hash, "type", chainTx.Type)
-
+			a.logger.Debugw("tx confirmed", "hash", hash, "type", chainTx.Type)
 			unconfirmedTx.Tx.Status = commontypes.Finalized
 
 			if err := a.accountStore.GetTxStore(accountAddress).Confirm(unconfirmedTx.Nonce, hash); err != nil {
