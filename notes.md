@@ -35,20 +35,12 @@ Add two node lists under `.cache`
 
 `NodeList.txt`
 ```
-http://localhost:50100 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
-http://localhost:50101 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
-http://localhost:50102 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
-http://localhost:50103 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
-http://localhost:50104 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
-```
+http://localhost:50100 notreal@fakeemail.ch fj293fbBnlQ!f9vNs http://chainlink.core.1:50100
+http://localhost:50101 notreal@fakeemail.ch fj293fbBnlQ!f9vNs http://chainlink.core.2:50101
+http://localhost:50102 notreal@fakeemail.ch fj293fbBnlQ!f9vNs http://chainlink.core.3:50102
+http://localhost:50103 notreal@fakeemail.ch fj293fbBnlQ!f9vNs http://chainlink.core.4:50103
+http://localhost:50104 notreal@fakeemail.ch fj293fbBnlQ!f9vNs http://chainlink.core.5:50104
 
-`NodeList.remote.txt`
-```
-http://chainlink.core.1:50100 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
-http://chainlink.core.2:50101 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
-http://chainlink.core.3:50102 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
-http://chainlink.core.4:50103 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
-http://chainlink.core.5:50104 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
 ```
 
 Switch back to the `aptos` repository.

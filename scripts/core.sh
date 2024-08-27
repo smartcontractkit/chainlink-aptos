@@ -50,11 +50,9 @@ for ((i = 1; i <= NODE_COUNT; i++)); do
 	# postgres_ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' chainlink.postgres)
 	# TODO: use postgres db ip
 	host_postgres_url="postgresql://postgres:postgres@127.0.0.1:5432/postgres"
-	# psql "${host_postgres_url}" -c "DROP DATABASE ${database_name};"
-	# Create the database if it doesn't exist
-	psql "${host_postgres_url}" -tc "SELECT 1 FROM pg_database WHERE datname = '${database_name}'" \
-		| grep -q 1 \
-		|| psql "${host_postgres_url}" -c "CREATE DATABASE ${database_name};"
+	# Recreate the database
+	psql "${host_postgres_url}" -c "DROP DATABASE ${database_name};" &>/dev/null || true
+	psql "${host_postgres_url}" -c "CREATE DATABASE ${database_name};" &>/dev/null || true
 
 	# TODO: remove this and use node ids
 	listen_args=()
@@ -71,7 +69,6 @@ for ((i = 1; i <= NODE_COUNT; i++)); do
 		--rm \
 		-it \
 		-d \
-		--platform linux/amd64 \
 		"${listen_args[@]}" \
 		--name "${container_name_docker}" \
 		--network-alias "${container_name_docker}" \
@@ -80,7 +77,7 @@ for ((i = 1; i <= NODE_COUNT; i++)); do
 		-e "CL_DATABASE_URL=postgresql://postgres:postgres@chainlink.postgres:5432/${database_name}?sslmode=disable" \
 		-e "CL_PASSWORD_KEYSTORE=asdfasdfasdfasdf" \
 		--entrypoint bash \
-		"${image_name}" \
+		${image_name} \
 		-c "echo -e '${api_email}\n${api_password}' > /tmp/api_credentials && chainlink node start --api /tmp/api_credentials"
 done
 
