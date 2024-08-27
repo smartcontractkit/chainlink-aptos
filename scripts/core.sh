@@ -67,6 +67,7 @@ for ((i = 1; i <= NODE_COUNT; i++)); do
 	docker run \
 		--rm \
 		-it \
+		-d \
 		--platform linux/amd64 \
 		"${listen_args[@]}" \
 		--name "${container_name_docker}" \
@@ -77,7 +78,7 @@ for ((i = 1; i <= NODE_COUNT; i++)); do
 		-e "CL_PASSWORD_KEYSTORE=asdfasdfasdfasdf" \
 		--entrypoint bash \
 		"${image_name}" \
-		-c "echo '${api_email}\n${api_password}' > /tmp/api_credentials && chainlink node start --api /tmp/api_credentials"
+		-c "echo -e '${api_email}\n${api_password}' > /tmp/api_credentials && chainlink node start --api /tmp/api_credentials"
 done
 
 echo "Waiting for core containers to become ready.."
