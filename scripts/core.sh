@@ -19,71 +19,9 @@ container_name="chainlink.core"
 api_email="notreal@fakeemail.ch"
 api_password="fj293fbBnlQ!f9vNs"
 
-CL_CONFIG=$(cat <<-END
-[Log]
-Level = 'debug'
-
-[Feature]
-FeedsManager = true
-LogPoller = true
-UICSAKeys = true
-
-
-[OCR2]
-Enabled = true
-
-[P2P]
-[P2P.V2]
-Enabled = true
-DeltaDial = '5s'
-DeltaReconcile = '5s'
-ListenAddresses = ['0.0.0.0:6691']
-
-[WebServer]
-HTTPPort = 6688
-TLS.HTTPSPort = 0
-AllowOrigins = '*'
-
-[[Aptos]]
-Enabled = true
-ChainID = "localnet"
-
-[Aptos.Workflow]
-ForwarderAddress = "$KEYSTONE_ADDR"
-PublicKey = ""
-
-[[Aptos.Nodes]]
-Name = 'primary'
-URL = "http://chainlink-aptos.devnet:8080/v1"
-
-# [[EVM]]
-# ChainID = '11155111'
-
-[[EVM]]
-ChainID = '1337'
-MinContractPayment = '0'
-Enabled = true
-Nodes = [{ Name = 'node-geth-0', WSURL = 'ws://chainlink.geth:8546', HTTPURL = 'http://chainlink.geth:8544' }]
-END
-)
-# [[EVM]]
-# ChainID = '$SOURCE_CHAIN_ID'
-# GasEstimator = { PriceMax = '200 gwei', LimitDefault = 6000000, FeeCapDefault = '200 gwei' }
-# Nodes = [{ Name = 'node-eth-sepolia', WSURL = '$SOURCE_CHAIN_WS', HTTPURL = '$SOURCE_CHAIN_HTTP' }]
-
-# [[EVM]]
-# ChainID = '$DEST_CHAIN_ID'
-# ChainType = 'optimismBedrock'
-# FinalityDepth = 200
-# LogPollInterval = '2s'
-# NoNewHeadsThreshold = '40s'
-# MinIncomingConfirmations = 1
-# Transactions = { ResendAfterThreshold = '30s'}
-# NodePool = { SyncThreshold = 10 }
-# OCR = { ContractConfirmations = 1 }
-# HeadTracker = { HistoryDepth = 300 }
-# GasEstimator = { EIP1559DynamicFees = true, BlockHistory.BlockHistorySize = 60, PriceMin = '1 wei', BumpMin = '100 wei' }
-# Nodes = [{ Name = 'node-base-sepolia', WSURL = '$DEST_CHAIN_WS', HTTPURL = '$DEST_CHAIN_HTTP' }]
+# read the core config file and replace the KEYSTONE_ADDR with the actual address
+CL_CONFIG_TEMPLATE=$(cat "$(dirname -- "$0")/core.config.toml")
+CL_CONFIG=$(echo "$CL_CONFIG_TEMPLATE" | sed "s/\$KEYSTONE_ADDR/${KEYSTONE_ADDR}/")
 
 if [[ -z "${CL_CONFIG:-}" ]]; then
 	echo "No CL_CONFIG env var provided." >&2
@@ -129,18 +67,17 @@ for ((i = 1; i <= NODE_COUNT; i++)); do
 	docker run \
 		--rm \
 		-it \
-		-d \
+		--platform linux/amd64 \
 		"${listen_args[@]}" \
 		--name "${container_name_docker}" \
 		--network-alias "${container_name_docker}" \
 		--network chainlink \
 		-e "CL_CONFIG=${CL_CONFIG}" \
 		-e "CL_DATABASE_URL=postgresql://postgres:postgres@chainlink.postgres:5432/${database_name}?sslmode=disable" \
-		-e 'CL_PASSWORD_KEYSTORE=asdfasdfasdfasdf' \
+		-e "CL_PASSWORD_KEYSTORE=asdfasdfasdfasdf" \
 		--entrypoint bash \
 		"${image_name}" \
-		-c \
-		"echo -e \"${api_email}\\n${api_password}\" > /tmp/api_credentials && chainlink node start --api /tmp/api_credentials"
+		-c "echo '${api_email}\n${api_password}' > /tmp/api_credentials && chainlink node start --api /tmp/api_credentials"
 done
 
 echo "Waiting for core containers to become ready.."

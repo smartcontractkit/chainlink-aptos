@@ -1,0 +1,62 @@
+[Log]
+Level = 'debug'
+
+[Feature]
+FeedsManager = true
+LogPoller = true
+UICSAKeys = true
+
+[OCR2]
+Enabled = true
+
+[P2P]
+[P2P.V2]
+Enabled = true
+DeltaDial = '5s'
+DeltaReconcile = '5s'
+ListenAddresses = ['0.0.0.0:6691']
+
+[WebServer]
+HTTPPort = 6688
+TLS.HTTPSPort = 0
+AllowOrigins = '*'
+
+[[Aptos]]
+Enabled = true
+ChainID = "localnet"
+
+[Aptos.Workflow]
+ForwarderAddress = "$KEYSTONE_ADDR"
+PublicKey = ""
+
+[[Aptos.Nodes]]
+Name = 'primary'
+URL = "http://chainlink-aptos.devnet:8080/v1"
+
+# [[EVM]]
+# ChainID = '11155111'
+
+[[EVM]]
+ChainID = '1337'
+MinContractPayment = '0'
+Enabled = true
+Nodes = [{ Name = 'node-geth-0', WSURL = 'ws://chainlink.geth:8546', HTTPURL = 'http://chainlink.geth:8544' }]
+
+# [[EVM]]
+# ChainID = '$SOURCE_CHAIN_ID'
+# GasEstimator = { PriceMax = '200 gwei', LimitDefault = 6000000, FeeCapDefault = '200 gwei' }
+# Nodes = [{ Name = 'node-eth-sepolia', WSURL = '$SOURCE_CHAIN_WS', HTTPURL = '$SOURCE_CHAIN_HTTP' }]
+
+# [[EVM]]
+# ChainID = '$DEST_CHAIN_ID'
+# ChainType = 'optimismBedrock'
+# FinalityDepth = 200
+# LogPollInterval = '2s'
+# NoNewHeadsThreshold = '40s'
+# MinIncomingConfirmations = 1
+# Transactions = { ResendAfterThreshold = '30s'}
+# NodePool = { SyncThreshold = 10 }
+# OCR = { ContractConfirmations = 1 }
+# HeadTracker = { HistoryDepth = 300 }
+# GasEstimator = { EIP1559DynamicFees = true, BlockHistory.BlockHistorySize = 60, PriceMin = '1 wei', BumpMin = '100 wei' }
+# Nodes = [{ Name = 'node-base-sepolia', WSURL = '$DEST_CHAIN_WS', HTTPURL = '$DEST_CHAIN_HTTP' }]

@@ -1,7 +1,10 @@
-{ stdenv, pkgs, lib
-, fetchzip, autoPatchelfHook
+{
+  stdenv,
+  pkgs,
+  lib,
+  fetchzip,
+  autoPatchelfHook,
 }:
-
 stdenv.mkDerivation rec {
   name = "aptos-${version}";
   version = "4.0.0";
@@ -15,7 +18,7 @@ stdenv.mkDerivation rec {
     autoPatchelfHook
   ];
 
-  buildInputs = with pkgs; [ openssl cacert libudev-zero stdenv.cc.cc.libgcc stdenv.cc.cc.lib ];
+  buildInputs = with pkgs; [openssl cacert libudev-zero stdenv.cc.cc.libgcc stdenv.cc.cc.lib];
 
   sourceRoot = ".";
 

@@ -37,7 +37,7 @@ docker run \
   --name "${container_name}" \
   --network "${network_name}" \
   "${container_image}" \
-  aptos node run-local-testnet --with-faucet --force-restart --bind-to 0.0.0.0
+  aptos node run-localnet --with-faucet --force-restart --bind-to 0.0.0.0
   # --ip "${container_ip}" \
 
 echo "Waiting for ${container_name} container to become ready.."

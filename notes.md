@@ -1,5 +1,10 @@
 # Local development setup
 
+TODO:
+
+- Aptos CLI excluded on MacOS
+- Disable "Use Rosetta for x86_64/amd64 emulation on Apple Silicon"
+
 Aptos scripts require `aptos` CLI, `jq` and `curl`.
 
 Create a shared network for the containers
