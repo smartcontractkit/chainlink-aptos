@@ -50,8 +50,11 @@ for ((i = 1; i <= NODE_COUNT; i++)); do
 	# postgres_ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' chainlink.postgres)
 	# TODO: use postgres db ip
 	host_postgres_url="postgresql://postgres:postgres@127.0.0.1:5432/postgres"
-	# psql "${host_postgres_url}" -c "DROP DATABASE ${database_name};" &>/dev/null || true
-	psql "${host_postgres_url}" -c "CREATE DATABASE ${database_name};" &>/dev/null || true
+	# psql "${host_postgres_url}" -c "DROP DATABASE ${database_name};"
+	# Create the database if it doesn't exist
+	psql "${host_postgres_url}" -tc "SELECT 1 FROM pg_database WHERE datname = '${database_name}'" \
+		| grep -q 1 \
+		|| psql "${host_postgres_url}" -c "CREATE DATABASE ${database_name};"
 
 	# TODO: remove this and use node ids
 	listen_args=()
@@ -96,7 +99,7 @@ for ((i = 1; i <= NODE_COUNT; i++)); do
 
 		if [[ $output == *"Listening and serving HTTP"* ]]; then
 			echo ""
-			echo "node is ready."
+			echo "node ${container_name_docker} is ready."
 			break
 		fi
 
