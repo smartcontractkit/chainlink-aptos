@@ -493,6 +493,8 @@ func (a *AptosTxm) checkUnconfirmed() {
 				if ledgerTimestampInSec > unconfirmedTx.Timestamp+TX_EXPIRATION_TIME {
 					// LedgerTimestamp dictates expiration, the local node might lag behind
 					// At this point we know the tx won't be committed
+					a.logger.Debugw("tx expired, setting for retry..", "hash", hash)
+
 					err = a.accountStore.GetTxStore(accountAddress).Confirm(unconfirmedTx.Nonce, hash)
 					if err != nil {
 						a.logger.Errorw("coudln't confirm expired tx", "error", err)
