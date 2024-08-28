@@ -32,28 +32,20 @@ var (
 const signedReportField = "signed_report"
 
 type WriteTarget struct {
+	capabilities.CapabilityInfo
 	cr               commontypes.ContractReader
 	cw               commontypes.ChainWriter
 	forwarderAddress string
-	capabilities.CapabilityInfo
-	lggr logger.Logger
+	lggr             logger.Logger
 }
 
 func NewWriteTarget(lggr logger.Logger, id string, cr commontypes.ContractReader, cw commontypes.ChainWriter, forwarderAddress string) *WriteTarget {
-	info := capabilities.MustNewCapabilityInfo(
-		id,
-		capabilities.CapabilityTypeTarget,
-		"Write target.",
-	)
-
-	logger := logger.Named(lggr, "WriteTarget")
-
 	return &WriteTarget{
+		capabilities.MustNewCapabilityInfo(id, capabilities.CapabilityTypeTarget, "WriteTarget"),
 		cr,
 		cw,
 		forwarderAddress,
-		info,
-		logger,
+		logger.Named(lggr, "WriteTarget"),
 	}
 }
 
@@ -77,6 +69,7 @@ func success() capabilities.CapabilityResponse {
 }
 
 func (c *WriteTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (capabilities.CapabilityResponse, error) {
+	// TODO: wrap body in a fn, handle errors by publishing [Beholder] Emit 'write-target.WriteError'
 	c.lggr.Debugw("Execute", "request", request)
 
 	reqConfig, err := parseConfig(request.Config)
@@ -94,30 +87,13 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 		return capabilities.CapabilityResponse{}, err
 	}
 
-	if len(inputs.Report) == 0 {
-		// We received any empty report -- this means we should skip transmission.
-		c.lggr.Debugw("Skipping empty report", "request", request)
-		return success(), nil
-	}
-	// TODO: validate encoded report is prefixed with workflowID and executionID that match the request meta
-
 	rawExecutionID, err := hex.DecodeString(request.Metadata.WorkflowExecutionID)
 	if err != nil {
 		return capabilities.CapabilityResponse{}, err
 	}
-	// Check whether value was already transmitted on chain
 	reportID, _ := binary.Uvarint(inputs.ID)
-	queryInputs := struct {
-		Receiver            string
-		WorkflowExecutionID []byte
-		ReportID            uint16
-	}{
-		Receiver:            reqConfig.Address,
-		WorkflowExecutionID: rawExecutionID,
-		ReportID:            uint16(reportID),
-	}
 
-	// Emit 'write-target.WriteInitiated'
+	// [Beholder] Emit 'write-target.WriteInitiated'
 	msgWriteInitiated := &wt.WriteInitiated{
 		Forwarder: c.forwarderAddress,
 		Receiver:  reqConfig.Address,
@@ -131,11 +107,49 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}
 	c.lggr.Infow("[Beholder.emit] 'write-target.WriteInitiated'", "message", msgWriteInitiated.String())
 
+	emitWriteSkipped := func() error {
+		// [Beholder] Emit 'write-target.WriteSkipped'
+		msgWriteSkipped := &wt.WriteSkipped{
+			Forwarder: c.forwarderAddress,
+			Receiver:  reqConfig.Address,
+			// TODO: figure out how to source the transmitter (e.g., c.cw.config.Functions["forwarder"].FromAddress)
+			Transmitter: "N/A",
+			ReportId:    uint32(reportID),
+		}
+		_, err = proto.Marshal(msgWriteInitiated)
+		if err != nil {
+			return err
+		}
+		c.lggr.Infow("[Beholder.emit] 'write-target.WriteSkipped'", "message", msgWriteSkipped.String())
+		return nil
+	}
+
+	// Check whether the report is valid (e.g., not empty)
+	if len(inputs.Report) == 0 {
+		// We received any empty report -- this means we should skip transmission.
+		emitWriteSkipped()
+		c.lggr.Debugw("Skipping empty report", "request", request)
+		return success(), nil
+	}
+	// TODO: validate encoded report is prefixed with workflowID and executionID that match the request meta
+
+	// Check whether value was already transmitted on chain
+	queryInputs := struct {
+		Receiver            string
+		WorkflowExecutionID []byte
+		ReportID            uint16
+	}{
+		Receiver:            reqConfig.Address,
+		WorkflowExecutionID: rawExecutionID,
+		ReportID:            uint16(reportID),
+	}
+
 	var transmitted bool
 	if err = c.cr.GetLatestValue(ctx, "forwarder", "getTransmissionState", primitives.Unconfirmed, queryInputs, &transmitted); err != nil {
 		return capabilities.CapabilityResponse{}, err
 	}
 	if transmitted == true {
+		emitWriteSkipped()
 		c.lggr.Infow("WriteTarget report already onchain - returning without a tranmission attempt", "executionID", request.Metadata.WorkflowExecutionID)
 		return success(), nil
 	}
@@ -173,14 +187,41 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 	if err := c.cw.SubmitTransaction(ctx, "forwarder", "report", req, txID.String(), c.forwarderAddress, &meta, value); err != nil {
 		return capabilities.CapabilityResponse{}, err
 	}
+
+	// [Beholder] Emit 'write-target.WriteSent'
+	msgWriteSent := &wt.WriteSent{
+		Forwarder: c.forwarderAddress,
+		Receiver:  reqConfig.Address,
+		// TODO: figure out how to source the transmitter (e.g., c.cw.config.Functions["forwarder"].FromAddress)
+		Transmitter: "N/A",
+		ReportId:    uint32(reportID),
+
+		// TODO: figure out how to source the tx hash
+		TxHash:        "N/A",
+		XMetadata:     []byte{},
+		XMetadataType: "aptos-tx-sent-metadata",
+	}
+	_, err = proto.Marshal(msgWriteSent)
+	if err != nil {
+		return nil, err
+	}
+	c.lggr.Infow("[Beholder.emit] 'write-target.WriteSent'", "message", msgWriteSent.String())
 	c.lggr.Debugw("Transaction submitted", "request", request, "transaction", txID)
+
+	// TODO: source tx receipt (wait for a tx to be included in a block)
+	// TODO: [Beholder] Emit 'write-target.WriteAccepted'
+
 	return success(), nil
 }
 
 func (c *WriteTarget) RegisterToWorkflow(ctx context.Context, request capabilities.RegisterToWorkflowRequest) error {
+	// TODO: start a process responsible for monitoring the chain and publishing [Beholder] Emit 'write-target.WriteConfirmed'
+	// TODO: start a process responsible for monitoring the WT account balance
 	return nil
 }
 
 func (c *WriteTarget) UnregisterFromWorkflow(ctx context.Context, request capabilities.UnregisterFromWorkflowRequest) error {
+	// TODO: stop a process responsible for monitoring the chain and publishing [Beholder] Emit 'write-target.WriteConfirmed'
+	// TODO: stop a process responsible for monitoring the WT account balance
 	return nil
 }
