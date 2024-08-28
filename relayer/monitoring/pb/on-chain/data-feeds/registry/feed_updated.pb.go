@@ -32,7 +32,9 @@ type FeedUpdated struct {
 	Report    []byte `protobuf:"bytes,4,opt,name=report,proto3" json:"report,omitempty"`
 	Success   bool   `protobuf:"varint,5,opt,name=success,proto3" json:"success,omitempty"`
 	// Metadata is a serialized protobuf message
-	// For example, Aptos specific type hosting transaction data (e.g., _metadata_type = "aptos-tx-metadata")
+	// For example, Aptos specific type hosting transaction data
+	//
+	//	(e.g., _metadata_type = "aptos-tx-metadata")
 	XMetadata     []byte `protobuf:"bytes,6,opt,name=_metadata,json=Metadata,proto3" json:"_metadata,omitempty"`
 	XMetadataType string `protobuf:"bytes,7,opt,name=_metadata_type,json=MetadataType,proto3" json:"_metadata_type,omitempty"`
 }

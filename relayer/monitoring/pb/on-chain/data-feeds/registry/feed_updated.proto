@@ -4,15 +4,16 @@ package registry;
 option go_package = ".;registry";
 
 message FeedUpdated {
-    bytes feed_id = 1;
-    // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
-    uint64 timestamp = 2;
-    uint64 benchmark = 3;
-    bytes report = 4;
-    bool success = 5;
+  bytes feed_id = 1;
+  // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
+  uint64 timestamp = 2;
+  uint64 benchmark = 3;
+  bytes report = 4;
+  bool success = 5;
 
-    // Metadata is a serialized protobuf message
-    // For example, Aptos specific type hosting transaction data (e.g., _metadata_type = "aptos-tx-metadata")
-    bytes _metadata = 6;
-    string _metadata_type = 7;
+  // Metadata is a serialized protobuf message
+  // For example, Aptos specific type hosting transaction data
+  //   (e.g., _metadata_type = "aptos-tx-metadata")
+  bytes _metadata = 6;
+  string _metadata_type = 7;
 }

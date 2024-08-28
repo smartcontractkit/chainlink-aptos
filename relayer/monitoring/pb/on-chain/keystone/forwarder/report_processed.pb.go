@@ -30,7 +30,9 @@ type ReportProcessed struct {
 	ReportId            uint32 `protobuf:"varint,3,opt,name=report_id,json=reportId,proto3" json:"report_id,omitempty"`
 	Success             bool   `protobuf:"varint,4,opt,name=success,proto3" json:"success,omitempty"`
 	// Metadata is a serialized protobuf message
-	// For example, Aptos specific type hosting transaction data (e.g., _metadata_type = "aptos-tx-metadata")
+	// For example, Aptos specific type hosting transaction data
+	//
+	//	(e.g., _metadata_type = "aptos-tx-metadata")
 	XMetadata     []byte `protobuf:"bytes,5,opt,name=_metadata,json=Metadata,proto3" json:"_metadata,omitempty"`
 	XMetadataType string `protobuf:"bytes,6,opt,name=_metadata_type,json=MetadataType,proto3" json:"_metadata_type,omitempty"`
 }

@@ -38,7 +38,9 @@ type WriteConfirmed struct {
 	// TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
 	BlockTimestamp uint64 `protobuf:"varint,11,opt,name=block_timestamp,json=blockTimestamp,proto3" json:"block_timestamp,omitempty"`
 	// Metadata is a serialized protobuf message
-	// For example, Aptos specific type hosting transaction data (e.g., _metadata_type = "aptos-tx-metadata")
+	// For example, Aptos specific type hosting transaction data
+	//
+	//	(e.g., _metadata_type = "aptos-tx-metadata")
 	XMetadata     []byte `protobuf:"bytes,12,opt,name=_metadata,json=Metadata,proto3" json:"_metadata,omitempty"`
 	XMetadataType string `protobuf:"bytes,13,opt,name=_metadata_type,json=MetadataType,proto3" json:"_metadata_type,omitempty"`
 }

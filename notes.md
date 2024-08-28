@@ -84,3 +84,19 @@ Inspect round:
 ```bash
 curl http://127.0.0.1:8080/v1/transactions/by_hash/0xe69848c6fe69b57b4feb763e720db12ea16dd214d8007995090a18ca52a82bb4 | jq '.events[] | select(.type | contains("FeedUpdated"))'
 ```
+
+# Protobuf
+
+We use protobuf to define monitoring messages types.
+
+Lint `.proto` files using:
+
+```bash
+protolint lint --fix .
+```
+
+To generate Go type bindings from `.proto` files run:
+
+```bash
+go generate ./...
+```

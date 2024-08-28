@@ -33,7 +33,9 @@ type WriteError struct {
 	Transmitter string `protobuf:"bytes,6,opt,name=transmitter,proto3" json:"transmitter,omitempty"`
 	ReportId    uint32 `protobuf:"varint,7,opt,name=report_id,json=reportId,proto3" json:"report_id,omitempty"`
 	// Metadata is a serialized protobuf message
-	// For example, Aptos specific type hosting API error data (e.g., _metadata_type = "aptos-api-error-metadata")
+	// For example, Aptos specific type hosting API error data
+	//
+	//	(e.g., _metadata_type = "aptos-api-error-metadata")
 	XMetadata     []byte `protobuf:"bytes,8,opt,name=_metadata,json=Metadata,proto3" json:"_metadata,omitempty"`
 	XMetadataType string `protobuf:"bytes,9,opt,name=_metadata_type,json=MetadataType,proto3" json:"_metadata_type,omitempty"`
 }

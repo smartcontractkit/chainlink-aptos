@@ -4,23 +4,24 @@ package write_target;
 option go_package = ".;write_target";
 
 message WriteConfirmed {
-    string forwarder = 1;
-    string receiver = 2;
-    string transmitter = 3;
-    uint32 report_id = 4;
+  string forwarder = 1;
+  string receiver = 2;
+  string transmitter = 3;
+  uint32 report_id = 4;
 
-    bool success = 5;
-    bytes report = 6;
-    uint32 signers_num = 7;
+  bool success = 5;
+  bytes report = 6;
+  uint32 signers_num = 7;
 
-    string tx_hash = 8;
-    string block_hash = 9;
-    uint64 block_num = 10;
-    // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
-    uint64 block_timestamp = 11;
+  string tx_hash = 8;
+  string block_hash = 9;
+  uint64 block_num = 10;
+  // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
+  uint64 block_timestamp = 11;
 
-    // Metadata is a serialized protobuf message
-    // For example, Aptos specific type hosting transaction data (e.g., _metadata_type = "aptos-tx-metadata")
-    bytes _metadata = 12;
-    string _metadata_type = 13;
+  // Metadata is a serialized protobuf message
+  // For example, Aptos specific type hosting transaction data
+  //   (e.g., _metadata_type = "aptos-tx-metadata")
+  bytes _metadata = 12;
+  string _metadata_type = 13;
 }

@@ -16,10 +16,11 @@
       # Official golang implementation of the Ethereum protocol (geth)
       go-ethereum
 
-      # Protobuf + plugins
+      # Protobuf + plugins/tools
       protobuf
       # Go support for Google's protocol buffers
       protoc-gen-go
+      protolint
 
       # Extra tools
       python3
