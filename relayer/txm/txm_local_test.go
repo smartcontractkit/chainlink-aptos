@@ -17,6 +17,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
+	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/testutils"
 )
@@ -70,7 +71,15 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 	require.NoError(t, err)
 
 	publicKeyHex := hex.EncodeToString([]byte(publicKey))
-	deployTestContract(t, txm, accountAddress.String(), publicKeyHex)
+
+	// Check if the counter module and resource already exists. This can occur if we're running on testnet.
+	// We assume that if it's deployed, it's the same version as the one we're testing.
+	if !testutils.HasCounterResource(client, accountAddress) {
+		logger.Debugw("Deploying counter module and initializing resource")
+		deployTestModule(t, txm, accountAddress, publicKeyHex)
+		// Make sure the counter resource was successfully initialized
+		require.True(t, testutils.HasCounterResource(client, accountAddress))
+	}
 
 	for {
 		queueLen, unconfirmedLen := txm.InflightCount()
@@ -83,9 +92,9 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 
 	logger.Debugw("Deployed test contract")
 
-	// Get the current version so that we can find the transactions quickly after incrementing.
+	// Set the initial counter value as read from the module
+	expectedValue := testutils.ReadCounterValue(t, client, accountAddress)
 
-	expectedValue := uint64(0)
 	for i := 0; i < iterations; i++ {
 		err := txm.Enqueue(
 			uuid.New().String(),
@@ -100,8 +109,9 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 		require.NoError(t, err)
 		expectedValue += 1
 
+		incrementMultId := uuid.New().String()
 		err = txm.Enqueue(
-			uuid.New().String(),
+			incrementMultId,
 			accountAddress.String(),
 			publicKeyHex,
 			accountAddress.String()+"::counter::increment_mult",
@@ -112,15 +122,8 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 		)
 		require.NoError(t, err)
 		expectedValue += 3 * 4
-	}
 
-	for {
-		queueLen, unconfirmedLen := txm.InflightCount()
-		logger.Debugw("Inflight count", "queued", queueLen, "unconfirmed", unconfirmedLen)
-		if queueLen == 0 && unconfirmedLen == 0 {
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
+		waitForTxmId(t, txm, incrementMultId, time.Second*15)
 	}
 
 	counterValue := testutils.ReadCounterValue(t, client, accountAddress)
@@ -129,28 +132,27 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 	require.Equal(t, expectedValue, counterValue)
 }
 
-func deployTestContract(t *testing.T, txm *AptosTxm, fromAddress, publicKeyHex string) {
-	packageMetadataBytes, moduleBytecodeBytes := testutils.GetTestContract(t, fromAddress)
+func deployTestModule(t *testing.T, txm *AptosTxm, fromAddress aptos.AccountAddress, publicKeyHex string) {
+	compilationResult := testutils.CompileTestModule(t, fromAddress)
 
 	err := txm.Enqueue(
 		uuid.New().String(),
-		fromAddress,
+		fromAddress.String(),
 		publicKeyHex,
 		"0x1::code::publish_package_txn",
 		/* typeArgs= */ []string{},
 		/* paramTypes= */ []string{"vector<u8>", "vector<vector<u8>>"},
-		/* paramValues= */ []any{packageMetadataBytes, [][]byte{moduleBytecodeBytes}},
+		/* paramValues= */ []any{compilationResult.PackageMetadata, compilationResult.BytecodeModules},
 		/* simulateTx= */ true,
 	)
 	require.NoError(t, err)
 
-	// TODO: check account module to make sure it was published.
-
+	initializeId := uuid.New().String()
 	err = txm.Enqueue(
-		uuid.New().String(),
-		fromAddress,
+		initializeId,
+		fromAddress.String(),
 		publicKeyHex,
-		fromAddress+"::counter::initialize",
+		fromAddress.String()+"::counter::initialize",
 		[]string{},
 		[]string{},
 		[]any{},
@@ -158,5 +160,19 @@ func deployTestContract(t *testing.T, txm *AptosTxm, fromAddress, publicKeyHex s
 	)
 	require.NoError(t, err)
 
-	// TODO: check account resource to make sure it was initialized.
+	// Wait for transactions to be confirmed
+	waitForTxmId(t, txm, initializeId, time.Second*15)
+}
+
+func waitForTxmId(t *testing.T, txm *AptosTxm, txId string, duration time.Duration) {
+	stopTime := time.Now().Add(duration)
+	for time.Now().Before(stopTime) {
+		time.Sleep(time.Second * 1)
+		status, err := txm.GetStatus(txId)
+		require.NoError(t, err)
+		if status != commontypes.Unconfirmed {
+			return
+		}
+	}
+	t.Fatalf("Failed to wait for txmId %s", txId)
 }

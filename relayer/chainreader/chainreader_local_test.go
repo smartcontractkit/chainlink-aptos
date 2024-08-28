@@ -7,6 +7,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
+	"math/big"
 	"testing"
 	"time"
 
@@ -75,30 +76,32 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 
 	publicKeyHex := hex.EncodeToString([]byte(publicKey))
 
-	packageMetadataBytes, moduleBytecodeBytes := testutils.GetEchoContract(t, accountAddress.String())
+	compilationResult := testutils.CompileTestModule(t, accountAddress)
 
+	txId := uuid.New().String()
 	err = txmgr.Enqueue(
-		uuid.New().String(),
+		txId,
 		accountAddress.String(),
 		publicKeyHex,
 		"0x1::code::publish_package_txn",
 		/* typeArgs= */ []string{},
 		/* paramTypes= */ []string{"vector<u8>", "vector<vector<u8>>"},
-		/* paramValues= */ []any{packageMetadataBytes, [][]byte{moduleBytecodeBytes}},
+		/* paramValues= */ []any{compilationResult.PackageMetadata, compilationResult.BytecodeModules},
 		/* simulateTx= */ true,
 	)
 	require.NoError(t, err)
 
-	// publishing the package could fail if it's already deployed, eg. on testnet,
-	// so we don't check beyond transactions being broadcast and confirmed.
-	for {
-		queueLen, unconfirmedLen := txmgr.InflightCount()
-		logger.Debugw("Inflight count", "queued", queueLen, "unconfirmed", unconfirmedLen)
-		if queueLen == 0 && unconfirmedLen == 0 {
+	confirmed := false
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second * 1)
+		status, err := txmgr.GetStatus(txId)
+		require.NoError(t, err)
+		if status != commontypes.Unconfirmed {
+			confirmed = true
 			break
 		}
-		time.Sleep(500 * time.Millisecond)
 	}
+	require.True(t, confirmed)
 
 	config := ChainReaderConfig{
 		Modules: map[string]*ChainReaderModule{
@@ -147,6 +150,14 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 							{
 								Name: "Value1",
 								Type: "vector<vector<u8>>",
+							},
+						},
+					},
+					"echo_u256": {
+						Params: []ChainReaderFunctionParam{
+							{
+								Name: "Value1",
+								Type: "u256",
 							},
 						},
 					},
@@ -204,4 +215,13 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 	}{Value1: expectedSliceSlice}, &retSliceSlice)
 	require.NoError(t, err)
 	require.Equal(t, expectedSliceSlice, retSliceSlice)
+
+	expectedU256, ok := new(big.Int).SetString("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffee", 16)
+	require.True(t, ok)
+	var retU256 *big.Int
+	err = chainReader.GetLatestValue(context.Background(), "testContract", "echo_u256", confidenceLevel, struct {
+		Value1 *big.Int
+	}{Value1: expectedU256}, &retU256)
+	require.NoError(t, err)
+	require.Equal(t, expectedU256, retU256)
 }

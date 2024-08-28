@@ -483,6 +483,8 @@ type mockSimulationSigner struct {
 	pubKey aptoscrypto.Ed25519PublicKey
 }
 
+var _ aptoscrypto.Signer = &mockSimulationSigner{}
+
 func (key *mockSimulationSigner) PubKey() aptoscrypto.PublicKey {
 	return &key.pubKey
 }
@@ -514,7 +516,7 @@ func (a *AptosTxm) simulateTransaction(client *aptos.NodeClient, rawTx aptos.Raw
 
 		a.logger.Debugw("simulating transaction", "attempt", attempt, "sequenceNumber", sequenceNumber)
 		// TODO: consider using EstimatePrioritizedGasUnitPrice(true)
-		txs, err := client.SimulateTransaction(&rawTx, any(signerForSimulation).(aptos.TransactionSigner), aptos.EstimateMaxGasAmount(true), aptos.EstimateGasUnitPrice(true))
+		txs, err := client.SimulateTransaction(&rawTx, signerForSimulation, aptos.EstimateMaxGasAmount(true), aptos.EstimateGasUnitPrice(true))
 		if err != nil {
 			a.logger.Debugw("failed to simulate transaction", "error", err)
 			return nil, err
