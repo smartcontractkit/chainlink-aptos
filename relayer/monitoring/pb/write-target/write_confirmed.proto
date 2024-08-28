@@ -3,6 +3,9 @@ syntax="proto3";
 package write_target;
 option go_package = ".;write_target";
 
+// WT confirmed the report was successfully written on-chain
+//
+// Notice: contains chain specific metadata type as raw bytes.
 message WriteConfirmed {
   string forwarder = 1;
   string receiver = 2;

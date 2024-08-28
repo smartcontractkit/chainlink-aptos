@@ -20,6 +20,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// WT initiated the processing of the write request
 type WriteInitiated struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

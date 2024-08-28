@@ -13,7 +13,7 @@
       delve
       (golangci-lint.override {buildGoModule = buildGo122Module;})
       gotools
-      # Official golang implementation of the Ethereum protocol (geth)
+      # Official golang implementation of the Ethereum protocol (e.g., geth, abigen, rlpdump, etc.)
       go-ethereum
 
       # Protobuf + plugins/tools

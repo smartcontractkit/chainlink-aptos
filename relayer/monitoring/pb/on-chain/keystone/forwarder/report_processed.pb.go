@@ -20,6 +20,11 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// The on-chain ReportProcessed event which is extracted from the Keystone
+// Forwarder contract transaction receipt after a write was confirmed (@see
+// message: write-target.WriteConfirmed).
+//
+// Notice: contains chain specific metadata type as raw bytes
 type ReportProcessed struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

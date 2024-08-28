@@ -20,6 +20,9 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// WT errored while processing write request
+//
+// Notice: contains chain specific metadata type as raw bytes
 type WriteError struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

@@ -20,6 +20,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// WT skipped the write request
 type WriteSkipped struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

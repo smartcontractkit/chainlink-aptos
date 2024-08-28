@@ -20,6 +20,11 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// The on-chain FeedUpdated event which is extracted (via Benthos) from the
+// Keystone Forwarder contract transaction receipt after a write was confirmed
+// (@see message: write-target.WriteConfirmed).
+//
+// Notice: contains chain specific metadata type as raw bytes
 type FeedUpdated struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

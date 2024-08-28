@@ -3,6 +3,7 @@ syntax="proto3";
 package write_target;
 option go_package = ".;write_target";
 
+// WT initiated the processing of the write request
 message WriteInitiated {
   string forwarder = 1;
   string receiver = 2;

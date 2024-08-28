@@ -3,6 +3,9 @@ syntax="proto3";
 package write_target;
 option go_package = ".;write_target";
 
+// WT errored while processing write request
+//
+// Notice: contains chain specific metadata type as raw bytes
 message WriteError {
   uint32 code = 1;
   string summary = 2;

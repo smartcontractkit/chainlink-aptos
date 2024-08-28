@@ -3,6 +3,7 @@ syntax="proto3";
 package write_target;
 option go_package = ".;write_target";
 
+// WT skipped the write request
 message WriteSkipped {
   string forwarder = 1;
   string receiver = 2;

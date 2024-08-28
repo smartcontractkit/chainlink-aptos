@@ -3,6 +3,11 @@ syntax="proto3";
 package registry;
 option go_package = ".;registry";
 
+// The on-chain FeedUpdated event which is extracted (via Benthos) from the
+// Keystone Forwarder contract transaction receipt after a write was confirmed
+// (@see message: write-target.WriteConfirmed).
+//
+// Notice: contains chain specific metadata type as raw bytes
 message FeedUpdated {
   bytes feed_id = 1;
   // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?

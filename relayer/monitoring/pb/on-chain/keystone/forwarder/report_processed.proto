@@ -3,6 +3,11 @@ syntax="proto3";
 package forwarder;
 option go_package = ".;forwarder";
 
+// The on-chain ReportProcessed event which is extracted from the Keystone
+// Forwarder contract transaction receipt after a write was confirmed (@see
+// message: write-target.WriteConfirmed).
+//
+// Notice: contains chain specific metadata type as raw bytes
 message ReportProcessed {
   string receiver = 1;
   bytes workflow_execution_id = 2;

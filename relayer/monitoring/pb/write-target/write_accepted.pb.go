@@ -20,6 +20,9 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// WT sent a transaction and it was accepted on-chain
+//
+// Notice: contains chain specific metadata type as raw bytes
 type WriteAccepted struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
