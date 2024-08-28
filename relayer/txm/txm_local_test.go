@@ -94,10 +94,16 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 
 	// Set the initial counter value as read from the module
 	expectedValue := testutils.ReadCounterValue(t, client, accountAddress)
+	logger.Debugw("Counter value before test", "value", expectedValue)
+
+	// submit all txs at once and wait for all afterwards
+	// helps testing reties and failure recoveries
+	var txIDs []string
 
 	for i := 0; i < iterations; i++ {
+		incrementId := uuid.New().String()
 		err := txm.Enqueue(
-			uuid.New().String(),
+			incrementId,
 			accountAddress.String(),
 			publicKeyHex,
 			accountAddress.String()+"::counter::increment",
@@ -108,6 +114,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 		)
 		require.NoError(t, err)
 		expectedValue += 1
+		txIDs = append(txIDs, incrementId)
 
 		incrementMultId := uuid.New().String()
 		err = txm.Enqueue(
@@ -122,12 +129,15 @@ func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcUR
 		)
 		require.NoError(t, err)
 		expectedValue += 3 * 4
+		txIDs = append(txIDs, incrementMultId)
+	}
 
-		waitForTxmId(t, txm, incrementMultId, time.Second*15)
+	for _, txId := range txIDs {
+		waitForTxmId(t, txm, txId, time.Minute*2)
 	}
 
 	counterValue := testutils.ReadCounterValue(t, client, accountAddress)
-	logger.Debugw("Read counter value", "value", counterValue)
+	logger.Debugw("Counter value after test", "value", counterValue)
 
 	require.Equal(t, expectedValue, counterValue)
 }
@@ -170,7 +180,7 @@ func waitForTxmId(t *testing.T, txm *AptosTxm, txId string, duration time.Durati
 		time.Sleep(time.Second * 1)
 		status, err := txm.GetStatus(txId)
 		require.NoError(t, err)
-		if status != commontypes.Unconfirmed {
+		if status == commontypes.Finalized {
 			return
 		}
 	}
