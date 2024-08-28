@@ -19,6 +19,9 @@ module data_feeds::registry {
 
         feeds: SimpleMap<vector<u8>, Feed>,
         configs: SimpleMap<vector<u8>, Config>,
+
+        allowed_workflow_owners: vector<vector<u8>>,
+        allowed_workflow_names: vector<vector<u8>>,
     }
 
     struct Feed has key, store, drop {
@@ -112,6 +115,8 @@ module data_feeds::registry {
     const ECONFIG_NOT_CONFIGURED: u64 = 5;
     const EUNEQUAL_ARRAY_LENGTHS: u64 = 6;
     const EINVALID_REPORT: u64 = 7;
+    const EUNAUTHORIZED_WORKFLOW_NAME: u64 = 8;
+    const EUNAUTHORIZED_WORKFLOW_OWNER: u64 = 9;
 
     // Schema types
     const SCHEMA_V1: u16 = 1;
@@ -155,6 +160,9 @@ module data_feeds::registry {
 
             feeds: simple_map::new(),
             configs: simple_map::new(),
+
+            allowed_workflow_names: vector[],
+            allowed_workflow_owners: vector[],
         });
     }
 
@@ -309,8 +317,12 @@ module data_feeds::registry {
     public fun on_report<T: key>(_metadata: Object<T>): option::Option<u128> acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
 
-        // TODO: validate report's workflow_id via metadata
         let (metadata, data) = keystone::storage::retrieve(new_proof());
+
+        let (workflow_name, workflow_owner) = keystone::storage::parse_report_metadata(metadata);
+
+        assert!(vector::is_empty(&registry.allowed_workflow_names) || vector::contains(&registry.allowed_workflow_names, &workflow_name), EUNAUTHORIZED_WORKFLOW_NAME);
+        assert!(vector::is_empty(&registry.allowed_workflow_owners) || vector::contains(&registry.allowed_workflow_owners, &workflow_owner), EUNAUTHORIZED_WORKFLOW_OWNER);
 
         let (feed_ids, reports) = parse_raw_report(data);
         vector::zip(feed_ids, reports, |feed_id, report| {
@@ -318,6 +330,14 @@ module data_feeds::registry {
         });
 
         option::none()
+    }
+
+    public fun set_config(authority: &signer, allowed_workflow_owners: vector<vector<u8>>, allowed_workflow_names: vector<vector<u8>>) acquires Registry {
+        let registry = borrow_global_mut<Registry>(get_state_addr());
+        assert_is_owner(registry, signer::address_of(authority));
+
+        registry.allowed_workflow_owners = allowed_workflow_owners;
+        registry.allowed_workflow_names = allowed_workflow_names;
     }
 
     // Parse ETH ABI encoded raw data into multiple reports
@@ -534,7 +554,7 @@ module data_feeds::registry {
         // 0003222222222222222200000000000000000000000000000000000000000000 feed_id
         // 0000000000000000000000000000000000000000000000000000000000000040 offset
         // 0000000000000000000000000000000000000000000000000000000000000120 len=228
-        // 0003222222222222222200000000000000000000000000000000000000000000 
+        // 0003222222222222222200000000000000000000000000000000000000000000
         // 0000000000000000000000000000000000000000000000000000000066b3a12c
         // 0000000000000000000000000000000000000000000000000000000066b3a12c
         // 00000000000000000000000000000000000000000000000000000000000494a8
@@ -558,7 +578,7 @@ module data_feeds::registry {
         let expected_reports = vector[
             x"00031111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a8",
             x"00032222222222222222000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a8"
-        ];      
+        ];
         assert!(reports == expected_reports, 1);
     }
 
