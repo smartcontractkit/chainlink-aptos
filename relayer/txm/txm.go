@@ -125,6 +125,8 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 		fromAddress = accountAddress.String()
 	}
 
+	a.logger.Debugw("Tx enqueued", "txID", transactionID, "fromAddr", fromAddress)
+
 	functionTokens := strings.Split(function, "::")
 	if len(functionTokens) != 3 {
 		return fmt.Errorf("unexpected function name, expected 3 tokens, got %d", len(functionTokens))
@@ -395,7 +397,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	// broadcast with basic retry to try get the tx included in the mempool
 	attempt := 1
 	for attempt <= MAX_SUBMIT_RETRY_ATTEMPTS {
-		// rebuild the tx in case the nonce has been updated and to update the expiration timestamp
+		// rebuild the tx to update the nonce and expiration timestamp
 		signedTx, nonce, err := buildSignedTx()
 		if err != nil {
 			a.logger.Errorw("failed to build signed tx", "error", err)
@@ -493,8 +495,11 @@ func (a *AptosTxm) checkUnconfirmed() {
 				if ledgerTimestampInSec > unconfirmedTx.Timestamp+TX_EXPIRATION_TIME {
 					// LedgerTimestamp dictates expiration, the local node might lag behind
 					// At this point we know the tx won't be committed
-					a.logger.Debugw("tx expired, setting for retry..", "hash", hash)
+					a.logger.Debugw("tx expired, setting for retry..", "txID", unconfirmedTx.Tx.ID, "hash", hash)
+					unconfirmedTx.Tx.Status = commontypes.Failed
 
+					// Confirm tx to remove it from the unconfirmedNonces pool
+					// On retry the tx will get the new hash and reenter the pool for further tracking
 					err = a.accountStore.GetTxStore(accountAddress).Confirm(unconfirmedTx.Nonce, hash)
 					if err != nil {
 						a.logger.Errorw("coudln't confirm expired tx", "error", err)
@@ -504,7 +509,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 					unconfirmedTx.Tx.Attempt++
 					if unconfirmedTx.Tx.Attempt > MAX_TX_RETRY_ATTEMPTS {
 						unconfirmedTx.Tx.Status = commontypes.Fatal
-						a.logger.Infow("tx reached max num of retries", "hash", hash)
+						a.logger.Errorw("tx reached max num of retries and will be discarded", "txID", unconfirmedTx.Tx.ID, "hash", hash)
 						continue
 					}
 
@@ -520,7 +525,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 				continue
 			}
 
-			a.logger.Debugw("tx confirmed", "hash", hash, "type", chainTx.Type)
+			a.logger.Debugw("tx confirmed", "txID", unconfirmedTx.Tx.ID, "hash", hash, "type", chainTx.Type)
 			unconfirmedTx.Tx.Status = commontypes.Finalized
 
 			if err := a.accountStore.GetTxStore(accountAddress).Confirm(unconfirmedTx.Nonce, hash); err != nil {
