@@ -54,6 +54,11 @@ func (s *TxStore) SetNextNonce(newNextNonce uint64) []*UnconfirmedTx {
 	return staleTxs
 }
 
+func (s *TxStore) IsNonceTaken(nonce uint64) bool {
+	_, exists := s.unconfirmedNonces[nonce]
+	return exists
+}
+
 func (s *TxStore) GetNextNonce() uint64 {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -83,6 +88,24 @@ func (s *TxStore) AddUnconfirmed(nonce uint64, hash string, timestamp uint64, tx
 	}
 
 	s.nextNonce = s.nextNonce + 1
+	return nil
+}
+
+func (s *TxStore) AddUnconfirmedNoChecks(nonce uint64, hash string, timestamp uint64, tx *AptosTx) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	if h, exists := s.unconfirmedNonces[nonce]; exists {
+		return fmt.Errorf("nonce used: tried to use nonce (%d) for tx (%s), already used by (%s)", nonce, hash, h.Hash)
+	}
+
+	s.unconfirmedNonces[nonce] = &UnconfirmedTx{
+		Nonce:     nonce,
+		Hash:      hash,
+		Timestamp: timestamp,
+		Tx:        tx,
+	}
+
 	return nil
 }
 
