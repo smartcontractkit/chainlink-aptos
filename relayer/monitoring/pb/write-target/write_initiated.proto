@@ -1,0 +1,11 @@
+syntax="proto3";
+
+package write_target;
+option go_package = ".;write_target";
+
+message WriteInitiated {
+    string forwarder = 1;
+    string receiver = 2;
+    string transmitter = 3;
+    uint32 report_id = 4;
+}

@@ -7,16 +7,22 @@
 (pkgs.mkShell.override {stdenv = pkgs.clangStdenv;}) {
   buildInputs = with pkgs;
     [
-      python3
-
+      # Go 1.22 + tools
       go_1_22
       gopls
       delve
       (golangci-lint.override {buildGoModule = buildGo122Module;})
       gotools
-
+      # Official golang implementation of the Ethereum protocol (geth)
       go-ethereum
 
+      # Protobuf + plugins
+      protobuf
+      # Go support for Google's protocol buffers
+      protoc-gen-go
+
+      # Extra tools
+      python3
       postgresql_15
       jq
     ]

@@ -1,0 +1,16 @@
+syntax="proto3";
+
+package forwarder;
+option go_package = ".;forwarder";
+
+message ReportProcessed {
+    string receiver = 1;
+    bytes workflow_execution_id = 2;
+    uint32 report_id = 3;
+    bool success = 4;
+
+    // Metadata is a serialized protobuf message
+    // For example, Aptos specific type hosting transaction data (e.g., _metadata_type = "aptos-tx-metadata")
+    bytes _metadata = 5;
+    string _metadata_type = 6;
+}

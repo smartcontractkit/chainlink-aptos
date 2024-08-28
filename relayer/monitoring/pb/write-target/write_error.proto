@@ -1,0 +1,20 @@
+syntax="proto3";
+
+package write_target;
+option go_package = ".;write_target";
+
+message WriteError {
+    uint32 code = 1;
+    string summary = 2;
+    string cause = 3;
+
+    string forwarder = 4;
+    string receiver = 5;
+    string transmitter = 6;
+    uint32 report_id = 7;
+
+    // Metadata is a serialized protobuf message
+    // For example, Aptos specific type hosting API error data (e.g., _metadata_type = "aptos-api-error-metadata")
+    bytes _metadata = 8;
+    string _metadata_type = 9;
+}

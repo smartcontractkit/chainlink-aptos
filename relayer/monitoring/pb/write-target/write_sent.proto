@@ -1,0 +1,18 @@
+syntax="proto3";
+
+package write_target;
+option go_package = ".;write_target";
+
+message WriteSent {
+    string forwarder = 1;
+    string receiver = 2;
+    string transmitter = 3;
+    uint32 report_id = 4;
+
+    string txHash = 5;
+
+    // Metadata is a serialized protobuf message
+    // For example, Aptos specific type hosting transaction data (e.g., _metadata_type = "aptos-tx-sent-metadata")
+    bytes _metadata = 6;
+    string _metadata_type = 7;
+}
