@@ -190,7 +190,7 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 		FunctionName:    functionName,
 		TypeTags:        typeTags,
 		BcsValues:       bcsValues,
-		Status:          commontypes.Unconfirmed,
+		Status:          commontypes.Pending,
 		Simulate:        simulateTx,
 	}
 
@@ -276,13 +276,6 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		txStore = newTxStore
 	}
 
-	nodeInfo, err := client.Info()
-	if err != nil {
-		a.logger.Errorw("failed to fetch ledger info", "error", err)
-		tx.Status = commontypes.Fatal
-		return
-	}
-
 	payload := aptos.TransactionPayload{
 		Payload: &aptos.EntryFunction{
 			Module: aptos.ModuleId{
@@ -296,7 +289,27 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	}
 
 	buildSignedTx := func() (*aptos.SignedTransaction, uint64, error) {
-		nonce := txStore.GetNextNonce()
+		var nonce uint64
+		if tx.Status == commontypes.Failed {
+			// Enter recovery mode here: reset the nonce for failed tx
+			nonce, _ = a.getSequenceNumber(a.client, tx.FromAddress)
+
+			// If the recovery tx already in progress, queue up normally
+			if txStore.IsNonceTaken(nonce) {
+				nonce = txStore.GetNextNonce()
+
+				// Return non-recovery tx to the default state
+				tx.Status = commontypes.Unconfirmed
+			}
+		} else {
+			nonce = txStore.GetNextNonce()
+		}
+
+		nodeInfo, err := client.Info()
+		if err != nil {
+			a.logger.Errorw("failed to fetch node info", "error", err)
+			return nil, nonce, errors.New("failed to fetch node info")
+		}
 
 		ledgerTimestamp := nodeInfo.LedgerTimestamp()
 		if ledgerTimestamp == 0 {
@@ -412,32 +425,46 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 				// In case of http errors (>400) wait gracefully and retry
 				// It inlcudes all network-related errors as well as
 				// the pre-execution validation in the Mempool (e.g. old/duplicated nonce)
-				a.logger.Errorw("failed to submit signed tx, retrying..", "error", httpErr)
+				a.logger.Errorw("failed to submit signed tx, retrying..", "txID", tx.ID, "error", httpErr)
 				time.Sleep(SUBMIT_DELAY_DURATION * time.Second)
 				attempt++
 				continue
 			} else {
 				// Do not retry on unknown errors
-				a.logger.Errorw("failed to submit signed tx, aborting..", "error", err)
+				a.logger.Errorw("failed to submit signed tx, discarding..", "txID", tx.ID, "error", err)
 				tx.Status = commontypes.Fatal
 				break
 			}
 		} else {
 			// Tx included in the Mempool
-			a.logger.Debugw("submit tx successful", "submitResponse", submitResponse)
+			a.logger.Debugw("submit tx successful", "txID", tx.ID, "submitResponse", submitResponse)
 
 			if submitResponse.Hash == "" {
 				a.logger.Errorw("did not receive hash after successful tx submission", "txID", tx.ID)
 				tx.Status = commontypes.Fatal
 				return
+			}
+
+			if tx.Status == commontypes.Failed {
+				// Handle special case when failed tx is submitted with the recovered nonce
+				// The nonce can be behind the tracked nonce, but we need to track the status
+				err = txStore.AddUnconfirmedNoChecks(nonce, submitResponse.Hash, uint64(time.Now().Unix()), tx)
+				if err != nil {
+					a.logger.Errorw("failed to add failed tx", "txID", tx.ID, "txHash", submitResponse.Hash, "error", err)
+					tx.Status = commontypes.Fatal
+					return
+				}
 			} else {
 				err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, uint64(time.Now().Unix()), tx)
 				if err != nil {
 					// TODO: figure out what to do here.
-					a.logger.Errorw("failed to add unconfirmed tx", "txHash", submitResponse.Hash, "error", err)
+					a.logger.Errorw("failed to add unconfirmed tx", "txID", tx.ID, "txHash", submitResponse.Hash, "error", err)
 					tx.Status = commontypes.Fatal
+					return
 				}
 			}
+
+			tx.Status = commontypes.Unconfirmed
 			return
 		}
 	}
