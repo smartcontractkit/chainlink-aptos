@@ -32,7 +32,7 @@ const MAX_SIMULATE_ATTEMPTS = 5
 // todo: add to txm config?
 const MAX_SUBMIT_RETRY_ATTEMPTS = 10
 const SUBMIT_DELAY_DURATION = 3 // seconds
-const TX_EXPIRATION_TIME = 10    // seconds
+const TX_EXPIRATION_TIME = 10   // seconds
 const MAX_TX_RETRY_ATTEMPTS = 5
 
 type AptosTxm struct {
@@ -125,8 +125,6 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 		fromAddress = accountAddress.String()
 	}
 
-	a.logger.Debugw("Tx enqueued", "txID", transactionID, "fromAddr", fromAddress)
-
 	functionTokens := strings.Split(function, "::")
 	if len(functionTokens) != 3 {
 		return fmt.Errorf("unexpected function name, expected 3 tokens, got %d", len(functionTokens))
@@ -200,6 +198,7 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 
 	select {
 	case a.broadcastChan <- transactionID:
+		a.logger.Debugw("Tx enqueued", "txID", transactionID, "fromAddr", fromAddress)
 	default:
 		return fmt.Errorf("failed to enqueue tx: %+v", tx)
 	}

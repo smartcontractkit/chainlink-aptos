@@ -55,6 +55,9 @@ func (s *TxStore) SetNextNonce(newNextNonce uint64) []*UnconfirmedTx {
 }
 
 func (s *TxStore) IsNonceTaken(nonce uint64) bool {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
 	_, exists := s.unconfirmedNonces[nonce]
 	return exists
 }
