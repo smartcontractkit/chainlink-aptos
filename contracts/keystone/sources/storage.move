@@ -68,7 +68,10 @@ module keystone::storage {
         let obj_signer = object::generate_signer_for_extending(extend_ref);
         move_to(&obj_signer, Storage { data, metadata: meta });
         *metadata
+    }
 
+    public(friend) fun storage_exists(obj_address: address): bool {
+        object::object_exists<Storage>(obj_address)
     }
 
     /// Second half of the process for retrieving. This happens outside engine to prevent the

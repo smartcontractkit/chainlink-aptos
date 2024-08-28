@@ -21,6 +21,7 @@ module keystone::forwarder {
     const E_FAULT_TOLERANCE_MUST_BE_POSITIVE: u64 = 9;
     const E_EXCESS_SIGNERS: u64 = 10;
     const E_INSUFFICIENT_SIGNERS: u64 = 11;
+    const E_CALLBACK_DATA_NOT_CONSUMED: u64 = 12;
 
     const MAX_ORACLES: u64 = 31;
 
@@ -149,6 +150,8 @@ module keystone::forwarder {
     fun dispatch(address: address, metadata: vector<u8>, data: vector<u8>) {
         let meta = keystone::storage::insert(address, metadata, data);
         aptos_framework::dispatchable_fungible_asset::derived_supply(meta);
+        let obj_address = object::object_address<aptos_framework::fungible_asset::Metadata>(&meta);
+        assert!(!keystone::storage::storage_exists(obj_address), E_CALLBACK_DATA_NOT_CONSUMED);
     }
 
     public entry fun report(transmitter: &signer, receiver: address, raw_report: vector<u8>, signatures: vector<vector<u8>>) acquires State {
