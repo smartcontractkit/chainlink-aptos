@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"google.golang.org/protobuf/proto"
+
 	aptos "github.com/aptos-labs/aptos-go-sdk"
 	"github.com/google/uuid"
 
@@ -18,6 +20,8 @@ import (
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 	"github.com/smartcontractkit/chainlink-common/pkg/values"
+
+	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/write-target"
 )
 
 var (
@@ -72,8 +76,8 @@ func success() capabilities.CapabilityResponse {
 	return capabilities.CapabilityResponse{}
 }
 
-func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (capabilities.CapabilityResponse, error) {
-	cap.lggr.Debugw("Execute", "request", request)
+func (c *WriteTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (capabilities.CapabilityResponse, error) {
+	c.lggr.Debugw("Execute", "request", request)
 
 	reqConfig, err := parseConfig(request.Config)
 	if err != nil {
@@ -92,7 +96,7 @@ func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.Capabi
 
 	if len(inputs.Report) == 0 {
 		// We received any empty report -- this means we should skip transmission.
-		cap.lggr.Debugw("Skipping empty report", "request", request)
+		c.lggr.Debugw("Skipping empty report", "request", request)
 		return success(), nil
 	}
 	// TODO: validate encoded report is prefixed with workflowID and executionID that match the request meta
@@ -112,16 +116,31 @@ func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.Capabi
 		WorkflowExecutionID: rawExecutionID,
 		ReportID:            uint16(reportID),
 	}
+
+	// Emit 'write-target.WriteInitiated'
+	msgWriteInitiated := &wt.WriteInitiated{
+		Forwarder: c.forwarderAddress,
+		Receiver:  reqConfig.Address,
+		// TODO: figure out how to source the transmitter (e.g., c.cw.config.Functions["forwarder"].FromAddress)
+		Transmitter: "N/A",
+		ReportId:    uint32(reportID),
+	}
+	_, err = proto.Marshal(msgWriteInitiated)
+	if err != nil {
+		return capabilities.CapabilityResponse{}, err
+	}
+	c.lggr.Infow("[Beholder.emit] 'write-target.WriteInitiated'", "message", msgWriteInitiated.String())
+
 	var transmitted bool
-	if err = cap.cr.GetLatestValue(ctx, "forwarder", "getTransmissionState", primitives.Unconfirmed, queryInputs, &transmitted); err != nil {
+	if err = c.cr.GetLatestValue(ctx, "forwarder", "getTransmissionState", primitives.Unconfirmed, queryInputs, &transmitted); err != nil {
 		return capabilities.CapabilityResponse{}, err
 	}
 	if transmitted == true {
-		cap.lggr.Infow("WriteTarget report already onchain - returning without a tranmission attempt", "executionID", request.Metadata.WorkflowExecutionID)
+		c.lggr.Infow("WriteTarget report already onchain - returning without a tranmission attempt", "executionID", request.Metadata.WorkflowExecutionID)
 		return success(), nil
 	}
 
-	cap.lggr.Infow("WriteTarget non-empty report - attempting to push to txmgr", "request", request, "reportLen", len(inputs.Report), "reportContextLen", len(inputs.Context), "nSignatures", len(inputs.Signatures), "executionID", request.Metadata.WorkflowExecutionID)
+	c.lggr.Infow("WriteTarget non-empty report - attempting to push to txmgr", "request", request, "reportLen", len(inputs.Report), "reportContextLen", len(inputs.Context), "nSignatures", len(inputs.Signatures), "executionID", request.Metadata.WorkflowExecutionID)
 	txID, err := uuid.NewUUID() // NOTE: CW expects us to generate an ID, rather than return one
 	if err != nil {
 		return capabilities.CapabilityResponse{}, err
@@ -147,21 +166,21 @@ func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.Capabi
 	if req.Signatures == nil {
 		req.Signatures = make([][]byte, 0)
 	}
-	cap.lggr.Debugw("Transaction raw report", "report", hex.EncodeToString(req.RawReport))
+	c.lggr.Debugw("Transaction raw report", "report", hex.EncodeToString(req.RawReport))
 
 	meta := commontypes.TxMeta{WorkflowExecutionID: &request.Metadata.WorkflowExecutionID}
 	value := big.NewInt(0)
-	if err := cap.cw.SubmitTransaction(ctx, "forwarder", "report", req, txID.String(), cap.forwarderAddress, &meta, value); err != nil {
+	if err := c.cw.SubmitTransaction(ctx, "forwarder", "report", req, txID.String(), c.forwarderAddress, &meta, value); err != nil {
 		return capabilities.CapabilityResponse{}, err
 	}
-	cap.lggr.Debugw("Transaction submitted", "request", request, "transaction", txID)
+	c.lggr.Debugw("Transaction submitted", "request", request, "transaction", txID)
 	return success(), nil
 }
 
-func (cap *WriteTarget) RegisterToWorkflow(ctx context.Context, request capabilities.RegisterToWorkflowRequest) error {
+func (c *WriteTarget) RegisterToWorkflow(ctx context.Context, request capabilities.RegisterToWorkflowRequest) error {
 	return nil
 }
 
-func (cap *WriteTarget) UnregisterFromWorkflow(ctx context.Context, request capabilities.UnregisterFromWorkflowRequest) error {
+func (c *WriteTarget) UnregisterFromWorkflow(ctx context.Context, request capabilities.UnregisterFromWorkflowRequest) error {
 	return nil
 }
