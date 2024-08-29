@@ -3,6 +3,7 @@ module keystone::storage {
     use std::option;
     use std::string;
     use std::signer;
+    use std::vector;
 
     use aptos_std::table::{Self, Table};
     use aptos_std::type_info::{Self, TypeInfo};
@@ -85,6 +86,20 @@ module keystone::storage {
         (data.metadata, data.data)
     }
 
+    #[view]
+    public fun parse_report_metadata(metadata: vector<u8>): (vector<u8>, vector<u8>) {
+      // (first 32 bytes contain length of the byte array)
+      // workflow_cid             // offset 32, size 32
+      // workflow_name            // offset 64, size 10
+      // workflow_owner           // offset 74, size 20
+      // report_name              // offset 94, size  2
+
+      let workflow_name = vector::slice(&metadata, 64, 74);
+      let workflow_owner = vector::slice(&metadata, 74, 94);
+
+      (workflow_name, workflow_owner)
+    }
+
     /// Prepares the dispatch table.
     fun init_module(publisher: &signer) {
         let constructor_ref = object::create_object(@keystone);
@@ -110,5 +125,14 @@ module keystone::storage {
     #[test_only]
     public fun init_module_for_testing(publisher: &signer) {
         init_module(publisher);
+    }
+
+    #[test]
+    fun test_parse_report_metadata() {
+        let metadata = x"1019256d85b84c7ba85cd9b7bb94fe15b73d7ec99e3cc0f470ee5dd2a1eaac88c000000000000000000000000bc3a8582cc08d3df797ab13a6c567eadb2517b3f0f931b7145b218016bf9dde43030303045544842544300000000000000000000000000000000000000aa000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000001c";
+
+        let (workflow_name, workflow_owner) = parse_report_metadata(metadata);
+        assert!(workflow_name == x"f0f931b7145b218016bf", 1);
+        assert!(workflow_owner == x"9dde430303030455448425443000000000000000", 1)
     }
 }
