@@ -16,6 +16,7 @@ module data_feeds::registry {
     struct Registry has key, store, drop {
         extend_ref: ExtendRef,
         owner_address: address,
+        pending_owner_address: address,
 
         feeds: SimpleMap<vector<u8>, Feed>,
         configs: SimpleMap<vector<u8>, Config>,
@@ -107,6 +108,18 @@ module data_feeds::registry {
         report_timestamp: u256,
     }
 
+    #[event]
+    struct OwnershipTransferRequested has drop, store {
+        from: address,
+        to: address,
+    }
+
+    #[event]
+    struct OwnershipTransferred has drop, store {
+        from: address,
+        to: address,
+    }
+
     // Errors
     const ENOT_OWNER: u64 = 1;
     const EDUPLICATE_ELEMENTS: u64 = 2;
@@ -117,6 +130,8 @@ module data_feeds::registry {
     const EINVALID_REPORT: u64 = 7;
     const EUNAUTHORIZED_WORKFLOW_NAME: u64 = 8;
     const EUNAUTHORIZED_WORKFLOW_OWNER: u64 = 9;
+    const ECANNOT_TRANSFER_TO_SELF: u64 = 10;
+    const ENOT_PROPOSED_OWNER: u64 = 11;
 
     // Schema types
     const SCHEMA_V1: u16 = 1;
@@ -156,6 +171,7 @@ module data_feeds::registry {
 
         move_to(&object_signer, Registry {
             owner_address: @owner,
+            pending_owner_address: @0x0,
             extend_ref,
 
             feeds: simple_map::new(),
@@ -489,6 +505,42 @@ module data_feeds::registry {
             }
         })
     }
+
+    // Ownership functions
+
+    #[view]
+    public fun get_owner(): address acquires Registry {
+        let registry = borrow_global<Registry>(get_state_addr());
+        registry.owner_address
+    }
+
+    public entry fun transfer_ownership(authority: &signer, to: address) acquires Registry {
+        let registry = borrow_global_mut<Registry>(get_state_addr());
+        assert_is_owner(registry, signer::address_of(authority));
+        assert!(registry.owner_address != to, error::invalid_argument(ECANNOT_TRANSFER_TO_SELF));
+
+        registry.pending_owner_address = to;
+
+        event::emit(OwnershipTransferRequested {
+            from: registry.owner_address,
+            to,
+        });
+    }
+
+    public entry fun accept_ownership(authority: &signer) acquires Registry {
+        let registry = borrow_global_mut<Registry>(get_state_addr());
+        assert!(registry.pending_owner_address == signer::address_of(authority), error::permission_denied(ENOT_PROPOSED_OWNER));
+
+        let old_owner_address = registry.owner_address;
+        registry.owner_address = registry.pending_owner_address;
+        registry.pending_owner_address = @0x0;
+
+        event::emit(OwnershipTransferred {
+            from: old_owner_address,
+            to: registry.owner_address,
+        });
+    }
+
 
     // Struct accessors
 
