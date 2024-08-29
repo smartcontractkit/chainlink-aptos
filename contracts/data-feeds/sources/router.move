@@ -1,5 +1,6 @@
 module data_feeds::router {
     use std::error;
+    use std::event;
     use std::signer;
     use std::string::String;
     use std::vector;
@@ -13,9 +14,24 @@ module data_feeds::router {
     struct Router has key, store, drop {
         extend_ref: ExtendRef,
         owner_address: address,
+        pending_owner_address: address,
+    }
+
+    #[event]
+    struct OwnershipTransferRequested has drop, store {
+        from: address,
+        to: address,
+    }
+
+    #[event]
+    struct OwnershipTransferred has drop, store {
+        from: address,
+        to: address,
     }
 
     const ENOT_OWNER: u64 = 0;
+    const ECANNOT_TRANSFER_TO_SELF: u64 = 1;
+    const ENOT_PROPOSED_OWNER: u64 = 2;
 
     fun assert_is_owner(router: &Router, target_address: address) {
         assert!(router.owner_address == target_address, error::invalid_argument(ENOT_OWNER));
@@ -33,6 +49,7 @@ module data_feeds::router {
 
         move_to(&object_signer, Router {
             owner_address: @owner,
+            pending_owner_address: @0x0,
             extend_ref,
         });
     }
@@ -66,5 +83,39 @@ module data_feeds::router {
         assert_is_owner(router, signer::address_of(authority));
 
         registry::set_feeds_unchecked(feed_ids, descriptions, config_id);
+    }
+
+    // Ownership functions
+    #[view]
+    public fun get_owner(): address acquires Router {
+        let router = borrow_global<Router>(get_state_addr());
+        router.owner_address
+    }
+
+    public entry fun transfer_ownership(authority: &signer, to: address) acquires Router {
+        let router = borrow_global_mut<Router>(get_state_addr());
+        assert_is_owner(router, signer::address_of(authority));
+        assert!(router.owner_address != to, error::invalid_argument(ECANNOT_TRANSFER_TO_SELF));
+
+        router.pending_owner_address = to;
+
+        event::emit(OwnershipTransferRequested {
+            from: router.owner_address,
+            to,
+        });
+    }
+
+    public entry fun accept_ownership(authority: &signer) acquires Router {
+        let router = borrow_global_mut<Router>(get_state_addr());
+        assert!(router.pending_owner_address == signer::address_of(authority), error::permission_denied(ENOT_PROPOSED_OWNER));
+
+        let old_owner_address = router.owner_address;
+        router.owner_address = router.pending_owner_address;
+        router.pending_owner_address = @0x0;
+
+        event::emit(OwnershipTransferred {
+            from: old_owner_address,
+            to: router.owner_address,
+        });
     }
 }
