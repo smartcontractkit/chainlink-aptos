@@ -638,7 +638,7 @@ module data_feeds::registry {
     }
 
     #[test_only]
-    public entry fun set_up_test(publisher: &signer, keystone: &signer) {
+    fun set_up_test(publisher: &signer, keystone: &signer) {
         use aptos_framework::account::{Self};
         account::create_account_for_test(signer::address_of(publisher));
 
@@ -648,16 +648,16 @@ module data_feeds::registry {
         init_module(publisher);
     }
 
-    #[test(owner = @0xcafe, publisher = @data_feeds, keystone = @keystone)]
+    #[test(owner = @owner, publisher = @data_feeds, keystone = @keystone)]
     fun test_set_feed_configs(
-        owner: signer,
-        publisher: signer,
-        keystone: signer,
+        owner: &signer,
+        publisher: &signer,
+        keystone: &signer,
     ) acquires Registry {
-        set_up_test(&publisher, &keystone);
+        set_up_test(publisher, keystone);
 
         set_feed_configs(
-            &owner,
+            owner,
             vector[],
             vector[],
             vector[],
