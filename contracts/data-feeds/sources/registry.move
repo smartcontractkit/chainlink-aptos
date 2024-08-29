@@ -663,4 +663,65 @@ module data_feeds::registry {
             vector[],
         );
     }
+
+    #[test(owner = @owner, publisher = @data_feeds, keystone = @keystone, new_owner=@0xbeef)]
+    fun test_transfer_ownership_success(
+      owner: &signer,
+      publisher: &signer,
+      keystone: &signer,
+      new_owner: &signer
+    ) acquires Registry {
+        set_up_test(publisher, keystone);
+
+        assert!(get_owner() == @owner, 1);
+
+        transfer_ownership(owner, signer::address_of(new_owner));
+        accept_ownership(new_owner);
+
+        assert!(get_owner() == signer::address_of(new_owner), 2);
+    }
+
+    #[test(publisher = @data_feeds, keystone = @keystone, unknown_user=@0xbeef)]
+    #[expected_failure(abort_code = 327681, location = data_feeds::registry)]
+    fun test_transfer_ownership_failure_not_owner(
+      publisher: &signer,
+      keystone: &signer,
+      unknown_user: &signer,
+    ) acquires Registry {
+        set_up_test(publisher, keystone);
+
+        assert!(get_owner() == @owner, 1);
+
+        transfer_ownership(unknown_user, signer::address_of(unknown_user));
+    }
+
+    #[test(owner = @owner, publisher = @data_feeds, keystone = @keystone)]
+    #[expected_failure(abort_code = 65546, location = data_feeds::registry)]
+    fun test_transfer_ownership_failure_transfer_to_self(
+      owner: &signer,
+      publisher: &signer,
+      keystone: &signer,
+    ) acquires Registry {
+        set_up_test(publisher, keystone);
+
+        assert!(get_owner() == @owner, 1);
+
+        transfer_ownership(owner, signer::address_of(owner));
+    }
+
+    #[test(owner = @owner, publisher = @data_feeds, keystone = @keystone, new_owner=@0xbeef)]
+    #[expected_failure(abort_code = 327691, location = data_feeds::registry)]
+    fun test_transfer_ownership_failure_not_proposed_owner(
+      owner: &signer,
+      publisher: &signer,
+      keystone: &signer,
+      new_owner: &signer
+    ) acquires Registry {
+        set_up_test(publisher, keystone);
+
+        assert!(get_owner() == @owner, 1);
+
+        transfer_ownership(owner, @0xfeeb);
+        accept_ownership(new_owner);
+    }
 }
