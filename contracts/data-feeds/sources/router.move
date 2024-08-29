@@ -118,4 +118,68 @@ module data_feeds::router {
             to: router.owner_address,
         });
     }
+
+    #[test_only]
+    fun set_up_test(publisher: &signer) {
+        init_module(publisher);
+    }
+
+
+
+    #[test(owner = @owner, publisher = @data_feeds, new_owner=@0xbeef)]
+    fun test_transfer_ownership_success(
+      owner: &signer,
+      publisher: &signer,
+      new_owner: &signer
+    ) acquires Router {
+        set_up_test(publisher);
+
+        assert!(get_owner() == @owner, 1);
+
+        transfer_ownership(owner, signer::address_of(new_owner));
+        accept_ownership(new_owner);
+
+        assert!(get_owner() == signer::address_of(new_owner), 2);
+    }
+
+    #[test(publisher = @data_feeds, unknown_user=@0xbeef)]
+    #[expected_failure(abort_code = 65536, location = data_feeds::router)]
+    fun test_transfer_ownership_failure_not_owner(
+      publisher: &signer,
+      unknown_user: &signer,
+    ) acquires Router {
+        set_up_test(publisher);
+
+        assert!(get_owner() == @owner, 1);
+
+        transfer_ownership(unknown_user, signer::address_of(unknown_user));
+    }
+
+    #[test(owner = @owner, publisher = @data_feeds)]
+    #[expected_failure(abort_code = 65537, location = data_feeds::router)]
+    fun test_transfer_ownership_failure_transfer_to_self(
+      owner: &signer,
+      publisher: &signer,
+    ) acquires Router {
+        set_up_test(publisher);
+
+        assert!(get_owner() == @owner, 1);
+
+        transfer_ownership(owner, signer::address_of(owner));
+    }
+
+    #[test(owner = @owner, publisher = @data_feeds, new_owner=@0xbeef)]
+    #[expected_failure(abort_code = 327682, location = data_feeds::router)]
+    fun test_transfer_ownership_failure_not_proposed_owner(
+      owner: &signer,
+      publisher: &signer,
+      new_owner: &signer
+    ) acquires Router {
+        set_up_test(publisher);
+
+        assert!(get_owner() == @owner, 1);
+
+        transfer_ownership(owner, @0xfeeb);
+        accept_ownership(new_owner);
+    }
 }
