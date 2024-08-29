@@ -319,7 +319,10 @@ module data_feeds::registry {
 
         let (metadata, data) = keystone::storage::retrieve(new_proof());
 
-        let (workflow_name, workflow_owner) = keystone::storage::parse_report_metadata(metadata);
+        let parsed_metadata = keystone::storage::parse_report_metadata(metadata);
+
+        let workflow_name = keystone::storage::get_report_metadata_workflow_name(&parsed_metadata);
+        let workflow_owner = keystone::storage::get_report_metadata_workflow_owner(&parsed_metadata);
 
         assert!(vector::is_empty(&registry.allowed_workflow_names) || vector::contains(&registry.allowed_workflow_names, &workflow_name), EUNAUTHORIZED_WORKFLOW_NAME);
         assert!(vector::is_empty(&registry.allowed_workflow_owners) || vector::contains(&registry.allowed_workflow_owners, &workflow_owner), EUNAUTHORIZED_WORKFLOW_OWNER);
