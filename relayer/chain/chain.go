@@ -18,6 +18,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/config"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
 )
 
@@ -61,7 +62,10 @@ type chain struct {
 	id   string
 	cfg  *config.TOMLConfig
 	lggr logger.Logger
-	txm  *txm.AptosTxm
+
+	// Sub-services
+	txm            *txm.AptosTxm
+	balanceMonitor services.Service
 }
 
 func NewChain(cfg *config.TOMLConfig, opts ChainOpts) (Chain, error) {
@@ -102,6 +106,19 @@ func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logg
 	if err != nil {
 		return nil, err
 	}
+
+	// Setup accounts balance monitor
+	opts := monitor.AptosAccBalanceMonitorOpts{
+		ChainID: ch.ID(),
+
+		Config:   *ch.Config().BalanceMonitor,
+		Logger:   lggr,
+		Keystore: loopKs,
+		NewClient: func() (*aptos.NodeClient, error) {
+			return ch.GetClient()
+		},
+	}
+	ch.balanceMonitor = monitor.NewAptosAccBalanceMonitor(opts)
 
 	return ch, nil
 }
@@ -155,17 +172,25 @@ func (c *chain) GetClient() (*aptos.NodeClient, error) {
 
 func (c *chain) Start(ctx context.Context) error {
 	return c.StartOnce("Chain", func() error {
-		return c.txm.Start(ctx)
+		c.lggr.Debug("Starting")
+		c.lggr.Debug("Starting txm")
+		c.lggr.Debug("Starting balance monitor")
+		var ms services.MultiStart
+		return ms.Start(ctx, c.txm, c.balanceMonitor)
 	})
 }
 
 func (c *chain) Close() error {
 	return c.StopOnce("Chain", func() error {
-		return c.txm.Close()
+		c.lggr.Debug("Stopping")
+		c.lggr.Debug("Stopping txm")
+		c.lggr.Debug("Stopping balance monitor")
+		return services.CloseAll(c.txm, c.balanceMonitor)
 	})
 }
 
 func (c *chain) Ready() error {
+	// TODO: errors.Join(txm.Ready(), balanceMonitor.Ready()), etc.
 	return c.StartStopOnce.Ready()
 }
 

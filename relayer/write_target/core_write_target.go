@@ -203,7 +203,7 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}
 	_, err = proto.Marshal(msgWriteSent)
 	if err != nil {
-		return nil, err
+		return capabilities.CapabilityResponse{}, err
 	}
 	c.lggr.Infow("[Beholder.emit] 'write-target.WriteSent'", "message", msgWriteSent.String())
 	c.lggr.Debugw("Transaction submitted", "request", request, "transaction", txID)
@@ -215,6 +215,8 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 }
 
 func (c *WriteTarget) RegisterToWorkflow(ctx context.Context, request capabilities.RegisterToWorkflowRequest) error {
+	// TODO: store locally, and if trigger seen
+
 	// TODO: start a process responsible for monitoring the chain and publishing [Beholder] Emit 'write-target.WriteConfirmed'
 	// TODO: start a process responsible for monitoring the WT account balance
 	return nil

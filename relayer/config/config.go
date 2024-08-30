@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
+	"time"
 
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/config"
 
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
 )
 
@@ -18,10 +20,14 @@ var DefaultConfigSet = ConfigSet{
 		BroadcastChanSize: 100,
 		ConfirmPollSecs:   2,
 	},
+	BalanceMonitor: monitor.Config{
+		BalancePollPeriod: 5 * time.Second,
+	},
 }
 
 type ConfigSet struct { //nolint:revive
 	TransactionManager txm.AptosTxmConfig
+	BalanceMonitor     monitor.Config
 }
 
 type WorkflowConfig struct {
@@ -32,12 +38,16 @@ type WorkflowConfig struct {
 
 type Chain struct {
 	TransactionManager *txm.AptosTxmConfig
+	BalanceMonitor     *monitor.Config
 	Workflow           WorkflowConfig
 }
 
 func (c *Chain) SetDefaults() {
 	if c.TransactionManager == nil {
 		c.TransactionManager = &DefaultConfigSet.TransactionManager
+	}
+	if c.BalanceMonitor == nil {
+		c.BalanceMonitor = &DefaultConfigSet.BalanceMonitor
 	}
 }
 
@@ -140,7 +150,9 @@ func setFromChain(c, f *Chain) {
 	if f.TransactionManager != nil {
 		c.TransactionManager = f.TransactionManager
 	}
-
+	if f.BalanceMonitor != nil {
+		c.BalanceMonitor = f.BalanceMonitor
+	}
 	c.Workflow = f.Workflow
 }
 
