@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/smartcontractkit/chainlink-common/pkg/config"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
@@ -12,7 +13,7 @@ import (
 
 // Config defines the balance monitor configuration.
 type Config struct {
-	BalancePollPeriod time.Duration
+	BalancePollPeriod config.Duration
 }
 
 type BalanceClient interface {
@@ -96,14 +97,15 @@ func (m *balanceMonitor) start() {
 	ctx, cancel := m.stop.NewCtx()
 	defer cancel()
 
-	tick := time.After(utils.WithJitter(m.cfg.BalancePollPeriod))
+	period := m.cfg.BalancePollPeriod.Duration()
+	tick := time.After(utils.WithJitter(period))
 	for {
 		select {
 		case <-m.stop:
 			return
 		case <-tick:
 			m.updateBalances(ctx)
-			tick = time.After(utils.WithJitter(m.cfg.BalancePollPeriod))
+			tick = time.After(utils.WithJitter(period))
 		}
 	}
 }

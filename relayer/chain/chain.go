@@ -73,10 +73,7 @@ func NewChain(cfg *config.TOMLConfig, opts ChainOpts) (Chain, error) {
 		return nil, fmt.Errorf("cannot create new chain with ID %s: chain is disabled", cfg.ChainID)
 	}
 	c, err := newChain(cfg.ChainID, cfg, opts.KeyStore, opts.Logger)
-	if err != nil {
-		return nil, err
-	}
-	return c, nil
+	return c, err
 }
 
 func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger) (*chain, error) {
@@ -111,12 +108,10 @@ func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logg
 	opts := monitor.AptosAccBalanceMonitorOpts{
 		ChainID: ch.ID(),
 
-		Config:   *ch.Config().BalanceMonitor,
-		Logger:   lggr,
-		Keystore: loopKs,
-		NewClient: func() (*aptos.NodeClient, error) {
-			return ch.GetClient()
-		},
+		Config:    *ch.Config().BalanceMonitor,
+		Logger:    lggr,
+		Keystore:  loopKs,
+		NewClient: getClient,
 	}
 	ch.balanceMonitor = monitor.NewAptosAccBalanceMonitor(opts)
 

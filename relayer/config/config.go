@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
@@ -21,7 +22,7 @@ var DefaultConfigSet = ConfigSet{
 		ConfirmPollSecs:   2,
 	},
 	BalanceMonitor: monitor.Config{
-		BalancePollPeriod: 5 * time.Second,
+		BalancePollPeriod: *config.MustNewDuration(5 * time.Second),
 	},
 }
 
@@ -132,6 +133,28 @@ type TOMLConfig struct {
 	ChainID string
 	Chain
 	Nodes Nodes
+}
+
+// decodeConfig decodes the rawConfig as (Aptos) TOML and sets default values
+func NewDecodedTOMLConfig(rawConfig string) (*TOMLConfig, error) {
+	d := toml.NewDecoder(strings.NewReader(rawConfig))
+	d.DisallowUnknownFields()
+
+	var cfg TOMLConfig
+	if err := d.Decode(&cfg); err != nil {
+		return &TOMLConfig{}, fmt.Errorf("failed to decode config toml: %w:\n\t%s", err, rawConfig)
+	}
+
+	if err := cfg.ValidateConfig(); err != nil {
+		return &TOMLConfig{}, fmt.Errorf("invalid aptos config: %w", err)
+	}
+
+	if !cfg.IsEnabled() {
+		return &TOMLConfig{}, fmt.Errorf("cannot create new chain with ID %s: config is disabled", cfg.ChainID)
+	}
+
+	cfg.SetDefaults()
+	return &cfg, nil
 }
 
 func (c *TOMLConfig) IsEnabled() bool {

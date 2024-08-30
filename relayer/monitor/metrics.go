@@ -7,6 +7,7 @@ import (
 
 // TODO: replace with Beholder metrics
 var promWTAccountBalance = promauto.NewGaugeVec(
-	prometheus.GaugeOpts{Name: "write-target_account-balance", Help: "Balance for configured WT account"},
+	// TODO: prom metric names can't have dashes (-), need to replace with underscores (_)
+	prometheus.GaugeOpts{Name: "write_target_account_balance", Help: "Balance for configured WT account"},
 	[]string{"account", "network_chain_id", "network_name", "denomination"},
 )

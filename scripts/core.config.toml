@@ -33,6 +33,9 @@ PublicKey = ""
 Name = 'primary'
 URL = "http://chainlink-aptos.devnet:8080/v1"
 
+[Aptos.BalanceMonitor]
+BalancePollPeriod = '5s'
+
 # [[EVM]]
 # ChainID = '11155111'
 
