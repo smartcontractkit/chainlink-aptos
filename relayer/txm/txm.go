@@ -43,11 +43,12 @@ type AptosTxm struct {
 	transactions     map[string]*AptosTx
 	transactionsLock sync.RWMutex
 
-	broadcastChan chan string
-	accountStore  *AccountStore
-	starter       utils.StartStopOnce
-	done          sync.WaitGroup
-	stop          chan struct{}
+	rebroadcastChan chan string
+	broadcastChan   chan string
+	accountStore    *AccountStore
+	starter         utils.StartStopOnce
+	done            sync.WaitGroup
+	stop            chan struct{}
 
 	client *aptos.NodeClient
 }
@@ -66,9 +67,10 @@ func New(lgr logger.Logger, keystore loop.Keystore, config AptosTxmConfig, getCl
 
 		transactions: map[string]*AptosTx{},
 
-		broadcastChan: make(chan string, config.BroadcastChanSize),
-		accountStore:  NewAccountStore(),
-		stop:          make(chan struct{}),
+		broadcastChan:   make(chan string, config.BroadcastChanSize),
+		rebroadcastChan: make(chan string, config.BroadcastChanSize),
+		accountStore:    NewAccountStore(),
+		stop:            make(chan struct{}),
 	}, nil
 }
 
@@ -227,19 +229,25 @@ func (a *AptosTxm) broadcastLoop() {
 	_, cancel := utils.ContextFromChan(a.stop)
 	defer cancel()
 
+	signAndBroadcast := func(transactionID string, isRebroadcasted bool) {
+		a.transactionsLock.Lock()
+		tx, ok := a.transactions[transactionID]
+		a.transactionsLock.Unlock()
+		if !ok {
+			a.logger.Errorw("failed to find tx", "txID", transactionID)
+			return
+		}
+		a.signAndBroadcast(tx, isRebroadcasted)
+	}
+
 	a.logger.Debugw("broadcastLoop: started")
 	for {
 		select {
+		// rebroadcast channel takes priority
+		case transactionID := <-a.rebroadcastChan:
+			signAndBroadcast(transactionID, true)
 		case transactionID := <-a.broadcastChan:
-			a.transactionsLock.Lock()
-			tx, ok := a.transactions[transactionID]
-			a.transactionsLock.Unlock()
-			if !ok {
-				a.logger.Errorw("failed to find tx", "txID", transactionID)
-				continue
-			}
-			a.signAndBroadcast(tx)
-
+			signAndBroadcast(transactionID, false)
 		case <-a.stop:
 			a.logger.Debugw("broadcastLoop: stopped")
 			return
