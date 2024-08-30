@@ -506,60 +506,67 @@ func (a *AptosTxm) confirmLoop() {
 
 func (a *AptosTxm) checkUnconfirmed() {
 	client := a.client
-
-	nodeInfo, err := client.Info()
-	if err != nil {
-		a.logger.Errorw("failed to fetch ledger info", "error", err)
-		return
-	}
-
-	ledgerTimestampInSec := nodeInfo.LedgerTimestamp() / 1000000
 	allUnconfirmedTxs := a.accountStore.GetAllUnconfirmed()
 
 	for accountAddress, unconfirmedTxs := range allUnconfirmedTxs {
+		accountStore := a.accountStore.GetTxStore(accountAddress)
+
 		for _, unconfirmedTx := range unconfirmedTxs {
 			hash := unconfirmedTx.Hash
-
 			chainTx, err := client.TransactionByHash(hash)
-			if err != nil || chainTx.Type == aptosapi.TransactionVariantPending {
-				if ledgerTimestampInSec > unconfirmedTx.Timestamp+TX_EXPIRATION_TIME {
-					// LedgerTimestamp dictates expiration, the local node might lag behind
+
+			if err == nil && chainTx.Type != aptosapi.TransactionVariantPending {
+				// tx has been commited
+				a.logger.Debugw("tx confirmed", "txID", unconfirmedTx.Tx.ID, "hash", hash, "type", chainTx.Type)
+				unconfirmedTx.Tx.Status = commontypes.Finalized
+
+				if err := accountStore.Confirm(unconfirmedTx.Nonce, hash); err != nil {
+					a.logger.Errorw("failed to confirm tx in TxStore", "hash", hash, "accountAddress", accountAddress, "error", err)
+				}
+			} else {
+				// LedgerTimestamp dictates expiration, the local node might lag behind
+				ledgerTimestamp, err := a.getLedgerTimestamp()
+				if err != nil {
+					a.logger.Errorw("couldn't fetch ledger timestamp and check if tx expired", "txID", unconfirmedTx.Tx.ID)
+					continue
+				}
+
+				if ledgerTimestamp <= unconfirmedTx.Timestamp+TX_EXPIRATION_TIME {
+					// tx was neither committed nor expired yet
+					a.logger.Debugw("tx not found or pending in the mempool", "hash", hash)
+				} else {
 					// At this point we know the tx won't be committed
-					a.logger.Debugw("tx expired, setting for retry..", "txID", unconfirmedTx.Tx.ID, "hash", hash)
 					unconfirmedTx.Tx.Status = commontypes.Failed
+					unconfirmedTx.Tx.LastUsedNonce = unconfirmedTx.Nonce
 
 					// Confirm tx to remove it from the unconfirmedNonces pool
 					// On retry the tx will get the new hash and reenter the pool for further tracking
-					err = a.accountStore.GetTxStore(accountAddress).Confirm(unconfirmedTx.Nonce, hash)
+					err = accountStore.Confirm(unconfirmedTx.Nonce, hash)
 					if err != nil {
 						a.logger.Errorw("coudln't confirm expired tx", "error", err)
 						continue
 					}
 
 					unconfirmedTx.Tx.Attempt++
-					if unconfirmedTx.Tx.Attempt > MAX_TX_RETRY_ATTEMPTS {
+					if unconfirmedTx.Tx.Attempt >= MAX_TX_RETRY_ATTEMPTS {
 						unconfirmedTx.Tx.Status = commontypes.Fatal
 						a.logger.Errorw("tx reached max num of retries and will be discarded", "txID", unconfirmedTx.Tx.ID, "hash", hash)
+
+						// save nonce to be reused with the new tx
+						accountStore.AddFailedNonce(unconfirmedTx.Nonce)
 						continue
 					}
 
+					a.logger.Debugw("tx expired, setting for retry..", "txID", unconfirmedTx.Tx.ID, "hash", hash)
+
 					select {
-					case a.broadcastChan <- unconfirmedTx.Tx.ID:
+					// prioritize tx by sending it to the rebroadcast channel
+					case a.rebroadcastChan <- unconfirmedTx.Tx.ID:
 					default:
-						a.logger.Errorw("failed to enqueue retry tx", "previousHash", unconfirmedTx.Hash)
+						a.logger.Errorw("failed to enqueue tx for rebroadcast", "previousHash", unconfirmedTx.Hash)
 					}
-				} else {
-					a.logger.Debugw("tx not found or pending in the mempool", "hash", hash)
 				}
 
-				continue
-			}
-
-			a.logger.Debugw("tx confirmed", "txID", unconfirmedTx.Tx.ID, "hash", hash, "type", chainTx.Type)
-			unconfirmedTx.Tx.Status = commontypes.Finalized
-
-			if err := a.accountStore.GetTxStore(accountAddress).Confirm(unconfirmedTx.Nonce, hash); err != nil {
-				a.logger.Errorw("failed to confirm tx in TxStore", "hash", hash, "accountAddress", accountAddress, "error", err)
 			}
 		}
 	}
