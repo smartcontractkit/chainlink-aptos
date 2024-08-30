@@ -32,7 +32,7 @@ func NewAptosAccBalanceMonitor(opts AptosAccBalanceMonitorOpts) services.Service
 		NewBalanceClient: func() (BalanceClient, error) {
 			client, err := opts.NewClient()
 			if err != nil {
-				return nil, fmt.Errorf("failed to get new client", "err", err)
+				return nil, fmt.Errorf("failed to get new client: %w", err)
 			}
 			return balanceClient{client}, nil
 		},
@@ -49,7 +49,7 @@ func (c balanceClient) GetAccountBalance(addr string) (float64, error) {
 	accAddr := &aptos.AccountAddress{}
 	err := accAddr.ParseStringRelaxed(addr)
 	if err != nil {
-		return -1, fmt.Errorf("failed to parse address", "address", addr, "err", err)
+		return -1, fmt.Errorf("failed to parse address [%s]: %w", addr, err)
 	}
 
 	// Get the account balance
