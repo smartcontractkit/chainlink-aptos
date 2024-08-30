@@ -255,7 +255,7 @@ func (a *AptosTxm) broadcastLoop() {
 	}
 }
 
-func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
+func (a *AptosTxm) signAndBroadcast(tx *AptosTx, isRebroadcasted bool) {
 	client := a.client
 
 	// this is cached within NodeClient after the first successful invocation.
@@ -295,42 +295,20 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		},
 	}
 
-	buildSignedTx := func() (*aptos.SignedTransaction, uint64, error) {
-		var nonce uint64
-		if tx.Status == commontypes.Failed {
-			// Enter recovery mode here: reset the nonce for failed tx
-			nonce, _ = a.getSequenceNumber(a.client, tx.FromAddress)
-
-			// If the recovery tx already in progress, queue up normally
-			if txStore.IsNonceTaken(nonce) {
-				nonce = txStore.GetNextNonce()
-
-				// Return non-recovery tx to the default state
-				tx.Status = commontypes.Unconfirmed
-			}
-		} else {
-			nonce = txStore.GetNextNonce()
-		}
-
-		nodeInfo, err := client.Info()
+	buildSignedTx := func(nonce uint64) (*aptos.SignedTransaction, error) {
+		ledgerTimestamp, err := a.getLedgerTimestamp()
 		if err != nil {
-			a.logger.Errorw("failed to fetch node info", "error", err)
-			return nil, nonce, errors.New("failed to fetch node info")
-		}
-
-		ledgerTimestamp := nodeInfo.LedgerTimestamp()
-		if ledgerTimestamp == 0 {
-			a.logger.Errorw("failed to fetch ledger timestamp", "nodeInfo", nodeInfo)
-			return nil, nonce, errors.New("failed to fetch ledger timestamp")
+			a.logger.Errorw("failed to fetch ledger timestamp", "error", err)
+			return nil, err
 		}
 
 		rawTx := aptos.RawTransaction{
 			Sender:                     tx.FromAddress,
 			SequenceNumber:             nonce,
 			Payload:                    payload,
-			MaxGasAmount:               0,                                                    // populated below
-			GasUnitPrice:               0,                                                    // populated below
-			ExpirationTimestampSeconds: ledgerTimestamp/1000000 + uint64(TX_EXPIRATION_TIME), // ledgerTimestamp returned in nanosec
+			MaxGasAmount:               0, // populated below
+			GasUnitPrice:               0, // populated below
+			ExpirationTimestampSeconds: ledgerTimestamp + uint64(TX_EXPIRATION_TIME),
 			ChainId:                    chainId,
 		}
 
@@ -338,7 +316,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		err = publicKey.FromBytes([]byte(tx.PublicKey))
 		if err != nil {
 			a.logger.Errorw("failed to deserialize public key", "error", err)
-			return nil, nonce, err
+			return nil, err
 		}
 
 		// (if enabled for tx) simulate tx to estimate gas
@@ -360,7 +338,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			gasInfo, err := client.EstimateGasPrice()
 			if err != nil {
 				a.logger.Errorw("failed to retrieve estimated gas price", "error", err)
-				return nil, nonce, err
+				return nil, err
 			}
 
 			a.logger.Debugw("estimated gas price", "gasEstimate", gasInfo.GasEstimate, "prioritizedGasEstimate", gasInfo.PrioritizedGasEstimate)
@@ -381,20 +359,20 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		signingMessage, err := rawTx.SigningMessage()
 		if err != nil {
 			a.logger.Errorw("failed to create signing message", "error", err)
-			return nil, nonce, err
+			return nil, err
 		}
 
 		signature, err := a.keystore.Sign(context.Background(), fmt.Sprintf("%064x", tx.PublicKey), signingMessage)
 		if err != nil {
 			a.logger.Errorw("failed to sign message", "fromAddress", tx.FromAddress, "error", err)
-			return nil, nonce, err
+			return nil, err
 		}
 
 		sig := aptoscrypto.Ed25519Signature{}
 		err = sig.FromBytes(signature)
 		if err != nil {
 			a.logger.Errorw("failed to deserialize signature", "error", err)
-			return nil, nonce, err
+			return nil, err
 		}
 
 		authenticator := &aptoscrypto.Ed25519Authenticator{
@@ -408,17 +386,32 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		})
 		if err != nil {
 			a.logger.Errorw("failed to sign tx", "error", err)
-			return nil, nonce, err
+			return nil, err
 		}
 
-		return signedTx, nonce, nil
+		return signedTx, nil
+	}
+
+	var nonce uint64
+	usedFailedNonce := false
+	if isRebroadcasted {
+		// resubmit the tx with its previously used nonce
+		nonce = tx.LastUsedNonce
+	} else {
+		if failedNonce, exists := txStore.PopFailedNonce(); exists {
+			// submit new tx with one of the previously failed nonces
+			nonce = failedNonce
+			usedFailedNonce = true
+		} else {
+			// submit new tx with the new nonce
+			nonce = txStore.GetNextNonce()
+		}
 	}
 
 	// broadcast with basic retry to try get the tx included in the mempool
-	attempt := 1
-	for attempt <= MAX_SUBMIT_RETRY_ATTEMPTS {
-		// rebuild the tx to update the nonce and expiration timestamp
-		signedTx, nonce, err := buildSignedTx()
+	for attempt := 1; attempt <= MAX_SUBMIT_RETRY_ATTEMPTS; attempt++ {
+		// rebuild the tx with the nonce and expiration timestamp
+		signedTx, err := buildSignedTx(nonce)
 		if err != nil {
 			a.logger.Errorw("failed to build signed tx", "error", err)
 			tx.Status = commontypes.Fatal
