@@ -590,6 +590,21 @@ func (a *AptosTxm) getSequenceNumber(client *aptos.NodeClient, address aptos.Acc
 	return sequenceNumber, nil
 }
 
+func (a *AptosTxm) getLedgerTimestamp() (uint64, error) {
+	nodeInfo, err := a.client.Info()
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch node info: %+w", err)
+	}
+
+	ledgerTimestamp := nodeInfo.LedgerTimestamp()
+	if ledgerTimestamp == 0 {
+		return 0, fmt.Errorf("ledgerTimestamp is 0")
+	}
+
+	// ledgerTimestamp given in nanosec
+	return ledgerTimestamp / 1000000, nil
+}
+
 type mockSimulationSigner struct {
 	aptoscrypto.Ed25519PrivateKey
 	pubKey aptoscrypto.Ed25519PublicKey
