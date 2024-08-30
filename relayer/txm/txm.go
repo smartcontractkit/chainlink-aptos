@@ -419,42 +419,18 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx, isRebroadcasted bool) {
 		}
 
 		submitResponse, err := client.SubmitTransaction(signedTx)
-		if err != nil {
-			var httpErr *aptos.HttpError
-			if errors.As(err, &httpErr) {
-				// In case of http errors (>400) wait gracefully and retry
-				// It inlcudes all network-related errors as well as
-				// the pre-execution validation in the Mempool (e.g. old/duplicated nonce)
-				a.logger.Errorw("failed to submit signed tx, retrying..", "txID", tx.ID, "error", httpErr)
-				time.Sleep(SUBMIT_DELAY_DURATION * time.Second)
-				attempt++
-				continue
-			} else {
-				// Do not retry on unknown errors
-				a.logger.Errorw("failed to submit signed tx, discarding..", "txID", tx.ID, "error", err)
-				tx.Status = commontypes.Fatal
-				break
-			}
-		} else {
-			// Tx included in the Mempool
-			a.logger.Debugw("submit tx successful", "txID", tx.ID, "submitResponse", submitResponse)
-
+		if err == nil {
 			if submitResponse.Hash == "" {
 				a.logger.Errorw("did not receive hash after successful tx submission", "txID", tx.ID)
 				tx.Status = commontypes.Fatal
 				return
 			}
 
-			if tx.Status == commontypes.Failed {
-				// Handle special case when failed tx is submitted with the recovered nonce
-				// The nonce can be behind the tracked nonce, but we need to track the status
-				err = txStore.AddUnconfirmedNoChecks(nonce, submitResponse.Hash, uint64(time.Now().Unix()), tx)
-				if err != nil {
-					a.logger.Errorw("failed to add failed tx", "txID", tx.ID, "txHash", submitResponse.Hash, "error", err)
-					tx.Status = commontypes.Fatal
-					return
-				}
-			} else {
+			// tx included in the Mempool
+			a.logger.Debugw("submit tx successful", "txID", tx.ID, "submitResponse", submitResponse)
+
+			if !isRebroadcasted && !usedFailedNonce {
+				// happy path: check the sequence and increment the nonce
 				err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, uint64(time.Now().Unix()), tx)
 				if err != nil {
 					// TODO: figure out what to do here.
@@ -462,15 +438,43 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx, isRebroadcasted bool) {
 					tx.Status = commontypes.Fatal
 					return
 				}
+			} else {
+				// no sequence checks and nonce increment for the recovery transactions
+				err = txStore.AddUnconfirmedNoChecks(nonce, submitResponse.Hash, uint64(time.Now().Unix()), tx)
+				if err != nil {
+					a.logger.Errorw("failed to add recovery tx", "txID", tx.ID, "txHash", submitResponse.Hash, "error", err)
+					tx.Status = commontypes.Fatal
+					return
+				}
 			}
 
 			tx.Status = commontypes.Unconfirmed
 			return
+		} else {
+			var httpErr *aptos.HttpError
+			if errors.As(err, &httpErr) {
+				// In case of http errors (>400) wait gracefully and retry
+				// It inlcudes all network-related errors as well as
+				// the pre-execution validation in the Mempool (e.g. old/duplicated nonce)
+				a.logger.Errorw("failed to submit signed tx, retrying..", "txID", tx.ID, "error", httpErr)
+				time.Sleep(SUBMIT_DELAY_DURATION * time.Second)
+				continue
+			} else {
+				// Do not retry on unknown errors
+				a.logger.Errorw("failed to submit signed tx, discarding..", "txID", tx.ID, "error", err)
+				tx.Status = commontypes.Fatal
+				return
+			}
 		}
 	}
 
-	if err != nil {
-		a.logger.Errorw("reached max retries for submitting the tx", "txID", tx.ID)
+	a.logger.Errorw("reached max retries for submitting the tx", "txID", tx.ID)
+	tx.Status = commontypes.Fatal
+
+	if isRebroadcasted || usedFailedNonce {
+		// no more attempts lefts for the nonce
+		// save the nonce to be reused with another tx
+		txStore.AddFailedNonce(nonce)
 	}
 }
 
@@ -493,7 +497,6 @@ func (a *AptosTxm) confirmLoop() {
 
 			remaining := time.Duration(a.config.ConfirmPollSecs) - time.Since(start)
 			tick = time.After(utils.WithJitter(remaining.Abs()))
-
 		case <-a.stop:
 			a.logger.Debugw("confirmLoop: stopped")
 			return
