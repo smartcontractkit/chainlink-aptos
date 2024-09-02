@@ -40,6 +40,10 @@ type WriteTarget struct {
 
 func NewWriteTarget(lggr logger.Logger, id string, cr commontypes.ContractReader, cw commontypes.ChainWriter, forwarderAddress string) *WriteTarget {
 	selfLogger := logger.Named(lggr, "WriteTarget")
+
+	// TODO: remove, just for demo purposes
+	monitor.StartBeholderDemo(selfLogger)
+
 	return &WriteTarget{
 		capabilities.MustNewCapabilityInfo(id, capabilities.CapabilityTypeTarget, "WriteTarget"),
 		cr,

@@ -22,6 +22,9 @@
       protoc-gen-go
       protolint
 
+      # Atlas + Beholder tools
+      redpanda
+
       # Extra tools
       python3
       postgresql_15
