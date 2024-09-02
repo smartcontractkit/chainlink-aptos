@@ -20,7 +20,6 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/values"
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
-	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/write-target"
 )
 
 var (
@@ -70,78 +69,91 @@ func success() capabilities.CapabilityResponse {
 	return capabilities.CapabilityResponse{}
 }
 
+type requestContext struct {
+	forwarder   string
+	receiver    string
+	transmitter string
+	reportID    uint64
+}
+
 func (c *WriteTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (capabilities.CapabilityResponse, error) {
-	// TODO: wrap body in a fn, handle errors by publishing [Beholder] Emit 'write-target.WriteError'
 	c.lggr.Debugw("Execute", "request", request)
 
+	// TODO: figure out how to source the transmitter (e.g., c.cw.config.Functions["forwarder"].FromAddress)
+	context := requestContext{
+		forwarder:   c.forwarderAddress,
+		receiver:    "N/A",
+		transmitter: "N/A",
+		reportID:    0,
+	}
+	// Helper to build monitoring (Beholder) messages
+	builder := &messageBuilder{}
+
+	// Try to parse the request (WT-specific) config
 	reqConfig, err := parseConfig(request.Config)
 	if err != nil {
-		return capabilities.CapabilityResponse{}, err
+		msg := builder.buildWriteError(context, 0, "failed to parse config", err.Error())
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
 	}
 
+	// Source the receiver addtress from the config
+	context.receiver = reqConfig.Address
+
+	// Try to source the signed report from the request
 	signedReport, ok := request.Inputs.Underlying[signedReportField]
 	if !ok {
-		return capabilities.CapabilityResponse{}, fmt.Errorf("missing required field %s", signedReportField)
+		cause := fmt.Sprintf("input missing required field: '%s'", signedReportField)
+		msg := builder.buildWriteError(context, 0, "failed to source the signed report", cause)
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
 	}
 
+	// Try to decode the signed report
 	inputs := types.SignedReport{}
 	if err = signedReport.UnwrapTo(&inputs); err != nil {
-		return capabilities.CapabilityResponse{}, err
+		msg := builder.buildWriteError(context, 0, "failed to parse signed report", err.Error())
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
 	}
 
+	// Source the report ID from the input
+	context.reportID, _ = binary.Uvarint(inputs.ID)
+
+	// Try to decode the workflow execution ID
 	rawExecutionID, err := hex.DecodeString(request.Metadata.WorkflowExecutionID)
 	if err != nil {
-		return capabilities.CapabilityResponse{}, err
+		msg := builder.buildWriteError(context, 0, "failed to decode the workflow execution ID", err.Error())
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
 	}
-	reportID, _ := binary.Uvarint(inputs.ID)
 
-	// TODO: figure out how to source the transmitter (e.g., c.cw.config.Functions["forwarder"].FromAddress)
-	transmitter := "N/A"
-
-	c.beholder.Emit(&wt.WriteInitiated{
-		Forwarder:   c.forwarderAddress,
-		Receiver:    reqConfig.Address,
-		Transmitter: transmitter,
-		ReportId:    uint32(reportID),
-	})
-
-	// Helper function to emit a WriteSkipped event
-	// TODO: add a reason for skipping
-	emitWriteSkipped := func() error {
-		return c.beholder.Emit(&wt.WriteSkipped{
-			Forwarder:   c.forwarderAddress,
-			Receiver:    reqConfig.Address,
-			Transmitter: transmitter,
-			ReportId:    uint32(reportID),
-		})
-	}
+	c.beholder.Emit(builder.buildWriteInitiated(context))
 
 	// Check whether the report is valid (e.g., not empty)
 	if len(inputs.Report) == 0 {
 		// We received any empty report -- this means we should skip transmission.
-		emitWriteSkipped()
+		// TODO: add a reason for skipping
+		c.beholder.Emit(builder.buildWriteSkipped(context))
 		c.lggr.Debugw("Skipping empty report", "request", request)
 		return success(), nil
 	}
 	// TODO: validate encoded report is prefixed with workflowID and executionID that match the request meta
 
-	// Check whether value was already transmitted on chain
+	// Try to check whether the report was already transmitted on chain
 	queryInputs := struct {
 		Receiver            string
 		WorkflowExecutionID []byte
 		ReportID            uint16
 	}{
-		Receiver:            reqConfig.Address,
+		Receiver:            context.receiver,
 		WorkflowExecutionID: rawExecutionID,
-		ReportID:            uint16(reportID),
+		ReportID:            uint16(context.reportID),
 	}
 
 	var transmitted bool
 	if err = c.cr.GetLatestValue(ctx, "forwarder", "getTransmissionState", primitives.Unconfirmed, queryInputs, &transmitted); err != nil {
-		return capabilities.CapabilityResponse{}, err
-	}
-	if transmitted == true {
-		emitWriteSkipped()
+		msg := builder.buildWriteError(context, 0, "failed to call [forwarder.getTransmissionState]", err.Error())
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
+	} else if transmitted == true {
+		// TODO: add a reason for skipping
+		c.beholder.Emit(builder.buildWriteSkipped(context))
 		c.lggr.Infow("WriteTarget report already onchain - returning without a tranmission attempt", "executionID", request.Metadata.WorkflowExecutionID)
 		return success(), nil
 	}
@@ -180,24 +192,17 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}
 	c.lggr.Debugw("Transaction raw report", "report", hex.EncodeToString(req.RawReport))
 
+	// Try to submit the transaction
 	meta := commontypes.TxMeta{WorkflowExecutionID: &request.Metadata.WorkflowExecutionID}
 	value := big.NewInt(0)
-	if err := c.cw.SubmitTransaction(ctx, "forwarder", "report", req, txID.String(), c.forwarderAddress, &meta, value); err != nil {
-		return capabilities.CapabilityResponse{}, err
+	if err := c.cw.SubmitTransaction(ctx, "forwarder", "report", req, txID.String(), context.forwarder, &meta, value); err != nil {
+		msg := builder.buildWriteError(context, 0, "failed to invoke [forwarder.report]", err.Error())
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
 	}
 
 	c.lggr.Debugw("Transaction submitted", "request", request, "transaction", txID)
-	c.beholder.Emit(&wt.WriteSent{
-		Forwarder:   c.forwarderAddress,
-		Receiver:    reqConfig.Address,
-		Transmitter: transmitter,
-		ReportId:    uint32(reportID),
-
-		// TODO: source the TxHash from CW -> TXM by generated TxID)
-		TxHash:        "N/A",
-		XMetadata:     []byte{},
-		XMetadataType: "aptos-tx-sent-metadata",
-	})
+	// TODO: source the TxHash from CW -> TXM by generated TxID)
+	c.beholder.Emit(builder.buildWriteSent(context, "N/A"))
 
 	// TODO: have background WriteConfirmer source tx receipt (wait for a tx to be included in a block)
 	// TODO: [Beholder] Emit 'write-target.WriteAccepted'
