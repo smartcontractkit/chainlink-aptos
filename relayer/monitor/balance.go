@@ -16,10 +16,12 @@ type Config struct {
 	BalancePollPeriod config.Duration
 }
 
+// BalanceClient defines the interface for getting account balances.
 type BalanceClient interface {
 	GetAccountBalance(addr string) (float64, error)
 }
 
+// BalanceMonitorOpts contains the options for creating a new balance monitor.
 type BalanceMonitorOpts struct {
 	ChainID         string
 	ChainName       string
@@ -67,6 +69,7 @@ type balanceMonitor struct {
 	// Updates the balance metric
 	updateFn func(acc string, balance float64) // overridable for testing
 
+	// Cached instance, intermitently reset to nil.
 	reader BalanceClient
 
 	stop services.StopChan
@@ -96,6 +99,7 @@ func (m *balanceMonitor) HealthReport() map[string]error {
 	return map[string]error{m.Name(): m.Healthy()}
 }
 
+// monitor fn continously updates balances, until stop signal is received.
 func (m *balanceMonitor) start() {
 	defer close(m.done)
 	ctx, cancel := m.stop.NewCtx()
@@ -114,6 +118,7 @@ func (m *balanceMonitor) start() {
 	}
 }
 
+// getReader returns the stored BalanceClient, creating a new one if necessary.
 func (m *balanceMonitor) getReader() (BalanceClient, error) {
 	if m.reader == nil {
 		var err error
@@ -125,6 +130,7 @@ func (m *balanceMonitor) getReader() (BalanceClient, error) {
 	return m.reader, nil
 }
 
+// updateBalances updates the balances of all accounts in the keystore, using the provided BalanceClient and the updateFn.
 func (m *balanceMonitor) updateBalances(ctx context.Context) {
 	keys, err := m.ks.Accounts(ctx)
 	if err != nil {
@@ -139,6 +145,7 @@ func (m *balanceMonitor) updateBalances(ctx context.Context) {
 		m.lggr.Errorw("Failed to get client", "err", err)
 		return
 	}
+
 	var gotSomeBals bool
 	for _, k := range keys {
 		// Check for shutdown signal, since Balance blocks and may be slow.
@@ -147,6 +154,7 @@ func (m *balanceMonitor) updateBalances(ctx context.Context) {
 			return
 		default:
 		}
+
 		balance, err := reader.GetAccountBalance(k)
 		if err != nil {
 			m.lggr.Errorw("Failed to get balance", "account", k, "err", err)
@@ -155,8 +163,9 @@ func (m *balanceMonitor) updateBalances(ctx context.Context) {
 		gotSomeBals = true
 		m.updateFn(k, balance)
 	}
+
+	// Try a new client next time. // TODO: This is for multinode
 	if !gotSomeBals {
-		// Try a new client next time. // TODO: This is for multinode
 		m.reader = nil
 	}
 }

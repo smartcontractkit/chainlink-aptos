@@ -10,6 +10,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 )
 
+// AptosAccBalanceMonitorOpts contains the options for creating a new Aptos account balance monitor.
 type AptosAccBalanceMonitorOpts struct {
 	ChainID string
 
@@ -44,6 +45,7 @@ type balanceClient struct {
 	client *aptos.NodeClient
 }
 
+// GetAccountBalance returns the account balance in APT.
 func (c balanceClient) GetAccountBalance(addr string) (float64, error) {
 	// Parse the address string
 	accAddr := &aptos.AccountAddress{}

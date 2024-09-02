@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"google.golang.org/protobuf/proto"
-
 	aptos "github.com/aptos-labs/aptos-go-sdk"
 	"github.com/google/uuid"
 
@@ -21,6 +19,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 	"github.com/smartcontractkit/chainlink-common/pkg/values"
 
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
 	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/write-target"
 )
 
@@ -37,15 +36,18 @@ type WriteTarget struct {
 	cw               commontypes.ChainWriter
 	forwarderAddress string
 	lggr             logger.Logger
+	beholder         *monitor.BeholderClient
 }
 
 func NewWriteTarget(lggr logger.Logger, id string, cr commontypes.ContractReader, cw commontypes.ChainWriter, forwarderAddress string) *WriteTarget {
+	selfLogger := logger.Named(lggr, "WriteTarget")
 	return &WriteTarget{
 		capabilities.MustNewCapabilityInfo(id, capabilities.CapabilityTypeTarget, "WriteTarget"),
 		cr,
 		cw,
 		forwarderAddress,
-		logger.Named(lggr, "WriteTarget"),
+		selfLogger,
+		monitor.NewBeholderClient(selfLogger),
 	}
 }
 
@@ -93,35 +95,25 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}
 	reportID, _ := binary.Uvarint(inputs.ID)
 
-	// [Beholder] Emit 'write-target.WriteInitiated'
-	msgWriteInitiated := &wt.WriteInitiated{
-		Forwarder: c.forwarderAddress,
-		Receiver:  reqConfig.Address,
-		// TODO: figure out how to source the transmitter (e.g., c.cw.config.Functions["forwarder"].FromAddress)
-		Transmitter: "N/A",
-		ReportId:    uint32(reportID),
-	}
-	_, err = proto.Marshal(msgWriteInitiated)
-	if err != nil {
-		return capabilities.CapabilityResponse{}, err
-	}
-	c.lggr.Infow("[Beholder.emit] 'write-target.WriteInitiated'", "message", msgWriteInitiated.String())
+	// TODO: figure out how to source the transmitter (e.g., c.cw.config.Functions["forwarder"].FromAddress)
+	transmitter := "N/A"
 
+	c.beholder.Emit(&wt.WriteInitiated{
+		Forwarder:   c.forwarderAddress,
+		Receiver:    reqConfig.Address,
+		Transmitter: transmitter,
+		ReportId:    uint32(reportID),
+	})
+
+	// Helper function to emit a WriteSkipped event
+	// TODO: add a reason for skipping
 	emitWriteSkipped := func() error {
-		// [Beholder] Emit 'write-target.WriteSkipped'
-		msgWriteSkipped := &wt.WriteSkipped{
-			Forwarder: c.forwarderAddress,
-			Receiver:  reqConfig.Address,
-			// TODO: figure out how to source the transmitter (e.g., c.cw.config.Functions["forwarder"].FromAddress)
-			Transmitter: "N/A",
+		return c.beholder.Emit(&wt.WriteSkipped{
+			Forwarder:   c.forwarderAddress,
+			Receiver:    reqConfig.Address,
+			Transmitter: transmitter,
 			ReportId:    uint32(reportID),
-		}
-		_, err = proto.Marshal(msgWriteInitiated)
-		if err != nil {
-			return err
-		}
-		c.lggr.Infow("[Beholder.emit] 'write-target.WriteSkipped'", "message", msgWriteSkipped.String())
-		return nil
+		})
 	}
 
 	// Check whether the report is valid (e.g., not empty)
@@ -154,7 +146,13 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 		return success(), nil
 	}
 
-	c.lggr.Infow("WriteTarget non-empty report - attempting to push to txmgr", "request", request, "reportLen", len(inputs.Report), "reportContextLen", len(inputs.Context), "nSignatures", len(inputs.Signatures), "executionID", request.Metadata.WorkflowExecutionID)
+	c.lggr.Infow("WriteTarget non-empty report - attempting to push to txmgr",
+		"request", request,
+		"reportLen", len(inputs.Report),
+		"reportContextLen", len(inputs.Context),
+		"nSignatures", len(inputs.Signatures),
+		"executionID", request.Metadata.WorkflowExecutionID,
+	)
 	txID, err := uuid.NewUUID() // NOTE: CW expects us to generate an ID, rather than return one
 	if err != nil {
 		return capabilities.CapabilityResponse{}, err
@@ -188,29 +186,22 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 		return capabilities.CapabilityResponse{}, err
 	}
 
-	// [Beholder] Emit 'write-target.WriteSent'
-	msgWriteSent := &wt.WriteSent{
-		Forwarder: c.forwarderAddress,
-		Receiver:  reqConfig.Address,
-		// TODO: figure out how to source the transmitter (e.g., c.cw.config.Functions["forwarder"].FromAddress)
-		Transmitter: "N/A",
+	c.lggr.Debugw("Transaction submitted", "request", request, "transaction", txID)
+	c.beholder.Emit(&wt.WriteSent{
+		Forwarder:   c.forwarderAddress,
+		Receiver:    reqConfig.Address,
+		Transmitter: transmitter,
 		ReportId:    uint32(reportID),
 
-		// TODO: figure out how to source the tx hash
+		// TODO: source the TxHash from CW -> TXM by generated TxID)
 		TxHash:        "N/A",
 		XMetadata:     []byte{},
 		XMetadataType: "aptos-tx-sent-metadata",
-	}
-	_, err = proto.Marshal(msgWriteSent)
-	if err != nil {
-		return capabilities.CapabilityResponse{}, err
-	}
-	c.lggr.Infow("[Beholder.emit] 'write-target.WriteSent'", "message", msgWriteSent.String())
-	c.lggr.Debugw("Transaction submitted", "request", request, "transaction", txID)
+	})
 
-	// TODO: source tx receipt (wait for a tx to be included in a block)
+	// TODO: have background WriteConfirmer source tx receipt (wait for a tx to be included in a block)
 	// TODO: [Beholder] Emit 'write-target.WriteAccepted'
-
+	// TODO: [Beholder] Emit 'write-target.WriteConfirmed'
 	return success(), nil
 }
 
@@ -218,12 +209,10 @@ func (c *WriteTarget) RegisterToWorkflow(ctx context.Context, request capabiliti
 	// TODO: store locally, and if trigger seen
 
 	// TODO: start a process responsible for monitoring the chain and publishing [Beholder] Emit 'write-target.WriteConfirmed'
-	// TODO: start a process responsible for monitoring the WT account balance
 	return nil
 }
 
 func (c *WriteTarget) UnregisterFromWorkflow(ctx context.Context, request capabilities.UnregisterFromWorkflowRequest) error {
 	// TODO: stop a process responsible for monitoring the chain and publishing [Beholder] Emit 'write-target.WriteConfirmed'
-	// TODO: stop a process responsible for monitoring the WT account balance
 	return nil
 }
