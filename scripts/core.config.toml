@@ -36,9 +36,6 @@ URL = "http://chainlink-aptos.devnet:8080/v1"
 [Aptos.BalanceMonitor]
 BalancePollPeriod = '5s'
 
-# [[EVM]]
-# ChainID = '11155111'
-
 [[EVM]]
 ChainID = '1337'
 MinContractPayment = '0'

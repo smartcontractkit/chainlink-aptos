@@ -42,7 +42,7 @@ Switch to the `chainlink` repo:
 
 `core/scripts/keystone`:
 
-Add two node lists under `.cache`
+Add a node list file under `.cache`
 
 (Ports from the node are forwarded so that host can talk to them if running in rootless containers to which DNS can't be resolved)
 

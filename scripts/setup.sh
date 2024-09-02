@@ -33,7 +33,7 @@ popd
 pushd "contracts"
 
 export ORACLE_ACCOUNTS=$(cat ../../../chainlink/core/scripts/keystone/.cache/PublicKeys.json | jq -r '.[].AptosAccount')
-echo $(echo "$ORACLE_ACCOUNTS" | xargs -L1 aptos account fund-with-faucet --account)
+echo "$ORACLE_ACCOUNTS" | xargs -L1 aptos account fund-with-faucet --account
 
 export ORACLE_PUBKEYS=$(cat ../../../chainlink/core/scripts/keystone/.cache/PublicKeys.json | jq '.[].AptosOnchainPublicKey' | paste -sd ",")
 scripts/set_config.sh

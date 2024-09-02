@@ -31,7 +31,11 @@ type BalanceMonitorOpts struct {
 	NewBalanceClient func() (BalanceClient, error)
 }
 
-// NewBalanceMonitor returns a balance monitoring services.Service which reports the TRX balance of all ks keys to prometheus.
+// TODO: This implementation is chain-agnotic, so it should be moved to the common package and reused by all chains.
+//   - Solana: /solana/pkg/solana/monitor
+//   - TRON: /tron/relayer/monitor
+//
+// NewBalanceMonitor returns a balance monitoring services.Service which reports the balance of all Keystore accounts.
 func NewBalanceMonitor(opts BalanceMonitorOpts) services.Service {
 	return newBalanceMonitor(opts)
 }
@@ -110,49 +114,49 @@ func (m *balanceMonitor) start() {
 	}
 }
 
-func (b *balanceMonitor) getReader() (BalanceClient, error) {
-	if b.reader == nil {
+func (m *balanceMonitor) getReader() (BalanceClient, error) {
+	if m.reader == nil {
 		var err error
-		b.reader, err = b.newReader()
+		m.reader, err = m.newReader()
 		if err != nil {
 			return nil, err
 		}
 	}
-	return b.reader, nil
+	return m.reader, nil
 }
 
-func (b *balanceMonitor) updateBalances(ctx context.Context) {
-	keys, err := b.ks.Accounts(ctx)
+func (m *balanceMonitor) updateBalances(ctx context.Context) {
+	keys, err := m.ks.Accounts(ctx)
 	if err != nil {
-		b.lggr.Errorw("Failed to get keys", "err", err)
+		m.lggr.Errorw("Failed to get keys", "err", err)
 		return
 	}
 	if len(keys) == 0 {
 		return
 	}
-	reader, err := b.getReader()
+	reader, err := m.getReader()
 	if err != nil {
-		b.lggr.Errorw("Failed to get client", "err", err)
+		m.lggr.Errorw("Failed to get client", "err", err)
 		return
 	}
 	var gotSomeBals bool
 	for _, k := range keys {
 		// Check for shutdown signal, since Balance blocks and may be slow.
 		select {
-		case <-b.stop:
+		case <-m.stop:
 			return
 		default:
 		}
 		balance, err := reader.GetAccountBalance(k)
 		if err != nil {
-			b.lggr.Errorw("Failed to get balance", "account", k, "err", err)
+			m.lggr.Errorw("Failed to get balance", "account", k, "err", err)
 			continue
 		}
 		gotSomeBals = true
-		b.updateFn(k, balance)
+		m.updateFn(k, balance)
 	}
 	if !gotSomeBals {
 		// Try a new client next time. // TODO: This is for multinode
-		b.reader = nil
+		m.reader = nil
 	}
 }
