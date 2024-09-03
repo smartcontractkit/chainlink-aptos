@@ -19,7 +19,9 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 	"github.com/smartcontractkit/chainlink-common/pkg/values"
 
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chainwriter"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
+	aptosutils "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/utils"
 )
 
 var (
@@ -27,30 +29,55 @@ var (
 )
 
 // required field of target's config in the workflow spec
-const signedReportField = "signed_report"
+const (
+	signedReportField = "signed_report"
 
+	// Static contract info
+	contractName                            = "forwarder"
+	contractMethodName_report               = "report"
+	contractMethodName_getTransmissionState = "getTransmissionState"
+)
+
+// TODO: make private and replace return type with the Capability interface
 type WriteTarget struct {
 	capabilities.CapabilityInfo
-	cr               commontypes.ContractReader
-	cw               commontypes.ChainWriter
+
+	lggr     logger.Logger
+	beholder *monitor.BeholderClient
+
+	cr       commontypes.ContractReader
+	cw       commontypes.ChainWriter
+	cwConfig chainwriter.ChainWriterConfig
+
 	forwarderAddress string
-	lggr             logger.Logger
-	beholder         *monitor.BeholderClient
 }
 
-func NewWriteTarget(lggr logger.Logger, id string, cr commontypes.ContractReader, cw commontypes.ChainWriter, forwarderAddress string) *WriteTarget {
-	selfLogger := logger.Named(lggr, "WriteTarget")
+type WriteTargetOpts struct {
+	ID string
+
+	Logger logger.Logger
+
+	ContractReader    commontypes.ContractReader
+	ChainWriter       commontypes.ChainWriter
+	ChainWriterConfig chainwriter.ChainWriterConfig
+
+	ForwarderAddress string
+}
+
+func NewWriteTarget(opts WriteTargetOpts) *WriteTarget {
+	selfLogger := logger.Named(opts.Logger, "WriteTarget")
 
 	// TODO: remove, just for demo purposes
 	monitor.StartBeholderDemo(selfLogger)
 
 	return &WriteTarget{
-		capabilities.MustNewCapabilityInfo(id, capabilities.CapabilityTypeTarget, "WriteTarget"),
-		cr,
-		cw,
-		forwarderAddress,
+		capabilities.MustNewCapabilityInfo(opts.ID, capabilities.CapabilityTypeTarget, "WriteTarget"),
 		selfLogger,
 		monitor.NewBeholderClient(selfLogger),
+		opts.ContractReader,
+		opts.ChainWriter,
+		opts.ChainWriterConfig,
+		opts.ForwarderAddress,
 	}
 }
 
@@ -83,15 +110,23 @@ type requestContext struct {
 func (c *WriteTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (capabilities.CapabilityResponse, error) {
 	c.lggr.Debugw("Execute", "request", request)
 
-	// TODO: figure out how to source the transmitter (e.g., c.cw.config.Functions["forwarder"].FromAddress)
+	// Helper to keep track of the context
 	context := requestContext{
 		forwarder:   c.forwarderAddress,
 		receiver:    "N/A",
 		transmitter: "N/A",
-		reportID:    0,
+		reportID:    0, // N/A
 	}
 	// Helper to build monitoring (Beholder) messages
 	builder := &messageBuilder{}
+
+	// Try to source the transmitter
+	transmitter, err := c.getTransmitter()
+	if err != nil {
+		msg := builder.buildWriteError(context, 0, "failed to source the transmitter", err.Error())
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
+	}
+	context.transmitter = transmitter
 
 	// Try to parse the request (WT-specific) config
 	reqConfig, err := parseConfig(request.Config)
@@ -100,7 +135,7 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
 	}
 
-	// Source the receiver addtress from the config
+	// Source the receiver address from the config
 	context.receiver = reqConfig.Address
 
 	// Try to source the signed report from the request
@@ -150,7 +185,7 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}
 
 	var transmitted bool
-	if err = c.cr.GetLatestValue(ctx, "forwarder", "getTransmissionState", primitives.Unconfirmed, queryInputs, &transmitted); err != nil {
+	if err = c.cr.GetLatestValue(ctx, contractName, contractMethodName_getTransmissionState, primitives.Unconfirmed, queryInputs, &transmitted); err != nil {
 		msg := builder.buildWriteError(context, 0, "failed to call [forwarder.getTransmissionState]", err.Error())
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
 	} else if transmitted == true {
@@ -162,11 +197,13 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 		"request", request,
 		"reportLen", len(inputs.Report),
 		"reportContextLen", len(inputs.Context),
-		"nSignatures", len(inputs.Signatures),
+		"signaturesLen", len(inputs.Signatures),
 		"executionID", request.Metadata.WorkflowExecutionID,
 	)
+
 	txID, err := uuid.NewUUID() // NOTE: CW expects us to generate an ID, rather than return one
 	if err != nil {
+		// This should never happen
 		return capabilities.CapabilityResponse{}, err
 	}
 
@@ -178,7 +215,7 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 		RawReport  []byte
 		Signatures [][]byte
 	}{
-		Receiver:   reqConfig.Address,
+		Receiver:   context.receiver,
 		RawReport:  append(inputs.Context, inputs.Report...),
 		Signatures: inputs.Signatures,
 	}
@@ -195,7 +232,8 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 	// Try to submit the transaction
 	meta := commontypes.TxMeta{WorkflowExecutionID: &request.Metadata.WorkflowExecutionID}
 	value := big.NewInt(0)
-	if err := c.cw.SubmitTransaction(ctx, "forwarder", "report", req, txID.String(), context.forwarder, &meta, value); err != nil {
+	err = c.cw.SubmitTransaction(ctx, "forwarder", "report", req, txID.String(), context.forwarder, &meta, value)
+	if err != nil {
 		msg := builder.buildWriteError(context, 0, "failed to invoke [forwarder.report]", err.Error())
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
 	}
@@ -220,4 +258,32 @@ func (c *WriteTarget) RegisterToWorkflow(ctx context.Context, request capabiliti
 func (c *WriteTarget) UnregisterFromWorkflow(ctx context.Context, request capabilities.UnregisterFromWorkflowRequest) error {
 	// TODO: stop a process responsible for monitoring the chain and publishing [Beholder] Emit 'write-target.WriteConfirmed'
 	return nil
+}
+
+// getTransmitter sources the transmitter address from the CW config
+func (c *WriteTarget) getTransmitter() (string, error) {
+	// Try to source the transmitter (e.g., c.cw.config.Functions["forwarder"].FromAddress)
+	moduleConfig, ok := c.cwConfig.Modules[contractName]
+	if !ok {
+		return "", fmt.Errorf("no such contract: %s", contractName)
+	}
+
+	functionConfig, ok := moduleConfig.Functions[contractMethodName_report]
+	if !ok {
+		return "", fmt.Errorf("no such method: %s", contractMethodName_report)
+	}
+
+	// Notice: reusing logic from the TXM which sources the transmitter this way
+	transmitter := functionConfig.FromAddress
+	if transmitter == "" {
+		// If the address is not specified, we assume the public key is for its corresponding address
+		// and not for an address with a rotated authentication key.
+		ed25519PublicKey, err := aptosutils.HexToEd25519PublicKey(functionConfig.PublicKey)
+		if err != nil {
+			return "", fmt.Errorf("failed to convert public key: %+w", err)
+		}
+		acc := aptosutils.Ed25519PublicKeyToAccount(ed25519PublicKey)
+		transmitter = acc.String()
+	}
+	return transmitter, nil
 }

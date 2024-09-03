@@ -70,7 +70,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 		return nil, err
 	}
 
-	chainWriterConfig := chainwriter.ChainWriterConfig{
+	cwConfig := chainwriter.ChainWriterConfig{
 		Modules: map[string]*chainwriter.ChainWriterModule{
 			"forwarder": {
 				Functions: map[string]*chainwriter.ChainWriterFunction{
@@ -99,10 +99,16 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 		},
 	}
 
-	cw := chainwriter.NewChainWriter(logger.Named(lggr, "ChainWriter"), chain.TxManager(), chainWriterConfig)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	cw := chainwriter.NewChainWriter(logger.Named(lggr, "ChainWriter"), chain.TxManager(), cwConfig)
 
-	return NewWriteTarget(lggr, id, cr, cw, config.ForwarderAddress), nil
+	// Create the WT capability
+	opts := WriteTargetOpts{
+		ID:                id,
+		Logger:            lggr,
+		ContractReader:    cr,
+		ChainWriter:       cw,
+		ChainWriterConfig: cwConfig,
+		ForwarderAddress:  config.ForwarderAddress,
+	}
+	return NewWriteTarget(opts), nil
 }

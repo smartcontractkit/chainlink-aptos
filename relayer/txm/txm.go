@@ -2,8 +2,6 @@ package txm
 
 import (
 	"context"
-	"crypto/ed25519"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"sort"
@@ -15,13 +13,14 @@ import (
 	aptosapi "github.com/aptos-labs/aptos-go-sdk/api"
 	aptoscrypto "github.com/aptos-labs/aptos-go-sdk/crypto"
 	"github.com/google/uuid"
-	"golang.org/x/crypto/sha3"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
+
+	aptosutils "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/utils"
 )
 
 var _ services.Service = &AptosTxm{}
@@ -117,7 +116,7 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 		}
 	}
 
-	ed25519PublicKey, err := hexToEd25519PublicKey(publicKey)
+	ed25519PublicKey, err := aptosutils.HexToEd25519PublicKey(publicKey)
 	if err != nil {
 		return fmt.Errorf("failed to convert public key: %+w", err)
 	}
@@ -125,9 +124,8 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 	if fromAddress == "" {
 		// If the address is not specified, we assume the public key is for its corresponding address
 		// and not for an address with a rotated authentication key.
-		authKey := sha3.Sum256(append([]byte(ed25519PublicKey), 0x00))
-		accountAddress := aptos.AccountAddress(authKey)
-		fromAddress = accountAddress.String()
+		acc := aptosutils.Ed25519PublicKeyToAccount(ed25519PublicKey)
+		fromAddress = acc.String()
 	}
 
 	functionTokens := strings.Split(function, "::")
@@ -694,20 +692,6 @@ func (a *AptosTxm) simulateTransaction(client *aptos.NodeClient, rawTx aptos.Raw
 
 	return nil, fmt.Errorf("simulation attempts failed, last error: %w", lastError)
 
-}
-
-func hexToEd25519PublicKey(hexKey string) (ed25519.PublicKey, error) {
-	keyBytes, err := hex.DecodeString(hexKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode hex string: %v", err)
-	}
-
-	if len(keyBytes) != ed25519.PublicKeySize {
-		return nil, fmt.Errorf("invalid key length: %d bytes, expected %d bytes", len(keyBytes), ed25519.PublicKeySize)
-	}
-
-	publicKey := ed25519.PublicKey(keyBytes)
-	return publicKey, nil
 }
 
 func getTimestampSecs() uint64 {
