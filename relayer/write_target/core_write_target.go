@@ -232,7 +232,7 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 	// Try to submit the transaction
 	meta := commontypes.TxMeta{WorkflowExecutionID: &request.Metadata.WorkflowExecutionID}
 	value := big.NewInt(0)
-	err = c.cw.SubmitTransaction(ctx, "forwarder", "report", req, txID.String(), context.forwarder, &meta, value)
+	err = c.cw.SubmitTransaction(ctx, contractName, contractMethodName_report, req, txID.String(), context.forwarder, &meta, value)
 	if err != nil {
 		msg := builder.buildWriteError(context, 0, "failed to invoke [forwarder.report]", err.Error())
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)

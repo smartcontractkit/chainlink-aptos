@@ -73,6 +73,7 @@ for ((i = 1; i <= NODE_COUNT; i++)); do
 		--name "${container_name_docker}" \
 		--network-alias "${container_name_docker}" \
 		--network chainlink \
+		--network beholder_default \
 		-e "CL_CONFIG=${CL_CONFIG}" \
 		-e "CL_DATABASE_URL=postgresql://postgres:postgres@chainlink.postgres:5432/${database_name}?sslmode=disable" \
 		-e "CL_PASSWORD_KEYSTORE=asdfasdfasdfasdf" \

@@ -55,7 +55,7 @@ func (d *beholderDemo) start() {
 func beholderDevConfig() beholder.Config {
 	config := beholder.DefaultConfig()
 	// Set the OTel exporter endpoint
-	config.OtelExporterGRPCEndpoint = "localhost:4317"
+	config.OtelExporterGRPCEndpoint = "otelcollector:4317"
 	// Add some more Resource Attributes
 	// Resource Attributes are static and are added to each emitted OTel data type
 	config.ResourceAttributes = append(config.ResourceAttributes, []attribute.KeyValue{
