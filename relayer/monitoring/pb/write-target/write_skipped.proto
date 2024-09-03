@@ -9,4 +9,6 @@ message WriteSkipped {
   string receiver = 2;
   string transmitter = 3;
   uint32 report_id = 4;
+
+  string reason = 5;
 }

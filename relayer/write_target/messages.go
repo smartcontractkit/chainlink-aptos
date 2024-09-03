@@ -28,13 +28,13 @@ func (m *messageBuilder) buildWriteInitiated(ctx requestContext) *wt.WriteInitia
 	}
 }
 
-// TODO: add a reason for skipping
-func (m *messageBuilder) buildWriteSkipped(ctx requestContext) *wt.WriteSkipped {
+func (m *messageBuilder) buildWriteSkipped(ctx requestContext, reason string) *wt.WriteSkipped {
 	return &wt.WriteSkipped{
 		Forwarder:   ctx.forwarder,
 		Receiver:    ctx.receiver,
 		Transmitter: ctx.transmitter,
 		ReportId:    uint32(ctx.reportID),
+		Reason:      reason,
 	}
 }
 

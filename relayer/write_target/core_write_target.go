@@ -133,9 +133,7 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 	// Check whether the report is valid (e.g., not empty)
 	if len(inputs.Report) == 0 {
 		// We received any empty report -- this means we should skip transmission.
-		// TODO: add a reason for skipping
-		c.beholder.Emit(builder.buildWriteSkipped(context))
-		c.lggr.Debugw("Skipping empty report", "request", request)
+		c.beholder.Emit(builder.buildWriteSkipped(context, "empty report"))
 		return success(), nil
 	}
 	// TODO: validate encoded report is prefixed with workflowID and executionID that match the request meta
@@ -156,9 +154,7 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 		msg := builder.buildWriteError(context, 0, "failed to call [forwarder.getTransmissionState]", err.Error())
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
 	} else if transmitted == true {
-		// TODO: add a reason for skipping
-		c.beholder.Emit(builder.buildWriteSkipped(context))
-		c.lggr.Infow("WriteTarget report already onchain - returning without a tranmission attempt", "executionID", request.Metadata.WorkflowExecutionID)
+		c.beholder.Emit(builder.buildWriteSkipped(context, "report already on-chain"))
 		return success(), nil
 	}
 
