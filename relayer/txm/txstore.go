@@ -17,8 +17,7 @@ type UnconfirmedTx struct {
 
 // TxStore tracks broadcast & unconfirmed txs per account address per chain id
 type TxStore struct {
-	uLock sync.RWMutex
-	fLock sync.RWMutex
+	lock sync.RWMutex
 
 	nextNonce         uint64
 	unconfirmedNonces map[uint64]*UnconfirmedTx
@@ -34,8 +33,8 @@ func NewTxStore(initialNonce uint64) *TxStore {
 }
 
 func (s *TxStore) SetNextNonce(newNextNonce uint64) []*UnconfirmedTx {
-	s.uLock.Lock()
-	defer s.uLock.Unlock()
+	s.lock.Lock()
+	defer s.lock.Unlock()
 
 	staleTxs := []*UnconfirmedTx{}
 	s.nextNonce = newNextNonce
@@ -58,43 +57,39 @@ func (s *TxStore) SetNextNonce(newNextNonce uint64) []*UnconfirmedTx {
 }
 
 func (s *TxStore) GetNextNonce() uint64 {
-	s.uLock.Lock()
-	defer s.uLock.Unlock()
-	return s.nextNonce
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	nextNonce := s.nextNonce
+	if len(s.failedNonces) > 0 {
+		for nonce := range s.failedNonces {
+			nextNonce = min(nextNonce, nonce)
+		}
+	}
+
+	return nextNonce
 }
 
 func (s *TxStore) AddUnconfirmed(nonce uint64, hash string, timestamp uint64, tx *AptosTx) error {
-	s.uLock.Lock()
-	defer s.uLock.Unlock()
-
-	if nonce < s.nextNonce {
-		return fmt.Errorf("tried to add an unconfirmed tx at an old nonce: expected %d, got %d", s.nextNonce, nonce)
-	}
-	if nonce > s.nextNonce {
-		return fmt.Errorf("tried to add an unconfirmed tx at a future nonce: expected %d, got %d", s.nextNonce, nonce)
-	}
+	s.lock.Lock()
+	defer s.lock.Unlock()
 
 	if h, exists := s.unconfirmedNonces[nonce]; exists {
 		return fmt.Errorf("nonce used: tried to use nonce (%d) for tx (%s), already used by (%s)", nonce, hash, h.Hash)
 	}
 
-	s.unconfirmedNonces[nonce] = &UnconfirmedTx{
-		Nonce:     nonce,
-		Hash:      hash,
-		Timestamp: timestamp,
-		Tx:        tx,
-	}
+	if _, isFailedNonce := s.failedNonces[nonce]; !isFailedNonce {
+		// this is a new nonce that we're using, which should match `nextNonce`.
+		if nonce < s.nextNonce {
+			return fmt.Errorf("tried to add an unconfirmed tx at an old nonce: expected %d, got %d", s.nextNonce, nonce)
+		}
+		if nonce > s.nextNonce {
+			return fmt.Errorf("tried to add an unconfirmed tx at a future nonce: expected %d, got %d", s.nextNonce, nonce)
+		}
 
-	s.nextNonce = s.nextNonce + 1
-	return nil
-}
-
-func (s *TxStore) AddUnconfirmedRetry(nonce uint64, hash string, timestamp uint64, tx *AptosTx) error {
-	s.uLock.Lock()
-	defer s.uLock.Unlock()
-
-	if h, exists := s.unconfirmedNonces[nonce]; exists {
-		return fmt.Errorf("nonce used: tried to use nonce (%d) for tx (%s), already used by (%s)", nonce, hash, h.Hash)
+		s.nextNonce = s.nextNonce + 1
+	} else {
+		delete(s.failedNonces, nonce)
 	}
 
 	s.unconfirmedNonces[nonce] = &UnconfirmedTx{
@@ -107,9 +102,9 @@ func (s *TxStore) AddUnconfirmedRetry(nonce uint64, hash string, timestamp uint6
 	return nil
 }
 
-func (s *TxStore) Confirm(nonce uint64, hash string) error {
-	s.uLock.Lock()
-	defer s.uLock.Unlock()
+func (s *TxStore) Confirm(nonce uint64, hash string, failed bool) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 
 	unconfirmed, exists := s.unconfirmedNonces[nonce]
 	if !exists {
@@ -120,12 +115,16 @@ func (s *TxStore) Confirm(nonce uint64, hash string) error {
 		return fmt.Errorf("unexpected tx hash: expected %s, got %s", unconfirmed.Hash, hash)
 	}
 	delete(s.unconfirmedNonces, nonce)
+
+	if failed {
+		s.failedNonces[nonce] = struct{}{}
+	}
 	return nil
 }
 
 func (s *TxStore) GetUnconfirmed() []*UnconfirmedTx {
-	s.uLock.RLock()
-	defer s.uLock.RUnlock()
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 
 	unconfirmed := maps.Values(s.unconfirmedNonces)
 	sort.Slice(unconfirmed, func(i, j int) bool {
@@ -138,36 +137,9 @@ func (s *TxStore) GetUnconfirmed() []*UnconfirmedTx {
 }
 
 func (s *TxStore) InflightCount() int {
-	s.uLock.RLock()
-	defer s.uLock.RUnlock()
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	return len(s.unconfirmedNonces)
-}
-
-func (s *TxStore) AddFailedNonce(nonce uint64) {
-	s.fLock.Lock()
-	defer s.fLock.Unlock()
-
-	s.failedNonces[nonce] = struct{}{}
-}
-
-func (s *TxStore) PopFailedNonce() (uint64, bool) {
-	s.fLock.Lock()
-	defer s.fLock.Unlock()
-
-	if len(s.failedNonces) == 0 {
-		return 0, false
-	}
-
-	var nonces []uint64
-	for nonce := range s.failedNonces {
-		nonces = append(nonces, nonce)
-	}
-	sort.Slice(nonces, func(i, j int) bool { return nonces[i] < nonces[j] })
-
-	smallestNonce := nonces[0]
-	delete(s.failedNonces, smallestNonce)
-
-	return smallestNonce, true
 }
 
 type AccountStore struct {
