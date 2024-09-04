@@ -440,7 +440,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx, isRebroadcasted bool) {
 				}
 			} else {
 				// no sequence checks and nonce increment for the recovery transactions
-				err = txStore.AddUnconfirmedNoChecks(nonce, submitResponse.Hash, uint64(time.Now().Unix()), tx)
+				err = txStore.AddUnconfirmedRetry(nonce, submitResponse.Hash, uint64(time.Now().Unix()), tx)
 				if err != nil {
 					a.logger.Errorw("failed to add recovery tx", "txID", tx.ID, "txHash", submitResponse.Hash, "error", err)
 					tx.Status = commontypes.Fatal
@@ -474,6 +474,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx, isRebroadcasted bool) {
 	if isRebroadcasted || usedFailedNonce {
 		// no more attempts lefts for the nonce
 		// save the nonce to be reused with another tx
+		a.logger.Debugw("adding failed nonce for retry", "nonce", nonce)
 		txStore.AddFailedNonce(nonce)
 	}
 }
@@ -536,7 +537,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 					a.logger.Debugw("tx not found or pending in the mempool", "hash", hash)
 				} else {
 					// At this point we know the tx won't be committed
-					unconfirmedTx.Tx.Status = commontypes.Failed
+					// unconfirmedTx.Tx.Status = commontypes.Failed // todo: what tx state should be here?
 					unconfirmedTx.Tx.LastUsedNonce = unconfirmedTx.Nonce
 
 					// Confirm tx to remove it from the unconfirmedNonces pool
@@ -557,7 +558,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 						continue
 					}
 
-					a.logger.Debugw("tx expired, setting for retry..", "txID", unconfirmedTx.Tx.ID, "hash", hash)
+					a.logger.Debugw("tx expired, setting for retry..", "txID", unconfirmedTx.Tx.ID, "attempt", commontypes.Failed)
 
 					select {
 					// prioritize tx by sending it to the rebroadcast channel
