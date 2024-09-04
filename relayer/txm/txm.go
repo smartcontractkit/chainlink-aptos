@@ -35,14 +35,17 @@ const MAX_SUBMIT_RETRY_ATTEMPTS = 10
 const SUBMIT_DELAY_DURATION = 3 // seconds
 const TX_EXPIRATION_TIME = 10   // seconds
 const MAX_TX_RETRY_ATTEMPTS = 5
+const PRUNE_INTERVAL_SECS = uint64(60 * 60 * 4)      // 4 hours
+const PRUNE_TX_EXPIRATION_SECS = uint64(60 * 60 * 2) // 2 hours
 
 type AptosTxm struct {
 	logger   logger.Logger
 	keystore loop.Keystore
 	config   AptosTxmConfig
 
-	transactions     map[string]*AptosTx
-	transactionsLock sync.RWMutex
+	transactions              map[string]*AptosTx
+	transactionsLock          sync.RWMutex
+	transactionsLastPruneTime uint64
 
 	broadcastChan chan string
 	accountStore  *AccountStore
@@ -65,7 +68,8 @@ func New(lgr logger.Logger, keystore loop.Keystore, config AptosTxmConfig, getCl
 		config:   config,
 		client:   client,
 
-		transactions: map[string]*AptosTx{},
+		transactions:              map[string]*AptosTx{},
+		transactionsLastPruneTime: getTimestampSecs(),
 
 		broadcastChan: make(chan string, config.BroadcastChanSize),
 		accountStore:  NewAccountStore(),
@@ -178,10 +182,10 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 		return fmt.Errorf("failed to parse contract address: %+w", err)
 	}
 
+	currentTimestamp := getTimestampSecs()
 	tx := &AptosTx{
-		ID: transactionID,
-		// TODO: clean up old transactions in the map by timestamp.
-		Timestamp:       uint64(time.Now().Unix()),
+		ID:              transactionID,
+		Timestamp:       currentTimestamp,
 		FromAddress:     *fromAccountAddress,
 		PublicKey:       ed25519PublicKey,
 		ContractAddress: *contractAccountAddress,
@@ -194,6 +198,19 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 	}
 
 	a.transactionsLock.Lock()
+	if (currentTimestamp - a.transactionsLastPruneTime) > PRUNE_INTERVAL_SECS {
+		for txID, tx := range a.transactions {
+			if tx.Status != commontypes.Finalized && tx.Status != commontypes.Failed && tx.Status != commontypes.Fatal {
+				continue
+			}
+			if (currentTimestamp - tx.Timestamp) < PRUNE_TX_EXPIRATION_SECS {
+				continue
+			}
+			a.logger.Debugw("Pruning transaction", "txID", txID, "status", tx.Status)
+			delete(a.transactions, txID)
+		}
+		a.transactionsLastPruneTime = currentTimestamp
+	}
 	a.transactions[transactionID] = tx
 	a.transactionsLock.Unlock()
 
@@ -431,7 +448,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			// tx included in the Mempool
 			a.logger.Debugw("submit tx successful", "txID", tx.ID, "attempt", tx.Attempt, "submitResponse", submitResponse)
 
-			err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, uint64(time.Now().Unix()), tx)
+			err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, getTimestampSecs(), tx)
 			if err != nil {
 				// TODO: figure out what to do here, this should never occur.
 				a.logger.Errorw("failed to add unconfirmed tx", "txID", tx.ID, "txHash", submitResponse.Hash, "error", err)
@@ -662,4 +679,8 @@ func hexToEd25519PublicKey(hexKey string) (ed25519.PublicKey, error) {
 
 	publicKey := ed25519.PublicKey(keyBytes)
 	return publicKey, nil
+}
+
+func getTimestampSecs() uint64 {
+	return uint64(time.Now().Unix())
 }
