@@ -12,6 +12,7 @@ import (
 	aptos "github.com/aptos-labs/aptos-go-sdk"
 	"github.com/google/uuid"
 
+	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/consensus/ocr3/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
@@ -42,7 +43,8 @@ const (
 type WriteTarget struct {
 	capabilities.CapabilityInfo
 
-	lggr     logger.Logger
+	lggr logger.Logger
+	// Local beholder client, also hosting the protobuf emitter
 	beholder *monitor.BeholderClient
 
 	cr       commontypes.ContractReader
@@ -55,7 +57,8 @@ type WriteTarget struct {
 type WriteTargetOpts struct {
 	ID string
 
-	Logger logger.Logger
+	Logger   logger.Logger
+	Beholder *beholder.Client
 
 	ContractReader    commontypes.ContractReader
 	ChainWriter       commontypes.ChainWriter
@@ -65,15 +68,17 @@ type WriteTargetOpts struct {
 }
 
 func NewWriteTarget(opts WriteTargetOpts) *WriteTarget {
+	capInfo := capabilities.MustNewCapabilityInfo(opts.ID, capabilities.CapabilityTypeTarget, "WriteTarget")
 	selfLogger := logger.Named(opts.Logger, "WriteTarget")
 
-	// TODO: remove, just for demo purposes
-	monitor.StartBeholderDemo(selfLogger)
+	// Initialize the Beholder client with a local logger a custom Emitter
+	protoEmitter := monitor.NewProtoEmitter(selfLogger, opts.Beholder)
+	beholder := &monitor.BeholderClient{opts.Beholder, protoEmitter}
 
 	return &WriteTarget{
-		capabilities.MustNewCapabilityInfo(opts.ID, capabilities.CapabilityTypeTarget, "WriteTarget"),
+		capInfo,
 		selfLogger,
-		monitor.NewBeholderClient(selfLogger),
+		beholder,
 		opts.ContractReader,
 		opts.ChainWriter,
 		opts.ChainWriterConfig,
@@ -124,7 +129,7 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 	transmitter, err := c.getTransmitter()
 	if err != nil {
 		msg := builder.buildWriteError(context, 0, "failed to source the transmitter", err.Error())
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 	context.transmitter = transmitter
 
@@ -132,7 +137,7 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 	reqConfig, err := parseConfig(request.Config)
 	if err != nil {
 		msg := builder.buildWriteError(context, 0, "failed to parse config", err.Error())
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
 	// Source the receiver address from the config
@@ -143,14 +148,14 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 	if !ok {
 		cause := fmt.Sprintf("input missing required field: '%s'", signedReportField)
 		msg := builder.buildWriteError(context, 0, "failed to source the signed report", cause)
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
 	// Try to decode the signed report
 	inputs := types.SignedReport{}
 	if err = signedReport.UnwrapTo(&inputs); err != nil {
 		msg := builder.buildWriteError(context, 0, "failed to parse signed report", err.Error())
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
 	// Source the report ID from the input
@@ -160,15 +165,15 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 	rawExecutionID, err := hex.DecodeString(request.Metadata.WorkflowExecutionID)
 	if err != nil {
 		msg := builder.buildWriteError(context, 0, "failed to decode the workflow execution ID", err.Error())
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
-	c.beholder.Emit(builder.buildWriteInitiated(context))
+	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteInitiated(context))
 
 	// Check whether the report is valid (e.g., not empty)
 	if len(inputs.Report) == 0 {
 		// We received any empty report -- this means we should skip transmission.
-		c.beholder.Emit(builder.buildWriteSkipped(context, "empty report"))
+		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSkipped(context, "empty report"))
 		return success(), nil
 	}
 	// TODO: validate encoded report is prefixed with workflowID and executionID that match the request meta
@@ -187,9 +192,9 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 	var transmitted bool
 	if err = c.cr.GetLatestValue(ctx, contractName, contractMethodName_getTransmissionState, primitives.Unconfirmed, queryInputs, &transmitted); err != nil {
 		msg := builder.buildWriteError(context, 0, "failed to call [forwarder.getTransmissionState]", err.Error())
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	} else if transmitted == true {
-		c.beholder.Emit(builder.buildWriteSkipped(context, "report already on-chain"))
+		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSkipped(context, "report already on-chain"))
 		return success(), nil
 	}
 
@@ -235,12 +240,12 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 	err = c.cw.SubmitTransaction(ctx, contractName, contractMethodName_report, req, txID.String(), context.forwarder, &meta, value)
 	if err != nil {
 		msg := builder.buildWriteError(context, 0, "failed to invoke [forwarder.report]", err.Error())
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(c.beholder)
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
 	c.lggr.Debugw("Transaction submitted", "request", request, "transaction", txID)
 	// TODO: source the TxHash from CW -> TXM by generated TxID)
-	c.beholder.Emit(builder.buildWriteSent(context, "N/A"))
+	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSent(context, "N/A"))
 
 	// TODO: have background WriteConfirmer source tx receipt (wait for a tx to be included in a block)
 	// TODO: [Beholder] Emit 'write-target.WriteAccepted'

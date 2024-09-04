@@ -10,6 +10,7 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/chains"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
@@ -30,6 +31,7 @@ type Chain interface {
 
 	TxManager() *txm.AptosTxm
 	GetClient() (*aptos.NodeClient, error)
+	Beholder() *beholder.Client
 }
 
 type ChainOpts struct {
@@ -66,6 +68,8 @@ type chain struct {
 	// Sub-services
 	txm            *txm.AptosTxm
 	balanceMonitor services.Service
+
+	beholder *beholder.Client
 }
 
 func NewChain(cfg *config.TOMLConfig, opts ChainOpts) (Chain, error) {
@@ -105,17 +109,21 @@ func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logg
 	}
 
 	// Setup accounts balance monitor
-	opts := monitor.AptosAccBalanceMonitorOpts{
+	ch.balanceMonitor = monitor.NewAptosAccBalanceMonitor(monitor.AptosAccBalanceMonitorOpts{
 		ChainID: ch.ID(),
 
 		Config:    *ch.Config().BalanceMonitor,
 		Logger:    lggr,
 		Keystore:  loopKs,
 		NewClient: getClient,
-	}
-	ch.balanceMonitor = monitor.NewAptosAccBalanceMonitor(opts)
+	})
 
-	return ch, nil
+	// Setup Beholder client
+	// TODO: get this injected from the core node
+	config := monitor.BeholderDevConfig()
+	ch.beholder, err = monitor.NewBeholderClient(context.TODO(), monitor.BeholderClientOpts{lggr, config})
+
+	return ch, err
 }
 
 func (c *chain) Name() string {
@@ -128,6 +136,10 @@ func (c *chain) Config() *config.TOMLConfig {
 
 func (c *chain) TxManager() *txm.AptosTxm {
 	return c.txm
+}
+
+func (c *chain) Beholder() *beholder.Client {
+	return c.beholder
 }
 
 func (c *chain) ChainID() string {
@@ -170,6 +182,18 @@ func (c *chain) Start(ctx context.Context) error {
 		c.lggr.Debug("Starting")
 		c.lggr.Debug("Starting txm")
 		c.lggr.Debug("Starting balance monitor")
+
+		// Setup Beholder client (on start)
+		// TODO: get this injected from the core node
+		if c.beholder == nil {
+			config := monitor.BeholderDevConfig()
+			var err error
+			c.beholder, err = monitor.NewBeholderClient(ctx, monitor.BeholderClientOpts{c.lggr, config})
+			if err != nil {
+				return err
+			}
+		}
+
 		var ms services.MultiStart
 		return ms.Start(ctx, c.txm, c.balanceMonitor)
 	})
@@ -180,6 +204,9 @@ func (c *chain) Close() error {
 		c.lggr.Debug("Stopping")
 		c.lggr.Debug("Stopping txm")
 		c.lggr.Debug("Stopping balance monitor")
+
+		// Tear down the Beholder client
+		defer c.beholder.Close()
 		return services.CloseAll(c.txm, c.balanceMonitor)
 	})
 }

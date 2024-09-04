@@ -2,57 +2,108 @@ package monitor
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/exp/rand"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/runtime/protoimpl"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
-	"github.com/smartcontractkit/chainlink-common/pkg/beholder/pb"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 )
 
 type BeholderClient struct {
-	lggr logger.Logger
+	*beholder.Client
+	ProtoEmitter ProtoEmitter
 }
 
-func NewBeholderClient(lggr logger.Logger) *BeholderClient {
-	return &BeholderClient{lggr}
+// ProtoEmitter is an interface for emitting protobuf messages
+// TODO: this should be moved to chainlink-common
+type ProtoEmitter interface {
+	// Sends message with bytes and attributes to OTel Collector
+	Emit(ctx context.Context, m proto.Message, attrKVs ...any) error
+	EmitWithLog(ctx context.Context, m proto.Message, attrKVs ...any) error
 }
 
-func (c *BeholderClient) Emit(m proto.Message) error {
-	_, err := proto.Marshal(m)
+func NewProtoEmitter(lggr logger.Logger, client *beholder.Client) ProtoEmitter {
+	return &protoEmitter{lggr, client}
+}
+
+type protoEmitter struct {
+	lggr   logger.Logger
+	client *beholder.Client
+}
+
+func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any) error {
+	payload, err := proto.Marshal(m)
+	if err != nil {
+		// Notice: we log here because emit errors are usually not critical and swallowed by the caller
+		e.lggr.Errorw("[Beholder] Failed to marshal", "err", err)
+		return err
+	}
+
+	// Add the message type as an attribute (required)
+	protoName := protoimpl.X.MessageTypeOf(m).Descriptor().FullName()
+	attrKVs = append(attrKVs, "beholder_data_schema")
+	// TODO: needs to be an URI (Beholder requirement)
+	// Notice: work on Beholder schema registry is in progress, for now we use a simple / prefix to indicate an URI
+	attrKVs = append(attrKVs, fmt.Sprintf("/%s/versions/1", string(protoName)))
+
+	// Emit the message with attributes
+	err = e.client.Emitter.Emit(ctx, payload, attrKVs...)
+	if err != nil {
+		// Notice: we log here because emit errors are usually not critical and swallowed by the caller
+		e.lggr.Errorw("[Beholder] Failed to client.Emitter.Emit", "err", err)
+		return err
+	}
+
+	return nil
+}
+
+// EmitWithLog emits a protobuf message with attributes and logs the emitted message
+func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs ...any) error {
+	err := e.Emit(ctx, m, attrKVs...)
 	if err != nil {
 		return err
 	}
 
 	protoName := protoimpl.X.MessageTypeOf(m).Descriptor().FullName()
 	protoStr := protoimpl.X.MessageStringOf(m)
-	c.lggr.Infow("[Beholder.emit]", "name", protoName, "message", protoStr)
+	// TODO: log attributes as well
+	e.lggr.Infow("[Beholder.emit]", "name", protoName, "message", protoStr)
 
 	return nil
 }
 
-type beholderDemo struct {
-	lggr logger.Logger
+type BeholderClientOpts struct {
+	Logger logger.Logger
+	Config beholder.Config
 }
 
-func StartBeholderDemo(lggr logger.Logger) {
-	(&beholderDemo{logger.Named(lggr, "BeholderDemo")}).start()
+func NewBeholderClient(ctx context.Context, opts BeholderClientOpts) (*beholder.Client, error) {
+	opts.Logger.Debugw("[Beholder] creating client", "config", opts.Config)
+
+	// Initialize beholder otel client which sets up OTel components
+	otelClient, err := beholder.NewClient(ctx, opts.Config)
+	if err != nil {
+		return &beholder.Client{}, fmt.Errorf("failed to create a new Beholder client: %+w", err)
+	}
+	// Handle OTel errors
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		opts.Logger.Errorw("OTEL error", "err", err)
+	}))
+	// Set global client so it will be accessible from anywhere through beholder/global functions
+	beholder.SetClient(otelClient)
+
+	return otelClient, nil
 }
 
-func (d *beholderDemo) start() {
-	d.setupBeholder()
-	go d.sendCustomMessages()
-	go d.sendMetricTraces()
-}
-
-func beholderDevConfig() beholder.Config {
+// This is for development purposes only, should not be used in production
+// Beholder configuration should be sourced from core node toml configuration
+func BeholderDevConfig() beholder.Config {
 	config := beholder.DefaultConfig()
 	// Set the OTel exporter endpoint
 	config.OtelExporterGRPCEndpoint = "otelcollector:4317"
@@ -75,85 +126,4 @@ func beholderDevConfig() beholder.Config {
 	// Disable batching, should not be used in production
 	config.LogBatchProcessor = false
 	return config
-}
-
-func (d *beholderDemo) setupBeholder() {
-	d.lggr.Debugw("Starting 'setupBeholder'")
-	config := beholderDevConfig()
-
-	d.lggr.Debugw("Beholder config", "config", config)
-
-	// Initialize beholder otel client which sets up OTel components
-	otelClient, err := beholder.NewClient(context.Background(), config)
-	if err != nil {
-		d.lggr.Errorw("Error creating Beholder client", "err", err)
-	}
-	// Handle OTel errors
-	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
-		d.lggr.Errorw("OTEL error", "err", err)
-	}))
-	// Set global client so it will be accessible from anywhere through beholder/global functions
-	beholder.SetClient(otelClient)
-}
-
-func (d *beholderDemo) sendCustomMessages() {
-	d.lggr.Debugw("Starting 'sendCustomMessages'")
-	// Define a custom protobuf payload to emit
-	payload := &pb.TestCustomMessage{
-		BoolVal:   true,
-		IntVal:    42,
-		FloatVal:  3.14,
-		StringVal: "custom message from chainlink",
-	}
-	payloadBytes, err := proto.Marshal(payload)
-	if err != nil {
-		d.lggr.Errorw("Failed to marshal protobuf", "err", err)
-		return
-	}
-
-	// Emit the custom message anywhere from application logic
-	for i := 0; ; i++ {
-		d.lggr.Debugw("Beholder: emitting custom message", "ID", i)
-		err := beholder.GetEmitter().Emit(context.Background(), payloadBytes,
-			"beholder_data_schema", "/custom-message/versions/1", // required
-			"beholder_data_type", "custom_message",
-			"message_ind", i,
-		)
-		if err != nil {
-			d.lggr.Errorw("Error emitting message", "err", err)
-		}
-		time.Sleep(1 * time.Second)
-	}
-}
-
-func (d *beholderDemo) sendMetricTraces() {
-	d.lggr.Debugw("Starting 'sendMetricTraces'")
-	ctx := context.Background()
-
-	// Define a new counter
-	counter, err := beholder.GetMeter().Int64Counter("custom_message.count")
-	if err != nil {
-		d.lggr.Errorw("Failed to create new counter", "err", err)
-	}
-
-	// Define a new gauge
-	gauge, err := beholder.GetMeter().Int64Gauge("custom_message.gauge")
-	if err != nil {
-		d.lggr.Errorw("Failed to create new gauge", "err", err)
-	}
-
-	for i := 0; ; i++ {
-		d.lggr.Debugw("Beholder: sending metric, trace", "ID", i)
-		// Use the counter and gauge for metrics within application logic
-		counter.Add(ctx, 1)
-		gauge.Record(ctx, rand.Int63n(101))
-
-		// Create a new trace span
-		_, span := beholder.GetTracer().Start(ctx, "sendMetricTraces", trace.WithAttributes(
-			attribute.String("app_name", "beholderdemo"),
-			attribute.Int64("trace_ind", int64(i)),
-		))
-		span.End()
-		time.Sleep(1 * time.Second)
-	}
 }
