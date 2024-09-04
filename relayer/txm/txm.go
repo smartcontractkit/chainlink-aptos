@@ -229,7 +229,7 @@ func (a *AptosTxm) broadcastLoop() {
 	_, cancel := utils.ContextFromChan(a.stop)
 	defer cancel()
 
-	signAndBroadcast := func(transactionID string, isRebroadcasted bool) {
+	signAndBroadcast := func(transactionID string) {
 		a.transactionsLock.Lock()
 		tx, ok := a.transactions[transactionID]
 		a.transactionsLock.Unlock()
@@ -237,7 +237,7 @@ func (a *AptosTxm) broadcastLoop() {
 			a.logger.Errorw("failed to find tx", "txID", transactionID)
 			return
 		}
-		a.signAndBroadcast(tx, isRebroadcasted)
+		a.signAndBroadcast(tx)
 	}
 
 	a.logger.Debugw("broadcastLoop: started")
@@ -245,9 +245,9 @@ func (a *AptosTxm) broadcastLoop() {
 		select {
 		// rebroadcast channel takes priority
 		case transactionID := <-a.rebroadcastChan:
-			signAndBroadcast(transactionID, true)
+			signAndBroadcast(transactionID)
 		case transactionID := <-a.broadcastChan:
-			signAndBroadcast(transactionID, false)
+			signAndBroadcast(transactionID)
 		case <-a.stop:
 			a.logger.Debugw("broadcastLoop: stopped")
 			return
@@ -255,7 +255,7 @@ func (a *AptosTxm) broadcastLoop() {
 	}
 }
 
-func (a *AptosTxm) signAndBroadcast(tx *AptosTx, isRebroadcasted bool) {
+func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	client := a.client
 
 	// this is cached within NodeClient after the first successful invocation.
@@ -392,21 +392,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx, isRebroadcasted bool) {
 		return signedTx, nil
 	}
 
-	var nonce uint64
-	usedFailedNonce := false
-	if isRebroadcasted {
-		// resubmit the tx with its previously used nonce
-		nonce = tx.LastUsedNonce
-	} else {
-		if failedNonce, exists := txStore.PopFailedNonce(); exists {
-			// submit new tx with one of the previously failed nonces
-			nonce = failedNonce
-			usedFailedNonce = true
-		} else {
-			// submit new tx with the new nonce
-			nonce = txStore.GetNextNonce()
-		}
-	}
+	nonce := txStore.GetNextNonce()
 
 	// broadcast with basic retry to try get the tx included in the mempool
 	for attempt := 1; attempt <= MAX_SUBMIT_RETRY_ATTEMPTS; attempt++ {
@@ -427,25 +413,14 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx, isRebroadcasted bool) {
 			}
 
 			// tx included in the Mempool
-			a.logger.Debugw("submit tx successful", "txID", tx.ID, "submitResponse", submitResponse)
+			a.logger.Debugw("submit tx successful", "txID", tx.ID, "attempt", tx.Attempt, "submitResponse", submitResponse)
 
-			if !isRebroadcasted && !usedFailedNonce {
-				// happy path: check the sequence and increment the nonce
-				err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, uint64(time.Now().Unix()), tx)
-				if err != nil {
-					// TODO: figure out what to do here.
-					a.logger.Errorw("failed to add unconfirmed tx", "txID", tx.ID, "txHash", submitResponse.Hash, "error", err)
-					tx.Status = commontypes.Failed
-					return
-				}
-			} else {
-				// no sequence checks and nonce increment for the recovery transactions
-				err = txStore.AddUnconfirmedRetry(nonce, submitResponse.Hash, uint64(time.Now().Unix()), tx)
-				if err != nil {
-					a.logger.Errorw("failed to add recovery tx", "txID", tx.ID, "txHash", submitResponse.Hash, "error", err)
-					tx.Status = commontypes.Failed
-					return
-				}
+			err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, uint64(time.Now().Unix()), tx)
+			if err != nil {
+				// TODO: figure out what to do here, this should never occur.
+				a.logger.Errorw("failed to add unconfirmed tx", "txID", tx.ID, "txHash", submitResponse.Hash, "error", err)
+				tx.Status = commontypes.Failed
+				return
 			}
 
 			tx.Status = commontypes.Unconfirmed
@@ -470,13 +445,6 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx, isRebroadcasted bool) {
 
 	a.logger.Errorw("reached max retries for submitting the tx", "txID", tx.ID)
 	tx.Status = commontypes.Failed
-
-	if isRebroadcasted || usedFailedNonce {
-		// no more attempts lefts for the nonce
-		// save the nonce to be reused with another tx
-		a.logger.Debugw("adding failed nonce for retry", "nonce", nonce)
-		txStore.AddFailedNonce(nonce)
-	}
 }
 
 func (a *AptosTxm) confirmLoop() {
@@ -521,7 +489,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 				a.logger.Debugw("tx confirmed", "txID", unconfirmedTx.Tx.ID, "hash", hash, "type", chainTx.Type)
 				unconfirmedTx.Tx.Status = commontypes.Finalized
 
-				if err := txStore.Confirm(unconfirmedTx.Nonce, hash); err != nil {
+				if err := txStore.Confirm(unconfirmedTx.Nonce, hash, false); err != nil {
 					a.logger.Errorw("failed to confirm tx in TxStore", "hash", hash, "accountAddress", accountAddress, "error", err)
 				}
 			} else {
@@ -535,36 +503,31 @@ func (a *AptosTxm) checkUnconfirmed() {
 				if ledgerTimestamp <= unconfirmedTx.Timestamp+TX_EXPIRATION_TIME {
 					// tx was neither committed nor expired yet
 					a.logger.Debugw("tx not found or pending in the mempool", "hash", hash)
-				} else {
-					// At this point we know the tx won't be committed
-					unconfirmedTx.Tx.LastUsedNonce = unconfirmedTx.Nonce
+					continue
+				}
 
-					// Confirm tx to remove it from the unconfirmedNonces pool
-					// On retry the tx will get the new hash and reenter the pool for further tracking
-					err = txStore.Confirm(unconfirmedTx.Nonce, hash)
-					if err != nil {
-						a.logger.Errorw("coudln't confirm expired tx", "error", err)
-						continue
-					}
+				// Confirm the transaction, mark as failed to reuse the nonce.
+				err = txStore.Confirm(unconfirmedTx.Nonce, hash, true)
+				if err != nil {
+					a.logger.Errorw("coudln't confirm expired tx", "error", err)
+					unconfirmedTx.Tx.Status = commontypes.Failed
+					continue
+				}
 
-					unconfirmedTx.Tx.Attempt++
-					if unconfirmedTx.Tx.Attempt >= MAX_TX_RETRY_ATTEMPTS {
-						unconfirmedTx.Tx.Status = commontypes.Failed
-						a.logger.Errorw("tx reached max num of retries and will be discarded", "txID", unconfirmedTx.Tx.ID, "hash", hash)
+				unconfirmedTx.Tx.Attempt++
+				if unconfirmedTx.Tx.Attempt >= MAX_TX_RETRY_ATTEMPTS {
+					unconfirmedTx.Tx.Status = commontypes.Failed
+					a.logger.Errorw("tx reached max num of retries and will be discarded", "txID", unconfirmedTx.Tx.ID, "hash", hash)
+					continue
+				}
 
-						// save nonce to be reused with the new tx
-						txStore.AddFailedNonce(unconfirmedTx.Nonce)
-						continue
-					}
+				a.logger.Debugw("tx expired, setting for retry..", "txID", unconfirmedTx.Tx.ID, "attempt", unconfirmedTx.Tx.Attempt)
 
-					a.logger.Debugw("tx expired, setting for retry..", "txID", unconfirmedTx.Tx.ID, "attempt", unconfirmedTx.Tx.Attempt)
-
-					select {
-					// prioritize tx by sending it to the rebroadcast channel
-					case a.rebroadcastChan <- unconfirmedTx.Tx.ID:
-					default:
-						a.logger.Errorw("failed to enqueue tx for rebroadcast", "previousHash", unconfirmedTx.Hash)
-					}
+				select {
+				// prioritize tx by sending it to the rebroadcast channel
+				case a.rebroadcastChan <- unconfirmedTx.Tx.ID:
+				default:
+					a.logger.Errorw("failed to enqueue tx for rebroadcast", "previousHash", unconfirmedTx.Hash)
 				}
 
 			}

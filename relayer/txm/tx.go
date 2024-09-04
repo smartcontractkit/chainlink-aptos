@@ -21,5 +21,4 @@ type AptosTx struct {
 	Attempt         uint64
 	Status          commontypes.TransactionStatus
 	Simulate        bool
-	LastUsedNonce   uint64
 }
