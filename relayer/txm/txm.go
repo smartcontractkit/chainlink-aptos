@@ -510,7 +510,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 	allUnconfirmedTxs := a.accountStore.GetAllUnconfirmed()
 
 	for accountAddress, unconfirmedTxs := range allUnconfirmedTxs {
-		accountStore := a.accountStore.GetTxStore(accountAddress)
+		txStore := a.accountStore.GetTxStore(accountAddress)
 
 		for _, unconfirmedTx := range unconfirmedTxs {
 			hash := unconfirmedTx.Hash
@@ -521,7 +521,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 				a.logger.Debugw("tx confirmed", "txID", unconfirmedTx.Tx.ID, "hash", hash, "type", chainTx.Type)
 				unconfirmedTx.Tx.Status = commontypes.Finalized
 
-				if err := accountStore.Confirm(unconfirmedTx.Nonce, hash); err != nil {
+				if err := txStore.Confirm(unconfirmedTx.Nonce, hash); err != nil {
 					a.logger.Errorw("failed to confirm tx in TxStore", "hash", hash, "accountAddress", accountAddress, "error", err)
 				}
 			} else {
@@ -541,7 +541,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 
 					// Confirm tx to remove it from the unconfirmedNonces pool
 					// On retry the tx will get the new hash and reenter the pool for further tracking
-					err = accountStore.Confirm(unconfirmedTx.Nonce, hash)
+					err = txStore.Confirm(unconfirmedTx.Nonce, hash)
 					if err != nil {
 						a.logger.Errorw("coudln't confirm expired tx", "error", err)
 						continue
@@ -553,7 +553,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 						a.logger.Errorw("tx reached max num of retries and will be discarded", "txID", unconfirmedTx.Tx.ID, "hash", hash)
 
 						// save nonce to be reused with the new tx
-						accountStore.AddFailedNonce(unconfirmedTx.Nonce)
+						txStore.AddFailedNonce(unconfirmedTx.Nonce)
 						continue
 					}
 
