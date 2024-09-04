@@ -262,7 +262,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx, isRebroadcasted bool) {
 	chainId, err := client.GetChainId()
 	if err != nil {
 		a.logger.Errorw("failed to get chain id", "error", err)
-		tx.Status = commontypes.Fatal
+		tx.Status = commontypes.Failed
 		return
 	}
 
@@ -271,13 +271,13 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx, isRebroadcasted bool) {
 		sequenceNumber, err := a.getSequenceNumber(client, tx.FromAddress)
 		if err != nil {
 			a.logger.Errorw("failed to get sequence number", "error", err)
-			tx.Status = commontypes.Fatal
+			tx.Status = commontypes.Failed
 			return
 		}
 		newTxStore, err := a.accountStore.CreateTxStore(tx.FromAddress.String(), sequenceNumber)
 		if err != nil {
 			a.logger.Errorw("failed to create tx store", "fromAddress", tx.FromAddress, "error", err)
-			tx.Status = commontypes.Fatal
+			tx.Status = commontypes.Failed
 			return
 		}
 		txStore = newTxStore
@@ -414,7 +414,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx, isRebroadcasted bool) {
 		signedTx, err := buildSignedTx(nonce)
 		if err != nil {
 			a.logger.Errorw("failed to build signed tx", "error", err)
-			tx.Status = commontypes.Fatal
+			tx.Status = commontypes.Failed
 			return
 		}
 
@@ -422,7 +422,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx, isRebroadcasted bool) {
 		if err == nil {
 			if submitResponse.Hash == "" {
 				a.logger.Errorw("did not receive hash after successful tx submission", "txID", tx.ID)
-				tx.Status = commontypes.Fatal
+				tx.Status = commontypes.Failed
 				return
 			}
 
@@ -435,7 +435,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx, isRebroadcasted bool) {
 				if err != nil {
 					// TODO: figure out what to do here.
 					a.logger.Errorw("failed to add unconfirmed tx", "txID", tx.ID, "txHash", submitResponse.Hash, "error", err)
-					tx.Status = commontypes.Fatal
+					tx.Status = commontypes.Failed
 					return
 				}
 			} else {
@@ -443,7 +443,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx, isRebroadcasted bool) {
 				err = txStore.AddUnconfirmedRetry(nonce, submitResponse.Hash, uint64(time.Now().Unix()), tx)
 				if err != nil {
 					a.logger.Errorw("failed to add recovery tx", "txID", tx.ID, "txHash", submitResponse.Hash, "error", err)
-					tx.Status = commontypes.Fatal
+					tx.Status = commontypes.Failed
 					return
 				}
 			}
@@ -462,14 +462,14 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx, isRebroadcasted bool) {
 			} else {
 				// Do not retry on unknown errors
 				a.logger.Errorw("failed to submit signed tx, discarding..", "txID", tx.ID, "error", err)
-				tx.Status = commontypes.Fatal
+				tx.Status = commontypes.Failed
 				return
 			}
 		}
 	}
 
 	a.logger.Errorw("reached max retries for submitting the tx", "txID", tx.ID)
-	tx.Status = commontypes.Fatal
+	tx.Status = commontypes.Failed
 
 	if isRebroadcasted || usedFailedNonce {
 		// no more attempts lefts for the nonce
@@ -537,7 +537,6 @@ func (a *AptosTxm) checkUnconfirmed() {
 					a.logger.Debugw("tx not found or pending in the mempool", "hash", hash)
 				} else {
 					// At this point we know the tx won't be committed
-					// unconfirmedTx.Tx.Status = commontypes.Failed // todo: what tx state should be here?
 					unconfirmedTx.Tx.LastUsedNonce = unconfirmedTx.Nonce
 
 					// Confirm tx to remove it from the unconfirmedNonces pool
@@ -550,7 +549,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 
 					unconfirmedTx.Tx.Attempt++
 					if unconfirmedTx.Tx.Attempt >= MAX_TX_RETRY_ATTEMPTS {
-						unconfirmedTx.Tx.Status = commontypes.Fatal
+						unconfirmedTx.Tx.Status = commontypes.Failed
 						a.logger.Errorw("tx reached max num of retries and will be discarded", "txID", unconfirmedTx.Tx.ID, "hash", hash)
 
 						// save nonce to be reused with the new tx
@@ -558,6 +557,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 						continue
 					}
 
+					a.logger.Debugw("tx expired, setting for retry..", "txID", unconfirmedTx.Tx.ID, "attempt", unconfirmedTx.Tx.Attempt)
 
 					select {
 					// prioritize tx by sending it to the rebroadcast channel
