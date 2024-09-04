@@ -558,7 +558,6 @@ func (a *AptosTxm) checkUnconfirmed() {
 						continue
 					}
 
-					a.logger.Debugw("tx expired, setting for retry..", "txID", unconfirmedTx.Tx.ID, "attempt", commontypes.Failed)
 
 					select {
 					// prioritize tx by sending it to the rebroadcast channel
