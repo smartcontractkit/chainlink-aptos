@@ -22,13 +22,14 @@ type TxStore struct {
 
 	nextNonce         uint64
 	unconfirmedNonces map[uint64]*UnconfirmedTx
-	failedNonces      []uint64
+	failedNonces      map[uint64]struct{}
 }
 
 func NewTxStore(initialNonce uint64) *TxStore {
 	return &TxStore{
 		nextNonce:         initialNonce,
-		unconfirmedNonces: map[uint64]*UnconfirmedTx{},
+		unconfirmedNonces: make(map[uint64]*UnconfirmedTx),
+		failedNonces:      make(map[uint64]struct{}),
 	}
 }
 
@@ -88,7 +89,7 @@ func (s *TxStore) AddUnconfirmed(nonce uint64, hash string, timestamp uint64, tx
 	return nil
 }
 
-func (s *TxStore) AddUnconfirmedNoChecks(nonce uint64, hash string, timestamp uint64, tx *AptosTx) error {
+func (s *TxStore) AddUnconfirmedRetry(nonce uint64, hash string, timestamp uint64, tx *AptosTx) error {
 	s.uLock.Lock()
 	defer s.uLock.Unlock()
 
@@ -146,7 +147,7 @@ func (s *TxStore) AddFailedNonce(nonce uint64) {
 	s.fLock.Lock()
 	defer s.fLock.Unlock()
 
-	s.failedNonces = append(s.failedNonces, nonce)
+	s.failedNonces[nonce] = struct{}{}
 }
 
 func (s *TxStore) PopFailedNonce() (uint64, bool) {
@@ -157,9 +158,17 @@ func (s *TxStore) PopFailedNonce() (uint64, bool) {
 		return 0, false
 	}
 
-	failedNonce := s.failedNonces[0]
-	s.failedNonces = s.failedNonces[1:]
-	return failedNonce, true
+	// Convert the map keys to a slice and sort it
+	var nonces []uint64
+	for nonce := range s.failedNonces {
+		nonces = append(nonces, nonce)
+	}
+	sort.Slice(nonces, func(i, j int) bool { return nonces[i] < nonces[j] })
+
+	smallestNonce := nonces[0]
+	delete(s.failedNonces, smallestNonce)
+
+	return smallestNonce, true
 }
 
 type AccountStore struct {
