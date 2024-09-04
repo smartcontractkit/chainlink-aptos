@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -43,12 +44,11 @@ type AptosTxm struct {
 	transactions     map[string]*AptosTx
 	transactionsLock sync.RWMutex
 
-	rebroadcastChan chan string
-	broadcastChan   chan string
-	accountStore    *AccountStore
-	starter         utils.StartStopOnce
-	done            sync.WaitGroup
-	stop            chan struct{}
+	broadcastChan chan string
+	accountStore  *AccountStore
+	starter       utils.StartStopOnce
+	done          sync.WaitGroup
+	stop          chan struct{}
 
 	client *aptos.NodeClient
 }
@@ -67,10 +67,9 @@ func New(lgr logger.Logger, keystore loop.Keystore, config AptosTxmConfig, getCl
 
 		transactions: map[string]*AptosTx{},
 
-		broadcastChan:   make(chan string, config.BroadcastChanSize),
-		rebroadcastChan: make(chan string, config.BroadcastChanSize),
-		accountStore:    NewAccountStore(),
-		stop:            make(chan struct{}),
+		broadcastChan: make(chan string, config.BroadcastChanSize),
+		accountStore:  NewAccountStore(),
+		stop:          make(chan struct{}),
 	}, nil
 }
 
@@ -229,25 +228,42 @@ func (a *AptosTxm) broadcastLoop() {
 	_, cancel := utils.ContextFromChan(a.stop)
 	defer cancel()
 
-	signAndBroadcast := func(transactionID string) {
-		a.transactionsLock.Lock()
-		tx, ok := a.transactions[transactionID]
-		a.transactionsLock.Unlock()
-		if !ok {
-			a.logger.Errorw("failed to find tx", "txID", transactionID)
-			return
-		}
-		a.signAndBroadcast(tx)
-	}
-
 	a.logger.Debugw("broadcastLoop: started")
 	for {
 		select {
-		// rebroadcast channel takes priority
-		case transactionID := <-a.rebroadcastChan:
-			signAndBroadcast(transactionID)
-		case transactionID := <-a.broadcastChan:
-			signAndBroadcast(transactionID)
+		case initialId := <-a.broadcastChan:
+			broadcastIds := []string{initialId}
+			// read all available ids on broadcastChan without blocking, and broadcast in order of which they were
+			// queued. this means that retries would take priority over newly submitted transactions.
+		DrainChannel:
+			for {
+				select {
+				case nextId := <-a.broadcastChan:
+					broadcastIds = append(broadcastIds, nextId)
+				default:
+					break DrainChannel
+				}
+			}
+
+			a.transactionsLock.Lock()
+			broadcastTxs := []*AptosTx{}
+			for _, transactionId := range broadcastIds {
+				tx, ok := a.transactions[transactionId]
+				if !ok {
+					a.logger.Errorw("failed to find tx", "txID", transactionId)
+					continue
+				}
+				broadcastTxs = append(broadcastTxs, tx)
+			}
+			a.transactionsLock.Unlock()
+
+			sort.Slice(broadcastTxs, func(i, j int) bool {
+				return broadcastTxs[i].Timestamp < broadcastTxs[j].Timestamp
+			})
+
+			for _, tx := range broadcastTxs {
+				a.signAndBroadcast(tx)
+			}
 		case <-a.stop:
 			a.logger.Debugw("broadcastLoop: stopped")
 			return
@@ -524,8 +540,8 @@ func (a *AptosTxm) checkUnconfirmed() {
 				a.logger.Debugw("tx expired, setting for retry..", "txID", unconfirmedTx.Tx.ID, "attempt", unconfirmedTx.Tx.Attempt)
 
 				select {
-				// prioritize tx by sending it to the rebroadcast channel
-				case a.rebroadcastChan <- unconfirmedTx.Tx.ID:
+				// add tx to be rebroadcast
+				case a.broadcastChan <- unconfirmedTx.Tx.ID:
 				default:
 					a.logger.Errorw("failed to enqueue tx for rebroadcast", "previousHash", unconfirmedTx.Hash)
 				}
