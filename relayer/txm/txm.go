@@ -109,7 +109,7 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 		_, transactionExists := a.transactions[transactionID]
 		a.transactionsLock.Unlock()
 		if transactionExists {
-			return nil
+			return errors.New("transaction already exists")
 		}
 	}
 
