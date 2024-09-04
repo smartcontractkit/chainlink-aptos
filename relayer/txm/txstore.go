@@ -158,7 +158,6 @@ func (s *TxStore) PopFailedNonce() (uint64, bool) {
 		return 0, false
 	}
 
-	// Convert the map keys to a slice and sort it
 	var nonces []uint64
 	for nonce := range s.failedNonces {
 		nonces = append(nonces, nonce)
