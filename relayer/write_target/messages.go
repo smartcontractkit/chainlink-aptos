@@ -38,16 +38,13 @@ func (m *messageBuilder) buildWriteSkipped(ctx requestContext, reason string) *w
 	}
 }
 
-func (m *messageBuilder) buildWriteSent(ctx requestContext, txHash string) *wt.WriteSent {
+func (m *messageBuilder) buildWriteSent(ctx requestContext, txID string) *wt.WriteSent {
 	return &wt.WriteSent{
 		Forwarder:   ctx.forwarder,
 		Receiver:    ctx.receiver,
 		Transmitter: ctx.transmitter,
 		ReportId:    uint32(ctx.reportID),
 
-		TxHash: txHash,
-		// TODO: is this metadata necessary here? (hard to source from CW -> TXM)
-		XMetadata:     []byte{},
-		XMetadataType: "aptos-tx-sent-metadata",
+		TxId: txID,
 	}
 }

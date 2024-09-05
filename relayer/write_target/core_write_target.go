@@ -243,11 +243,11 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
-	c.lggr.Debugw("Transaction submitted", "request", request, "transaction", txID)
-	// TODO: source the TxHash from CW -> TXM by generated TxID)
-	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSent(context, "N/A"))
+	c.lggr.Debugw("Transaction submitted", "request", request, "transaction-id", txID)
+	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSent(context, txID.String()))
 
-	// TODO: have background WriteConfirmer source tx receipt (wait for a tx to be included in a block)
+	// TODO: source the TxHash from CW -> TXM by generated TxID)
+	// TODO: have background WriteConfirmer source relevant txs and their receipts (wait for a tx to be included in a block)
 	// TODO: [Beholder] Emit 'write-target.WriteAccepted'
 	// TODO: [Beholder] Emit 'write-target.WriteConfirmed'
 	return success(), nil

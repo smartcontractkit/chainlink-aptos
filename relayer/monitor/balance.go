@@ -45,7 +45,7 @@ func NewBalanceMonitor(opts BalanceMonitorOpts) (services.Service, error) {
 
 func newBalanceMonitor(opts BalanceMonitorOpts) (*balanceMonitor, error) {
 	// Try to create a new gauge for account balance
-	gaugeAccBalance, err := NewGaugeAccBalance(opts.ChainNativeCurrency)
+	gauge, err := NewGaugeAccBalance(opts.ChainNativeCurrency)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gauge: %w", err)
 	}
@@ -58,8 +58,8 @@ func newBalanceMonitor(opts BalanceMonitorOpts) (*balanceMonitor, error) {
 
 		newReader: opts.NewBalanceClient,
 		updateFn: func(ctx context.Context, acc string, balance float64) {
-			lggr.Info("%s balance for %s: %f", opts.ChainNativeCurrency, acc, balance)
-			gaugeAccBalance.Record(ctx, balance, acc, opts.ChainID, opts.ChainName)
+			lggr.Infow("Account balance updated", "unit", opts.ChainNativeCurrency, "account", acc, "balance", balance)
+			gauge.Record(ctx, balance, acc, opts.ChainID, opts.ChainName)
 		},
 
 		stop: make(chan struct{}),

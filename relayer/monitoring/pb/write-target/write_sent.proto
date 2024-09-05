@@ -5,18 +5,13 @@ option go_package = ".;write_target";
 
 // WT sent a transaction on-chain
 //
-// Notice: contains chain specific metadata type as raw bytes
+// Notice: we publish txId (TXM ref) vs. txHash (N/A here)
 message WriteSent {
   string forwarder = 1;
   string receiver = 2;
   string transmitter = 3;
   uint32 report_id = 4;
 
-  string tx_hash = 5;
-
-  // Metadata is a serialized protobuf message
-  // For example, Aptos specific type hosting transaction data
-  //   (e.g., _metadata_type = "aptos-tx-sent-metadata")
-  bytes _metadata = 6;
-  string _metadata_type = 7;
+  // Transaction ID - tx reference as created by the WT, to be used for tracking TXM execution
+  string tx_id = 5;
 }
