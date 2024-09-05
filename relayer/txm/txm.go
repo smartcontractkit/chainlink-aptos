@@ -33,7 +33,7 @@ const MAX_SIMULATE_ATTEMPTS = 5
 // todo: add to txm config?
 const MAX_SUBMIT_RETRY_ATTEMPTS = 10
 const SUBMIT_DELAY_DURATION = 3 // seconds
-const TX_EXPIRATION_TIME = 10   // seconds
+const TX_EXPIRATION_SECS = 10   // seconds
 const MAX_TX_RETRY_ATTEMPTS = 5
 const PRUNE_INTERVAL_SECS = uint64(60 * 60 * 4)      // 4 hours
 const PRUNE_TX_EXPIRATION_SECS = uint64(60 * 60 * 2) // 2 hours
@@ -328,20 +328,14 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		},
 	}
 
-	buildSignedTx := func(nonce uint64) (*aptos.SignedTransaction, error) {
-		ledgerTimestamp, err := a.getLedgerTimestamp()
-		if err != nil {
-			a.logger.Errorw("failed to fetch ledger timestamp", "error", err)
-			return nil, err
-		}
-
+	buildSignedTx := func(nonce uint64, expirationTimestamp uint64) (*aptos.SignedTransaction, error) {
 		rawTx := aptos.RawTransaction{
 			Sender:                     tx.FromAddress,
 			SequenceNumber:             nonce,
 			Payload:                    payload,
 			MaxGasAmount:               0, // populated below
 			GasUnitPrice:               0, // populated below
-			ExpirationTimestampSeconds: ledgerTimestamp + uint64(TX_EXPIRATION_TIME),
+			ExpirationTimestampSeconds: expirationTimestamp,
 			ChainId:                    chainId,
 		}
 
@@ -433,9 +427,18 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 
 	// broadcast with basic retry to try get the tx included in the mempool
 	for attempt := 1; attempt <= MAX_SUBMIT_RETRY_ATTEMPTS; attempt++ {
+		ledgerTimestamp, err := a.getLedgerTimestamp()
+		if err != nil {
+			a.logger.Errorw("failed to fetch ledger timestamp", "error", err)
+			tx.Status = commontypes.Failed
+			return
+		}
+
+		expirationTimestamp := ledgerTimestamp + TX_EXPIRATION_SECS
+
 		// build the tx with the nonce and expiration timestamp
 		nonce := txStore.GetNextNonce()
-		signedTx, err := buildSignedTx(nonce)
+		signedTx, err := buildSignedTx(nonce, expirationTimestamp)
 		if err != nil {
 			a.logger.Errorw("failed to build signed tx", "error", err)
 			tx.Status = commontypes.Failed
@@ -453,7 +456,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			// tx included in the Mempool
 			a.logger.Debugw("submit tx successful", "txID", tx.ID, "attempt", tx.Attempt, "submitResponse", submitResponse)
 
-			err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, getTimestampSecs(), tx)
+			err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, expirationTimestamp, tx)
 			if err != nil {
 				// TODO: figure out what to do here, this should never occur.
 				a.logger.Errorw("failed to add unconfirmed tx", "txID", tx.ID, "txHash", submitResponse.Hash, "error", err)
@@ -533,14 +536,14 @@ func (a *AptosTxm) checkUnconfirmed() {
 					a.logger.Errorw("failed to confirm tx in TxStore", "hash", hash, "accountAddress", accountAddress, "error", err)
 				}
 			} else {
-				// LedgerTimestamp dictates expiration, the local node might lag behind
+				// Check using the ledger timestamp whether the transaction has expired.
 				ledgerTimestamp, err := a.getLedgerTimestamp()
 				if err != nil {
 					a.logger.Errorw("couldn't fetch ledger timestamp and check if tx expired", "txID", unconfirmedTx.Tx.ID)
 					continue
 				}
 
-				if ledgerTimestamp <= unconfirmedTx.Timestamp+TX_EXPIRATION_TIME {
+				if ledgerTimestamp <= unconfirmedTx.ExpirationTimestamp {
 					// tx was neither committed nor expired yet
 					a.logger.Debugw("tx not found or pending in the mempool", "hash", hash)
 					continue
