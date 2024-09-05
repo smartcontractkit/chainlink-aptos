@@ -37,6 +37,28 @@ type protoEmitter struct {
 	client *beholder.Client
 }
 
+// Add the message type as an attribute (required)
+func appendSchemaIfMissing(m proto.Message, attrKVs []any) []any {
+	key := "beholder_data_schema"
+	hasSchema := false
+	for i := 0; i < len(attrKVs); i += 2 {
+		if attrKVs[i] == key {
+			hasSchema = true
+			break
+		}
+	}
+
+	if !hasSchema {
+		protoName := protoimpl.X.MessageTypeOf(m).Descriptor().FullName()
+		attrKVs = append(attrKVs, key)
+		// TODO: needs to be an URI (Beholder requirement)
+		// Notice: work on Beholder schema registry is in progress, for now we use a simple / prefix to indicate an URI
+		attrKVs = append(attrKVs, fmt.Sprintf("/%s/versions/1", string(protoName)))
+	}
+
+	return attrKVs
+}
+
 func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any) error {
 	payload, err := proto.Marshal(m)
 	if err != nil {
@@ -45,12 +67,7 @@ func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any
 		return err
 	}
 
-	// Add the message type as an attribute (required)
-	protoName := protoimpl.X.MessageTypeOf(m).Descriptor().FullName()
-	attrKVs = append(attrKVs, "beholder_data_schema")
-	// TODO: needs to be an URI (Beholder requirement)
-	// Notice: work on Beholder schema registry is in progress, for now we use a simple / prefix to indicate an URI
-	attrKVs = append(attrKVs, fmt.Sprintf("/%s/versions/1", string(protoName)))
+	attrKVs = appendSchemaIfMissing(m, attrKVs)
 
 	// Emit the message with attributes
 	err = e.client.Emitter.Emit(ctx, payload, attrKVs...)
@@ -65,15 +82,15 @@ func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any
 
 // EmitWithLog emits a protobuf message with attributes and logs the emitted message
 func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs ...any) error {
+	attrKVs = appendSchemaIfMissing(m, attrKVs)
 	err := e.Emit(ctx, m, attrKVs...)
 	if err != nil {
 		return err
 	}
 
-	protoName := protoimpl.X.MessageTypeOf(m).Descriptor().FullName()
-	protoStr := protoimpl.X.MessageStringOf(m)
-	// TODO: log attributes as well
-	e.lggr.Infow("[Beholder.emit]", "name", protoName, "message", protoStr)
+	mStr := fmt.Sprintf("{%s}", protoimpl.X.MessageStringOf(m))
+	// TODO: how do we get and log the full set of attributes?
+	e.lggr.Infow("[Beholder.emit]", "message", mStr, "attributes", attrKVs)
 
 	return nil
 }

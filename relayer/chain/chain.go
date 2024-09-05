@@ -101,6 +101,7 @@ func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logg
 
 	// Setup Beholder client
 	// TODO: get this injected from the core node
+	// https://github.com/smartcontractkit/chainlink/pull/14110
 	config := monitor.BeholderDevConfig()
 	ch.beholder, err = monitor.NewBeholderClient(context.TODO(), monitor.BeholderClientOpts{lggr, config})
 	if err != nil {
@@ -191,6 +192,7 @@ func (c *chain) Start(ctx context.Context) error {
 
 		// Setup Beholder client (on start)
 		// TODO: get this injected from the core node
+		// https://github.com/smartcontractkit/chainlink/pull/14110
 		if c.beholder == nil {
 			config := monitor.BeholderDevConfig()
 			var err error
