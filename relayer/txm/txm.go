@@ -425,11 +425,16 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		return signedTx, nil
 	}
 
-	nonce := txStore.GetNextNonce()
+	if tx.Attempt > 0 {
+		// If we're retrying a failed transaction that we caught in the confirm loop, resync the nonce again
+		// first.
+		a.resyncNonce(client, tx.FromAddress)
+	}
 
 	// broadcast with basic retry to try get the tx included in the mempool
 	for attempt := 1; attempt <= MAX_SUBMIT_RETRY_ATTEMPTS; attempt++ {
-		// rebuild the tx with the nonce and expiration timestamp
+		// build the tx with the nonce and expiration timestamp
+		nonce := txStore.GetNextNonce()
 		signedTx, err := buildSignedTx(nonce)
 		if err != nil {
 			a.logger.Errorw("failed to build signed tx", "error", err)
@@ -459,20 +464,22 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			tx.Status = commontypes.Unconfirmed
 			return
 		} else {
+			// In case of http errors (>400) wait gracefully and retry
+			// It includes all network-related errors as well as
+			// the pre-execution validation in the Mempool (e.g. old/duplicated nonce)
 			var httpErr *aptos.HttpError
-			if errors.As(err, &httpErr) {
-				// In case of http errors (>400) wait gracefully and retry
-				// It inlcudes all network-related errors as well as
-				// the pre-execution validation in the Mempool (e.g. old/duplicated nonce)
-				a.logger.Errorw("failed to submit signed tx, retrying..", "txID", tx.ID, "error", httpErr)
-				time.Sleep(SUBMIT_DELAY_DURATION * time.Second)
-				continue
-			} else {
+			if !errors.As(err, &httpErr) {
 				// Do not retry on unknown errors
 				a.logger.Errorw("failed to submit signed tx, discarding..", "txID", tx.ID, "error", err)
 				tx.Status = commontypes.Failed
 				return
 			}
+
+			a.logger.Errorw("failed to submit signed tx, retrying..", "txID", tx.ID, "error", httpErr)
+			time.Sleep(SUBMIT_DELAY_DURATION * time.Second)
+
+			// Try to resync the nonce before the next attempt.
+			a.resyncNonce(client, tx.FromAddress)
 		}
 	}
 
@@ -584,6 +591,25 @@ func (a *AptosTxm) getSequenceNumber(client *aptos.NodeClient, address aptos.Acc
 		return 0, err
 	}
 	return sequenceNumber, nil
+}
+
+func (a *AptosTxm) resyncNonce(client *aptos.NodeClient, address aptos.AccountAddress) error {
+	sequenceNumber, err := a.getSequenceNumber(client, address)
+	if err != nil {
+		return err
+	}
+
+	txStore := a.accountStore.GetTxStore(address.String())
+
+	previousNextNonce := txStore.GetNextNonce()
+	previousLastOnchainNonce := txStore.GetLastResyncedNonce()
+	txStore.ResyncNonce(sequenceNumber)
+	updatedNextNonce := txStore.GetNextNonce()
+	updatedLastOnchainNonce := txStore.GetLastResyncedNonce()
+
+	a.logger.Infow("resynced nonce", "sequenceNumber", sequenceNumber, "previousLastOnchainNonce", previousLastOnchainNonce, "updatedLastOnchainNonce", updatedLastOnchainNonce, "previousNextNonce", previousNextNonce, "updatedNextNonce", updatedNextNonce)
+
+	return nil
 }
 
 func (a *AptosTxm) getLedgerTimestamp() (uint64, error) {

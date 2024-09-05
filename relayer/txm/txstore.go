@@ -22,6 +22,7 @@ type TxStore struct {
 	nextNonce         uint64
 	unconfirmedNonces map[uint64]*UnconfirmedTx
 	failedNonces      map[uint64]struct{}
+	lastOnchainNonce  uint64
 }
 
 func NewTxStore(initialNonce uint64) *TxStore {
@@ -29,31 +30,44 @@ func NewTxStore(initialNonce uint64) *TxStore {
 		nextNonce:         initialNonce,
 		unconfirmedNonces: make(map[uint64]*UnconfirmedTx),
 		failedNonces:      make(map[uint64]struct{}),
+		lastOnchainNonce:  initialNonce,
 	}
 }
 
-func (s *TxStore) SetNextNonce(newNextNonce uint64) []*UnconfirmedTx {
+// Resync the next nonce.
+// This should never be called between GetNextNonce() and AddUnconfirmed() as it
+// updates the next nonce, since AddUnconfirmed expects the current `nextNonce` to be
+// used for the following transaction.
+func (s *TxStore) ResyncNonce(onchainNonce uint64) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	staleTxs := []*UnconfirmedTx{}
-	s.nextNonce = newNextNonce
-
-	// Remove any stale transactions with nonces greater than the new next nonce.
-	for nonce, tx := range s.unconfirmedNonces {
-		if nonce >= s.nextNonce {
-			staleTxs = append(staleTxs, tx)
-			delete(s.unconfirmedNonces, nonce)
+	// Remove any failed nonces that are smaller, since reuse would not be possible.
+	badFailedNonces := []uint64{}
+	for failedNonce := range s.failedNonces {
+		// if failedNonce == onchainNonce, then it would be eventually reused,
+		// and it means that nextNonce is already ahead of onchainNonce.
+		if failedNonce >= onchainNonce {
+			continue
 		}
+		badFailedNonces = append(badFailedNonces, failedNonce)
+	}
+	for _, failedNonce := range badFailedNonces {
+		delete(s.failedNonces, failedNonce)
 	}
 
-	sort.Slice(staleTxs, func(i, j int) bool {
-		a := staleTxs[i]
-		b := staleTxs[j]
-		return a.Nonce < b.Nonce
-	})
+	if s.nextNonce < onchainNonce {
+		// The nextNonce is smaller than the known on-chain nonce, we are out of sync.
+		s.nextNonce = onchainNonce
+	}
 
-	return staleTxs
+	// Cache the last known on-chain nonce, so that when Confirm() is called with a failing transaction,
+	// we won't try to reuse it.
+	s.lastOnchainNonce = onchainNonce
+}
+
+func (s *TxStore) GetLastResyncedNonce() uint64 {
+	return s.lastOnchainNonce
 }
 
 func (s *TxStore) GetNextNonce() uint64 {
@@ -116,7 +130,7 @@ func (s *TxStore) Confirm(nonce uint64, hash string, failed bool) error {
 	}
 	delete(s.unconfirmedNonces, nonce)
 
-	if failed {
+	if failed && nonce >= s.lastOnchainNonce {
 		s.failedNonces[nonce] = struct{}{}
 	}
 	return nil
