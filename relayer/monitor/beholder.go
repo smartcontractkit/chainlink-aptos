@@ -89,7 +89,7 @@ func NewBeholderClient(ctx context.Context, opts BeholderClientOpts) (*beholder.
 	// Initialize beholder otel client which sets up OTel components
 	otelClient, err := beholder.NewClient(ctx, opts.Config)
 	if err != nil {
-		return &beholder.Client{}, fmt.Errorf("failed to create a new Beholder client: %+w", err)
+		return nil, fmt.Errorf("failed to create a new Beholder client: %+w", err)
 	}
 	// Handle OTel errors
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {

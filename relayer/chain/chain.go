@@ -99,6 +99,14 @@ func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logg
 		lggr: logger.Named(lggr, "Chain"),
 	}
 
+	// Setup Beholder client
+	// TODO: get this injected from the core node
+	config := monitor.BeholderDevConfig()
+	ch.beholder, err = monitor.NewBeholderClient(context.TODO(), monitor.BeholderClientOpts{lggr, config})
+	if err != nil {
+		return nil, err
+	}
+
 	getClient := func() (*aptos.NodeClient, error) {
 		return ch.GetClient()
 	}
@@ -121,12 +129,7 @@ func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logg
 		return nil, err
 	}
 
-	// Setup Beholder client
-	// TODO: get this injected from the core node
-	config := monitor.BeholderDevConfig()
-	ch.beholder, err = monitor.NewBeholderClient(context.TODO(), monitor.BeholderClientOpts{lggr, config})
-
-	return ch, err
+	return ch, nil
 }
 
 func (c *chain) Name() string {

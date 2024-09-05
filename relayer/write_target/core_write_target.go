@@ -73,12 +73,12 @@ func NewWriteTarget(opts WriteTargetOpts) *WriteTarget {
 
 	// Initialize the Beholder client with a local logger a custom Emitter
 	protoEmitter := monitor.NewProtoEmitter(selfLogger, opts.Beholder)
-	beholder := &monitor.BeholderClient{opts.Beholder, protoEmitter}
+	beholderClient := &monitor.BeholderClient{opts.Beholder, protoEmitter}
 
 	return &WriteTarget{
 		capInfo,
 		selfLogger,
-		beholder,
+		beholderClient,
 		opts.ContractReader,
 		opts.ChainWriter,
 		opts.ChainWriterConfig,
