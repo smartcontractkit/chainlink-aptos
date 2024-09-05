@@ -1,4 +1,4 @@
-package chainreader
+package codec
 
 import (
 	"math/big"
@@ -9,7 +9,7 @@ import (
 func TestDecodeAptosJsonValue(t *testing.T) {
 	t.Run("String to String", func(t *testing.T) {
 		var result string
-		err := decodeAptosJsonValue("hello world", &result)
+		err := DecodeAptosJsonValue("hello world", &result)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -20,7 +20,7 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 
 	t.Run("Hex String to []byte", func(t *testing.T) {
 		var result []byte
-		err := decodeAptosJsonValue("0x12345678", &result)
+		err := DecodeAptosJsonValue("0x12345678", &result)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -32,7 +32,7 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 
 	t.Run("Hex String to *big.Int", func(t *testing.T) {
 		var result *big.Int
-		err := decodeAptosJsonValue("0x12345678", &result)
+		err := DecodeAptosJsonValue("0x12345678", &result)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -44,7 +44,7 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 
 	t.Run("Array of Hex Strings to [][]byte", func(t *testing.T) {
 		var result [][]byte
-		err := decodeAptosJsonValue([]interface{}{"0x1234", "0x5678"}, &result)
+		err := DecodeAptosJsonValue([]interface{}{"0x1234", "0x5678"}, &result)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -56,7 +56,7 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 
 	t.Run("Array of Hex Strings to []*big.Int", func(t *testing.T) {
 		var result []*big.Int
-		err := decodeAptosJsonValue([]interface{}{"0x1234", "0x5678"}, &result)
+		err := DecodeAptosJsonValue([]interface{}{"0x1234", "0x5678"}, &result)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -70,7 +70,7 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 	// because u32 is encoded as a JSON number, where u64 is encoded as a JSON string.
 	t.Run("Array of Mixed Types to []uint", func(t *testing.T) {
 		var result []uint
-		err := decodeAptosJsonValue([]interface{}{42, "99"}, &result)
+		err := DecodeAptosJsonValue([]interface{}{42, "99"}, &result)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -82,7 +82,7 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 
 	t.Run("Boolean to Boolean", func(t *testing.T) {
 		var result bool
-		err := decodeAptosJsonValue(true, &result)
+		err := DecodeAptosJsonValue(true, &result)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -90,7 +90,7 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 			t.Errorf("Expected true, got false")
 		}
 
-		err = decodeAptosJsonValue(false, &result)
+		err = DecodeAptosJsonValue(false, &result)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -101,7 +101,7 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 
 	t.Run("Invalid Hex String", func(t *testing.T) {
 		var result []byte
-		err := decodeAptosJsonValue("0xZZZZ", &result)
+		err := DecodeAptosJsonValue("0xZZZZ", &result)
 		if err == nil {
 			t.Fatalf("Expected an error, got nil")
 		}
@@ -109,7 +109,7 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 
 	t.Run("Non-numeric String to Int", func(t *testing.T) {
 		var result int
-		err := decodeAptosJsonValue("not a number", &result)
+		err := DecodeAptosJsonValue("not a number", &result)
 		if err == nil {
 			t.Fatalf("Expected an error, got nil")
 		}
@@ -117,7 +117,7 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 
 	t.Run("Overflow Uint8", func(t *testing.T) {
 		var result uint8
-		err := decodeAptosJsonValue("256", &result)
+		err := DecodeAptosJsonValue("256", &result)
 		if err == nil {
 			t.Fatalf("Expected an error, got nil")
 		}
@@ -125,7 +125,7 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 
 	t.Run("Boolean to Unsupported Type", func(t *testing.T) {
 		var result float64
-		err := decodeAptosJsonValue(true, &result)
+		err := DecodeAptosJsonValue(true, &result)
 		if err == nil {
 			t.Fatalf("Expected an error or no conversion, got %v", result)
 		}
@@ -142,7 +142,7 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 			Age  int
 			Data []*big.Int
 		}
-		err := decodeAptosJsonValue(input, &result)
+		err := DecodeAptosJsonValue(input, &result)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}

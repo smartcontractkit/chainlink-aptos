@@ -7,6 +7,7 @@ import (
 	chain "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chain"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chainreader"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chainwriter"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
@@ -36,7 +37,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 				Functions: map[string]*chainreader.ChainReaderFunction{
 					"getTransmissionState": {
 						Name: "get_transmission_state",
-						Params: []chainreader.ChainReaderFunctionParam{
+						Params: []codec.AptosFunctionParam{
 							{
 								Name:     "Receiver",
 								Type:     "address",
@@ -75,7 +76,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 				Functions: map[string]*chainwriter.ChainWriterFunction{
 					"report": {
 						PublicKey: config.PublicKey,
-						Params: []chainwriter.ChainWriterFunctionParam{
+						Params: []codec.AptosFunctionParam{
 							{
 								Name:     "Receiver",
 								Type:     "address",
