@@ -93,7 +93,7 @@ func NewBeholderClient(ctx context.Context, opts BeholderClientOpts) (*beholder.
 	}
 	// Handle OTel errors
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
-		opts.Logger.Errorw("OTEL error", "err", err)
+		opts.Logger.Errorw("[Beholder] OTEL error", "err", err)
 	}))
 	// Set global client so it will be accessible from anywhere through beholder/global functions
 	beholder.SetClient(otelClient)

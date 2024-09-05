@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/config"
@@ -23,9 +24,9 @@ type BalanceClient interface {
 
 // BalanceMonitorOpts contains the options for creating a new balance monitor.
 type BalanceMonitorOpts struct {
-	ChainID         string
-	ChainName       string
-	BalanceCoinName string
+	ChainID             string
+	ChainName           string
+	ChainNativeCurrency string
 
 	Config           Config
 	Logger           logger.Logger
@@ -38,24 +39,32 @@ type BalanceMonitorOpts struct {
 //   - TRON: /tron/relayer/monitor
 //
 // NewBalanceMonitor returns a balance monitoring services.Service which reports the balance of all Keystore accounts.
-func NewBalanceMonitor(opts BalanceMonitorOpts) services.Service {
+func NewBalanceMonitor(opts BalanceMonitorOpts) (services.Service, error) {
 	return newBalanceMonitor(opts)
 }
 
-func newBalanceMonitor(opts BalanceMonitorOpts) *balanceMonitor {
+func newBalanceMonitor(opts BalanceMonitorOpts) (*balanceMonitor, error) {
+	// Try to create a new gauge for account balance
+	gaugeAccBalance, err := NewGaugeAccBalance(opts.ChainNativeCurrency)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gauge: %w", err)
+	}
+
+	lggr := logger.Named(opts.Logger, "BalanceMonitor")
 	return &balanceMonitor{
 		cfg:  opts.Config,
-		lggr: logger.Named(opts.Logger, "BalanceMonitor"),
+		lggr: lggr,
 		ks:   opts.Keystore,
 
 		newReader: opts.NewBalanceClient,
-		updateFn: func(acc string, balance float64) {
-			promWTAccountBalance.WithLabelValues(acc, opts.ChainID, opts.ChainName, opts.BalanceCoinName).Set(balance)
+		updateFn: func(ctx context.Context, acc string, balance float64) {
+			lggr.Info("%s balance for %s: %f", opts.ChainNativeCurrency, acc, balance)
+			gaugeAccBalance.Record(ctx, balance, acc, opts.ChainID, opts.ChainName)
 		},
 
 		stop: make(chan struct{}),
 		done: make(chan struct{}),
-	}
+	}, nil
 }
 
 type balanceMonitor struct {
@@ -67,7 +76,7 @@ type balanceMonitor struct {
 	// Returns a new BalanceClient
 	newReader func() (BalanceClient, error)
 	// Updates the balance metric
-	updateFn func(acc string, balance float64) // overridable for testing
+	updateFn func(ctx context.Context, acc string, balance float64) // overridable for testing
 
 	// Cached instance, intermitently reset to nil.
 	reader BalanceClient
@@ -132,6 +141,7 @@ func (m *balanceMonitor) getReader() (BalanceClient, error) {
 
 // updateBalances updates the balances of all accounts in the keystore, using the provided BalanceClient and the updateFn.
 func (m *balanceMonitor) updateBalances(ctx context.Context) {
+	m.lggr.Debug("Updating account balances")
 	keys, err := m.ks.Accounts(ctx)
 	if err != nil {
 		m.lggr.Errorw("Failed to get keys", "err", err)
@@ -161,7 +171,7 @@ func (m *balanceMonitor) updateBalances(ctx context.Context) {
 			continue
 		}
 		gotSomeBals = true
-		m.updateFn(k, balance)
+		m.updateFn(ctx, k, balance)
 	}
 
 	// Try a new client next time. // TODO: This is for multinode

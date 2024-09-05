@@ -109,7 +109,7 @@ func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logg
 	}
 
 	// Setup accounts balance monitor
-	ch.balanceMonitor = monitor.NewAptosAccBalanceMonitor(monitor.AptosAccBalanceMonitorOpts{
+	ch.balanceMonitor, err = monitor.NewAptosAccBalanceMonitor(monitor.AptosAccBalanceMonitorOpts{
 		ChainID: ch.ID(),
 
 		Config:    *ch.Config().BalanceMonitor,
@@ -117,6 +117,9 @@ func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logg
 		Keystore:  loopKs,
 		NewClient: getClient,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	// Setup Beholder client
 	// TODO: get this injected from the core node

@@ -21,11 +21,11 @@ type AptosAccBalanceMonitorOpts struct {
 }
 
 // NewAptosAccBalanceMonitor returns a balance monitoring services.Service which reports balance of all Keystore accounts.
-func NewAptosAccBalanceMonitor(opts AptosAccBalanceMonitorOpts) services.Service {
+func NewAptosAccBalanceMonitor(opts AptosAccBalanceMonitorOpts) (services.Service, error) {
 	return newBalanceMonitor(BalanceMonitorOpts{
-		ChainID:         opts.ChainID,
-		ChainName:       "Aptos",
-		BalanceCoinName: "APT",
+		ChainID:             opts.ChainID,
+		ChainName:           "Aptos",
+		ChainNativeCurrency: "APT",
 
 		Config:   opts.Config,
 		Logger:   opts.Logger,
