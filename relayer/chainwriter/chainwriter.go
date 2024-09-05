@@ -13,6 +13,7 @@ import (
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
 )
 
@@ -73,7 +74,8 @@ func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, 
 	}
 
 	argMap := make(map[string]interface{})
-	if err := mapstructure.Decode(args, &argMap); err != nil {
+	err := mapstructure.Decode(args, &argMap)
+	if err != nil {
 		return fmt.Errorf("failed to parse arguments: %+w", err)
 	}
 
@@ -81,17 +83,9 @@ func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, 
 	paramValues := []any{}
 
 	if functionConfig.Params != nil {
-		for _, paramConfig := range functionConfig.Params {
-			argValue, ok := argMap[paramConfig.Name]
-			if !ok {
-				if paramConfig.Required {
-					return fmt.Errorf("missing argument: %s", paramConfig.Name)
-				}
-				argValue = paramConfig.DefaultValue
-			}
-
-			paramTypes = append(paramTypes, paramConfig.Type)
-			paramValues = append(paramValues, argValue)
+		paramTypes, paramValues, err = codec.EncodeFunctionParams(argMap, functionConfig.Params)
+		if err != nil {
+			return fmt.Errorf("failed to encode function params: %+w", err)
 		}
 	}
 
@@ -109,7 +103,7 @@ func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, 
 		functionName = method
 	}
 
-	err := a.txm.Enqueue(
+	err = a.txm.Enqueue(
 		transactionID,
 		functionConfig.FromAddress,
 		functionConfig.PublicKey,
