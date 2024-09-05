@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -29,13 +30,22 @@ var _ services.Service = &AptosTxm{}
 const DEFAULT_MAX_GAS_AMOUNT = 200000
 const MAX_SIMULATE_ATTEMPTS = 5
 
+// todo: add to txm config?
+const MAX_SUBMIT_RETRY_ATTEMPTS = 10
+const SUBMIT_DELAY_DURATION = 3 // seconds
+const TX_EXPIRATION_TIME = 10   // seconds
+const MAX_TX_RETRY_ATTEMPTS = 5
+const PRUNE_INTERVAL_SECS = uint64(60 * 60 * 4)      // 4 hours
+const PRUNE_TX_EXPIRATION_SECS = uint64(60 * 60 * 2) // 2 hours
+
 type AptosTxm struct {
 	logger   logger.Logger
 	keystore loop.Keystore
 	config   AptosTxmConfig
 
-	transactions     map[string]*AptosTx
-	transactionsLock sync.RWMutex
+	transactions              map[string]*AptosTx
+	transactionsLock          sync.RWMutex
+	transactionsLastPruneTime uint64
 
 	broadcastChan chan string
 	accountStore  *AccountStore
@@ -58,7 +68,8 @@ func New(lgr logger.Logger, keystore loop.Keystore, config AptosTxmConfig, getCl
 		config:   config,
 		client:   client,
 
-		transactions: map[string]*AptosTx{},
+		transactions:              map[string]*AptosTx{},
+		transactionsLastPruneTime: getTimestampSecs(),
 
 		broadcastChan: make(chan string, config.BroadcastChanSize),
 		accountStore:  NewAccountStore(),
@@ -102,7 +113,7 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 		_, transactionExists := a.transactions[transactionID]
 		a.transactionsLock.Unlock()
 		if transactionExists {
-			return nil
+			return errors.New("transaction already exists")
 		}
 	}
 
@@ -171,10 +182,10 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 		return fmt.Errorf("failed to parse contract address: %+w", err)
 	}
 
+	currentTimestamp := getTimestampSecs()
 	tx := &AptosTx{
-		ID: transactionID,
-		// TODO: clean up old transactions in the map by timestamp.
-		Timestamp:       uint64(time.Now().Unix()),
+		ID:              transactionID,
+		Timestamp:       currentTimestamp,
 		FromAddress:     *fromAccountAddress,
 		PublicKey:       ed25519PublicKey,
 		ContractAddress: *contractAccountAddress,
@@ -182,18 +193,32 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 		FunctionName:    functionName,
 		TypeTags:        typeTags,
 		BcsValues:       bcsValues,
-		Status:          commontypes.Unconfirmed,
+		Status:          commontypes.Pending,
 		Simulate:        simulateTx,
 	}
 
 	a.transactionsLock.Lock()
+	if (currentTimestamp - a.transactionsLastPruneTime) > PRUNE_INTERVAL_SECS {
+		for txID, tx := range a.transactions {
+			if tx.Status != commontypes.Finalized && tx.Status != commontypes.Failed && tx.Status != commontypes.Fatal {
+				continue
+			}
+			if (currentTimestamp - tx.Timestamp) < PRUNE_TX_EXPIRATION_SECS {
+				continue
+			}
+			a.logger.Debugw("Pruning transaction", "txID", txID, "status", tx.Status)
+			delete(a.transactions, txID)
+		}
+		a.transactionsLastPruneTime = currentTimestamp
+	}
 	a.transactions[transactionID] = tx
 	a.transactionsLock.Unlock()
 
 	select {
 	case a.broadcastChan <- transactionID:
+		a.logger.Debugw("Tx enqueued", "txID", transactionID, "fromAddr", fromAddress)
 	default:
-		return fmt.Errorf("failed to enqueue transaction: %+v", tx)
+		return fmt.Errorf("failed to enqueue tx: %+v", tx)
 	}
 
 	return nil
@@ -201,14 +226,14 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 
 func (a *AptosTxm) GetStatus(transactionID string) (commontypes.TransactionStatus, error) {
 	if transactionID == "" {
-		return commontypes.Unknown, errors.New("nil transaction id")
+		return commontypes.Unknown, errors.New("nil tx id")
 	}
 
 	a.transactionsLock.Lock()
 	defer a.transactionsLock.Unlock()
 	tx, ok := a.transactions[transactionID]
 	if !ok {
-		return commontypes.Unknown, errors.New("no such transaction")
+		return commontypes.Unknown, errors.New("no such tx")
 	}
 
 	return tx.Status, nil
@@ -223,16 +248,39 @@ func (a *AptosTxm) broadcastLoop() {
 	a.logger.Debugw("broadcastLoop: started")
 	for {
 		select {
-		case transactionID := <-a.broadcastChan:
-			a.transactionsLock.Lock()
-			tx, ok := a.transactions[transactionID]
-			a.transactionsLock.Unlock()
-			if !ok {
-				a.logger.Errorw("failed to find transaction", "transactionID", transactionID)
-				continue
+		case initialId := <-a.broadcastChan:
+			broadcastIds := []string{initialId}
+			// read all available ids on broadcastChan without blocking, and broadcast in order of which they were
+			// queued. this means that retries would take priority over newly submitted transactions.
+		DrainChannel:
+			for {
+				select {
+				case nextId := <-a.broadcastChan:
+					broadcastIds = append(broadcastIds, nextId)
+				default:
+					break DrainChannel
+				}
 			}
-			a.signAndBroadcast(tx)
 
+			a.transactionsLock.Lock()
+			broadcastTxs := []*AptosTx{}
+			for _, transactionId := range broadcastIds {
+				tx, ok := a.transactions[transactionId]
+				if !ok {
+					a.logger.Errorw("failed to find tx", "txID", transactionId)
+					continue
+				}
+				broadcastTxs = append(broadcastTxs, tx)
+			}
+			a.transactionsLock.Unlock()
+
+			sort.Slice(broadcastTxs, func(i, j int) bool {
+				return broadcastTxs[i].Timestamp < broadcastTxs[j].Timestamp
+			})
+
+			for _, tx := range broadcastTxs {
+				a.signAndBroadcast(tx)
+			}
 		case <-a.stop:
 			a.logger.Debugw("broadcastLoop: stopped")
 			return
@@ -247,7 +295,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	chainId, err := client.GetChainId()
 	if err != nil {
 		a.logger.Errorw("failed to get chain id", "error", err)
-		tx.Status = commontypes.Fatal
+		tx.Status = commontypes.Failed
 		return
 	}
 
@@ -256,151 +304,180 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		sequenceNumber, err := a.getSequenceNumber(client, tx.FromAddress)
 		if err != nil {
 			a.logger.Errorw("failed to get sequence number", "error", err)
-			tx.Status = commontypes.Fatal
+			tx.Status = commontypes.Failed
 			return
 		}
 		newTxStore, err := a.accountStore.CreateTxStore(tx.FromAddress.String(), sequenceNumber)
 		if err != nil {
 			a.logger.Errorw("failed to create tx store", "fromAddress", tx.FromAddress, "error", err)
-			tx.Status = commontypes.Fatal
+			tx.Status = commontypes.Failed
 			return
 		}
 		txStore = newTxStore
 	}
 
-	nodeInfo, err := client.Info()
-	if err != nil {
-		a.logger.Errorw("failed to fetch ledger info", "error", err)
-		tx.Status = commontypes.Fatal
-		return
-	}
-	ledgerTimestamp := nodeInfo.LedgerTimestamp()
-	if ledgerTimestamp == 0 {
-		a.logger.Errorw("failed to fetch ledger timestamp", "nodeInfo", nodeInfo)
-		tx.Status = commontypes.Fatal
-		return
-	}
-
-	moduleId := aptos.ModuleId{
-		Address: tx.ContractAddress,
-		Name:    tx.ModuleName,
-	}
-
 	payload := aptos.TransactionPayload{
 		Payload: &aptos.EntryFunction{
-			Module:   moduleId,
+			Module: aptos.ModuleId{
+				Address: tx.ContractAddress,
+				Name:    tx.ModuleName,
+			},
 			Function: tx.FunctionName,
 			ArgTypes: tx.TypeTags,
 			Args:     tx.BcsValues,
 		},
 	}
 
+	buildSignedTx := func(nonce uint64) (*aptos.SignedTransaction, error) {
+		ledgerTimestamp, err := a.getLedgerTimestamp()
+		if err != nil {
+			a.logger.Errorw("failed to fetch ledger timestamp", "error", err)
+			return nil, err
+		}
+
+		rawTx := aptos.RawTransaction{
+			Sender:                     tx.FromAddress,
+			SequenceNumber:             nonce,
+			Payload:                    payload,
+			MaxGasAmount:               0, // populated below
+			GasUnitPrice:               0, // populated below
+			ExpirationTimestampSeconds: ledgerTimestamp + uint64(TX_EXPIRATION_TIME),
+			ChainId:                    chainId,
+		}
+
+		publicKey := aptoscrypto.Ed25519PublicKey{}
+		err = publicKey.FromBytes([]byte(tx.PublicKey))
+		if err != nil {
+			a.logger.Errorw("failed to deserialize public key", "error", err)
+			return nil, err
+		}
+
+		// (if enabled for tx) simulate tx to estimate gas
+		if tx.Simulate {
+			simulatedTx, err := a.simulateTransaction(client, rawTx, tx.FromAddress, publicKey)
+			if err == nil {
+				// todo: configurable multiplier?
+				// fixed multiplier of 1.25 to account for potential discrepancies in gas estimation
+				rawTx.MaxGasAmount = uint64(float64(simulatedTx.GasUsed) * 1.25)
+				rawTx.GasUnitPrice = simulatedTx.GasUnitPrice
+			} else {
+				// do not error on failed estimate gas as it could fail due to conflicting in-flight txs
+				a.logger.Errorw("failed to simulate tx", "error", err)
+			}
+		}
+
+		if rawTx.GasUnitPrice == 0 {
+			// If simulate was disabled or failed, populate the gas unit price.
+			gasInfo, err := client.EstimateGasPrice()
+			if err != nil {
+				a.logger.Errorw("failed to retrieve estimated gas price", "error", err)
+				return nil, err
+			}
+
+			a.logger.Debugw("estimated gas price", "gasEstimate", gasInfo.GasEstimate, "prioritizedGasEstimate", gasInfo.PrioritizedGasEstimate)
+
+			// use prioritized fee for sebsequent attempts
+			if tx.Attempt > 0 {
+				rawTx.GasUnitPrice = gasInfo.PrioritizedGasEstimate
+			} else {
+				rawTx.GasUnitPrice = gasInfo.GasEstimate
+			}
+		}
+
+		if rawTx.MaxGasAmount == 0 {
+			rawTx.MaxGasAmount = DEFAULT_MAX_GAS_AMOUNT
+			a.logger.Debugw("using default max gas amount", "maxGasAmount", DEFAULT_MAX_GAS_AMOUNT)
+		}
+
+		signingMessage, err := rawTx.SigningMessage()
+		if err != nil {
+			a.logger.Errorw("failed to create signing message", "error", err)
+			return nil, err
+		}
+
+		signature, err := a.keystore.Sign(context.Background(), fmt.Sprintf("%064x", tx.PublicKey), signingMessage)
+		if err != nil {
+			a.logger.Errorw("failed to sign message", "fromAddress", tx.FromAddress, "error", err)
+			return nil, err
+		}
+
+		sig := aptoscrypto.Ed25519Signature{}
+		err = sig.FromBytes(signature)
+		if err != nil {
+			a.logger.Errorw("failed to deserialize signature", "error", err)
+			return nil, err
+		}
+
+		authenticator := &aptoscrypto.Ed25519Authenticator{
+			PubKey: &publicKey,
+			Sig:    &sig,
+		}
+
+		signedTx, err := rawTx.SignedTransactionWithAuthenticator(&aptoscrypto.AccountAuthenticator{
+			Variant: aptoscrypto.AccountAuthenticatorEd25519,
+			Auth:    authenticator,
+		})
+		if err != nil {
+			a.logger.Errorw("failed to sign tx", "error", err)
+			return nil, err
+		}
+
+		return signedTx, nil
+	}
+
 	nonce := txStore.GetNextNonce()
 
-	rawTx := aptos.RawTransaction{
-		Sender:         tx.FromAddress,
-		SequenceNumber: nonce,
-		Payload:        payload,
-		// Gas fields populated below.
-		MaxGasAmount: 0,
-		GasUnitPrice: 0,
-		// TODO: handle expiry
-		ExpirationTimestampSeconds: ledgerTimestamp + uint64(600),
-		ChainId:                    chainId,
-	}
-
-	publicKey := aptoscrypto.Ed25519PublicKey{}
-	err = publicKey.FromBytes([]byte(tx.PublicKey))
-	if err != nil {
-		a.logger.Errorw("failed to deserialize public key", "error", err)
-		tx.Status = commontypes.Fatal
-		return
-	}
-
-	// (if enabled for tx) simulate tx to estimate gas
-	if tx.Simulate {
-		simulatedTx, err := a.simulateTransaction(client, rawTx, tx.FromAddress, publicKey)
-		if err == nil {
-			// todo: configurable multiplier?
-			// fixed multiplier of 1.25 to account for potential discrepancies in gas estimation
-			rawTx.MaxGasAmount = uint64(float64(simulatedTx.GasUsed) * 1.25)
-			rawTx.GasUnitPrice = simulatedTx.GasUnitPrice
-		} else {
-			// do not error on failed estimate gas as it could fail due to conflicting in-flight txs
-			a.logger.Errorw("failed to simulate transaction", "error", err)
-		}
-	}
-
-	if rawTx.GasUnitPrice == 0 {
-		// If simulate was disabled or failed, populate the gas unit price.
-		gasInfo, err := client.EstimateGasPrice()
+	// broadcast with basic retry to try get the tx included in the mempool
+	for attempt := 1; attempt <= MAX_SUBMIT_RETRY_ATTEMPTS; attempt++ {
+		// rebuild the tx with the nonce and expiration timestamp
+		signedTx, err := buildSignedTx(nonce)
 		if err != nil {
-			a.logger.Errorw("failed to retrieve estimated gas price", "error", err)
-			tx.Status = commontypes.Fatal
+			a.logger.Errorw("failed to build signed tx", "error", err)
+			tx.Status = commontypes.Failed
 			return
 		}
-		a.logger.Debugw("estimated gas price", "gasEstimate", gasInfo.GasEstimate, "prioritizedGasEstimate", gasInfo.PrioritizedGasEstimate)
-		// TODO: on retry, consider using PrioritizedGasEstimate
-		rawTx.GasUnitPrice = gasInfo.GasEstimate
+
+		submitResponse, err := client.SubmitTransaction(signedTx)
+		if err == nil {
+			if submitResponse.Hash == "" {
+				a.logger.Errorw("did not receive hash after successful tx submission", "txID", tx.ID)
+				tx.Status = commontypes.Failed
+				return
+			}
+
+			// tx included in the Mempool
+			a.logger.Debugw("submit tx successful", "txID", tx.ID, "attempt", tx.Attempt, "submitResponse", submitResponse)
+
+			err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, getTimestampSecs(), tx)
+			if err != nil {
+				// TODO: figure out what to do here, this should never occur.
+				a.logger.Errorw("failed to add unconfirmed tx", "txID", tx.ID, "txHash", submitResponse.Hash, "error", err)
+				tx.Status = commontypes.Failed
+				return
+			}
+
+			tx.Status = commontypes.Unconfirmed
+			return
+		} else {
+			var httpErr *aptos.HttpError
+			if errors.As(err, &httpErr) {
+				// In case of http errors (>400) wait gracefully and retry
+				// It inlcudes all network-related errors as well as
+				// the pre-execution validation in the Mempool (e.g. old/duplicated nonce)
+				a.logger.Errorw("failed to submit signed tx, retrying..", "txID", tx.ID, "error", httpErr)
+				time.Sleep(SUBMIT_DELAY_DURATION * time.Second)
+				continue
+			} else {
+				// Do not retry on unknown errors
+				a.logger.Errorw("failed to submit signed tx, discarding..", "txID", tx.ID, "error", err)
+				tx.Status = commontypes.Failed
+				return
+			}
+		}
 	}
 
-	if rawTx.MaxGasAmount == 0 {
-		rawTx.MaxGasAmount = DEFAULT_MAX_GAS_AMOUNT
-		a.logger.Debugw("using default max gas amount", "maxGasAmount", DEFAULT_MAX_GAS_AMOUNT)
-	}
-
-	signingMessage, err := rawTx.SigningMessage()
-	if err != nil {
-		a.logger.Errorw("failed to create signing message", "error", err)
-		tx.Status = commontypes.Fatal
-		return
-	}
-
-	signature, err := a.keystore.Sign(context.Background(), fmt.Sprintf("%064x", tx.PublicKey), signingMessage)
-	if err != nil {
-		a.logger.Errorw("failed to sign message", "fromAddress", tx.FromAddress, "error", err)
-		tx.Status = commontypes.Fatal
-		return
-	}
-
-	sig := aptoscrypto.Ed25519Signature{}
-	err = sig.FromBytes(signature)
-	if err != nil {
-		a.logger.Errorw("failed to deserialize signature", "error", err)
-		tx.Status = commontypes.Fatal
-		return
-	}
-
-	authenticator := &aptoscrypto.Ed25519Authenticator{
-		PubKey: &publicKey,
-		Sig:    &sig,
-	}
-
-	signedTx, err := rawTx.SignedTransactionWithAuthenticator(&aptoscrypto.AccountAuthenticator{
-		Variant: aptoscrypto.AccountAuthenticatorEd25519,
-		Auth:    authenticator,
-	})
-	if err != nil {
-		a.logger.Errorw("failed to sign transaction", "error", err)
-		tx.Status = commontypes.Fatal
-		return
-	}
-
-	submitResponse, err := client.SubmitTransaction(signedTx)
-	if err != nil {
-		a.logger.Errorw("failed to submit signed transaction", "error", err)
-		tx.Status = commontypes.Fatal
-		return
-	}
-
-	a.logger.Debugw("submitted tx", "submitResponse", submitResponse)
-
-	err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, uint64(time.Now().Unix()), tx)
-	if err != nil {
-		// TODO: figure out what to do here.
-		a.logger.Errorw("failed to add unconfirmed tx", "txHash", submitResponse.Hash, "error", err)
-		tx.Status = commontypes.Fatal
-	}
+	a.logger.Errorw("reached max retries for submitting the tx", "txID", tx.ID)
+	tx.Status = commontypes.Failed
 }
 
 func (a *AptosTxm) confirmLoop() {
@@ -422,7 +499,6 @@ func (a *AptosTxm) confirmLoop() {
 
 			remaining := time.Duration(a.config.ConfirmPollSecs) - time.Since(start)
 			tick = time.After(utils.WithJitter(remaining.Abs()))
-
 		case <-a.stop:
 			a.logger.Debugw("confirmLoop: stopped")
 			return
@@ -433,28 +509,60 @@ func (a *AptosTxm) confirmLoop() {
 func (a *AptosTxm) checkUnconfirmed() {
 	client := a.client
 	allUnconfirmedTxs := a.accountStore.GetAllUnconfirmed()
+
 	for accountAddress, unconfirmedTxs := range allUnconfirmedTxs {
+		txStore := a.accountStore.GetTxStore(accountAddress)
+
 		for _, unconfirmedTx := range unconfirmedTxs {
 			hash := unconfirmedTx.Hash
-
 			chainTx, err := client.TransactionByHash(hash)
-			if err != nil {
-				// TODO: check expiry?
-				a.logger.Errorw("failed to check for transaction", "hash", hash, "error", err)
-				continue
-			}
 
-			if chainTx.Type == aptosapi.TransactionVariantPending {
-				// TODO: check expiry?
-				continue
-			}
+			if err == nil && chainTx.Type != aptosapi.TransactionVariantPending {
+				// tx has been commited
+				a.logger.Debugw("tx confirmed", "txID", unconfirmedTx.Tx.ID, "hash", hash, "type", chainTx.Type)
+				unconfirmedTx.Tx.Status = commontypes.Finalized
 
-			a.logger.Debugw("transaction confirmed", "hash", hash, "type", chainTx.Type)
+				if err := txStore.Confirm(unconfirmedTx.Nonce, hash, false); err != nil {
+					a.logger.Errorw("failed to confirm tx in TxStore", "hash", hash, "accountAddress", accountAddress, "error", err)
+				}
+			} else {
+				// LedgerTimestamp dictates expiration, the local node might lag behind
+				ledgerTimestamp, err := a.getLedgerTimestamp()
+				if err != nil {
+					a.logger.Errorw("couldn't fetch ledger timestamp and check if tx expired", "txID", unconfirmedTx.Tx.ID)
+					continue
+				}
 
-			unconfirmedTx.Tx.Status = commontypes.Finalized
+				if ledgerTimestamp <= unconfirmedTx.Timestamp+TX_EXPIRATION_TIME {
+					// tx was neither committed nor expired yet
+					a.logger.Debugw("tx not found or pending in the mempool", "hash", hash)
+					continue
+				}
 
-			if err := a.accountStore.GetTxStore(accountAddress).Confirm(unconfirmedTx.Nonce, hash); err != nil {
-				a.logger.Errorw("failed to confirm tx in TxStore", "hash", hash, "accountAddress", accountAddress, "error", err)
+				// Confirm the transaction, mark as failed to reuse the nonce.
+				err = txStore.Confirm(unconfirmedTx.Nonce, hash, true)
+				if err != nil {
+					a.logger.Errorw("coudln't confirm expired tx", "error", err)
+					unconfirmedTx.Tx.Status = commontypes.Failed
+					continue
+				}
+
+				unconfirmedTx.Tx.Attempt++
+				if unconfirmedTx.Tx.Attempt >= MAX_TX_RETRY_ATTEMPTS {
+					unconfirmedTx.Tx.Status = commontypes.Failed
+					a.logger.Errorw("tx reached max num of retries and will be discarded", "txID", unconfirmedTx.Tx.ID, "hash", hash)
+					continue
+				}
+
+				a.logger.Debugw("tx expired, setting for retry..", "txID", unconfirmedTx.Tx.ID, "attempt", unconfirmedTx.Tx.Attempt)
+
+				select {
+				// add tx to be rebroadcast
+				case a.broadcastChan <- unconfirmedTx.Tx.ID:
+				default:
+					a.logger.Errorw("failed to enqueue tx for rebroadcast", "previousHash", unconfirmedTx.Hash)
+				}
+
 			}
 		}
 	}
@@ -476,6 +584,21 @@ func (a *AptosTxm) getSequenceNumber(client *aptos.NodeClient, address aptos.Acc
 		return 0, err
 	}
 	return sequenceNumber, nil
+}
+
+func (a *AptosTxm) getLedgerTimestamp() (uint64, error) {
+	nodeInfo, err := a.client.Info()
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch node info: %+w", err)
+	}
+
+	ledgerTimestamp := nodeInfo.LedgerTimestamp()
+	if ledgerTimestamp == 0 {
+		return 0, fmt.Errorf("ledgerTimestamp is 0")
+	}
+
+	// ledgerTimestamp given in nanosec
+	return ledgerTimestamp / 1000000, nil
 }
 
 type mockSimulationSigner struct {
@@ -514,15 +637,15 @@ func (a *AptosTxm) simulateTransaction(client *aptos.NodeClient, rawTx aptos.Raw
 		}
 		rawTx.SequenceNumber = sequenceNumber
 
-		a.logger.Debugw("simulating transaction", "attempt", attempt, "sequenceNumber", sequenceNumber)
+		a.logger.Debugw("simulating tx", "attempt", attempt, "sequenceNumber", sequenceNumber)
 		// TODO: consider using EstimatePrioritizedGasUnitPrice(true)
 		txs, err := client.SimulateTransaction(&rawTx, signerForSimulation, aptos.EstimateMaxGasAmount(true), aptos.EstimateGasUnitPrice(true))
 		if err != nil {
-			a.logger.Debugw("failed to simulate transaction", "error", err)
+			a.logger.Debugw("failed to simulate tx", "error", err)
 			return nil, err
 		}
 		if len(txs) < 1 {
-			return nil, errors.New("no simulated transactions returned")
+			return nil, errors.New("no simulated tx returned")
 		}
 		simulateResponse := txs[0]
 		if !*(simulateResponse.TxnSuccess()) {
@@ -532,11 +655,11 @@ func (a *AptosTxm) simulateTransaction(client *aptos.NodeClient, rawTx aptos.Raw
 				attempt = attempt + 1
 				continue
 			}
-			a.logger.Debugw("simulated transaction unexpected status", "vmStatus", simulateResponse.VmStatus)
-			return nil, fmt.Errorf("simulated transaction unexpected status: %v", simulateResponse.VmStatus)
+			a.logger.Debugw("simulated tx unexpected status", "vmStatus", simulateResponse.VmStatus)
+			return nil, fmt.Errorf("simulated tx unexpected status: %v", simulateResponse.VmStatus)
 		}
 
-		a.logger.Debugw("simulate transaction successful", "vmStatus", simulateResponse.VmStatus, "gasUsed", simulateResponse.GasUsed, "gasUnitPrice", simulateResponse.GasUnitPrice)
+		a.logger.Debugw("simulate tx successful", "vmStatus", simulateResponse.VmStatus, "gasUsed", simulateResponse.GasUsed, "gasUnitPrice", simulateResponse.GasUnitPrice)
 		return simulateResponse, nil
 	}
 
@@ -556,4 +679,8 @@ func hexToEd25519PublicKey(hexKey string) (ed25519.PublicKey, error) {
 
 	publicKey := ed25519.PublicKey(keyBytes)
 	return publicKey, nil
+}
+
+func getTimestampSecs() uint64 {
+	return uint64(time.Now().Unix())
 }

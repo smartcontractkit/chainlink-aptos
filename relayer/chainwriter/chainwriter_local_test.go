@@ -250,7 +250,7 @@ func waitForTransaction(t *testing.T, chainWriter commontypes.ChainWriter, id st
 		status, err := chainWriter.GetTransactionStatus(context.Background(), id)
 		require.NoError(t, err)
 
-		if status == commontypes.Unconfirmed {
+		if status == commontypes.Pending || status == commontypes.Unconfirmed {
 			time.Sleep(time.Second)
 		} else if status == commontypes.Finalized {
 			return

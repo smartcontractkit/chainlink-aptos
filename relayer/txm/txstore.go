@@ -21,12 +21,14 @@ type TxStore struct {
 
 	nextNonce         uint64
 	unconfirmedNonces map[uint64]*UnconfirmedTx
+	failedNonces      map[uint64]struct{}
 }
 
 func NewTxStore(initialNonce uint64) *TxStore {
 	return &TxStore{
 		nextNonce:         initialNonce,
-		unconfirmedNonces: map[uint64]*UnconfirmedTx{},
+		unconfirmedNonces: make(map[uint64]*UnconfirmedTx),
+		failedNonces:      make(map[uint64]struct{}),
 	}
 }
 
@@ -57,22 +59,37 @@ func (s *TxStore) SetNextNonce(newNextNonce uint64) []*UnconfirmedTx {
 func (s *TxStore) GetNextNonce() uint64 {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	return s.nextNonce
+
+	nextNonce := s.nextNonce
+	if len(s.failedNonces) > 0 {
+		for nonce := range s.failedNonces {
+			nextNonce = min(nextNonce, nonce)
+		}
+	}
+
+	return nextNonce
 }
 
 func (s *TxStore) AddUnconfirmed(nonce uint64, hash string, timestamp uint64, tx *AptosTx) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	if nonce < s.nextNonce {
-		return fmt.Errorf("tried to add an unconfirmed tx at an old nonce: expected %d, got %d", s.nextNonce, nonce)
-	}
-	if nonce > s.nextNonce {
-		return fmt.Errorf("tried to add an unconfirmed tx at a future nonce: expected %d, got %d", s.nextNonce, nonce)
-	}
-
 	if h, exists := s.unconfirmedNonces[nonce]; exists {
 		return fmt.Errorf("nonce used: tried to use nonce (%d) for tx (%s), already used by (%s)", nonce, hash, h.Hash)
+	}
+
+	if _, isFailedNonce := s.failedNonces[nonce]; !isFailedNonce {
+		// this is a new nonce that we're using, which should match `nextNonce`.
+		if nonce < s.nextNonce {
+			return fmt.Errorf("tried to add an unconfirmed tx at an old nonce: expected %d, got %d", s.nextNonce, nonce)
+		}
+		if nonce > s.nextNonce {
+			return fmt.Errorf("tried to add an unconfirmed tx at a future nonce: expected %d, got %d", s.nextNonce, nonce)
+		}
+
+		s.nextNonce = s.nextNonce + 1
+	} else {
+		delete(s.failedNonces, nonce)
 	}
 
 	s.unconfirmedNonces[nonce] = &UnconfirmedTx{
@@ -82,11 +99,10 @@ func (s *TxStore) AddUnconfirmed(nonce uint64, hash string, timestamp uint64, tx
 		Tx:        tx,
 	}
 
-	s.nextNonce = s.nextNonce + 1
 	return nil
 }
 
-func (s *TxStore) Confirm(nonce uint64, hash string) error {
+func (s *TxStore) Confirm(nonce uint64, hash string, failed bool) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -99,6 +115,10 @@ func (s *TxStore) Confirm(nonce uint64, hash string) error {
 		return fmt.Errorf("unexpected tx hash: expected %s, got %s", unconfirmed.Hash, hash)
 	}
 	delete(s.unconfirmedNonces, nonce)
+
+	if failed {
+		s.failedNonces[nonce] = struct{}{}
+	}
 	return nil
 }
 
