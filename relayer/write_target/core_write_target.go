@@ -26,12 +26,15 @@ import (
 )
 
 var (
-	_ capabilities.ActionCapability = &WriteTarget{}
+	_ capabilities.TargetCapability = &writeTarget{}
 )
 
 // required field of target's config in the workflow spec
 const (
-	signedReportField = "signed_report"
+	capabilityName = "write-target"
+
+	// Input keys
+	keySignedReport = "signed_report"
 
 	// Static contract info
 	contractName                            = "forwarder"
@@ -39,8 +42,7 @@ const (
 	contractMethodName_getTransmissionState = "getTransmissionState"
 )
 
-// TODO: make private and replace return type with the Capability interface
-type WriteTarget struct {
+type writeTarget struct {
 	capabilities.CapabilityInfo
 
 	lggr logger.Logger
@@ -67,15 +69,15 @@ type WriteTargetOpts struct {
 	ForwarderAddress string
 }
 
-func NewWriteTarget(opts WriteTargetOpts) *WriteTarget {
-	capInfo := capabilities.MustNewCapabilityInfo(opts.ID, capabilities.CapabilityTypeTarget, "WriteTarget")
-	selfLogger := logger.Named(opts.Logger, "WriteTarget")
+func NewWriteTarget(opts WriteTargetOpts) capabilities.TargetCapability {
+	capInfo := capabilities.MustNewCapabilityInfo(opts.ID, capabilities.CapabilityTypeTarget, capabilityName)
+	selfLogger := logger.Named(opts.Logger, capabilityName)
 
 	// Initialize the Beholder client with a local logger a custom Emitter
 	protoEmitter := monitor.NewProtoEmitter(selfLogger, opts.Beholder)
 	beholderClient := &monitor.BeholderClient{opts.Beholder, protoEmitter}
 
-	return &WriteTarget{
+	return &writeTarget{
 		capInfo,
 		selfLogger,
 		beholderClient,
@@ -112,7 +114,7 @@ type requestContext struct {
 	reportID    uint64
 }
 
-func (c *WriteTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (capabilities.CapabilityResponse, error) {
+func (c *writeTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (capabilities.CapabilityResponse, error) {
 	c.lggr.Debugw("Execute", "request", request)
 
 	// Helper to keep track of the context
@@ -144,9 +146,9 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 	context.receiver = reqConfig.Address
 
 	// Try to source the signed report from the request
-	signedReport, ok := request.Inputs.Underlying[signedReportField]
+	signedReport, ok := request.Inputs.Underlying[keySignedReport]
 	if !ok {
-		cause := fmt.Sprintf("input missing required field: '%s'", signedReportField)
+		cause := fmt.Sprintf("input missing required field: '%s'", keySignedReport)
 		msg := builder.buildWriteError(context, 0, "failed to source the signed report", cause)
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
@@ -253,20 +255,20 @@ func (c *WriteTarget) Execute(ctx context.Context, request capabilities.Capabili
 	return success(), nil
 }
 
-func (c *WriteTarget) RegisterToWorkflow(ctx context.Context, request capabilities.RegisterToWorkflowRequest) error {
+func (c *writeTarget) RegisterToWorkflow(ctx context.Context, request capabilities.RegisterToWorkflowRequest) error {
 	// TODO: store locally, and if trigger seen
 
 	// TODO: start a process responsible for monitoring the chain and publishing [Beholder] Emit 'write-target.WriteConfirmed'
 	return nil
 }
 
-func (c *WriteTarget) UnregisterFromWorkflow(ctx context.Context, request capabilities.UnregisterFromWorkflowRequest) error {
+func (c *writeTarget) UnregisterFromWorkflow(ctx context.Context, request capabilities.UnregisterFromWorkflowRequest) error {
 	// TODO: stop a process responsible for monitoring the chain and publishing [Beholder] Emit 'write-target.WriteConfirmed'
 	return nil
 }
 
 // getTransmitter sources the transmitter address from the CW config
-func (c *WriteTarget) getTransmitter() (string, error) {
+func (c *writeTarget) getTransmitter() (string, error) {
 	// Try to source the transmitter (e.g., c.cw.config.Functions["forwarder"].FromAddress)
 	moduleConfig, ok := c.cwConfig.Modules[contractName]
 	if !ok {

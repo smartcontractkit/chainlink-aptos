@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
+	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
 
 	chain "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chain"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chainreader"
@@ -15,7 +16,7 @@ import (
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 )
 
-func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Logger, beholder *beholder.Client) (*WriteTarget, error) {
+func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Logger, beholder *beholder.Client) (capabilities.TargetCapability, error) {
 	// generate ID based on chain selector
 	// id := fmt.Sprintf("write_%v@1.0.0", chain.ID())
 	// chainName, err := chainselectors.NameFromChainId(chain.ID().Uint64())

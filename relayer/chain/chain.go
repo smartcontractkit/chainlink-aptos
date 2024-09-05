@@ -81,7 +81,7 @@ func NewChain(cfg *config.TOMLConfig, opts ChainOpts) (Chain, error) {
 }
 
 func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger) (*chain, error) {
-	lggr = logger.With(lggr, "aptosChainID", id)
+	lggr = logger.With(lggr, "chainID", id)
 
 	// TEMP: fetch the first account in the store to use for transmissions to avoid having to specify it in TOML
 	accounts, err := loopKs.Accounts(context.Background())
