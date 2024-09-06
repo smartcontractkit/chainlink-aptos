@@ -60,7 +60,8 @@ func (o *ChainOpts) Validate() (err error) {
 var _ Chain = (*chain)(nil)
 
 type chain struct {
-	utils.StartStopOnce
+	starter utils.StartStopOnce
+
 	id   string
 	cfg  *config.TOMLConfig
 	lggr logger.Logger
@@ -185,7 +186,7 @@ func (c *chain) GetClient() (*aptos.NodeClient, error) {
 }
 
 func (c *chain) Start(ctx context.Context) error {
-	return c.StartOnce("Chain", func() error {
+	return c.starter.StartOnce("Chain", func() error {
 		c.lggr.Debug("Starting")
 		c.lggr.Debug("Starting txm")
 		c.lggr.Debug("Starting balance monitor")
@@ -208,7 +209,7 @@ func (c *chain) Start(ctx context.Context) error {
 }
 
 func (c *chain) Close() error {
-	return c.StopOnce("Chain", func() error {
+	return c.starter.StopOnce("Chain", func() error {
 		c.lggr.Debug("Stopping")
 		c.lggr.Debug("Stopping txm")
 		c.lggr.Debug("Stopping balance monitor")
@@ -220,13 +221,13 @@ func (c *chain) Close() error {
 }
 
 func (c *chain) Ready() error {
-	// TODO: errors.Join(txm.Ready(), balanceMonitor.Ready()), etc.
-	return c.StartStopOnce.Ready()
+	return errors.Join(c.starter.Ready(), c.txm.Ready(), c.balanceMonitor.Ready())
 }
 
 func (c *chain) HealthReport() map[string]error {
-	report := map[string]error{c.Name(): c.Healthy()}
+	report := map[string]error{c.Name(): c.starter.Healthy()}
 	services.CopyHealth(report, c.txm.HealthReport())
+	services.CopyHealth(report, c.balanceMonitor.HealthReport())
 	return report
 }
 
