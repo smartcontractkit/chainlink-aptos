@@ -59,8 +59,7 @@ type writeTarget struct {
 type WriteTargetOpts struct {
 	ID string
 
-	Logger   logger.Logger
-	Beholder *beholder.Client
+	Logger logger.Logger
 
 	ContractReader    commontypes.ContractReader
 	ChainWriter       commontypes.ChainWriter
@@ -74,13 +73,13 @@ func NewWriteTarget(opts WriteTargetOpts) capabilities.TargetCapability {
 	selfLogger := logger.Named(opts.Logger, capabilityName)
 
 	// Initialize the Beholder client with a local logger a custom Emitter
-	protoEmitter := monitor.NewProtoEmitter(selfLogger, opts.Beholder)
-	beholderClient := &monitor.BeholderClient{opts.Beholder, protoEmitter}
+	protoEmitter := monitor.NewProtoEmitter(selfLogger, beholder.GetClient())
+	beholder := &monitor.BeholderClient{beholder.GetClient(), protoEmitter}
 
 	return &writeTarget{
 		capInfo,
 		selfLogger,
-		beholderClient,
+		beholder,
 		opts.ContractReader,
 		opts.ChainWriter,
 		opts.ChainWriterConfig,

@@ -31,7 +31,6 @@ type Chain interface {
 
 	TxManager() *txm.AptosTxm
 	GetClient() (*aptos.NodeClient, error)
-	Beholder() *beholder.Client
 }
 
 type ChainOpts struct {
@@ -69,8 +68,6 @@ type chain struct {
 	// Sub-services
 	txm            *txm.AptosTxm
 	balanceMonitor services.Service
-
-	beholder *beholder.Client
 }
 
 func NewChain(cfg *config.TOMLConfig, opts ChainOpts) (Chain, error) {
@@ -104,7 +101,7 @@ func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logg
 	// TODO: get this injected from the core node
 	// https://github.com/smartcontractkit/chainlink/pull/14110
 	config := monitor.BeholderDevConfig()
-	ch.beholder, err = monitor.NewBeholderClient(context.TODO(), monitor.BeholderClientOpts{lggr, config})
+	_, err = monitor.NewBeholderClient(context.TODO(), monitor.BeholderClientOpts{lggr, config})
 	if err != nil {
 		return nil, err
 	}
@@ -144,10 +141,6 @@ func (c *chain) Config() *config.TOMLConfig {
 
 func (c *chain) TxManager() *txm.AptosTxm {
 	return c.txm
-}
-
-func (c *chain) Beholder() *beholder.Client {
-	return c.beholder
 }
 
 func (c *chain) ChainID() string {
@@ -194,10 +187,10 @@ func (c *chain) Start(ctx context.Context) error {
 		// Setup Beholder client (on start)
 		// TODO: get this injected from the core node
 		// https://github.com/smartcontractkit/chainlink/pull/14110
-		if c.beholder == nil {
+		if beholder.GetClient() == nil {
 			config := monitor.BeholderDevConfig()
 			var err error
-			c.beholder, err = monitor.NewBeholderClient(ctx, monitor.BeholderClientOpts{c.lggr, config})
+			_, err = monitor.NewBeholderClient(ctx, monitor.BeholderClientOpts{c.lggr, config})
 			if err != nil {
 				return err
 			}
@@ -215,7 +208,9 @@ func (c *chain) Close() error {
 		c.lggr.Debug("Stopping balance monitor")
 
 		// Tear down the Beholder client
-		defer c.beholder.Close()
+		if beholder.GetClient() == nil {
+			defer beholder.GetClient().Close()
+		}
 		return services.CloseAll(c.txm, c.balanceMonitor)
 	})
 }
