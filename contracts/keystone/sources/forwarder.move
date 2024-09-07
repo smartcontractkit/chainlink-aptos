@@ -33,7 +33,7 @@ module keystone::forwarder {
     }
 
     struct State has key {
-        owner: address,
+        owner_address: address,
 
         extend_ref: ExtendRef,
 
@@ -74,7 +74,7 @@ module keystone::forwarder {
         let app_signer = &object::generate_signer(&constructor_ref);
 
         move_to(app_signer, State {
-            owner: @owner,
+            owner_address: @owner,
             configs: smart_table::new(),
             reports: smart_table::new(),
             extend_ref,
@@ -88,7 +88,7 @@ module keystone::forwarder {
     public entry fun set_config(authority: &signer, don_id: u32, config_version: u32, f: u8, oracles: vector<vector<u8>>) acquires State {
         let state = borrow_global_mut<State>(get_state_addr());
 
-        assert!(state.owner == signer::address_of(authority), E_UNAUTHORIZED);
+        assert!(state.owner_address == signer::address_of(authority), E_UNAUTHORIZED);
 
         assert!(f != 0, error::invalid_argument(E_FAULT_TOLERANCE_MUST_BE_POSITIVE));
         assert!(vector::length(&oracles) <= MAX_ORACLES, error::invalid_argument(E_EXCESS_SIGNERS));
@@ -112,7 +112,7 @@ module keystone::forwarder {
     public entry fun clear_config(authority: &signer, don_id: u32, config_version: u32) acquires State {
         let state = borrow_global_mut<State>(get_state_addr());
 
-        assert!(state.owner == signer::address_of(authority), E_UNAUTHORIZED);
+        assert!(state.owner_address == signer::address_of(authority), E_UNAUTHORIZED);
 
         smart_table::remove(&mut state.configs, ConfigId {don_id, config_version});
 
