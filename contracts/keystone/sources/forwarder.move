@@ -16,12 +16,14 @@ module keystone::forwarder {
     const E_INVALID_SIGNATURE_COUNT: u64 = 4;
     const E_INVALID_SIGNATURE: u64 = 5;
     const E_ALREADY_PROCESSED: u64 = 6;
-    const E_UNAUTHORIZED: u64 = 7;
+    const E_NOT_OWNER: u64 = 7;
     const E_MALFORMED_SIGNATURE: u64 = 8;
     const E_FAULT_TOLERANCE_MUST_BE_POSITIVE: u64 = 9;
     const E_EXCESS_SIGNERS: u64 = 10;
     const E_INSUFFICIENT_SIGNERS: u64 = 11;
     const E_CALLBACK_DATA_NOT_CONSUMED: u64 = 12;
+    const E_CANNOT_TRANSFER_TO_SELF: u64 = 13;
+    const E_NOT_PROPOSED_OWNER: u64 = 14;
 
     const MAX_ORACLES: u64 = 31;
 
@@ -34,6 +36,7 @@ module keystone::forwarder {
 
     struct State has key {
         owner_address: address,
+        pending_owner_address: address,
 
         extend_ref: ExtendRef,
 
@@ -64,6 +67,22 @@ module keystone::forwarder {
         report_id: u16,
     }
 
+    #[event]
+    struct OwnershipTransferRequested has drop, store {
+        from: address,
+        to: address,
+    }
+
+    #[event]
+    struct OwnershipTransferred has drop, store {
+        from: address,
+        to: address,
+    }
+
+    inline fun assert_is_owner(state: &State, target_address: address) {
+        assert!(state.owner_address == target_address, error::permission_denied(E_NOT_OWNER));
+    }
+
     fun init_module(publisher: &signer) {
         let constructor_ref = object::create_named_object(
             publisher,
@@ -75,6 +94,7 @@ module keystone::forwarder {
 
         move_to(app_signer, State {
             owner_address: @owner,
+            pending_owner_address: @0x0,
             configs: smart_table::new(),
             reports: smart_table::new(),
             extend_ref,
@@ -88,7 +108,7 @@ module keystone::forwarder {
     public entry fun set_config(authority: &signer, don_id: u32, config_version: u32, f: u8, oracles: vector<vector<u8>>) acquires State {
         let state = borrow_global_mut<State>(get_state_addr());
 
-        assert!(state.owner_address == signer::address_of(authority), E_UNAUTHORIZED);
+        assert_is_owner(state, signer::address_of(authority));
 
         assert!(f != 0, error::invalid_argument(E_FAULT_TOLERANCE_MUST_BE_POSITIVE));
         assert!(vector::length(&oracles) <= MAX_ORACLES, error::invalid_argument(E_EXCESS_SIGNERS));
@@ -112,7 +132,7 @@ module keystone::forwarder {
     public entry fun clear_config(authority: &signer, don_id: u32, config_version: u32) acquires State {
         let state = borrow_global_mut<State>(get_state_addr());
 
-        assert!(state.owner_address == signer::address_of(authority), E_UNAUTHORIZED);
+        assert_is_owner(state, signer::address_of(authority));
 
         smart_table::remove(&mut state.configs, ConfigId {don_id, config_version});
 
@@ -256,6 +276,41 @@ module keystone::forwarder {
         option::some(*smart_table::borrow(&state.reports, transmission_id))
     }
 
+    // Ownership functions
+
+    #[view]
+    public fun get_owner(): address acquires State {
+        let state = borrow_global<State>(get_state_addr());
+        state.owner_address
+    }
+
+    public entry fun transfer_ownership(authority: &signer, to: address) acquires State {
+        let state = borrow_global_mut<State>(get_state_addr());
+        assert_is_owner(state, signer::address_of(authority));
+        assert!(state.owner_address != to, error::invalid_argument(E_CANNOT_TRANSFER_TO_SELF));
+
+        state.pending_owner_address = to;
+
+        event::emit(OwnershipTransferRequested {
+            from: state.owner_address,
+            to,
+        });
+    }
+
+    public entry fun accept_ownership(authority: &signer) acquires State {
+        let state = borrow_global_mut<State>(get_state_addr());
+        assert!(state.pending_owner_address == signer::address_of(authority), error::permission_denied(E_NOT_PROPOSED_OWNER));
+
+        let old_owner_address = state.owner_address;
+        state.owner_address = state.pending_owner_address;
+        state.pending_owner_address = @0x0;
+
+        event::emit(OwnershipTransferred {
+            from: old_owner_address,
+            to: state.owner_address,
+        });
+    }
+
     #[test_only]
     public fun init_module_for_testing(publisher: &signer) {
         init_module(publisher);
@@ -322,19 +377,19 @@ module keystone::forwarder {
     }
 
     #[test (
-        owner = @0xcafe,
+        owner = @owner,
         publisher = @keystone,
     )]
     public entry fun test_happy_path(
-        owner: signer,
-        publisher: signer,
+        owner: &signer,
+        publisher: &signer,
     ) acquires State {
-        set_up_test(&owner, &publisher);
+        set_up_test(owner, publisher);
 
         let config = generate_oracle_set();
 
         // configure DON
-        set_config(&owner, config.don_id, config.config_version, config.f, config.oracles);
+        set_config(owner, config.don_id, config.config_version, config.f, config.oracles);
 
         // generate report
         let version = 1;
@@ -385,6 +440,64 @@ module keystone::forwarder {
         let signatures = sign_report(&config, report, report_context);
 
         // call entrypoint
-        validate_report(&owner, signer::address_of(&publisher), raw_report, signatures);
+        validate_report(owner, signer::address_of(publisher), raw_report, signatures);
+    }
+
+    #[test(owner = @owner, publisher = @keystone, new_owner=@0xbeef)]
+    fun test_transfer_ownership_success(
+      owner: &signer,
+      publisher: &signer,
+      new_owner: &signer
+    ) acquires State {
+        set_up_test(owner, publisher);
+
+        assert!(get_owner() == @owner, 1);
+
+        transfer_ownership(owner, signer::address_of(new_owner));
+        accept_ownership(new_owner);
+
+        assert!(get_owner() == signer::address_of(new_owner), 2);
+    }
+
+    #[test(owner = @owner, publisher = @keystone, unknown_user=@0xbeef)]
+    #[expected_failure(abort_code = 327687, location = keystone::forwarder)]
+    fun test_transfer_ownership_failure_not_owner(
+      owner: &signer,
+      publisher: &signer,
+      unknown_user: &signer,
+    ) acquires State {
+        set_up_test(owner, publisher);
+
+        assert!(get_owner() == @owner, 1);
+
+        transfer_ownership(unknown_user, signer::address_of(unknown_user));
+    }
+
+    #[test(owner = @owner, publisher = @keystone)]
+    #[expected_failure(abort_code = 65549, location = keystone::forwarder)]
+    fun test_transfer_ownership_failure_transfer_to_self(
+      owner: &signer,
+      publisher: &signer,
+    ) acquires State {
+        set_up_test(owner, publisher);
+
+        assert!(get_owner() == @owner, 1);
+
+        transfer_ownership(owner, signer::address_of(owner));
+    }
+
+    #[test(owner = @owner, publisher = @keystone, new_owner=@0xbeef)]
+    #[expected_failure(abort_code = 327694, location = keystone::forwarder)]
+    fun test_transfer_ownership_failure_not_proposed_owner(
+      owner: &signer,
+      publisher: &signer,
+      new_owner: &signer
+    ) acquires State {
+        set_up_test(owner, publisher);
+
+        assert!(get_owner() == @owner, 1);
+
+        transfer_ownership(owner, @0xfeeb);
+        accept_ownership(new_owner);
     }
 }
