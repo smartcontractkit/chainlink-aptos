@@ -5,4 +5,4 @@ cd "$(dirname -- "$0")/.."
 
 aptos move test --package-dir keystone
 aptos move test --package-dir mcms
-aptos move test --package-dir data-feeds --named-addresses keystone=default
+aptos move test --package-dir data-feeds
