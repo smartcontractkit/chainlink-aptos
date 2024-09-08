@@ -4,7 +4,7 @@ module mcms::multisig {
     use std::option;
     use std::event;
     use std::bcs;
-    use std::simple_map::{SimpleMap,Self};
+    use std::simple_map::{SimpleMap, Self};
     use std::secp256k1;
     use std::aptos_hash::keccak256;
     use aptos_framework::multisig_account;
@@ -18,9 +18,13 @@ module mcms::multisig {
     const NUM_GROUPS: u8 = 32;
     const MAX_NUM_SIGNERS: u8 = 200;
     // equivalent to address(0x0) in Solidity
-    const ZERO_EVM_ADDRESS: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const ZERO_EVM_ADDRESS: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0];
     // equivalent to initializing empty uint8[NUM_GROUPS] in Solidity
-    const VEC_NUM_GROUPS: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const VEC_NUM_GROUPS: vector<u8> = vector[
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0
+    ];
     // keccak256("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA")
     const MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA: vector<u8> = x"e6b82be989101b4eb519770114b997b97b3c8707515286748a871717f0e4ea1c";
     // keccak256("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP")
@@ -113,7 +117,7 @@ module mcms::multisig {
     // where MCMS is one signer and the executor is the other signer. MCMS does not expose
     // any methods to vote on transactions, and thus any txs proposed by the executor will
     // never be able to be executed. this changes the MCMS model from (k of n) to ((k of n) +1)
-    // if we explore using the Aptos native multisig account (1 of N) as an executor, this 
+    // if we explore using the Aptos native multisig account (1 of N) as an executor, this
     // can make it effectively more than one single signer, but this is still different to
     // to original behaviour of MCMS on EVM chains.
 
@@ -121,24 +125,20 @@ module mcms::multisig {
         // s_signers is used to easily validate the existence of the signer by its address. We still
         // have signers stored in s_config in order to easily deactivate them when a new config is set.
         s_signers: SimpleMap<vector<u8>, Signer>,
-
         s_config: Config,
 
         // Remember signedHashes that this contract has seen. Each signedHash can only be set once.
         s_seen_signed_hashes: SimpleMap<vector<u8>, bool>,
-
         s_expiring_root_and_op_count: ExpiringRootAndOpCount,
-
         s_root_metadata: RootMetadata,
 
         // Aptos extended multisig fields
         addr: address,
-
         signer_cap: account::SignerCapability,
 
         // Ownable fields
         owner: address
-	}
+    }
 
     #[event]
     struct ConfigSet has drop, store {
@@ -156,11 +156,10 @@ module mcms::multisig {
     #[event]
     struct OpExecuted has drop, store {
         nonce: u64,
-        data: vector<u8>,
+        data: vector<u8>
     }
 
-
-    // MCM Getters 
+    // MCM Getters
 
     #[view]
     public fun get_config(): Config acquires MCMState {
@@ -175,7 +174,10 @@ module mcms::multisig {
     #[view]
     public fun get_root(): (vector<u8>, u64) acquires MCMState {
         let state = borrow_global<MCMState>(get_state_addr());
-        (state.s_expiring_root_and_op_count.root, state.s_expiring_root_and_op_count.valid_until)
+        (
+            state.s_expiring_root_and_op_count.root,
+            state.s_expiring_root_and_op_count.valid_until
+        )
     }
 
     #[view]
@@ -189,7 +191,7 @@ module mcms::multisig {
     public fun owner(): address acquires MCMState {
         borrow_global<MCMState>(get_state_addr()).owner
     }
-    
+
     // Getters to help manage the wrapped extended multisig account
 
     #[view]
@@ -204,7 +206,9 @@ module mcms::multisig {
     }
 
     #[view]
-    public fun get_transaction(sequence_number: u64): multisig_account::MultisigTransaction acquires MCMState {
+    public fun get_transaction(
+        sequence_number: u64
+    ): multisig_account::MultisigTransaction acquires MCMState {
         multisig_account::get_transaction(get_multisig_addr(), sequence_number)
     }
 
@@ -230,7 +234,7 @@ module mcms::multisig {
         metadata_proof: vector<vector<u8>>,
         signatures: vector<vector<u8>>
     ) acquires MCMState {
-        let metadata = RootMetadata { 
+        let metadata = RootMetadata {
             chain_id,
             multisig,
             pre_op_count,
@@ -242,7 +246,10 @@ module mcms::multisig {
         let signed_hash = compute_eth_message_hash(root, valid_until);
 
         // check if hash has been seen already
-        assert!(simple_map::contains_key(&mut state.s_seen_signed_hashes, &signed_hash) == false, EALREADY_SEEN_HASH);
+        assert!(
+            simple_map::contains_key(&mut state.s_seen_signed_hashes, &signed_hash) == false,
+            EALREADY_SEEN_HASH
+        );
 
         // verify valid_until against current timestamp
         assert!(timestamp::now_seconds() <= valid_until, EVALID_UNTIL_EXPIRED);
@@ -257,16 +264,22 @@ module mcms::multisig {
         let op_count = state.s_expiring_root_and_op_count.op_count;
         // don't allow a new root to be set if there are still outstanding ops that have not been
         // executed, unless overridePreviousRoot is set
-        assert!(override_previous_root || op_count == state.s_root_metadata.post_op_count, EPENDING_OPS);
+        assert!(
+            override_previous_root || op_count == state.s_root_metadata.post_op_count,
+            EPENDING_OPS
+        );
         // the signers are responsible for tracking opCount offchain and ensuring that
-        // preOpCount equals to opCount and preOpCount <= postOpCount 
+        // preOpCount equals to opCount and preOpCount <= postOpCount
         assert!(op_count == metadata.pre_op_count, EWRONG_PRE_OP_COUNT);
         assert!(metadata.pre_op_count <= metadata.post_op_count, EWRONG_POST_OP_COUNT);
 
         // verify metadata proof
         {
             let hashed_leaf: vector<u8> = hash_metadata_leaf(metadata);
-            assert!(verify_merkle_proof(metadata_proof, root, hashed_leaf), EPROOF_CANNOT_BE_VERIFIED);
+            assert!(
+                verify_merkle_proof(metadata_proof, root, hashed_leaf),
+                EPROOF_CANNOT_BE_VERIFIED
+            );
         };
 
         // verify ECDSA signatures on (root, valid_until) and ensure that the root group is successful
@@ -275,38 +288,53 @@ module mcms::multisig {
             let signer: Signer;
             let prev_address: vector<u8> = ZERO_EVM_ADDRESS;
             let group_vote_counts: vector<u8> = right_pad_vec(vector[], NUM_GROUPS);
-            vector::for_each(signatures, |signature| {
-                let signer_addr = ecdsa_recover_evm_addr(signed_hash, signature);
-                // the off-chain system is required to sort the signatures by the
-                // signer address in an increasing order
-                assert!(vector_u8_gt(signer_addr, prev_address), ESIGNER_ADDR_MUST_BE_INCREASING);
-                prev_address = signer_addr;
+            vector::for_each(
+                signatures,
+                |signature| {
+                    let signer_addr = ecdsa_recover_evm_addr(signed_hash, signature);
+                    // the off-chain system is required to sort the signatures by the
+                    // signer address in an increasing order
+                    assert!(
+                        vector_u8_gt(signer_addr, prev_address),
+                        ESIGNER_ADDR_MUST_BE_INCREASING
+                    );
+                    prev_address = signer_addr;
 
-                assert!(simple_map::contains_key(&state.s_signers, &signer_addr), EINVALID_SIGNER);
-                signer = *simple_map::borrow(&state.s_signers, &signer_addr);
+                    assert!(
+                        simple_map::contains_key(&state.s_signers, &signer_addr),
+                        EINVALID_SIGNER
+                    );
+                    signer = *simple_map::borrow(&state.s_signers, &signer_addr);
 
-                // check group quorums
-                let group: u8 = signer.group;
-                while (true) {
-                    let group_vote_count = vector::borrow_mut(&mut group_vote_counts, (group as u64));
-                    *group_vote_count = *group_vote_count + 1;
+                    // check group quorums
+                    let group: u8 = signer.group;
+                    while (true) {
+                        let group_vote_count = vector::borrow_mut(
+                            &mut group_vote_counts, (group as u64)
+                        );
+                        *group_vote_count = *group_vote_count + 1;
 
-                    let quorum = vector::borrow(&state.s_config.group_quorums, (group as u64));
-                    if (*group_vote_count != *quorum) {
-                        // bail out unless we just hit the quorum. we only hit each quorum once,
-                        // so we never move on to the parent of a group more than once.
-                        break
+                        let quorum = vector::borrow(
+                            &state.s_config.group_quorums, (group as u64)
+                        );
+                        if (*group_vote_count != *quorum) {
+                            // bail out unless we just hit the quorum. we only hit each quorum once,
+                            // so we never move on to the parent of a group more than once.
+                            break
+                        };
+
+                        if (group == 0) {
+                            // root group reached
+                            break
+                        };
+
+                        // group quorum reached, restart loop and check parent group
+                        group = *vector::borrow(
+                            &state.s_config.group_parents, (group as u64)
+                        );
                     };
-
-                    if (group == 0) {
-                        // root group reached
-                        break
-                    };
-
-                    // group quorum reached, restart loop and check parent group
-                    group = *vector::borrow(&state.s_config.group_parents, (group as u64));
-                };
-            });
+                }
+            );
 
             // the group at the root of the tree (with index 0) determines whether the vote passed,
             // we cannot proceed if it isn't configured with a valid (non-zero) quorum
@@ -318,7 +346,7 @@ module mcms::multisig {
             assert!(*root_group_vote_count >= *root_group_quorum, EINSUFFICIENT_SIGNERS);
         };
 
-        // save details to contract state     
+        // save details to contract state
         simple_map::add(&mut state.s_seen_signed_hashes, signed_hash, true);
         state.s_expiring_root_and_op_count = ExpiringRootAndOpCount {
             root,
@@ -339,41 +367,50 @@ module mcms::multisig {
         proof: vector<vector<u8>>
     ) acquires MCMState {
         let state = borrow_global_mut<MCMState>(get_state_addr());
-        let op = Op {
-            chain_id,
-            multisig,
-            nonce,
-            data
-        };
+        let op = Op { chain_id, multisig, nonce, data };
 
         // op validations
-        assert!(state.s_root_metadata.post_op_count > state.s_expiring_root_and_op_count.op_count, EPOST_OP_COUNT_REACHED);
+        assert!(
+            state.s_root_metadata.post_op_count
+                > state.s_expiring_root_and_op_count.op_count,
+            EPOST_OP_COUNT_REACHED
+        );
 
         assert!(op.chain_id == (chain_id::get() as u256), EWRONG_CHAIN_ID);
 
         assert!(op.multisig == @mcms, EWRONG_MULTISIG);
 
-        assert!(timestamp::now_seconds() <= state.s_expiring_root_and_op_count.valid_until, EROOT_EXPIRED);
+        assert!(
+            timestamp::now_seconds() <= state.s_expiring_root_and_op_count.valid_until,
+            EROOT_EXPIRED
+        );
 
         assert!(op.nonce == state.s_expiring_root_and_op_count.op_count, EWRONG_NONCE);
 
         // verify op exists in merkle tree
         let hashed_leaf: vector<u8> = hash_op_leaf(op);
-        assert!(verify_merkle_proof(proof, state.s_expiring_root_and_op_count.root, hashed_leaf), EPROOF_CANNOT_BE_VERIFIED);
+        assert!(
+            verify_merkle_proof(
+                proof, state.s_expiring_root_and_op_count.root, hashed_leaf
+            ),
+            EPROOF_CANNOT_BE_VERIFIED
+        );
 
         // increment op_count
-        state.s_expiring_root_and_op_count.op_count = state.s_expiring_root_and_op_count.op_count + 1;
+        state.s_expiring_root_and_op_count.op_count = state.s_expiring_root_and_op_count.op_count
+            + 1;
 
         // create transaction on multisig account (will already have one approval from creator)
         // todo: investigate if `to` params are encoded in the `data` payload
         let multisig_addr = get_multisig_addr();
         let multisig_signer = multisig_signer();
-        multisig_account::create_transaction_with_hash(&multisig_signer, multisig_addr, data);
+        multisig_account::create_transaction_with_hash(
+            &multisig_signer, multisig_addr, data
+        );
 
-        event::emit(OpExecuted {
-            nonce: op.nonce,
-            data: op.data,
-        })
+        event::emit(
+            OpExecuted { nonce: op.nonce, data: op.data }
+        )
     }
 
     public entry fun set_config(
@@ -386,20 +423,35 @@ module mcms::multisig {
     ) acquires MCMState {
         only_owner(resource_account);
 
-        assert!(vector::length(&signer_addresses) != 0 && vector::length(&signer_addresses) <= (MAX_NUM_SIGNERS as u64), EINVALID_NUM_SIGNERS);
-        assert!(vector::length(&signer_addresses) == vector::length(&signer_groups), ESIGNER_GROUPS_LEN_MISMATCH);
-        assert!(vector::length(&group_quorums) == (NUM_GROUPS as u64), EINVALID_GROUP_QUORUM_LEN);
-        assert!(vector::length(&group_parents) == (NUM_GROUPS as u64), EINVALID_GROUP_PARENTS_LEN);
+        assert!(
+            vector::length(&signer_addresses) != 0
+                && vector::length(&signer_addresses) <= (MAX_NUM_SIGNERS as u64),
+            EINVALID_NUM_SIGNERS
+        );
+        assert!(
+            vector::length(&signer_addresses) == vector::length(&signer_groups),
+            ESIGNER_GROUPS_LEN_MISMATCH
+        );
+        assert!(
+            vector::length(&group_quorums) == (NUM_GROUPS as u64), EINVALID_GROUP_QUORUM_LEN
+        );
+        assert!(
+            vector::length(&group_parents) == (NUM_GROUPS as u64),
+            EINVALID_GROUP_PARENTS_LEN
+        );
 
         // validate group structure
         // counts number of children of each group
         let group_children_counts = right_pad_vec(vector[], NUM_GROUPS);
         // first, we count the signers as children
-        vector::for_each(signer_groups, |group| {
-            assert!(group < NUM_GROUPS, EOUT_OF_BOUNDS_GROUP);
-            let count = vector::borrow_mut(&mut group_children_counts, (group as u64));
-            *count = *count + 1;
-        });
+        vector::for_each(
+            signer_groups,
+            |group| {
+                assert!(group < NUM_GROUPS, EOUT_OF_BOUNDS_GROUP);
+                let count = vector::borrow_mut(&mut group_children_counts, (group as u64));
+                *count = *count + 1;
+            }
+        );
 
         // second, we iterate backwards so as to check each group and propagate counts from
         // child group to parent groups up the tree to the root
@@ -422,10 +474,14 @@ module mcms::multisig {
             } else {
                 // if group is enabled, ensure group quorum can be met
                 let group_quorum = vector::borrow(&group_quorums, (i as u64));
-                assert!(*group_children_count >= *group_quorum, EOUT_OF_BOUNDS_GROUP_QUORUM);
+                assert!(
+                    *group_children_count >= *group_quorum, EOUT_OF_BOUNDS_GROUP_QUORUM
+                );
 
                 // propagate children counts to parent group
-                let count = vector::borrow_mut(&mut group_children_counts, (*group_parent as u64));
+                let count = vector::borrow_mut(
+                    &mut group_children_counts, (*group_parent as u64)
+                );
                 *count = *count + 1;
             };
 
@@ -454,7 +510,10 @@ module mcms::multisig {
             // - signer address is exactly 20 bytes
             // - signer is distinct
             // - signer address is in increasing order
-            assert!(vector_u8_gt(*signer_addr, prev_signer_addr), ESIGNER_ADDR_MUST_BE_INCREASING);
+            assert!(
+                vector_u8_gt(*signer_addr, prev_signer_addr),
+                ESIGNER_ADDR_MUST_BE_INCREASING
+            );
 
             let signer = Signer {
                 addr: *signer_addr,
@@ -501,32 +560,55 @@ module mcms::multisig {
         // at least during multisig creation:
         // https://github.com/aptos-labs/aptos-core/blob/bd4e8c53db3b6a70f3ff04b02be754166fc87cc4/aptos-move/framework/aptos-framework/sources/multisig_account.move#L1262
         assert!(signer::address_of(account) == @mcms, 1);
-        let (resource_signer, resource_signer_cap) = account::create_resource_account(account, MULTISIG_SEED);
+        let (resource_signer, resource_signer_cap) =
+            account::create_resource_account(account, MULTISIG_SEED);
         let resource_address = signer::address_of(&resource_signer);
 
         // derive internal multisig address
-        let multisig_addr = multisig_account::get_next_multisig_account_address(resource_address);
+        let multisig_addr =
+            multisig_account::get_next_multisig_account_address(resource_address);
         // create multisig account with the resource account and @owner as owners, requiring 2 signatures.
         // this is necessary because we need an EOA account to execute the 0x1::multisig_account transaction.
-        multisig_account::create_with_owners(&resource_signer, vector[@owner], 2, vector[], vector[]);
+        multisig_account::create_with_owners(
+            &resource_signer, vector[@owner], 2, vector[], vector[]
+        );
 
-        move_to(&resource_signer, MCMState {
-            s_signers: simple_map::new(),
-            s_config: Config { signers: vector[], group_quorums: VEC_NUM_GROUPS, group_parents: VEC_NUM_GROUPS },
-            s_seen_signed_hashes: simple_map::new(),
-            s_expiring_root_and_op_count: ExpiringRootAndOpCount { root: vector[], valid_until: 0, op_count: 0 },
-            s_root_metadata: RootMetadata { chain_id: 0, multisig: get_state_addr(), pre_op_count: 0, post_op_count: 0, override_previous_root: false },
-            addr: multisig_addr,
-            signer_cap: resource_signer_cap,
-            owner: @owner,
-        });
+        move_to(
+            &resource_signer,
+            MCMState {
+                s_signers: simple_map::new(),
+                s_config: Config {
+                    signers: vector[],
+                    group_quorums: VEC_NUM_GROUPS,
+                    group_parents: VEC_NUM_GROUPS
+                },
+                s_seen_signed_hashes: simple_map::new(),
+                s_expiring_root_and_op_count: ExpiringRootAndOpCount {
+                    root: vector[],
+                    valid_until: 0,
+                    op_count: 0
+                },
+                s_root_metadata: RootMetadata {
+                    chain_id: 0,
+                    multisig: get_state_addr(),
+                    pre_op_count: 0,
+                    post_op_count: 0,
+                    override_previous_root: false
+                },
+                addr: multisig_addr,
+                signer_cap: resource_signer_cap,
+                owner: @owner
+            }
+        );
     }
 
     fun get_state_addr(): address {
         account::create_resource_address(&@mcms, MULTISIG_SEED)
     }
 
-    fun ecdsa_recover_evm_addr(eth_signed_message_hash: vector<u8>, signature: vector<u8>): vector<u8> {
+    fun ecdsa_recover_evm_addr(
+        eth_signed_message_hash: vector<u8>, signature: vector<u8>
+    ): vector<u8> {
         // ensure signature has correct length - (r,s,v) concatenated = 65 bytes
         assert!(vector::length(&signature) == 65, ERR);
         // extract v from signature
@@ -539,15 +621,17 @@ module mcms::multisig {
         let v = v - 27;
 
         // retrieve signer public key
-        let public_key = aptos_std::secp256k1::ecdsa_recover(
-            eth_signed_message_hash,
-            v,
-            &sig,
-        );
+        let public_key =
+            aptos_std::secp256k1::ecdsa_recover(
+                eth_signed_message_hash,
+                v,
+                &sig
+            );
         assert!(option::is_some(&public_key), EFAILED_ECDSA_RECOVER);
 
         // return last 20 bytes of hashed public key as the recovered ethereum address
-        let public_key_bytes = secp256k1::ecdsa_raw_public_key_to_bytes(&option::extract(&mut public_key));
+        let public_key_bytes =
+            secp256k1::ecdsa_raw_public_key_to_bytes(&option::extract(&mut public_key));
         std::vector::trim((&mut keccak256(public_key_bytes)), 12) // trims publicKeyBytes to 12 bytes, returns trimmed last 20 bytes
     }
 
@@ -555,7 +639,7 @@ module mcms::multisig {
         // abi.encode(root (bytes32), valid_until)
         let valid_until_bytes = left_pad_vec(uint_to_bytes(valid_until), 32);
         assert!(vector::length(&root) == 32, EINVALID_ROOT_LEN); // root should be 32 bytes
-        let abi_encoded_params = &mut root; 
+        let abi_encoded_params = &mut root;
         vector::append(abi_encoded_params, valid_until_bytes);
 
         // keccak256(abi_encoded_params)
@@ -581,7 +665,7 @@ module mcms::multisig {
         } else {
             override_previous_root = vector[0];
         };
-        
+
         let hash_preimage: vector<u8> = vector[];
         vector::append(&mut hash_preimage, MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA);
         vector::append(&mut hash_preimage, chain_id);
@@ -611,8 +695,8 @@ module mcms::multisig {
         // note that we can't use right_pad_vec which takes a u8 as length.
         let pad_amount = 32 - (vector::length(&op.data) % 32);
         while (pad_amount > 0) {
-          vector::push_back(&mut hash_preimage, 0);
-          pad_amount = pad_amount - 1;
+            vector::push_back(&mut hash_preimage, 0);
+            pad_amount = pad_amount - 1;
         };
 
         // since we are using this in a merkle tree/proof, hash_preimage should be greater than 64 bytes
@@ -620,26 +704,33 @@ module mcms::multisig {
         keccak256(hash_preimage)
     }
 
-    fun verify_merkle_proof(proof: vector<vector<u8>>, root: vector<u8>, leaf: vector<u8>): bool {
+    fun verify_merkle_proof(
+        proof: vector<vector<u8>>, root: vector<u8>, leaf: vector<u8>
+    ): bool {
         let computed_hash = leaf;
-        vector::for_each(proof, |proof_element| {
-            let left = computed_hash;
-            let right = proof_element;
-            if (vector_u8_gt(computed_hash, proof_element)) {
-                left = proof_element;
-                right = computed_hash;
-            };
-            let hash_input: vector<u8> = left;
-            vector::append(&mut hash_input, right);
-            computed_hash = keccak256(hash_input);
-        });
+        vector::for_each(
+            proof,
+            |proof_element| {
+                let left = computed_hash;
+                let right = proof_element;
+                if (vector_u8_gt(computed_hash, proof_element)) {
+                    left = proof_element;
+                    right = computed_hash;
+                };
+                let hash_input: vector<u8> = left;
+                vector::append(&mut hash_input, right);
+                computed_hash = keccak256(hash_input);
+            }
+        );
         computed_hash == root
     }
 
     // retrieve signer for multisig account - should be protected with appropriate guards
     fun multisig_signer(): signer acquires MCMState {
         assert!(exists<MCMState>(get_state_addr()), ENO_MULTISIG);
-        account::create_signer_with_capability(&borrow_global<MCMState>(get_state_addr()).signer_cap)
+        account::create_signer_with_capability(
+            &borrow_global<MCMState>(get_state_addr()).signer_cap
+        )
     }
 
     // helper function to convert any input type to bytes
@@ -742,9 +833,15 @@ module mcms::multisig {
     #[test_only]
     const SIGNER_GROUPS: vector<u8> = vector[1, 2, 3];
     #[test_only]
-    const GROUP_QUORUMS: vector<u8> = vector[2, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const GROUP_QUORUMS: vector<u8> = vector[
+        2, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0
+    ];
     #[test_only]
-    const GROUP_PARENTS: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const GROUP_PARENTS: vector<u8> = vector[
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0
+    ];
 
     // test set root params
     #[test_only]
@@ -760,8 +857,8 @@ module mcms::multisig {
 
     #[test_only]
     const METADATA_PROOF: vector<vector<u8>> = vector[
-      x"876ca709f922f97afc2e7722782923bfe9da9c15c236870494e4a21ee385b94b",
-      x"3482dfbe0856d5c5399fe5afae0ba8cf127f4a54b8da6571f061fc933436ec38"
+        x"876ca709f922f97afc2e7722782923bfe9da9c15c236870494e4a21ee385b94b",
+        x"3482dfbe0856d5c5399fe5afae0ba8cf127f4a54b8da6571f061fc933436ec38"
     ];
 
     // cannot generate secp256k1 signatures in Move for testing so need to hard code
@@ -769,7 +866,7 @@ module mcms::multisig {
     const SIGNATURES: vector<vector<u8>> = vector[
         x"4cea287be319937950431b32e6b36d358ff62dcc47ee735f1481a7275f8d3d8a7ad5827005270d83f2ba7e45a14c599353213d1c6f2c298365a5d9ba20e00b971b",
         x"de12f77acccc12615541a8b69b26a6351cd2e225e8177c447bcc6734dd7b736b679f46d6e51d3f3db930f6ff98fb6430d8c50e6deedb28bc7895ba89528fc75c1b",
-        x"8e01e215ec8d7f391884ebf7a4aec05d8c1e40abd3183b6d39202f391f53e0370263c47793c348b0e86c0646d47b256f563fff91029af3eb3fa07c857f0d04901c",
+        x"8e01e215ec8d7f391884ebf7a4aec05d8c1e40abd3183b6d39202f391f53e0370263c47793c348b0e86c0646d47b256f563fff91029af3eb3fa07c857f0d04901c"
     ];
 
     #[test_only]
@@ -778,7 +875,7 @@ module mcms::multisig {
         x"75a7dc4ac036b3e4478b62d3a4fb446b298c9d429c94c10cc8758a052b055bdc", // index 0
         x"876ca709f922f97afc2e7722782923bfe9da9c15c236870494e4a21ee385b94b", // index 1
         x"171ec02e28e71b310c020ed2d1d3eb6927c6ade0b52b37f8599390edddc8e6c6", // index 2
-        x"10dfeb49c9a869d351db29caca5f2d31b072d0b3fec3c98f82a70626b1d71875"  // index 3
+        x"10dfeb49c9a869d351db29caca5f2d31b072d0b3fec3c98f82a70626b1d71875" // index 3
     ];
 
     #[test_only]
@@ -790,7 +887,6 @@ module mcms::multisig {
     const OP1_NONCE: u64 = 0;
     #[test_only]
     const OP1_DATA: vector<u8> = b"This is exactly 32 bytes long...";
-
 
     #[test_only]
     fun setup(deployer: &signer, framework: &signer): address {
@@ -840,11 +936,20 @@ module mcms::multisig {
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
-    public entry fun test_e2e(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_e2e(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
 
         // set config
-        set_config(owner, vector[ADDR1, ADDR2, ADDR3], SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            vector[ADDR1, ADDR2, ADDR3],
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
 
         // set root
         let set_root_args = default_set_root_args();
@@ -899,9 +1004,9 @@ module mcms::multisig {
         SetRootArgs {
             root: ROOT,
             valid_until: VALID_UNTIL,
-            chain_id: (CHAIN_ID as u256), 
+            chain_id: (CHAIN_ID as u256),
             multisig: @mcms,
-            pre_op_count:  PRE_OP_COUNT,
+            pre_op_count: PRE_OP_COUNT,
             post_op_count: POST_OP_COUNT,
             override_previous_root: false,
             metadata_proof: METADATA_PROOF,
@@ -911,7 +1016,17 @@ module mcms::multisig {
 
     #[test_only]
     fun call_set_root(args: SetRootArgs) acquires MCMState {
-        set_root(args.root, args.valid_until, args.chain_id, args.multisig, args.pre_op_count, args.post_op_count, args.override_previous_root, args.metadata_proof, args.signatures);
+        set_root(
+            args.root,
+            args.valid_until,
+            args.chain_id,
+            args.multisig,
+            args.pre_op_count,
+            args.post_op_count,
+            args.override_previous_root,
+            args.metadata_proof,
+            args.signatures
+        );
     }
 
     // test helper function to generate the merkle root for given metadata
@@ -919,25 +1034,37 @@ module mcms::multisig {
     fun compute_root(metadata: RootMetadata): vector<u8> {
         let leaf = hash_metadata_leaf(metadata);
         let computed_hash = leaf;
-        vector::for_each(METADATA_PROOF, |proof_element| {
-            let left = computed_hash;
-            let right = proof_element;
-            if (vector_u8_gt(computed_hash, proof_element)) {
-                left = proof_element;
-                right = computed_hash;
-            };
-            let hash_input: vector<u8> = left;
-            vector::append(&mut hash_input, right);
-            computed_hash = keccak256(hash_input);
-        });
+        vector::for_each(
+            METADATA_PROOF,
+            |proof_element| {
+                let left = computed_hash;
+                let right = proof_element;
+                if (vector_u8_gt(computed_hash, proof_element)) {
+                    left = proof_element;
+                    right = computed_hash;
+                };
+                let hash_input: vector<u8> = left;
+                vector::append(&mut hash_input, right);
+                computed_hash = keccak256(hash_input);
+            }
+        );
         computed_hash
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EALREADY_SEEN_HASH)]
-    public entry fun test_set_root__already_seen_hash(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__already_seen_hash(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
-        set_config(owner, vector[ADDR1, ADDR2, ADDR3], SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            vector[ADDR1, ADDR2, ADDR3],
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
 
         // first call success
         let set_root_args = default_set_root_args();
@@ -950,7 +1077,9 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EVALID_UNTIL_EXPIRED)]
-    public entry fun test_set_root__valid_until_expired(deployer: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__valid_until_expired(
+        deployer: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let set_root_args = default_set_root_args();
         set_root_args.valid_until = TIMESTAMP - 1; // set valid_until to a time in the past
@@ -959,9 +1088,12 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EINVALID_ROOT_LEN)]
-    public entry fun test_set_root__invalid_root_len(deployer: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__invalid_root_len(
+        deployer: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
-        let invalid_root = x"8ad6edb34398f637ca17e46b0b51ce50e18f56287aa0bf728ae3b5c4119c16";
+        let invalid_root =
+            x"8ad6edb34398f637ca17e46b0b51ce50e18f56287aa0bf728ae3b5c4119c16";
         let set_root_args = default_set_root_args();
         set_root_args.root = invalid_root;
         call_set_root(set_root_args);
@@ -969,7 +1101,9 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_CHAIN_ID)]
-    public entry fun test_set_root__invalid_chain_id(deployer: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__invalid_chain_id(
+        deployer: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let set_root_args = default_set_root_args();
         set_root_args.chain_id = 111; // wrong chain id
@@ -978,7 +1112,9 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_MULTISIG)]
-    public entry fun test_set_root__invalid_multisig_addr(deployer: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__invalid_multisig_addr(
+        deployer: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let set_root_args = default_set_root_args();
         set_root_args.multisig = @0x12345; // wrong multisig address
@@ -987,7 +1123,9 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPENDING_OPS)]
-    public entry fun test_set_root__pending_ops(deployer: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__pending_ops(
+        deployer: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         // modify state to add pending ops
         let state = borrow_global_mut<MCMState>(get_state_addr());
@@ -1004,7 +1142,9 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
-    public entry fun test_set_root__override_previous_root(deployer: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__override_previous_root(
+        deployer: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         // modify state to add pending ops
         let state = borrow_global_mut<MCMState>(get_state_addr());
@@ -1024,7 +1164,9 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_PRE_OP_COUNT)]
-    public entry fun test_set_root__wrong_pre_op_count(deployer: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__wrong_pre_op_count(
+        deployer: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let set_root_args = default_set_root_args();
         set_root_args.pre_op_count = 1; // wrong pre op count, should equal op count (0)
@@ -1033,7 +1175,9 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_POST_OP_COUNT)]
-    public entry fun test_set_root__wrong_post_op_count(deployer: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__wrong_post_op_count(
+        deployer: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let state = borrow_global_mut<MCMState>(get_state_addr());
         state.s_expiring_root_and_op_count = ExpiringRootAndOpCount {
@@ -1051,7 +1195,9 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
-    public entry fun test_set_root__empty_metadata_proof(deployer: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__empty_metadata_proof(
+        deployer: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let set_root_args = default_set_root_args();
         set_root_args.metadata_proof = vector[]; // empty proof
@@ -1060,7 +1206,9 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
-    public entry fun test_set_root__metadata_not_consistent_with_proof(deployer: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__metadata_not_consistent_with_proof(
+        deployer: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let set_root_args = default_set_root_args();
         set_root_args.post_op_count = POST_OP_COUNT + 1; // post op count modified
@@ -1069,7 +1217,9 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EMISSING_CONFIG)]
-    public entry fun test_set_root__config_not_set(deployer: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__config_not_set(
+        deployer: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let set_root_args = default_set_root_args();
         set_root_args.signatures = vector[]; // no signatures
@@ -1078,9 +1228,18 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_ADDR_MUST_BE_INCREASING)]
-    public entry fun test_set_root__out_of_order_signatures(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__out_of_order_signatures(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
-        set_config(owner, vector[ADDR1, ADDR2, ADDR3], SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            vector[ADDR1, ADDR2, ADDR3],
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
         let set_root_args = default_set_root_args();
         let sig0 = vector::borrow(&set_root_args.signatures, 0);
         let sig1 = vector::borrow(&set_root_args.signatures, 1);
@@ -1091,20 +1250,39 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EINVALID_SIGNER)]
-    public entry fun test_set_root__signature_from_invalid_signer(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__signature_from_invalid_signer(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
-        set_config(owner, vector[ADDR1, ADDR2, ADDR3], SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            vector[ADDR1, ADDR2, ADDR3],
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
         let set_root_args = default_set_root_args();
-        let invalid_signer_sig = x"bb7f7e44b8d9c8f978c255c7efd6abb64e8fa9a33dcb6db2e2203d8aacd51dd471113ca6c8d1ed56bb0395f0bef0daf2fae6ef2cb5c86c57d148c7de473383461B";
+        let invalid_signer_sig =
+            x"bb7f7e44b8d9c8f978c255c7efd6abb64e8fa9a33dcb6db2e2203d8aacd51dd471113ca6c8d1ed56bb0395f0bef0daf2fae6ef2cb5c86c57d148c7de473383461B";
         set_root_args.signatures = vector[invalid_signer_sig]; // add signature from invalid signer
         call_set_root(set_root_args);
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EINSUFFICIENT_SIGNERS)]
-    public entry fun test_set_root__signer_quorum_not_met(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__signer_quorum_not_met(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
-        set_config(owner, vector[ADDR1, ADDR2, ADDR3], SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            vector[ADDR1, ADDR2, ADDR3],
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
         let set_root_args = default_set_root_args();
         let signer1 = vector::borrow(&set_root_args.signatures, 0);
         set_root_args.signatures = vector[*signer1]; // only 1 signature, quorum is 2
@@ -1112,9 +1290,18 @@ module mcms::multisig {
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
-    public entry fun test_set_root__success(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_root__success(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
-        set_config(owner, vector[ADDR1, ADDR2, ADDR3], SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            vector[ADDR1, ADDR2, ADDR3],
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
         let set_root_args = default_set_root_args();
 
         call_set_root(set_root_args);
@@ -1131,20 +1318,31 @@ module mcms::multisig {
     }
 
     //// set_config tests ////
-    
+
     #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EUNATHORIZED)]
-    public entry fun test_set_config__caller_is_not_owner(deployer: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_config__caller_is_not_owner(
+        deployer: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let (not_owner, _) = account::create_resource_account(deployer, b"seed123");
-        set_config(&not_owner, vector[ADDR1, ADDR2, ADDR3], SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            &not_owner,
+            vector[ADDR1, ADDR2, ADDR3],
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
     }
-    
+
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EINVALID_NUM_SIGNERS)]
-    public entry fun test_set_config__invalid_number_of_signers(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_config__invalid_number_of_signers(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
-         // empty signer addresses and groups
+        // empty signer addresses and groups
         let signer_addr = vector[];
         let signer_group = vector[];
         set_config(owner, signer_addr, signer_group, vector[], vector[], false);
@@ -1152,114 +1350,217 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_ADDR_MUST_BE_INCREASING)]
-    public entry fun test_set_config__signers_must_be_distinct(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_config__signers_must_be_distinct(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         // same signer address twice
         let signer_addr = vector[ADDR1, ADDR2, ADDR2];
-        set_config(owner, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            signer_addr,
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_ADDR_MUST_BE_INCREASING)]
-    public entry fun test_set_config__signers_must_be_increasing(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_config__signers_must_be_increasing(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         // signer addresses out of order
         let signer_addr = vector[ADDR1, ADDR3, ADDR2];
-        set_config(owner, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            signer_addr,
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = ECMP_VECTORS_DIFF_LEN)]
-    public entry fun test_set_config__invalid_signer_address(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_config__invalid_signer_address(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         // signer address not 20 bytes
         let invalid_signer_addr = x"E37ca797F7fCCFbd9bb3bf8f812F19C3184df1";
         let signer_addr = vector[ADDR1, ADDR2, invalid_signer_addr];
-        set_config(owner, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            signer_addr,
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EOUT_OF_BOUNDS_GROUP)]
-    public entry fun test_set_config__out_of_bounds_signer_group(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_config__out_of_bounds_signer_group(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // signer group out of bounds
         let signer_groups = vector[1, 2, NUM_GROUPS];
-        set_config(owner, signer_addr, signer_groups, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            signer_addr,
+            signer_groups,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EOUT_OF_BOUNDS_GROUP_QUORUM)]
-    public entry fun test_set_config__out_of_bounds_group_quorum(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_config__out_of_bounds_group_quorum(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group quorum out of bounds (greater than num signers)
-        let group_quorums = right_pad_vec(vector[2, 1, 1, MAX_NUM_SIGNERS + 1], NUM_GROUPS);
-        set_config(owner, signer_addr, SIGNER_GROUPS, group_quorums, GROUP_PARENTS, false);
+        let group_quorums = right_pad_vec(
+            vector[2, 1, 1, MAX_NUM_SIGNERS + 1], NUM_GROUPS
+        );
+        set_config(
+            owner,
+            signer_addr,
+            SIGNER_GROUPS,
+            group_quorums,
+            GROUP_PARENTS,
+            false
+        );
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EGROUP_TREE_NOT_WELL_FORMED)]
-    public entry fun test_set_config__root_is_not_its_own_parent(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_config__root_is_not_its_own_parent(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group parent of root is group 1 (should be itself = group 0)
         let group_parents = right_pad_vec(vector[1], NUM_GROUPS);
-        set_config(owner, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, group_parents, false);
+        set_config(
+            owner,
+            signer_addr,
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            group_parents,
+            false
+        );
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EGROUP_TREE_NOT_WELL_FORMED)]
-    public entry fun test_set_config__non_root_is_its_own_parent(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_config__non_root_is_its_own_parent(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group parent of group 1 is itself (should be lower index group)
         let group_parents = right_pad_vec(vector[0, 1], NUM_GROUPS);
-        set_config(owner, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, group_parents, false);
+        set_config(
+            owner,
+            signer_addr,
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            group_parents,
+            false
+        );
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EGROUP_TREE_NOT_WELL_FORMED)]
-    public entry fun test_set_config__group_parent_higher_index(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_config__group_parent_higher_index(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group parent of group 1 is group 2 (should be lower index group)
         let group_parents = right_pad_vec(vector[0, 2], NUM_GROUPS);
-        set_config(owner, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, group_parents, false);
+        set_config(
+            owner,
+            signer_addr,
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            group_parents,
+            false
+        );
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EOUT_OF_BOUNDS_GROUP_QUORUM)]
-    public entry fun test_set_config__quorum_cannot_be_met(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_config__quorum_cannot_be_met(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group quorum of group 0 (root) is 4, which can never be met because there are only three child groups
         let group_quorum = right_pad_vec(vector[4, 1, 1, 1], NUM_GROUPS);
-        set_config(owner, signer_addr, SIGNER_GROUPS, group_quorum, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            signer_addr,
+            SIGNER_GROUPS,
+            group_quorum,
+            GROUP_PARENTS,
+            false
+        );
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_IN_DISABLED_GROUP)]
-    public entry fun test_set_config__signer_in_disabled_group(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_config__signer_in_disabled_group(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // group 31 is disabled (quorum = 0) but signer 3 is in group 31
         let signer_groups = vector[1, 2, 31];
-        set_config(owner, signer_addr, signer_groups, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            signer_addr,
+            signer_groups,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_GROUPS_LEN_MISMATCH)]
-    public entry fun test_set_config__signer_group_len_mismatch(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_config__signer_group_len_mismatch(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
         // len of signer groups does not match len of signers
         let signer_groups = vector[1, 2, 3, 3];
-        set_config(owner, signer_addr, signer_groups, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            signer_addr,
+            signer_groups,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
-    public entry fun test_set_config__success(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_set_config__success(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         let mcms_addr = setup(deployer, framework);
 
         // manually modify root state to check for modifications
@@ -1279,7 +1580,14 @@ module mcms::multisig {
 
         // test set config with clear_root=false
         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
-        set_config(owner, signer_addr, SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            signer_addr,
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
         let config = get_config();
         assert!(vector::length(&config.signers) == 3, 1);
         assert!(vector::borrow(&config.signers, 0).addr == ADDR1, 2);
@@ -1302,7 +1610,14 @@ module mcms::multisig {
         let signer_groups = vector[1, 3, 4];
         let group_quorums = right_pad_vec(vector[1, 1, 2, 1, 1], NUM_GROUPS);
         let group_parents = right_pad_vec(vector[0, 0, 0, 2, 2], NUM_GROUPS);
-        set_config(owner, signer_addr, signer_groups, group_quorums, group_parents, true);
+        set_config(
+            owner,
+            signer_addr,
+            signer_groups,
+            group_quorums,
+            group_parents,
+            true
+        );
         let config = get_config();
         assert!(vector::length(&config.signers) == 3, 14);
         assert!(vector::borrow(&config.signers, 0).addr == ADDR1, 15);
@@ -1322,10 +1637,12 @@ module mcms::multisig {
     }
 
     //// execute tests ////
-    
+
     #[test(deployer = @mcms, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPOST_OP_COUNT_REACHED)]
-    public entry fun test_execute__root_not_set(deployer: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_execute__root_not_set(
+        deployer: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         // since root not set, post op count is 0 which is not greater than current op count (also 0)
         let execute_args = default_execute_args();
@@ -1334,9 +1651,18 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPOST_OP_COUNT_REACHED)]
-    public entry fun test_execute__post_op_count_reached(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_execute__post_op_count_reached(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
-        set_config(owner, vector[ADDR1, ADDR2, ADDR3], SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            vector[ADDR1, ADDR2, ADDR3],
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
         call_set_root(default_set_root_args());
         // set current op count to post op count
         let state = borrow_global_mut<MCMState>(get_state_addr());
@@ -1347,9 +1673,18 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_CHAIN_ID)]
-    public entry fun test_execute__wrong_chain_id(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_execute__wrong_chain_id(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
-        set_config(owner, vector[ADDR1, ADDR2, ADDR3], SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            vector[ADDR1, ADDR2, ADDR3],
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
         call_set_root(default_set_root_args());
         let execute_args = default_execute_args();
         execute_args.chain_id = 111; // wrong chain id
@@ -1358,9 +1693,18 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_MULTISIG)]
-    public entry fun test_execute__wrong_multisig_addr(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_execute__wrong_multisig_addr(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
-        set_config(owner, vector[ADDR1, ADDR2, ADDR3], SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            vector[ADDR1, ADDR2, ADDR3],
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
         call_set_root(default_set_root_args());
         let execute_args = default_execute_args();
         execute_args.multisig = @0x12345; // wrong multisig address
@@ -1369,9 +1713,18 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EROOT_EXPIRED)]
-    public entry fun test_execute__root_expired(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_execute__root_expired(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
-        set_config(owner, vector[ADDR1, ADDR2, ADDR3], SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            vector[ADDR1, ADDR2, ADDR3],
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
         call_set_root(default_set_root_args());
         // modify valid until state directly - set valid_until to a time in the past
         let state = borrow_global_mut<MCMState>(get_state_addr());
@@ -1382,9 +1735,18 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_NONCE)]
-    public entry fun test_execute__wrong_nonce(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_execute__wrong_nonce(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
-        set_config(owner, vector[ADDR1, ADDR2, ADDR3], SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            vector[ADDR1, ADDR2, ADDR3],
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
         call_set_root(default_set_root_args());
         let execute_args = default_execute_args();
         execute_args.nonce = execute_args.nonce + 1; // wrong nonce
@@ -1393,9 +1755,18 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
-    public entry fun test_execute__bad_op_proof(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_execute__bad_op_proof(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
-        set_config(owner, vector[ADDR1, ADDR2, ADDR3], SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            vector[ADDR1, ADDR2, ADDR3],
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
         call_set_root(default_set_root_args());
         let execute_args = default_execute_args();
         execute_args.data = b"different data"; // modify op so proof verification should fail
@@ -1404,9 +1775,18 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
-    public entry fun test_execute__empty_proof(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_execute__empty_proof(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
-        set_config(owner, vector[ADDR1, ADDR2, ADDR3], SIGNER_GROUPS, GROUP_QUORUMS, GROUP_PARENTS, false);
+        set_config(
+            owner,
+            vector[ADDR1, ADDR2, ADDR3],
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            false
+        );
         call_set_root(default_set_root_args());
         let execute_args = default_execute_args();
         execute_args.proof = vector[]; // empty proof
@@ -1415,7 +1795,9 @@ module mcms::multisig {
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
-    public entry fun test_execute__ops_executed_in_order(deployer: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_execute__ops_executed_in_order(
+        deployer: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         // modify state to add pending ops
         let state = borrow_global_mut<MCMState>(get_state_addr());
@@ -1434,7 +1816,9 @@ module mcms::multisig {
     // todo: test send values
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
-    public entry fun test_ownable__transfer_ownership(deployer: &signer, owner: &signer, framework: &signer) acquires MCMState  {
+    public entry fun test_ownable__transfer_ownership(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) acquires MCMState {
         setup(deployer, framework);
         let new_owner = @0xdef;
         transfer_ownership(owner, new_owner);
@@ -1442,17 +1826,18 @@ module mcms::multisig {
         assert!(updated_owner == new_owner, 1);
     }
 
-
     //// utility function tests ////
 
     #[test]
     public entry fun test_utils__ecdsa_recover_evm_addr() {
-        let eth_signed_message_hash = x"910cd291f5281f5bf25d8a83962f282b6c2bdf831f079dfcb84480f922abd2e1";
-        let signature = x"45283a6239b1b559a910e97f79a52bab1605e8bd952c4b4e0720ed9b1e9e96712acab6f5f946bfa3dfa61f47705aff6e2f17f6ad83d484857bb119a06ba1f0e71C";
+        let eth_signed_message_hash =
+            x"910cd291f5281f5bf25d8a83962f282b6c2bdf831f079dfcb84480f922abd2e1";
+        let signature =
+            x"45283a6239b1b559a910e97f79a52bab1605e8bd952c4b4e0720ed9b1e9e96712acab6f5f946bfa3dfa61f47705aff6e2f17f6ad83d484857bb119a06ba1f0e71C";
         let recovered_addr = ecdsa_recover_evm_addr(eth_signed_message_hash, signature);
         assert!(recovered_addr == x"16c9fACed8a1e3C6aEA2B654EEca5617eb900EFf", 1);
     }
-    
+
     #[test]
     public entry fun test_utils__uint_to_bytes() {
         let large_u64: u64 = 1748317727; // hex = 0x6835361F
@@ -1469,7 +1854,11 @@ module mcms::multisig {
 
         let u256_num: u256 = 262144;
         let bytes_256 = uint_to_bytes(u256_num);
-        assert!(bytes_256 == x"0000000000000000000000000000000000000000000000000000000000040000", 4);
+        assert!(
+            bytes_256
+                == x"0000000000000000000000000000000000000000000000000000000000040000",
+            4
+        );
 
         let max_u64: u64 = 18446744073709551615; // hex = 0xFFFFFFFFFFFFFFFF
         let bytes_max = uint_to_bytes(max_u64);
@@ -1482,7 +1871,9 @@ module mcms::multisig {
         let valid_until = 1748317727;
         let hash = compute_eth_message_hash(root, valid_until);
         // test output computed from equivalent solidity function: ECDSA.toEthSignedMessageHash(keccak256(abi.encode(root, validUntil)));
-        assert!(hash == x"032705bd71839baef725154f00f87ddcc1d95c4b5189c9fb5983f26ad6c95102", 1);
+        assert!(
+            hash == x"032705bd71839baef725154f00f87ddcc1d95c4b5189c9fb5983f26ad6c95102", 1
+        );
     }
 
     #[test]
@@ -1496,17 +1887,21 @@ module mcms::multisig {
         };
         let hash = hash_metadata_leaf(metadata);
         // test output computed from equivalent solidity function: keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA, metadata))
-        assert!(hash == x"ea6938e5cfa9b72197343db029e3146dec767d24f830eb750252076e439ccffa", 1);
+        assert!(
+            hash == x"ea6938e5cfa9b72197343db029e3146dec767d24f830eb750252076e439ccffa", 1
+        );
     }
 
     #[test(deployer = @mcms, framework = @aptos_framework)]
-    public entry fun test_utils__hash_op_leaf(deployer: &signer, framework: &signer) {
+    public entry fun test_utils__hash_op_leaf(
+        deployer: &signer, framework: &signer
+    ) {
         setup(deployer, framework);
         let op = Op {
             chain_id: (CHAIN_ID as u256),
             multisig: @mcms,
             nonce: OP1_NONCE,
-            data: OP1_DATA,
+            data: OP1_DATA
         };
         let hash = hash_op_leaf(op);
         // test output computed from equivalent solidity function: keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP, op))
@@ -1517,7 +1912,8 @@ module mcms::multisig {
     #[test]
     public entry fun test_utils__verify_merkle_proof() {
         let root = x"8ad6edb34398f637ca17e46b0b51ce50e18f56287aa0bf728ae3b5c4119c1600";
-        let leaf_hash = x"03783fac2efed8fbc9ad443e592ee30e61d65f471140c10ca155e937b435b760";
+        let leaf_hash =
+            x"03783fac2efed8fbc9ad443e592ee30e61d65f471140c10ca155e937b435b760";
         let proof = vector[
             x"044852b2a670ade5407e78fb2863c51de9fcb96542a07186fe3aeda6bb8a116d",
             x"156d92046fd42325cec0997498d663ce343243a1ff530521e60d08407dbb0580",
@@ -1554,10 +1950,13 @@ module mcms::multisig {
             x"e0F4758dbD92E2499C95cb2c57bF605be032AF42"
         ];
         let prev_address = x"0000000000000000000000000000000000000001";
-        vector::for_each(sorted_addresses, |addr| {
-            assert!(vector_u8_gt(addr, prev_address), 7);
-            prev_address = addr;
-        });
+        vector::for_each(
+            sorted_addresses,
+            |addr| {
+                assert!(vector_u8_gt(addr, prev_address), 7);
+                prev_address = addr;
+            }
+        );
     }
 
     #[test]

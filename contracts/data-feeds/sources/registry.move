@@ -17,12 +17,10 @@ module data_feeds::registry {
         extend_ref: ExtendRef,
         owner_address: address,
         pending_owner_address: address,
-
         feeds: SimpleMap<vector<u8>, Feed>,
         configs: SimpleMap<vector<u8>, Config>,
-
         allowed_workflow_owners: vector<vector<u8>>,
-        allowed_workflow_names: vector<vector<u8>>,
+        allowed_workflow_names: vector<vector<u8>>
     }
 
     struct Feed has key, store, drop {
@@ -30,14 +28,14 @@ module data_feeds::registry {
         config_id: vector<u8>,
         benchmark: u256,
         report: vector<u8>,
-        observation_timestamp: u256,
+        observation_timestamp: u256
     }
 
     struct Config has key, store, drop {
         deviation_threshold: u256,
 
         // TODO: shrink down to u64?
-        staleness_seconds: u256,
+        staleness_seconds: u256
     }
 
     struct Benchmark has store, drop {
@@ -47,32 +45,32 @@ module data_feeds::registry {
 
     struct Report has store, drop {
         report: vector<u8>,
-        observation_timestamp: u256,
+        observation_timestamp: u256
     }
 
     struct FeedMetadata has store, drop, key {
         description: String,
         config_id: vector<u8>,
         deviation_threshold: u256,
-        staleness_seconds: u256,
+        staleness_seconds: u256
     }
 
     struct FeedConfig has store, drop {
         deviation_threshold: u256,
-        staleness_seconds: u256,
+        staleness_seconds: u256
     }
 
     #[event]
     struct FeedConfigIdUpdated has drop, store {
         feed_id: vector<u8>,
-        config_id: vector<u8>,
+        config_id: vector<u8>
     }
 
     #[event]
     struct FeedConfigSet has drop, store {
         config_id: vector<u8>,
         deviation_threshold: u256,
-        staleness_seconds: u256,
+        staleness_seconds: u256
     }
 
     #[event]
@@ -83,14 +81,14 @@ module data_feeds::registry {
 
     #[event]
     struct FeedRemoved has drop, store {
-        feed_id: vector<u8>,
+        feed_id: vector<u8>
     }
 
     #[event]
     struct FeedSet has drop, store {
         feed_id: vector<u8>,
         description: String,
-        config_id: vector<u8>,
+        config_id: vector<u8>
     }
 
     #[event]
@@ -105,19 +103,19 @@ module data_feeds::registry {
     struct StaleReport has drop, store {
         feed_id: vector<u8>,
         latest_timestamp: u256,
-        report_timestamp: u256,
+        report_timestamp: u256
     }
 
     #[event]
     struct OwnershipTransferRequested has drop, store {
         from: address,
-        to: address,
+        to: address
     }
 
     #[event]
     struct OwnershipTransferred has drop, store {
         from: address,
-        to: address,
+        to: address
     }
 
     // Errors
@@ -138,23 +136,29 @@ module data_feeds::registry {
     const SCHEMA_V2: u16 = 2;
     const SCHEMA_V3: u16 = 3;
 
-    inline fun assert_is_owner(registry: &Registry, target_address: address) {
-        assert!(registry.owner_address == target_address, error::permission_denied(ENOT_OWNER));
+    inline fun assert_is_owner(
+        registry: &Registry, target_address: address
+    ) {
+        assert!(
+            registry.owner_address == target_address, error::permission_denied(ENOT_OWNER)
+        );
     }
 
     fun assert_no_duplicates<T>(a: &vector<T>) {
         let len = vector::length(a);
         for (i in 0..len) {
             for (j in (i + 1)..len) {
-                assert!(vector::borrow(a, i) != vector::borrow(a, j), error::invalid_argument(EDUPLICATE_ELEMENTS));
+                assert!(
+                    vector::borrow(a, i) != vector::borrow(a, j),
+                    error::invalid_argument(EDUPLICATE_ELEMENTS)
+                );
             }
         }
     }
 
     fun init_module(publisher: &signer) {
         let constructor_ref = object::create_named_object(
-            publisher,
-            APP_OBJECT_SEED,
+            publisher, APP_OBJECT_SEED
         );
         let _object_address = object::address_from_constructor_ref(&constructor_ref);
 
@@ -162,85 +166,128 @@ module data_feeds::registry {
         let object_signer = object::generate_signer(&constructor_ref);
 
         // register to receive keystone::forwarder reports
-        let cb = aptos_framework::function_info::new_function_info(
-            publisher,
-            string::utf8(b"registry"),
-            string::utf8(b"on_report"),
-        );
+        let cb =
+            aptos_framework::function_info::new_function_info(
+                publisher,
+                string::utf8(b"registry"),
+                string::utf8(b"on_report")
+            );
         keystone::storage::register(publisher, cb, new_proof());
 
-        move_to(&object_signer, Registry {
-            owner_address: @owner,
-            pending_owner_address: @0x0,
-            extend_ref,
-
-            feeds: simple_map::new(),
-            configs: simple_map::new(),
-
-            allowed_workflow_names: vector[],
-            allowed_workflow_owners: vector[],
-        });
+        move_to(
+            &object_signer,
+            Registry {
+                owner_address: @owner,
+                pending_owner_address: @0x0,
+                extend_ref,
+                feeds: simple_map::new(),
+                configs: simple_map::new(),
+                allowed_workflow_names: vector[],
+                allowed_workflow_owners: vector[]
+            }
+        );
     }
 
     inline fun get_state_addr(): address {
         object::create_object_address(&@data_feeds, APP_OBJECT_SEED)
     }
 
-    public entry fun set_feeds(authority: &signer, feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>) acquires Registry {
+    public entry fun set_feeds(
+        authority: &signer,
+        feed_ids: vector<vector<u8>>,
+        descriptions: vector<String>,
+        config_id: vector<u8>
+    ) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
         assert_is_owner(registry, signer::address_of(authority));
         set_feeds_internal(registry, feed_ids, descriptions, config_id);
     }
 
-    public(friend) fun set_feeds_unchecked(feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>) acquires Registry {
+    public(friend) fun set_feeds_unchecked(
+        feed_ids: vector<vector<u8>>,
+        descriptions: vector<String>,
+        config_id: vector<u8>
+    ) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
         set_feeds_internal(registry, feed_ids, descriptions, config_id);
     }
 
-    fun set_feeds_internal(registry: &mut Registry, feed_ids: vector<vector<u8>>, descriptions: vector<String>, config_id: vector<u8>) {
+    fun set_feeds_internal(
+        registry: &mut Registry,
+        feed_ids: vector<vector<u8>>,
+        descriptions: vector<String>,
+        config_id: vector<u8>
+    ) {
         assert_no_duplicates(&feed_ids);
 
-        assert!(vector::length(&feed_ids) == vector::length(&descriptions), error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS));
+        assert!(
+            vector::length(&feed_ids) == vector::length(&descriptions),
+            error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS)
+        );
 
-        vector::zip(feed_ids, descriptions, |feed_id, description|{
-            assert!(!simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_EXISTS));
+        vector::zip(
+            feed_ids,
+            descriptions,
+            |feed_id, description| {
+                assert!(
+                    !simple_map::contains_key(&registry.feeds, &feed_id),
+                    error::invalid_argument(EFEED_EXISTS)
+                );
 
-            let feed = Feed {
-                description,
-                config_id,
-                benchmark: 0,
-                report: vector::empty(),
-                observation_timestamp: 0
-            };
-            simple_map::add(&mut registry.feeds, feed_id, feed);
+                let feed = Feed {
+                    description,
+                    config_id,
+                    benchmark: 0,
+                    report: vector::empty(),
+                    observation_timestamp: 0
+                };
+                simple_map::add(&mut registry.feeds, feed_id, feed);
 
-            event::emit(FeedSet {
-                feed_id,
-                description,
-                config_id,
-            });
-        });
+                event::emit(
+                    FeedSet { feed_id, description, config_id }
+                );
+            }
+        );
     }
 
-    public entry fun remove_feeds(authority: &signer, feed_ids: vector<vector<u8>>) acquires Registry {
+    public entry fun remove_feeds(
+        authority: &signer, feed_ids: vector<vector<u8>>
+    ) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
         assert_is_owner(registry, signer::address_of(authority));
 
         assert_no_duplicates(&feed_ids);
 
-        vector::for_each(feed_ids, |feed_id| {
-            assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
-            simple_map::remove(&mut registry.feeds, &feed_id);
-        });
+        vector::for_each(
+            feed_ids,
+            |feed_id| {
+                assert!(
+                    simple_map::contains_key(&registry.feeds, &feed_id),
+                    error::invalid_argument(EFEED_NOT_CONFIGURED)
+                );
+                simple_map::remove(&mut registry.feeds, &feed_id);
+            }
+        );
     }
 
-    public entry fun set_feed_configs(authority: &signer, config_ids: vector<vector<u8>>, deviation_thresholds: vector<u256>, staleness_seconds: vector<u256>) acquires Registry {
+    public entry fun set_feed_configs(
+        authority: &signer,
+        config_ids: vector<vector<u8>>,
+        deviation_thresholds: vector<u256>,
+        staleness_seconds: vector<u256>
+    ) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
         assert_is_owner(registry, signer::address_of(authority));
 
         let len = vector::length(&config_ids);
-        assert!(len == vector::length(&deviation_thresholds), error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS));
-        assert!(len == vector::length(&staleness_seconds), error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS));
+        assert!(
+            len == vector::length(&deviation_thresholds),
+            error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS)
+        );
+        assert!(
+            len == vector::length(&staleness_seconds),
+            error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS)
+        );
 
         // NOTE: the solidity contract does not check that no duplicates exist in config_ids,
         // but we do it here which allows us to iterate through config_ids in reverse order.
@@ -253,56 +300,76 @@ module data_feeds::registry {
             let deviation_threshold = vector::pop_back(&mut deviation_thresholds);
             let staleness_seconds = vector::pop_back(&mut staleness_seconds);
 
-            simple_map::upsert(&mut registry.configs, config_id, Config {
-                deviation_threshold: deviation_threshold,
-                staleness_seconds: staleness_seconds,
-            });
-
-            event::emit(FeedConfigSet {
+            simple_map::upsert(
+                &mut registry.configs,
                 config_id,
-                deviation_threshold,
-                staleness_seconds,
-            });
+                Config {
+                    deviation_threshold: deviation_threshold,
+                    staleness_seconds: staleness_seconds
+                }
+            );
+
+            event::emit(
+                FeedConfigSet { config_id, deviation_threshold, staleness_seconds }
+            );
 
             len = len - 1;
         }
     }
 
-    public entry fun update_descriptions(authority: &signer, feed_ids: vector<vector<u8>>, descriptions: vector<String>) acquires Registry {
+    public entry fun update_descriptions(
+        authority: &signer, feed_ids: vector<vector<u8>>, descriptions: vector<String>
+    ) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
         assert_is_owner(registry, signer::address_of(authority));
 
-        assert!(vector::length(&feed_ids) == vector::length(&descriptions), error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS));
+        assert!(
+            vector::length(&feed_ids) == vector::length(&descriptions),
+            error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS)
+        );
 
-        vector::zip(feed_ids, descriptions, |feed_id, description|{
-            assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
+        vector::zip(
+            feed_ids,
+            descriptions,
+            |feed_id, description| {
+                assert!(
+                    simple_map::contains_key(&registry.feeds, &feed_id),
+                    error::invalid_argument(EFEED_NOT_CONFIGURED)
+                );
 
-            let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
-            feed.description = description;
+                let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
+                feed.description = description;
 
-            event::emit(FeedDescriptionUpdated {
-                feed_id,
-                description,
-            });
-        });
+                event::emit(
+                    FeedDescriptionUpdated { feed_id, description }
+                );
+            }
+        );
     }
 
-    public entry fun update_feed_config_id(authority: &signer, feed_ids: vector<vector<u8>>, config_id: vector<u8>) acquires Registry {
+    public entry fun update_feed_config_id(
+        authority: &signer, feed_ids: vector<vector<u8>>, config_id: vector<u8>
+    ) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
         assert_is_owner(registry, signer::address_of(authority));
 
         // NOTE: not in the solidity contract, but we make sure that the config exists first.
-        assert!(simple_map::contains_key(&registry.configs, &config_id), error::invalid_argument(ECONFIG_NOT_CONFIGURED));
+        assert!(
+            simple_map::contains_key(&registry.configs, &config_id),
+            error::invalid_argument(ECONFIG_NOT_CONFIGURED)
+        );
 
-        vector::for_each(feed_ids, |feed_id| {
-            let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
-            feed.config_id = config_id;
+        vector::for_each(
+            feed_ids,
+            |feed_id| {
+                let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
+                feed.config_id = config_id;
 
-            event::emit(FeedConfigIdUpdated {
-                feed_id,
-                config_id,
-            });
-        });
+                event::emit(
+                    FeedConfigIdUpdated { feed_id, config_id }
+                );
+            }
+        );
     }
 
     fun to_u16be(data: vector<u8>): u16 {
@@ -326,7 +393,7 @@ module data_feeds::registry {
     struct OnReceive has drop {}
 
     inline fun new_proof(): OnReceive {
-      OnReceive {}
+        OnReceive {}
     }
 
     // Keystone receiver function interface
@@ -337,21 +404,39 @@ module data_feeds::registry {
 
         let parsed_metadata = keystone::storage::parse_report_metadata(metadata);
 
-        let workflow_name = keystone::storage::get_report_metadata_workflow_name(&parsed_metadata);
-        let workflow_owner = keystone::storage::get_report_metadata_workflow_owner(&parsed_metadata);
+        let workflow_name =
+            keystone::storage::get_report_metadata_workflow_name(&parsed_metadata);
+        let workflow_owner =
+            keystone::storage::get_report_metadata_workflow_owner(&parsed_metadata);
 
-        assert!(vector::is_empty(&registry.allowed_workflow_names) || vector::contains(&registry.allowed_workflow_names, &workflow_name), EUNAUTHORIZED_WORKFLOW_NAME);
-        assert!(vector::is_empty(&registry.allowed_workflow_owners) || vector::contains(&registry.allowed_workflow_owners, &workflow_owner), EUNAUTHORIZED_WORKFLOW_OWNER);
+        assert!(
+            vector::is_empty(&registry.allowed_workflow_names)
+                || vector::contains(&registry.allowed_workflow_names, &workflow_name),
+            EUNAUTHORIZED_WORKFLOW_NAME
+        );
+        assert!(
+            vector::is_empty(&registry.allowed_workflow_owners)
+                || vector::contains(&registry.allowed_workflow_owners, &workflow_owner),
+            EUNAUTHORIZED_WORKFLOW_OWNER
+        );
 
         let (feed_ids, reports) = parse_raw_report(data);
-        vector::zip(feed_ids, reports, |feed_id, report| {
-            perform_update(registry, feed_id, report);
-        });
+        vector::zip(
+            feed_ids,
+            reports,
+            |feed_id, report| {
+                perform_update(registry, feed_id, report);
+            }
+        );
 
         option::none()
     }
 
-    public fun set_config(authority: &signer, allowed_workflow_owners: vector<vector<u8>>, allowed_workflow_names: vector<vector<u8>>) acquires Registry {
+    public fun set_config(
+        authority: &signer,
+        allowed_workflow_owners: vector<vector<u8>>,
+        allowed_workflow_names: vector<vector<u8>>
+    ) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
         assert_is_owner(registry, signer::address_of(authority));
 
@@ -395,8 +480,13 @@ module data_feeds::registry {
         (feed_ids, reports)
     }
 
-    fun perform_update(registry: &mut Registry, feed_id: vector<u8>, report_data: vector<u8>) {
-        assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
+    fun perform_update(
+        registry: &mut Registry, feed_id: vector<u8>, report_data: vector<u8>
+    ) {
+        assert!(
+            simple_map::contains_key(&registry.feeds, &feed_id),
+            error::invalid_argument(EFEED_NOT_CONFIGURED)
+        );
         let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
 
         let report_feed_id = vector::slice(&report_data, 0, 32);
@@ -406,7 +496,8 @@ module data_feeds::registry {
         let observation_timestamp: u32;
         let benchmark_price: u256;
         if (schema == SCHEMA_V3) {
-            observation_timestamp = to_u32be(vector::slice(&report_data, 64+32-4, 64+32));
+            observation_timestamp = to_u32be(vector::slice(&report_data, 64 + 32 - 4, 64
+                + 32));
             // NOTE: aptos has no signed integer types, so can't parse as i196, this is a raw representation
             benchmark_price = to_u256be(vector::slice(&report_data, 96, 128));
         } else {
@@ -417,93 +508,135 @@ module data_feeds::registry {
         feed.benchmark = benchmark_price;
         feed.report = report_data;
 
-        event::emit(FeedUpdated {
-            feed_id,
-            timestamp: (observation_timestamp as u256),
-            benchmark: benchmark_price,
-            report: report_data,
-        });
+        event::emit(
+            FeedUpdated {
+                feed_id,
+                timestamp: (observation_timestamp as u256),
+                benchmark: benchmark_price,
+                report: report_data
+            }
+        );
     }
 
     // Getters
 
-    public fun get_benchmarks(authority: &signer, feed_ids: vector<vector<u8>>): vector<Benchmark> acquires Registry {
+    public fun get_benchmarks(
+        authority: &signer, feed_ids: vector<vector<u8>>
+    ): vector<Benchmark> acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());
         assert_is_owner(registry, signer::address_of(authority));
         get_benchmarks_internal(registry, feed_ids)
     }
 
-    public(friend) fun get_benchmarks_unchecked(feed_ids: vector<vector<u8>>): vector<Benchmark> acquires Registry {
+    public(friend) fun get_benchmarks_unchecked(
+        feed_ids: vector<vector<u8>>
+    ): vector<Benchmark> acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());
         get_benchmarks_internal(registry, feed_ids)
     }
 
-    fun get_benchmarks_internal(registry: &Registry, feed_ids: vector<vector<u8>>): vector<Benchmark> {
-        vector::map(feed_ids, |feed_id| {
-            assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
-            let feed = simple_map::borrow(&registry.feeds, &feed_id);
-            Benchmark {
-                benchmark: feed.benchmark,
-                observation_timestamp: feed.observation_timestamp
+    fun get_benchmarks_internal(
+        registry: &Registry, feed_ids: vector<vector<u8>>
+    ): vector<Benchmark> {
+        vector::map(
+            feed_ids,
+            |feed_id| {
+                assert!(
+                    simple_map::contains_key(&registry.feeds, &feed_id),
+                    error::invalid_argument(EFEED_NOT_CONFIGURED)
+                );
+                let feed = simple_map::borrow(&registry.feeds, &feed_id);
+                Benchmark {
+                    benchmark: feed.benchmark,
+                    observation_timestamp: feed.observation_timestamp
+                }
             }
-        })
+        )
     }
 
-    public fun get_reports(authority: &signer, feed_ids: vector<vector<u8>>): vector<Report> acquires Registry {
+    public fun get_reports(
+        authority: &signer, feed_ids: vector<vector<u8>>
+    ): vector<Report> acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());
         assert_is_owner(registry, signer::address_of(authority));
         get_reports_internal(registry, feed_ids)
     }
 
-    public(friend) fun get_reports_unchecked(feed_ids: vector<vector<u8>>): vector<Report> acquires Registry {
+    public(friend) fun get_reports_unchecked(
+        feed_ids: vector<vector<u8>>
+    ): vector<Report> acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());
         get_reports_internal(registry, feed_ids)
     }
 
-    fun get_reports_internal(registry: &Registry, feed_ids: vector<vector<u8>>): vector<Report> {
-        vector::map(feed_ids, |feed_id| {
-            assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
+    fun get_reports_internal(
+        registry: &Registry, feed_ids: vector<vector<u8>>
+    ): vector<Report> {
+        vector::map(
+            feed_ids,
+            |feed_id| {
+                assert!(
+                    simple_map::contains_key(&registry.feeds, &feed_id),
+                    error::invalid_argument(EFEED_NOT_CONFIGURED)
+                );
 
-            let feed = simple_map::borrow(&registry.feeds, &feed_id);
-            Report {
-                report: feed.report,
-                observation_timestamp: feed.observation_timestamp
+                let feed = simple_map::borrow(&registry.feeds, &feed_id);
+                Report {
+                    report: feed.report,
+                    observation_timestamp: feed.observation_timestamp
+                }
             }
-        })
+        )
     }
 
     #[view]
-    public fun get_feed_metadata(feed_ids: vector<vector<u8>>): vector<FeedMetadata> acquires Registry {
+    public fun get_feed_metadata(
+        feed_ids: vector<vector<u8>>
+    ): vector<FeedMetadata> acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());
 
-        vector::map(feed_ids, |feed_id| {
-            assert!(simple_map::contains_key(&registry.feeds, &feed_id), error::invalid_argument(EFEED_NOT_CONFIGURED));
+        vector::map(
+            feed_ids,
+            |feed_id| {
+                assert!(
+                    simple_map::contains_key(&registry.feeds, &feed_id),
+                    error::invalid_argument(EFEED_NOT_CONFIGURED)
+                );
 
-            let feed = simple_map::borrow(&registry.feeds, &feed_id);
-            let config = simple_map::borrow(&registry.configs, &feed.config_id);
+                let feed = simple_map::borrow(&registry.feeds, &feed_id);
+                let config = simple_map::borrow(&registry.configs, &feed.config_id);
 
-            FeedMetadata {
-                description: feed.description,
-                config_id: feed.config_id,
-                deviation_threshold: config.deviation_threshold,
-                staleness_seconds: config.staleness_seconds,
+                FeedMetadata {
+                    description: feed.description,
+                    config_id: feed.config_id,
+                    deviation_threshold: config.deviation_threshold,
+                    staleness_seconds: config.staleness_seconds
+                }
             }
-        })
+        )
     }
 
     #[view]
-    public fun get_feed_configs(config_ids: vector<vector<u8>>): vector<FeedConfig> acquires Registry {
+    public fun get_feed_configs(
+        config_ids: vector<vector<u8>>
+    ): vector<FeedConfig> acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());
 
-        vector::map(config_ids, |config_id| {
-            assert!(simple_map::contains_key(&registry.configs, &config_id), error::invalid_argument(ECONFIG_NOT_CONFIGURED));
+        vector::map(
+            config_ids,
+            |config_id| {
+                assert!(
+                    simple_map::contains_key(&registry.configs, &config_id),
+                    error::invalid_argument(ECONFIG_NOT_CONFIGURED)
+                );
 
-            let config = simple_map::borrow(&registry.configs, &config_id);
-            FeedConfig {
-                deviation_threshold: config.deviation_threshold,
-                staleness_seconds: config.staleness_seconds,
+                let config = simple_map::borrow(&registry.configs, &config_id);
+                FeedConfig {
+                    deviation_threshold: config.deviation_threshold,
+                    staleness_seconds: config.staleness_seconds
+                }
             }
-        })
+        )
     }
 
     // Ownership functions
@@ -517,30 +650,34 @@ module data_feeds::registry {
     public entry fun transfer_ownership(authority: &signer, to: address) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
         assert_is_owner(registry, signer::address_of(authority));
-        assert!(registry.owner_address != to, error::invalid_argument(ECANNOT_TRANSFER_TO_SELF));
+        assert!(
+            registry.owner_address != to, error::invalid_argument(
+                ECANNOT_TRANSFER_TO_SELF
+            )
+        );
 
         registry.pending_owner_address = to;
 
-        event::emit(OwnershipTransferRequested {
-            from: registry.owner_address,
-            to,
-        });
+        event::emit(
+            OwnershipTransferRequested { from: registry.owner_address, to }
+        );
     }
 
     public entry fun accept_ownership(authority: &signer) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
-        assert!(registry.pending_owner_address == signer::address_of(authority), error::permission_denied(ENOT_PROPOSED_OWNER));
+        assert!(
+            registry.pending_owner_address == signer::address_of(authority),
+            error::permission_denied(ENOT_PROPOSED_OWNER)
+        );
 
         let old_owner_address = registry.owner_address;
         registry.owner_address = registry.pending_owner_address;
         registry.pending_owner_address = @0x0;
 
-        event::emit(OwnershipTransferred {
-            from: old_owner_address,
-            to: registry.owner_address,
-        });
+        event::emit(
+            OwnershipTransferred { from: old_owner_address, to: registry.owner_address }
+        );
     }
-
 
     // Struct accessors
 
@@ -568,7 +705,9 @@ module data_feeds::registry {
         result.config_id
     }
 
-    public fun get_feed_metadata_deviation_threshold(result: &FeedMetadata): u256 {
+    public fun get_feed_metadata_deviation_threshold(
+        result: &FeedMetadata
+    ): u256 {
         result.deviation_threshold
     }
 
@@ -619,16 +758,21 @@ module data_feeds::registry {
         // 00000000000000000000000000000000000000000000000000000000000494a8
         // 00000000000000000000000000000000000000000000000000000000000494a8
 
-        let data = x"00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000001c000031111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000012000031111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800032222222222222222000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000012000032222222222222222000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a8";
+        let data =
+            x"00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000001c000031111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000012000031111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800032222222222222222000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000012000032222222222222222000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a8";
 
         let (feed_ids, reports) = parse_raw_report(data);
         std::debug::print(&feed_ids);
         std::debug::print(&reports);
 
-        assert!(feed_ids == vector[
-            x"0003111111111111111100000000000000000000000000000000000000000000",
-            x"0003222222222222222200000000000000000000000000000000000000000000"
-        ], 1);
+        assert!(
+            feed_ids
+                == vector[
+                    x"0003111111111111111100000000000000000000000000000000000000000000",
+                    x"0003222222222222222200000000000000000000000000000000000000000000"
+                ],
+            1
+        );
 
         let expected_reports = vector[
             x"00031111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a8",
@@ -652,7 +796,7 @@ module data_feeds::registry {
     fun test_set_feed_configs(
         owner: &signer,
         publisher: &signer,
-        keystone: &signer,
+        keystone: &signer
     ) acquires Registry {
         set_up_test(publisher, keystone);
 
@@ -660,16 +804,18 @@ module data_feeds::registry {
             owner,
             vector[],
             vector[],
-            vector[],
+            vector[]
         );
     }
 
-    #[test(owner = @owner, publisher = @data_feeds, keystone = @keystone, new_owner=@0xbeef)]
+    #[test(
+        owner = @owner, publisher = @data_feeds, keystone = @keystone, new_owner = @0xbeef
+    )]
     fun test_transfer_ownership_success(
-      owner: &signer,
-      publisher: &signer,
-      keystone: &signer,
-      new_owner: &signer
+        owner: &signer,
+        publisher: &signer,
+        keystone: &signer,
+        new_owner: &signer
     ) acquires Registry {
         set_up_test(publisher, keystone);
 
@@ -681,12 +827,12 @@ module data_feeds::registry {
         assert!(get_owner() == signer::address_of(new_owner), 2);
     }
 
-    #[test(publisher = @data_feeds, keystone = @keystone, unknown_user=@0xbeef)]
+    #[test(publisher = @data_feeds, keystone = @keystone, unknown_user = @0xbeef)]
     #[expected_failure(abort_code = 327681, location = data_feeds::registry)]
     fun test_transfer_ownership_failure_not_owner(
-      publisher: &signer,
-      keystone: &signer,
-      unknown_user: &signer,
+        publisher: &signer,
+        keystone: &signer,
+        unknown_user: &signer
     ) acquires Registry {
         set_up_test(publisher, keystone);
 
@@ -698,9 +844,9 @@ module data_feeds::registry {
     #[test(owner = @owner, publisher = @data_feeds, keystone = @keystone)]
     #[expected_failure(abort_code = 65546, location = data_feeds::registry)]
     fun test_transfer_ownership_failure_transfer_to_self(
-      owner: &signer,
-      publisher: &signer,
-      keystone: &signer,
+        owner: &signer,
+        publisher: &signer,
+        keystone: &signer
     ) acquires Registry {
         set_up_test(publisher, keystone);
 
@@ -709,13 +855,15 @@ module data_feeds::registry {
         transfer_ownership(owner, signer::address_of(owner));
     }
 
-    #[test(owner = @owner, publisher = @data_feeds, keystone = @keystone, new_owner=@0xbeef)]
+    #[test(
+        owner = @owner, publisher = @data_feeds, keystone = @keystone, new_owner = @0xbeef
+    )]
     #[expected_failure(abort_code = 327691, location = data_feeds::registry)]
     fun test_transfer_ownership_failure_not_proposed_owner(
-      owner: &signer,
-      publisher: &signer,
-      keystone: &signer,
-      new_owner: &signer
+        owner: &signer,
+        publisher: &signer,
+        keystone: &signer,
+        new_owner: &signer
     ) acquires Registry {
         set_up_test(publisher, keystone);
 
