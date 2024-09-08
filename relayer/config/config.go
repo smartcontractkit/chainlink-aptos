@@ -24,8 +24,6 @@ type ConfigSet struct { //nolint:revive
 	TransactionManager txm.AptosTxmConfig
 }
 
-//
-
 type WorkflowConfig struct {
 	ForwarderAddress string
 	// FromAddress      string
@@ -46,6 +44,20 @@ func (c *Chain) SetDefaults() {
 type Node struct {
 	Name *string
 	URL  *config.URL
+}
+
+func (n *Node) ValidateConfig() (err error) {
+	if n.Name == nil {
+		err = errors.Join(err, config.ErrMissing{Name: "Name", Msg: "required for all nodes"})
+	} else if *n.Name == "" {
+		err = errors.Join(err, config.ErrEmpty{Name: "Name", Msg: "required for all nodes"})
+	}
+
+	if n.URL == nil {
+		err = errors.Join(err, config.ErrMissing{Name: "URL", Msg: "required for all nodes"})
+	}
+
+	return
 }
 
 type TOMLConfigs []*TOMLConfig
@@ -117,12 +129,9 @@ func (c *TOMLConfig) IsEnabled() bool {
 }
 
 func (c *TOMLConfig) SetFrom(f *TOMLConfig) {
-	// if f.Enabled != nil {
-	// 	c.Enabled = f.Enabled
-	// }
-	// if f.ChainID != nil {
-	// 	c.ChainID = f.ChainID
-	// }
+	c.ChainID = f.ChainID
+	c.Enabled = f.Enabled
+
 	setFromChain(&c.Chain, &f.Chain)
 	c.Nodes.SetFrom(&f.Nodes)
 }
@@ -131,6 +140,8 @@ func setFromChain(c, f *Chain) {
 	if f.TransactionManager != nil {
 		c.TransactionManager = f.TransactionManager
 	}
+
+	c.Workflow = f.Workflow
 }
 
 func (c *TOMLConfig) ValidateConfig() (err error) {
@@ -140,6 +151,10 @@ func (c *TOMLConfig) ValidateConfig() (err error) {
 
 	if len(c.Nodes) == 0 {
 		err = errors.Join(err, config.ErrMissing{Name: "Nodes", Msg: "must have at least one node"})
+	} else {
+		for _, node := range c.Nodes {
+			err = errors.Join(err, node.ValidateConfig())
+		}
 	}
 
 	return

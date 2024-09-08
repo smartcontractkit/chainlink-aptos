@@ -20,6 +20,7 @@ import (
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/testutils"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
 )
@@ -110,7 +111,7 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 				Functions: map[string]*ChainReaderFunction{
 					"replacementNameEchoU64": {
 						Name: "echo_u64",
-						Params: []ChainReaderFunctionParam{
+						Params: []codec.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "u64",
@@ -118,7 +119,7 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 						},
 					},
 					"echo_u32_u64_tuple": {
-						Params: []ChainReaderFunctionParam{
+						Params: []codec.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "u32",
@@ -130,7 +131,7 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 						},
 					},
 					"echo_string": {
-						Params: []ChainReaderFunctionParam{
+						Params: []codec.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "0x1::string::String",
@@ -138,7 +139,7 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 						},
 					},
 					"echo_byte_vector": {
-						Params: []ChainReaderFunctionParam{
+						Params: []codec.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "vector<u8>",
@@ -146,7 +147,7 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 						},
 					},
 					"echo_byte_vector_vector": {
-						Params: []ChainReaderFunctionParam{
+						Params: []codec.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "vector<vector<u8>>",
@@ -154,7 +155,7 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 						},
 					},
 					"echo_u256": {
-						Params: []ChainReaderFunctionParam{
+						Params: []codec.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "u256",

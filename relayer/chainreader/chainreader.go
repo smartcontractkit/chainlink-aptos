@@ -14,6 +14,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
 )
 
@@ -135,7 +136,7 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, contractName, met
 		return fmt.Errorf("failed to call view function: %+w", err)
 	}
 
-	return decodeAptosJsonValue(data, returnVal)
+	return codec.DecodeAptosJsonValue(data, returnVal)
 }
 
 func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request types.BatchGetLatestValuesRequest) (types.BatchGetLatestValuesResult, error) {

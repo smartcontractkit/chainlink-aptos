@@ -1,4 +1,4 @@
-package chainreader
+package codec
 
 import (
 	"encoding/hex"
@@ -12,7 +12,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-func decodeAptosJsonValue(from any, to any) error {
+func DecodeAptosJsonValue(from any, to any) error {
 	config := &mapstructure.DecoderConfig{
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
 			hexStringHook,
@@ -193,7 +193,7 @@ func arrayHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, e
 		sourceElem := sourceSlice.Index(i).Interface()
 		targetElem := reflect.New(t.Elem()).Interface()
 
-		if err := decodeAptosJsonValue(sourceElem, targetElem); err != nil {
+		if err := DecodeAptosJsonValue(sourceElem, targetElem); err != nil {
 			return nil, fmt.Errorf("failed to decode array element at index %d: %+w", i, err)
 		}
 

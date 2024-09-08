@@ -1,5 +1,9 @@
 package chainwriter
 
+import (
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
+)
+
 type ChainWriterConfig struct {
 	Modules map[string]*ChainWriterModule
 }
@@ -20,17 +24,5 @@ type ChainWriterFunction struct {
 	// The account address (optional). When not provided, the address is calculated
 	// from the public key.
 	FromAddress string
-	Params      []ChainWriterFunctionParam
-}
-
-// An Aptos module function parameter, which will be mapped to a BCS value.
-type ChainWriterFunctionParam struct {
-	// The function parameter name.
-	Name string
-	// The function parameter Move type.
-	Type string
-	// True if this is a required parameter, false otherwise.
-	Required bool
-	// If this is not a required parameter and it is not provided, this default value will be used.
-	DefaultValue any
+	Params      []codec.AptosFunctionParam
 }
