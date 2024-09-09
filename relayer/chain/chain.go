@@ -74,8 +74,7 @@ func NewChain(cfg *config.TOMLConfig, opts ChainOpts) (Chain, error) {
 	if !cfg.IsEnabled() {
 		return nil, fmt.Errorf("cannot create new chain with ID %s: chain is disabled", cfg.ChainID)
 	}
-	c, err := newChain(cfg.ChainID, cfg, opts.KeyStore, opts.Logger)
-	return c, err
+	return newChain(cfg.ChainID, cfg, opts.KeyStore, opts.Logger)
 }
 
 func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger) (*chain, error) {
