@@ -83,16 +83,14 @@ func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any
 // EmitWithLog emits a protobuf message with attributes and logs the emitted message
 func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs ...any) error {
 	attrKVs = appendSchemaIfMissing(m, attrKVs)
-	err := e.Emit(ctx, m, attrKVs...)
-	if err != nil {
-		return err
-	}
 
 	mStr := fmt.Sprintf("{%s}", protoimpl.X.MessageStringOf(m))
 	// TODO: how do we get and log the full set of attributes?
 	e.lggr.Infow("[Beholder.emit]", "message", mStr, "attributes", attrKVs)
 
-	return nil
+	err := e.Emit(ctx, m, attrKVs...)
+
+	return err
 }
 
 type BeholderClientOpts struct {
