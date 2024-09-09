@@ -68,31 +68,26 @@ func parseConfig(rawConfig *values.Map) (config AptosConfig, err error) {
 	return config, nil
 }
 
-func success() <-chan capabilities.CapabilityResponse {
-	callback := make(chan capabilities.CapabilityResponse)
-	go func() {
-		callback <- capabilities.CapabilityResponse{}
-		close(callback)
-	}()
-	return callback
+func success() capabilities.CapabilityResponse {
+	return capabilities.CapabilityResponse{}
 }
 
-func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (<-chan capabilities.CapabilityResponse, error) {
+func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (capabilities.CapabilityResponse, error) {
 	cap.lggr.Debugw("Execute", "request", request)
 
 	reqConfig, err := parseConfig(request.Config)
 	if err != nil {
-		return nil, err
+		return capabilities.CapabilityResponse{}, err
 	}
 
 	signedReport, ok := request.Inputs.Underlying[signedReportField]
 	if !ok {
-		return nil, fmt.Errorf("missing required field %s", signedReportField)
+		return capabilities.CapabilityResponse{}, fmt.Errorf("missing required field %s", signedReportField)
 	}
 
 	inputs := types.SignedReport{}
 	if err = signedReport.UnwrapTo(&inputs); err != nil {
-		return nil, err
+		return capabilities.CapabilityResponse{}, err
 	}
 
 	if len(inputs.Report) == 0 {
@@ -104,7 +99,7 @@ func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.Capabi
 
 	rawExecutionID, err := hex.DecodeString(request.Metadata.WorkflowExecutionID)
 	if err != nil {
-		return nil, err
+		return capabilities.CapabilityResponse{}, err
 	}
 	// Check whether value was already transmitted on chain
 	reportID, _ := binary.Uvarint(inputs.ID)
@@ -119,7 +114,7 @@ func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.Capabi
 	}
 	var transmitted bool
 	if err = cap.cr.GetLatestValue(ctx, "forwarder", "getTransmissionState", primitives.Unconfirmed, queryInputs, &transmitted); err != nil {
-		return nil, err
+		return capabilities.CapabilityResponse{}, err
 	}
 	if transmitted == true {
 		cap.lggr.Infow("WriteTarget report already onchain - returning without a tranmission attempt", "executionID", request.Metadata.WorkflowExecutionID)
@@ -129,7 +124,7 @@ func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.Capabi
 	cap.lggr.Infow("WriteTarget non-empty report - attempting to push to txmgr", "request", request, "reportLen", len(inputs.Report), "reportContextLen", len(inputs.Context), "nSignatures", len(inputs.Signatures), "executionID", request.Metadata.WorkflowExecutionID)
 	txID, err := uuid.NewUUID() // NOTE: CW expects us to generate an ID, rather than return one
 	if err != nil {
-		return nil, err
+		return capabilities.CapabilityResponse{}, err
 	}
 
 	// Note: The codec that ChainWriter uses to encode the parameters for the contract ABI cannot handle
@@ -157,7 +152,7 @@ func (cap *WriteTarget) Execute(ctx context.Context, request capabilities.Capabi
 	meta := commontypes.TxMeta{WorkflowExecutionID: &request.Metadata.WorkflowExecutionID}
 	value := big.NewInt(0)
 	if err := cap.cw.SubmitTransaction(ctx, "forwarder", "report", req, txID.String(), cap.forwarderAddress, &meta, value); err != nil {
-		return nil, err
+		return capabilities.CapabilityResponse{}, err
 	}
 	cap.lggr.Debugw("Transaction submitted", "request", request, "transaction", txID)
 	return success(), nil
