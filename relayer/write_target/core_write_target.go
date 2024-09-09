@@ -247,22 +247,20 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	c.lggr.Debugw("Transaction submitted", "request", request, "transaction-id", txID)
 	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSent(context, txID.String()))
 
-	// TODO: source the TxHash from CW -> TXM by generated TxID)
-	// TODO: have background WriteConfirmer source relevant txs and their receipts (wait for a tx to be included in a block)
+	// TODO: implement a background WriteConfirmer to periodically source new blocks and transactions,
+	//  filter relevant (to this forwarder) transactions, and emit write-accepted/confirmed events.
 	// TODO: [Beholder] Emit 'write-target.WriteAccepted'
 	// TODO: [Beholder] Emit 'write-target.WriteConfirmed'
 	return success(), nil
 }
 
 func (c *writeTarget) RegisterToWorkflow(ctx context.Context, request capabilities.RegisterToWorkflowRequest) error {
-	// TODO: store locally, and if trigger seen
-
-	// TODO: start a process responsible for monitoring the chain and publishing [Beholder] Emit 'write-target.WriteConfirmed'
+	// TODO: notify the background WriteConfirmer (workflow registered)
 	return nil
 }
 
 func (c *writeTarget) UnregisterFromWorkflow(ctx context.Context, request capabilities.UnregisterFromWorkflowRequest) error {
-	// TODO: stop a process responsible for monitoring the chain and publishing [Beholder] Emit 'write-target.WriteConfirmed'
+	// TODO: notify the background WriteConfirmer (workflow unregistered)
 	return nil
 }
 
