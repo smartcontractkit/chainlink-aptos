@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math/big"
 
-	aptos "github.com/aptos-labs/aptos-go-sdk"
 	"github.com/google/uuid"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
@@ -18,11 +17,8 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
-	"github.com/smartcontractkit/chainlink-common/pkg/values"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chainwriter"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
-	aptosutils "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/utils"
 )
 
 var (
@@ -49,11 +45,12 @@ type writeTarget struct {
 	// Local beholder client, also hosting the protobuf emitter
 	beholder *monitor.BeholderClient
 
-	cr       commontypes.ContractReader
-	cw       commontypes.ChainWriter
-	cwConfig chainwriter.ChainWriterConfig
+	cr               commontypes.ContractReader
+	cw               commontypes.ChainWriter
+	configValidateFn func(config Config) error
 
-	forwarderAddress string
+	transmitterAddress string
+	forwarderAddress   string
 }
 
 type WriteTargetOpts struct {
@@ -61,11 +58,17 @@ type WriteTargetOpts struct {
 
 	Logger logger.Logger
 
-	ContractReader    commontypes.ContractReader
-	ChainWriter       commontypes.ChainWriter
-	ChainWriterConfig chainwriter.ChainWriterConfig
+	ContractReader   commontypes.ContractReader
+	ChainWriter      commontypes.ChainWriter
+	ConfigValidateFn func(config Config) error
 
-	ForwarderAddress string
+	TransmitterAddress string
+	ForwarderAddress   string
+}
+
+// Capability-specific configuration
+type Config struct {
+	Address string
 }
 
 func NewWriteTarget(opts WriteTargetOpts) capabilities.TargetCapability {
@@ -82,24 +85,10 @@ func NewWriteTarget(opts WriteTargetOpts) capabilities.TargetCapability {
 		beholder,
 		opts.ContractReader,
 		opts.ChainWriter,
-		opts.ChainWriterConfig,
+		opts.ConfigValidateFn,
+		opts.TransmitterAddress,
 		opts.ForwarderAddress,
 	}
-}
-
-type AptosConfig struct {
-	Address string
-}
-
-func parseConfig(rawConfig *values.Map) (config AptosConfig, err error) {
-	if err := rawConfig.UnwrapTo(&config); err != nil {
-		return config, err
-	}
-	address := aptos.AccountAddress{}
-	if err = address.ParseStringRelaxed(config.Address); err != nil {
-		return config, fmt.Errorf("'%v' is not a valid address", config.Address)
-	}
-	return config, nil
 }
 
 func success() capabilities.CapabilityResponse {
@@ -120,24 +109,24 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	context := requestContext{
 		forwarder:   c.forwarderAddress,
 		receiver:    "N/A",
-		transmitter: "N/A",
+		transmitter: c.transmitterAddress,
 		reportID:    0, // N/A
 	}
 	// Helper to build monitoring (Beholder) messages
 	builder := &messageBuilder{}
 
-	// Try to source the transmitter
-	transmitter, err := c.getTransmitter()
-	if err != nil {
-		msg := builder.buildWriteError(context, 0, "failed to source the transmitter", err.Error())
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
-	}
-	context.transmitter = transmitter
-
 	// Try to parse the request (WT-specific) config
-	reqConfig, err := parseConfig(request.Config)
+	var reqConfig Config
+	err := request.Config.UnwrapTo(&reqConfig)
 	if err != nil {
 		msg := builder.buildWriteError(context, 0, "failed to parse config", err.Error())
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
+	}
+
+	// Try to validate the config
+	err = c.configValidateFn(reqConfig)
+	if err != nil {
+		msg := builder.buildWriteError(context, 0, "failed to validate config", err.Error())
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
@@ -262,32 +251,4 @@ func (c *writeTarget) RegisterToWorkflow(ctx context.Context, request capabiliti
 func (c *writeTarget) UnregisterFromWorkflow(ctx context.Context, request capabilities.UnregisterFromWorkflowRequest) error {
 	// TODO: notify the background WriteConfirmer (workflow unregistered)
 	return nil
-}
-
-// getTransmitter sources the transmitter address from the CW config
-func (c *writeTarget) getTransmitter() (string, error) {
-	// Try to source the transmitter (e.g., c.cw.config.Functions["forwarder"].FromAddress)
-	moduleConfig, ok := c.cwConfig.Modules[contractName]
-	if !ok {
-		return "", fmt.Errorf("no such contract: %s", contractName)
-	}
-
-	functionConfig, ok := moduleConfig.Functions[contractMethodName_report]
-	if !ok {
-		return "", fmt.Errorf("no such method: %s", contractMethodName_report)
-	}
-
-	// Notice: reusing logic from the TXM which sources the transmitter this way
-	transmitter := functionConfig.FromAddress
-	if transmitter == "" {
-		// If the address is not specified, we assume the public key is for its corresponding address
-		// and not for an address with a rotated authentication key.
-		ed25519PublicKey, err := aptosutils.HexToEd25519PublicKey(functionConfig.PublicKey)
-		if err != nil {
-			return "", fmt.Errorf("failed to convert public key: %+w", err)
-		}
-		acc := aptosutils.Ed25519PublicKeyToAccount(ed25519PublicKey)
-		transmitter = acc.String()
-	}
-	return transmitter, nil
 }
