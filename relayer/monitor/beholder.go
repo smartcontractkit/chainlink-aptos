@@ -3,10 +3,6 @@ package monitor
 import (
 	"context"
 	"fmt"
-	"time"
-
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/runtime/protoimpl"
@@ -96,49 +92,4 @@ func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs
 type BeholderClientOpts struct {
 	Logger logger.Logger
 	Config beholder.Config
-}
-
-func NewBeholderClient(ctx context.Context, opts BeholderClientOpts) (*beholder.Client, error) {
-	opts.Logger.Debugw("[Beholder] creating client", "config", opts.Config)
-
-	// Initialize beholder otel client which sets up OTel components
-	otelClient, err := beholder.NewClient(ctx, opts.Config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create a new Beholder client: %+w", err)
-	}
-	// Handle OTel errors
-	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
-		opts.Logger.Errorw("[Beholder] OTEL error", "err", err)
-	}))
-	// Set global client so it will be accessible from anywhere through beholder/global functions
-	beholder.SetClient(otelClient)
-
-	return otelClient, nil
-}
-
-// This is for development purposes only, should not be used in production
-// Beholder configuration should be sourced from core node toml configuration
-func BeholderDevConfig() beholder.Config {
-	config := beholder.DefaultConfig()
-	// Set the OTel exporter endpoint
-	config.OtelExporterGRPCEndpoint = "otelcollector:4317"
-	// Add some more Resource Attributes
-	// Resource Attributes are static and are added to each emitted OTel data type
-	config.ResourceAttributes = append(config.ResourceAttributes, []attribute.KeyValue{
-		attribute.String("chain_id", "11155111"),
-		attribute.String("node_id", "dev-node-id"),
-	}...)
-	// Emitter
-	// Disable batching, should not be used in production
-	config.EmitterBatchProcessor = false
-	// Trace
-	config.TraceSampleRatio = 1
-	config.TraceBatchTimeout = 1 * time.Second
-	// Metric
-	config.MetricReaderInterval = 1 * time.Second
-	// Log
-	config.LogExportTimeout = 1 * time.Second
-	// Disable batching, should not be used in production
-	config.LogBatchProcessor = false
-	return config
 }

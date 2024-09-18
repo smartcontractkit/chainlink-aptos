@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/mitchellh/mapstructure"
@@ -19,6 +20,8 @@ import (
 )
 
 type aptosChainReader struct {
+	types.UnimplementedContractReader
+
 	logger          logger.Logger
 	config          ChainReaderConfig
 	starter         utils.StartStopOnce
@@ -60,7 +63,17 @@ func (a *aptosChainReader) Close() error {
 	})
 }
 
-func (a *aptosChainReader) GetLatestValue(ctx context.Context, contractName, method string, confidenceLevel primitives.ConfidenceLevel, params, returnVal any) error {
+func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier string, confidenceLevel primitives.ConfidenceLevel, params, returnVal any) error {
+	// Try to decode the readIdentifier
+	// TODO: check /chainlink-internal-integrations/solana/pkg/solana/chainreader/lookup.go, see if we can use the same approach
+	readComponents := strings.Split(readIdentifier, "-")
+	if len(readComponents) != 3 {
+		return fmt.Errorf("invalid read identifier: %s", readIdentifier)
+	}
+	contractName := readComponents[1]
+	method := readComponents[2]
+
+	// Try to source the read method configuration
 	toAddress, ok := a.moduleAddresses[contractName]
 	if !ok {
 		return fmt.Errorf("no bound address for module %s", contractName)
@@ -161,6 +174,18 @@ func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContr
 	return nil
 }
 
-func (a *aptosChainReader) QueryKey(ctx context.Context, contractName string, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]types.Sequence, error) {
-	return nil, errors.New("not implemented")
+func (a *aptosChainReader) Unbind(ctx context.Context, bindings []types.BoundContract) error {
+	for _, binding := range bindings {
+		key := binding.Name
+		if _, ok := a.moduleAddresses[key]; ok {
+			delete(a.moduleAddresses, key)
+		} else {
+			return fmt.Errorf("no such binding: %s", key)
+		}
+	}
+	return nil
+}
+
+func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]types.Sequence, error) {
+	return nil, errors.ErrUnsupported
 }

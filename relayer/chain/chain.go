@@ -10,7 +10,6 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/chains"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
@@ -96,15 +95,6 @@ func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logg
 		lggr: logger.Named(lggr, "Chain"),
 	}
 
-	// Setup Beholder client
-	// TODO: get this injected from the core node
-	// https://github.com/smartcontractkit/chainlink/pull/14110
-	config := monitor.BeholderDevConfig()
-	_, err = monitor.NewBeholderClient(context.TODO(), monitor.BeholderClientOpts{lggr, config})
-	if err != nil {
-		return nil, err
-	}
-
 	getClient := func() (*aptos.NodeClient, error) {
 		return ch.GetClient()
 	}
@@ -183,18 +173,6 @@ func (c *chain) Start(ctx context.Context) error {
 		c.lggr.Debug("Starting txm")
 		c.lggr.Debug("Starting balance monitor")
 
-		// Setup Beholder client (on start)
-		// TODO: get this injected from the core node
-		// https://github.com/smartcontractkit/chainlink/pull/14110
-		// if beholder.GetClient() == nil {
-		// 	config := monitor.BeholderDevConfig()
-		// 	var err error
-		// 	_, err = monitor.NewBeholderClient(ctx, monitor.BeholderClientOpts{c.lggr, config})
-		// 	if err != nil {
-		// 		return err
-		// 	}
-		// }
-
 		var ms services.MultiStart
 		return ms.Start(ctx, c.txm, c.balanceMonitor)
 	})
@@ -206,10 +184,6 @@ func (c *chain) Close() error {
 		c.lggr.Debug("Stopping txm")
 		c.lggr.Debug("Stopping balance monitor")
 
-		// Tear down the Beholder client
-		if beholder.GetClient() == nil {
-			defer beholder.GetClient().Close()
-		}
 		return services.CloseAll(c.txm, c.balanceMonitor)
 	})
 }
@@ -227,6 +201,11 @@ func (c *chain) HealthReport() map[string]error {
 
 func (c *chain) ID() string {
 	return c.id
+}
+
+// LatestHead returns the latest head for the underlying chain.
+func (c *chain) LatestHead(ctx context.Context) (types.Head, error) {
+	return types.Head{}, errors.ErrUnsupported
 }
 
 // ChainService interface

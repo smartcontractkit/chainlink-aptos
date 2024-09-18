@@ -179,8 +179,13 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		ReportID:            uint16(context.reportID),
 	}
 
+	binding := commontypes.BoundContract{
+		Address: context.forwarder,
+		Name:    contractName,
+	}
+
 	var transmitted bool
-	if err = c.cr.GetLatestValue(ctx, contractName, contractMethodName_getTransmissionState, primitives.Unconfirmed, queryInputs, &transmitted); err != nil {
+	if err = c.cr.GetLatestValue(ctx, binding.ReadIdentifier(contractMethodName_getTransmissionState), primitives.Unconfirmed, queryInputs, &transmitted); err != nil {
 		msg := builder.buildWriteError(context, 0, "failed to call [forwarder.getTransmissionState]", err.Error())
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	} else if transmitted == true {
