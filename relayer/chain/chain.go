@@ -186,14 +186,14 @@ func (c *chain) Start(ctx context.Context) error {
 		// Setup Beholder client (on start)
 		// TODO: get this injected from the core node
 		// https://github.com/smartcontractkit/chainlink/pull/14110
-		if beholder.GetClient() == nil {
-			config := monitor.BeholderDevConfig()
-			var err error
-			_, err = monitor.NewBeholderClient(ctx, monitor.BeholderClientOpts{c.lggr, config})
-			if err != nil {
-				return err
-			}
-		}
+		// if beholder.GetClient() == nil {
+		// 	config := monitor.BeholderDevConfig()
+		// 	var err error
+		// 	_, err = monitor.NewBeholderClient(ctx, monitor.BeholderClientOpts{c.lggr, config})
+		// 	if err != nil {
+		// 		return err
+		// 	}
+		// }
 
 		var ms services.MultiStart
 		return ms.Start(ctx, c.txm, c.balanceMonitor)
