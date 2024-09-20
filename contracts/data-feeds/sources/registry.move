@@ -132,9 +132,8 @@ module data_feeds::registry {
     const ENOT_PROPOSED_OWNER: u64 = 11;
 
     // Schema types
-    const SCHEMA_V1: u16 = 1;
-    const SCHEMA_V2: u16 = 2;
     const SCHEMA_V3: u16 = 3;
+    const SCHEMA_V4: u16 = 4;
 
     inline fun assert_is_owner(
         registry: &Registry, target_address: address
@@ -495,11 +494,11 @@ module data_feeds::registry {
 
         let observation_timestamp: u32;
         let benchmark_price: u256;
-        if (schema == SCHEMA_V3) {
-            observation_timestamp = to_u32be(vector::slice(&report_data, 64 + 32 - 4, 64
-                + 32));
+        if (schema == SCHEMA_V3 || schema == SCHEMA_V4) {
+            // offsets are the same for timestamp and benchmark in v3 and v4.
+            observation_timestamp = to_u32be(vector::slice(&report_data, 3 * 32 - 4, 3 * 32));
             // NOTE: aptos has no signed integer types, so can't parse as i196, this is a raw representation
-            benchmark_price = to_u256be(vector::slice(&report_data, 96, 128));
+            benchmark_price = to_u256be(vector::slice(&report_data, 6 * 32, 7 * 32));
         } else {
             abort error::invalid_argument(EINVALID_REPORT)
         };
@@ -806,6 +805,46 @@ module data_feeds::registry {
             vector[],
             vector[]
         );
+    }
+
+    #[test(owner = @owner, publisher = @data_feeds, keystone = @keystone)]
+    fun test_perform_update_v3(
+        owner: &signer,
+        publisher: &signer,
+        keystone: &signer
+    ) acquires Registry {
+        set_up_test(publisher, keystone);
+
+        let report_data = x"0003fbba4fce42f65d6032b18aee53efdf526cc734ad296cb57565979d883bdd0000000000000000000000000000000000000000000000000000000066ed173e0000000000000000000000000000000000000000000000000000000066ed174200000000000000007fffffffffffffffffffffffffffffffffffffffffffffff00000000000000007fffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000066ee68c2000000000000000000000000000000000000000000000d808cc35e6ed670bd00000000000000000000000000000000000000000000000d808590c35425347980000000000000000000000000000000000000000000000d8093f5f989878e7c00";
+        let feed_id = vector::slice(&report_data, 0, 32);
+        let expected_timestamp = 0x000066ed1742;
+        let expected_benchmark = 0x000d808cc35e6ed670bd00;
+
+        let config_id = vector[1];
+
+        set_feed_configs(
+            owner,
+            vector[config_id],
+            vector[1],
+            vector[1]
+        );
+
+        set_feeds(
+            owner,
+            vector[feed_id],
+            vector[string::utf8(b"description")],
+            config_id
+            );
+
+        let registry = borrow_global_mut<Registry>(get_state_addr());
+        perform_update(registry, feed_id, report_data);
+
+        let benchmarks = get_benchmarks(owner, vector[feed_id]);
+        assert!(vector::length(&benchmarks) == 1, 1);
+
+        let benchmark = vector::borrow(&benchmarks, 0);
+        assert!(benchmark.benchmark == expected_benchmark, 1);
+        assert!(benchmark.observation_timestamp == expected_timestamp, 1);
     }
 
     #[test(
