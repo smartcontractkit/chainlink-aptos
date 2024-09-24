@@ -18,7 +18,6 @@ module data_feeds::registry {
         owner_address: address,
         pending_owner_address: address,
         feeds: SimpleMap<vector<u8>, Feed>,
-        configs: SimpleMap<vector<u8>, Config>,
         allowed_workflow_owners: vector<vector<u8>>,
         allowed_workflow_names: vector<vector<u8>>
     }
@@ -29,13 +28,6 @@ module data_feeds::registry {
         benchmark: u256,
         report: vector<u8>,
         observation_timestamp: u256
-    }
-
-    struct Config has key, store, drop {
-        deviation_threshold: u256,
-
-        // TODO: shrink down to u64?
-        staleness_seconds: u256
     }
 
     struct Benchmark has store, drop {
@@ -51,26 +43,6 @@ module data_feeds::registry {
     struct FeedMetadata has store, drop, key {
         description: String,
         config_id: vector<u8>,
-        deviation_threshold: u256,
-        staleness_seconds: u256
-    }
-
-    struct FeedConfig has store, drop {
-        deviation_threshold: u256,
-        staleness_seconds: u256
-    }
-
-    #[event]
-    struct FeedConfigIdUpdated has drop, store {
-        feed_id: vector<u8>,
-        config_id: vector<u8>
-    }
-
-    #[event]
-    struct FeedConfigSet has drop, store {
-        config_id: vector<u8>,
-        deviation_threshold: u256,
-        staleness_seconds: u256
     }
 
     #[event]
@@ -180,7 +152,6 @@ module data_feeds::registry {
                 pending_owner_address: @0x0,
                 extend_ref,
                 feeds: simple_map::new(),
-                configs: simple_map::new(),
                 allowed_workflow_names: vector[],
                 allowed_workflow_owners: vector[]
             }
@@ -269,53 +240,6 @@ module data_feeds::registry {
         );
     }
 
-    public entry fun set_feed_configs(
-        authority: &signer,
-        config_ids: vector<vector<u8>>,
-        deviation_thresholds: vector<u256>,
-        staleness_seconds: vector<u256>
-    ) acquires Registry {
-        let registry = borrow_global_mut<Registry>(get_state_addr());
-        assert_is_owner(registry, signer::address_of(authority));
-
-        let len = vector::length(&config_ids);
-        assert!(
-            len == vector::length(&deviation_thresholds),
-            error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS)
-        );
-        assert!(
-            len == vector::length(&staleness_seconds),
-            error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS)
-        );
-
-        // NOTE: the solidity contract does not check that no duplicates exist in config_ids,
-        // but we do it here which allows us to iterate through config_ids in reverse order.
-        // should we need to remove this precondition, we can consider vector::reverse'ing the
-        // vectors first, similar to vector::zip.
-        assert_no_duplicates(&config_ids);
-
-        while (len > 0) {
-            let config_id = vector::pop_back(&mut config_ids);
-            let deviation_threshold = vector::pop_back(&mut deviation_thresholds);
-            let staleness_seconds = vector::pop_back(&mut staleness_seconds);
-
-            simple_map::upsert(
-                &mut registry.configs,
-                config_id,
-                Config {
-                    deviation_threshold: deviation_threshold,
-                    staleness_seconds: staleness_seconds
-                }
-            );
-
-            event::emit(
-                FeedConfigSet { config_id, deviation_threshold, staleness_seconds }
-            );
-
-            len = len - 1;
-        }
-    }
-
     public entry fun update_descriptions(
         authority: &signer, feed_ids: vector<vector<u8>>, descriptions: vector<String>
     ) acquires Registry {
@@ -341,31 +265,6 @@ module data_feeds::registry {
 
                 event::emit(
                     FeedDescriptionUpdated { feed_id, description }
-                );
-            }
-        );
-    }
-
-    public entry fun update_feed_config_id(
-        authority: &signer, feed_ids: vector<vector<u8>>, config_id: vector<u8>
-    ) acquires Registry {
-        let registry = borrow_global_mut<Registry>(get_state_addr());
-        assert_is_owner(registry, signer::address_of(authority));
-
-        // NOTE: not in the solidity contract, but we make sure that the config exists first.
-        assert!(
-            simple_map::contains_key(&registry.configs, &config_id),
-            error::invalid_argument(ECONFIG_NOT_CONFIGURED)
-        );
-
-        vector::for_each(
-            feed_ids,
-            |feed_id| {
-                let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
-                feed.config_id = config_id;
-
-                event::emit(
-                    FeedConfigIdUpdated { feed_id, config_id }
                 );
             }
         );
@@ -603,36 +502,10 @@ module data_feeds::registry {
                 );
 
                 let feed = simple_map::borrow(&registry.feeds, &feed_id);
-                let config = simple_map::borrow(&registry.configs, &feed.config_id);
 
                 FeedMetadata {
                     description: feed.description,
                     config_id: feed.config_id,
-                    deviation_threshold: config.deviation_threshold,
-                    staleness_seconds: config.staleness_seconds
-                }
-            }
-        )
-    }
-
-    #[view]
-    public fun get_feed_configs(
-        config_ids: vector<vector<u8>>
-    ): vector<FeedConfig> acquires Registry {
-        let registry = borrow_global<Registry>(get_state_addr());
-
-        vector::map(
-            config_ids,
-            |config_id| {
-                assert!(
-                    simple_map::contains_key(&registry.configs, &config_id),
-                    error::invalid_argument(ECONFIG_NOT_CONFIGURED)
-                );
-
-                let config = simple_map::borrow(&registry.configs, &config_id);
-                FeedConfig {
-                    deviation_threshold: config.deviation_threshold,
-                    staleness_seconds: config.staleness_seconds
                 }
             }
         )
@@ -702,24 +575,6 @@ module data_feeds::registry {
 
     public fun get_feed_metadata_config_id(result: &FeedMetadata): vector<u8> {
         result.config_id
-    }
-
-    public fun get_feed_metadata_deviation_threshold(
-        result: &FeedMetadata
-    ): u256 {
-        result.deviation_threshold
-    }
-
-    public fun get_feed_metadata_staleness_seconds(result: &FeedMetadata): u256 {
-        result.staleness_seconds
-    }
-
-    public fun get_feed_config_deviation_threshold(result: &FeedConfig): u256 {
-        result.deviation_threshold
-    }
-
-    public fun get_feed_config_staleness_seconds(result: &FeedConfig): u256 {
-        result.staleness_seconds
     }
 
     #[test]
@@ -792,22 +647,6 @@ module data_feeds::registry {
     }
 
     #[test(owner = @owner, publisher = @data_feeds, keystone = @keystone)]
-    fun test_set_feed_configs(
-        owner: &signer,
-        publisher: &signer,
-        keystone: &signer
-    ) acquires Registry {
-        set_up_test(publisher, keystone);
-
-        set_feed_configs(
-            owner,
-            vector[],
-            vector[],
-            vector[]
-        );
-    }
-
-    #[test(owner = @owner, publisher = @data_feeds, keystone = @keystone)]
     fun test_perform_update_v3(
         owner: &signer,
         publisher: &signer,
@@ -821,13 +660,6 @@ module data_feeds::registry {
         let expected_benchmark = 0x000d808cc35e6ed670bd00;
 
         let config_id = vector[1];
-
-        set_feed_configs(
-            owner,
-            vector[config_id],
-            vector[1],
-            vector[1]
-        );
 
         set_feeds(
             owner,
