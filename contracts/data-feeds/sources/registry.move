@@ -392,25 +392,35 @@ module data_feeds::registry {
         // schema is based on first two bytes of the feed id
         let schema = to_u16be(vector::slice(&report_feed_id, 0, 2));
 
-        let observation_timestamp: u32;
+        let observation_timestamp: u256;
         let benchmark_price: u256;
         if (schema == SCHEMA_V3 || schema == SCHEMA_V4) {
             // offsets are the same for timestamp and benchmark in v3 and v4.
-            observation_timestamp = to_u32be(vector::slice(&report_data, 3 * 32 - 4, 3 * 32));
+            observation_timestamp = (to_u32be(vector::slice(&report_data, 3 * 32 - 4, 3 * 32)) as u256);
             // NOTE: aptos has no signed integer types, so can't parse as i196, this is a raw representation
             benchmark_price = to_u256be(vector::slice(&report_data, 6 * 32, 7 * 32));
         } else {
             abort error::invalid_argument(EINVALID_REPORT)
         };
 
-        feed.observation_timestamp = (observation_timestamp as u256);
+        if (feed.observation_timestamp >= observation_timestamp) {
+            event::emit(
+                StaleReport{
+                    feed_id,
+                    latest_timestamp: feed.observation_timestamp,
+                    report_timestamp: observation_timestamp,
+                }
+            );
+        };
+
+        feed.observation_timestamp = observation_timestamp;
         feed.benchmark = benchmark_price;
         feed.report = report_data;
 
         event::emit(
             FeedUpdated {
                 feed_id,
-                timestamp: (observation_timestamp as u256),
+                timestamp: observation_timestamp,
                 benchmark: benchmark_price,
                 report: report_data
             }
