@@ -102,6 +102,7 @@ module data_feeds::registry {
     const EUNAUTHORIZED_WORKFLOW_OWNER: u64 = 9;
     const ECANNOT_TRANSFER_TO_SELF: u64 = 10;
     const ENOT_PROPOSED_OWNER: u64 = 11;
+    const EALLOWED_WORKFLOW_OWNERS: u64 = 12;
 
     // Schema types
     const SCHEMA_V3: u16 = 3;
@@ -308,14 +309,13 @@ module data_feeds::registry {
             keystone::storage::get_report_metadata_workflow_owner(&parsed_metadata);
 
         assert!(
+            vector::contains(&registry.allowed_workflow_owners, &workflow_owner),
+            EUNAUTHORIZED_WORKFLOW_OWNER
+        );
+        assert!(
             vector::is_empty(&registry.allowed_workflow_names)
                 || vector::contains(&registry.allowed_workflow_names, &workflow_name),
             EUNAUTHORIZED_WORKFLOW_NAME
-        );
-        assert!(
-            vector::is_empty(&registry.allowed_workflow_owners)
-                || vector::contains(&registry.allowed_workflow_owners, &workflow_owner),
-            EUNAUTHORIZED_WORKFLOW_OWNER
         );
 
         let (feed_ids, reports) = parse_raw_report(data);
@@ -337,6 +337,7 @@ module data_feeds::registry {
     ) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
         assert_is_owner(registry, signer::address_of(authority));
+        assert!(vector::length(&allowed_workflow_owners) != 0, error::invalid_argument(EALLOWED_WORKFLOW_OWNERS));
 
         registry.allowed_workflow_owners = allowed_workflow_owners;
         registry.allowed_workflow_names = allowed_workflow_names;
