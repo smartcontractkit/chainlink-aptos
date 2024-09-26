@@ -212,6 +212,15 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		Timestamp: 1,
 	}
 
+	c.lggr.Debugw("WriteTarget non-empty report",
+		"report", hex.EncodeToString(inputs.Report),
+		"reportLen", len(inputs.Report),
+		"reportContext", hex.EncodeToString(inputs.Context),
+		"reportContextLen", len(inputs.Context),
+		"signaturesLen", len(inputs.Signatures),
+		"executionID", request.Metadata.WorkflowExecutionID,
+	)
+
 	var transmitted bool
 	if err = c.cr.GetLatestValue(ctx, binding.ReadIdentifier(contractMethodName_getTransmissionState), primitives.Unconfirmed, queryInputs, &transmitted); err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to call [forwarder.getTransmissionState]", err.Error())
@@ -221,7 +230,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		return success(), nil
 	}
 
-	c.lggr.Infow("WriteTarget non-empty report - attempting to push to txmgr",
+	c.lggr.Infow("WriteTarget on-chain report check done - attempting to push to txmgr",
 		"request", request,
 		"reportLen", len(inputs.Report),
 		"reportContextLen", len(inputs.Context),
@@ -255,7 +264,6 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	if req.Signatures == nil {
 		req.Signatures = make([][]byte, 0)
 	}
-	c.lggr.Debugw("Transaction raw report", "report", hex.EncodeToString(req.RawReport))
 
 	// Try to submit the transaction
 	meta := commontypes.TxMeta{WorkflowExecutionID: &request.Metadata.WorkflowExecutionID}

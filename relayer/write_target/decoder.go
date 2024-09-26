@@ -7,19 +7,24 @@ import (
 	"fmt"
 )
 
-// version | workflow_execution_id | timestamp | don_id | config_version | ...
+// version | workflow_execution_id | timestamp | don_id | config_version | metadata | data
 type Report struct {
 	Version             uint8
 	WorkflowExecutionID string
 	Timestamp           uint32
 	DONID               uint32
 	ConfigVersion       uint32
-	ReportID            uint16
 	Metadata            []byte
 	Data                []byte
 }
 
-func decodeReport(rawReport []byte) (*Report, error) {
+// ? | report_id
+type ReportMetadata struct {
+	// TODO: Add metadata fields
+	ReportID uint16
+}
+
+func DecodeReport(rawReport []byte) (*Report, error) {
 	if len(rawReport) < 109 {
 		return nil, fmt.Errorf("invalid report length")
 	}
@@ -62,13 +67,6 @@ func decodeReport(rawReport []byte) (*Report, error) {
 	}
 	report.ConfigVersion = binary.BigEndian.Uint32(configVersionBytes[:])
 
-	// Decode report_id
-	var reportIDBytes [2]byte
-	if _, err := buf.Read(reportIDBytes[:]); err != nil {
-		return nil, err
-	}
-	report.ReportID = binary.BigEndian.Uint16(reportIDBytes[:])
-
 	// Decode metadata
 	report.Metadata = make([]byte, 64)
 	if _, err := buf.Read(report.Metadata); err != nil {
@@ -82,4 +80,28 @@ func decodeReport(rawReport []byte) (*Report, error) {
 	}
 
 	return report, nil
+}
+
+func DecodeMetadata(rawReportMetadata []byte) (*ReportMetadata, error) {
+	if len(rawReportMetadata) < 64 {
+		return nil, fmt.Errorf("invalid report metadata length")
+	}
+
+	rMetadata := &ReportMetadata{}
+	buf := bytes.NewReader(rawReportMetadata)
+
+	// Decode unknown bytes
+	var unknownBytes [62]byte
+	if _, err := buf.Read(unknownBytes[:]); err != nil {
+		return nil, err
+	}
+
+	// Decode report_id
+	var reportIDBytes [2]byte
+	if _, err := buf.Read(reportIDBytes[:]); err != nil {
+		return nil, err
+	}
+	rMetadata.ReportID = binary.BigEndian.Uint16(reportIDBytes[:])
+
+	return rMetadata, nil
 }
