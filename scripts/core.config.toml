@@ -48,7 +48,7 @@ Enabled = true
 # CollectorTarget is the logical address of the OTEL Tracing Collector.
 CollectorTarget = 'otelcollector:4317'
 # NodeID is an unique name for this node relative to any other node traces are collected for.
-NodeID = '1337' # Example
+NodeID = '7331' # Example
 # SamplingRatio is the ratio of traces to sample for this node.
 SamplingRatio = 1.0 # Example
 # Mode is a string value. `tls` or `unencrypted` are the only values allowed. If set to `unencrypted`, `TLSCertPath` can be unset, meaning traces will be sent over plaintext to the collector.

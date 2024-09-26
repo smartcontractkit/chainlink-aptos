@@ -102,7 +102,7 @@ type reportInfo struct {
 	signersNum    uint32
 }
 
-type requestContext struct {
+type requestInfo struct {
 	forwarder   string
 	receiver    string
 	transmitter string
@@ -113,8 +113,8 @@ type requestContext struct {
 func (c *writeTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (capabilities.CapabilityResponse, error) {
 	c.lggr.Debugw("Execute", "request", request)
 
-	// Helper to keep track of the context
-	context := requestContext{
+	// Helper to keep track of the info
+	info := requestInfo{
 		forwarder:   c.forwarderAddress,
 		receiver:    "N/A",
 		transmitter: c.transmitterAddress,
@@ -132,58 +132,58 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	var reqConfig Config
 	err := request.Config.UnwrapTo(&reqConfig)
 	if err != nil {
-		msg := builder.buildWriteError(context, 0, "failed to parse config", err.Error())
+		msg := builder.buildWriteError(info, 0, "failed to parse config", err.Error())
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
 	// Try to validate the config
 	err = c.configValidateFn(reqConfig)
 	if err != nil {
-		msg := builder.buildWriteError(context, 0, "failed to validate config", err.Error())
+		msg := builder.buildWriteError(info, 0, "failed to validate config", err.Error())
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
 	// Source the receiver address from the config
-	context.receiver = reqConfig.Address
+	info.receiver = reqConfig.Address
 
 	// Try to source the signed report from the request
 	signedReport, ok := request.Inputs.Underlying[keySignedReport]
 	if !ok {
 		cause := fmt.Sprintf("input missing required field: '%s'", keySignedReport)
-		msg := builder.buildWriteError(context, 0, "failed to source the signed report", cause)
+		msg := builder.buildWriteError(info, 0, "failed to source the signed report", cause)
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
 	// Try to decode the signed report
 	inputs := types.SignedReport{}
 	if err = signedReport.UnwrapTo(&inputs); err != nil {
-		msg := builder.buildWriteError(context, 0, "failed to parse signed report", err.Error())
+		msg := builder.buildWriteError(info, 0, "failed to parse signed report", err.Error())
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
 	// Source the report ID from the input
-	context.reportInfo.reportID, _ = binary.Uvarint(inputs.ID)
+	info.reportInfo.reportID, _ = binary.Uvarint(inputs.ID)
 
 	// Try to decode the workflow execution ID
 	rawExecutionID, err := hex.DecodeString(request.Metadata.WorkflowExecutionID)
 	if err != nil {
-		msg := builder.buildWriteError(context, 0, "failed to decode the workflow execution ID", err.Error())
+		msg := builder.buildWriteError(info, 0, "failed to decode the workflow execution ID", err.Error())
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
-	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteInitiated(context))
+	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteInitiated(info))
 
 	// Check whether the report is valid (e.g., not empty)
 	if len(inputs.Report) == 0 {
 		// We received any empty report -- this means we should skip transmission.
-		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSkipped(context, "empty report"))
+		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSkipped(info, "empty report"))
 		return success(), nil
 	}
 	// TODO: validate encoded report is prefixed with workflowID and executionID that match the request meta
 
-	// Update the context with the report info
-	context.reportInfo = &reportInfo{
-		reportID:      context.reportInfo.reportID,
+	// Update the info with the report info
+	info.reportInfo = &reportInfo{
+		reportID:      info.reportInfo.reportID,
 		reportContext: inputs.Context,
 		report:        inputs.Report,
 		signersNum:    uint32(len(inputs.Signatures)),
@@ -195,13 +195,13 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		WorkflowExecutionID []byte
 		ReportID            uint16
 	}{
-		Receiver:            context.receiver,
+		Receiver:            info.receiver,
 		WorkflowExecutionID: rawExecutionID,
-		ReportID:            uint16(context.reportInfo.reportID),
+		ReportID:            uint16(info.reportInfo.reportID),
 	}
 
 	binding := commontypes.BoundContract{
-		Address: context.forwarder,
+		Address: info.forwarder,
 		Name:    contractName,
 	}
 
@@ -209,15 +209,15 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	head := commontypes.Head{
 		Hash:      nil,
 		Height:    "0",
-		Timestamp: 0,
+		Timestamp: 1,
 	}
 
 	var transmitted bool
 	if err = c.cr.GetLatestValue(ctx, binding.ReadIdentifier(contractMethodName_getTransmissionState), primitives.Unconfirmed, queryInputs, &transmitted); err != nil {
-		msg := builder.buildWriteError(context, 0, "failed to call [forwarder.getTransmissionState]", err.Error())
+		msg := builder.buildWriteError(info, 0, "failed to call [forwarder.getTransmissionState]", err.Error())
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	} else if transmitted == true {
-		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(context, head))
+		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(info, head))
 		return success(), nil
 	}
 
@@ -243,7 +243,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		RawReport  []byte
 		Signatures [][]byte
 	}{
-		Receiver:   context.receiver,
+		Receiver:   info.receiver,
 		RawReport:  append(inputs.Context, inputs.Report...),
 		Signatures: inputs.Signatures,
 	}
@@ -260,14 +260,14 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	// Try to submit the transaction
 	meta := commontypes.TxMeta{WorkflowExecutionID: &request.Metadata.WorkflowExecutionID}
 	value := big.NewInt(0)
-	err = c.cw.SubmitTransaction(ctx, contractName, contractMethodName_report, req, txID.String(), context.forwarder, &meta, value)
+	err = c.cw.SubmitTransaction(ctx, contractName, contractMethodName_report, req, txID.String(), info.forwarder, &meta, value)
 	if err != nil {
-		msg := builder.buildWriteError(context, 0, "failed to invoke [forwarder.report]", err.Error())
+		msg := builder.buildWriteError(info, 0, "failed to invoke [forwarder.report]", err.Error())
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
 	c.lggr.Debugw("Transaction submitted", "request", request, "transaction-id", txID)
-	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSent(context, head, txID.String()))
+	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSent(info, head, txID.String()))
 
 	// TODO: [Beholder] Emit 'write-target.WriteAccepted' by pooling for TXM status
 

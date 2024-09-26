@@ -10,44 +10,44 @@ import (
 
 type messageBuilder struct{}
 
-func (m *messageBuilder) buildWriteError(ctx requestContext, code uint32, summary, cause string) *wt.WriteError {
+func (m *messageBuilder) buildWriteError(i requestInfo, code uint32, summary, cause string) *wt.WriteError {
 	return &wt.WriteError{
 		Code:    code,
 		Summary: summary,
 		Cause:   cause,
 
-		Node:      ctx.transmitter,
-		Forwarder: ctx.forwarder,
-		Receiver:  ctx.receiver,
-		ReportId:  uint32(ctx.reportInfo.reportID),
+		Node:      i.transmitter,
+		Forwarder: i.forwarder,
+		Receiver:  i.receiver,
+		ReportId:  uint32(i.reportInfo.reportID),
 	}
 }
 
-func (m *messageBuilder) buildWriteInitiated(ctx requestContext) *wt.WriteInitiated {
+func (m *messageBuilder) buildWriteInitiated(i requestInfo) *wt.WriteInitiated {
 	return &wt.WriteInitiated{
-		Node:      ctx.transmitter,
-		Forwarder: ctx.forwarder,
-		Receiver:  ctx.receiver,
-		ReportId:  uint32(ctx.reportInfo.reportID),
+		Node:      i.transmitter,
+		Forwarder: i.forwarder,
+		Receiver:  i.receiver,
+		ReportId:  uint32(i.reportInfo.reportID),
 	}
 }
 
-func (m *messageBuilder) buildWriteSkipped(ctx requestContext, reason string) *wt.WriteSkipped {
+func (m *messageBuilder) buildWriteSkipped(i requestInfo, reason string) *wt.WriteSkipped {
 	return &wt.WriteSkipped{
-		Node:      ctx.transmitter,
-		Forwarder: ctx.forwarder,
-		Receiver:  ctx.receiver,
-		ReportId:  uint32(ctx.reportInfo.reportID),
+		Node:      i.transmitter,
+		Forwarder: i.forwarder,
+		Receiver:  i.receiver,
+		ReportId:  uint32(i.reportInfo.reportID),
 		Reason:    reason,
 	}
 }
 
-func (m *messageBuilder) buildWriteSent(ctx requestContext, head types.Head, txID string) *wt.WriteSent {
+func (m *messageBuilder) buildWriteSent(i requestInfo, head types.Head, txID string) *wt.WriteSent {
 	return &wt.WriteSent{
-		Node:      ctx.transmitter,
-		Forwarder: ctx.forwarder,
-		Receiver:  ctx.receiver,
-		ReportId:  uint32(ctx.reportInfo.reportID),
+		Node:      i.transmitter,
+		Forwarder: i.forwarder,
+		Receiver:  i.receiver,
+		ReportId:  uint32(i.reportInfo.reportID),
 
 		TxId: txID,
 
@@ -57,16 +57,16 @@ func (m *messageBuilder) buildWriteSent(ctx requestContext, head types.Head, txI
 	}
 }
 
-func (m *messageBuilder) buildWriteConfirmed(ctx requestContext, head types.Head) *wt.WriteConfirmed {
+func (m *messageBuilder) buildWriteConfirmed(i requestInfo, head types.Head) *wt.WriteConfirmed {
 	return &wt.WriteConfirmed{
-		Node:      ctx.transmitter,
-		Forwarder: ctx.forwarder,
-		Receiver:  ctx.receiver,
+		Node:      i.transmitter,
+		Forwarder: i.forwarder,
+		Receiver:  i.receiver,
 
-		ReportId:      uint32(ctx.reportInfo.reportID),
-		ReportContext: ctx.reportInfo.reportContext,
-		Report:        ctx.reportInfo.report,
-		SignersNum:    ctx.reportInfo.signersNum,
+		ReportId:      uint32(i.reportInfo.reportID),
+		ReportContext: i.reportInfo.reportContext,
+		Report:        i.reportInfo.report,
+		SignersNum:    i.reportInfo.signersNum,
 
 		BlockHash:      hex.EncodeToString(head.Hash),
 		BlockHeight:    head.Height,
