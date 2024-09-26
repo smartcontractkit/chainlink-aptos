@@ -5,24 +5,23 @@ option go_package = ".;write_target";
 
 // WT sent a transaction and it was accepted on-chain
 //
-// Notice: contains chain specific metadata type as raw bytes
+// Notice: we publish txId (TXM ref) and txHash (in the future should be available here)
 message WriteAccepted {
-  string forwarder = 1;
-  string receiver = 2;
-  string transmitter = 3;
+  string node = 1;
+  string forwarder = 2;
+  string receiver = 3;
+
+  // Report Info
   uint32 report_id = 4;
 
-  bool success = 5;
-
+  // Transaction ID - tx reference as created by the WT, to be used for tracking TXM execution
+  string tx_id = 5;
   string tx_hash = 6;
-  string block_hash = 7;
-  uint64 block_num = 8;
-  // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
-  uint64 block_timestamp = 9;
+  string status = 7;
 
-  // Metadata is a serialized protobuf message
-  // For example, Aptos specific type hosting transaction data
-  //   (e.g., _metadata_type = "aptos-tx-metadata")
-  bytes _metadata = 10;
-  string _metadata_type = 11;
+  // When was the transaction accepted on-chain
+  string block_hash = 8;
+  string block_height = 9;
+  // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
+  uint64 block_timestamp = 10;
 }

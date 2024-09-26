@@ -95,11 +95,19 @@ func success() capabilities.CapabilityResponse {
 	return capabilities.CapabilityResponse{}
 }
 
+type reportInfo struct {
+	reportID      uint64
+	reportContext []byte
+	report        []byte
+	signersNum    uint32
+}
+
 type requestContext struct {
 	forwarder   string
 	receiver    string
 	transmitter string
-	reportID    uint64
+
+	reportInfo *reportInfo
 }
 
 func (c *writeTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (capabilities.CapabilityResponse, error) {
@@ -110,7 +118,12 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		forwarder:   c.forwarderAddress,
 		receiver:    "N/A",
 		transmitter: c.transmitterAddress,
-		reportID:    0, // N/A
+		reportInfo: &reportInfo{
+			reportID:      0, // N/A
+			reportContext: nil,
+			report:        nil,
+			signersNum:    0, // N/A
+		},
 	}
 	// Helper to build monitoring (Beholder) messages
 	builder := &messageBuilder{}
@@ -149,7 +162,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}
 
 	// Source the report ID from the input
-	context.reportID, _ = binary.Uvarint(inputs.ID)
+	context.reportInfo.reportID, _ = binary.Uvarint(inputs.ID)
 
 	// Try to decode the workflow execution ID
 	rawExecutionID, err := hex.DecodeString(request.Metadata.WorkflowExecutionID)
@@ -168,6 +181,14 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}
 	// TODO: validate encoded report is prefixed with workflowID and executionID that match the request meta
 
+	// Update the context with the report info
+	context.reportInfo = &reportInfo{
+		reportID:      context.reportInfo.reportID,
+		reportContext: inputs.Context,
+		report:        inputs.Report,
+		signersNum:    uint32(len(inputs.Signatures)),
+	}
+
 	// Try to check whether the report was already transmitted on chain
 	queryInputs := struct {
 		Receiver            string
@@ -176,7 +197,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}{
 		Receiver:            context.receiver,
 		WorkflowExecutionID: rawExecutionID,
-		ReportID:            uint16(context.reportID),
+		ReportID:            uint16(context.reportInfo.reportID),
 	}
 
 	binding := commontypes.BoundContract{
@@ -184,12 +205,19 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		Name:    contractName,
 	}
 
+	// TODO: fetch the latest head from the chain (timestamp)
+	head := commontypes.Head{
+		Hash:      nil,
+		Height:    "0",
+		Timestamp: 0,
+	}
+
 	var transmitted bool
 	if err = c.cr.GetLatestValue(ctx, binding.ReadIdentifier(contractMethodName_getTransmissionState), primitives.Unconfirmed, queryInputs, &transmitted); err != nil {
 		msg := builder.buildWriteError(context, 0, "failed to call [forwarder.getTransmissionState]", err.Error())
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	} else if transmitted == true {
-		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSkipped(context, "report already on-chain"))
+		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(context, head))
 		return success(), nil
 	}
 
@@ -239,12 +267,12 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}
 
 	c.lggr.Debugw("Transaction submitted", "request", request, "transaction-id", txID)
-	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSent(context, txID.String()))
+	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSent(context, head, txID.String()))
 
-	// TODO: implement a background WriteConfirmer to periodically source new blocks and transactions,
-	//  filter relevant (to this forwarder) transactions, and emit write-accepted/confirmed events.
-	// TODO: [Beholder] Emit 'write-target.WriteAccepted'
-	// TODO: [Beholder] Emit 'write-target.WriteConfirmed'
+	// TODO: [Beholder] Emit 'write-target.WriteAccepted' by pooling for TXM status
+
+	// TODO: implement a background WriteTxConfirmer to periodically source new events/transactions,
+	// relevant to this forwarder), and emit write-tx-accepted/confirmed events.
 	return success(), nil
 }
 

@@ -7,11 +7,19 @@ option go_package = ".;write_target";
 //
 // Notice: we publish txId (TXM ref) vs. txHash (N/A here)
 message WriteSent {
-  string forwarder = 1;
-  string receiver = 2;
-  string transmitter = 3;
+  string node = 1;
+  string forwarder = 2;
+  string receiver = 3;
+
+  // Report Info
   uint32 report_id = 4;
 
   // Transaction ID - tx reference as created by the WT, to be used for tracking TXM execution
   string tx_id = 5;
+
+  // When was the transaction submitted
+  string block_hash = 7;
+  string block_height = 8;
+  // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
+  uint64 block_timestamp = 9;
 }

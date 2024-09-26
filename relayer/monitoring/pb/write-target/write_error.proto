@@ -4,21 +4,15 @@ package write_target;
 option go_package = ".;write_target";
 
 // WT errored while processing write request
-//
-// Notice: contains chain specific metadata type as raw bytes
 message WriteError {
   uint32 code = 1;
   string summary = 2;
   string cause = 3;
 
-  string forwarder = 4;
-  string receiver = 5;
-  string transmitter = 6;
-  uint32 report_id = 7;
+  string node = 4;
+  string forwarder = 5;
+  string receiver = 6;
 
-  // Metadata is a serialized protobuf message
-  // For example, Aptos specific type hosting API error data
-  //   (e.g., _metadata_type = "aptos-api-error-metadata")
-  bytes _metadata = 8;
-  string _metadata_type = 9;
+  // Report Info
+  uint32 report_id = 7;
 }

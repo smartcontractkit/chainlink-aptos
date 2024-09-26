@@ -5,8 +5,10 @@ option go_package = ".;write_target";
 
 // WT initiated the processing of the write request
 message WriteInitiated {
-  string forwarder = 1;
-  string receiver = 2;
-  string transmitter = 3;
+  string node = 1;
+  string forwarder = 2;
+  string receiver = 3;
+
+  // Report Info
   uint32 report_id = 4;
 }
