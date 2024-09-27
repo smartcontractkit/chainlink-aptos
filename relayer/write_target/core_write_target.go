@@ -98,7 +98,7 @@ func success() capabilities.CapabilityResponse {
 }
 
 type reportInfo struct {
-	reportID      uint64
+	reportID      uint16
 	reportContext []byte
 	report        []byte
 	signersNum    uint32
@@ -117,12 +117,12 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 
 	// TODO: [remove] debugging contract write/check race condition (WE triggers nodes at the same time)
 	rand.Seed(time.Now().UnixNano())
-	r := rand.Intn(500)
+	r := rand.Intn(4000)
 	time.Sleep(time.Duration(r) * time.Millisecond)
 	c.lggr.Debugw("Execute - random wake", "request", request)
 
 	// Helper to keep track of the info
-	info := requestInfo{
+	info := &requestInfo{
 		forwarder:   c.forwarderAddress,
 		receiver:    "N/A",
 		transmitter: c.transmitterAddress,
@@ -170,7 +170,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}
 
 	// Source the report ID from the input
-	info.reportInfo.reportID, _ = binary.Uvarint(inputs.ID)
+	info.reportInfo.reportID = binary.BigEndian.Uint16(inputs.ID)
 
 	// Try to decode the workflow execution ID
 	rawExecutionID, err := hex.DecodeString(request.Metadata.WorkflowExecutionID)
@@ -187,7 +187,6 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSkipped(info, "empty report"))
 		return success(), nil
 	}
-	// TODO: validate encoded report is prefixed with workflowID and executionID that match the request meta
 
 	// Update the info with the report info
 	info.reportInfo = &reportInfo{
@@ -195,6 +194,22 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		reportContext: inputs.Context,
 		report:        inputs.Report,
 		signersNum:    uint32(len(inputs.Signatures)),
+	}
+
+	// Try to decode the report
+	reportDecoded, err := Decode(inputs.Report)
+	if err != nil {
+		msg := builder.buildWriteError(info, 0, "failed to decode the report", err.Error())
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
+	}
+
+	// Validate encoded report is prefixed with workflowID and executionID that match the request meta
+	if reportDecoded.ExecutionID != request.Metadata.WorkflowExecutionID {
+		msg := builder.buildWriteError(info, 0, "decoded report execution ID does not match the request", "")
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
+	} else if reportDecoded.WorkflowID != request.Metadata.WorkflowID {
+		msg := builder.buildWriteError(info, 0, "decoded report workflow ID does not match the request", "")
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
 	// Try to check whether the report was already transmitted on chain
@@ -210,7 +225,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}{
 		Receiver:            info.receiver,
 		WorkflowExecutionID: rawExecutionID,
-		ReportID:            uint16(info.reportInfo.reportID),
+		ReportID:            info.reportInfo.reportID,
 	}
 
 	// TODO: fetch the latest head from the chain (timestamp)
@@ -218,13 +233,6 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		Hash:      nil,
 		Height:    "0",
 		Timestamp: 0,
-	}
-
-	// Try to decode the report
-	reportDecoded, err := Decode(inputs.Report)
-	if err != nil {
-		msg := builder.buildWriteError(info, 0, "failed to decode the report", err.Error())
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
 	c.lggr.Debugw("WriteTarget non-empty report",

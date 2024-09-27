@@ -10,7 +10,7 @@ import (
 
 type messageBuilder struct{}
 
-func (m *messageBuilder) buildWriteError(i requestInfo, code uint32, summary, cause string) *wt.WriteError {
+func (m *messageBuilder) buildWriteError(i *requestInfo, code uint32, summary, cause string) *wt.WriteError {
 	return &wt.WriteError{
 		Code:    code,
 		Summary: summary,
@@ -23,7 +23,7 @@ func (m *messageBuilder) buildWriteError(i requestInfo, code uint32, summary, ca
 	}
 }
 
-func (m *messageBuilder) buildWriteInitiated(i requestInfo) *wt.WriteInitiated {
+func (m *messageBuilder) buildWriteInitiated(i *requestInfo) *wt.WriteInitiated {
 	return &wt.WriteInitiated{
 		Node:      i.transmitter,
 		Forwarder: i.forwarder,
@@ -32,7 +32,7 @@ func (m *messageBuilder) buildWriteInitiated(i requestInfo) *wt.WriteInitiated {
 	}
 }
 
-func (m *messageBuilder) buildWriteSkipped(i requestInfo, reason string) *wt.WriteSkipped {
+func (m *messageBuilder) buildWriteSkipped(i *requestInfo, reason string) *wt.WriteSkipped {
 	return &wt.WriteSkipped{
 		Node:      i.transmitter,
 		Forwarder: i.forwarder,
@@ -42,7 +42,7 @@ func (m *messageBuilder) buildWriteSkipped(i requestInfo, reason string) *wt.Wri
 	}
 }
 
-func (m *messageBuilder) buildWriteSent(i requestInfo, head types.Head, txID string) *wt.WriteSent {
+func (m *messageBuilder) buildWriteSent(i *requestInfo, head types.Head, txID string) *wt.WriteSent {
 	return &wt.WriteSent{
 		Node:      i.transmitter,
 		Forwarder: i.forwarder,
@@ -57,7 +57,7 @@ func (m *messageBuilder) buildWriteSent(i requestInfo, head types.Head, txID str
 	}
 }
 
-func (m *messageBuilder) buildWriteConfirmed(i requestInfo, head types.Head) *wt.WriteConfirmed {
+func (m *messageBuilder) buildWriteConfirmed(i *requestInfo, head types.Head) *wt.WriteConfirmed {
 	return &wt.WriteConfirmed{
 		Node:      i.transmitter,
 		Forwarder: i.forwarder,
