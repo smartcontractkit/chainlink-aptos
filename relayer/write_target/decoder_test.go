@@ -16,7 +16,7 @@ func TestDecodeReport(t *testing.T) {
 	rawReport, err := base64.StdEncoding.DecodeString(encoded)
 	require.NoError(t, err)
 
-	r, err := DecodeReport(rawReport)
+	r, err := Decode(rawReport)
 	require.NoError(t, err)
 	require.Equal(t, uint32(1), r.Version)
 	require.Equal(t, "816d80fa4bb8b350cacc3a2e395236bcc6b813b0568b61eea0bd3e6ba7218dd3", r.ExecutionID)

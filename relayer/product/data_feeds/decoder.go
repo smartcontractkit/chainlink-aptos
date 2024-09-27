@@ -14,7 +14,7 @@ type FeedReport struct {
 	Data   []byte
 }
 
-func DecodeReport(data []byte) Report {
+func Decode(data []byte) Report {
 	offset := 0
 
 	// Skip the first 32 bytes (assertion)
@@ -58,7 +58,7 @@ func DecodeReport(data []byte) Report {
 
 	for i := int64(0); i < count; i++ {
 		reportData.Reports[i] = FeedReport{
-			FeedID: "0x" + hex.EncodeToString(feedIDs[i]),
+			FeedID: hex.EncodeToString(feedIDs[i]),
 			Data:   reports[i],
 		}
 	}

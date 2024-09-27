@@ -16,8 +16,8 @@ type Report struct {
 	Data []byte
 }
 
-// DecodeReport decodes a report from raw bytes
-func DecodeReport(rawReport []byte) (*Report, error) {
+// Decode decodes a report from raw bytes
+func Decode(rawReport []byte) (*Report, error) {
 	if len(rawReport) < 109 {
 		return nil, fmt.Errorf("invalid report length")
 	}

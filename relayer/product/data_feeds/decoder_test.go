@@ -3,11 +3,12 @@ package data_feeds
 import (
 	"encoding/base64"
 	"fmt"
+	"math/big"
 	"testing"
-
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/product/mercury"
 	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/write_target"
 )
 
@@ -19,30 +20,50 @@ func TestDecodeReport(t *testing.T) {
 	decoded, err := base64.StdEncoding.DecodeString(encoded)
 	require.NoError(t, err)
 
-	// Print the decoded data as bytes
-	t.Log("Decoded as bytes:", decoded)
-
-	report, _ := wt.DecodeReport(decoded)
+	// Decode the report
+	report, err := wt.Decode(decoded)
+	require.NoError(t, err)
 	t.Log(fmt.Sprintf("Decoded as report: %+v", report))
 
-	expected := Report{
-		Reports: []FeedReport{
-			{
-				FeedID: "0x0003111111111111111100000000000000000000000000000000000000000000",
-				Data:   []byte{},
-			},
-			{
-				FeedID: "0x0003222222222222222200000000000000000000000000000000000000000000",
-				Data:   []byte{},
-			},
+	expectedFeedID := []string{
+		"0003111111111111111100000000000000000000000000000000000000000000",
+		"0003222222222222222200000000000000000000000000000000000000000000",
+	}
+
+	expectedData := []mercury.Report{
+		mercury.Report{
+			FeedId:                [32]uint8{0x0, 0x3, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0},
+			ObservationsTimestamp: 0x66f5bf69,
+			BenchmarkPrice:        big.NewInt(300069),
+			Bid:                   big.NewInt(300069),
+			Ask:                   big.NewInt(300069),
+			ValidFromTimestamp:    0x66f5bf69,
+			ExpiresAt:             0x670501a9,
+			LinkFee:               big.NewInt(300069),
+			NativeFee:             big.NewInt(300069),
+		},
+		mercury.Report{
+			FeedId:                [32]uint8{0x0, 0x3, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0},
+			ObservationsTimestamp: 0x66f5bf69,
+			BenchmarkPrice:        big.NewInt(300069),
+			Bid:                   big.NewInt(300069),
+			Ask:                   big.NewInt(300069),
+			ValidFromTimestamp:    0x66f5bf69,
+			ExpiresAt:             0x670501a9,
+			LinkFee:               big.NewInt(300069),
+			NativeFee:             big.NewInt(300069),
 		},
 	}
 
-	rDataFeeds := DecodeReport(report.Data)
-	require.Equal(t, len(expected.Reports), len(rDataFeeds.Reports))
+	rDataFeeds := Decode(report.Data)
+	require.Equal(t, len(expectedFeedID), len(rDataFeeds.Reports))
 
 	for i, report := range rDataFeeds.Reports {
-		require.Equal(t, expected.Reports[i].FeedID, report.FeedID)
+		require.Equal(t, expectedFeedID[i], report.FeedID)
 		require.True(t, len(report.Data) > 0)
+
+		m, err := mercury.Decode(report.Data)
+		require.NoError(t, err)
+		require.Equal(t, expectedData[i], *m)
 	}
 }
