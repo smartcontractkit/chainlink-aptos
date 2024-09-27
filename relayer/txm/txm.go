@@ -527,7 +527,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 
 			if err == nil && chainTx.Type != aptosapi.TransactionVariantPending {
 				// tx has been commited
-				a.logger.Debugw("tx confirmed", "txID", unconfirmedTx.Tx.ID, "hash", hash, "type", chainTx.Type)
+				a.logger.Debugw("tx confirmed", "txID", unconfirmedTx.Tx.ID, "hash", hash, "chainTx", chainTx, "chainTx.type", chainTx.Type)
 				unconfirmedTx.Tx.Status = commontypes.Finalized
 
 				if err := txStore.Confirm(unconfirmedTx.Nonce, hash, false); err != nil {

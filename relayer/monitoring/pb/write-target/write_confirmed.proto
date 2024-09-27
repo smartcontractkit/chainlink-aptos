@@ -15,14 +15,17 @@ message WriteConfirmed {
   bytes report = 6;
   uint32 signers_num = 7;
 
+  // Is the report finalized on-chain?
+  bool finalized = 8;
+
   // When was the report confirmed on-chain
-  string block_hash = 8;
-  string block_height = 9;
+  string block_hash = 9;
+  string block_height = 10;
   // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
-  uint64 block_timestamp = 10;
+  uint64 block_timestamp = 11;
 
   // Transmission Info
-  string transmitter = 11;
-  bool success = 12;
+  string transmitter = 12;
+  bool success = 13;
   // TODO: what about EVM's TransmissionInfo parity?
 }

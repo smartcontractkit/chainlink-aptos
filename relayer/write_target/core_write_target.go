@@ -115,12 +115,6 @@ type requestInfo struct {
 func (c *writeTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (capabilities.CapabilityResponse, error) {
 	c.lggr.Debugw("Execute", "request", request)
 
-	// TODO: [remove] debugging contract write/check race condition (WE triggers nodes at the same time)
-	rand.Seed(time.Now().UnixNano())
-	r := rand.Intn(4000)
-	time.Sleep(time.Duration(r) * time.Millisecond)
-	c.lggr.Debugw("Execute - random wake", "request", request)
-
 	// Helper to keep track of the info
 	info := &requestInfo{
 		forwarder:   c.forwarderAddress,
@@ -248,12 +242,24 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 
 	c.lggr.Debugw("WriteTarget - calling [forwarder.getTransmissionState]", "binding", binding, "queryInputs", queryInputs)
 
-	var transmitted bool
-	if err = c.cr.GetLatestValue(ctx, readID, primitives.Unconfirmed, queryInputs, &transmitted); err != nil {
+	// Notice: if not confirmed the report is published yet, we're expected to submit the report on-chain (might be
+	// competing with other nodes). We want to confirm this report was accepted and finalized eventually, or timeout
+	// and emit an error - we store the confirm query
+
+	// Helper to query the chain for the transmission state
+	query := func(ctx context.Context) (bool, error) {
+		var transmitted bool
+		err := c.cr.GetLatestValue(ctx, readID, primitives.Unconfirmed, queryInputs, &transmitted)
+		return transmitted, err
+	}
+
+	transmitted, err := query(ctx)
+	if err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to call [forwarder.getTransmissionState]", err.Error())
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	} else if transmitted == true {
-		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(info, head))
+		finalized := false
+		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(info, head, finalized))
 		return success(), nil
 	}
 
@@ -304,10 +310,12 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	c.lggr.Debugw("Transaction submitted", "request", request, "transaction-id", txID)
 	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSent(info, head, txID.String()))
 
-	// TODO: [Beholder] Emit 'write-target.WriteAccepted' by pooling for TXM status
+	// TODO: [Beholder] Emit 'write-target.WriteAccepted' by pooling for TXM status finalized/failed
 
 	// TODO: implement a background WriteTxConfirmer to periodically source new events/transactions,
 	// relevant to this forwarder), and emit write-tx-accepted/confirmed events.
+
+	go c.confirmWrite(ctx, *info, txID, query)
 	return success(), nil
 }
 
@@ -319,4 +327,43 @@ func (c *writeTarget) RegisterToWorkflow(ctx context.Context, request capabiliti
 func (c *writeTarget) UnregisterFromWorkflow(ctx context.Context, request capabilities.UnregisterFromWorkflowRequest) error {
 	// TODO: notify the background WriteTxConfirmer (workflow unregistered)
 	return nil
+}
+
+// TODO: replace with a proper implementation
+// A dummy confirmer that sleeps some time before confirming the write
+// confirmWrite waits for the report to be transmitted on-chain and emits the appropriate Beholder messages
+func (c *writeTarget) confirmWrite(ctx context.Context, info requestInfo, txID uuid.UUID, query func(context.Context) (bool, error)) {
+	// Sleep for N sec + a random amount of time
+	rand.Seed(time.Now().UnixNano())
+	n := 4
+	r := rand.Intn(200)
+	time.Sleep(time.Duration(n)*time.Second + time.Duration(r)*time.Millisecond)
+
+	// Helper to build monitoring (Beholder) messages
+	builder := &messageBuilder{}
+
+	// TODO: fetch the latest head from the chain (timestamp)
+	head := commontypes.Head{
+		Hash:      nil,
+		Height:    "1",
+		Timestamp: 1,
+	}
+
+	// Check the transmission state
+	ctx = context.Background()
+	transmitted, err := query(ctx)
+	if err != nil || transmitted != true {
+		var msg string
+		if err != nil {
+			msg = "failed to call [forwarder.getTransmissionState]:" + err.Error()
+		} else {
+			msg = "unable to observe the report was transmitted"
+		}
+		// We (eventually) failed to confirm the report was transmitted
+		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteError(&info, 0, "failed to confirm the report was transmitted", msg))
+	} else {
+		// We (eventually) confirmed the report was transmitted
+		finalized := false
+		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(&info, head, finalized))
+	}
 }

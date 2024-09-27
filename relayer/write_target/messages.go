@@ -57,11 +57,13 @@ func (m *messageBuilder) buildWriteSent(i *requestInfo, head types.Head, txID st
 	}
 }
 
-func (m *messageBuilder) buildWriteConfirmed(i *requestInfo, head types.Head) *wt.WriteConfirmed {
+func (m *messageBuilder) buildWriteConfirmed(i *requestInfo, head types.Head, finalized bool) *wt.WriteConfirmed {
 	return &wt.WriteConfirmed{
 		Node:      i.transmitter,
 		Forwarder: i.forwarder,
 		Receiver:  i.receiver,
+
+		Finalized: finalized,
 
 		ReportId:      uint32(i.reportInfo.reportID),
 		ReportContext: i.reportInfo.reportContext,
