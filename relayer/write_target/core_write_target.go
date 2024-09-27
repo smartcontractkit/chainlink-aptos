@@ -8,6 +8,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"math/rand"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -113,6 +115,12 @@ type requestInfo struct {
 func (c *writeTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (capabilities.CapabilityResponse, error) {
 	c.lggr.Debugw("Execute", "request", request)
 
+	// TODO: [remove] debugging contract write/check race condition (WE triggers nodes at the same time)
+	rand.Seed(time.Now().UnixNano())
+	r := rand.Intn(500)
+	time.Sleep(time.Duration(r) * time.Millisecond)
+	c.lggr.Debugw("Execute - random wake", "request", request)
+
 	// Helper to keep track of the info
 	info := requestInfo{
 		forwarder:   c.forwarderAddress,
@@ -190,6 +198,11 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}
 
 	// Try to check whether the report was already transmitted on chain
+	binding := commontypes.BoundContract{
+		Address: info.forwarder,
+		Name:    contractName,
+	}
+	readID := binding.ReadIdentifier(contractMethodName_getTransmissionState)
 	queryInputs := struct {
 		Receiver            string
 		WorkflowExecutionID []byte
@@ -200,11 +213,6 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		ReportID:            uint16(info.reportInfo.reportID),
 	}
 
-	binding := commontypes.BoundContract{
-		Address: info.forwarder,
-		Name:    contractName,
-	}
-
 	// TODO: fetch the latest head from the chain (timestamp)
 	head := commontypes.Head{
 		Hash:      nil,
@@ -212,18 +220,28 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		Timestamp: 0,
 	}
 
+	// Try to decode the report
+	reportDecoded, err := DecodeReport(inputs.Report)
+	if err != nil {
+		msg := builder.buildWriteError(info, 0, "failed to decode the report", err.Error())
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
+	}
+
 	c.lggr.Debugw("WriteTarget non-empty report",
 		"reportID", info.reportInfo.reportID,
-		"report", "0x" + hex.EncodeToString(inputs.Report),
+		"report", "0x"+hex.EncodeToString(inputs.Report),
 		"reportLen", len(inputs.Report),
-		"reportContext", "0x" + hex.EncodeToString(inputs.Context),
+		"reportDecoded", reportDecoded,
+		"reportContext", "0x"+hex.EncodeToString(inputs.Context),
 		"reportContextLen", len(inputs.Context),
 		"signaturesLen", len(inputs.Signatures),
 		"executionID", request.Metadata.WorkflowExecutionID,
 	)
 
+	c.lggr.Debugw("WriteTarget - calling [forwarder.getTransmissionState]", "binding", binding, "queryInputs", queryInputs)
+
 	var transmitted bool
-	if err = c.cr.GetLatestValue(ctx, binding.ReadIdentifier(contractMethodName_getTransmissionState), primitives.Unconfirmed, queryInputs, &transmitted); err != nil {
+	if err = c.cr.GetLatestValue(ctx, readID, primitives.Unconfirmed, queryInputs, &transmitted); err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to call [forwarder.getTransmissionState]", err.Error())
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	} else if transmitted == true {
@@ -286,11 +304,11 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 }
 
 func (c *writeTarget) RegisterToWorkflow(ctx context.Context, request capabilities.RegisterToWorkflowRequest) error {
-	// TODO: notify the background WriteConfirmer (workflow registered)
+	// TODO: notify the background WriteTxConfirmer (workflow registered)
 	return nil
 }
 
 func (c *writeTarget) UnregisterFromWorkflow(ctx context.Context, request capabilities.UnregisterFromWorkflowRequest) error {
-	// TODO: notify the background WriteConfirmer (workflow unregistered)
+	// TODO: notify the background WriteTxConfirmer (workflow unregistered)
 	return nil
 }

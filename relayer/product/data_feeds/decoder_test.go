@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+
 	"github.com/stretchr/testify/require"
 
 	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/write_target"

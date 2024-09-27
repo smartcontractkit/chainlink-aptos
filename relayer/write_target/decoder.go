@@ -5,25 +5,18 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+
+	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/consensus/ocr3/types"
 )
 
-// version | workflow_execution_id | timestamp | don_id | config_version | metadata | data
+// Report represents an OCR3 report with metadata and data
+// version | workflow_execution_id | timestamp | don_id | config_version | ... | data
 type Report struct {
-	Version             uint8
-	WorkflowExecutionID string
-	Timestamp           uint32
-	DONID               uint32
-	ConfigVersion       uint32
-	Metadata            []byte
-	Data                []byte
+	types.Metadata
+	Data []byte
 }
 
-// ? | report_id
-type ReportMetadata struct {
-	// TODO: Add metadata fields
-	ReportID uint16
-}
-
+// DecodeReport decodes a report from raw bytes
 func DecodeReport(rawReport []byte) (*Report, error) {
 	if len(rawReport) < 109 {
 		return nil, fmt.Errorf("invalid report length")
@@ -37,14 +30,14 @@ func DecodeReport(rawReport []byte) (*Report, error) {
 	if err := binary.Read(buf, binary.BigEndian, &versionByte); err != nil {
 		return nil, err
 	}
-	report.Version = uint8(versionByte)
+	report.Version = uint32(versionByte)
 
 	// Decode workflow_execution_id
 	var workflowExecutionIDBytes [32]byte
 	if _, err := buf.Read(workflowExecutionIDBytes[:]); err != nil {
 		return nil, err
 	}
-	report.WorkflowExecutionID = hex.EncodeToString(workflowExecutionIDBytes[:])
+	report.ExecutionID = hex.EncodeToString(workflowExecutionIDBytes[:])
 
 	// Decode timestamp
 	var timestampBytes [4]byte
@@ -65,13 +58,35 @@ func DecodeReport(rawReport []byte) (*Report, error) {
 	if _, err := buf.Read(configVersionBytes[:]); err != nil {
 		return nil, err
 	}
-	report.ConfigVersion = binary.BigEndian.Uint32(configVersionBytes[:])
+	report.DONConfigVersion = binary.BigEndian.Uint32(configVersionBytes[:])
 
-	// Decode metadata
-	report.Metadata = make([]byte, 64)
-	if _, err := buf.Read(report.Metadata); err != nil {
+	// Decode workflow_id
+	var workflowIDBytes [32]byte
+	if _, err := buf.Read(workflowIDBytes[:]); err != nil {
 		return nil, err
 	}
+	report.WorkflowID = hex.EncodeToString(workflowIDBytes[:])
+
+	// Decode workflow_name (UTF-8)
+	var workflowNameBytes [10]byte
+	if _, err := buf.Read(workflowNameBytes[:]); err != nil {
+		return nil, err
+	}
+	report.WorkflowName = string(workflowNameBytes[:])
+
+	// Decode workflow_owner
+	var workflowOwnerBytes [20]byte
+	if _, err := buf.Read(workflowOwnerBytes[:]); err != nil {
+		return nil, err
+	}
+	report.WorkflowOwner = hex.EncodeToString(workflowOwnerBytes[:])
+
+	// Decode report_id
+	var reportIDBytes [2]byte
+	if _, err := buf.Read(reportIDBytes[:]); err != nil {
+		return nil, err
+	}
+	report.ReportID = hex.EncodeToString(reportIDBytes[:])
 
 	// Decode data
 	report.Data = make([]byte, buf.Len())
@@ -80,28 +95,4 @@ func DecodeReport(rawReport []byte) (*Report, error) {
 	}
 
 	return report, nil
-}
-
-func DecodeMetadata(rawReportMetadata []byte) (*ReportMetadata, error) {
-	if len(rawReportMetadata) < 64 {
-		return nil, fmt.Errorf("invalid report metadata length")
-	}
-
-	rMetadata := &ReportMetadata{}
-	buf := bytes.NewReader(rawReportMetadata)
-
-	// Decode unknown bytes
-	var unknownBytes [62]byte
-	if _, err := buf.Read(unknownBytes[:]); err != nil {
-		return nil, err
-	}
-
-	// Decode report_id
-	var reportIDBytes [2]byte
-	if _, err := buf.Read(reportIDBytes[:]); err != nil {
-		return nil, err
-	}
-	rMetadata.ReportID = binary.BigEndian.Uint16(reportIDBytes[:])
-
-	return rMetadata, nil
 }

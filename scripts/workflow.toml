@@ -42,7 +42,8 @@ targets:
    inputs:
      signed_report: "$(aptos_feeds.outputs)" # TODO: annotate with devnet
    config:
-     address: "0xa34b23cdcda186e62aaaf69278baea45e7b12d2690c3f361ee3303e99540f663"
+     # TODO: should be replaced with a variable which is populated at setup time
+     address: "0x580846c1c1f72fecd6e1d13099b9044f3d0293c556417cd7889908277d5ebc6c"
      deltaStage: "45s"
      schedule: "oneAtATime"
 """
