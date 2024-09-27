@@ -209,13 +209,14 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	head := commontypes.Head{
 		Hash:      nil,
 		Height:    "0",
-		Timestamp: 1,
+		Timestamp: 0,
 	}
 
 	c.lggr.Debugw("WriteTarget non-empty report",
-		"report", hex.EncodeToString(inputs.Report),
+		"reportID", info.reportInfo.reportID,
+		"report", "0x" + hex.EncodeToString(inputs.Report),
 		"reportLen", len(inputs.Report),
-		"reportContext", hex.EncodeToString(inputs.Context),
+		"reportContext", "0x" + hex.EncodeToString(inputs.Context),
 		"reportContextLen", len(inputs.Context),
 		"signaturesLen", len(inputs.Signatures),
 		"executionID", request.Metadata.WorkflowExecutionID,
@@ -231,7 +232,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}
 
 	c.lggr.Infow("WriteTarget on-chain report check done - attempting to push to txmgr",
-		"request", request,
+		"reportID", info.reportInfo.reportID,
 		"reportLen", len(inputs.Report),
 		"reportContextLen", len(inputs.Context),
 		"signaturesLen", len(inputs.Signatures),

@@ -292,7 +292,6 @@ module keystone::forwarder {
                         &signature.sig, &signature.public_key, msg
                     );
                 assert!(result, error::invalid_argument(E_INVALID_SIGNATURE));
-
             }
         );
 
