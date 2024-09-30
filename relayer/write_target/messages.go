@@ -73,5 +73,7 @@ func (m *messageBuilder) buildWriteConfirmed(i *requestInfo, head types.Head, fi
 		BlockHash:      hex.EncodeToString(head.Hash),
 		BlockHeight:    head.Height,
 		BlockTimestamp: head.Timestamp,
+
+		// TODO: Add the TransactionState
 	}
 }

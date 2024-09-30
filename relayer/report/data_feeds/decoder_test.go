@@ -8,12 +8,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/product/mercury"
+	mercury_v3 "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/mercury/v3"
 	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/write_target"
 )
 
-func TestDecodeReport(t *testing.T) {
+func TestDecodeReportV3(t *testing.T) {
 	// Base64-encoded report data (example)
+	// Test case sourced from runtime logs
 	// version | workflow_execution_id | timestamp | don_id | config_version | ... | data
 	encoded := "AYFtgPpLuLNQysw6LjlSNrzGuBOwVoth7qC9PmunIY3TZvW/cAAAAAEAAAABvAbzAOeX1ahXVjehSq4T4/hQgAjR/FT0xGEf/xemjLAwMDAwRk9PQkFSAAAAAAAAAAAAAAAAAAAAAAAAAKoAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHAAAMREREREREREQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEgAAMREREREREREQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZvW/aQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABm9b9pAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAElCUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASUJQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABnBQGpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAElCUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASUJQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABJQlAAMiIiIiIiIiIgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEgAAMiIiIiIiIiIgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZvW/aQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABm9b9pAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAElCUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASUJQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABnBQGpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAElCUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASUJQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABJQl"
 
@@ -31,8 +32,8 @@ func TestDecodeReport(t *testing.T) {
 		"0003222222222222222200000000000000000000000000000000000000000000",
 	}
 
-	expectedData := []mercury.Report{
-		mercury.Report{
+	expectedData := []mercury_v3.Report{
+		mercury_v3.Report{
 			FeedId:                [32]uint8{0x0, 0x3, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0},
 			ObservationsTimestamp: 0x66f5bf69,
 			BenchmarkPrice:        big.NewInt(300069),
@@ -43,7 +44,7 @@ func TestDecodeReport(t *testing.T) {
 			LinkFee:               big.NewInt(300069),
 			NativeFee:             big.NewInt(300069),
 		},
-		mercury.Report{
+		mercury_v3.Report{
 			FeedId:                [32]uint8{0x0, 0x3, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0},
 			ObservationsTimestamp: 0x66f5bf69,
 			BenchmarkPrice:        big.NewInt(300069),
@@ -57,13 +58,14 @@ func TestDecodeReport(t *testing.T) {
 	}
 
 	rDataFeeds := Decode(report.Data)
+	t.Log(fmt.Sprintf("Decoded as DF report: %+v", rDataFeeds))
 	require.Equal(t, len(expectedFeedID), len(rDataFeeds.Reports))
 
 	for i, report := range rDataFeeds.Reports {
 		require.Equal(t, expectedFeedID[i], report.FeedID)
 		require.True(t, len(report.Data) > 0)
 
-		m, err := mercury.Decode(report.Data)
+		m, err := mercury_v3.Decode(report.Data)
 		require.NoError(t, err)
 		require.Equal(t, expectedData[i], *m)
 	}

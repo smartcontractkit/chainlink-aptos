@@ -1,5 +1,5 @@
 // TODO: duplicate of https://github.com/smartcontractkit/chainlink/blob/develop/core/services/relay/evm/mercury/v3/types/types.go
-package mercury
+package v3
 
 import (
 	"fmt"
