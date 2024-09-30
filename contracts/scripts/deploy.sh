@@ -7,8 +7,8 @@ PUBLISHER_ADDR=0x$(aptos config show-profiles --profile=$PUBLISHER_PROFILE | gre
 KEYSTONE_ADDR=$(cat keystone/contract_address.txt)
 DATA_FEEDS_ADDR=$(cat data-feeds/contract_address.txt)
 
-# data_feeds::router::set_feed_configs(config_ids, deviation_thresholds, staleness_seconds)
-aptos move run --function-id "$DATA_FEEDS_ADDR::registry::set_feed_configs" --assume-yes --args 'hex:["0x99"]' 'u256:[1]' 'u256:[60]'
+# data_feeds::router::set_workflow_config(workflow_owners, workflow_names)
+aptos move run --function-id "$DATA_FEEDS_ADDR::registry::set_workflow_config" --assume-yes --args 'string:["0000FOOBAR"]' 'string:[]'
 
 # data_feeds::router::set_feeds(feed_ids, descriptions, config_id)
 aptos move run --function-id "$DATA_FEEDS_ADDR::registry::set_feeds" --assume-yes --args 'hex:["0x0003111111111111111100000000000000000000000000000000000000000000"]' 'string:["FOOBAR"]' 'hex:0x99'
