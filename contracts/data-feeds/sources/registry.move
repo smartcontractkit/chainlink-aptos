@@ -330,7 +330,7 @@ module data_feeds::registry {
         option::none()
     }
 
-    public fun set_workflow_config(
+    public entry fun set_workflow_config(
         authority: &signer,
         allowed_workflow_owners: vector<vector<u8>>,
         allowed_workflow_names: vector<vector<u8>>
