@@ -24,6 +24,7 @@ module keystone::forwarder {
     const E_CALLBACK_DATA_NOT_CONSUMED: u64 = 12;
     const E_CANNOT_TRANSFER_TO_SELF: u64 = 13;
     const E_NOT_PROPOSED_OWNER: u64 = 14;
+    const E_CONFIG_ID_NOT_FOUND: u64 = 15;
 
     const MAX_ORACLES: u64 = 31;
 
@@ -251,10 +252,9 @@ module keystone::forwarder {
         let metadata = vector::slice(&report, 45, 109);
         let data = vector::slice(&report, 109, vector::length(&report));
 
-        // NOTE: this will revert for us if don_id doesn't exist
-        let config = smart_table::borrow(
-            &state.configs, ConfigId { don_id, config_version }
-        );
+        let config_id =  ConfigId { don_id, config_version };
+        assert!(smart_table::contains(&state.configs, config_id), E_CONFIG_ID_NOT_FOUND);
+        let config = smart_table::borrow(&state.configs, config_id);
 
         // check if report was already delivered
         let transmission_id = transmission_id(receiver, workflow_execution_id, report_id);
