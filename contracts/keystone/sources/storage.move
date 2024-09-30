@@ -15,6 +15,8 @@ module keystone::storage {
 
     friend keystone::forwarder;
 
+    const E_UNKNOWN_RECEIVER: u64 = 1;
+
     struct Entry has key, store, drop {
         metadata: Object<Metadata>,
         extend_ref: ExtendRef
@@ -85,6 +87,7 @@ module keystone::storage {
     ): Object<Metadata> acquires Dispatcher {
         let dispatcher = borrow_global<Dispatcher>(@keystone);
         let typeinfo = *table::borrow(&dispatcher.address_to_typeinfo, address);
+        assert!(table::contains(&dispatcher.dispatcher, typeinfo), E_UNKNOWN_RECEIVER);
         let Entry { metadata, extend_ref } =
             table::borrow(&dispatcher.dispatcher, typeinfo);
         let obj_signer = object::generate_signer_for_extending(extend_ref);
