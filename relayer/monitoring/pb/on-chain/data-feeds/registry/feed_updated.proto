@@ -3,22 +3,21 @@ syntax="proto3";
 package registry;
 option go_package = ".;registry";
 
-// The on-chain FeedUpdated event which is extracted (via Benthos) from the
-// Keystone Forwarder contract transaction receipt after a write was confirmed
-// (@see message: write-target.WriteConfirmed).
-//
-// Notice: contains chain specific metadata type as raw bytes
+// The on-chain FeedUpdated event which is extracted from the tx/event data or
+// the write-target WriteConfirmed event, after a write was confirmed (@see message: write-target.WriteConfirmed).
 message FeedUpdated {
   bytes feed_id = 1;
   // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
-  uint64 timestamp = 2;
+  uint32 timestamp = 2;
+  // TODO: how to represent benchmark data which is u256 on-chain?
   uint64 benchmark = 3;
   bytes report = 4;
-  bool success = 5;
 
-  // Metadata is a serialized protobuf message
-  // For example, Aptos specific type hosting transaction data
-  //   (e.g., _metadata_type = "aptos-tx-metadata")
-  bytes _metadata = 6;
-  string _metadata_type = 7;
+  // TODO: Transaction data - tx that mained the event (e.g., hash, gas, transmitter, payload, etc.)
+
+  // Head data - when was the event produced on-chain
+  string block_hash = 9;
+  string block_height = 10;
+  // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
+  uint64 block_timestamp = 11;
 }

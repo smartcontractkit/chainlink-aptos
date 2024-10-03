@@ -19,5 +19,5 @@ func TestDecodeReport(t *testing.T) {
 	m, err := Decode(decoded)
 	require.NoError(t, err)
 
-	require.Equal(t, 3, GetReportType(m.FeedId))
+	require.Equal(t, uint16(3), GetReportType(m.FeedId))
 }

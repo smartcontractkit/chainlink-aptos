@@ -3,20 +3,19 @@ syntax="proto3";
 package forwarder;
 option go_package = ".;forwarder";
 
-// The on-chain ReportProcessed event which is extracted from the Keystone
-// Forwarder contract transaction receipt after a write was confirmed (@see
-// message: write-target.WriteConfirmed).
-//
-// Notice: contains chain specific metadata type as raw bytes
+// The on-chain ReportProcessed event which is extracted from the tx/event data or
+// the write-target WriteConfirmed event, after a write was confirmed (@see message: write-target.WriteConfirmed).
 message ReportProcessed {
   string receiver = 1;
   bytes workflow_execution_id = 2;
   uint32 report_id = 3;
   bool success = 4;
 
-  // Metadata is a serialized protobuf message
-  // For example, Aptos specific type hosting transaction data
-  //   (e.g., _metadata_type = "aptos-tx-metadata")
-  bytes _metadata = 5;
-  string _metadata_type = 6;
+  // TODO: Transaction data - tx that mained the event (e.g., hash, gas, transmitter, payload, etc.)
+
+  // Head data - when was the event produced on-chain
+  string block_hash = 9;
+  string block_height = 10;
+  // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
+  uint64 block_timestamp = 11;
 }

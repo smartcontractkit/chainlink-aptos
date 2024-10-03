@@ -27,9 +27,9 @@ func TestDecodeReportV3(t *testing.T) {
 	require.NoError(t, err)
 	t.Log(fmt.Sprintf("Decoded as report: %+v", report))
 
-	expectedFeedID := []string{
-		"0003111111111111111100000000000000000000000000000000000000000000",
-		"0003222222222222222200000000000000000000000000000000000000000000",
+	expectedFeedID := [][32]uint8{
+		[32]uint8{0x0, 0x3, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0},
+		[32]uint8{0x0, 0x3, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0},
 	}
 
 	expectedData := []mercury_v3.Report{
@@ -57,12 +57,13 @@ func TestDecodeReportV3(t *testing.T) {
 		},
 	}
 
-	rDataFeeds := Decode(report.Data)
+	rDataFeeds, err := Decode(report.Data)
+	require.NoError(t, err)
 	t.Log(fmt.Sprintf("Decoded as DF report: %+v", rDataFeeds))
 	require.Equal(t, len(expectedFeedID), len(rDataFeeds.Reports))
 
 	for i, report := range rDataFeeds.Reports {
-		require.Equal(t, expectedFeedID[i], report.FeedID)
+		require.Equal(t, expectedFeedID[i], report.FeedId)
 		require.True(t, len(report.Data) > 0)
 
 		m, err := mercury_v3.Decode(report.Data)

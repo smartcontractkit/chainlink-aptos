@@ -1,7 +1,6 @@
 package data_feeds
 
 import (
-	"encoding/hex"
 	"math/big"
 )
 
@@ -10,11 +9,12 @@ type Report struct {
 }
 
 type FeedReport struct {
-	FeedID string
+	FeedId [32]byte
 	Data   []byte
 }
 
-func Decode(data []byte) Report {
+// TODO: improve this function
+func Decode(data []byte) (*Report, error) {
 	offset := 0
 
 	// Skip the first 32 bytes (assertion)
@@ -52,16 +52,19 @@ func Decode(data []byte) Report {
 	}
 
 	// Create the Report struct
-	reportData := Report{
+	reportData := &Report{
 		Reports: make([]FeedReport, count),
 	}
 
 	for i := int64(0); i < count; i++ {
+		var feedID [32]byte
+		copy(feedID[:], feedIDs[i])
+
 		reportData.Reports[i] = FeedReport{
-			FeedID: hex.EncodeToString(feedIDs[i]),
+			FeedId: feedID,
 			Data:   reports[i],
 		}
 	}
 
-	return reportData
+	return reportData, nil
 }
