@@ -22,18 +22,18 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 		return nil, fmt.Errorf("failed to decode report: %w", err)
 	}
 
-	// Decode the underlying Data Feeds report
-	rDF, err := data_feeds.Decode(r.Data)
+	// Decode the underlying Data Feeds reports
+	reports, err := data_feeds.Decode(r.Data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode Data Feeds report: %w", err)
 	}
 
 	// Allocate space for the messages (event per updated feed)
-	msgs := make([]*FeedUpdated, 0, len(rDF.Reports))
+	msgs := make([]*FeedUpdated, 0, len(reports))
 
 	// Iterate over the underlying Mercury reports
-	for _, rf := range rDF.Reports {
-		// Decode the Mercury report
+	for _, rf := range reports {
+		// Decode the common Mercury report
 		rm, err := mercury_vX.Decode(rf.Data)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode Mercury report: %w", err)

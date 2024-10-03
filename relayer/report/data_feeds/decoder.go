@@ -4,17 +4,17 @@ import (
 	"math/big"
 )
 
-type Report struct {
-	Reports []FeedReport
-}
-
 type FeedReport struct {
 	FeedId [32]byte
 	Data   []byte
 }
 
+type Reports = []FeedReport
+
 // TODO: improve this function
-func Decode(data []byte) (*Report, error) {
+// This is ABI encoding - abi: "(bytes32 FeedID, bytes RawReport)[] Reports" (set in workflow)
+// Encoded with: https://github.com/smartcontractkit/chainlink/blob/develop/core/services/relay/evm/cap_encoder.go
+func Decode(data []byte) (Reports, error) {
 	offset := 0
 
 	// Skip the first 32 bytes (assertion)
@@ -52,15 +52,13 @@ func Decode(data []byte) (*Report, error) {
 	}
 
 	// Create the Report struct
-	reportData := &Report{
-		Reports: make([]FeedReport, count),
-	}
+	reportData := make([]FeedReport, count)
 
 	for i := int64(0); i < count; i++ {
 		var feedID [32]byte
 		copy(feedID[:], feedIDs[i])
 
-		reportData.Reports[i] = FeedReport{
+		reportData[i] = FeedReport{
 			FeedId: feedID,
 			Data:   reports[i],
 		}
