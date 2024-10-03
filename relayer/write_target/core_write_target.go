@@ -47,6 +47,7 @@ type writeTarget struct {
 	// Local beholder client, also hosting the protobuf emitter
 	beholder *monitor.BeholderClient
 
+	cs               commontypes.ChainService
 	cr               commontypes.ContractReader
 	cw               commontypes.ChainWriter
 	configValidateFn func(config Config) error
@@ -60,6 +61,7 @@ type WriteTargetOpts struct {
 
 	Logger logger.Logger
 
+	ChainService     commontypes.ChainService
 	ContractReader   commontypes.ContractReader
 	ChainWriter      commontypes.ChainWriter
 	ConfigValidateFn func(config Config) error
@@ -85,6 +87,7 @@ func NewWriteTarget(opts WriteTargetOpts) capabilities.TargetCapability {
 		capInfo,
 		selfLogger,
 		beholder,
+		opts.ChainService,
 		opts.ContractReader,
 		opts.ChainWriter,
 		opts.ConfigValidateFn,
@@ -130,7 +133,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	// Helper to build monitoring (Beholder) messages
 	builder := &messageBuilder{}
 
-	// Try to parse the request (WT-specific) config
+	// Parse the request (WT-specific) config
 	var reqConfig Config
 	err := request.Config.UnwrapTo(&reqConfig)
 	if err != nil {
@@ -138,7 +141,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
-	// Try to validate the config
+	// Validate the config
 	err = c.configValidateFn(reqConfig)
 	if err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to validate config", err.Error())
@@ -148,7 +151,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	// Source the receiver address from the config
 	info.receiver = reqConfig.Address
 
-	// Try to source the signed report from the request
+	// Source the signed report from the request
 	signedReport, ok := request.Inputs.Underlying[keySignedReport]
 	if !ok {
 		cause := fmt.Sprintf("input missing required field: '%s'", keySignedReport)
@@ -156,7 +159,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
-	// Try to decode the signed report
+	// Decode the signed report
 	inputs := types.SignedReport{}
 	if err = signedReport.UnwrapTo(&inputs); err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to parse signed report", err.Error())
@@ -166,7 +169,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	// Source the report ID from the input
 	info.reportInfo.reportID = binary.BigEndian.Uint16(inputs.ID)
 
-	// Try to decode the workflow execution ID
+	// Decode the workflow execution ID
 	rawExecutionID, err := hex.DecodeString(request.Metadata.WorkflowExecutionID)
 	if err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to decode the workflow execution ID", err.Error())
@@ -190,7 +193,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		signersNum:    uint32(len(inputs.Signatures)),
 	}
 
-	// Try to decode the report
+	// Decode the report
 	reportDecoded, err := Decode(inputs.Report)
 	if err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to decode the report", err.Error())
@@ -206,7 +209,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
-	// Try to check whether the report was already transmitted on chain
+	// Check whether the report was already transmitted on chain
 	binding := commontypes.BoundContract{
 		Address: info.forwarder,
 		Name:    contractName,
@@ -222,11 +225,11 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		ReportID:            info.reportInfo.reportID,
 	}
 
-	// TODO: fetch the latest head from the chain (timestamp)
-	head := commontypes.Head{
-		Hash:      nil,
-		Height:    "0",
-		Timestamp: 0,
+	// Fetch the latest head from the chain (timestamp)
+	head, err := c.cs.LatestHead(ctx)
+	if err != nil {
+		msg := builder.buildWriteError(info, 0, "failed to fetch the latest head", err.Error())
+		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
 	c.lggr.Debugw("WriteTarget non-empty report",
@@ -298,7 +301,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		req.Signatures = make([][]byte, 0)
 	}
 
-	// Try to submit the transaction
+	// Submit the transaction
 	meta := commontypes.TxMeta{WorkflowExecutionID: &request.Metadata.WorkflowExecutionID}
 	value := big.NewInt(0)
 	err = c.cw.SubmitTransaction(ctx, contractName, contractMethodName_report, req, txID.String(), info.forwarder, &meta, value)
@@ -342,11 +345,11 @@ func (c *writeTarget) confirmWrite(ctx context.Context, info requestInfo, txID u
 	// Helper to build monitoring (Beholder) messages
 	builder := &messageBuilder{}
 
-	// TODO: fetch the latest head from the chain (timestamp)
-	head := commontypes.Head{
-		Hash:      nil,
-		Height:    "1",
-		Timestamp: 1,
+	// Fetch the latest head from the chain (timestamp)
+	head, err := c.cs.LatestHead(ctx)
+	if err != nil {
+		msg := "failed to fetch the latest head:" + err.Error()
+		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteError(&info, 0, "failed to confirm the report was transmitted", msg))
 	}
 
 	// Check the transmission state

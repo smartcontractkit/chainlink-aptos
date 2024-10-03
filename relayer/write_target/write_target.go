@@ -124,6 +124,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	opts := WriteTargetOpts{
 		ID:                 id,
 		Logger:             lggr,
+		ChainService:       chain,
 		ContractReader:     cr,
 		ChainWriter:        cw,
 		ConfigValidateFn:   validate,

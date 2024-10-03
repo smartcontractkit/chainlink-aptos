@@ -2,10 +2,13 @@ package aptos
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
+	"strconv"
+	"strings"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/pelletier/go-toml/v2"
@@ -204,8 +207,33 @@ func (c *chain) ID() string {
 }
 
 // LatestHead returns the latest head for the underlying chain.
+// TODO: should be replaced with a head tracker component
 func (c *chain) LatestHead(ctx context.Context) (types.Head, error) {
-	return types.Head{}, errors.ErrUnsupported
+	client, err := c.GetClient()
+
+	// Try to get the latest block height and block by height
+	info, err := client.Info()
+	if err != nil {
+		return types.Head{}, fmt.Errorf("failed to get chain info: %w", err)
+	}
+
+	withTransactions := false
+	block, err := client.BlockByHeight(info.BlockHeight(), withTransactions)
+	if err != nil {
+		return types.Head{}, fmt.Errorf("failed to get block by height: %w", err)
+	}
+
+	// Map to common Head type
+	hash, err := hex.DecodeString(strings.TrimPrefix(block.BlockHash, "0x"))
+	if err != nil {
+		return types.Head{}, fmt.Errorf("failed to decode block hash: %w", err)
+	}
+
+	return types.Head{
+		Hash:      hash,
+		Height:    strconv.FormatUint(block.BlockHeight, 10),
+		Timestamp: block.BlockTimestamp,
+	}, nil
 }
 
 // ChainService interface
