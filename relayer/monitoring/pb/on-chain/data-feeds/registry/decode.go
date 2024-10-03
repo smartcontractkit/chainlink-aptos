@@ -29,10 +29,10 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 	}
 
 	// Allocate space for the messages (event per updated feed)
-	msgs := make([]*FeedUpdated, 0, len(reports))
+	msgs := make([]*FeedUpdated, 0, len(*reports))
 
 	// Iterate over the underlying Mercury reports
-	for _, rf := range reports {
+	for _, rf := range *reports {
 		// Decode the common Mercury report
 		rm, err := mercury_vX.Decode(rf.Data)
 		if err != nil {

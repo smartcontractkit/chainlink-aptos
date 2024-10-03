@@ -59,10 +59,10 @@ func TestDecodeReportV3(t *testing.T) {
 
 	reports, err := Decode(report.Data)
 	require.NoError(t, err)
-	t.Log(fmt.Sprintf("Decoded as DF report: %+v", reports))
-	require.Equal(t, len(expectedFeedID), len(reports))
+	t.Log(fmt.Sprintf("Decoded as DF reports: %+v", reports))
+	require.Equal(t, len(expectedFeedID), len(*reports))
 
-	for i, report := range reports {
+	for i, report := range *reports {
 		require.Equal(t, expectedFeedID[i], report.FeedId)
 		require.True(t, len(report.Data) > 0)
 
