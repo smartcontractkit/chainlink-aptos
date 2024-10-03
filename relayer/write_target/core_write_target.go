@@ -339,7 +339,7 @@ func (c *writeTarget) confirmWrite(ctx context.Context, info requestInfo, txID u
 	// Sleep for N sec + a random amount of time
 	rand.Seed(time.Now().UnixNano())
 	n := 4
-	r := rand.Intn(200)
+	r := rand.Intn(500)
 	time.Sleep(time.Duration(n)*time.Second + time.Duration(r)*time.Millisecond)
 
 	// Helper to build monitoring (Beholder) messages
