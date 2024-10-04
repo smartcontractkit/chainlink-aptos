@@ -17,11 +17,12 @@ message WriteAccepted {
   // Transaction ID - tx reference as created by the WT, to be used for tracking TXM execution
   string tx_id = 5;
   string tx_hash = 6;
-  string status = 7;
+  string tx_from = 7;
+  string tx_status = 8;
 
   // When was the transaction accepted on-chain
-  string block_hash = 8;
-  string block_height = 9;
+  string block_hash = 9;
+  string block_height = 10;
   // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
-  uint64 block_timestamp = 10;
+  uint64 block_timestamp = 11;
 }
