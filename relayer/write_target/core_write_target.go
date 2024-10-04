@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
@@ -313,12 +312,10 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	c.lggr.Debugw("Transaction submitted", "request", request, "transaction-id", txID)
 	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSent(info, head, txID.String()))
 
-	// TODO: [Beholder] Emit 'write-target.WriteAccepted' by pooling for TXM status finalized/failed
-
 	// TODO: implement a background WriteTxConfirmer to periodically source new events/transactions,
 	// relevant to this forwarder), and emit write-tx-accepted/confirmed events.
 
-	go c.confirmWrite(ctx, *info, txID, query)
+	go c.acceptAndConfirmWrite(ctx, *info, txID, query)
 	return success(), nil
 }
 
@@ -332,41 +329,90 @@ func (c *writeTarget) UnregisterFromWorkflow(ctx context.Context, request capabi
 	return nil
 }
 
-// TODO: replace with a proper implementation
-// A dummy confirmer that sleeps some time before confirming the write
-// confirmWrite waits for the report to be transmitted on-chain and emits the appropriate Beholder messages
-func (c *writeTarget) confirmWrite(ctx context.Context, info requestInfo, txID uuid.UUID, query func(context.Context) (bool, error)) {
-	// Sleep for N sec + a random amount of time
-	rand.Seed(time.Now().UnixNano())
-	n := 4
-	r := rand.Intn(500)
-	time.Sleep(time.Duration(n)*time.Second + time.Duration(r)*time.Millisecond)
+// acceptAndConfirmWrite waits (until timeout) for the report to be accepted and (optionally) confirmed on-chain
+// Emits Beholder messages:
+//   - 'write-target.WriteError' if not accepted
+//   - 'write-target.WriteAccepted' if accepted (with or without an error)
+//   - 'write-target.WriteError' if accepted (with an error)
+//   - 'write-target.WriteConfirmed' if confirmed (until timeout)
+func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInfo, txID uuid.UUID, query func(context.Context) (bool, error)) {
+	// TODO: needs to be configurable
+	timeout := 10 * time.Second // Timeout for the confirmation process
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	// TODO: needs to be configurable
+	ticker := time.NewTicker(1 * time.Second) // Retry interval
+	defer ticker.Stop()
 
 	// Helper to build monitoring (Beholder) messages
 	builder := &messageBuilder{}
 
-	// Fetch the latest head from the chain (timestamp)
-	head, err := c.cs.LatestHead(ctx)
-	if err != nil {
-		msg := "failed to fetch the latest head:" + err.Error()
-		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteError(&info, 0, "failed to confirm the report was transmitted", msg))
+	// Fn helpers
+	checkAcceptedStatus := func(ctx context.Context) (bool, error) {
+		// TODO: check TXM for status
+		return true, nil
 	}
+	checkConfirmedStatus := query
 
-	// Check the transmission state
-	ctx = context.Background()
-	transmitted, err := query(ctx)
-	if err != nil || transmitted != true {
-		var msg string
-		if err != nil {
-			msg = "failed to call [forwarder.getTransmissionState]:" + err.Error()
-		} else {
-			msg = "unable to observe the report was transmitted"
+	// Store the acceptance status
+	accepted := false
+
+	for {
+		select {
+		case <-ctx.Done():
+			// We (eventually) failed to confirm the report was transmitted
+			c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteError(&info, 0, "write confirmation - failed", "timed out"))
+			return
+		case <-ticker.C:
+			// Fetch the latest head from the chain (timestamp)
+			head, err := c.cs.LatestHead(ctx)
+			if err != nil {
+				c.lggr.Errorw("write confirmation - failed to fetch the latest head", "txID", txID, "err", err)
+				continue
+			}
+
+			if !accepted {
+				// Check acceptance status
+				accepted, err := checkAcceptedStatus(ctx)
+				if err != nil {
+					c.lggr.Errorw("write confirmation - failed to check accepted status", "txID", txID, "err", err)
+					continue
+				}
+
+				if accepted {
+					c.lggr.Infow("write confirmation - accepted", "txID", txID)
+					// TODO: [Beholder] Emit 'write-target.WriteAccepted' by pooling for TXM status finalized/failed
+
+					// TODO: check if accepted with an error (e.g., on-chain revert)
+					acceptedWithErr := false
+					if acceptedWithErr {
+						// TODO: [Beholder] Emit 'write-target.WriteError' if accepted with an error
+
+						// Notice: no return, we continue to check for confirmation (should be accepted by another node)
+					}
+				} else {
+					c.lggr.Infow("write confirmation - not accepted yet", "txID", txID)
+					continue
+				}
+			}
+
+			// Check confirmation status (transmission state)
+			confirmed, err := checkConfirmedStatus(ctx)
+			if err != nil {
+				c.lggr.Errorw("write confirmation - failed to check confirmed status", "txID", txID, "err", err)
+				continue
+			}
+
+			if confirmed {
+				// We (eventually) confirmed the report was transmitted
+				c.lggr.Infow("write confirmation - confirmed", "txID", txID)
+
+				finalized := false
+				c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(&info, head, finalized))
+				return
+			}
+			c.lggr.Infow("write confirmation - not confirmed yet", "txID", txID)
 		}
-		// We (eventually) failed to confirm the report was transmitted
-		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteError(&info, 0, "failed to confirm the report was transmitted", msg))
-	} else {
-		// We (eventually) confirmed the report was transmitted
-		finalized := false
-		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(&info, head, finalized))
 	}
 }
