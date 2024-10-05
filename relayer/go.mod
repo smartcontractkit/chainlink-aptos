@@ -57,7 +57,6 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
-	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/oklog/run v1.0.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -98,10 +97,5 @@ require (
 	nhooyr.io/websocket v1.8.11 // indirect
 )
 
-replace (
-	// until merged upstream: https://github.com/hashicorp/go-plugin/pull/257
-	github.com/hashicorp/go-plugin => github.com/smartcontractkit/go-plugin v0.0.0-20231003134350-e49dad63b306
-
-	// until merged upstream: https://github.com/mwitkow/grpc-proxy/pull/69
-	github.com/mwitkow/grpc-proxy => github.com/smartcontractkit/grpc-proxy v0.0.0-20230731113816-f1be6620749f
-)
+// until merged upstream: https://github.com/mwitkow/grpc-proxy/pull/69
+replace github.com/mwitkow/grpc-proxy => github.com/smartcontractkit/grpc-proxy v0.0.0-20230731113816-f1be6620749f
