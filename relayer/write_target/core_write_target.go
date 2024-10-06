@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
@@ -100,10 +102,13 @@ func success() capabilities.CapabilityResponse {
 }
 
 type reportInfo struct {
-	reportID      uint16
 	reportContext []byte
 	report        []byte
 	signersNum    uint32
+
+	// Decoded report fields
+	reportID            uint16
+	workflowExecutionID string
 }
 
 type requestInfo struct {
@@ -115,6 +120,10 @@ type requestInfo struct {
 }
 
 func (c *writeTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (capabilities.CapabilityResponse, error) {
+	attrs := c.traceAttributes(request.Metadata.WorkflowExecutionID)
+	_, span := beholder.GetClient().Tracer.Start(ctx, "Execute", trace.WithAttributes(attrs...))
+	defer span.End()
+
 	c.lggr.Debugw("Execute", "request", request)
 
 	// Helper to keep track of the info
@@ -123,10 +132,11 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		receiver:    "N/A",
 		transmitter: c.transmitterAddress,
 		reportInfo: &reportInfo{
-			reportID:      0, // N/A
-			reportContext: nil,
-			report:        nil,
-			signersNum:    0, // N/A
+			reportContext:       nil,
+			report:              nil,
+			signersNum:          0, // N/A
+			reportID:            0, // N/A
+			workflowExecutionID: request.Metadata.WorkflowExecutionID,
 		},
 	}
 	// Helper to build monitoring (Beholder) messages
@@ -336,6 +346,10 @@ func (c *writeTarget) UnregisterFromWorkflow(ctx context.Context, request capabi
 //   - 'write-target.WriteError' if accepted (with an error)
 //   - 'write-target.WriteConfirmed' if confirmed (until timeout)
 func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInfo, txID uuid.UUID, query func(context.Context) (bool, error)) {
+	attrs := c.traceAttributes(info.reportInfo.workflowExecutionID)
+	_, span := beholder.GetClient().Tracer.Start(ctx, "Execute.acceptAndConfirmWrite", trace.WithAttributes(attrs...))
+	defer span.End()
+
 	// TODO: needs to be configurable
 	timeout := 10 * time.Second // Timeout for the confirmation process
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -414,5 +428,16 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 			}
 			c.lggr.Infow("write confirmation - not confirmed yet", "txID", txID)
 		}
+	}
+}
+
+// traceAttributes returns the attributes to be used for tracing
+func (c *writeTarget) traceAttributes(workflowExecutionID string) []attribute.KeyValue {
+	return []attribute.KeyValue{
+		attribute.String("capability.id", c.ID),
+		attribute.String("capability.version", c.Version()),
+		attribute.String("capability.type", string(c.CapabilityType)),
+		attribute.String("capability.instance", c.lggr.Name()), // full name from logger
+		attribute.String("capability.executionID", workflowExecutionID),
 	}
 }
