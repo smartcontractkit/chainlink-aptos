@@ -15,19 +15,29 @@ import (
 	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/write-target"
 )
 
-func NewAptosWriteTargetMonitor(ctx context.Context, lggr logger.Logger) *monitor.BeholderClient {
+// TODO: this is just a PoC implementation - replace with more robust implementation
+func NewAptosWriteTargetMonitor(ctx context.Context, lggr logger.Logger) (*monitor.BeholderClient, error) {
 	// Initialize the Beholder client with a local logger a custom Emitter
 	client := beholder.GetClient().ForPackage("write_target")
-	protoEmitter := protoEmitter{
-		emitter: monitor.NewProtoEmitter(lggr, &client),
+
+	registryMetrics, err := registry.NewMetrics()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new registry metrics: %w", err)
 	}
-	return &monitor.BeholderClient{&client, &protoEmitter}
+
+	protoEmitterProxy := protoEmitter{
+		emitter: monitor.NewProtoEmitter(lggr, &client),
+		// Metrics collection
+		registryMetrics: registryMetrics,
+	}
+	return &monitor.BeholderClient{&client, &protoEmitterProxy}, nil
 }
 
-// TODO: this is just a PoC implementation
 // Specific to the Aptos WT
 type protoEmitter struct {
 	emitter monitor.ProtoEmitter
+	// Metrics collection
+	registryMetrics *registry.Metrics
 }
 
 func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any) error {
@@ -47,6 +57,11 @@ func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs
 		// Not a 'write_target.WriteConfirmed' message
 		return nil
 	}
+	// TODO: improve metrics publishing
+	err = publishWriteConfirmedMetrics(ctx, writeConfirmed)
+	if err != nil {
+		return fmt.Errorf("failed to publish write confirmed metrics: %w", err)
+	}
 
 	// Decode as a 'keystone.forwarder.ReportProcessed' message
 	reportProcessed, err := forwarder.DecodeAsReportProcessed(writeConfirmed)
@@ -57,6 +72,11 @@ func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs
 	err = e.emitter.EmitWithLog(ctx, reportProcessed, attrKVs...)
 	if err != nil {
 		return fmt.Errorf("failed to emit with log: %w", err)
+	}
+	// TODO: improve metrics publishing
+	err = publishReportProcessedMetrics(ctx, reportProcessed)
+	if err != nil {
+		return fmt.Errorf("failed to publish report processed metrics: %w", err)
 	}
 
 	// Decode as an array of 'data-feeds.registry.FeedUpdated' messages
@@ -70,7 +90,36 @@ func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs
 		if err != nil {
 			return fmt.Errorf("failed to emit with log: %w", err)
 		}
+		// Process emit and derive metrics
+		err = e.registryMetrics.ProcessFeedUpdated(ctx, update)
+		if err != nil {
+			return fmt.Errorf("failed to publish feed updated metrics: %w", err)
+		}
 	}
 
+	return nil
+}
+
+func publishWriteConfirmedMetrics(ctx context.Context, m *wt.WriteConfirmed) error {
+	meter := beholder.GetMeter()
+
+	// Count events
+	counter, err := meter.Int64Counter("write_target_write_confirmed_count")
+	if err != nil {
+		return fmt.Errorf("failed to create new counter: %w", err)
+	}
+	counter.Add(ctx, 1)
+	return nil
+}
+
+func publishReportProcessedMetrics(ctx context.Context, m *forwarder.ReportProcessed) error {
+	meter := beholder.GetMeter()
+
+	// Count events
+	counter, err := meter.Int64Counter("on_chain_keystone_forwarder_report_processed_count")
+	if err != nil {
+		return fmt.Errorf("failed to create new counter: %w", err)
+	}
+	counter.Add(ctx, 1)
 	return nil
 }

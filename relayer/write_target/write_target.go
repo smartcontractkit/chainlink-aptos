@@ -38,7 +38,10 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	}
 
 	// Set up a specific Beholder client for the Aptos WT
-	beholder := NewAptosWriteTargetMonitor(ctx, lggr)
+	beholder, err := NewAptosWriteTargetMonitor(ctx, lggr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Aptos WT monitor client: %+w", err)
+	}
 
 	// Initialize a reader to check whether a value was already transmitted on chain
 	cr := chainreader.NewChainReader(lggr, client, chainreader.ChainReaderConfig{
