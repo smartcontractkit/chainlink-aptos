@@ -5,3 +5,11 @@
 .aptos/
 
 *.log
+.env
+
+tmp/
+
+PublicKeys.json
+
+integration-tests/.cache/
+integration-tests/logs/

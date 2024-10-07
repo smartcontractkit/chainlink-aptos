@@ -1,0 +1,40 @@
+[Log]
+Level = 'debug'
+
+[Feature]
+FeedsManager = true
+LogPoller = true
+UICSAKeys = true
+
+[OCR2]
+Enabled = true
+
+[P2P]
+[P2P.V2]
+Enabled = true
+DeltaDial = '5s'
+DeltaReconcile = '5s'
+ListenAddresses = ['0.0.0.0:6690']
+
+[WebServer]
+HTTPPort = 6688
+TLS.HTTPSPort = 0
+AllowOrigins = '*'
+
+[[Aptos]]
+Enabled = true
+ChainID = "localnet"
+
+[Aptos.Workflow]
+ForwarderAddress = ""
+PublicKey = ""
+
+[[Aptos.Nodes]]
+Name = 'primary'
+URL = "http://chainlink-aptos.devnet:8080/v1"
+
+[[EVM]]
+ChainID = '1337'
+MinContractPayment = '0'
+Enabled = true
+Nodes = [{ Name = 'node-geth-0', WSURL = 'ws://chainlink.geth:8546', HTTPURL = 'http://chainlink.geth:8544' }]
