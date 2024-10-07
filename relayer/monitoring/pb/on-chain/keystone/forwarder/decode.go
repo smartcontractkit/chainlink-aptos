@@ -4,15 +4,16 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/keystone"
+
 	wt_msg "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/write-target"
-	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/write_target"
 )
 
 // DecodeAsReportProcessed decodes a 'write-target.WriteConfirmed' message
 // as a 'keytone.forwarder.ReportProcessed' message
 func DecodeAsReportProcessed(m *wt_msg.WriteConfirmed) (*ReportProcessed, error) {
 	// Decode the confirmed report (WT -> Keystone forwarder)
-	r, err := wt.Decode(m.Report)
+	r, err := keystone.Decode(m.Report)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode report: %w", err)
 	}

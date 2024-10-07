@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	wt_msg "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/write-target"
-	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/write_target"
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/data_feeds"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/keystone"
 
 	mercury_vX "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/mercury/common"
 	mercury_v3 "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/mercury/v3"
@@ -17,7 +17,7 @@ import (
 // as a 'data-feeds.registry.ReportProcessed' message
 func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 	// Decode the confirmed report (WT -> Keystone forwarder)
-	r, err := wt.Decode(m.Report)
+	r, err := keystone.Decode(m.Report)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode report: %w", err)
 	}

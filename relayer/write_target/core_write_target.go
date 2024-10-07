@@ -21,6 +21,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/keystone"
 )
 
 var (
@@ -199,7 +200,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}
 
 	// Decode the report
-	reportDecoded, err := Decode(inputs.Report)
+	reportDecoded, err := keystone.Decode(inputs.Report)
 	if err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to decode the report", err.Error())
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)

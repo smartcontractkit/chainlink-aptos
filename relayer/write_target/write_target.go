@@ -13,11 +13,9 @@ import (
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chainwriter"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
 
-	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/utils"
 )
 
@@ -39,10 +37,8 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 		return nil, err
 	}
 
-	// Initialize the Beholder client with a local logger a custom Emitter
-	bClient := beholder.GetClient().ForPackage("write_target")
-	protoEmitter := monitor.NewProtoEmitter(lggr, &bClient)
-	beholder := &monitor.BeholderClient{&bClient, protoEmitter}
+	// Set up a specific Beholder client for the Aptos WT
+	beholder := NewAptosWriteTargetMonitor(ctx, lggr)
 
 	// Initialize a reader to check whether a value was already transmitted on chain
 	cr := chainreader.NewChainReader(lggr, client, chainreader.ChainReaderConfig{
