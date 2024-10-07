@@ -25,10 +25,28 @@ func NewAptosWriteTargetMonitor(ctx context.Context, lggr logger.Logger) (*monit
 		return nil, fmt.Errorf("failed to create new registry metrics: %w", err)
 	}
 
+	forwarderMetrics, err := forwarder.NewMetrics()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new forwarder metrics: %w", err)
+	}
+
+	wtMetrics, err := wt.NewMetrics()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new write target metrics: %w", err)
+	}
+
 	protoEmitterProxy := protoEmitter{
 		emitter: monitor.NewProtoEmitter(lggr, &client),
 		// Metrics collection
-		registryMetrics: registryMetrics,
+		metrics: struct {
+			registry  *registry.Metrics
+			forwarder *forwarder.Metrics
+			wt        *wt.Metrics
+		}{
+			registry:  registryMetrics,
+			forwarder: forwarderMetrics,
+			wt:        wtMetrics,
+		},
 	}
 	return &monitor.BeholderClient{&client, &protoEmitterProxy}, nil
 }
@@ -37,7 +55,11 @@ func NewAptosWriteTargetMonitor(ctx context.Context, lggr logger.Logger) (*monit
 type protoEmitter struct {
 	emitter monitor.ProtoEmitter
 	// Metrics collection
-	registryMetrics *registry.Metrics
+	metrics struct {
+		registry  *registry.Metrics
+		forwarder *forwarder.Metrics
+		wt        *wt.Metrics
+	}
 }
 
 func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any) error {
@@ -58,7 +80,7 @@ func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs
 		return nil
 	}
 	// TODO: improve metrics publishing
-	err = publishWriteConfirmedMetrics(ctx, writeConfirmed)
+	err = e.metrics.wt.OnWriteConfirmed(ctx, writeConfirmed)
 	if err != nil {
 		return fmt.Errorf("failed to publish write confirmed metrics: %w", err)
 	}
@@ -73,8 +95,8 @@ func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs
 	if err != nil {
 		return fmt.Errorf("failed to emit with log: %w", err)
 	}
-	// TODO: improve metrics publishing
-	err = publishReportProcessedMetrics(ctx, reportProcessed)
+	// Process emit and derive metrics
+	err = e.metrics.forwarder.OnReportProcessed(ctx, reportProcessed)
 	if err != nil {
 		return fmt.Errorf("failed to publish report processed metrics: %w", err)
 	}
@@ -91,35 +113,11 @@ func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs
 			return fmt.Errorf("failed to emit with log: %w", err)
 		}
 		// Process emit and derive metrics
-		err = e.registryMetrics.ProcessFeedUpdated(ctx, update)
+		err = e.metrics.registry.OnFeedUpdated(ctx, update)
 		if err != nil {
 			return fmt.Errorf("failed to publish feed updated metrics: %w", err)
 		}
 	}
 
-	return nil
-}
-
-func publishWriteConfirmedMetrics(ctx context.Context, m *wt.WriteConfirmed) error {
-	meter := beholder.GetMeter()
-
-	// Count events
-	counter, err := meter.Int64Counter("write_target_write_confirmed_count")
-	if err != nil {
-		return fmt.Errorf("failed to create new counter: %w", err)
-	}
-	counter.Add(ctx, 1)
-	return nil
-}
-
-func publishReportProcessedMetrics(ctx context.Context, m *forwarder.ReportProcessed) error {
-	meter := beholder.GetMeter()
-
-	// Count events
-	counter, err := meter.Int64Counter("on_chain_keystone_forwarder_report_processed_count")
-	if err != nil {
-		return fmt.Errorf("failed to create new counter: %w", err)
-	}
-	counter.Add(ctx, 1)
 	return nil
 }

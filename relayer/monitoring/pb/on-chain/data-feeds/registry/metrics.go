@@ -62,7 +62,7 @@ func NewMetrics() (*Metrics, error) {
 	return m, nil
 }
 
-func (m *Metrics) ProcessFeedUpdated(ctx context.Context, msg *FeedUpdated) error {
+func (m *Metrics) OnFeedUpdated(ctx context.Context, msg *FeedUpdated) error {
 	// Count events
 	m.feedUpdated.count.Add(ctx, 1)
 
