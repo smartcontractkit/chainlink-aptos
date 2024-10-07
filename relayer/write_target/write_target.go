@@ -13,9 +13,11 @@ import (
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chainwriter"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
 
+	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/utils"
 )
 
@@ -28,6 +30,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	// }
 
 	id := fmt.Sprintf("write_aptos@1.0.0")
+	lggr = logger.Named(lggr, id)
 
 	config := chain.Config().Workflow
 
@@ -36,8 +39,13 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 		return nil, err
 	}
 
+	// Initialize the Beholder client with a local logger a custom Emitter
+	bClient := beholder.GetClient().ForPackage("write_target")
+	protoEmitter := monitor.NewProtoEmitter(lggr, &bClient)
+	beholder := &monitor.BeholderClient{&bClient, protoEmitter}
+
 	// Initialize a reader to check whether a value was already transmitted on chain
-	cr := chainreader.NewChainReader(logger.Named(lggr, "ChainReader"), client, chainreader.ChainReaderConfig{
+	cr := chainreader.NewChainReader(lggr, client, chainreader.ChainReaderConfig{
 		Modules: map[string]*chainreader.ChainReaderModule{
 			"forwarder": {
 				Functions: map[string]*chainreader.ChainReaderFunction{
@@ -105,7 +113,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 		},
 	}
 
-	cw := chainwriter.NewChainWriter(logger.Named(lggr, "ChainWriter"), chain.TxManager(), cwConfig)
+	cw := chainwriter.NewChainWriter(lggr, chain.TxManager(), cwConfig)
 
 	validate := func(config Config) error {
 		address := aptos.AccountAddress{}
@@ -124,6 +132,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	opts := WriteTargetOpts{
 		ID:                 id,
 		Logger:             lggr,
+		Beholder:           beholder,
 		ChainService:       chain,
 		ContractReader:     cr,
 		ChainWriter:        cw,

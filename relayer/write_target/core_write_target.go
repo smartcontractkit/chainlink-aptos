@@ -14,7 +14,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/consensus/ocr3/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
@@ -60,7 +59,8 @@ type writeTarget struct {
 type WriteTargetOpts struct {
 	ID string
 
-	Logger logger.Logger
+	Logger   logger.Logger
+	Beholder *monitor.BeholderClient
 
 	ChainService     commontypes.ChainService
 	ContractReader   commontypes.ContractReader
@@ -80,14 +80,10 @@ func NewWriteTarget(opts WriteTargetOpts) capabilities.TargetCapability {
 	capInfo := capabilities.MustNewCapabilityInfo(opts.ID, capabilities.CapabilityTypeTarget, capabilityName)
 	selfLogger := logger.Named(opts.Logger, capabilityName)
 
-	// Initialize the Beholder client with a local logger a custom Emitter
-	protoEmitter := monitor.NewProtoEmitter(selfLogger, beholder.GetClient())
-	beholder := &monitor.BeholderClient{beholder.GetClient(), protoEmitter}
-
 	return &writeTarget{
 		capInfo,
 		selfLogger,
-		beholder,
+		opts.Beholder,
 		opts.ChainService,
 		opts.ContractReader,
 		opts.ChainWriter,
@@ -121,7 +117,7 @@ type requestInfo struct {
 
 func (c *writeTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (capabilities.CapabilityResponse, error) {
 	attrs := c.traceAttributes(request.Metadata.WorkflowExecutionID)
-	_, span := beholder.GetClient().Tracer.Start(ctx, "Execute", trace.WithAttributes(attrs...))
+	_, span := c.beholder.Tracer.Start(ctx, "Execute", trace.WithAttributes(attrs...))
 	defer span.End()
 
 	c.lggr.Debugw("Execute", "request", request)
@@ -347,7 +343,7 @@ func (c *writeTarget) UnregisterFromWorkflow(ctx context.Context, request capabi
 //   - 'write-target.WriteConfirmed' if confirmed (until timeout)
 func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInfo, txID uuid.UUID, query func(context.Context) (bool, error)) {
 	attrs := c.traceAttributes(info.reportInfo.workflowExecutionID)
-	_, span := beholder.GetClient().Tracer.Start(ctx, "Execute.acceptAndConfirmWrite", trace.WithAttributes(attrs...))
+	_, span := c.beholder.Tracer.Start(ctx, "Execute.acceptAndConfirmWrite", trace.WithAttributes(attrs...))
 	defer span.End()
 
 	// TODO: needs to be configurable
