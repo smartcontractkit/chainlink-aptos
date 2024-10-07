@@ -32,5 +32,9 @@ func DecodeAsReportProcessed(m *wt_msg.WriteConfirmed) (*ReportProcessed, error)
 
 		// Notice: we skip head/tx data here (unknown), as we map from 'write-target.WriteConfirmed'
 		// and not from tx/event data (e.g., 'write-target.WriteTxConfirmed')
+
+		BlockHash:      m.BlockHash,
+		BlockHeight:    m.BlockHeight,
+		BlockTimestamp: m.BlockTimestamp,
 	}, nil
 }

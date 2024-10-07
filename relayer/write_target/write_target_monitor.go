@@ -67,6 +67,7 @@ func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any
 	return nil
 }
 
+// TODO: the way this is currently used, these errors will be swallowed
 func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs ...any) error {
 	err := e.emitter.EmitWithLog(ctx, m, attrKVs...)
 	if err != nil {

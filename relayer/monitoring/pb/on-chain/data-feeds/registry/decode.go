@@ -13,7 +13,7 @@ import (
 	mercury_v4 "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/mercury/v4"
 )
 
-// DecodeAsReportProcessed decodes a 'write-target.WriteConfirmed' message
+// DecodeAsFeedUpdated decodes a 'write-target.WriteConfirmed' message
 // as a 'data-feeds.registry.ReportProcessed' message
 func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 	// Decode the confirmed report (WT -> Keystone forwarder)
@@ -58,6 +58,10 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 
 				// Notice: we skip head/tx data here (unknown), as we map from 'write-target.WriteConfirmed'
 				// and not from tx/event data (e.g., 'write-target.WriteTxConfirmed')
+
+				BlockHash:      m.BlockHash,
+				BlockHeight:    m.BlockHeight,
+				BlockTimestamp: m.BlockTimestamp,
 			})
 		case uint16(4):
 			rm, err := mercury_v4.Decode(rf.Data)
@@ -75,6 +79,10 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 
 				// Notice: we skip head/tx data here (unknown), as we map from 'write-target.WriteConfirmed'
 				// and not from tx/event data (e.g., 'write-target.WriteTxConfirmed')
+
+				BlockHash:      m.BlockHash,
+				BlockHeight:    m.BlockHeight,
+				BlockTimestamp: m.BlockTimestamp,
 			})
 		default:
 			return nil, fmt.Errorf("unsupported Mercury report type: %d", t)
