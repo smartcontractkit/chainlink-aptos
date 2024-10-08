@@ -13,7 +13,6 @@ import (
 	"log"
 	"os"
 	"time"
-
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
