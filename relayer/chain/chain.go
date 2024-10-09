@@ -230,9 +230,11 @@ func (c *chain) LatestHead(ctx context.Context) (types.Head, error) {
 	}
 
 	return types.Head{
-		Hash:      hash,
-		Height:    strconv.FormatUint(block.BlockHeight, 10),
-		Timestamp: block.BlockTimestamp,
+		Hash:   hash,
+		Height: strconv.FormatUint(block.BlockHeight, 10),
+		// block.BlockTimestamp is the Unix timestamp of the block, in microseconds, may not be set for block 0
+		// Divide by 1000 to convert to milliseconds
+		Timestamp: block.BlockTimestamp / 1000,
 	}, nil
 }
 

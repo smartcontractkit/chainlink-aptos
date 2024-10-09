@@ -76,7 +76,7 @@ Endpoint = 'otelcollector:4317'
 # Only available in dev mode.
 InsecureConnection = true # Default
 # TraceSampleRatio is the rate at which to sample traces. Must be between 0 and 1.
-TraceSampleRatio = 0.01 # Default
+TraceSampleRatio = 1
 
 # ResourceAttributes are global metadata to include with all telemetry.
 [Telemetry.ResourceAttributes]

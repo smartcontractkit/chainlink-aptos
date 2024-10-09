@@ -523,6 +523,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 
 		for _, unconfirmedTx := range unconfirmedTxs {
 			hash := unconfirmedTx.Hash
+			// TODO: chainTx, err not logged anywhere and hidden (required for debugging when txs are not confirmed)
 			chainTx, err := client.TransactionByHash(hash)
 
 			if err == nil && chainTx.Type != aptosapi.TransactionVariantPending {
