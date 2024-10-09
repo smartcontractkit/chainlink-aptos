@@ -46,12 +46,12 @@ var (
 		blockTimestamp: MetricConfig{
 			name:        "on_chain_data_feeds_registry_feed_updated_block_timestamp",
 			unit:        "ms",
-			description: "The block timestamp for latest confirmed write request (as observed)",
+			description: "The block timestamp for latest confirmed write (as observed)",
 		},
 		blockNumber: MetricConfig{
 			name:        "on_chain_data_feeds_registry_feed_updated_block_number",
 			unit:        "",
-			description: "The block number for latest confirmed write request (as observed)",
+			description: "The block number for latest confirmed write (as observed)",
 		},
 	}
 )

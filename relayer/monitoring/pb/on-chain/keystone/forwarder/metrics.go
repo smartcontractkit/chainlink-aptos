@@ -3,22 +3,53 @@ package forwarder
 import (
 	"context"
 	"fmt"
-	"go.opentelemetry.io/otel/metric"
 	"strconv"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
+)
+
+// Define a new struct for metrics configuration
+type MetricConfig struct {
+	name        string
+	unit        string
+	description string
+}
+
+// Define metrics configuration
+var (
+	reportProcessed = struct {
+		count          MetricConfig
+		blockTimestamp MetricConfig
+		blockNumber    MetricConfig
+	}{
+		count: MetricConfig{
+			name:        "on_chain_keystone_forwarder_report_processed_count",
+			unit:        "",
+			description: "The count of message: 'on-chain.keystone.forwarder.ReportProcessed' emitted",
+		},
+		blockTimestamp: MetricConfig{
+			name:        "on_chain_keystone_forwarder_report_processed_block_timestamp",
+			unit:        "ms",
+			description: "The block timestamp for latest confirmed write (as observed)",
+		},
+		blockNumber: MetricConfig{
+			name:        "on_chain_keystone_forwarder_report_processed_block_number",
+			unit:        "",
+			description: "The block number for latest confirmed write (as observed)",
+		},
+	}
 )
 
 // Define a new struct for metrics
 type Metrics struct {
 	// Define on ReportProcessed metrics
 	reportProcessed struct {
-		// on_chain_keystone_forwarder_report_processed_count
-		count metric.Int64Counter
-		// on_chain_keystone_forwarder_report_processed_block_timestamp
+		count          metric.Int64Counter
 		blockTimestamp metric.Int64Gauge
-		// on_chain_keystone_forwarder_report_processed_block_number
-		blockNumber metric.Int64Gauge
+		blockNumber    metric.Int64Gauge
 	}
 }
 
@@ -30,17 +61,33 @@ func NewMetrics() (*Metrics, error) {
 
 	// Create new metrics
 	var err error
-	m.reportProcessed.count, err = meter.Int64Counter("on_chain_keystone_forwarder_report_processed_count")
+
+	mc := reportProcessed.count
+	m.reportProcessed.count, err = meter.Int64Counter(
+		mc.name,
+		metric.WithUnit(mc.unit),
+		metric.WithDescription(mc.description),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new counter: %w", err)
 	}
 
-	m.reportProcessed.blockTimestamp, err = meter.Int64Gauge("on_chain_keystone_forwarder_report_processed_block_timestamp")
+	mc = reportProcessed.blockTimestamp
+	m.reportProcessed.blockTimestamp, err = meter.Int64Gauge(
+		mc.name,
+		metric.WithUnit(mc.unit),
+		metric.WithDescription(mc.description),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
 
-	m.reportProcessed.blockNumber, err = meter.Int64Gauge("on_chain_keystone_forwarder_report_processed_block_number")
+	mc = reportProcessed.blockNumber
+	m.reportProcessed.blockNumber, err = meter.Int64Gauge(
+		mc.name,
+		metric.WithUnit(mc.unit),
+		metric.WithDescription(mc.description),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
@@ -49,18 +96,29 @@ func NewMetrics() (*Metrics, error) {
 }
 
 func (m *Metrics) OnReportProcessed(ctx context.Context, msg *ReportProcessed) error {
+	// Define common attributes
+	attrs := metric.WithAttributes(
+		// TODO: do we need these attributes? (available in WriteConfirmed)
+		// attribute.String("node", msg.Node),
+		// attribute.String("forwarder", msg.Forwarder),
+		attribute.String("receiver", msg.Receiver),
+		attribute.Int64("report_id", int64(msg.ReportId)), // uint32 -> int64
+		// attribute.String("transmitter", msg.Transmitter),
+		attribute.Bool("success", msg.Success),
+	)
+
 	// Count events
-	m.reportProcessed.count.Add(ctx, 1)
+	m.reportProcessed.count.Add(ctx, 1, attrs)
 
 	// Block timestamp
-	m.reportProcessed.blockTimestamp.Record(ctx, int64(msg.BlockTimestamp))
+	m.reportProcessed.blockTimestamp.Record(ctx, int64(msg.BlockTimestamp), attrs)
 
 	// Block number
 	blockHeightVal, err := strconv.ParseInt(msg.BlockHeight, 10, 64)
 	if err != nil {
 		return fmt.Errorf("failed to parse block height: %w", err)
 	}
-	m.reportProcessed.blockNumber.Record(ctx, blockHeightVal)
+	m.reportProcessed.blockNumber.Record(ctx, blockHeightVal, attrs)
 
 	return nil
 }
