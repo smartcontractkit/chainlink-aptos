@@ -8,9 +8,10 @@ option go_package = ".;registry";
 message FeedUpdated {
   bytes feed_id = 1;
   // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
-  uint32 timestamp = 2;
+  uint32 observations_timestamp = 2;
   // TODO: how to represent benchmark data which is u256 on-chain?
   uint64 benchmark = 3;
+
   bytes report = 4;
 
   // TODO: Transaction data - tx that mained the event (e.g., hash, gas, transmitter, payload, etc.)

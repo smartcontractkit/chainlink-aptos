@@ -50,8 +50,8 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 
 			msgs = append(msgs, &FeedUpdated{
 				// Event data
-				FeedId:    rm.FeedId[:], // Convert [32]byte to []byte
-				Timestamp: rm.ObservationsTimestamp,
+				FeedId:                rm.FeedId[:], // Convert [32]byte to []byte
+				ObservationsTimestamp: rm.ObservationsTimestamp,
 				// TODO: u256 lossy conversion
 				Benchmark: rm.BenchmarkPrice.Uint64(), // Map big.Int as uint64
 				Report:    rf.Data,
@@ -71,8 +71,8 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 
 			msgs = append(msgs, &FeedUpdated{
 				// Event data
-				FeedId:    rm.FeedId[:], // Convert [32]byte to []byte
-				Timestamp: rm.ObservationsTimestamp,
+				FeedId:                rm.FeedId[:], // Convert [32]byte to []byte
+				ObservationsTimestamp: rm.ObservationsTimestamp,
 				// TODO: u256 lossy conversion
 				Benchmark: rm.BenchmarkPrice.Uint64(), // Map big.Int as uint64
 				Report:    rf.Data,
