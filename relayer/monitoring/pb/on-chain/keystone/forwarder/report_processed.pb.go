@@ -32,9 +32,8 @@ type ReportProcessed struct {
 	ReportId            uint32 `protobuf:"varint,3,opt,name=report_id,json=reportId,proto3" json:"report_id,omitempty"`
 	Success             bool   `protobuf:"varint,4,opt,name=success,proto3" json:"success,omitempty"`
 	// Head data - when was the event produced on-chain
-	BlockHash   string `protobuf:"bytes,9,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty"`
-	BlockHeight string `protobuf:"bytes,10,opt,name=block_height,json=blockHeight,proto3" json:"block_height,omitempty"`
-	// TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
+	BlockHash      string `protobuf:"bytes,9,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty"`
+	BlockHeight    string `protobuf:"bytes,10,opt,name=block_height,json=blockHeight,proto3" json:"block_height,omitempty"`
 	BlockTimestamp uint64 `protobuf:"varint,11,opt,name=block_timestamp,json=blockTimestamp,proto3" json:"block_timestamp,omitempty"`
 }
 

@@ -7,7 +7,6 @@ option go_package = ".;registry";
 // the write-target WriteConfirmed event, after a write was confirmed (@see message: write-target.WriteConfirmed).
 message FeedUpdated {
   bytes feed_id = 1;
-  // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
   uint32 observations_timestamp = 2;
   // TODO: how to represent benchmark data which is u256 on-chain?
   uint64 benchmark = 3;
@@ -19,6 +18,5 @@ message FeedUpdated {
   // Head data - when was the event produced on-chain
   string block_hash = 9;
   string block_height = 10;
-  // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
   uint64 block_timestamp = 11;
 }

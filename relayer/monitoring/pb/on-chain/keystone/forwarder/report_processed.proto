@@ -16,6 +16,5 @@ message ReportProcessed {
   // Head data - when was the event produced on-chain
   string block_hash = 9;
   string block_height = 10;
-  // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
   uint64 block_timestamp = 11;
 }

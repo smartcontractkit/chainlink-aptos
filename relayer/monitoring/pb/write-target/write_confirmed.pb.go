@@ -37,9 +37,8 @@ type WriteConfirmed struct {
 	// Is the report finalized on-chain?
 	Finalized bool `protobuf:"varint,8,opt,name=finalized,proto3" json:"finalized,omitempty"`
 	// When was the report confirmed on-chain
-	BlockHash   string `protobuf:"bytes,9,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty"`
-	BlockHeight string `protobuf:"bytes,10,opt,name=block_height,json=blockHeight,proto3" json:"block_height,omitempty"`
-	// TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
+	BlockHash      string `protobuf:"bytes,9,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty"`
+	BlockHeight    string `protobuf:"bytes,10,opt,name=block_height,json=blockHeight,proto3" json:"block_height,omitempty"`
 	BlockTimestamp uint64 `protobuf:"varint,11,opt,name=block_timestamp,json=blockTimestamp,proto3" json:"block_timestamp,omitempty"`
 	// Transmission Info
 	Transmitter string `protobuf:"bytes,12,opt,name=transmitter,proto3" json:"transmitter,omitempty"`

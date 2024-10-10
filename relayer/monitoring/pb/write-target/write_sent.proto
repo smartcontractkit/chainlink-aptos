@@ -20,6 +20,5 @@ message WriteSent {
   // When was the transaction submitted
   string block_hash = 7;
   string block_height = 8;
-  // TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
   uint64 block_timestamp = 9;
 }

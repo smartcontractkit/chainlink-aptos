@@ -27,16 +27,14 @@ type FeedUpdated struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	FeedId []byte `protobuf:"bytes,1,opt,name=feed_id,json=feedId,proto3" json:"feed_id,omitempty"`
-	// TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
+	FeedId                []byte `protobuf:"bytes,1,opt,name=feed_id,json=feedId,proto3" json:"feed_id,omitempty"`
 	ObservationsTimestamp uint32 `protobuf:"varint,2,opt,name=observations_timestamp,json=observationsTimestamp,proto3" json:"observations_timestamp,omitempty"`
 	// TODO: how to represent benchmark data which is u256 on-chain?
 	Benchmark uint64 `protobuf:"varint,3,opt,name=benchmark,proto3" json:"benchmark,omitempty"`
 	Report    []byte `protobuf:"bytes,4,opt,name=report,proto3" json:"report,omitempty"`
 	// Head data - when was the event produced on-chain
-	BlockHash   string `protobuf:"bytes,9,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty"`
-	BlockHeight string `protobuf:"bytes,10,opt,name=block_height,json=blockHeight,proto3" json:"block_height,omitempty"`
-	// TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
+	BlockHash      string `protobuf:"bytes,9,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty"`
+	BlockHeight    string `protobuf:"bytes,10,opt,name=block_height,json=blockHeight,proto3" json:"block_height,omitempty"`
 	BlockTimestamp uint64 `protobuf:"varint,11,opt,name=block_timestamp,json=blockTimestamp,proto3" json:"block_timestamp,omitempty"`
 }
 

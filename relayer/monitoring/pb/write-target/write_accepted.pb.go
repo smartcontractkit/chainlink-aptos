@@ -39,9 +39,8 @@ type WriteAccepted struct {
 	TxFrom   string `protobuf:"bytes,7,opt,name=tx_from,json=txFrom,proto3" json:"tx_from,omitempty"`
 	TxStatus string `protobuf:"bytes,8,opt,name=tx_status,json=txStatus,proto3" json:"tx_status,omitempty"`
 	// When was the transaction accepted on-chain
-	BlockHash   string `protobuf:"bytes,9,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty"`
-	BlockHeight string `protobuf:"bytes,10,opt,name=block_height,json=blockHeight,proto3" json:"block_height,omitempty"`
-	// TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
+	BlockHash      string `protobuf:"bytes,9,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty"`
+	BlockHeight    string `protobuf:"bytes,10,opt,name=block_height,json=blockHeight,proto3" json:"block_height,omitempty"`
 	BlockTimestamp uint64 `protobuf:"varint,11,opt,name=block_timestamp,json=blockTimestamp,proto3" json:"block_timestamp,omitempty"`
 }
 

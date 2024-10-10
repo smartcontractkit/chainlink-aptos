@@ -36,9 +36,8 @@ type WriteSent struct {
 	// Transaction ID - tx reference as created by the WT, to be used for tracking TXM execution
 	TxId string `protobuf:"bytes,5,opt,name=tx_id,json=txId,proto3" json:"tx_id,omitempty"`
 	// When was the transaction submitted
-	BlockHash   string `protobuf:"bytes,7,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty"`
-	BlockHeight string `protobuf:"bytes,8,opt,name=block_height,json=blockHeight,proto3" json:"block_height,omitempty"`
-	// TODO: Should we use "google/protobuf/timestamp.proto" for timestamps?
+	BlockHash      string `protobuf:"bytes,7,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty"`
+	BlockHeight    string `protobuf:"bytes,8,opt,name=block_height,json=blockHeight,proto3" json:"block_height,omitempty"`
 	BlockTimestamp uint64 `protobuf:"varint,9,opt,name=block_timestamp,json=blockTimestamp,proto3" json:"block_timestamp,omitempty"`
 }
 
