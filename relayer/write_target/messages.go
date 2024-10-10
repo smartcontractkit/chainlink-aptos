@@ -16,7 +16,7 @@ func (m *messageBuilder) buildWriteError(i *requestInfo, code uint32, summary, c
 		Summary: summary,
 		Cause:   cause,
 
-		Node:      i.transmitter,
+		Node:      i.node,
 		Forwarder: i.forwarder,
 		Receiver:  i.receiver,
 		ReportId:  uint32(i.reportInfo.reportID),
@@ -25,7 +25,7 @@ func (m *messageBuilder) buildWriteError(i *requestInfo, code uint32, summary, c
 
 func (m *messageBuilder) buildWriteInitiated(i *requestInfo) *wt.WriteInitiated {
 	return &wt.WriteInitiated{
-		Node:      i.transmitter,
+		Node:      i.node,
 		Forwarder: i.forwarder,
 		Receiver:  i.receiver,
 		ReportId:  uint32(i.reportInfo.reportID),
@@ -34,7 +34,7 @@ func (m *messageBuilder) buildWriteInitiated(i *requestInfo) *wt.WriteInitiated 
 
 func (m *messageBuilder) buildWriteSkipped(i *requestInfo, reason string) *wt.WriteSkipped {
 	return &wt.WriteSkipped{
-		Node:      i.transmitter,
+		Node:      i.node,
 		Forwarder: i.forwarder,
 		Receiver:  i.receiver,
 		ReportId:  uint32(i.reportInfo.reportID),
@@ -44,7 +44,7 @@ func (m *messageBuilder) buildWriteSkipped(i *requestInfo, reason string) *wt.Wr
 
 func (m *messageBuilder) buildWriteSent(i *requestInfo, head types.Head, txID string) *wt.WriteSent {
 	return &wt.WriteSent{
-		Node:      i.transmitter,
+		Node:      i.node,
 		Forwarder: i.forwarder,
 		Receiver:  i.receiver,
 		ReportId:  uint32(i.reportInfo.reportID),
@@ -59,7 +59,7 @@ func (m *messageBuilder) buildWriteSent(i *requestInfo, head types.Head, txID st
 
 func (m *messageBuilder) buildWriteConfirmed(i *requestInfo, head types.Head, finalized bool) *wt.WriteConfirmed {
 	return &wt.WriteConfirmed{
-		Node:      i.transmitter,
+		Node:      i.node,
 		Forwarder: i.forwarder,
 		Receiver:  i.receiver,
 
@@ -74,6 +74,8 @@ func (m *messageBuilder) buildWriteConfirmed(i *requestInfo, head types.Head, fi
 		BlockHeight:    head.Height,
 		BlockTimestamp: head.Timestamp,
 
-		// TODO: Add the TransactionState
+		// Transmission Info
+		Transmitter: i.reportTransmissionState.Transmitter,
+		Success:     i.reportTransmissionState.Success,
 	}
 }

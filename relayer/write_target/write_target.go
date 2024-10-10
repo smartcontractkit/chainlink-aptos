@@ -68,6 +68,26 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 							},
 						},
 					},
+					"getTransmitter": {
+						Name: "get_transmitter",
+						Params: []codec.AptosFunctionParam{
+							{
+								Name:     "Receiver",
+								Type:     "address",
+								Required: true,
+							},
+							{
+								Name:     "WorkflowExecutionID",
+								Type:     "vector<u8>",
+								Required: true,
+							},
+							{
+								Name:     "ReportID",
+								Type:     "u16",
+								Required: true,
+							},
+						},
+					},
 				},
 			},
 		},
@@ -129,15 +149,15 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 
 	// Create the WT capability
 	opts := WriteTargetOpts{
-		ID:                 id,
-		Logger:             lggr,
-		Beholder:           beholder,
-		ChainService:       chain,
-		ContractReader:     cr,
-		ChainWriter:        cw,
-		ConfigValidateFn:   validate,
-		TransmitterAddress: transmitter,
-		ForwarderAddress:   config.ForwarderAddress,
+		ID:               id,
+		Logger:           lggr,
+		Beholder:         beholder,
+		ChainService:     chain,
+		ContractReader:   cr,
+		ChainWriter:      cw,
+		ConfigValidateFn: validate,
+		NodeAddress:      transmitter,
+		ForwarderAddress: config.ForwarderAddress,
 	}
 	return NewWriteTarget(opts), nil
 }

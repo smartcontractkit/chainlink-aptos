@@ -39,6 +39,7 @@ const (
 	contractName                            = "forwarder"
 	contractMethodName_report               = "report"
 	contractMethodName_getTransmissionState = "getTransmissionState"
+	contractMethodName_getTransmitter       = "getTransmitter"
 )
 
 type writeTarget struct {
@@ -53,8 +54,8 @@ type writeTarget struct {
 	cw               commontypes.ChainWriter
 	configValidateFn func(config Config) error
 
-	transmitterAddress string
-	forwarderAddress   string
+	nodeAddress      string
+	forwarderAddress string
 }
 
 type WriteTargetOpts struct {
@@ -68,13 +69,18 @@ type WriteTargetOpts struct {
 	ChainWriter      commontypes.ChainWriter
 	ConfigValidateFn func(config Config) error
 
-	TransmitterAddress string
-	ForwarderAddress   string
+	NodeAddress      string
+	ForwarderAddress string
 }
 
 // Capability-specific configuration
 type Config struct {
 	Address string
+}
+
+type TransmissionState struct {
+	Transmitter string
+	Success     bool
 }
 
 func NewWriteTarget(opts WriteTargetOpts) capabilities.TargetCapability {
@@ -89,7 +95,7 @@ func NewWriteTarget(opts WriteTargetOpts) capabilities.TargetCapability {
 		opts.ContractReader,
 		opts.ChainWriter,
 		opts.ConfigValidateFn,
-		opts.TransmitterAddress,
+		opts.NodeAddress,
 		opts.ForwarderAddress,
 	}
 }
@@ -109,11 +115,12 @@ type reportInfo struct {
 }
 
 type requestInfo struct {
-	forwarder   string
-	receiver    string
-	transmitter string
+	node      string
+	forwarder string
+	receiver  string
 
-	reportInfo *reportInfo
+	reportInfo              *reportInfo
+	reportTransmissionState *TransmissionState
 }
 
 func (c *writeTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (capabilities.CapabilityResponse, error) {
@@ -125,9 +132,9 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 
 	// Helper to keep track of the info
 	info := &requestInfo{
-		forwarder:   c.forwarderAddress,
-		receiver:    "N/A",
-		transmitter: c.transmitterAddress,
+		node:      c.nodeAddress,
+		forwarder: c.forwarderAddress,
+		receiver:  "N/A",
 		reportInfo: &reportInfo{
 			reportContext:       nil,
 			report:              nil,
@@ -135,6 +142,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 			reportID:            0, // N/A
 			workflowExecutionID: request.Metadata.WorkflowExecutionID,
 		},
+		reportTransmissionState: nil,
 	}
 	// Helper to build monitoring (Beholder) messages
 	builder := &messageBuilder{}
@@ -220,7 +228,6 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		Address: info.forwarder,
 		Name:    contractName,
 	}
-	readID := binding.ReadIdentifier(contractMethodName_getTransmissionState)
 	queryInputs := struct {
 		Receiver            string
 		WorkflowExecutionID []byte
@@ -238,7 +245,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
 	}
 
-	c.lggr.Debugw("WriteTarget non-empty report",
+	c.lggr.Debugw("non-empty valid report",
 		"reportID", info.reportInfo.reportID,
 		"report", "0x"+hex.EncodeToString(inputs.Report),
 		"reportLen", len(inputs.Report),
@@ -249,30 +256,80 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		"executionID", request.Metadata.WorkflowExecutionID,
 	)
 
-	c.lggr.Debugw("WriteTarget - calling [forwarder.getTransmissionState]", "binding", binding, "queryInputs", queryInputs)
+	c.lggr.Debugw("querying [TransmissionState]", "binding", binding, "queryInputs", queryInputs)
 
 	// Notice: if not confirmed the report is published yet, we're expected to submit the report on-chain (might be
 	// competing with other nodes). We want to confirm this report was accepted and finalized eventually, or timeout
 	// and emit an error - we store the confirm query
 
 	// Helper to query the chain for the transmission state
-	query := func(ctx context.Context) (bool, error) {
+	// TODO: it's unclear how to source the TransmissionState via an abstracted CR API call
+	// Notice: this function is Aptos chain-specific (logic needs to be hidden behind the CR API call)
+	query := func(ctx context.Context) (*TransmissionState, error) {
+		// Check if transmission state exists
 		var transmitted bool
-		err := c.cr.GetLatestValue(ctx, readID, primitives.Unconfirmed, queryInputs, &transmitted)
-		return transmitted, err
+		readTransmissionState := binding.ReadIdentifier(contractMethodName_getTransmissionState)
+		err := c.cr.GetLatestValue(ctx, readTransmissionState, primitives.Unconfirmed, queryInputs, &transmitted)
+		if err != nil {
+			return nil, fmt.Errorf("failed to call [forwarder.getTransmissionState]: %w", err)
+		}
+
+		c.lggr.Debugw("[forwarder.getTransmissionState] call output", "transmitted", transmitted)
+
+		// nil state means the report was not transmitted yet
+		if !transmitted {
+			return nil, nil
+		}
+
+		// Fetch the transmitter address from the chain (decode output type)
+		// TODO: it's unclear how to decode the Option<string> output type via CR API (we decode manually)
+		var output []interface{}
+		readTransmitter := binding.ReadIdentifier(contractMethodName_getTransmitter)
+		err = c.cr.GetLatestValue(ctx, readTransmitter, primitives.Unconfirmed, queryInputs, &output)
+		if err != nil {
+			return nil, fmt.Errorf("failed to call [forwarder.getTransmitter]: %w", err)
+		}
+
+		c.lggr.Debugw("[forwarder.getTransmitter] call output", "output", output)
+
+		if len(output) == 0 {
+			return nil, fmt.Errorf("failed to call [forwarder.getTransmitter]: empty result")
+		}
+
+		transmitterMap, ok := output[0].(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("failed to call [forwarder.getTransmitter]: unexpected result format (map[string]interface{})")
+		}
+
+		transmitterVec, ok := transmitterMap["vec"].([]interface{})
+		if !ok || len(transmitterVec) == 0 {
+			return nil, fmt.Errorf("failed to call [forwarder.getTransmitter]: unexpected result format ([]interface{})")
+		}
+
+		transmitterStr, ok := transmitterVec[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("failed to call [forwarder.getTransmitter]: unexpected result format (string)")
+		}
+
+		return &TransmissionState{Transmitter: transmitterStr, Success: true}, nil
 	}
 
-	transmitted, err := query(ctx)
+	state, err := query(ctx)
 	if err != nil {
-		msg := builder.buildWriteError(info, 0, "failed to call [forwarder.getTransmissionState]", err.Error())
+		msg := builder.buildWriteError(info, 0, "failed to fetch [TransmissionState]", err.Error())
 		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
-	} else if transmitted == true {
+	}
+
+	if state != nil {
+		// Source the transmitter address from the on-chain state
+		info.reportTransmissionState = state
+
 		finalized := false
 		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(info, head, finalized))
 		return success(), nil
 	}
 
-	c.lggr.Infow("WriteTarget on-chain report check done - attempting to push to txmgr",
+	c.lggr.Infow("on-chain report check done - attempting to push to txmgr",
 		"reportID", info.reportInfo.reportID,
 		"reportLen", len(inputs.Report),
 		"reportContextLen", len(inputs.Context),
@@ -338,11 +395,11 @@ func (c *writeTarget) UnregisterFromWorkflow(ctx context.Context, request capabi
 
 // acceptAndConfirmWrite waits (until timeout) for the report to be accepted and (optionally) confirmed on-chain
 // Emits Beholder messages:
-//   - 'write-target.WriteError' if not accepted
-//   - 'write-target.WriteAccepted' if accepted (with or without an error)
-//   - 'write-target.WriteError' if accepted (with an error)
+//   - 'write-target.WriteError'     if not accepted
+//   - 'write-target.WriteAccepted'  if accepted (with or without an error)
+//   - 'write-target.WriteError'     if accepted (with an error)
 //   - 'write-target.WriteConfirmed' if confirmed (until timeout)
-func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInfo, txID uuid.UUID, query func(context.Context) (bool, error)) {
+func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInfo, txID uuid.UUID, query func(context.Context) (*TransmissionState, error)) {
 	attrs := c.traceAttributes(info.reportInfo.workflowExecutionID)
 	_, span := c.beholder.Tracer.Start(ctx, "Execute.acceptAndConfirmWrite", trace.WithAttributes(attrs...))
 	defer span.End()
@@ -409,15 +466,19 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 			}
 
 			// Check confirmation status (transmission state)
-			confirmed, err := checkConfirmedStatus(ctx)
+			state, err := checkConfirmedStatus(ctx)
 			if err != nil {
 				c.lggr.Errorw("write confirmation - failed to check confirmed status", "txID", txID, "err", err)
 				continue
 			}
 
-			if confirmed {
+			// If confirmed, emit the confirmation message and return
+			if state != nil {
 				// We (eventually) confirmed the report was transmitted
 				c.lggr.Infow("write confirmation - confirmed", "txID", txID)
+
+				// Source the transmitter address from the on-chain state
+				info.reportTransmissionState = state
 
 				finalized := false
 				c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(&info, head, finalized))
