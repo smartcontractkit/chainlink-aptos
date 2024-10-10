@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"integration-tests/deploy"
 	"integration-tests/scripts"
+	"log"
+	"os"
 	"os/exec"
 	"os/signal"
 	"syscall"
-
-	"log"
-	"os"
 	"time"
 
 	"github.com/docker/docker/api/types"
