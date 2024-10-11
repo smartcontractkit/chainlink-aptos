@@ -22,6 +22,9 @@ import (
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/keystone"
+
+	// TODO: Notice, we use the Apots SDK in this WT implementation (not-portable, not chain-agnostic)
+	"github.com/aptos-labs/aptos-go-sdk"
 )
 
 var (
@@ -282,36 +285,22 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		}
 
 		// Fetch the transmitter address from the chain (decode output type)
-		// TODO: it's unclear how to decode the Option<string> output type via CR API (we decode manually)
-		var output []interface{}
+		var transmitter struct {
+			Vec []aptos.AccountAddress
+		}
 		readTransmitter := binding.ReadIdentifier(contractMethodName_getTransmitter)
-		err = c.cr.GetLatestValue(ctx, readTransmitter, primitives.Unconfirmed, queryInputs, &output)
+		err = c.cr.GetLatestValue(ctx, readTransmitter, primitives.Unconfirmed, queryInputs, &transmitter)
 		if err != nil {
 			return nil, fmt.Errorf("failed to call [forwarder.getTransmitter]: %w", err)
 		}
 
-		c.lggr.Debugw("[forwarder.getTransmitter] call output", "output", output)
+		c.lggr.Debugw("[forwarder.getTransmitter] call output", "transmitter", transmitter)
 
-		if len(output) == 0 {
+		if len(transmitter.Vec) == 0 {
 			return nil, fmt.Errorf("failed to call [forwarder.getTransmitter]: empty result")
 		}
 
-		transmitterMap, ok := output[0].(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("failed to call [forwarder.getTransmitter]: unexpected result format (map[string]interface{})")
-		}
-
-		transmitterVec, ok := transmitterMap["vec"].([]interface{})
-		if !ok || len(transmitterVec) == 0 {
-			return nil, fmt.Errorf("failed to call [forwarder.getTransmitter]: unexpected result format ([]interface{})")
-		}
-
-		transmitterStr, ok := transmitterVec[0].(string)
-		if !ok {
-			return nil, fmt.Errorf("failed to call [forwarder.getTransmitter]: unexpected result format (string)")
-		}
-
-		return &TransmissionState{Transmitter: transmitterStr, Success: true}, nil
+		return &TransmissionState{Transmitter: transmitter.Vec[0].String(), Success: true}, nil
 	}
 
 	state, err := query(ctx)
