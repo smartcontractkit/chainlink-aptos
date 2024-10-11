@@ -22,9 +22,6 @@ import (
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/keystone"
-
-	// TODO: Notice, we use the Apots SDK in this WT implementation (not-portable, not chain-agnostic)
-	"github.com/aptos-labs/aptos-go-sdk"
 )
 
 var (
@@ -285,8 +282,9 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		}
 
 		// Fetch the transmitter address from the chain (decode output type)
+		// Notice: here we leak an Apots specific type and implementation - Option<string> (not-portable, not chain-agnostic)
 		var transmitter struct {
-			Vec []aptos.AccountAddress
+			Vec []string
 		}
 		readTransmitter := binding.ReadIdentifier(contractMethodName_getTransmitter)
 		err = c.cr.GetLatestValue(ctx, readTransmitter, primitives.Unconfirmed, queryInputs, &transmitter)
@@ -297,10 +295,10 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		c.lggr.Debugw("[forwarder.getTransmitter] call output", "transmitter", transmitter)
 
 		if len(transmitter.Vec) == 0 {
-			return nil, fmt.Errorf("failed to call [forwarder.getTransmitter]: empty result")
+			return nil, fmt.Errorf("failed to call [forwarder.getTransmitter]: unexpected empty result")
 		}
 
-		return &TransmissionState{Transmitter: transmitter.Vec[0].String(), Success: true}, nil
+		return &TransmissionState{Transmitter: transmitter.Vec[0], Success: true}, nil
 	}
 
 	state, err := query(ctx)
