@@ -18,6 +18,11 @@ type MetricConfig struct {
 	description string
 }
 
+// ns returns a namespaced metric name
+func ns(name string) string {
+	return fmt.Sprintf("keystone_on_chain_forwarder_%s", name)
+}
+
 // Define metrics configuration
 var (
 	reportProcessed = struct {
@@ -26,17 +31,17 @@ var (
 		blockNumber    MetricConfig
 	}{
 		count: MetricConfig{
-			name:        "keystone_on_chain_forwarder_report_processed_count",
+			name:        ns("report_processed_count"),
 			unit:        "",
 			description: "The count of message: 'keystone.on-chain.forwarder.ReportProcessed' emitted",
 		},
 		blockTimestamp: MetricConfig{
-			name:        "keystone_on_chain_forwarder_report_processed_block_timestamp",
+			name:        ns("report_processed_block_timestamp"),
 			unit:        "ms",
 			description: "The block timestamp for latest confirmed write (as observed)",
 		},
 		blockNumber: MetricConfig{
-			name:        "keystone_on_chain_forwarder_report_processed_block_number",
+			name:        ns("report_processed_block_number"),
 			unit:        "",
 			description: "The block number for latest confirmed write (as observed)",
 		},

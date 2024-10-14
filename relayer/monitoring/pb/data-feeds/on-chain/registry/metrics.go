@@ -19,6 +19,11 @@ type MetricConfig struct {
 	description string
 }
 
+// ns returns a namespaced metric name
+func ns(name string) string {
+	return fmt.Sprintf("data_feeds_on_chain_registry_%s", name)
+}
+
 // Define metrics configuration
 var (
 	feedUpdated = struct {
@@ -29,27 +34,27 @@ var (
 		blockNumber           MetricConfig
 	}{
 		count: MetricConfig{
-			name:        "data_feeds_on_chain_registry_feed_updated_count",
+			name:        ns("feed_updated_count"),
 			unit:        "",
 			description: "The count of message: 'data-feeds.on-chain.registry.FeedUpdated' emitted",
 		},
 		observationsTimestamp: MetricConfig{
-			name:        "data_feeds_on_chain_registry_feed_updated_observations_timestamp",
+			name:        ns("feed_updated_observations_timestamp"),
 			unit:        "ms",
 			description: "",
 		},
 		benchmark: MetricConfig{
-			name:        "data_feeds_on_chain_registry_feed_updated_benchmark",
+			name:        ns("feed_updated_benchmark"),
 			unit:        "",
 			description: "",
 		},
 		blockTimestamp: MetricConfig{
-			name:        "data_feeds_on_chain_registry_feed_updated_block_timestamp",
+			name:        ns("feed_updated_block_timestamp"),
 			unit:        "ms",
 			description: "The block timestamp for latest confirmed write (as observed)",
 		},
 		blockNumber: MetricConfig{
-			name:        "data_feeds_on_chain_registry_feed_updated_block_number",
+			name:        ns("feed_updated_block_number"),
 			unit:        "",
 			description: "The block number for latest confirmed write (as observed)",
 		},

@@ -18,6 +18,11 @@ type MetricConfig struct {
 	description string
 }
 
+// ns returns a namespaced metric name
+func ns(name string) string {
+	return fmt.Sprintf("keystone_write_target_%s", name)
+}
+
 // Define metrics configuration
 var (
 	writeConfirmed = struct {
@@ -27,22 +32,22 @@ var (
 		signersNumber  MetricConfig
 	}{
 		count: MetricConfig{
-			name:        "keystone_write_target_write_confirmed_count",
+			name:        ns("write_confirmed_count"),
 			unit:        "",
 			description: "The count of message: 'keystone.write-target.WriteConfirmed' emitted",
 		},
 		blockTimestamp: MetricConfig{
-			name:        "keystone_write_target_write_confirmed_block_timestamp",
+			name:        ns("write_confirmed_block_timestamp"),
 			unit:        "ms",
 			description: "The block timestamp for latest confirmed write (as observed)",
 		},
 		blockNumber: MetricConfig{
-			name:        "keystone_write_target_write_confirmed_block_number",
+			name:        ns("write_confirmed_block_number"),
 			unit:        "",
 			description: "The block number for latest confirmed write (as observed)",
 		},
 		signersNumber: MetricConfig{
-			name:        "keystone_write_target_write_confirmed_signers_number",
+			name:        ns("write_confirmed_signers_number"),
 			unit:        "",
 			description: "The number of signers attached to the processed and confirmed write request",
 		},

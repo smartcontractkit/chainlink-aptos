@@ -21,7 +21,7 @@ const (
 )
 
 // The on-chain ReportProcessed event which is extracted from the tx/event data or
-// the write-target WriteConfirmed event, after a write was confirmed (@see message: write-target.WriteConfirmed).
+// the write-target WriteConfirmed event, after a write was confirmed (@see message: keystone.write-target.WriteConfirmed).
 type ReportProcessed struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
