@@ -5,7 +5,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 
-	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/write-target"
+	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/keystone/write-target"
 )
 
 type messageBuilder struct{}

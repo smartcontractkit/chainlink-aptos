@@ -1,6 +1,6 @@
 syntax="proto3";
 
-package write_target;
+package keystone.write_target;
 option go_package = ".;write_target";
 
 // WT sent a transaction and it was accepted on-chain

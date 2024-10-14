@@ -6,10 +6,10 @@ import (
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/keystone"
 
-	wt_msg "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/write-target"
+	wt_msg "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/keystone/write-target"
 )
 
-// DecodeAsReportProcessed decodes a 'write-target.WriteConfirmed' message
+// DecodeAsReportProcessed decodes a 'keystone.write-target.WriteConfirmed' message
 // as a 'keytone.forwarder.ReportProcessed' message
 func DecodeAsReportProcessed(m *wt_msg.WriteConfirmed) (*ReportProcessed, error) {
 	// Decode the confirmed report (WT -> Keystone forwarder)
@@ -30,8 +30,8 @@ func DecodeAsReportProcessed(m *wt_msg.WriteConfirmed) (*ReportProcessed, error)
 		ReportId:            m.ReportId,
 		Success:             m.Success,
 
-		// Notice: we skip head/tx data here (unknown), as we map from 'write-target.WriteConfirmed'
-		// and not from tx/event data (e.g., 'write-target.WriteTxConfirmed')
+		// Notice: we skip head/tx data here (unknown), as we map from 'keystone.write-target.WriteConfirmed'
+		// and not from tx/event data (e.g., 'keystone.write-target.WriteTxConfirmed')
 
 		BlockHash:      m.BlockHash,
 		BlockHeight:    m.BlockHeight,

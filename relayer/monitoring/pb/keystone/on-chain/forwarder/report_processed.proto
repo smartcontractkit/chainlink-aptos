@@ -1,17 +1,15 @@
 syntax="proto3";
 
-package registry;
-option go_package = ".;registry";
+package keystone.on_chain.forwarder;
+option go_package = ".;forwarder";
 
-// The on-chain FeedUpdated event which is extracted from the tx/event data or
+// The on-chain ReportProcessed event which is extracted from the tx/event data or
 // the write-target WriteConfirmed event, after a write was confirmed (@see message: write-target.WriteConfirmed).
-message FeedUpdated {
-  bytes feed_id = 1;
-  uint32 observations_timestamp = 2;
-  // TODO: how to represent benchmark data which is u256 on-chain?
-  uint64 benchmark = 3;
-
-  bytes report = 4;
+message ReportProcessed {
+  string receiver = 1;
+  bytes workflow_execution_id = 2;
+  uint32 report_id = 3;
+  bool success = 4;
 
   // TODO: Transaction data - tx that mained the event (e.g., hash, gas, transmitter, payload, etc.)
 

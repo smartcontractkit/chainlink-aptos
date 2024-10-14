@@ -3,7 +3,7 @@ package registry
 import (
 	"fmt"
 
-	wt_msg "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/write-target"
+	wt_msg "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/keystone/write-target"
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/data_feeds"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/keystone"
@@ -13,7 +13,7 @@ import (
 	mercury_v4 "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/mercury/v4"
 )
 
-// DecodeAsFeedUpdated decodes a 'write-target.WriteConfirmed' message
+// DecodeAsFeedUpdated decodes a 'keystone.write-target.WriteConfirmed' message
 // as a 'data-feeds.registry.ReportProcessed' message
 func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 	// Decode the confirmed report (WT -> Keystone forwarder)
@@ -56,8 +56,8 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				Benchmark: rm.BenchmarkPrice.Uint64(), // Map big.Int as uint64
 				Report:    rf.Data,
 
-				// Notice: we skip head/tx data here (unknown), as we map from 'write-target.WriteConfirmed'
-				// and not from tx/event data (e.g., 'write-target.WriteTxConfirmed')
+				// Notice: we skip head/tx data here (unknown), as we map from 'keystone.write-target.WriteConfirmed'
+				// and not from tx/event data (e.g., 'keystone.write-target.WriteTxConfirmed')
 
 				BlockHash:      m.BlockHash,
 				BlockHeight:    m.BlockHeight,
@@ -77,8 +77,8 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				Benchmark: rm.BenchmarkPrice.Uint64(), // Map big.Int as uint64
 				Report:    rf.Data,
 
-				// Notice: we skip head/tx data here (unknown), as we map from 'write-target.WriteConfirmed'
-				// and not from tx/event data (e.g., 'write-target.WriteTxConfirmed')
+				// Notice: we skip head/tx data here (unknown), as we map from 'keystone.write-target.WriteConfirmed'
+				// and not from tx/event data (e.g., 'keystone.write-target.WriteTxConfirmed')
 
 				BlockHash:      m.BlockHash,
 				BlockHeight:    m.BlockHeight,

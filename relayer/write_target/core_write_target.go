@@ -22,6 +22,8 @@ import (
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/keystone"
+
+	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/keystone/write-target"
 )
 
 var (
@@ -152,14 +154,14 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	err := request.Config.UnwrapTo(&reqConfig)
 	if err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to parse config", err.Error())
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
+		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
 	}
 
 	// Validate the config
 	err = c.configValidateFn(reqConfig)
 	if err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to validate config", err.Error())
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
+		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
 	}
 
 	// Source the receiver address from the config
@@ -170,14 +172,14 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	if !ok {
 		cause := fmt.Sprintf("input missing required field: '%s'", keySignedReport)
 		msg := builder.buildWriteError(info, 0, "failed to source the signed report", cause)
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
+		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
 	}
 
 	// Decode the signed report
 	inputs := types.SignedReport{}
 	if err = signedReport.UnwrapTo(&inputs); err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to parse signed report", err.Error())
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
+		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
 	}
 
 	// Source the report ID from the input
@@ -187,7 +189,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	rawExecutionID, err := hex.DecodeString(request.Metadata.WorkflowExecutionID)
 	if err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to decode the workflow execution ID", err.Error())
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
+		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
 	}
 
 	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteInitiated(info))
@@ -211,16 +213,16 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	reportDecoded, err := keystone.Decode(inputs.Report)
 	if err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to decode the report", err.Error())
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
+		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
 	}
 
 	// Validate encoded report is prefixed with workflowID and executionID that match the request meta
 	if reportDecoded.ExecutionID != request.Metadata.WorkflowExecutionID {
 		msg := builder.buildWriteError(info, 0, "decoded report execution ID does not match the request", "")
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
+		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
 	} else if reportDecoded.WorkflowID != request.Metadata.WorkflowID {
 		msg := builder.buildWriteError(info, 0, "decoded report workflow ID does not match the request", "")
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
+		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
 	}
 
 	// Check whether the report was already transmitted on chain
@@ -242,7 +244,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	head, err := c.cs.LatestHead(ctx)
 	if err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to fetch the latest head", err.Error())
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
+		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
 	}
 
 	c.lggr.Debugw("non-empty valid report",
@@ -304,7 +306,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	state, err := query(ctx)
 	if err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to fetch [TransmissionState]", err.Error())
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
+		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
 	}
 
 	if state != nil {
@@ -357,7 +359,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	err = c.cw.SubmitTransaction(ctx, contractName, contractMethodName_report, req, txID.String(), info.forwarder, &meta, value)
 	if err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to invoke [forwarder.report]", err.Error())
-		return capabilities.CapabilityResponse{}, msg.AsEmittedError(ctx, c.beholder)
+		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
 	}
 
 	c.lggr.Debugw("Transaction submitted", "request", request, "transaction-id", txID)
@@ -382,10 +384,10 @@ func (c *writeTarget) UnregisterFromWorkflow(ctx context.Context, request capabi
 
 // acceptAndConfirmWrite waits (until timeout) for the report to be accepted and (optionally) confirmed on-chain
 // Emits Beholder messages:
-//   - 'write-target.WriteError'     if not accepted
-//   - 'write-target.WriteAccepted'  if accepted (with or without an error)
-//   - 'write-target.WriteError'     if accepted (with an error)
-//   - 'write-target.WriteConfirmed' if confirmed (until timeout)
+//   - 'keystone.write-target.WriteError'     if not accepted
+//   - 'keystone.write-target.WriteAccepted'  if accepted (with or without an error)
+//   - 'keystone.write-target.WriteError'     if accepted (with an error)
+//   - 'keystone.write-target.WriteConfirmed' if confirmed (until timeout)
 func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInfo, txID uuid.UUID, query func(context.Context) (*TransmissionState, error)) {
 	attrs := c.traceAttributes(info.reportInfo.workflowExecutionID)
 	_, span := c.beholder.Tracer.Start(ctx, "Execute.acceptAndConfirmWrite", trace.WithAttributes(attrs...))
@@ -437,12 +439,12 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 
 				if accepted {
 					c.lggr.Infow("write confirmation - accepted", "txID", txID)
-					// TODO: [Beholder] Emit 'write-target.WriteAccepted' by pooling for TXM status finalized/failed
+					// TODO: [Beholder] Emit 'keystone.write-target.WriteAccepted' by pooling for TXM status finalized/failed
 
 					// TODO: check if accepted with an error (e.g., on-chain revert)
 					acceptedWithErr := false
 					if acceptedWithErr {
-						// TODO: [Beholder] Emit 'write-target.WriteError' if accepted with an error
+						// TODO: [Beholder] Emit 'keystone.write-target.WriteError' if accepted with an error
 
 						// Notice: no return, we continue to check for confirmation (should be accepted by another node)
 					}
@@ -485,4 +487,14 @@ func (c *writeTarget) traceAttributes(workflowExecutionID string) []attribute.Ke
 		attribute.String("capability.instance", c.lggr.Name()), // full name from logger
 		attribute.String("capability.executionID", workflowExecutionID),
 	}
+}
+
+// asEmittedError returns the WriteError message as an (Go) error, after emitting it first
+func (c *writeTarget) asEmittedError(ctx context.Context, e *wt.WriteError, attrKVs ...any) error {
+	// Notice: we always want to log the error
+	err := c.beholder.ProtoEmitter.EmitWithLog(ctx, e, attrKVs...)
+	if err != nil {
+		return fmt.Errorf("failed to emit error: %+w", err)
+	}
+	return e.AsError()
 }

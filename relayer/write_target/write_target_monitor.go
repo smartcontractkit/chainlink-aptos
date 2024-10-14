@@ -10,9 +10,9 @@ import (
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/on-chain/data-feeds/registry"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/on-chain/keystone/forwarder"
-	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/write-target"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/data-feeds/on-chain/registry"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/keystone/on-chain/forwarder"
+	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/keystone/write-target"
 )
 
 // TODO: this is just a PoC implementation - replace with more robust implementation

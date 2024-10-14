@@ -12,13 +12,13 @@ import (
 
 // Define a new gauge metric for account balance
 type GaugeAccBalance struct {
-	// write_target_account_balance
+	// account_balance
 	gauge metric.Float64Gauge
 }
 
 func NewGaugeAccBalance(unitStr string) (*GaugeAccBalance, error) {
 	// TODO: group this under 'chain' (parent service) not under 'write_target' (original plan)
-	name := "write_target_account_balance"
+	name := "account_balance"
 	description := "Balance for configured WT account"
 	gauge, err := beholder.GetMeter().Float64Gauge(name, metric.WithUnit(unitStr), metric.WithDescription(description))
 	if err != nil {
