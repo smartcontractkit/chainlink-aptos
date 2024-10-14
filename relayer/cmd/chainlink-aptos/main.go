@@ -54,14 +54,14 @@ type pluginRelayer struct {
 // [github.com/smartcontractkit/chainlink-common/pkg/loop.PluginRelayer]
 // loopKs must be an implementation that can construct a aptos keystore adapter
 // [github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm.NewKeystoreAdapter]
-func (c *pluginRelayer) NewRelayer(ctx context.Context, rawConfig string, loopKs loop.Keystore, capRegistry core.CapabilitiesRegistry) (loop.Relayer, error) {
+func (p *pluginRelayer) NewRelayer(ctx context.Context, rawConfig string, loopKs loop.Keystore, capRegistry core.CapabilitiesRegistry) (loop.Relayer, error) {
 	// Initialize the chain service
 	cfg, err := config.NewDecodedTOMLConfig(rawConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read configs: %w", err)
 	}
 	opts := chain.ChainOpts{
-		Logger:   c.Logger,
+		Logger:   p.Logger,
 		KeyStore: loopKs,
 	}
 	chain, err := chain.NewChain(cfg, opts)
@@ -70,14 +70,11 @@ func (c *pluginRelayer) NewRelayer(ctx context.Context, rawConfig string, loopKs
 	}
 
 	// Initialize the relayer service
-	relay, err := relayer.NewRelayer(c.Logger, chain, capRegistry)
+	relay, err := relayer.NewRelayer(p.Logger, chain, capRegistry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create relay: %w", err)
 	}
+	p.SubService(relay)
 
-	// Register the relayer services with the loop infrastructure
-	ra := &loop.RelayerAdapter{Relayer: relay, RelayerExt: chain}
-	c.SubService(ra)
-
-	return ra, nil
+	return relay, nil
 }
