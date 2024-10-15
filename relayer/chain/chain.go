@@ -166,7 +166,7 @@ func (c *chain) GetClient() (*aptos.NodeClient, error) {
 	if client == nil {
 		return nil, errors.New("no node valid nodes available")
 	}
-	c.lggr.Debugw("Created client", "name", node.Name, "starknet-url", node.URL)
+	c.lggr.Debugw("Created client", "name", node.Name, "url", node.URL)
 	return client, nil
 }
 
@@ -256,6 +256,7 @@ func (c *chain) ListNodeStatuses(ctx context.Context, pageSize int32, pageToken 
 }
 
 func (c *chain) Transact(ctx context.Context, from, to string, amount *big.Int, balanceCheck bool) error {
+	// TODO: this should be (?) hooked into ChainWriter API
 	return errors.ErrUnsupported
 }
 

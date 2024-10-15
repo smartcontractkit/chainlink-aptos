@@ -52,31 +52,36 @@ func (a *aptosChainReader) HealthReport() map[string]error {
 }
 
 func (a *aptosChainReader) Start(ctx context.Context) error {
-	return a.starter.StartOnce("AptosChainReader", func() error {
+	return a.starter.StartOnce(a.Name(), func() error {
 		return nil
 	})
 }
 
 func (a *aptosChainReader) Close() error {
-	return a.starter.StopOnce("AptosChainReader", func() error {
+	return a.starter.StopOnce(a.Name(), func() error {
 		return nil
 	})
 }
 
 func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier string, confidenceLevel primitives.ConfidenceLevel, params, returnVal any) error {
-	// Try to decode the readIdentifier
+	// Decode the readIdentifier - a combination of address, contract, and readName as a concatenated string
 	// TODO: check /chainlink-internal-integrations/solana/pkg/solana/chainreader/lookup.go, see if we can use the same approach
 	readComponents := strings.Split(readIdentifier, "-")
 	if len(readComponents) != 3 {
 		return fmt.Errorf("invalid read identifier: %s", readIdentifier)
 	}
-	contractName := readComponents[1]
-	method := readComponents[2]
+	// TODO: rename 'method' as 'readName' (entity name to read) vs. method (function name to call), as defined by CR API spec
+	_address, contractName, method := readComponents[0], readComponents[1], readComponents[2]
 
-	// Try to source the read method configuration
-	toAddress, ok := a.moduleAddresses[contractName]
+	// Source the read configuration, by contract name
+	address, ok := a.moduleAddresses[contractName]
 	if !ok {
 		return fmt.Errorf("no bound address for module %s", contractName)
+	}
+
+	// Notice: the address in the readIdentifier should match the bound address, by contract name
+	if address.String() != _address {
+		return fmt.Errorf("bound address %s for module %s does not match read address %s", address, contractName, _address)
 	}
 
 	moduleConfig, ok := a.config.Modules[contractName]
@@ -136,7 +141,7 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 
 	viewPayload := &aptos.ViewPayload{
 		Module: aptos.ModuleId{
-			Address: toAddress,
+			Address: address,
 			Name:    moduleName,
 		},
 		Function: functionName,

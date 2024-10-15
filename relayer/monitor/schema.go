@@ -15,8 +15,8 @@ const (
 	AttrKeyBeholderDataType   = "beholder_data_type"
 )
 
-// toSneakCase converts a CamelCase to snake_case (used for type -> file name mapping)
-func toSneakCase(s string) string {
+// toSnakeCase converts a CamelCase to snake_case (used for type -> file name mapping)
+func toSnakeCase(s string) string {
 	// \p{Lu} matches all charaters in the unicode class for uppercase letters
 	pattern := regexp.MustCompile("(\\p{Lu}+\\P{Lu}*)")
 	s = pattern.ReplaceAllString(s, "_${1}")
@@ -44,7 +44,7 @@ func toSchemaPath(m proto.Message, basePath string) (string, error) {
 	if len(pp) == 0 {
 		return "", fmt.Errorf("invalid proto path: %s", protoPath)
 	}
-	pp[len(pp)-1] = toSneakCase(pp[len(pp)-1])
+	pp[len(pp)-1] = toSnakeCase(pp[len(pp)-1])
 
 	// Join the path components again
 	protoPath = strings.Join(pp, "/")
