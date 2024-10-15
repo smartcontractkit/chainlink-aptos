@@ -9,14 +9,9 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
-)
 
-// Define a new struct for metrics configuration
-type MetricConfig struct {
-	name        string
-	unit        string
-	description string
-}
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/metric/utils"
+)
 
 // ns returns a namespaced metric name
 func ns(name string) string {
@@ -26,24 +21,24 @@ func ns(name string) string {
 // Define metrics configuration
 var (
 	reportProcessed = struct {
-		count          MetricConfig
-		blockTimestamp MetricConfig
-		blockNumber    MetricConfig
+		count          utils.MetricInfo
+		blockTimestamp utils.MetricInfo
+		blockNumber    utils.MetricInfo
 	}{
-		count: MetricConfig{
-			name:        ns("report_processed_count"),
-			unit:        "",
-			description: "The count of message: 'keystone.on-chain.forwarder.ReportProcessed' emitted",
+		count: utils.MetricInfo{
+			Name:        ns("report_processed_count"),
+			Unit:        "",
+			Description: "The count of message: 'keystone.on-chain.forwarder.ReportProcessed' emitted",
 		},
-		blockTimestamp: MetricConfig{
-			name:        ns("report_processed_block_timestamp"),
-			unit:        "ms",
-			description: "The block timestamp for latest confirmed write (as observed)",
+		blockTimestamp: utils.MetricInfo{
+			Name:        ns("report_processed_block_timestamp"),
+			Unit:        "ms",
+			Description: "The block timestamp for latest confirmed write (as observed)",
 		},
-		blockNumber: MetricConfig{
-			name:        ns("report_processed_block_number"),
-			unit:        "",
-			description: "The block number for latest confirmed write (as observed)",
+		blockNumber: utils.MetricInfo{
+			Name:        ns("report_processed_block_number"),
+			Unit:        "",
+			Description: "The block number for latest confirmed write (as observed)",
 		},
 	}
 )
@@ -67,32 +62,17 @@ func NewMetrics() (*Metrics, error) {
 	// Create new metrics
 	var err error
 
-	mc := reportProcessed.count
-	m.reportProcessed.count, err = meter.Int64Counter(
-		mc.name,
-		metric.WithUnit(mc.unit),
-		metric.WithDescription(mc.description),
-	)
+	m.reportProcessed.count, err = reportProcessed.count.NewInt64Counter(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new counter: %w", err)
 	}
 
-	mc = reportProcessed.blockTimestamp
-	m.reportProcessed.blockTimestamp, err = meter.Int64Gauge(
-		mc.name,
-		metric.WithUnit(mc.unit),
-		metric.WithDescription(mc.description),
-	)
+	m.reportProcessed.blockTimestamp, err = reportProcessed.blockTimestamp.NewInt64Gauge(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
 
-	mc = reportProcessed.blockNumber
-	m.reportProcessed.blockNumber, err = meter.Int64Gauge(
-		mc.name,
-		metric.WithUnit(mc.unit),
-		metric.WithDescription(mc.description),
-	)
+	m.reportProcessed.blockNumber, err = reportProcessed.blockNumber.NewInt64Gauge(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}

@@ -9,14 +9,9 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
-)
 
-// Define a new struct for metrics configuration
-type MetricConfig struct {
-	name        string
-	unit        string
-	description string
-}
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/metric/utils"
+)
 
 // ns returns a namespaced metric name
 func ns(name string) string {
@@ -25,37 +20,90 @@ func ns(name string) string {
 
 // Define metrics configuration
 var (
-	writeConfirmed = struct {
-		count          MetricConfig
-		blockTimestamp MetricConfig
-		blockNumber    MetricConfig
-		signersNumber  MetricConfig
+	writeInitiated = struct {
+		count utils.MetricInfo
 	}{
-		count: MetricConfig{
-			name:        ns("write_confirmed_count"),
-			unit:        "",
-			description: "The count of message: 'keystone.write-target.WriteConfirmed' emitted",
+		count: utils.MetricInfo{
+			Name:        ns("write_initiated_count"),
+			Unit:        "",
+			Description: "The count of message: 'keystone.write-target.WriteInitiated' emitted",
 		},
-		blockTimestamp: MetricConfig{
-			name:        ns("write_confirmed_block_timestamp"),
-			unit:        "ms",
-			description: "The block timestamp for latest confirmed write (as observed)",
+	}
+	writeError = struct {
+		count utils.MetricInfo
+	}{
+		count: utils.MetricInfo{
+			Name:        ns("write_error_count"),
+			Unit:        "",
+			Description: "The count of message: 'keystone.write-target.WriteError' emitted",
 		},
-		blockNumber: MetricConfig{
-			name:        ns("write_confirmed_block_number"),
-			unit:        "",
-			description: "The block number for latest confirmed write (as observed)",
+	}
+	writeSent = struct {
+		count          utils.MetricInfo
+		blockTimestamp utils.MetricInfo
+		blockNumber    utils.MetricInfo
+	}{
+		count: utils.MetricInfo{
+			Name:        ns("write_sent_count"),
+			Unit:        "",
+			Description: "The count of message: 'keystone.write-target.WriteSent' emitted",
 		},
-		signersNumber: MetricConfig{
-			name:        ns("write_confirmed_signers_number"),
-			unit:        "",
-			description: "The number of signers attached to the processed and confirmed write request",
+		blockTimestamp: utils.MetricInfo{
+			Name:        ns("write_sent_block_timestamp"),
+			Unit:        "ms",
+			Description: "The block timestamp for latest sent write (as observed)",
+		},
+		blockNumber: utils.MetricInfo{
+			Name:        ns("write_sent_block_number"),
+			Unit:        "",
+			Description: "The block number for latest sent write (as observed)",
+		},
+	}
+	writeConfirmed = struct {
+		count          utils.MetricInfo
+		blockTimestamp utils.MetricInfo
+		blockNumber    utils.MetricInfo
+		signersNumber  utils.MetricInfo
+	}{
+		count: utils.MetricInfo{
+			Name:        ns("write_confirmed_count"),
+			Unit:        "",
+			Description: "The count of message: 'keystone.write-target.WriteConfirmed' emitted",
+		},
+		blockTimestamp: utils.MetricInfo{
+			Name:        ns("write_confirmed_block_timestamp"),
+			Unit:        "ms",
+			Description: "The block timestamp for latest confirmed write (as observed)",
+		},
+		blockNumber: utils.MetricInfo{
+			Name:        ns("write_confirmed_block_number"),
+			Unit:        "",
+			Description: "The block number for latest confirmed write (as observed)",
+		},
+		signersNumber: utils.MetricInfo{
+			Name:        ns("write_confirmed_signers_number"),
+			Unit:        "",
+			Description: "The number of signers attached to the processed and confirmed write request",
 		},
 	}
 )
 
 // Define a new struct for metrics
 type Metrics struct {
+	// Define on WriteInitiated metrics
+	writeInitiated struct {
+		count metric.Int64Counter
+	}
+	// Define on WriteError metrics
+	writeError struct {
+		count metric.Int64Counter
+	}
+	// Define on WriteSent metrics
+	writeSent struct {
+		count          metric.Int64Counter
+		blockTimestamp metric.Int64Gauge
+		blockNumber    metric.Int64Gauge
+	}
 	// Define on WriteConfirmed metrics
 	writeConfirmed struct {
 		count          metric.Int64Counter
@@ -74,47 +122,108 @@ func NewMetrics() (*Metrics, error) {
 	// Create new metrics
 	var err error
 
-	mc := writeConfirmed.count
-	m.writeConfirmed.count, err = meter.Int64Counter(
-		mc.name,
-		metric.WithUnit(mc.unit),
-		metric.WithDescription(mc.description),
-	)
+	// WriteInitiated
+	m.writeInitiated.count, err = writeInitiated.count.NewInt64Counter(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new counter: %w", err)
 	}
 
-	mc = writeConfirmed.blockTimestamp
-	m.writeConfirmed.blockTimestamp, err = meter.Int64Gauge(
-		mc.name,
-		metric.WithUnit(mc.unit),
-		metric.WithDescription(mc.description),
-	)
+	// WriteError
+	m.writeError.count, err = writeError.count.NewInt64Counter(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new counter: %w", err)
+	}
+
+	// WriteSent
+	m.writeSent.count, err = writeSent.count.NewInt64Counter(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new counter: %w", err)
+	}
+
+	m.writeSent.blockTimestamp, err = writeSent.blockTimestamp.NewInt64Gauge(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
 
-	mc = writeConfirmed.blockNumber
-	m.writeConfirmed.blockNumber, err = meter.Int64Gauge(
-		mc.name,
-		metric.WithUnit(mc.unit),
-		metric.WithDescription(mc.description),
-	)
+	m.writeSent.blockNumber, err = writeSent.blockNumber.NewInt64Gauge(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
 
-	mc = writeConfirmed.signersNumber
-	m.writeConfirmed.signersNumber, err = meter.Int64Gauge(
-		mc.name,
-		metric.WithUnit(mc.unit),
-		metric.WithDescription(mc.description),
-	)
+	// WriteConfirmed
+	m.writeConfirmed.count, err = writeConfirmed.count.NewInt64Counter(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new counter: %w", err)
+	}
+
+	m.writeConfirmed.blockTimestamp, err = writeConfirmed.blockTimestamp.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
+	}
+
+	m.writeConfirmed.blockNumber, err = writeConfirmed.blockNumber.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
+	}
+
+	m.writeConfirmed.signersNumber, err = writeConfirmed.signersNumber.NewInt64Gauge(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
 
 	return m, nil
+}
+
+func (m *Metrics) OnWriteInitiated(ctx context.Context, msg *WriteInitiated) error {
+	// Define common attributes
+	attrs := metric.WithAttributes(
+		attribute.String("node", msg.Node),
+		attribute.String("forwarder", msg.Forwarder),
+		attribute.String("receiver", msg.Receiver),
+		attribute.Int64("report_id", int64(msg.ReportId)), // uint32 -> int64
+	)
+
+	// Count events
+	m.writeConfirmed.count.Add(ctx, 1, attrs)
+	return nil
+}
+
+func (m *Metrics) OnWriteError(ctx context.Context, msg *WriteError) error {
+	// Define common attributes
+	attrs := metric.WithAttributes(
+		attribute.String("node", msg.Node),
+		attribute.String("forwarder", msg.Forwarder),
+		attribute.String("receiver", msg.Receiver),
+		attribute.Int64("report_id", int64(msg.ReportId)), // uint32 -> int64
+	)
+
+	// Count events
+	m.writeError.count.Add(ctx, 1, attrs)
+	return nil
+}
+
+func (m *Metrics) OnWriteSent(ctx context.Context, msg *WriteSent) error {
+	// Define common attributes
+	attrs := metric.WithAttributes(
+		attribute.String("node", msg.Node),
+		attribute.String("forwarder", msg.Forwarder),
+		attribute.String("receiver", msg.Receiver),
+		attribute.Int64("report_id", int64(msg.ReportId)), // uint32 -> int64
+	)
+
+	// Count events
+	m.writeSent.count.Add(ctx, 1, attrs)
+
+	// Block timestamp
+	m.writeSent.blockTimestamp.Record(ctx, int64(msg.BlockTimestamp), attrs)
+
+	// Block number
+	blockHeightVal, err := strconv.ParseInt(msg.BlockHeight, 10, 64)
+	if err != nil {
+		return fmt.Errorf("failed to parse block height: %w", err)
+	}
+	m.writeSent.blockNumber.Record(ctx, blockHeightVal, attrs)
+	return nil
 }
 
 func (m *Metrics) OnWriteConfirmed(ctx context.Context, msg *WriteConfirmed) error {

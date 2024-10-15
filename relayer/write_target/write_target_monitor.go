@@ -74,20 +74,43 @@ func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs
 		return fmt.Errorf("failed to emit with log: %w", err)
 	}
 
-	// Try to cast as 'write_target.WriteConfirmed'
-	writeConfirmed, ok := m.(*wt.WriteConfirmed)
-	if !ok {
-		// Not a 'write_target.WriteConfirmed' message
+	// Switch on the type of the proto.Message
+	switch msg := m.(type) {
+	case *wt.WriteInitiated:
+		err = e.metrics.wt.OnWriteInitiated(ctx, msg)
+		if err != nil {
+			return fmt.Errorf("failed to publish write initiated metrics: %w", err)
+		}
+		return nil
+	case *wt.WriteError:
+		err = e.metrics.wt.OnWriteError(ctx, msg)
+		if err != nil {
+			return fmt.Errorf("failed to publish write error metrics: %w", err)
+		}
+		return nil
+	case *wt.WriteSent:
+		err = e.metrics.wt.OnWriteSent(ctx, msg)
+		if err != nil {
+			return fmt.Errorf("failed to publish write sent metrics: %w", err)
+		}
+		return nil
+	case *wt.WriteConfirmed:
+		err = e.metrics.wt.OnWriteConfirmed(ctx, msg)
+		if err != nil {
+			return fmt.Errorf("failed to publish write confirmed metrics: %w", err)
+		}
+
+		// Further processing for 'WriteConfirmed' messages
+		return e.decodeAndProcessWriteConfirmed(ctx, msg, attrKVs...)
+	default:
+		// Not a recognized message type
 		return nil
 	}
-	// TODO: improve metrics publishing
-	err = e.metrics.wt.OnWriteConfirmed(ctx, writeConfirmed)
-	if err != nil {
-		return fmt.Errorf("failed to publish write confirmed metrics: %w", err)
-	}
+}
 
+func (e *protoEmitter) decodeAndProcessWriteConfirmed(ctx context.Context, m *wt.WriteConfirmed, attrKVs ...any) error {
 	// Decode as a 'keystone.forwarder.ReportProcessed' message
-	reportProcessed, err := forwarder.DecodeAsReportProcessed(writeConfirmed)
+	reportProcessed, err := forwarder.DecodeAsReportProcessed(m)
 	if err != nil {
 		return fmt.Errorf("failed to decode as 'keystone.forwarder.ReportProcessed': %w", err)
 	}
@@ -102,8 +125,10 @@ func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs
 		return fmt.Errorf("failed to publish report processed metrics: %w", err)
 	}
 
+	// TODO: add option for other products
+
 	// Decode as an array of 'data-feeds.registry.FeedUpdated' messages
-	updates, err := registry.DecodeAsFeedUpdated(writeConfirmed)
+	updates, err := registry.DecodeAsFeedUpdated(m)
 	if err != nil {
 		return fmt.Errorf("failed to decode as 'data-feeds.registry.FeedUpdated': %w", err)
 	}

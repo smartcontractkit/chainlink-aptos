@@ -10,14 +10,9 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
-)
 
-// Define a new struct for metrics configuration
-type MetricConfig struct {
-	name        string
-	unit        string
-	description string
-}
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/metric/utils"
+)
 
 // ns returns a namespaced metric name
 func ns(name string) string {
@@ -27,36 +22,36 @@ func ns(name string) string {
 // Define metrics configuration
 var (
 	feedUpdated = struct {
-		count                 MetricConfig
-		observationsTimestamp MetricConfig
-		benchmark             MetricConfig
-		blockTimestamp        MetricConfig
-		blockNumber           MetricConfig
+		count                 utils.MetricInfo
+		observationsTimestamp utils.MetricInfo
+		benchmark             utils.MetricInfo
+		blockTimestamp        utils.MetricInfo
+		blockNumber           utils.MetricInfo
 	}{
-		count: MetricConfig{
-			name:        ns("feed_updated_count"),
-			unit:        "",
-			description: "The count of message: 'data-feeds.on-chain.registry.FeedUpdated' emitted",
+		count: utils.MetricInfo{
+			Name:        ns("feed_updated_count"),
+			Unit:        "",
+			Description: "The count of message: 'data-feeds.on-chain.registry.FeedUpdated' emitted",
 		},
-		observationsTimestamp: MetricConfig{
-			name:        ns("feed_updated_observations_timestamp"),
-			unit:        "ms",
-			description: "",
+		observationsTimestamp: utils.MetricInfo{
+			Name:        ns("feed_updated_observations_timestamp"),
+			Unit:        "ms",
+			Description: "",
 		},
-		benchmark: MetricConfig{
-			name:        ns("feed_updated_benchmark"),
-			unit:        "",
-			description: "",
+		benchmark: utils.MetricInfo{
+			Name:        ns("feed_updated_benchmark"),
+			Unit:        "",
+			Description: "",
 		},
-		blockTimestamp: MetricConfig{
-			name:        ns("feed_updated_block_timestamp"),
-			unit:        "ms",
-			description: "The block timestamp for latest confirmed write (as observed)",
+		blockTimestamp: utils.MetricInfo{
+			Name:        ns("feed_updated_block_timestamp"),
+			Unit:        "ms",
+			Description: "The block timestamp for latest confirmed write (as observed)",
 		},
-		blockNumber: MetricConfig{
-			name:        ns("feed_updated_block_number"),
-			unit:        "",
-			description: "The block number for latest confirmed write (as observed)",
+		blockNumber: utils.MetricInfo{
+			Name:        ns("feed_updated_block_number"),
+			Unit:        "",
+			Description: "The block number for latest confirmed write (as observed)",
 		},
 	}
 )
@@ -82,52 +77,27 @@ func NewMetrics() (*Metrics, error) {
 	// Create new metrics
 	var err error
 
-	mc := feedUpdated.count
-	m.feedUpdated.count, err = meter.Int64Counter(
-		mc.name,
-		metric.WithUnit(mc.unit),
-		metric.WithDescription(mc.description),
-	)
+	m.feedUpdated.count, err = feedUpdated.count.NewInt64Counter(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new counter: %w", err)
 	}
 
-	mc = feedUpdated.observationsTimestamp
-	m.feedUpdated.observationsTimestamp, err = meter.Int64Gauge(
-		mc.name,
-		metric.WithUnit(mc.unit),
-		metric.WithDescription(mc.description),
-	)
+	m.feedUpdated.observationsTimestamp, err = feedUpdated.observationsTimestamp.NewInt64Gauge(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
 
-	mc = feedUpdated.benchmark
-	m.feedUpdated.benchmark, err = meter.Int64Gauge(
-		mc.name,
-		metric.WithUnit(mc.unit),
-		metric.WithDescription(mc.description),
-	)
+	m.feedUpdated.benchmark, err = feedUpdated.benchmark.NewInt64Gauge(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
 
-	mc = feedUpdated.blockTimestamp
-	m.feedUpdated.blockTimestamp, err = meter.Int64Gauge(
-		mc.name,
-		metric.WithUnit(mc.unit),
-		metric.WithDescription(mc.description),
-	)
+	m.feedUpdated.blockTimestamp, err = feedUpdated.blockTimestamp.NewInt64Gauge(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
 
-	mc = feedUpdated.blockNumber
-	m.feedUpdated.blockNumber, err = meter.Int64Gauge(
-		mc.name,
-		metric.WithUnit(mc.unit),
-		metric.WithDescription(mc.description),
-	)
+	m.feedUpdated.blockNumber, err = feedUpdated.blockNumber.NewInt64Gauge(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
