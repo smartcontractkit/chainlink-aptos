@@ -51,12 +51,12 @@ var (
 		blockTimestamp: utils.MetricInfo{
 			Name:        ns("write_sent_block_timestamp"),
 			Unit:        "ms",
-			Description: "The block timestamp for latest sent write (as observed)",
+			Description: "The block timestamp at the latest sent write (as observed)",
 		},
 		blockNumber: utils.MetricInfo{
 			Name:        ns("write_sent_block_number"),
 			Unit:        "",
-			Description: "The block number for latest sent write (as observed)",
+			Description: "The block number at the latest sent write (as observed)",
 		},
 	}
 	writeConfirmed = struct {

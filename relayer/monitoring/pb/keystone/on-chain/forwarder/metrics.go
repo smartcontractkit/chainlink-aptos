@@ -33,12 +33,12 @@ var (
 		blockTimestamp: utils.MetricInfo{
 			Name:        ns("report_processed_block_timestamp"),
 			Unit:        "ms",
-			Description: "The block timestamp for latest confirmed write (as observed)",
+			Description: "The block timestamp at the latest confirmed write (as observed)",
 		},
 		blockNumber: utils.MetricInfo{
 			Name:        ns("report_processed_block_number"),
 			Unit:        "",
-			Description: "The block number for latest confirmed write (as observed)",
+			Description: "The block number at the latest confirmed write (as observed)",
 		},
 	}
 )

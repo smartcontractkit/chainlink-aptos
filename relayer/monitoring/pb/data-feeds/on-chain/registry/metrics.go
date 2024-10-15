@@ -36,22 +36,22 @@ var (
 		observationsTimestamp: utils.MetricInfo{
 			Name:        ns("feed_updated_observations_timestamp"),
 			Unit:        "ms",
-			Description: "",
+			Description: "The observations timestamp for the latest confirmed update (as reported)",
 		},
 		benchmark: utils.MetricInfo{
 			Name:        ns("feed_updated_benchmark"),
 			Unit:        "",
-			Description: "",
+			Description: "The benchmark value for the latest confirmed update (as reported)",,
 		},
 		blockTimestamp: utils.MetricInfo{
 			Name:        ns("feed_updated_block_timestamp"),
 			Unit:        "ms",
-			Description: "The block timestamp for latest confirmed write (as observed)",
+			Description: "The block timestamp at the latest confirmed update (as observed)",
 		},
 		blockNumber: utils.MetricInfo{
 			Name:        ns("feed_updated_block_number"),
 			Unit:        "",
-			Description: "The block number for latest confirmed write (as observed)",
+			Description: "The block number at the latest confirmed update (as observed)",
 		},
 	}
 )

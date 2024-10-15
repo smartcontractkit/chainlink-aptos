@@ -103,7 +103,6 @@ func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs
 		// Further processing for 'WriteConfirmed' messages
 		return e.decodeAndProcessWriteConfirmed(ctx, msg, attrKVs...)
 	default:
-		// Not a recognized message type
 		return fmt.Errorf("unrecognized message type: %T", m)
 	}
 }
