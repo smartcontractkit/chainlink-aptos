@@ -10,6 +10,11 @@ import (
 	"google.golang.org/protobuf/runtime/protoimpl"
 )
 
+const (
+	AttrKeyBeholderDataSchema = "beholder_data_schema"
+	AttrKeyBeholderDataType   = "beholder_data_type"
+)
+
 // toSneakCase converts a CamelCase to snake_case (used for type -> file name mapping)
 func toSneakCase(s string) string {
 	// \p{Lu} matches all charaters in the unicode class for uppercase letters
@@ -19,13 +24,18 @@ func toSneakCase(s string) string {
 	return s
 }
 
+// toSchemaName returns a protobuf message full name
+func toSchemaName(m proto.Message) string {
+	return string(protoimpl.X.MessageTypeOf(m).Descriptor().FullName())
+}
+
 // toSchemaPath maps a protobuf message to a Beholder schema path
 func toSchemaPath(m proto.Message, basePath string) (string, error) {
-	// Notice: a path like 'keystone.on_chain.forwarder.ReportProcessed'
-	protoName := protoimpl.X.MessageTypeOf(m).Descriptor().FullName()
+	// Notice: a name like 'keystone.on_chain.forwarder.ReportProcessed'
+	protoName := toSchemaName(m)
 
 	// We map to a Beholder schema path like '<basePath>/keystone/on-chain/forwarder/report_processed.proto'
-	protoPath := string(protoName)
+	protoPath := protoName
 	protoPath = strings.ReplaceAll(protoPath, ".", "/")
 	protoPath = strings.ReplaceAll(protoPath, "_", "-")
 
@@ -46,7 +56,7 @@ func toSchemaPath(m proto.Message, basePath string) (string, error) {
 
 // Add the message type as an attribute (required)
 func appendSchemaIfMissing(m proto.Message, attrKVs []any, basePath string) ([]any, error) {
-	key := "beholder_data_schema"
+	key := AttrKeyBeholderDataSchema
 	hasSchema := false
 	for i := 0; i < len(attrKVs); i += 2 {
 		if attrKVs[i] == key {
@@ -63,6 +73,11 @@ func appendSchemaIfMissing(m proto.Message, attrKVs []any, basePath string) ([]a
 			return nil, fmt.Errorf("failed to map to schema path: %w", err)
 		}
 		attrKVs = append(attrKVs, val)
+
+		// Add the message type as an attribute (optional)
+		key = AttrKeyBeholderDataType
+		attrKVs = append(attrKVs, key)
+		attrKVs = append(attrKVs, toSchemaName(m))
 	}
 
 	return attrKVs, nil
@@ -70,8 +85,13 @@ func appendSchemaIfMissing(m proto.Message, attrKVs []any, basePath string) ([]a
 
 // appendSchemaUnknown adds an unknown schema path to the attributes
 func appendSchemaUnknown(attrKVs []any, basePath string) []any {
-	key := "beholder_data_schema"
+	key := AttrKeyBeholderDataSchema
 	attrKVs = append(attrKVs, key)
 	attrKVs = append(attrKVs, path.Join(basePath, "unknown.proto"))
+
+	// Add the message type as an attribute (optional)
+	key = AttrKeyBeholderDataType
+	attrKVs = append(attrKVs, key)
+	attrKVs = append(attrKVs, "unknown")
 	return attrKVs
 }
