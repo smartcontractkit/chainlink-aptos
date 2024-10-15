@@ -41,7 +41,7 @@ var (
 		benchmark: utils.MetricInfo{
 			Name:        ns("feed_updated_benchmark"),
 			Unit:        "",
-			Description: "The benchmark value for the latest confirmed update (as reported)",,
+			Description: "The benchmark value for the latest confirmed update (as reported)",
 		},
 		blockTimestamp: utils.MetricInfo{
 			Name:        ns("feed_updated_block_timestamp"),
