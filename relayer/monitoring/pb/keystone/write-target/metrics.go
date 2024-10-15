@@ -184,7 +184,7 @@ func (m *Metrics) OnWriteInitiated(ctx context.Context, msg *WriteInitiated) err
 	)
 
 	// Count events
-	m.writeConfirmed.count.Add(ctx, 1, attrs)
+	m.writeInitiated.count.Add(ctx, 1, attrs)
 	return nil
 }
 
@@ -195,6 +195,9 @@ func (m *Metrics) OnWriteError(ctx context.Context, msg *WriteError) error {
 		attribute.String("forwarder", msg.Forwarder),
 		attribute.String("receiver", msg.Receiver),
 		attribute.Int64("report_id", int64(msg.ReportId)), // uint32 -> int64
+		// Error information
+		attribute.Int64("code", int64(msg.Code)), // uint32 -> int64
+		attribute.String("summary", msg.Summary),
 	)
 
 	// Count events
