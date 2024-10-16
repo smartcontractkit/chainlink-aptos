@@ -174,23 +174,26 @@ func NewMetrics() (*Metrics, error) {
 	return m, nil
 }
 
-func (m *Metrics) OnWriteInitiated(ctx context.Context, msg *WriteInitiated) error {
-	// Define common attributes
-	attrs := metric.WithAttributes(
+func (m *Metrics) OnWriteInitiated(ctx context.Context, msg *WriteInitiated, attrKVs ...any) error {
+	// Define attributes
+	attrsCommon := utils.CommonAttributes(attrKVs...)
+	attrsNew := []attribute.KeyValue{
 		attribute.String("node", msg.Node),
 		attribute.String("forwarder", msg.Forwarder),
 		attribute.String("receiver", msg.Receiver),
 		attribute.Int64("report_id", int64(msg.ReportId)), // uint32 -> int64
-	)
+	}
+	attrs := metric.WithAttributes(append(attrsNew, attrsCommon...)...)
 
 	// Count events
 	m.writeInitiated.count.Add(ctx, 1, attrs)
 	return nil
 }
 
-func (m *Metrics) OnWriteError(ctx context.Context, msg *WriteError) error {
-	// Define common attributes
-	attrs := metric.WithAttributes(
+func (m *Metrics) OnWriteError(ctx context.Context, msg *WriteError, attrKVs ...any) error {
+	// Define attributes
+	attrsCommon := utils.CommonAttributes(attrKVs...)
+	attrsNew := []attribute.KeyValue{
 		attribute.String("node", msg.Node),
 		attribute.String("forwarder", msg.Forwarder),
 		attribute.String("receiver", msg.Receiver),
@@ -198,21 +201,24 @@ func (m *Metrics) OnWriteError(ctx context.Context, msg *WriteError) error {
 		// Error information
 		attribute.Int64("code", int64(msg.Code)), // uint32 -> int64
 		attribute.String("summary", msg.Summary),
-	)
+	}
+	attrs := metric.WithAttributes(append(attrsNew, attrsCommon...)...)
 
 	// Count events
 	m.writeError.count.Add(ctx, 1, attrs)
 	return nil
 }
 
-func (m *Metrics) OnWriteSent(ctx context.Context, msg *WriteSent) error {
-	// Define common attributes
-	attrs := metric.WithAttributes(
+func (m *Metrics) OnWriteSent(ctx context.Context, msg *WriteSent, attrKVs ...any) error {
+	// Define attributes
+	attrsCommon := utils.CommonAttributes(attrKVs...)
+	attrsNew := []attribute.KeyValue{
 		attribute.String("node", msg.Node),
 		attribute.String("forwarder", msg.Forwarder),
 		attribute.String("receiver", msg.Receiver),
 		attribute.Int64("report_id", int64(msg.ReportId)), // uint32 -> int64
-	)
+	}
+	attrs := metric.WithAttributes(append(attrsNew, attrsCommon...)...)
 
 	// Count events
 	m.writeSent.count.Add(ctx, 1, attrs)
@@ -229,16 +235,18 @@ func (m *Metrics) OnWriteSent(ctx context.Context, msg *WriteSent) error {
 	return nil
 }
 
-func (m *Metrics) OnWriteConfirmed(ctx context.Context, msg *WriteConfirmed) error {
-	// Define common attributes
-	attrs := metric.WithAttributes(
+func (m *Metrics) OnWriteConfirmed(ctx context.Context, msg *WriteConfirmed, attrKVs ...any) error {
+	// Define attributes
+	attrsCommon := utils.CommonAttributes(attrKVs...)
+	attrsNew := []attribute.KeyValue{
 		attribute.String("node", msg.Node),
 		attribute.String("forwarder", msg.Forwarder),
 		attribute.String("receiver", msg.Receiver),
 		attribute.Int64("report_id", int64(msg.ReportId)), // uint32 -> int64
 		attribute.String("transmitter", msg.Transmitter),
 		attribute.Bool("success", msg.Success),
-	)
+	}
+	attrs := metric.WithAttributes(append(attrsNew, attrsCommon...)...)
 
 	// Count events
 	m.writeConfirmed.count.Add(ctx, 1, attrs)

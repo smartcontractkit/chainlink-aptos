@@ -80,9 +80,10 @@ func NewMetrics() (*Metrics, error) {
 	return m, nil
 }
 
-func (m *Metrics) OnReportProcessed(ctx context.Context, msg *ReportProcessed) error {
-	// Define common attributes
-	attrs := metric.WithAttributes(
+func (m *Metrics) OnReportProcessed(ctx context.Context, msg *ReportProcessed, attrKVs ...any) error {
+	// Define attributes
+	attrsCommon := utils.CommonAttributes(attrKVs...)
+	attrsNew := []attribute.KeyValue{
 		// TODO: do we need these attributes? (available in WriteConfirmed)
 		// attribute.String("node", msg.Node),
 		// attribute.String("forwarder", msg.Forwarder),
@@ -90,7 +91,8 @@ func (m *Metrics) OnReportProcessed(ctx context.Context, msg *ReportProcessed) e
 		attribute.Int64("report_id", int64(msg.ReportId)), // uint32 -> int64
 		// attribute.String("transmitter", msg.Transmitter),
 		attribute.Bool("success", msg.Success),
-	)
+	}
+	attrs := metric.WithAttributes(append(attrsNew, attrsCommon...)...)
 
 	// Count events
 	m.reportProcessed.count.Add(ctx, 1, attrs)

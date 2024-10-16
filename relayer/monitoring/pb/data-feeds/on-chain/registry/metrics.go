@@ -105,9 +105,10 @@ func NewMetrics() (*Metrics, error) {
 	return m, nil
 }
 
-func (m *Metrics) OnFeedUpdated(ctx context.Context, msg *FeedUpdated) error {
-	// Define common attributes
-	attrs := metric.WithAttributes(
+func (m *Metrics) OnFeedUpdated(ctx context.Context, msg *FeedUpdated, attrKVs ...any) error {
+	// Define attributes
+	attrsCommon := utils.CommonAttributes(attrKVs...)
+	attrsNew := []attribute.KeyValue{
 		attribute.String("feed_id", hex.EncodeToString(msg.FeedId)),
 
 		// TODO: do we need these attributes? (available in WriteConfirmed)
@@ -116,7 +117,8 @@ func (m *Metrics) OnFeedUpdated(ctx context.Context, msg *FeedUpdated) error {
 		// attribute.String("receiver", msg.Receiver),
 		// attribute.Int64("report_id", int64(msg.ReportId)), // uint32 -> int64
 		// attribute.String("transmitter", msg.Transmitter),
-	)
+	}
+	attrs := metric.WithAttributes(append(attrsNew, attrsCommon...)...)
 
 	// Count events
 	m.feedUpdated.count.Add(ctx, 1, attrs)

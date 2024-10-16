@@ -97,25 +97,25 @@ func (p *wtProcessor) Process(ctx context.Context, m proto.Message, attrKVs ...a
 	// Switch on the type of the proto.Message
 	switch msg := m.(type) {
 	case *wt.WriteInitiated:
-		err := p.metrics.OnWriteInitiated(ctx, msg)
+		err := p.metrics.OnWriteInitiated(ctx, msg, attrKVs...)
 		if err != nil {
 			return fmt.Errorf("failed to publish write initiated metrics: %w", err)
 		}
 		return nil
 	case *wt.WriteError:
-		err := p.metrics.OnWriteError(ctx, msg)
+		err := p.metrics.OnWriteError(ctx, msg, attrKVs...)
 		if err != nil {
 			return fmt.Errorf("failed to publish write error metrics: %w", err)
 		}
 		return nil
 	case *wt.WriteSent:
-		err := p.metrics.OnWriteSent(ctx, msg)
+		err := p.metrics.OnWriteSent(ctx, msg, attrKVs...)
 		if err != nil {
 			return fmt.Errorf("failed to publish write sent metrics: %w", err)
 		}
 		return nil
 	case *wt.WriteConfirmed:
-		err := p.metrics.OnWriteConfirmed(ctx, msg)
+		err := p.metrics.OnWriteConfirmed(ctx, msg, attrKVs...)
 		if err != nil {
 			return fmt.Errorf("failed to publish write confirmed metrics: %w", err)
 		}
@@ -149,7 +149,7 @@ func (p *keystoneProcessor) Process(ctx context.Context, m proto.Message, attrKV
 			return fmt.Errorf("failed to emit with log: %w", err)
 		}
 		// Process emit and derive metrics
-		err = p.metrics.OnReportProcessed(ctx, reportProcessed)
+		err = p.metrics.OnReportProcessed(ctx, reportProcessed, attrKVs...)
 		if err != nil {
 			return fmt.Errorf("failed to publish report processed metrics: %w", err)
 		}
@@ -184,7 +184,7 @@ func (p *dataFeedsProcessor) Process(ctx context.Context, m proto.Message, attrK
 				return fmt.Errorf("failed to emit with log: %w", err)
 			}
 			// Process emit and derive metrics
-			err = p.metrics.OnFeedUpdated(ctx, update)
+			err = p.metrics.OnFeedUpdated(ctx, update, attrKVs...)
 			if err != nil {
 				return fmt.Errorf("failed to publish feed updated metrics: %w", err)
 			}
