@@ -26,6 +26,11 @@ type ProtoEmitter interface {
 	EmitWithLog(ctx context.Context, m proto.Message, attrKVs ...any) error
 }
 
+// ProtoProcessor is an interface for processing emitted protobuf messages
+type ProtoProcessor interface {
+	Process(ctx context.Context, m proto.Message, attrKVs ...any) error
+}
+
 func NewProtoEmitter(lggr logger.Logger, client *beholder.Client) ProtoEmitter {
 	return &protoEmitter{lggr, client}
 }

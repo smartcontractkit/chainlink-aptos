@@ -35,17 +35,16 @@ func NewAptosWriteTargetMonitor(ctx context.Context, lggr logger.Logger) (*monit
 		return nil, fmt.Errorf("failed to create new write target metrics: %w", err)
 	}
 
+	// Underlying ProtoEmitter
+	emitter := monitor.NewProtoEmitter(lggr, &client)
+
+	// Proxy ProtoEmitter with additional processing
 	protoEmitterProxy := protoEmitter{
-		emitter: monitor.NewProtoEmitter(lggr, &client),
-		// Metrics collection
-		metrics: struct {
-			registry  *registry.Metrics
-			forwarder *forwarder.Metrics
-			wt        *wt.Metrics
-		}{
-			registry:  registryMetrics,
-			forwarder: forwarderMetrics,
-			wt:        wtMetrics,
+		emitter: emitter,
+		processors: []monitor.ProtoProcessor{
+			&wtProcessor{wtMetrics},
+			&keystoneProcessor{emitter, forwarderMetrics},
+			&dataFeedsProcessor{emitter, registryMetrics},
 		},
 	}
 	return &monitor.BeholderClient{&client, &protoEmitterProxy}, nil
@@ -53,18 +52,17 @@ func NewAptosWriteTargetMonitor(ctx context.Context, lggr logger.Logger) (*monit
 
 // Specific to the Aptos WT
 type protoEmitter struct {
-	emitter monitor.ProtoEmitter
-	// Metrics collection
-	metrics struct {
-		registry  *registry.Metrics
-		forwarder *forwarder.Metrics
-		wt        *wt.Metrics
-	}
+	emitter    monitor.ProtoEmitter
+	processors []monitor.ProtoProcessor
 }
 
 func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any) error {
-	// TODO: implement me
-	return nil
+	err := e.emitter.Emit(ctx, m, attrKVs...)
+	if err != nil {
+		return fmt.Errorf("failed to emit: %w", err)
+	}
+
+	return e.Process(ctx, m, attrKVs...)
 }
 
 // TODO: the way this is currently used, these errors will be swallowed
@@ -74,75 +72,125 @@ func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs
 		return fmt.Errorf("failed to emit with log: %w", err)
 	}
 
+	return e.Process(ctx, m, attrKVs...)
+}
+
+// Process aggregates further processing for emitted messages
+func (e *protoEmitter) Process(ctx context.Context, m proto.Message, attrKVs ...any) error {
+	// Further processing for emitted messages
+	for _, p := range e.processors {
+		err := p.Process(ctx, m, attrKVs...)
+		if err != nil {
+			// TODO: do we want to return here or continue processing?
+			return fmt.Errorf("failed to process message: %w", err)
+		}
+	}
+	return nil
+}
+
+// Write-Target specific processor decodes write messages to derive metrics
+type wtProcessor struct {
+	metrics *wt.Metrics
+}
+
+func (p *wtProcessor) Process(ctx context.Context, m proto.Message, attrKVs ...any) error {
 	// Switch on the type of the proto.Message
 	switch msg := m.(type) {
 	case *wt.WriteInitiated:
-		err = e.metrics.wt.OnWriteInitiated(ctx, msg)
+		err := p.metrics.OnWriteInitiated(ctx, msg)
 		if err != nil {
 			return fmt.Errorf("failed to publish write initiated metrics: %w", err)
 		}
 		return nil
 	case *wt.WriteError:
-		err = e.metrics.wt.OnWriteError(ctx, msg)
+		err := p.metrics.OnWriteError(ctx, msg)
 		if err != nil {
 			return fmt.Errorf("failed to publish write error metrics: %w", err)
 		}
 		return nil
 	case *wt.WriteSent:
-		err = e.metrics.wt.OnWriteSent(ctx, msg)
+		err := p.metrics.OnWriteSent(ctx, msg)
 		if err != nil {
 			return fmt.Errorf("failed to publish write sent metrics: %w", err)
 		}
 		return nil
 	case *wt.WriteConfirmed:
-		err = e.metrics.wt.OnWriteConfirmed(ctx, msg)
+		err := p.metrics.OnWriteConfirmed(ctx, msg)
 		if err != nil {
 			return fmt.Errorf("failed to publish write confirmed metrics: %w", err)
 		}
-
-		// Further processing for 'WriteConfirmed' messages
-		return e.decodeAndProcessWriteConfirmed(ctx, msg, attrKVs...)
+		return nil
 	default:
-		return fmt.Errorf("unrecognized message type: %T", m)
+		return nil // fallthrough
 	}
 }
 
-func (e *protoEmitter) decodeAndProcessWriteConfirmed(ctx context.Context, m *wt.WriteConfirmed, attrKVs ...any) error {
-	// Decode as a 'keystone.forwarder.ReportProcessed' message
-	reportProcessed, err := forwarder.DecodeAsReportProcessed(m)
-	if err != nil {
-		return fmt.Errorf("failed to decode as 'keystone.forwarder.ReportProcessed': %w", err)
-	}
-	// Emit the 'keystone.forwarder.ReportProcessed' message
-	err = e.emitter.EmitWithLog(ctx, reportProcessed, attrKVs...)
-	if err != nil {
-		return fmt.Errorf("failed to emit with log: %w", err)
-	}
-	// Process emit and derive metrics
-	err = e.metrics.forwarder.OnReportProcessed(ctx, reportProcessed)
-	if err != nil {
-		return fmt.Errorf("failed to publish report processed metrics: %w", err)
-	}
+// Keystone specific processor decodes writes as 'keystone.forwarder.ReportProcessed' messages + metrics
+type keystoneProcessor struct {
+	emitter monitor.ProtoEmitter
+	metrics *forwarder.Metrics
+}
 
-	// TODO: add option for other products
+func (p *keystoneProcessor) Process(ctx context.Context, m proto.Message, attrKVs ...any) error {
+	// Switch on the type of the proto.Message
+	switch msg := m.(type) {
+	case *wt.WriteConfirmed:
+		// TODO: fallthrough if not Keystone forwarder write
+		// Will this msg ever contain different types of writes? Hmm.
 
-	// Decode as an array of 'data-feeds.registry.FeedUpdated' messages
-	updates, err := registry.DecodeAsFeedUpdated(m)
-	if err != nil {
-		return fmt.Errorf("failed to decode as 'data-feeds.registry.FeedUpdated': %w", err)
-	}
-	// Emit the 'data-feeds.registry.FeedUpdated' messages
-	for _, update := range updates {
-		err = e.emitter.EmitWithLog(ctx, update, attrKVs...)
+		// Decode as a 'keystone.forwarder.ReportProcessed' message
+		reportProcessed, err := forwarder.DecodeAsReportProcessed(msg)
+		if err != nil {
+			return fmt.Errorf("failed to decode as 'keystone.forwarder.ReportProcessed': %w", err)
+		}
+		// Emit the 'keystone.forwarder.ReportProcessed' message
+		err = p.emitter.EmitWithLog(ctx, reportProcessed, attrKVs...)
 		if err != nil {
 			return fmt.Errorf("failed to emit with log: %w", err)
 		}
 		// Process emit and derive metrics
-		err = e.metrics.registry.OnFeedUpdated(ctx, update)
+		err = p.metrics.OnReportProcessed(ctx, reportProcessed)
 		if err != nil {
-			return fmt.Errorf("failed to publish feed updated metrics: %w", err)
+			return fmt.Errorf("failed to publish report processed metrics: %w", err)
 		}
+		return nil
+	default:
+		return nil // fallthrough
 	}
+}
 
-	return nil
+// Data-Feeds specific processor decodes writes as 'data-feeds.registry.FeedUpdated' messages + metrics
+type dataFeedsProcessor struct {
+	emitter monitor.ProtoEmitter
+	metrics *registry.Metrics
+}
+
+func (p *dataFeedsProcessor) Process(ctx context.Context, m proto.Message, attrKVs ...any) error {
+	// Switch on the type of the proto.Message
+	switch msg := m.(type) {
+	case *wt.WriteConfirmed:
+		// TODO: fallthrough if not DF write
+		// Will this msg ever contain different types of writes? Yes.
+
+		// Decode as an array of 'data-feeds.registry.FeedUpdated' messages
+		updates, err := registry.DecodeAsFeedUpdated(msg)
+		if err != nil {
+			return fmt.Errorf("failed to decode as 'data-feeds.registry.FeedUpdated': %w", err)
+		}
+		// Emit the 'data-feeds.registry.FeedUpdated' messages
+		for _, update := range updates {
+			err = p.emitter.EmitWithLog(ctx, update, attrKVs...)
+			if err != nil {
+				return fmt.Errorf("failed to emit with log: %w", err)
+			}
+			// Process emit and derive metrics
+			err = p.metrics.OnFeedUpdated(ctx, update)
+			if err != nil {
+				return fmt.Errorf("failed to publish feed updated metrics: %w", err)
+			}
+		}
+		return nil
+	default:
+		return nil // fallthrough
+	}
 }
