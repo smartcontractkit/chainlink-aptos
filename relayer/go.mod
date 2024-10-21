@@ -97,5 +97,3 @@ require (
 	nhooyr.io/websocket v1.8.11 // indirect
 )
 
-// until merged upstream: https://github.com/mwitkow/grpc-proxy/pull/69
-replace github.com/mwitkow/grpc-proxy => github.com/smartcontractkit/grpc-proxy v0.0.0-20230731113816-f1be6620749f
