@@ -275,16 +275,119 @@ func (a *AptosTxm) broadcastLoop() {
 	}
 }
 
-func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
-	client := a.client
-
+func (a *AptosTxm) buildSignedTx(client *aptos.NodeClient, tx *AptosTx, nonce uint64, expirationTimestamp uint64) (*aptos.SignedTransaction, error) {
 	// this is cached within NodeClient after the first successful invocation.
 	chainId, err := client.GetChainId()
 	if err != nil {
 		a.logger.Errorw("failed to get chain id", "error", err)
-		tx.Status = commontypes.Failed
-		return
+		return nil, err
 	}
+
+	payload := aptos.TransactionPayload{
+		Payload: &aptos.EntryFunction{
+			Module: aptos.ModuleId{
+				Address: tx.ContractAddress,
+				Name:    tx.ModuleName,
+			},
+			Function: tx.FunctionName,
+			ArgTypes: tx.TypeTags,
+			Args:     tx.BcsValues,
+		},
+	}
+
+	rawTx := aptos.RawTransaction{
+		Sender:                     tx.FromAddress,
+		SequenceNumber:             nonce,
+		Payload:                    payload,
+		MaxGasAmount:               0, // populated below
+		GasUnitPrice:               0, // populated below
+		ExpirationTimestampSeconds: expirationTimestamp,
+		ChainId:                    chainId,
+	}
+
+	publicKey := aptoscrypto.Ed25519PublicKey{}
+	err = publicKey.FromBytes([]byte(tx.PublicKey))
+	if err != nil {
+		a.logger.Errorw("failed to deserialize public key", "error", err)
+		return nil, err
+	}
+
+	// (if enabled for tx) simulate tx to estimate gas
+	if tx.Simulate {
+		simulatedTx, err := a.simulateTransaction(client, rawTx, tx.FromAddress, publicKey)
+		if err == nil {
+			// todo: configurable multiplier?
+			// fixed multiplier of 1.25 to account for potential discrepancies in gas estimation
+			rawTx.MaxGasAmount = uint64(float64(simulatedTx.GasUsed) * 1.25)
+			rawTx.GasUnitPrice = simulatedTx.GasUnitPrice
+		} else {
+			// do not error on failed estimate gas as it could fail due to conflicting in-flight txs
+			a.logger.Errorw("failed to simulate tx", "error", err)
+		}
+	}
+
+	if rawTx.GasUnitPrice == 0 {
+		// If simulate was disabled or failed, populate the gas unit price.
+		gasInfo, err := client.EstimateGasPrice()
+		if err != nil {
+			a.logger.Errorw("failed to retrieve estimated gas price", "error", err)
+			return nil, err
+		}
+
+		a.logger.Debugw("estimated gas price", "gasEstimate", gasInfo.GasEstimate, "prioritizedGasEstimate", gasInfo.PrioritizedGasEstimate)
+
+		// use prioritized fee for sebsequent attempts
+		if tx.Attempt > 0 {
+			rawTx.GasUnitPrice = gasInfo.PrioritizedGasEstimate
+		} else {
+			rawTx.GasUnitPrice = gasInfo.GasEstimate
+		}
+	}
+
+	if rawTx.MaxGasAmount == 0 {
+		rawTx.MaxGasAmount = a.config.DefaultMaxGasAmount
+		a.logger.Debugw("using default max gas amount", "maxGasAmount", a.config.DefaultMaxGasAmount)
+	}
+
+	signingMessage, err := rawTx.SigningMessage()
+	if err != nil {
+		a.logger.Errorw("failed to create signing message", "error", err)
+		return nil, err
+	}
+
+	signature, err := a.keystore.Sign(context.Background(), fmt.Sprintf("%064x", tx.PublicKey), signingMessage)
+	if err != nil {
+		a.logger.Errorw("failed to sign message", "fromAddress", tx.FromAddress, "error", err)
+		return nil, err
+	}
+
+	sig := aptoscrypto.Ed25519Signature{}
+	err = sig.FromBytes(signature)
+	if err != nil {
+		a.logger.Errorw("failed to deserialize signature", "error", err)
+		return nil, err
+	}
+
+	authenticator := &aptoscrypto.Ed25519Authenticator{
+		PubKey: &publicKey,
+		Sig:    &sig,
+	}
+
+	signedTx, err := rawTx.SignedTransactionWithAuthenticator(&aptoscrypto.AccountAuthenticator{
+		Variant: aptoscrypto.AccountAuthenticatorEd25519,
+		Auth:    authenticator,
+	})
+	if err != nil {
+		a.logger.Errorw("failed to sign tx", "error", err)
+		return nil, err
+	}
+
+	return signedTx, nil
+}
+
+func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
+	client := a.client
+
 
 	txStore := a.accountStore.GetTxStore(tx.FromAddress.String())
 	if txStore == nil {
@@ -303,108 +406,6 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		txStore = newTxStore
 	}
 
-	payload := aptos.TransactionPayload{
-		Payload: &aptos.EntryFunction{
-			Module: aptos.ModuleId{
-				Address: tx.ContractAddress,
-				Name:    tx.ModuleName,
-			},
-			Function: tx.FunctionName,
-			ArgTypes: tx.TypeTags,
-			Args:     tx.BcsValues,
-		},
-	}
-
-	buildSignedTx := func(nonce uint64, expirationTimestamp uint64) (*aptos.SignedTransaction, error) {
-		rawTx := aptos.RawTransaction{
-			Sender:                     tx.FromAddress,
-			SequenceNumber:             nonce,
-			Payload:                    payload,
-			MaxGasAmount:               0, // populated below
-			GasUnitPrice:               0, // populated below
-			ExpirationTimestampSeconds: expirationTimestamp,
-			ChainId:                    chainId,
-		}
-
-		publicKey := aptoscrypto.Ed25519PublicKey{}
-		err = publicKey.FromBytes([]byte(tx.PublicKey))
-		if err != nil {
-			a.logger.Errorw("failed to deserialize public key", "error", err)
-			return nil, err
-		}
-
-		// (if enabled for tx) simulate tx to estimate gas
-		if tx.Simulate {
-			simulatedTx, err := a.simulateTransaction(client, rawTx, tx.FromAddress, publicKey)
-			if err == nil {
-				// todo: configurable multiplier?
-				// fixed multiplier of 1.25 to account for potential discrepancies in gas estimation
-				rawTx.MaxGasAmount = uint64(float64(simulatedTx.GasUsed) * 1.25)
-				rawTx.GasUnitPrice = simulatedTx.GasUnitPrice
-			} else {
-				// do not error on failed estimate gas as it could fail due to conflicting in-flight txs
-				a.logger.Errorw("failed to simulate tx", "error", err)
-			}
-		}
-
-		if rawTx.GasUnitPrice == 0 {
-			// If simulate was disabled or failed, populate the gas unit price.
-			gasInfo, err := client.EstimateGasPrice()
-			if err != nil {
-				a.logger.Errorw("failed to retrieve estimated gas price", "error", err)
-				return nil, err
-			}
-
-			a.logger.Debugw("estimated gas price", "gasEstimate", gasInfo.GasEstimate, "prioritizedGasEstimate", gasInfo.PrioritizedGasEstimate)
-
-			// use prioritized fee for sebsequent attempts
-			if tx.Attempt > 0 {
-				rawTx.GasUnitPrice = gasInfo.PrioritizedGasEstimate
-			} else {
-				rawTx.GasUnitPrice = gasInfo.GasEstimate
-			}
-		}
-
-		if rawTx.MaxGasAmount == 0 {
-			rawTx.MaxGasAmount = a.config.DefaultMaxGasAmount
-			a.logger.Debugw("using default max gas amount", "maxGasAmount", a.config.DefaultMaxGasAmount)
-		}
-
-		signingMessage, err := rawTx.SigningMessage()
-		if err != nil {
-			a.logger.Errorw("failed to create signing message", "error", err)
-			return nil, err
-		}
-
-		signature, err := a.keystore.Sign(context.Background(), fmt.Sprintf("%064x", tx.PublicKey), signingMessage)
-		if err != nil {
-			a.logger.Errorw("failed to sign message", "fromAddress", tx.FromAddress, "error", err)
-			return nil, err
-		}
-
-		sig := aptoscrypto.Ed25519Signature{}
-		err = sig.FromBytes(signature)
-		if err != nil {
-			a.logger.Errorw("failed to deserialize signature", "error", err)
-			return nil, err
-		}
-
-		authenticator := &aptoscrypto.Ed25519Authenticator{
-			PubKey: &publicKey,
-			Sig:    &sig,
-		}
-
-		signedTx, err := rawTx.SignedTransactionWithAuthenticator(&aptoscrypto.AccountAuthenticator{
-			Variant: aptoscrypto.AccountAuthenticatorEd25519,
-			Auth:    authenticator,
-		})
-		if err != nil {
-			a.logger.Errorw("failed to sign tx", "error", err)
-			return nil, err
-		}
-
-		return signedTx, nil
-	}
 
 	if tx.Attempt > 0 {
 		// If we're retrying a failed transaction that we caught in the confirm loop, resync the nonce again
@@ -425,7 +426,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 
 		// build the tx with the nonce and expiration timestamp
 		nonce := txStore.GetNextNonce()
-		signedTx, err := buildSignedTx(nonce, expirationTimestamp)
+		signedTx, err := a.buildSignedTx(client, tx, nonce, expirationTimestamp)
 		if err != nil {
 			a.logger.Errorw("failed to build signed tx", "error", err)
 			tx.Status = commontypes.Failed
@@ -681,7 +682,6 @@ func (a *AptosTxm) simulateTransaction(client *aptos.NodeClient, rawTx aptos.Raw
 	}
 
 	return nil, fmt.Errorf("simulation attempts failed, last error: %w", lastError)
-
 }
 
 func getTimestampSecs() uint64 {
