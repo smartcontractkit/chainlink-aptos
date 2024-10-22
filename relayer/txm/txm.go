@@ -2,6 +2,7 @@ package txm
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"sort"
@@ -275,7 +276,7 @@ func (a *AptosTxm) broadcastLoop() {
 	}
 }
 
-func (a *AptosTxm) buildSignedTx(client *aptos.NodeClient, tx *AptosTx, nonce uint64, expirationTimestamp uint64) (*aptos.SignedTransaction, error) {
+func (a *AptosTxm) buildRawTx(client *aptos.NodeClient, tx *AptosTx, nonce uint64, expirationTimestamp uint64) (*aptos.RawTransaction, error) {
 	// this is cached within NodeClient after the first successful invocation.
 	chainId, err := client.GetChainId()
 	if err != nil {
@@ -295,7 +296,7 @@ func (a *AptosTxm) buildSignedTx(client *aptos.NodeClient, tx *AptosTx, nonce ui
 		},
 	}
 
-	rawTx := aptos.RawTransaction{
+	rawTx := &aptos.RawTransaction{
 		Sender:                     tx.FromAddress,
 		SequenceNumber:             nonce,
 		Payload:                    payload,
@@ -305,16 +306,9 @@ func (a *AptosTxm) buildSignedTx(client *aptos.NodeClient, tx *AptosTx, nonce ui
 		ChainId:                    chainId,
 	}
 
-	publicKey := aptoscrypto.Ed25519PublicKey{}
-	err = publicKey.FromBytes([]byte(tx.PublicKey))
-	if err != nil {
-		a.logger.Errorw("failed to deserialize public key", "error", err)
-		return nil, err
-	}
-
 	// (if enabled for tx) simulate tx to estimate gas
 	if tx.Simulate {
-		simulatedTx, err := a.simulateTransaction(client, rawTx, tx.FromAddress, publicKey)
+		simulatedTx, err := a.simulateTransaction(client, *rawTx, tx.FromAddress, tx.PublicKey)
 		if err == nil {
 			// todo: configurable multiplier?
 			// fixed multiplier of 1.25 to account for potential discrepancies in gas estimation
@@ -349,15 +343,19 @@ func (a *AptosTxm) buildSignedTx(client *aptos.NodeClient, tx *AptosTx, nonce ui
 		a.logger.Debugw("using default max gas amount", "maxGasAmount", a.config.DefaultMaxGasAmount)
 	}
 
+	return rawTx, nil
+}
+
+func (a *AptosTxm) buildSignedTx(client *aptos.NodeClient, rawTx *aptos.RawTransaction, publicKey ed25519.PublicKey, fromAddress aptos.AccountAddress) (*aptos.SignedTransaction, error) {
 	signingMessage, err := rawTx.SigningMessage()
 	if err != nil {
 		a.logger.Errorw("failed to create signing message", "error", err)
 		return nil, err
 	}
 
-	signature, err := a.keystore.Sign(context.Background(), fmt.Sprintf("%064x", tx.PublicKey), signingMessage)
+	signature, err := a.keystore.Sign(context.Background(), fmt.Sprintf("%064x", publicKey), signingMessage)
 	if err != nil {
-		a.logger.Errorw("failed to sign message", "fromAddress", tx.FromAddress, "error", err)
+		a.logger.Errorw("failed to sign message", "fromAddress", fromAddress, "error", err)
 		return nil, err
 	}
 
@@ -369,7 +367,7 @@ func (a *AptosTxm) buildSignedTx(client *aptos.NodeClient, tx *AptosTx, nonce ui
 	}
 
 	authenticator := &aptoscrypto.Ed25519Authenticator{
-		PubKey: &publicKey,
+		PubKey: &aptoscrypto.Ed25519PublicKey{Inner: publicKey},
 		Sig:    &sig,
 	}
 
@@ -426,7 +424,15 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 
 		// build the tx with the nonce and expiration timestamp
 		nonce := txStore.GetNextNonce()
-		signedTx, err := a.buildSignedTx(client, tx, nonce, expirationTimestamp)
+
+		rawTx, err := a.buildRawTx(client, tx, nonce, expirationTimestamp)
+		if err != nil {
+			a.logger.Errorw("failed to build raw tx", "error", err)
+			tx.Status = commontypes.Failed
+			return
+		}
+
+		signedTx, err := a.buildSignedTx(client, rawTx, tx.PublicKey, tx.FromAddress)
 		if err != nil {
 			a.logger.Errorw("failed to build signed tx", "error", err)
 			tx.Status = commontypes.Failed
@@ -640,9 +646,9 @@ func (key *mockSimulationSigner) SimulationAuthenticator() *aptoscrypto.AccountA
 	}
 }
 
-func (a *AptosTxm) simulateTransaction(client *aptos.NodeClient, rawTx aptos.RawTransaction, fromAddress aptos.AccountAddress, publicKey aptoscrypto.Ed25519PublicKey) (*aptosapi.UserTransaction, error) {
+func (a *AptosTxm) simulateTransaction(client *aptos.NodeClient, rawTx aptos.RawTransaction, fromAddress aptos.AccountAddress, publicKey ed25519.PublicKey) (*aptosapi.UserTransaction, error) {
 	// build mock signer for simulation
-	signerForSimulation := &aptos.Account{Signer: &mockSimulationSigner{pubKey: publicKey}}
+	signerForSimulation := &aptos.Account{Signer: &mockSimulationSigner{pubKey: aptoscrypto.Ed25519PublicKey{Inner: publicKey}}}
 
 	attempt := 1
 	var lastError error
