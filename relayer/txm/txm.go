@@ -276,13 +276,21 @@ func (a *AptosTxm) broadcastLoop() {
 	}
 }
 
-func (a *AptosTxm) createRawTx(client *aptos.NodeClient, tx *AptosTx, nonce uint64, expirationTimestampSecs uint64) (*aptos.RawTransaction, error) {
+func (a *AptosTxm) createRawTx(client *aptos.NodeClient, tx *AptosTx, nonce uint64) (*aptos.RawTransaction, error) {
 	// this is cached within NodeClient after the first successful invocation.
 	chainId, err := client.GetChainId()
 	if err != nil {
 		a.logger.Errorw("failed to get chain id", "error", err)
 		return nil, err
 	}
+
+	ledgerTimestampSecs, err := a.getLedgerTimestampSecs(client)
+	if err != nil {
+		a.logger.Errorw("failed to fetch ledger timestamp", "error", err)
+		return nil, err
+	}
+
+	expirationTimestampSecs := ledgerTimestampSecs + a.config.TxExpirationSecs
 
 	payload := aptos.TransactionPayload{
 		Payload: &aptos.EntryFunction{
@@ -411,19 +419,10 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 
 	// broadcast with basic retry to try get the tx included in the mempool
 	for attempt := 1; attempt <= int(a.config.MaxSubmitRetryAttempts); attempt++ {
-		ledgerTimestampSecs, err := a.getLedgerTimestampSecs()
-		if err != nil {
-			a.logger.Errorw("failed to fetch ledger timestamp", "error", err)
-			tx.Status = commontypes.Failed
-			return
-		}
-
-		expirationTimestampSecs := ledgerTimestampSecs + a.config.TxExpirationSecs
-
 		// build the tx with the nonce and expiration timestamp
 		nonce := txStore.GetNextNonce()
 
-		rawTx, err := a.createRawTx(client, tx, nonce, expirationTimestampSecs)
+		rawTx, err := a.createRawTx(client, tx, nonce)
 		if err != nil {
 			a.logger.Errorw("failed to create raw tx", "error", err)
 			tx.Status = commontypes.Failed
@@ -448,7 +447,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			// tx included in the Mempool
 			a.logger.Debugw("submit tx successful", "txID", tx.ID, "attempt", tx.Attempt, "submitResponse", submitResponse)
 
-			err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, expirationTimestampSecs, tx)
+			err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, rawTx.ExpirationTimestampSeconds, tx)
 			if err != nil {
 				// TODO: figure out what to do here, this should never occur.
 				a.logger.Errorw("failed to add unconfirmed tx", "txID", tx.ID, "txHash", submitResponse.Hash, "error", err)
@@ -530,7 +529,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 				}
 			} else {
 				// Check using the ledger timestamp whether the transaction has expired.
-				ledgerTimestampSecs, err := a.getLedgerTimestampSecs()
+				ledgerTimestampSecs, err := a.getLedgerTimestampSecs(client)
 				if err != nil {
 					a.logger.Errorw("couldn't fetch ledger timestamp and check if tx expired", "txID", unconfirmedTx.Tx.ID)
 					continue
@@ -608,8 +607,8 @@ func (a *AptosTxm) resyncNonce(client *aptos.NodeClient, address aptos.AccountAd
 	return nil
 }
 
-func (a *AptosTxm) getLedgerTimestampSecs() (uint64, error) {
-	nodeInfo, err := a.client.Info()
+func (a *AptosTxm) getLedgerTimestampSecs(client *aptos.NodeClient) (uint64, error) {
+	nodeInfo, err := client.Info()
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch node info: %+w", err)
 	}
