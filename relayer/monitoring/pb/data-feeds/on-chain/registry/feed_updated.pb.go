@@ -29,7 +29,7 @@ type FeedUpdated struct {
 
 	FeedId                []byte `protobuf:"bytes,1,opt,name=feed_id,json=feedId,proto3" json:"feed_id,omitempty"`
 	ObservationsTimestamp uint32 `protobuf:"varint,2,opt,name=observations_timestamp,json=observationsTimestamp,proto3" json:"observations_timestamp,omitempty"`
-	// TODO: how to represent benchmark data which is u256 on-chain?
+	// TODO: how to represent benchmark data which is i192 on-chain?
 	Benchmark uint64 `protobuf:"varint,3,opt,name=benchmark,proto3" json:"benchmark,omitempty"`
 	Report    []byte `protobuf:"bytes,4,opt,name=report,proto3" json:"report,omitempty"`
 	// Head data - when was the event produced on-chain

@@ -111,7 +111,7 @@ func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logg
 	ch.balanceMonitor, err = monitor.NewAptosAccBalanceMonitor(monitor.AptosAccBalanceMonitorOpts{
 		ChainID: ch.ID(),
 
-		Config:    *ch.Config().BalanceMonitor,
+		Config:    *cfg.BalanceMonitor,
 		Logger:    lggr,
 		Keystore:  loopKs,
 		NewClient: getClient,

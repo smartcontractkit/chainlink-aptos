@@ -34,7 +34,11 @@ Name = 'primary'
 URL = "http://chainlink-aptos.devnet:8080/v1"
 
 [Aptos.BalanceMonitor]
-BalancePollPeriod = '5s'
+BalancePollPeriod = '10s'
+
+[Aptos.WriteTargetCap]
+ConfirmerPollPeriod = '1s'
+ConfirmerTimeout = '10s'
 
 [[EVM]]
 ChainID = '1337'

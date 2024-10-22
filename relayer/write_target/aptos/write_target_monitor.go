@@ -15,7 +15,11 @@ import (
 	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/keystone/write-target"
 )
 
-// TODO: this is just a PoC implementation - replace with more robust implementation
+// NewAptosWriteTargetMonitor initializes a Beholder client for the Aptos Write Target
+//
+// The client is initialized as a BeholderClient extension with a custom ProtoEmitter.
+// The ProtoEmitter is proxied with additional processing for emitted messages. This processing
+// includes decoding messages as specific types and deriving metrics based on the decoded messages.
 func NewAptosWriteTargetMonitor(ctx context.Context, lggr logger.Logger) (*monitor.BeholderClient, error) {
 	// Initialize the Beholder client with a local logger a custom Emitter
 	client := beholder.GetClient().ForPackage("write_target")
@@ -56,6 +60,7 @@ type protoEmitter struct {
 	processors []monitor.ProtoProcessor
 }
 
+// Emit emits a proto.Message and runs additional processing
 func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any) error {
 	err := e.emitter.Emit(ctx, m, attrKVs...)
 	if err != nil {
@@ -66,6 +71,7 @@ func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any
 }
 
 // TODO: the way this is currently used, these errors will be swallowed
+// EmitWithLog emits a proto.Message and runs additional processing
 func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs ...any) error {
 	err := e.emitter.EmitWithLog(ctx, m, attrKVs...)
 	if err != nil {

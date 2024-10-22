@@ -15,11 +15,15 @@ const (
 	AttrKeyBeholderDataType   = "beholder_data_type"
 )
 
+// patternSnake is a regular expression to match CamelCase words
+// Notice: we use the Unicode property 'Lu' (uppercase letter) to match
+// the first letter of the word, and 'P{Lu}' (not uppercase letter) to match
+// the rest of the word.
+var patternSnake = regexp.MustCompile("(\\p{Lu}+\\P{Lu}*)")
+
 // toSnakeCase converts a CamelCase to snake_case (used for type -> file name mapping)
 func toSnakeCase(s string) string {
-	// \p{Lu} matches all charaters in the unicode class for uppercase letters
-	pattern := regexp.MustCompile("(\\p{Lu}+\\P{Lu}*)")
-	s = pattern.ReplaceAllString(s, "_${1}")
+	s = patternSnake.ReplaceAllString(s, "_${1}")
 	s, _ = strings.CutPrefix(strings.ToLower(s), "_")
 	return s
 }

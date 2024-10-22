@@ -14,6 +14,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/write_target"
 )
 
 var DefaultConfigSet = ConfigSet{
@@ -22,13 +23,18 @@ var DefaultConfigSet = ConfigSet{
 		ConfirmPollSecs:   2,
 	},
 	BalanceMonitor: monitor.Config{
-		BalancePollPeriod: *config.MustNewDuration(5 * time.Second),
+		BalancePollPeriod: *config.MustNewDuration(10 * time.Second),
+	},
+	WriteTargetCap: write_target.Config{
+		ConfirmerPollPeriod: *config.MustNewDuration(1 * time.Second),
+		ConfirmerTimeout:    *config.MustNewDuration(10 * time.Second),
 	},
 }
 
 type ConfigSet struct { //nolint:revive
 	TransactionManager txm.AptosTxmConfig
 	BalanceMonitor     monitor.Config
+	WriteTargetCap     write_target.Config
 }
 
 type WorkflowConfig struct {
@@ -40,6 +46,7 @@ type WorkflowConfig struct {
 type Chain struct {
 	TransactionManager *txm.AptosTxmConfig
 	BalanceMonitor     *monitor.Config
+	WriteTargetCap     *write_target.Config
 	Workflow           WorkflowConfig
 }
 
@@ -49,6 +56,9 @@ func (c *Chain) SetDefaults() {
 	}
 	if c.BalanceMonitor == nil {
 		c.BalanceMonitor = &DefaultConfigSet.BalanceMonitor
+	}
+	if c.WriteTargetCap == nil {
+		c.WriteTargetCap = &DefaultConfigSet.WriteTargetCap
 	}
 }
 
@@ -175,6 +185,9 @@ func setFromChain(c, f *Chain) {
 	}
 	if f.BalanceMonitor != nil {
 		c.BalanceMonitor = f.BalanceMonitor
+	}
+	if f.WriteTargetCap != nil {
+		c.WriteTargetCap = f.WriteTargetCap
 	}
 	c.Workflow = f.Workflow
 }

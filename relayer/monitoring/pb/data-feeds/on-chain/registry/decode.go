@@ -52,7 +52,7 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				// Event data
 				FeedId:                rm.FeedId[:], // Convert [32]byte to []byte
 				ObservationsTimestamp: rm.ObservationsTimestamp,
-				// TODO: u256 lossy conversion
+				// TODO: int192 lossy conversion (can overflow, undefined in Go)
 				Benchmark: rm.BenchmarkPrice.Uint64(), // Map big.Int as uint64
 				Report:    rf.Data,
 
@@ -73,7 +73,7 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				// Event data
 				FeedId:                rm.FeedId[:], // Convert [32]byte to []byte
 				ObservationsTimestamp: rm.ObservationsTimestamp,
-				// TODO: u256 lossy conversion
+				// TODO: int192 lossy conversion (can overflow, undefined in Go)
 				Benchmark: rm.BenchmarkPrice.Uint64(), // Map big.Int as uint64
 				Report:    rf.Data,
 

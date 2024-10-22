@@ -17,7 +17,6 @@ type GaugeAccBalance struct {
 }
 
 func NewGaugeAccBalance(unitStr string) (*GaugeAccBalance, error) {
-	// TODO: group this under 'chain' (parent service) not under 'write_target' (original plan)
 	name := "account_balance"
 	description := "Balance for configured WT account"
 	gauge, err := beholder.GetMeter().Float64Gauge(name, metric.WithUnit(unitStr), metric.WithDescription(description))
