@@ -9,10 +9,10 @@ import (
 )
 
 type UnconfirmedTx struct {
-	Nonce               uint64
-	Hash                string
-	ExpirationTimestamp uint64
-	Tx                  *AptosTx
+	Nonce                   uint64
+	Hash                    string
+	ExpirationTimestampSecs uint64
+	Tx                      *AptosTx
 }
 
 // TxStore tracks broadcast & unconfirmed txs per account address per chain id
@@ -84,7 +84,7 @@ func (s *TxStore) GetNextNonce() uint64 {
 	return nextNonce
 }
 
-func (s *TxStore) AddUnconfirmed(nonce uint64, hash string, expirationTimestamp uint64, tx *AptosTx) error {
+func (s *TxStore) AddUnconfirmed(nonce uint64, hash string, expirationTimestampSecs uint64, tx *AptosTx) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -107,10 +107,10 @@ func (s *TxStore) AddUnconfirmed(nonce uint64, hash string, expirationTimestamp 
 	}
 
 	s.unconfirmedNonces[nonce] = &UnconfirmedTx{
-		Nonce:               nonce,
-		Hash:                hash,
-		ExpirationTimestamp: expirationTimestamp,
-		Tx:                  tx,
+		Nonce:                   nonce,
+		Hash:                    hash,
+		ExpirationTimestampSecs: expirationTimestampSecs,
+		Tx:                      tx,
 	}
 
 	return nil

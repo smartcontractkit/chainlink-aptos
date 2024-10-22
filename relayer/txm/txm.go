@@ -276,7 +276,7 @@ func (a *AptosTxm) broadcastLoop() {
 	}
 }
 
-func (a *AptosTxm) buildRawTx(client *aptos.NodeClient, tx *AptosTx, nonce uint64, expirationTimestamp uint64) (*aptos.RawTransaction, error) {
+func (a *AptosTxm) createRawTx(client *aptos.NodeClient, tx *AptosTx, nonce uint64, expirationTimestampSecs uint64) (*aptos.RawTransaction, error) {
 	// this is cached within NodeClient after the first successful invocation.
 	chainId, err := client.GetChainId()
 	if err != nil {
@@ -302,7 +302,7 @@ func (a *AptosTxm) buildRawTx(client *aptos.NodeClient, tx *AptosTx, nonce uint6
 		Payload:                    payload,
 		MaxGasAmount:               0, // populated below
 		GasUnitPrice:               0, // populated below
-		ExpirationTimestampSeconds: expirationTimestamp,
+		ExpirationTimestampSeconds: expirationTimestampSecs,
 		ChainId:                    chainId,
 	}
 
@@ -346,7 +346,7 @@ func (a *AptosTxm) buildRawTx(client *aptos.NodeClient, tx *AptosTx, nonce uint6
 	return rawTx, nil
 }
 
-func (a *AptosTxm) buildSignedTx(client *aptos.NodeClient, rawTx *aptos.RawTransaction, publicKey ed25519.PublicKey, fromAddress aptos.AccountAddress) (*aptos.SignedTransaction, error) {
+func (a *AptosTxm) createSignedTx(client *aptos.NodeClient, rawTx *aptos.RawTransaction, publicKey ed25519.PublicKey, fromAddress aptos.AccountAddress) (*aptos.SignedTransaction, error) {
 	signingMessage, err := rawTx.SigningMessage()
 	if err != nil {
 		a.logger.Errorw("failed to create signing message", "error", err)
@@ -386,7 +386,6 @@ func (a *AptosTxm) buildSignedTx(client *aptos.NodeClient, rawTx *aptos.RawTrans
 func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	client := a.client
 
-
 	txStore := a.accountStore.GetTxStore(tx.FromAddress.String())
 	if txStore == nil {
 		sequenceNumber, err := a.getSequenceNumber(client, tx.FromAddress)
@@ -404,7 +403,6 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		txStore = newTxStore
 	}
 
-
 	if tx.Attempt > 0 {
 		// If we're retrying a failed transaction that we caught in the confirm loop, resync the nonce again
 		// first.
@@ -413,28 +411,28 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 
 	// broadcast with basic retry to try get the tx included in the mempool
 	for attempt := 1; attempt <= int(a.config.MaxSubmitRetryAttempts); attempt++ {
-		ledgerTimestamp, err := a.getLedgerTimestamp()
+		ledgerTimestampSecs, err := a.getLedgerTimestampSecs()
 		if err != nil {
 			a.logger.Errorw("failed to fetch ledger timestamp", "error", err)
 			tx.Status = commontypes.Failed
 			return
 		}
 
-		expirationTimestamp := ledgerTimestamp + a.config.TxExpirationSecs
+		expirationTimestampSecs := ledgerTimestampSecs + a.config.TxExpirationSecs
 
 		// build the tx with the nonce and expiration timestamp
 		nonce := txStore.GetNextNonce()
 
-		rawTx, err := a.buildRawTx(client, tx, nonce, expirationTimestamp)
+		rawTx, err := a.createRawTx(client, tx, nonce, expirationTimestampSecs)
 		if err != nil {
-			a.logger.Errorw("failed to build raw tx", "error", err)
+			a.logger.Errorw("failed to create raw tx", "error", err)
 			tx.Status = commontypes.Failed
 			return
 		}
 
-		signedTx, err := a.buildSignedTx(client, rawTx, tx.PublicKey, tx.FromAddress)
+		signedTx, err := a.createSignedTx(client, rawTx, tx.PublicKey, tx.FromAddress)
 		if err != nil {
-			a.logger.Errorw("failed to build signed tx", "error", err)
+			a.logger.Errorw("failed to create signed tx", "error", err)
 			tx.Status = commontypes.Failed
 			return
 		}
@@ -450,7 +448,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			// tx included in the Mempool
 			a.logger.Debugw("submit tx successful", "txID", tx.ID, "attempt", tx.Attempt, "submitResponse", submitResponse)
 
-			err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, expirationTimestamp, tx)
+			err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, expirationTimestampSecs, tx)
 			if err != nil {
 				// TODO: figure out what to do here, this should never occur.
 				a.logger.Errorw("failed to add unconfirmed tx", "txID", tx.ID, "txHash", submitResponse.Hash, "error", err)
@@ -532,13 +530,13 @@ func (a *AptosTxm) checkUnconfirmed() {
 				}
 			} else {
 				// Check using the ledger timestamp whether the transaction has expired.
-				ledgerTimestamp, err := a.getLedgerTimestamp()
+				ledgerTimestampSecs, err := a.getLedgerTimestampSecs()
 				if err != nil {
 					a.logger.Errorw("couldn't fetch ledger timestamp and check if tx expired", "txID", unconfirmedTx.Tx.ID)
 					continue
 				}
 
-				if ledgerTimestamp <= unconfirmedTx.ExpirationTimestamp {
+				if ledgerTimestampSecs <= unconfirmedTx.ExpirationTimestampSecs {
 					// tx was neither committed nor expired yet
 					a.logger.Debugw("tx not found or pending in the mempool", "hash", hash)
 					continue
@@ -610,7 +608,7 @@ func (a *AptosTxm) resyncNonce(client *aptos.NodeClient, address aptos.AccountAd
 	return nil
 }
 
-func (a *AptosTxm) getLedgerTimestamp() (uint64, error) {
+func (a *AptosTxm) getLedgerTimestampSecs() (uint64, error) {
 	nodeInfo, err := a.client.Info()
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch node info: %+w", err)
@@ -621,7 +619,7 @@ func (a *AptosTxm) getLedgerTimestamp() (uint64, error) {
 		return 0, fmt.Errorf("ledgerTimestamp is 0")
 	}
 
-	// ledgerTimestamp given in nanosec
+	// ledger timestamp is in microseconds, convert to seconds.
 	return ledgerTimestamp / 1000000, nil
 }
 
