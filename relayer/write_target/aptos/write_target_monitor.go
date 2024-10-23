@@ -44,6 +44,7 @@ func NewAptosWriteTargetMonitor(ctx context.Context, lggr logger.Logger) (*monit
 
 	// Proxy ProtoEmitter with additional processing
 	protoEmitterProxy := protoEmitter{
+		lggr:    lggr,
 		emitter: emitter,
 		processors: []monitor.ProtoProcessor{
 			&wtProcessor{wtMetrics},
@@ -54,8 +55,9 @@ func NewAptosWriteTargetMonitor(ctx context.Context, lggr logger.Logger) (*monit
 	return &monitor.BeholderClient{&client, &protoEmitterProxy}, nil
 }
 
-// Specific to the Aptos WT
+// ProtoEmitter proxy specific to the Aptos WT
 type protoEmitter struct {
+	lggr       logger.Logger
 	emitter    monitor.ProtoEmitter
 	processors []monitor.ProtoProcessor
 }
@@ -67,10 +69,10 @@ func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any
 		return fmt.Errorf("failed to emit: %w", err)
 	}
 
+	// Notice: we skip processing errors (and continue) so this will never error
 	return e.Process(ctx, m, attrKVs...)
 }
 
-// TODO: the way this is currently used, these errors will be swallowed
 // EmitWithLog emits a proto.Message and runs additional processing
 func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs ...any) error {
 	err := e.emitter.EmitWithLog(ctx, m, attrKVs...)
@@ -78,6 +80,7 @@ func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs
 		return fmt.Errorf("failed to emit with log: %w", err)
 	}
 
+	// Notice: we skip processing errors (and continue) so this will never error
 	return e.Process(ctx, m, attrKVs...)
 }
 
@@ -87,8 +90,11 @@ func (e *protoEmitter) Process(ctx context.Context, m proto.Message, attrKVs ...
 	for _, p := range e.processors {
 		err := p.Process(ctx, m, attrKVs...)
 		if err != nil {
-			// TODO: do we want to return here or continue processing?
-			return fmt.Errorf("failed to process message: %w", err)
+			// Notice: we swallow and log processing errors
+			// These should be investigated and fixed, but are not critical to product runtime,
+			// and shouldn't block further processing of the emitted message.
+			e.lggr.Errorw("failed to process emitted message", "err", err)
+			return nil
 		}
 	}
 	return nil

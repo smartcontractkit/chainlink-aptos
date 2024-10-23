@@ -12,7 +12,7 @@ import (
 
 const (
 	AttrKeyBeholderDataSchema = "beholder_data_schema"
-	AttrKeyBeholderDataType   = "beholder_data_type"
+	AttrKeyBeholderEntity     = "beholder_entity"
 )
 
 // patternSnake is a regular expression to match CamelCase words
@@ -79,7 +79,7 @@ func appendSchemaIfMissing(m proto.Message, attrKVs []any, basePath string) ([]a
 		attrKVs = append(attrKVs, val)
 
 		// Add the message type as an attribute (optional)
-		key = AttrKeyBeholderDataType
+		key = AttrKeyBeholderEntity
 		attrKVs = append(attrKVs, key)
 		attrKVs = append(attrKVs, toSchemaName(m))
 	}
@@ -94,8 +94,8 @@ func appendSchemaUnknown(attrKVs []any, basePath string) []any {
 	attrKVs = append(attrKVs, path.Join(basePath, "unknown.proto"))
 
 	// Add the message type as an attribute (optional)
-	key = AttrKeyBeholderDataType
+	key = AttrKeyBeholderEntity
 	attrKVs = append(attrKVs, key)
-	attrKVs = append(attrKVs, "unknown")
+	attrKVs = append(attrKVs, "Unknown")
 	return attrKVs
 }

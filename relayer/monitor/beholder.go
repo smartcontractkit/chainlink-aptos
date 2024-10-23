@@ -13,6 +13,7 @@ import (
 
 const schemaBasePath = "https://github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb"
 
+// BeholderClient is a Beholder client extension with a custom ProtoEmitter
 type BeholderClient struct {
 	*beholder.Client
 	ProtoEmitter ProtoEmitter
@@ -35,6 +36,7 @@ func NewProtoEmitter(lggr logger.Logger, client *beholder.Client) ProtoEmitter {
 	return &protoEmitter{lggr, client}
 }
 
+// protoEmitter is a ProtoEmitter implementation
 type protoEmitter struct {
 	lggr   logger.Logger
 	client *beholder.Client
@@ -74,15 +76,9 @@ func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs
 	}
 
 	mStr := fmt.Sprintf("{%s}", protoimpl.X.MessageStringOf(m))
-	// TODO: how do we get and log the full set of attributes?
 	e.lggr.Infow("[Beholder.emit]", "message", mStr, "attributes", attrKVs)
 
 	err = e.Emit(ctx, m, attrKVs...)
 
 	return err
-}
-
-type BeholderClientOpts struct {
-	Logger logger.Logger
-	Config beholder.Config
 }
