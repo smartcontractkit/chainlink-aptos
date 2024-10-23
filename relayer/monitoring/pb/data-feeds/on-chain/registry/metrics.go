@@ -127,7 +127,7 @@ func (m *Metrics) OnFeedUpdated(ctx context.Context, msg *FeedUpdated, attrKVs .
 	m.feedUpdated.observationsTimestamp.Record(ctx, int64(msg.ObservationsTimestamp), attrs)
 
 	// Benchmark
-	m.feedUpdated.benchmark.Record(ctx, int64(msg.Benchmark), attrs)
+	m.feedUpdated.benchmark.Record(ctx, msg.BenchmarkVal, attrs)
 
 	// Block timestamp
 	m.feedUpdated.blockTimestamp.Record(ctx, int64(msg.BlockTimestamp), attrs)

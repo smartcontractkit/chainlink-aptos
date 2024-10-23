@@ -2,6 +2,8 @@ package registry
 
 import (
 	"fmt"
+	"math"
+	"math/big"
 
 	wt_msg "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/keystone/write-target"
 
@@ -52,9 +54,11 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				// Event data
 				FeedId:                rm.FeedId[:], // Convert [32]byte to []byte
 				ObservationsTimestamp: rm.ObservationsTimestamp,
-				// TODO: int192 lossy conversion (can overflow, undefined in Go)
-				Benchmark: rm.BenchmarkPrice.Uint64(), // Map big.Int as uint64
-				Report:    rf.Data,
+				Benchmark:             rm.BenchmarkPrice.Bytes(), // Map big.Int as []byte
+				Report:                rf.Data,
+
+				// Notice: i192 will not fit if number bigger than 64 bits
+				BenchmarkVal: toInt64(rm.BenchmarkPrice),
 
 				// Notice: we skip head/tx data here (unknown), as we map from 'keystone.write-target.WriteConfirmed'
 				// and not from tx/event data (e.g., 'keystone.write-target.WriteTxConfirmed')
@@ -73,9 +77,11 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				// Event data
 				FeedId:                rm.FeedId[:], // Convert [32]byte to []byte
 				ObservationsTimestamp: rm.ObservationsTimestamp,
-				// TODO: int192 lossy conversion (can overflow, undefined in Go)
-				Benchmark: rm.BenchmarkPrice.Uint64(), // Map big.Int as uint64
-				Report:    rf.Data,
+				Benchmark:             rm.BenchmarkPrice.Bytes(), // Map big.Int as []byte
+				Report:                rf.Data,
+
+				// Notice: i192 will not fit if number bigger than 64 bits
+				BenchmarkVal: toInt64(rm.BenchmarkPrice),
 
 				// Notice: we skip head/tx data here (unknown), as we map from 'keystone.write-target.WriteConfirmed'
 				// and not from tx/event data (e.g., 'keystone.write-target.WriteTxConfirmed')
@@ -90,4 +96,15 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 	}
 
 	return msgs, nil
+}
+
+// toInt64 converts a big.Int to int64
+// Returns a math.MinInt64 number that represents an error on overflow.
+// This is used to represent and detect huge i192 on-chain values that cannot be represented as int64.
+func toInt64(i *big.Int) int64 {
+	if i.IsInt64() {
+		return i.Int64()
+	}
+	// Return a number that represents an error (overflow)
+	return math.MinInt64 // -1 << 63 = -9223372036854775808
 }

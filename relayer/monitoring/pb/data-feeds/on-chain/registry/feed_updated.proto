@@ -6,17 +6,21 @@ option go_package = ".;registry";
 // The on-chain FeedUpdated event which is extracted from the tx/event data or
 // the write-target WriteConfirmed event, after a write was confirmed (@see message: write-target.WriteConfirmed).
 message FeedUpdated {
+  // Event data
   bytes feed_id = 1;
   uint32 observations_timestamp = 2;
-  // TODO: how to represent benchmark data which is i192 on-chain?
-  uint64 benchmark = 3;
-
+  bytes benchmark = 3;
   bytes report = 4;
+
+  // Notice: benchmark_val is the benchmark i192 on-chain value decoded as an int64.
+  // This is the largest type Prometheus supports, and this conversion can overflow but so far was sufficient
+  // for most use-cases. For big numbers, benchmark bytes should be used instead.
+  int64 benchmark_val = 5;
 
   // TODO: Transaction data - tx that mained the event (e.g., hash, gas, transmitter, payload, etc.)
 
   // Head data - when was the event produced on-chain
-  string block_hash = 9;
-  string block_height = 10;
-  uint64 block_timestamp = 11;
+  string block_hash = 6;
+  string block_height = 7;
+  uint64 block_timestamp = 8;
 }

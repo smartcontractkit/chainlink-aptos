@@ -6,6 +6,7 @@ option go_package = ".;forwarder";
 // The on-chain ReportProcessed event which is extracted from the tx/event data or
 // the write-target WriteConfirmed event, after a write was confirmed (@see message: keystone.write-target.WriteConfirmed).
 message ReportProcessed {
+  // Event data
   string receiver = 1;
   bytes workflow_execution_id = 2;
   uint32 report_id = 3;
@@ -14,7 +15,7 @@ message ReportProcessed {
   // TODO: Transaction data - tx that mained the event (e.g., hash, gas, transmitter, payload, etc.)
 
   // Head data - when was the event produced on-chain
-  string block_hash = 9;
-  string block_height = 10;
-  uint64 block_timestamp = 11;
+  string block_hash = 5;
+  string block_height = 6;
+  uint64 block_timestamp = 7;
 }
