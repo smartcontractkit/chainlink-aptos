@@ -37,6 +37,8 @@ func NewProtoEmitter(lggr logger.Logger, client *beholder.Client) ProtoEmitter {
 }
 
 // protoEmitter is a ProtoEmitter implementation
+var _ ProtoEmitter = (*protoEmitter)(nil)
+
 type protoEmitter struct {
 	lggr   logger.Logger
 	client *beholder.Client
