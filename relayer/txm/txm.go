@@ -460,8 +460,8 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		} else {
 			// In case of http errors (>400) wait gracefully and retry
 			// It includes all network-related errors as well as
-			// the pre-execution validation in the Mempool (e.g. old/duplicated nonce)
-			var httpErr *aptos.HttpError
+			// the pre-execution validation in the Mempool (e.g. old/duplicated nonce, transaction expired)
+			var httpError *aptos.HttpError
 			if !errors.As(err, &httpErr) {
 				// Do not retry on unknown errors
 				a.logger.Errorw("failed to submit signed tx, discarding..", "txID", tx.ID, "error", err)
@@ -472,8 +472,11 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			a.logger.Errorw("failed to submit signed tx, retrying..", "txID", tx.ID, "error", httpErr)
 			time.Sleep(time.Duration(a.config.SubmitDelayDuration) * time.Second)
 
-			// Try to resync the nonce before the next attempt.
-			a.resyncNonce(client, tx.FromAddress)
+			httpErrorBody := string(httpError.Body)
+			if strings.Contains(httpErrorBody, "SEQUENCE_NUMBER_TOO_OLD") || strings.Contains(httpErrorBody, "SEQUENCE_NUMBER_TOO_NEW") {
+				// Try to resync the nonce before the next attempt.
+				a.resyncNonce(client, tx.FromAddress)
+			}
 		}
 	}
 
