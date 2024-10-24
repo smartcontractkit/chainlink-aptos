@@ -40,15 +40,13 @@ BalancePollPeriod = '10s'
 [Aptos.TransactionManager]
 BroadcastChanSize = 100
 ConfirmPollSecs = 2
-
 DefaultMaxGasAmount = 200000
 MaxSimulateAttempts = 5
-
 MaxSubmitRetryAttempts = 10
-SubmitDelayDuration = 3  # seconds
-TxExpirationSecs = 10 # seconds
+SubmitDelayDuration = 3      # seconds
+TxExpirationSecs = 10        # seconds
 MaxTxRetryAttempts = 5
-PruneIntervalSecs = 14400 # 60 * 60 * 4 = 4 hours
+PruneIntervalSecs = 14400    # 60 * 60 * 4 = 4 hours
 PruneTxExpirationSecs = 7200 # 60 * 60 * 2 = 2 hours
 
 [Aptos.WriteTargetCap]
@@ -59,7 +57,9 @@ ConfirmerTimeout = '10s'
 ChainID = '1337'
 MinContractPayment = '0'
 Enabled = true
-Nodes = [{ Name = 'node-geth-0', WSURL = 'ws://chainlink.geth:8546', HTTPURL = 'http://chainlink.geth:8544' }]
+Nodes = [
+    { Name = 'node-geth-0', WSURL = 'ws://chainlink.geth:8546', HTTPURL = 'http://chainlink.geth:8544' },
+]
 
 [Tracing]
 # Enabled turns trace collection on or off. On requires an OTEL Tracing Collector.
@@ -100,7 +100,8 @@ TraceSampleRatio = 1
 # ResourceAttributes are global metadata to include with all telemetry.
 [Telemetry.ResourceAttributes]
 # OTEL service name: https://opentelemetry.io/docs/languages/sdk-configuration/general/#otel_service_name
-service.name = 'chainlink-node'
+# Notice: TOML decoding will fail if this dotted key (service.name) is not wrapped in quotes.
+"service.name" = 'chainlink-node'
 # example resource attribute
 aptos-telemetry-attr = 'test' # Example
 
