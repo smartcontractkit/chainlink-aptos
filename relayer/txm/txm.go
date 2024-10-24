@@ -25,22 +25,10 @@ import (
 
 var _ services.Service = &AptosTxm{}
 
-// https://github.com/aptos-labs/aptos-ts-sdk/blob/32d4360740392782c1368647f89ba62e1b6a2cb3/src/utils/const.ts#L21
-const DEFAULT_MAX_GAS_AMOUNT = 200000
-const MAX_SIMULATE_ATTEMPTS = 5
-
-// todo: add to txm config?
-const MAX_SUBMIT_RETRY_ATTEMPTS = 10
-const SUBMIT_DELAY_DURATION = 3 // seconds
-const TX_EXPIRATION_SECS = 10   // seconds
-const MAX_TX_RETRY_ATTEMPTS = 5
-const PRUNE_INTERVAL_SECS = uint64(60 * 60 * 4)      // 4 hours
-const PRUNE_TX_EXPIRATION_SECS = uint64(60 * 60 * 2) // 2 hours
-
 type AptosTxm struct {
 	logger   logger.Logger
 	keystore loop.Keystore
-	config   AptosTxmConfig
+	config   Config
 
 	transactions              map[string]*AptosTx
 	transactionsLock          sync.RWMutex
@@ -55,7 +43,8 @@ type AptosTxm struct {
 	client *aptos.NodeClient
 }
 
-func New(lgr logger.Logger, keystore loop.Keystore, config AptosTxmConfig, getClient func() (*aptos.NodeClient, error)) (*AptosTxm, error) {
+// TODO: Config input is not validated for sanity
+func New(lgr logger.Logger, keystore loop.Keystore, config Config, getClient func() (*aptos.NodeClient, error)) (*AptosTxm, error) {
 	client, err := getClient()
 	if err != nil {
 		return nil, err
@@ -196,12 +185,12 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 	}
 
 	a.transactionsLock.Lock()
-	if (currentTimestamp - a.transactionsLastPruneTime) > PRUNE_INTERVAL_SECS {
+	if (currentTimestamp - a.transactionsLastPruneTime) > a.config.PruneIntervalSecs {
 		for txID, tx := range a.transactions {
 			if tx.Status != commontypes.Finalized && tx.Status != commontypes.Failed && tx.Status != commontypes.Fatal {
 				continue
 			}
-			if (currentTimestamp - tx.Timestamp) < PRUNE_TX_EXPIRATION_SECS {
+			if (currentTimestamp - tx.Timestamp) < a.config.PruneTxExpirationSecs {
 				continue
 			}
 			a.logger.Debugw("Pruning transaction", "txID", txID, "status", tx.Status)
@@ -377,8 +366,8 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		}
 
 		if rawTx.MaxGasAmount == 0 {
-			rawTx.MaxGasAmount = DEFAULT_MAX_GAS_AMOUNT
-			a.logger.Debugw("using default max gas amount", "maxGasAmount", DEFAULT_MAX_GAS_AMOUNT)
+			rawTx.MaxGasAmount = a.config.DefaultMaxGasAmount
+			a.logger.Debugw("using default max gas amount", "maxGasAmount", a.config.DefaultMaxGasAmount)
 		}
 
 		signingMessage, err := rawTx.SigningMessage()
@@ -424,7 +413,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	}
 
 	// broadcast with basic retry to try get the tx included in the mempool
-	for attempt := 1; attempt <= MAX_SUBMIT_RETRY_ATTEMPTS; attempt++ {
+	for attempt := 1; attempt <= int(a.config.MaxSubmitRetryAttempts); attempt++ {
 		ledgerTimestamp, err := a.getLedgerTimestamp()
 		if err != nil {
 			a.logger.Errorw("failed to fetch ledger timestamp", "error", err)
@@ -432,7 +421,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			return
 		}
 
-		expirationTimestamp := ledgerTimestamp + TX_EXPIRATION_SECS
+		expirationTimestamp := ledgerTimestamp + a.config.TxExpirationSecs
 
 		// build the tx with the nonce and expiration timestamp
 		nonce := txStore.GetNextNonce()
@@ -477,7 +466,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			}
 
 			a.logger.Errorw("failed to submit signed tx, retrying..", "txID", tx.ID, "error", httpErr)
-			time.Sleep(SUBMIT_DELAY_DURATION * time.Second)
+			time.Sleep(time.Duration(a.config.SubmitDelayDuration) * time.Second)
 
 			// Try to resync the nonce before the next attempt.
 			a.resyncNonce(client, tx.FromAddress)
@@ -557,7 +546,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 				}
 
 				unconfirmedTx.Tx.Attempt++
-				if unconfirmedTx.Tx.Attempt >= MAX_TX_RETRY_ATTEMPTS {
+				if unconfirmedTx.Tx.Attempt >= a.config.MaxTxRetryAttempts {
 					unconfirmedTx.Tx.Status = commontypes.Failed
 					a.logger.Errorw("tx reached max num of retries and will be discarded", "txID", unconfirmedTx.Tx.ID, "hash", hash)
 					continue
@@ -656,7 +645,7 @@ func (a *AptosTxm) simulateTransaction(client *aptos.NodeClient, rawTx aptos.Raw
 
 	attempt := 1
 	var lastError error
-	for attempt <= MAX_SIMULATE_ATTEMPTS {
+	for attempt <= int(a.config.MaxSimulateAttempts) {
 		// need to fetch latest sequence number on-chain since we could have other in-flight txs which results in an error SEQUENCE_NUMBER_TOO_NEW
 		sequenceNumber, err := a.getSequenceNumber(client, fromAddress)
 		if err != nil {

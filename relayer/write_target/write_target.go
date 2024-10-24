@@ -90,6 +90,7 @@ type TransmissionState struct {
 	Success     bool
 }
 
+// TODO: opts.Config input is not validated for sanity
 func NewWriteTarget(opts WriteTargetOpts) capabilities.TargetCapability {
 	capInfo := capabilities.MustNewCapabilityInfo(opts.ID, capabilities.CapabilityTypeTarget, CapabilityName)
 	selfLogger := logger.Named(opts.Logger, CapabilityName)

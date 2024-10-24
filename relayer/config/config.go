@@ -18,21 +18,15 @@ import (
 )
 
 var DefaultConfigSet = ConfigSet{
-	TransactionManager: txm.AptosTxmConfig{
-		BroadcastChanSize: 100,
-		ConfirmPollSecs:   2,
-	},
+	TransactionManager: txm.DefaultConfigSet,
 	BalanceMonitor: monitor.Config{
 		BalancePollPeriod: *config.MustNewDuration(10 * time.Second),
 	},
-	WriteTargetCap: write_target.Config{
-		ConfirmerPollPeriod: *config.MustNewDuration(1 * time.Second),
-		ConfirmerTimeout:    *config.MustNewDuration(10 * time.Second),
-	},
+	WriteTargetCap: write_target.DefaultConfigSet,
 }
 
 type ConfigSet struct { //nolint:revive
-	TransactionManager txm.AptosTxmConfig
+	TransactionManager txm.Config
 	BalanceMonitor     monitor.Config
 	WriteTargetCap     write_target.Config
 }
@@ -44,7 +38,7 @@ type WorkflowConfig struct {
 }
 
 type Chain struct {
-	TransactionManager *txm.AptosTxmConfig
+	TransactionManager *txm.Config
 	BalanceMonitor     *monitor.Config
 	WriteTargetCap     *write_target.Config
 	Workflow           WorkflowConfig

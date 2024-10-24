@@ -29,7 +29,7 @@ func runTestnetTest(t *testing.T, rpcUrl string) {
 	keystore := testutils.NewTestKeystore(t)
 	keystore.AddKey(privateKey)
 
-	config := AptosTxmConfig{
+	config := Config{
 		BroadcastChanSize: 100,
 		ConfirmPollSecs:   2,
 	}

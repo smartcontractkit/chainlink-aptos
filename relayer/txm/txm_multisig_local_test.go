@@ -125,7 +125,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	client, err := aptos.NewNodeClient(rpcURL, 0)
 	require.NoError(t, err)
 
-	config := AptosTxmConfig{
+	config := Config{
 		BroadcastChanSize: 100,
 		ConfirmPollSecs:   2,
 	}

@@ -64,11 +64,7 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 	require.NoError(t, err)
 	getClient := func() (*aptos.NodeClient, error) { return client, nil }
 
-	txmConfig := txm.AptosTxmConfig{
-		BroadcastChanSize: 100,
-		ConfirmPollSecs:   2,
-	}
-
+	txmConfig := txm.DefaultConfigSet
 	txmgr, err := txm.New(logger, keystore, txmConfig, getClient)
 	require.NoError(t, err)
 

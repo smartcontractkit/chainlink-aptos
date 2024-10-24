@@ -53,7 +53,7 @@ func TestTxmLocal(t *testing.T) {
 	keystore := testutils.NewTestKeystore(t)
 	keystore.AddKey(privateKey)
 
-	config := AptosTxmConfig{
+	config := Config{
 		BroadcastChanSize: 100,
 		ConfirmPollSecs:   2,
 	}
@@ -61,7 +61,7 @@ func TestTxmLocal(t *testing.T) {
 	runTxmTest(t, logger, config, rpcUrl, keystore, accountAddress, publicKey, 5)
 }
 
-func runTxmTest(t *testing.T, logger logger.Logger, config AptosTxmConfig, rpcURL string, keystore loop.Keystore, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, iterations int) {
+func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string, keystore loop.Keystore, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, iterations int) {
 	client, err := aptos.NewNodeClient(rpcURL, 0) // TODO: chainId
 	require.NoError(t, err)
 	getClient := func() (*aptos.NodeClient, error) { return client, nil }
