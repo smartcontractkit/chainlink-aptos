@@ -416,22 +416,22 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 	builder := &messageBuilder{}
 
 	// Fn helpers
-	checkAcceptedStatus := func(ctx context.Context) (bool, error) {
+	checkAcceptedStatus := func(ctx context.Context) (commontypes.TransactionStatus, bool, error) {
 		// Check TXM for status
 		status, err := c.cw.GetTransactionStatus(ctx, txID.String())
 		if err != nil {
-			return false, fmt.Errorf("failed to get tx status: %w", err)
+			return commontypes.Unknown, false, fmt.Errorf("failed to get tx status: %w", err)
 		}
 
 		lggr.Debugw("txm - tx status", "txID", txID, "status", status)
 
 		// Check if the transaction was accepted (included in a chain block, not required to be finalized)
 		if status == commontypes.Unconfirmed || status == commontypes.Finalized {
-			return true, nil
+			return status, true, nil
 		}
 
 		// false if [Unknown, Pending, Failed, Fatal]
-		return false, nil
+		return status, false, nil
 	}
 	checkConfirmedStatus := query
 
@@ -454,18 +454,18 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 
 			if !accepted {
 				// Check acceptance status
-				accepted, err := checkAcceptedStatus(ctx)
+				status, accepted, err := checkAcceptedStatus(ctx)
 				if err != nil {
 					lggr.Errorw("failed to check accepted status", "txID", txID, "err", err)
 					continue
 				}
 
 				if !accepted {
-					lggr.Infow("not accepted yet [Unconfirmed, Finalized]", "txID", txID)
+					lggr.Infow("not accepted yet", "txID", txID, "status", status)
 					continue
 				}
 
-				lggr.Infow("accepted [Unconfirmed, Finalized]", "txID", txID)
+				lggr.Infow("accepted", "txID", txID, "status", status)
 				// TODO: [Beholder] Emit 'keystone.write-target.WriteAccepted' (useful to source tx hash, block number, and tx status/error)
 
 				// TODO: check if accepted with an error (e.g., on-chain revert)
@@ -473,7 +473,6 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 				acceptedWithErr := false
 				if acceptedWithErr {
 					// TODO: [Beholder] Emit 'keystone.write-target.WriteError' if accepted with an error (surface specific on-chain error)
-
 					// Notice: no return, we continue to check for confirmation (tx could be accepted by another node)
 				}
 			}
@@ -485,19 +484,21 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 				continue
 			}
 
-			// If confirmed, emit the confirmation message and return
-			if state != nil {
-				// We (eventually) confirmed the report was transmitted
-				lggr.Infow("confirmed", "txID", txID)
-
-				// Source the transmitter address from the on-chain state
-				info.reportTransmissionState = state
-
-				finalized := false
-				c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(&info, head, finalized))
-				return
+			if state == nil {
+				lggr.Infow("not confirmed yet - transmission state NOT visible", "txID", txID)
+				continue
 			}
-			lggr.Infow("not confirmed yet", "txID", txID)
+
+			// We (eventually) confirmed the report was transmitted
+			// Emit the confirmation message and return
+			lggr.Infow("confirmed - transmission state visible", "txID", txID)
+
+			// Source the transmitter address from the on-chain state
+			info.reportTransmissionState = state
+
+			finalized := false
+			c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(&info, head, finalized))
+			return
 		}
 	}
 }
