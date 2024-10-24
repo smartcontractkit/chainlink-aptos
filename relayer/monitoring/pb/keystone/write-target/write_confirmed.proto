@@ -15,8 +15,7 @@ message WriteConfirmed {
   bytes report = 6;
   uint32 signers_num = 7;
 
-  // Is the report finalized on-chain?
-  bool finalized = 8;
+  // TODO: Is the report confirmed finalized on-chain, or just observed?
 
   // When was the report confirmed on-chain
   string block_hash = 9;

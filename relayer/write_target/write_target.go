@@ -320,8 +320,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		// Source the transmitter address from the on-chain state
 		info.reportTransmissionState = state
 
-		finalized := false
-		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(info, head, finalized))
+		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(info, head))
 		return success(), nil
 	}
 
@@ -496,8 +495,7 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 			// Source the transmitter address from the on-chain state
 			info.reportTransmissionState = state
 
-			finalized := false
-			c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(&info, head, finalized))
+			c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(&info, head))
 			return
 		}
 	}
