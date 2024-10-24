@@ -53,10 +53,7 @@ func TestTxmLocal(t *testing.T) {
 	keystore := testutils.NewTestKeystore(t)
 	keystore.AddKey(privateKey)
 
-	config := Config{
-		BroadcastChanSize: 100,
-		ConfirmPollSecs:   2,
-	}
+	config := DefaultConfigSet
 
 	runTxmTest(t, logger, config, rpcUrl, keystore, accountAddress, publicKey, 5)
 }
