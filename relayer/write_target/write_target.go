@@ -400,6 +400,8 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 	_, span := c.beholder.Tracer.Start(ctx, "Execute.acceptAndConfirmWrite", trace.WithAttributes(attrs...))
 	defer span.End()
 
+	lggr := logger.Named(c.lggr, "write-confirmer")
+
 	// Timeout for the confirmation process
 	timeout := c.config.ConfirmerTimeout.Duration()
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -415,8 +417,21 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 
 	// Fn helpers
 	checkAcceptedStatus := func(ctx context.Context) (bool, error) {
-		// TODO: check TXM for status
-		return true, nil
+		// Check TXM for status
+		status, err := c.cw.GetTransactionStatus(ctx, txID.String())
+		if err != nil {
+			return false, fmt.Errorf("failed to get tx status: %w", err)
+		}
+
+		lggr.Debugw("txm - tx status", "txID", txID, "status", status)
+
+		// Check if the transaction was accepted (included in a chain block, not required to be finalized)
+		if status == commontypes.Unconfirmed || status == commontypes.Finalized {
+			return true, nil
+		}
+
+		// false if [Unknown, Pending, Failed, Fatal]
+		return false, nil
 	}
 	checkConfirmedStatus := query
 
@@ -433,7 +448,7 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 			// Fetch the latest head from the chain (timestamp)
 			head, err := c.cs.LatestHead(ctx)
 			if err != nil {
-				c.lggr.Errorw("write confirmation - failed to fetch the latest head", "txID", txID, "err", err)
+				lggr.Errorw("failed to fetch the latest head", "txID", txID, "err", err)
 				continue
 			}
 
@@ -441,38 +456,39 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 				// Check acceptance status
 				accepted, err := checkAcceptedStatus(ctx)
 				if err != nil {
-					c.lggr.Errorw("write confirmation - failed to check accepted status", "txID", txID, "err", err)
+					lggr.Errorw("failed to check accepted status", "txID", txID, "err", err)
 					continue
 				}
 
-				if accepted {
-					c.lggr.Infow("write confirmation - accepted", "txID", txID)
-					// TODO: [Beholder] Emit 'keystone.write-target.WriteAccepted' by pooling for TXM status finalized/failed
-
-					// TODO: check if accepted with an error (e.g., on-chain revert)
-					acceptedWithErr := false
-					if acceptedWithErr {
-						// TODO: [Beholder] Emit 'keystone.write-target.WriteError' if accepted with an error
-
-						// Notice: no return, we continue to check for confirmation (should be accepted by another node)
-					}
-				} else {
-					c.lggr.Infow("write confirmation - not accepted yet", "txID", txID)
+				if !accepted {
+					lggr.Infow("not accepted yet [Unconfirmed, Finalized]", "txID", txID)
 					continue
+				}
+
+				lggr.Infow("accepted [Unconfirmed, Finalized]", "txID", txID)
+				// TODO: [Beholder] Emit 'keystone.write-target.WriteAccepted' (useful to source tx hash, block number, and tx status/error)
+
+				// TODO: check if accepted with an error (e.g., on-chain revert)
+				// Notice: this functionality is not available in the current CW/TXM API
+				acceptedWithErr := false
+				if acceptedWithErr {
+					// TODO: [Beholder] Emit 'keystone.write-target.WriteError' if accepted with an error (surface specific on-chain error)
+
+					// Notice: no return, we continue to check for confirmation (tx could be accepted by another node)
 				}
 			}
 
 			// Check confirmation status (transmission state)
 			state, err := checkConfirmedStatus(ctx)
 			if err != nil {
-				c.lggr.Errorw("write confirmation - failed to check confirmed status", "txID", txID, "err", err)
+				lggr.Errorw("failed to check confirmed status", "txID", txID, "err", err)
 				continue
 			}
 
 			// If confirmed, emit the confirmation message and return
 			if state != nil {
 				// We (eventually) confirmed the report was transmitted
-				c.lggr.Infow("write confirmation - confirmed", "txID", txID)
+				lggr.Infow("confirmed", "txID", txID)
 
 				// Source the transmitter address from the on-chain state
 				info.reportTransmissionState = state
@@ -481,7 +497,7 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 				c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(&info, head, finalized))
 				return
 			}
-			c.lggr.Infow("write confirmation - not confirmed yet", "txID", txID)
+			lggr.Infow("not confirmed yet", "txID", txID)
 		}
 	}
 }
