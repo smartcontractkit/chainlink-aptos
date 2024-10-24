@@ -36,6 +36,21 @@ URL = "http://chainlink-aptos.devnet:8080/v1"
 [Aptos.BalanceMonitor]
 BalancePollPeriod = '10s'
 
+# TODO: migrate config types as time.Duration ('10s') instead of number (10)
+[Aptos.TransactionManager]
+BroadcastChanSize = 100
+ConfirmPollSecs = 2
+
+DefaultMaxGasAmount = 200000
+MaxSimulateAttempts = 5
+
+MaxSubmitRetryAttempts = 10
+SubmitDelayDuration = 3  # seconds
+TxExpirationSecs = 10 # seconds
+MaxTxRetryAttempts = 5
+PruneIntervalSecs = 14400 # 60 * 60 * 4 = 4 hours
+PruneTxExpirationSecs = 7200 # 60 * 60 * 2 = 2 hours
+
 [Aptos.WriteTargetCap]
 ConfirmerPollPeriod = '1s'
 ConfirmerTimeout = '10s'
