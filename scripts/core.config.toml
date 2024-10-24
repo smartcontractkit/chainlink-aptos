@@ -37,6 +37,7 @@ URL = "http://chainlink-aptos.devnet:8080/v1"
 BalancePollPeriod = '10s'
 
 # TODO: migrate config types as time.Duration ('10s') instead of number (10)
+# TODO: missing configs are not merged with defaults: https://smartcontract-it.atlassian.net/browse/NONEVM-810
 [Aptos.TransactionManager]
 BroadcastChanSize = 100
 ConfirmPollSecs = 2
