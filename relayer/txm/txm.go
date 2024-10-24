@@ -512,12 +512,12 @@ func (a *AptosTxm) checkUnconfirmed() {
 
 		for _, unconfirmedTx := range unconfirmedTxs {
 			hash := unconfirmedTx.Hash
-			// TODO: chainTx, err not logged anywhere and hidden (required for debugging when txs are not confirmed)
-			chainTx, err := client.TransactionByHash(hash)
+			txInfo, err := client.TransactionByHash(hash)
+			a.logger.Debugw("tx info fetched", "txID", unconfirmedTx.Tx.ID, "hash", hash, "txInfo", txInfo)
 
-			if err == nil && chainTx.Type != aptosapi.TransactionVariantPending {
+			if err == nil && txInfo.Type != aptosapi.TransactionVariantPending {
 				// tx has been commited
-				a.logger.Debugw("tx confirmed", "txID", unconfirmedTx.Tx.ID, "hash", hash, "chainTx", chainTx, "chainTx.type", chainTx.Type)
+				a.logger.Debugw("tx confirmed", "txID", unconfirmedTx.Tx.ID, "hash", hash, "txInfo", txInfo)
 				unconfirmedTx.Tx.Status = commontypes.Finalized
 
 				if err := txStore.Confirm(unconfirmedTx.Nonce, hash, false); err != nil {
