@@ -100,9 +100,6 @@ TraceSampleRatio = 1
 
 # ResourceAttributes are global metadata to include with all telemetry.
 [Telemetry.ResourceAttributes]
-# OTEL service name: https://opentelemetry.io/docs/languages/sdk-configuration/general/#otel_service_name
-# Notice: TOML decoding will fail if this dotted key (service.name) is not wrapped in quotes.
-"service.name" = 'chainlink-node'
 # example resource attribute
 aptos-telemetry-attr = 'test' # Example
 
