@@ -45,14 +45,14 @@ DefaultMaxGasAmount = 200000
 MaxSimulateAttempts = 5
 MaxSubmitRetryAttempts = 10
 SubmitDelayDuration = 3      # seconds
-TxExpirationSecs = 30        # seconds
+TxExpirationSecs = 10        # seconds
 MaxTxRetryAttempts = 5
 PruneIntervalSecs = 14400    # 60 * 60 * 4 = 4 hours
 PruneTxExpirationSecs = 7200 # 60 * 60 * 2 = 2 hours
 
 [Aptos.WriteTargetCap]
 ConfirmerPollPeriod = '1s'
-ConfirmerTimeout = '30s'
+ConfirmerTimeout = '10s'
 
 [[EVM]]
 ChainID = '1337'
