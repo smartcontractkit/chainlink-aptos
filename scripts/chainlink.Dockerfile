@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=smartcontract/chainlink-aptos
+ARG BASE_IMAGE=smartcontract/chainlink:aptos
 ARG ROOT=.
 
 # Build image: Plugins
