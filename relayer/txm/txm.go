@@ -462,14 +462,14 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			// It includes all network-related errors as well as
 			// the pre-execution validation in the Mempool (e.g. old/duplicated nonce, transaction expired)
 			var httpError *aptos.HttpError
-			if !errors.As(err, &httpErr) {
+			if !errors.As(err, &httpError) {
 				// Do not retry on unknown errors
 				a.logger.Errorw("failed to submit signed tx, discarding..", "txID", tx.ID, "error", err)
 				tx.Status = commontypes.Failed
 				return
 			}
 
-			a.logger.Errorw("failed to submit signed tx, retrying..", "txID", tx.ID, "error", httpErr)
+			a.logger.Errorw("failed to submit signed tx, retrying..", "txID", tx.ID, "error", httpError)
 			time.Sleep(time.Duration(a.config.SubmitDelayDuration) * time.Second)
 
 			httpErrorBody := string(httpError.Body)
@@ -519,18 +519,41 @@ func (a *AptosTxm) checkUnconfirmed() {
 
 		for _, unconfirmedTx := range unconfirmedTxs {
 			hash := unconfirmedTx.Hash
-			txInfo, err := client.TransactionByHash(hash)
-			a.logger.Debugw("tx info fetched", "txID", unconfirmedTx.Tx.ID, "hash", hash, "txInfo", txInfo)
+			chainTx, err := client.TransactionByHash(hash)
 
-			if err == nil && txInfo.Type != aptosapi.TransactionVariantPending {
+			if err == nil && chainTx.Type != aptosapi.TransactionVariantPending {
 				// tx has been commited
-				a.logger.Debugw("tx confirmed", "txID", unconfirmedTx.Tx.ID, "hash", hash, "txInfo", txInfo)
-				unconfirmedTx.Tx.Status = commontypes.Finalized
+				a.logger.Debugw("tx confirmed", "txID", unconfirmedTx.Tx.ID, "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
 
 				if err := txStore.Confirm(unconfirmedTx.Nonce, hash, false); err != nil {
 					a.logger.Errorw("failed to confirm tx in TxStore", "hash", hash, "accountAddress", accountAddress, "error", err)
 				}
+
+				if chainTx.Type == aptosapi.TransactionVariantUser {
+					userTx, ok := chainTx.Inner.(*aptosapi.UserTransaction)
+					if ok {
+						if !userTx.Success {
+							a.logger.Infow("confirmed tx was unsuccessful", "hash", hash, "userTx", userTx, "userTx.VmStatus", userTx.VmStatus)
+							if userTx.VmStatus == "Out of gas" {
+								// https://github.com/aptos-labs/aptos-core/blob/77ff4bf413f54c41206bd5573e1891fa3a0dccf6/api/types/src/convert.rs#L1062
+								// Example transaction: https://api.testnet.aptoslabs.com/v1/transactions/by_hash/0x7a106db811c8d5dfd71ac98f374ca36e4f630ce5412b99c8f0e871e7feda37ea
+								unconfirmedTx.Tx.Attempt++
+								if !a.maybeRetry(unconfirmedTx, "out of gas") {
+									unconfirmedTx.Tx.Status = commontypes.Failed
+								}
+								continue
+							}
+						}
+					} else {
+						a.logger.Errorw("failed to read confirmed user tx", "hash", hash, "chainTxInner", chainTx.Inner)
+					}
+				} else {
+					a.logger.Errorw("unexpected confirmed tx type", "hash", hash, "chainTxType", chainTx.Type)
+				}
+
+				unconfirmedTx.Tx.Status = commontypes.Finalized
 			} else {
+				a.logger.Debugw("tx still unconfirmed", "txID", unconfirmedTx.Tx.ID, "hash", hash, "chainTx", chainTx)
 				// Check using the ledger timestamp whether the transaction has expired.
 				ledgerTimestampSecs, err := a.getLedgerTimestampSecs(client)
 				if err != nil {
@@ -553,25 +576,30 @@ func (a *AptosTxm) checkUnconfirmed() {
 				}
 
 				unconfirmedTx.Tx.Attempt++
-				if unconfirmedTx.Tx.Attempt >= a.config.MaxTxRetryAttempts {
+				if !a.maybeRetry(unconfirmedTx, "expired") {
 					unconfirmedTx.Tx.Status = commontypes.Failed
-					a.logger.Errorw("tx reached max num of retries and will be discarded", "txID", unconfirmedTx.Tx.ID, "hash", hash)
-					continue
 				}
-
-				a.logger.Debugw("tx expired, setting for retry..", "txID", unconfirmedTx.Tx.ID, "attempt", unconfirmedTx.Tx.Attempt)
-
-				select {
-				// add tx to be rebroadcast
-				case a.broadcastChan <- unconfirmedTx.Tx.ID:
-				default:
-					a.logger.Errorw("failed to enqueue tx for rebroadcast", "previousHash", unconfirmedTx.Hash)
-				}
-
 			}
 		}
 	}
 }
+
+func (a *AptosTxm) maybeRetry(unconfirmedTx *UnconfirmedTx, retryReason string) bool {
+		if unconfirmedTx.Tx.Attempt >= a.config.MaxTxRetryAttempts {
+			a.logger.Errorw("tx reached max num of retries and will be discarded", "txID", unconfirmedTx.Tx.ID, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
+			return false
+		}
+
+		a.logger.Debugw("retrying tx", "txID", unconfirmedTx.Tx.ID, "attempt", unconfirmedTx.Tx.Attempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
+		select {
+		case a.broadcastChan <- unconfirmedTx.Tx.ID:
+		default:
+			a.logger.Errorw("failed to enqueue tx for rebroadcast", "txID", unconfirmedTx.Tx.ID, "attempt", unconfirmedTx.Tx.Attempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
+		}
+
+		return true
+}
+
 
 func (a *AptosTxm) InflightCount() (int, int) {
 	return len(a.broadcastChan), a.accountStore.GetTotalInflightCount()
