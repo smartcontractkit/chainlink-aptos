@@ -11,8 +11,6 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 )
 
-const schemaBasePath = "https://github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb"
-
 // BeholderClient is a Beholder client extension with a custom ProtoEmitter
 type BeholderClient struct {
 	*beholder.Client
@@ -32,16 +30,17 @@ type ProtoProcessor interface {
 	Process(ctx context.Context, m proto.Message, attrKVs ...any) error
 }
 
-func NewProtoEmitter(lggr logger.Logger, client *beholder.Client) ProtoEmitter {
-	return &protoEmitter{lggr, client}
+func NewProtoEmitter(lggr logger.Logger, client *beholder.Client, schemaBasePath string) ProtoEmitter {
+	return &protoEmitter{lggr, client, schemaBasePath}
 }
 
 // protoEmitter is a ProtoEmitter implementation
 var _ ProtoEmitter = (*protoEmitter)(nil)
 
 type protoEmitter struct {
-	lggr   logger.Logger
-	client *beholder.Client
+	lggr           logger.Logger
+	client         *beholder.Client
+	schemaBasePath string
 }
 
 func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any) error {
@@ -52,11 +51,7 @@ func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any
 		return err
 	}
 
-	attrKVs, err = appendSchemaIfMissing(m, attrKVs, schemaBasePath)
-	if err != nil {
-		e.lggr.Errorw("[Beholder] Failed to append schema, emitting with unknown schema...", "err", err)
-		attrKVs = appendSchemaUnknown(attrKVs, schemaBasePath)
-	}
+	attrKVs = e.appendRequiredAttrs(m, attrKVs)
 
 	// Emit the message with attributes
 	err = e.client.Emitter.Emit(ctx, payload, attrKVs...)
@@ -71,16 +66,18 @@ func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any
 
 // EmitWithLog emits a protobuf message with attributes and logs the emitted message
 func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs ...any) error {
-	attrKVs, err := appendSchemaIfMissing(m, attrKVs, schemaBasePath)
-	if err != nil {
-		e.lggr.Errorw("[Beholder] Failed to append schema, emitting with unknown schema...", "err", err)
-		attrKVs = appendSchemaUnknown(attrKVs, schemaBasePath)
-	}
+	attrKVs = e.appendRequiredAttrs(m, attrKVs)
 
 	mStr := fmt.Sprintf("{%s}", protoimpl.X.MessageStringOf(m))
 	e.lggr.Infow("[Beholder.emit]", "message", mStr, "attributes", attrKVs)
 
-	err = e.Emit(ctx, m, attrKVs...)
+	return e.Emit(ctx, m, attrKVs...)
+}
 
-	return err
+// appendRequiredAttrs appends required attributes to the attribute key-value list
+func (e *protoEmitter) appendRequiredAttrs(m proto.Message, attrKVs []any) []any {
+	attrKVs = appendRequiredAttrDataSchema(m, attrKVs, e.schemaBasePath)
+	attrKVs = appendRequiredAttrEntity(m, attrKVs)
+	attrKVs = appendRequiredAttrDomain(m, attrKVs)
+	return attrKVs
 }

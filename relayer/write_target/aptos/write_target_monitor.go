@@ -15,6 +15,12 @@ import (
 	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/keystone/write-target"
 )
 
+const (
+	repoCLLInternalIntegrations = "https://raw.githubusercontent.com/smartcontractkit/chainlink-internal-integrations"
+	versionRefsDevelop          = "refs/heads/develop"
+	schemaBasePath              = repoCLLInternalIntegrations + "/" + versionRefsDevelop + "/aptos/relayer/monitoring/pb"
+)
+
 // NewAptosWriteTargetMonitor initializes a Beholder client for the Aptos Write Target
 //
 // The client is initialized as a BeholderClient extension with a custom ProtoEmitter.
@@ -40,7 +46,7 @@ func NewAptosWriteTargetMonitor(ctx context.Context, lggr logger.Logger) (*monit
 	}
 
 	// Underlying ProtoEmitter
-	emitter := monitor.NewProtoEmitter(lggr, &client)
+	emitter := monitor.NewProtoEmitter(lggr, &client, schemaBasePath)
 
 	// Proxy ProtoEmitter with additional processing
 	protoEmitterProxy := protoEmitter{

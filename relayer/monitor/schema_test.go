@@ -44,8 +44,7 @@ func TestToSchemaPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
-			result, err := toSchemaPath(tt.input, "/<base-path>")
-			assert.NoError(t, err)
+			result := toSchemaPath(tt.input, "/<base-path>")
 			assert.Equal(t, tt.expected, result)
 		})
 	}

@@ -13,6 +13,7 @@ import (
 const (
 	AttrKeyBeholderDataSchema = "beholder_data_schema"
 	AttrKeyBeholderEntity     = "beholder_entity"
+	AttrKeyBeholderDomain     = "beholder_domain"
 )
 
 // patternSnake is a regular expression to match CamelCase words
@@ -28,15 +29,20 @@ func toSnakeCase(s string) string {
 	return s
 }
 
-// toSchemaName returns a protobuf message full name
+// toSchemaName returns a protobuf message name (short)
 func toSchemaName(m proto.Message) string {
+	return string(protoimpl.X.MessageTypeOf(m).Descriptor().Name())
+}
+
+// toSchemaName returns a protobuf message name (full)
+func toSchemaFullName(m proto.Message) string {
 	return string(protoimpl.X.MessageTypeOf(m).Descriptor().FullName())
 }
 
 // toSchemaPath maps a protobuf message to a Beholder schema path
-func toSchemaPath(m proto.Message, basePath string) (string, error) {
+func toSchemaPath(m proto.Message, basePath string) string {
 	// Notice: a name like 'keystone.on_chain.forwarder.ReportProcessed'
-	protoName := toSchemaName(m)
+	protoName := toSchemaFullName(m)
 
 	// We map to a Beholder schema path like '<basePath>/keystone/on-chain/forwarder/report_processed.proto'
 	protoPath := protoName
@@ -45,57 +51,73 @@ func toSchemaPath(m proto.Message, basePath string) (string, error) {
 
 	// Split the path and convert the last component to snake_case
 	pp := strings.Split(protoPath, "/")
-	if len(pp) == 0 {
-		return "", fmt.Errorf("invalid proto path: %s", protoPath)
+	l := len(pp)
+	if l == 0 {
+		// No path components, return snake_case .proto filename
+		protoPath = toSnakeCase(fmt.Sprintf("%s.proto", protoPath))
+		// Return the full schema path
+		return path.Join(basePath, protoPath)
 	}
-	pp[len(pp)-1] = toSnakeCase(pp[len(pp)-1])
+
+	pp[l-1] = toSnakeCase(pp[l-1])
 
 	// Join the path components again
 	protoPath = strings.Join(pp, "/")
 	protoPath = fmt.Sprintf("%s.proto", protoPath)
 
 	// Return the full schema path
-	return path.Join(basePath, protoPath), nil
+	return path.Join(basePath, protoPath)
 }
 
-// Add the message type as an attribute (required)
-func appendSchemaIfMissing(m proto.Message, attrKVs []any, basePath string) ([]any, error) {
+// appendRequiredAttrDataSchema adds the message schema path as an attribute (required)
+func appendRequiredAttrDataSchema(m proto.Message, attrKVs []any, basePath string) []any {
 	key := AttrKeyBeholderDataSchema
-	hasSchema := false
 	for i := 0; i < len(attrKVs); i += 2 {
 		if attrKVs[i] == key {
-			hasSchema = true
-			break
+			return attrKVs
 		}
 	}
 
-	if !hasSchema {
-		attrKVs = append(attrKVs, key)
-		// Needs to be an URI (Beholder requirement)
-		val, err := toSchemaPath(m, basePath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to map to schema path: %w", err)
-		}
-		attrKVs = append(attrKVs, val)
-
-		// Add the message type as an attribute (optional)
-		key = AttrKeyBeholderEntity
-		attrKVs = append(attrKVs, key)
-		attrKVs = append(attrKVs, toSchemaName(m))
-	}
-
-	return attrKVs, nil
+	attrKVs = append(attrKVs, key)
+	// Needs to be an URI (Beholder requirement)
+	val := toSchemaPath(m, basePath)
+	attrKVs = append(attrKVs, val)
+	return attrKVs
 }
 
-// appendSchemaUnknown adds an unknown schema path to the attributes
-func appendSchemaUnknown(attrKVs []any, basePath string) []any {
-	key := AttrKeyBeholderDataSchema
-	attrKVs = append(attrKVs, key)
-	attrKVs = append(attrKVs, path.Join(basePath, "unknown.proto"))
+// appendRequiredAttrEntity adds the message entity type as an attribute (required)
+func appendRequiredAttrEntity(m proto.Message, attrKVs []any) []any {
+	key := AttrKeyBeholderEntity
+	for i := 0; i < len(attrKVs); i += 2 {
+		if attrKVs[i] == key {
+			return attrKVs
+		}
+	}
 
-	// Add the message type as an attribute (optional)
-	key = AttrKeyBeholderEntity
 	attrKVs = append(attrKVs, key)
-	attrKVs = append(attrKVs, "Unknown")
+	attrKVs = append(attrKVs, toSchemaName(m))
+	return attrKVs
+}
+
+// appendRequiredAttrDomain adds the message domain as an attribute (required)
+func appendRequiredAttrDomain(m proto.Message, attrKVs []any) []any {
+	key := AttrKeyBeholderDomain
+	for i := 0; i < len(attrKVs); i += 2 {
+		if attrKVs[i] == key {
+			return attrKVs
+		}
+	}
+
+	// Notice: a name like 'keystone.on_chain.forwarder.ReportProcessed'
+	protoName := toSchemaFullName(m)
+
+	// Extract first path component (entrypoint package) as a domain
+	domain := "unknown"
+	if strings.Contains(protoName, ".") {
+		domain = strings.Split(protoName, ".")[0]
+	}
+
+	attrKVs = append(attrKVs, key)
+	attrKVs = append(attrKVs, domain)
 	return attrKVs
 }
