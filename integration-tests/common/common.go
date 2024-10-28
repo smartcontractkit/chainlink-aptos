@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/rs/zerolog"
-	keystone "github.com/smartcontractkit/chainlink/core/scripts/keystone/src"
 )
 
 // mirrored from https://github.com/smartcontractkit/chainlink/blob/e9e885cb2dc08d24dc115587a1cab96eae38d779/integration-tests/deployment/keystone/ocr3config.go#L53
