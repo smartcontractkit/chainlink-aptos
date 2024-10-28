@@ -153,8 +153,10 @@ func (p *keystoneProcessor) Process(ctx context.Context, m proto.Message, attrKV
 	// Switch on the type of the proto.Message
 	switch msg := m.(type) {
 	case *wt.WriteConfirmed:
-		// TODO: fallthrough if not Keystone forwarder write
-		// Will this msg ever contain different types of writes? Hmm.
+		// TODO: detect the type of write payload (support more than one type of write, first multiple Keystone report versions)
+		// https://smartcontract-it.atlassian.net/browse/NONEVM-817
+		// Q: Will this msg ever contain different (non-Keystone) types of writes? Hmm.
+		// Notice: we assume all writes are Keystone (v1) writes for now
 
 		// Decode as a 'keystone.forwarder.ReportProcessed' message
 		reportProcessed, err := forwarder.DecodeAsReportProcessed(msg)
@@ -187,8 +189,9 @@ func (p *dataFeedsProcessor) Process(ctx context.Context, m proto.Message, attrK
 	// Switch on the type of the proto.Message
 	switch msg := m.(type) {
 	case *wt.WriteConfirmed:
-		// TODO: fallthrough if not DF write
-		// Will this msg ever contain different types of writes? Yes.
+		// TODO: fallthrough if not a write containing a DF report
+		// https://smartcontract-it.atlassian.net/browse/NONEVM-818
+		// Notice: we assume all writes are Data-Feeds (static schema) writes for now
 
 		// Decode as an array of 'data-feeds.registry.FeedUpdated' messages
 		updates, err := registry.DecodeAsFeedUpdated(msg)
