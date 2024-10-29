@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=795953128386.dkr.ecr.us-west-2.amazonaws.com/chainlink:b5e7d373d2ca65e6ada2214f0c67a0773ece1cab-plugins
+ARG BASE_IMAGE=chainlink:aptos
 
 # Build image: Plugins
 FROM golang:1.22-bullseye as buildplugins

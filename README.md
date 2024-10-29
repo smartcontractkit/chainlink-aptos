@@ -25,5 +25,6 @@ Local development and tests how to
 3. `go test`
 
 ### Custom images on PRs
-If you want to test the CI with a custom core image you need to specify in the PR body either the commit sha or branch name in the following format `core_ref:<sha>;` e.g `core_ref:develop;`.
+If you want to test the CI with a custom core image you need to specify in the PR body either the commit sha or branch name in the following format `core_ref:<sha>;` e.g `core_ref:develop;`. 
+_Note:_ Develop does not work untill the core aptos_init branch is merged
 
