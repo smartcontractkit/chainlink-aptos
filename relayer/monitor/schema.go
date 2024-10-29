@@ -49,15 +49,7 @@ func toSchemaPath(m proto.Message, basePath string) string {
 	protoPath = strings.ReplaceAll(protoPath, ".", "/")
 	protoPath = strings.ReplaceAll(protoPath, "_", "-")
 
-	// Convert the last path component to snake_case
-	if !strings.Contains(protoPath, "/") {
-		// No path components, return snake_case .proto filename
-		protoPath = toSnakeCase(fmt.Sprintf("%s.proto", protoPath))
-		// Return the full schema path
-		return path.Join(basePath, protoPath)
-	}
-
-	// Split the path components (at least two components)
+	// Split the path components (at least one component)
 	pp := strings.Split(protoPath, "/")
 	len := len(pp)
 	pp[len-1] = toSnakeCase(pp[len-1])
