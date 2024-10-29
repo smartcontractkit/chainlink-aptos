@@ -15,7 +15,7 @@ import (
 
 // ns returns a namespaced metric name
 func ns(name string) string {
-	return fmt.Sprintf("keystone_write_target_%s", name)
+	return fmt.Sprintf("platform_write_target_%s", name)
 }
 
 // Define metrics configuration
@@ -26,7 +26,7 @@ var (
 		count: utils.MetricInfo{
 			Name:        ns("write_initiated_count"),
 			Unit:        "",
-			Description: "The count of message: 'keystone.write-target.WriteInitiated' emitted",
+			Description: "The count of message: 'platform.write-target.WriteInitiated' emitted",
 		},
 	}
 	writeError = struct {
@@ -35,7 +35,7 @@ var (
 		count: utils.MetricInfo{
 			Name:        ns("write_error_count"),
 			Unit:        "",
-			Description: "The count of message: 'keystone.write-target.WriteError' emitted",
+			Description: "The count of message: 'platform.write-target.WriteError' emitted",
 		},
 	}
 	writeSent = struct {
@@ -46,7 +46,7 @@ var (
 		count: utils.MetricInfo{
 			Name:        ns("write_sent_count"),
 			Unit:        "",
-			Description: "The count of message: 'keystone.write-target.WriteSent' emitted",
+			Description: "The count of message: 'platform.write-target.WriteSent' emitted",
 		},
 		blockTimestamp: utils.MetricInfo{
 			Name:        ns("write_sent_block_timestamp"),
@@ -68,7 +68,7 @@ var (
 		count: utils.MetricInfo{
 			Name:        ns("write_confirmed_count"),
 			Unit:        "",
-			Description: "The count of message: 'keystone.write-target.WriteConfirmed' emitted",
+			Description: "The count of message: 'platform.write-target.WriteConfirmed' emitted",
 		},
 		blockTimestamp: utils.MetricInfo{
 			Name:        ns("write_confirmed_block_timestamp"),

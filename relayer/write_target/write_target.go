@@ -21,9 +21,9 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/keystone"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/platform"
 
-	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/keystone/write-target"
+	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/write-target"
 )
 
 var (
@@ -217,7 +217,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}
 
 	// Decode the report
-	reportDecoded, err := keystone.Decode(inputs.Report)
+	reportDecoded, err := platform.Decode(inputs.Report)
 	if err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to decode the report", err.Error())
 		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
@@ -390,10 +390,10 @@ func (c *writeTarget) UnregisterFromWorkflow(ctx context.Context, request capabi
 
 // acceptAndConfirmWrite waits (until timeout) for the report to be accepted and (optionally) confirmed on-chain
 // Emits Beholder messages:
-//   - 'keystone.write-target.WriteError'     if not accepted
-//   - 'keystone.write-target.WriteAccepted'  if accepted (with or without an error)
-//   - 'keystone.write-target.WriteError'     if accepted (with an error)
-//   - 'keystone.write-target.WriteConfirmed' if confirmed (until timeout)
+//   - 'platform.write-target.WriteError'     if not accepted
+//   - 'platform.write-target.WriteAccepted'  if accepted (with or without an error)
+//   - 'platform.write-target.WriteError'     if accepted (with an error)
+//   - 'platform.write-target.WriteConfirmed' if confirmed (until timeout)
 func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInfo, txID uuid.UUID, query func(context.Context) (*TransmissionState, error)) {
 	attrs := c.traceAttributes(info.reportInfo.workflowExecutionID)
 	_, span := c.beholder.Tracer.Start(ctx, "Execute.acceptAndConfirmWrite", trace.WithAttributes(attrs...))
@@ -465,13 +465,13 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 				}
 
 				lggr.Infow("accepted", "txID", txID, "status", status)
-				// TODO: [Beholder] Emit 'keystone.write-target.WriteAccepted' (useful to source tx hash, block number, and tx status/error)
+				// TODO: [Beholder] Emit 'platform.write-target.WriteAccepted' (useful to source tx hash, block number, and tx status/error)
 
 				// TODO: check if accepted with an error (e.g., on-chain revert)
 				// Notice: this functionality is not available in the current CW/TXM API
 				acceptedWithErr := false
 				if acceptedWithErr {
-					// TODO: [Beholder] Emit 'keystone.write-target.WriteError' if accepted with an error (surface specific on-chain error)
+					// TODO: [Beholder] Emit 'platform.write-target.WriteError' if accepted with an error (surface specific on-chain error)
 					// Notice: no return, we continue to check for confirmation (tx could be accepted by another node)
 				}
 			}

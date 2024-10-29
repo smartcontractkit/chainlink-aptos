@@ -5,21 +5,21 @@ import (
 	"math"
 	"math/big"
 
-	wt_msg "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/keystone/write-target"
+	wt_msg "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/write-target"
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/data_feeds"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/keystone"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/platform"
 
 	mercury_vX "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/mercury/common"
 	mercury_v3 "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/mercury/v3"
 	mercury_v4 "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/mercury/v4"
 )
 
-// DecodeAsFeedUpdated decodes a 'keystone.write-target.WriteConfirmed' message
+// DecodeAsFeedUpdated decodes a 'platform.write-target.WriteConfirmed' message
 // as a 'data-feeds.registry.ReportProcessed' message
 func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
-	// Decode the confirmed report (WT -> Keystone forwarder)
-	r, err := keystone.Decode(m.Report)
+	// Decode the confirmed report (WT -> DF contract event)
+	r, err := platform.Decode(m.Report)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode report: %w", err)
 	}
@@ -60,8 +60,8 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				// Notice: i192 will not fit if number bigger than 64 bits
 				BenchmarkVal: toInt64(rm.BenchmarkPrice),
 
-				// Notice: we skip head/tx data here (unknown), as we map from 'keystone.write-target.WriteConfirmed'
-				// and not from tx/event data (e.g., 'keystone.write-target.WriteTxConfirmed')
+				// Notice: we skip head/tx data here (unknown), as we map from 'platform.write-target.WriteConfirmed'
+				// and not from tx/event data (e.g., 'platform.write-target.WriteTxConfirmed')
 
 				BlockHash:      m.BlockHash,
 				BlockHeight:    m.BlockHeight,
@@ -83,8 +83,8 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				// Notice: i192 will not fit if number bigger than 64 bits
 				BenchmarkVal: toInt64(rm.BenchmarkPrice),
 
-				// Notice: we skip head/tx data here (unknown), as we map from 'keystone.write-target.WriteConfirmed'
-				// and not from tx/event data (e.g., 'keystone.write-target.WriteTxConfirmed')
+				// Notice: we skip head/tx data here (unknown), as we map from 'platform.write-target.WriteConfirmed'
+				// and not from tx/event data (e.g., 'platform.write-target.WriteTxConfirmed')
 
 				BlockHash:      m.BlockHash,
 				BlockHeight:    m.BlockHeight,

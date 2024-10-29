@@ -7,8 +7,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/data-feeds/on-chain/registry"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/keystone/on-chain/forwarder"
-	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/keystone/write-target"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/on-chain/forwarder"
+	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/write-target"
 )
 
 func TestToSchemaPath(t *testing.T) {
@@ -18,23 +18,23 @@ func TestToSchemaPath(t *testing.T) {
 	}{
 		{
 			input:    &wt.WriteInitiated{},
-			expected: "/<base-path>/keystone/write-target/write_initiated.proto",
+			expected: "/<base-path>/platform/write-target/write_initiated.proto",
 		},
 		{
 			input:    &wt.WriteError{},
-			expected: "/<base-path>/keystone/write-target/write_error.proto",
+			expected: "/<base-path>/platform/write-target/write_error.proto",
 		},
 		{
 			input:    &wt.WriteSent{},
-			expected: "/<base-path>/keystone/write-target/write_sent.proto",
+			expected: "/<base-path>/platform/write-target/write_sent.proto",
 		},
 		{
 			input:    &wt.WriteConfirmed{},
-			expected: "/<base-path>/keystone/write-target/write_confirmed.proto",
+			expected: "/<base-path>/platform/write-target/write_confirmed.proto",
 		},
 		{
 			input:    &forwarder.ReportProcessed{},
-			expected: "/<base-path>/keystone/on-chain/forwarder/report_processed.proto",
+			expected: "/<base-path>/platform/on-chain/forwarder/report_processed.proto",
 		},
 		{
 			input:    &registry.FeedUpdated{},

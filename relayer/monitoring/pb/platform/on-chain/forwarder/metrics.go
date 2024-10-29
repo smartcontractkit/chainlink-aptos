@@ -15,7 +15,7 @@ import (
 
 // ns returns a namespaced metric name
 func ns(name string) string {
-	return fmt.Sprintf("keystone_on_chain_forwarder_%s", name)
+	return fmt.Sprintf("platform_on_chain_forwarder_%s", name)
 }
 
 // Define metrics configuration
@@ -28,7 +28,7 @@ var (
 		count: utils.MetricInfo{
 			Name:        ns("report_processed_count"),
 			Unit:        "",
-			Description: "The count of message: 'keystone.on-chain.forwarder.ReportProcessed' emitted",
+			Description: "The count of message: 'platform.on-chain.forwarder.ReportProcessed' emitted",
 		},
 		blockTimestamp: utils.MetricInfo{
 			Name:        ns("report_processed_block_timestamp"),

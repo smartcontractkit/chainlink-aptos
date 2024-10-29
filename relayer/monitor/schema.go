@@ -41,10 +41,10 @@ func toSchemaFullName(m proto.Message) string {
 
 // toSchemaPath maps a protobuf message to a Beholder schema path
 func toSchemaPath(m proto.Message, basePath string) string {
-	// Notice: a name like 'keystone.on_chain.forwarder.ReportProcessed'
+	// Notice: a name like 'platform.on_chain.forwarder.ReportProcessed'
 	protoName := toSchemaFullName(m)
 
-	// We map to a Beholder schema path like '<basePath>/keystone/on-chain/forwarder/report_processed.proto'
+	// We map to a Beholder schema path like '<basePath>/platform/on-chain/forwarder/report_processed.proto'
 	protoPath := protoName
 	protoPath = strings.ReplaceAll(protoPath, ".", "/")
 	protoPath = strings.ReplaceAll(protoPath, "_", "-")
@@ -101,7 +101,7 @@ func appendRequiredAttrDomain(m proto.Message, attrKVs []any) []any {
 		}
 	}
 
-	// Notice: a name like 'keystone.on_chain.forwarder.ReportProcessed'
+	// Notice: a name like 'platform.on_chain.forwarder.ReportProcessed'
 	protoName := toSchemaFullName(m)
 
 	// Extract first path component (entrypoint package) as a domain

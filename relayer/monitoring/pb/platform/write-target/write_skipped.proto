@@ -1,6 +1,6 @@
 syntax="proto3";
 
-package keystone.write_target;
+package platform.write_target;
 option go_package = ".;write_target";
 
 // WT skipped the write request

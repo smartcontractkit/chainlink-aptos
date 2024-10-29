@@ -1,10 +1,10 @@
 syntax="proto3";
 
-package keystone.on_chain.forwarder;
+package platform.on_chain.forwarder;
 option go_package = ".;forwarder";
 
 // The on-chain ReportProcessed event which is extracted from the tx/event data or
-// the write-target WriteConfirmed event, after a write was confirmed (@see message: keystone.write-target.WriteConfirmed).
+// the write-target WriteConfirmed event, after a write was confirmed (@see message: platform.write-target.WriteConfirmed).
 message ReportProcessed {
   // Event data
   string receiver = 1;

@@ -11,8 +11,8 @@ import (
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/data-feeds/on-chain/registry"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/keystone/on-chain/forwarder"
-	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/keystone/write-target"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/on-chain/forwarder"
+	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/write-target"
 )
 
 const (
@@ -143,7 +143,7 @@ func (p *wtProcessor) Process(ctx context.Context, m proto.Message, attrKVs ...a
 	}
 }
 
-// Keystone specific processor decodes writes as 'keystone.forwarder.ReportProcessed' messages + metrics
+// Keystone specific processor decodes writes as 'platform.forwarder.ReportProcessed' messages + metrics
 type keystoneProcessor struct {
 	emitter monitor.ProtoEmitter
 	metrics *forwarder.Metrics
@@ -158,12 +158,12 @@ func (p *keystoneProcessor) Process(ctx context.Context, m proto.Message, attrKV
 		// Q: Will this msg ever contain different (non-Keystone) types of writes? Hmm.
 		// Notice: we assume all writes are Keystone (v1) writes for now
 
-		// Decode as a 'keystone.forwarder.ReportProcessed' message
+		// Decode as a 'platform.forwarder.ReportProcessed' message
 		reportProcessed, err := forwarder.DecodeAsReportProcessed(msg)
 		if err != nil {
-			return fmt.Errorf("failed to decode as 'keystone.forwarder.ReportProcessed': %w", err)
+			return fmt.Errorf("failed to decode as 'platform.forwarder.ReportProcessed': %w", err)
 		}
-		// Emit the 'keystone.forwarder.ReportProcessed' message
+		// Emit the 'platform.forwarder.ReportProcessed' message
 		err = p.emitter.EmitWithLog(ctx, reportProcessed, attrKVs...)
 		if err != nil {
 			return fmt.Errorf("failed to emit with log: %w", err)

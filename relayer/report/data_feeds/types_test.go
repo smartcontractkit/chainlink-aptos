@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/keystone"
 	mercury_v3 "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/mercury/v3"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/platform"
 )
 
 func TestDecodeReportV3(t *testing.T) {
@@ -23,7 +23,7 @@ func TestDecodeReportV3(t *testing.T) {
 	require.NoError(t, err)
 
 	// Decode the report
-	report, err := keystone.Decode(decoded)
+	report, err := platform.Decode(decoded)
 	require.NoError(t, err)
 	t.Log(fmt.Sprintf("Decoded as report: %+v", report))
 
