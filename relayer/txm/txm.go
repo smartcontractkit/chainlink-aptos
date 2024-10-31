@@ -522,9 +522,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 			chainTx, err := client.TransactionByHash(hash)
 
 			if err == nil && chainTx.Type != aptosapi.TransactionVariantPending {
-				// tx has been commited
-				a.logger.Debugw("tx confirmed", "txID", unconfirmedTx.Tx.ID, "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
-
+				// tx has been committed
 				if err := txStore.Confirm(unconfirmedTx.Nonce, hash, false); err != nil {
 					a.logger.Errorw("failed to confirm tx in TxStore", "hash", hash, "accountAddress", accountAddress, "error", err)
 				}
@@ -532,8 +530,10 @@ func (a *AptosTxm) checkUnconfirmed() {
 				if chainTx.Type == aptosapi.TransactionVariantUser {
 					userTx, ok := chainTx.Inner.(*aptosapi.UserTransaction)
 					if ok {
-						if !userTx.Success {
-							a.logger.Infow("confirmed tx was unsuccessful", "hash", hash, "userTx", userTx, "userTx.VmStatus", userTx.VmStatus)
+						if userTx.Success {
+							a.logger.Infow("confirmed tx: successful", "txID", unconfirmedTx.Tx.ID, "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
+						} else {
+							a.logger.Infow("confirmed tx: unsuccessful", "txID", unconfirmedTx.Tx.ID, "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
 							if userTx.VmStatus == "Out of gas" {
 								// https://github.com/aptos-labs/aptos-core/blob/77ff4bf413f54c41206bd5573e1891fa3a0dccf6/api/types/src/convert.rs#L1062
 								// Example transaction: https://api.testnet.aptoslabs.com/v1/transactions/by_hash/0x7a106db811c8d5dfd71ac98f374ca36e4f630ce5412b99c8f0e871e7feda37ea
@@ -548,7 +548,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 						a.logger.Errorw("failed to read confirmed user tx", "hash", hash, "chainTxInner", chainTx.Inner)
 					}
 				} else {
-					a.logger.Errorw("unexpected confirmed tx type", "hash", hash, "chainTxType", chainTx.Type)
+					a.logger.Errorw("unexpected confirmed tx type", "txID", unconfirmedTx.Tx.ID, "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
 				}
 
 				unconfirmedTx.Tx.Status = commontypes.Finalized
