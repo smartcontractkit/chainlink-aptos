@@ -176,14 +176,7 @@ func NewMetrics() (*Metrics, error) {
 
 func (m *Metrics) OnWriteInitiated(ctx context.Context, msg *WriteInitiated, attrKVs ...any) error {
 	// Define attributes
-	attrsCommon := utils.CommonAttributes(attrKVs...)
-	attrsNew := []attribute.KeyValue{
-		attribute.String("node", msg.Node),
-		attribute.String("forwarder", msg.Forwarder),
-		attribute.String("receiver", msg.Receiver),
-		attribute.Int64("report_id", int64(msg.ReportId)), // uint32 -> int64
-	}
-	attrs := metric.WithAttributes(append(attrsNew, attrsCommon...)...)
+	attrs := metric.WithAttributes(msg.Attributes()...)
 
 	// Count events
 	m.writeInitiated.count.Add(ctx, 1, attrs)
@@ -192,17 +185,7 @@ func (m *Metrics) OnWriteInitiated(ctx context.Context, msg *WriteInitiated, att
 
 func (m *Metrics) OnWriteError(ctx context.Context, msg *WriteError, attrKVs ...any) error {
 	// Define attributes
-	attrsCommon := utils.CommonAttributes(attrKVs...)
-	attrsNew := []attribute.KeyValue{
-		attribute.String("node", msg.Node),
-		attribute.String("forwarder", msg.Forwarder),
-		attribute.String("receiver", msg.Receiver),
-		attribute.Int64("report_id", int64(msg.ReportId)), // uint32 -> int64
-		// Error information
-		attribute.Int64("code", int64(msg.Code)), // uint32 -> int64
-		attribute.String("summary", msg.Summary),
-	}
-	attrs := metric.WithAttributes(append(attrsNew, attrsCommon...)...)
+	attrs := metric.WithAttributes(msg.Attributes()...)
 
 	// Count events
 	m.writeError.count.Add(ctx, 1, attrs)
@@ -211,14 +194,7 @@ func (m *Metrics) OnWriteError(ctx context.Context, msg *WriteError, attrKVs ...
 
 func (m *Metrics) OnWriteSent(ctx context.Context, msg *WriteSent, attrKVs ...any) error {
 	// Define attributes
-	attrsCommon := utils.CommonAttributes(attrKVs...)
-	attrsNew := []attribute.KeyValue{
-		attribute.String("node", msg.Node),
-		attribute.String("forwarder", msg.Forwarder),
-		attribute.String("receiver", msg.Receiver),
-		attribute.Int64("report_id", int64(msg.ReportId)), // uint32 -> int64
-	}
-	attrs := metric.WithAttributes(append(attrsNew, attrsCommon...)...)
+	attrs := metric.WithAttributes(msg.Attributes()...)
 
 	// Count events
 	m.writeSent.count.Add(ctx, 1, attrs)
@@ -237,16 +213,7 @@ func (m *Metrics) OnWriteSent(ctx context.Context, msg *WriteSent, attrKVs ...an
 
 func (m *Metrics) OnWriteConfirmed(ctx context.Context, msg *WriteConfirmed, attrKVs ...any) error {
 	// Define attributes
-	attrsCommon := utils.CommonAttributes(attrKVs...)
-	attrsNew := []attribute.KeyValue{
-		attribute.String("node", msg.Node),
-		attribute.String("forwarder", msg.Forwarder),
-		attribute.String("receiver", msg.Receiver),
-		attribute.Int64("report_id", int64(msg.ReportId)), // uint32 -> int64
-		attribute.String("transmitter", msg.Transmitter),
-		attribute.Bool("success", msg.Success),
-	}
-	attrs := metric.WithAttributes(append(attrsNew, attrsCommon...)...)
+	attrs := metric.WithAttributes(msg.Attributes()...)
 
 	// Count events
 	m.writeConfirmed.count.Add(ctx, 1, attrs)
@@ -265,4 +232,129 @@ func (m *Metrics) OnWriteConfirmed(ctx context.Context, msg *WriteConfirmed, att
 	m.writeConfirmed.blockNumber.Record(ctx, blockHeightVal, attrs)
 
 	return nil
+}
+
+// Attributes returns the attributes for the WriteInitiated message to be used in metrics
+func (m *WriteInitiated) Attributes() []attribute.KeyValue {
+	context := utils.ExecutionMetadata{
+		// Execution Context - Chain
+		ChainName:      m.MetaChainName,
+		NetworkName:    m.MetaNetworkName,
+		NetworkChainId: m.MetaNetworkChainId,
+		// Execution Context - Workflow (capabilities.RequestMetadata)
+		WorkflowId:               m.MetaWorkflowId,
+		WorkflowOwner:            m.MetaWorkflowOwner,
+		WorkflowExecutionId:      m.MetaWorkflowExecutionId,
+		WorkflowName:             m.MetaWorkflowName,
+		WorkflowDonId:            m.MetaWorkflowDonId,
+		WorkflowDonConfigVersion: m.MetaWorkflowDonConfigVersion,
+		ReferenceId:              m.MetaReferenceId,
+		// Execution Context - Capability
+		CapabilityType: m.MetaCapabilityType,
+		CapabilityId:   m.MetaCapabilityId,
+	}
+
+	attrs := []attribute.KeyValue{
+		attribute.String("node", m.Node),
+		attribute.String("forwarder", m.Forwarder),
+		attribute.String("receiver", m.Receiver),
+		attribute.Int64("report_id", int64(m.ReportId)), // uint32 -> int64
+	}
+
+	return append(attrs, context.Attributes()...)
+}
+
+// Attributes returns the attributes for the WriteError message to be used in metrics
+func (m *WriteError) Attributes() []attribute.KeyValue {
+	context := utils.ExecutionMetadata{
+		// Execution Context - Chain
+		ChainName:      m.MetaChainName,
+		NetworkName:    m.MetaNetworkName,
+		NetworkChainId: m.MetaNetworkChainId,
+		// Execution Context - Workflow (capabilities.RequestMetadata)
+		WorkflowId:               m.MetaWorkflowId,
+		WorkflowOwner:            m.MetaWorkflowOwner,
+		WorkflowExecutionId:      m.MetaWorkflowExecutionId,
+		WorkflowName:             m.MetaWorkflowName,
+		WorkflowDonId:            m.MetaWorkflowDonId,
+		WorkflowDonConfigVersion: m.MetaWorkflowDonConfigVersion,
+		ReferenceId:              m.MetaReferenceId,
+		// Execution Context - Capability
+		CapabilityType: m.MetaCapabilityType,
+		CapabilityId:   m.MetaCapabilityId,
+	}
+
+	attrs := []attribute.KeyValue{
+		attribute.String("node", m.Node),
+		attribute.String("forwarder", m.Forwarder),
+		attribute.String("receiver", m.Receiver),
+		attribute.Int64("report_id", int64(m.ReportId)), // uint32 -> int64
+		// Error information
+		attribute.Int64("code", int64(m.Code)), // uint32 -> int64
+		attribute.String("summary", m.Summary),
+	}
+
+	return append(attrs, context.Attributes()...)
+}
+
+// Attributes returns the attributes for the WriteSent message to be used in metrics
+func (m *WriteSent) Attributes() []attribute.KeyValue {
+	context := utils.ExecutionMetadata{
+		// Execution Context - Chain
+		ChainName:      m.MetaChainName,
+		NetworkName:    m.MetaNetworkName,
+		NetworkChainId: m.MetaNetworkChainId,
+		// Execution Context - Workflow (capabilities.RequestMetadata)
+		WorkflowId:               m.MetaWorkflowId,
+		WorkflowOwner:            m.MetaWorkflowOwner,
+		WorkflowExecutionId:      m.MetaWorkflowExecutionId,
+		WorkflowName:             m.MetaWorkflowName,
+		WorkflowDonId:            m.MetaWorkflowDonId,
+		WorkflowDonConfigVersion: m.MetaWorkflowDonConfigVersion,
+		ReferenceId:              m.MetaReferenceId,
+		// Execution Context - Capability
+		CapabilityType: m.MetaCapabilityType,
+		CapabilityId:   m.MetaCapabilityId,
+	}
+
+	attrs := []attribute.KeyValue{
+		attribute.String("node", m.Node),
+		attribute.String("forwarder", m.Forwarder),
+		attribute.String("receiver", m.Receiver),
+		attribute.Int64("report_id", int64(m.ReportId)), // uint32 -> int64
+	}
+
+	return append(attrs, context.Attributes()...)
+}
+
+// Attributes returns the attributes for the WriteConfirmed message to be used in metrics
+func (m *WriteConfirmed) Attributes() []attribute.KeyValue {
+	context := utils.ExecutionMetadata{
+		// Execution Context - Chain
+		ChainName:      m.MetaChainName,
+		NetworkName:    m.MetaNetworkName,
+		NetworkChainId: m.MetaNetworkChainId,
+		// Execution Context - Workflow (capabilities.RequestMetadata)
+		WorkflowId:               m.MetaWorkflowId,
+		WorkflowOwner:            m.MetaWorkflowOwner,
+		WorkflowExecutionId:      m.MetaWorkflowExecutionId,
+		WorkflowName:             m.MetaWorkflowName,
+		WorkflowDonId:            m.MetaWorkflowDonId,
+		WorkflowDonConfigVersion: m.MetaWorkflowDonConfigVersion,
+		ReferenceId:              m.MetaReferenceId,
+		// Execution Context - Capability
+		CapabilityType: m.MetaCapabilityType,
+		CapabilityId:   m.MetaCapabilityId,
+	}
+
+	attrs := []attribute.KeyValue{
+		attribute.String("node", m.Node),
+		attribute.String("forwarder", m.Forwarder),
+		attribute.String("receiver", m.Receiver),
+		attribute.Int64("report_id", int64(m.ReportId)), // uint32 -> int64
+		attribute.String("transmitter", m.Transmitter),
+		attribute.Bool("success", m.Success),
+	}
+
+	return append(attrs, context.Attributes()...)
 }

@@ -82,17 +82,7 @@ func NewMetrics() (*Metrics, error) {
 
 func (m *Metrics) OnReportProcessed(ctx context.Context, msg *ReportProcessed, attrKVs ...any) error {
 	// Define attributes
-	attrsCommon := utils.CommonAttributes(attrKVs...)
-	attrsNew := []attribute.KeyValue{
-		// TODO: do we need these attributes? (available in WriteConfirmed)
-		// attribute.String("node", msg.Node),
-		// attribute.String("forwarder", msg.Forwarder),
-		attribute.String("receiver", msg.Receiver),
-		attribute.Int64("report_id", int64(msg.ReportId)), // uint32 -> int64
-		// attribute.String("transmitter", msg.Transmitter),
-		attribute.Bool("success", msg.Success),
-	}
-	attrs := metric.WithAttributes(append(attrsNew, attrsCommon...)...)
+	attrs := metric.WithAttributes(msg.Attributes()...)
 
 	// Count events
 	m.reportProcessed.count.Add(ctx, 1, attrs)
@@ -108,4 +98,37 @@ func (m *Metrics) OnReportProcessed(ctx context.Context, msg *ReportProcessed, a
 	m.reportProcessed.blockNumber.Record(ctx, blockHeightVal, attrs)
 
 	return nil
+}
+
+// Attributes returns the attributes for the ReportProcessed message to be used in metrics
+func (m *ReportProcessed) Attributes() []attribute.KeyValue {
+	context := utils.ExecutionMetadata{
+		// Execution Context - Chain
+		ChainName:      m.MetaChainName,
+		NetworkName:    m.MetaNetworkName,
+		NetworkChainId: m.MetaNetworkChainId,
+		// Execution Context - Workflow (capabilities.RequestMetadata)
+		WorkflowId:               m.MetaWorkflowId,
+		WorkflowOwner:            m.MetaWorkflowOwner,
+		WorkflowExecutionId:      m.MetaWorkflowExecutionId,
+		WorkflowName:             m.MetaWorkflowName,
+		WorkflowDonId:            m.MetaWorkflowDonId,
+		WorkflowDonConfigVersion: m.MetaWorkflowDonConfigVersion,
+		ReferenceId:              m.MetaReferenceId,
+		// Execution Context - Capability
+		CapabilityType: m.MetaCapabilityType,
+		CapabilityId:   m.MetaCapabilityId,
+	}
+
+	attrs := []attribute.KeyValue{
+		// TODO: do we need these attributes? (available in WriteConfirmed)
+		// attribute.String("node", m.Node),
+		// attribute.String("forwarder", m.Forwarder),
+		attribute.String("receiver", m.Receiver),
+		attribute.Int64("report_id", int64(m.ReportId)), // uint32 -> int64
+		// attribute.String("transmitter", m.Transmitter),
+		attribute.Bool("success", m.Success),
+	}
+
+	return append(attrs, context.Attributes()...)
 }

@@ -38,7 +38,9 @@ func DecodeAsReportProcessed(m *wt_msg.WriteConfirmed) (*ReportProcessed, error)
 		BlockTimestamp: m.BlockTimestamp,
 
 		// Execution Context - Chain
-		// TODO: Add chain info
+		MetaChainName:      m.MetaChainName,
+		MetaNetworkName:    m.MetaNetworkName,
+		MetaNetworkChainId: m.MetaNetworkChainId,
 
 		// Execution Context - Workflow (capabilities.RequestMetadata)
 		MetaWorkflowId:               m.MetaWorkflowId,
@@ -50,6 +52,7 @@ func DecodeAsReportProcessed(m *wt_msg.WriteConfirmed) (*ReportProcessed, error)
 		MetaReferenceId:              m.MetaReferenceId,
 
 		// Execution Context - Capability
-		// TODO: Add capability info
+		MetaCapabilityType: m.MetaCapabilityType,
+		MetaCapabilityId:   m.MetaCapabilityId,
 	}, nil
 }

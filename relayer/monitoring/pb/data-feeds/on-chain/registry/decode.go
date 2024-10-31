@@ -68,7 +68,9 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				BlockTimestamp: m.BlockTimestamp,
 
 				// Execution Context - Chain
-				// TODO: Add chain info
+				MetaChainName:      m.MetaChainName,
+				MetaNetworkName:    m.MetaNetworkName,
+				MetaNetworkChainId: m.MetaNetworkChainId,
 
 				// Execution Context - Workflow (capabilities.RequestMetadata)
 				MetaWorkflowId:               m.MetaWorkflowId,
@@ -80,7 +82,8 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				MetaReferenceId:              m.MetaReferenceId,
 
 				// Execution Context - Capability
-				// TODO: Add capability info
+				MetaCapabilityType: m.MetaCapabilityType,
+				MetaCapabilityId:   m.MetaCapabilityId,
 			})
 		case uint16(4):
 			rm, err := mercury_v4.Decode(rf.Data)
@@ -106,7 +109,9 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				BlockTimestamp: m.BlockTimestamp,
 
 				// Execution Context - Chain
-				// TODO: Add chain info
+				MetaChainName:      m.MetaChainName,
+				MetaNetworkName:    m.MetaNetworkName,
+				MetaNetworkChainId: m.MetaNetworkChainId,
 
 				// Execution Context - Workflow (capabilities.RequestMetadata)
 				MetaWorkflowId:               m.MetaWorkflowId,
@@ -118,7 +123,8 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				MetaReferenceId:              m.MetaReferenceId,
 
 				// Execution Context - Capability
-				// TODO: Add capability info
+				MetaCapabilityType: m.MetaCapabilityType,
+				MetaCapabilityId:   m.MetaCapabilityId,
 			})
 		default:
 			return nil, fmt.Errorf("unsupported Mercury report type: %d", t)
