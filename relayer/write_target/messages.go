@@ -34,7 +34,8 @@ func (m *messageBuilder) buildWriteError(i *requestInfo, code uint32, summary, c
 		MetaReferenceId:              i.request.Metadata.ReferenceID,
 
 		// Execution Context - Capability
-		// TODO: Add capability info
+		MetaCapabilityType: string(i.capInfo.CapabilityType),
+		MetaCapabilityId:   i.capInfo.ID,
 	}
 }
 
@@ -58,7 +59,8 @@ func (m *messageBuilder) buildWriteInitiated(i *requestInfo) *wt.WriteInitiated 
 		MetaReferenceId:              i.request.Metadata.ReferenceID,
 
 		// Execution Context - Capability
-		// TODO: Add capability info
+		MetaCapabilityType: string(i.capInfo.CapabilityType),
+		MetaCapabilityId:   i.capInfo.ID,
 	}
 }
 
@@ -83,7 +85,8 @@ func (m *messageBuilder) buildWriteSkipped(i *requestInfo, reason string) *wt.Wr
 		MetaReferenceId:              i.request.Metadata.ReferenceID,
 
 		// Execution Context - Capability
-		// TODO: Add capability info
+		MetaCapabilityType: string(i.capInfo.CapabilityType),
+		MetaCapabilityId:   i.capInfo.ID,
 	}
 }
 
@@ -113,7 +116,8 @@ func (m *messageBuilder) buildWriteSent(i *requestInfo, head types.Head, txID st
 		MetaReferenceId:              i.request.Metadata.ReferenceID,
 
 		// Execution Context - Capability
-		// TODO: Add capability info
+		MetaCapabilityType: string(i.capInfo.CapabilityType),
+		MetaCapabilityId:   i.capInfo.ID,
 	}
 }
 
@@ -149,6 +153,7 @@ func (m *messageBuilder) buildWriteConfirmed(i *requestInfo, head types.Head) *w
 		MetaReferenceId:              i.request.Metadata.ReferenceID,
 
 		// Execution Context - Capability
-		// TODO: Add capability info
+		MetaCapabilityType: string(i.capInfo.CapabilityType),
+		MetaCapabilityId:   i.capInfo.ID,
 	}
 }

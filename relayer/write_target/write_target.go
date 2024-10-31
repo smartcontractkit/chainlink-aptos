@@ -123,6 +123,8 @@ type reportInfo struct {
 }
 
 type requestInfo struct {
+	capInfo capabilities.CapabilityInfo
+
 	node      string
 	forwarder string
 	receiver  string
@@ -137,7 +139,10 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	_, span := c.beholder.Tracer.Start(ctx, "Execute", trace.WithAttributes(attrs...))
 	defer span.End()
 
-	c.lggr.Debugw("Execute", "request", request)
+	// Notice: error skipped as implementation always returns nil
+	capInfo, _ := c.Info(ctx)
+
+	c.lggr.Debugw("Execute", "request", request, "capInfo", capInfo)
 
 	// Helper to keep track of the info
 	info := &requestInfo{
@@ -145,6 +150,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		forwarder: c.forwarderAddress,
 		receiver:  "N/A",
 		request:   request,
+		capInfo:   capInfo,
 		reportInfo: &reportInfo{
 			reportContext: nil,
 			report:        nil,
@@ -504,11 +510,9 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 // traceAttributes returns the attributes to be used for tracing
 func (c *writeTarget) traceAttributes(workflowExecutionID string) []attribute.KeyValue {
 	return []attribute.KeyValue{
-		attribute.String("capability.id", c.ID),
-		attribute.String("capability.version", c.Version()),
-		attribute.String("capability.type", string(c.CapabilityType)),
-		attribute.String("capability.instance", c.lggr.Name()), // full name from logger
-		attribute.String("capability.executionID", workflowExecutionID),
+		attribute.String("capability_id", c.ID),
+		attribute.String("capability_type", string(c.CapabilityType)),
+		attribute.String("workflow_execution_id", workflowExecutionID),
 	}
 }
 

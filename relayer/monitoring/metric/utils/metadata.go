@@ -33,7 +33,7 @@ func (m ExecutionMetadata) Attributes() []attribute.KeyValue {
 		// Execution Context - Workflow (capabilities.RequestMetadata)
 		attribute.String("workflow_id", m.WorkflowId),
 		attribute.String("workflow_owner", m.WorkflowOwner),
-		attribute.String("workflow_execution_id", m.WorkflowExecutionId),
+		// Notice: WorkflowExecutionId is not used by metrics (skipped b/c high cardinality)
 		attribute.String("workflow_name", m.WorkflowName),
 		attribute.Int64("workflow_don_id", int64(m.WorkflowDonId)),
 		attribute.Int64("workflow_don_config_version", int64(m.WorkflowDonConfigVersion)),
