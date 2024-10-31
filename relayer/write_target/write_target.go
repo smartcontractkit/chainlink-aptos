@@ -119,8 +119,7 @@ type reportInfo struct {
 	signersNum    uint32
 
 	// Decoded report fields
-	reportID            uint16
-	workflowExecutionID string
+	reportID uint16
 }
 
 type requestInfo struct {
@@ -128,6 +127,7 @@ type requestInfo struct {
 	forwarder string
 	receiver  string
 
+	request                 capabilities.CapabilityRequest
 	reportInfo              *reportInfo
 	reportTransmissionState *TransmissionState
 }
@@ -145,11 +145,10 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		forwarder: c.forwarderAddress,
 		receiver:  "N/A",
 		reportInfo: &reportInfo{
-			reportContext:       nil,
-			report:              nil,
-			signersNum:          0, // N/A
-			reportID:            0, // N/A
-			workflowExecutionID: request.Metadata.WorkflowExecutionID,
+			reportContext: nil,
+			report:        nil,
+			signersNum:    0, // N/A
+			reportID:      0, // N/A
 		},
 		reportTransmissionState: nil,
 	}
@@ -395,7 +394,7 @@ func (c *writeTarget) UnregisterFromWorkflow(ctx context.Context, request capabi
 //   - 'platform.write-target.WriteError'     if accepted (with an error)
 //   - 'platform.write-target.WriteConfirmed' if confirmed (until timeout)
 func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInfo, txID uuid.UUID, query func(context.Context) (*TransmissionState, error)) {
-	attrs := c.traceAttributes(info.reportInfo.workflowExecutionID)
+	attrs := c.traceAttributes(info.request.Metadata.WorkflowExecutionID)
 	_, span := c.beholder.Tracer.Start(ctx, "Execute.acceptAndConfirmWrite", trace.WithAttributes(attrs...))
 	defer span.End()
 

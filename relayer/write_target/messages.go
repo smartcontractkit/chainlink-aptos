@@ -20,6 +20,21 @@ func (m *messageBuilder) buildWriteError(i *requestInfo, code uint32, summary, c
 		Forwarder: i.forwarder,
 		Receiver:  i.receiver,
 		ReportId:  uint32(i.reportInfo.reportID),
+
+		// Execution Context - Chain
+		// TODO: Add chain info
+
+		// Execution Context - Workflow (capabilities.RequestMetadata)
+		MetaWorkflowId:               i.request.Metadata.WorkflowID,
+		MetaWorkflowOwner:            i.request.Metadata.WorkflowOwner,
+		MetaWorkflowExecutionId:      i.request.Metadata.WorkflowExecutionID,
+		MetaWorkflowName:             i.request.Metadata.WorkflowName,
+		MetaWorkflowDonId:            i.request.Metadata.WorkflowDonID,
+		MetaWorkflowDonConfigVersion: i.request.Metadata.WorkflowDonConfigVersion,
+		MetaReferenceId:              i.request.Metadata.ReferenceID,
+
+		// Execution Context - Capability
+		// TODO: Add capability info
 	}
 }
 
@@ -29,6 +44,21 @@ func (m *messageBuilder) buildWriteInitiated(i *requestInfo) *wt.WriteInitiated 
 		Forwarder: i.forwarder,
 		Receiver:  i.receiver,
 		ReportId:  uint32(i.reportInfo.reportID),
+
+		// Execution Context - Chain
+		// TODO: Add chain info
+
+		// Execution Context - Workflow (capabilities.RequestMetadata)
+		MetaWorkflowId:               i.request.Metadata.WorkflowID,
+		MetaWorkflowOwner:            i.request.Metadata.WorkflowOwner,
+		MetaWorkflowExecutionId:      i.request.Metadata.WorkflowExecutionID,
+		MetaWorkflowName:             i.request.Metadata.WorkflowName,
+		MetaWorkflowDonId:            i.request.Metadata.WorkflowDonID,
+		MetaWorkflowDonConfigVersion: i.request.Metadata.WorkflowDonConfigVersion,
+		MetaReferenceId:              i.request.Metadata.ReferenceID,
+
+		// Execution Context - Capability
+		// TODO: Add capability info
 	}
 }
 
@@ -39,6 +69,21 @@ func (m *messageBuilder) buildWriteSkipped(i *requestInfo, reason string) *wt.Wr
 		Receiver:  i.receiver,
 		ReportId:  uint32(i.reportInfo.reportID),
 		Reason:    reason,
+
+		// Execution Context - Chain
+		// TODO: Add chain info
+
+		// Execution Context - Workflow (capabilities.RequestMetadata)
+		MetaWorkflowId:               i.request.Metadata.WorkflowID,
+		MetaWorkflowOwner:            i.request.Metadata.WorkflowOwner,
+		MetaWorkflowExecutionId:      i.request.Metadata.WorkflowExecutionID,
+		MetaWorkflowName:             i.request.Metadata.WorkflowName,
+		MetaWorkflowDonId:            i.request.Metadata.WorkflowDonID,
+		MetaWorkflowDonConfigVersion: i.request.Metadata.WorkflowDonConfigVersion,
+		MetaReferenceId:              i.request.Metadata.ReferenceID,
+
+		// Execution Context - Capability
+		// TODO: Add capability info
 	}
 }
 
@@ -54,6 +99,21 @@ func (m *messageBuilder) buildWriteSent(i *requestInfo, head types.Head, txID st
 		BlockHash:      hex.EncodeToString(head.Hash),
 		BlockHeight:    head.Height,
 		BlockTimestamp: head.Timestamp,
+
+		// Execution Context - Chain
+		// TODO: Add chain info
+
+		// Execution Context - Workflow (capabilities.RequestMetadata)
+		MetaWorkflowId:               i.request.Metadata.WorkflowID,
+		MetaWorkflowOwner:            i.request.Metadata.WorkflowOwner,
+		MetaWorkflowExecutionId:      i.request.Metadata.WorkflowExecutionID,
+		MetaWorkflowName:             i.request.Metadata.WorkflowName,
+		MetaWorkflowDonId:            i.request.Metadata.WorkflowDonID,
+		MetaWorkflowDonConfigVersion: i.request.Metadata.WorkflowDonConfigVersion,
+		MetaReferenceId:              i.request.Metadata.ReferenceID,
+
+		// Execution Context - Capability
+		// TODO: Add capability info
 	}
 }
 
@@ -75,5 +135,20 @@ func (m *messageBuilder) buildWriteConfirmed(i *requestInfo, head types.Head) *w
 		// Transmission Info
 		Transmitter: i.reportTransmissionState.Transmitter,
 		Success:     i.reportTransmissionState.Success,
+
+		// Execution Context - Chain
+		// TODO: Add chain info
+
+		// Execution Context - Workflow (capabilities.RequestMetadata)
+		MetaWorkflowId:               i.request.Metadata.WorkflowID,
+		MetaWorkflowOwner:            i.request.Metadata.WorkflowOwner,
+		MetaWorkflowExecutionId:      i.request.Metadata.WorkflowExecutionID,
+		MetaWorkflowName:             i.request.Metadata.WorkflowName,
+		MetaWorkflowDonId:            i.request.Metadata.WorkflowDonID,
+		MetaWorkflowDonConfigVersion: i.request.Metadata.WorkflowDonConfigVersion,
+		MetaReferenceId:              i.request.Metadata.ReferenceID,
+
+		// Execution Context - Capability
+		// TODO: Add capability info
 	}
 }

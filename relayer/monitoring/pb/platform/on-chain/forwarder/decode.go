@@ -36,5 +36,20 @@ func DecodeAsReportProcessed(m *wt_msg.WriteConfirmed) (*ReportProcessed, error)
 		BlockHash:      m.BlockHash,
 		BlockHeight:    m.BlockHeight,
 		BlockTimestamp: m.BlockTimestamp,
+
+		// Execution Context - Chain
+		// TODO: Add chain info
+
+		// Execution Context - Workflow (capabilities.RequestMetadata)
+		MetaWorkflowId:               m.MetaWorkflowId,
+		MetaWorkflowOwner:            m.MetaWorkflowOwner,
+		MetaWorkflowExecutionId:      m.MetaWorkflowExecutionId,
+		MetaWorkflowName:             m.MetaWorkflowName,
+		MetaWorkflowDonId:            m.MetaWorkflowDonId,
+		MetaWorkflowDonConfigVersion: m.MetaWorkflowDonConfigVersion,
+		MetaReferenceId:              m.MetaReferenceId,
+
+		// Execution Context - Capability
+		// TODO: Add capability info
 	}, nil
 }
