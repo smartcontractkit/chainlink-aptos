@@ -280,14 +280,12 @@ func (a *AptosTxm) createRawTx(client *aptos.NodeClient, tx *AptosTx, nonce uint
 	// this is cached within NodeClient after the first successful invocation.
 	chainId, err := client.GetChainId()
 	if err != nil {
-		a.logger.Errorw("failed to get chain id", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to get chain id: %w", err)
 	}
 
 	ledgerTimestampSecs, err := a.getLedgerTimestampSecs(client)
 	if err != nil {
-		a.logger.Errorw("failed to fetch ledger timestamp", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to fetch ledger timestamp: %w", err)
 	}
 
 	expirationTimestampSecs := ledgerTimestampSecs + a.config.TxExpirationSecs
@@ -332,8 +330,7 @@ func (a *AptosTxm) createRawTx(client *aptos.NodeClient, tx *AptosTx, nonce uint
 		// If simulate was disabled or failed, populate the gas unit price.
 		gasInfo, err := client.EstimateGasPrice()
 		if err != nil {
-			a.logger.Errorw("failed to retrieve estimated gas price", "error", err)
-			return nil, err
+			return nil, fmt.Errorf("failed to retrieve estimated gas price: %w", err)
 		}
 
 		a.logger.Debugw("estimated gas price", "gasEstimate", gasInfo.GasEstimate, "prioritizedGasEstimate", gasInfo.PrioritizedGasEstimate)
