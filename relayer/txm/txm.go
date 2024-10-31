@@ -538,7 +538,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 								// https://github.com/aptos-labs/aptos-core/blob/77ff4bf413f54c41206bd5573e1891fa3a0dccf6/api/types/src/convert.rs#L1062
 								// Example transaction: https://api.testnet.aptoslabs.com/v1/transactions/by_hash/0x7a106db811c8d5dfd71ac98f374ca36e4f630ce5412b99c8f0e871e7feda37ea
 								unconfirmedTx.Tx.Attempt++
-								if !a.maybeRetry(unconfirmedTx, "out of gas") {
+								if !a.maybeRetry(unconfirmedTx, RetryReasonOutOfGas) {
 									unconfirmedTx.Tx.Status = commontypes.Failed
 								}
 								continue
@@ -576,7 +576,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 				}
 
 				unconfirmedTx.Tx.Attempt++
-				if !a.maybeRetry(unconfirmedTx, "expired") {
+				if !a.maybeRetry(unconfirmedTx, RetryReasonExpired) {
 					unconfirmedTx.Tx.Status = commontypes.Failed
 				}
 			}
@@ -584,7 +584,25 @@ func (a *AptosTxm) checkUnconfirmed() {
 	}
 }
 
-func (a *AptosTxm) maybeRetry(unconfirmedTx *UnconfirmedTx, retryReason string) bool {
+type RetryReason int
+
+const (
+	RetryReasonOutOfGas RetryReason = iota
+	RetryReasonExpired
+)
+
+func (r RetryReason) String() string {
+	switch r {
+	case RetryReasonOutOfGas:
+		return "out of gas"
+	case RetryReasonExpired:
+		return "expired"
+	default:
+		return "unknown"
+	}
+}
+
+func (a *AptosTxm) maybeRetry(unconfirmedTx *UnconfirmedTx, retryReason RetryReason) bool {
 		if unconfirmedTx.Tx.Attempt >= a.config.MaxTxRetryAttempts {
 			a.logger.Errorw("tx reached max num of retries and will be discarded", "txID", unconfirmedTx.Tx.ID, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
 			return false
