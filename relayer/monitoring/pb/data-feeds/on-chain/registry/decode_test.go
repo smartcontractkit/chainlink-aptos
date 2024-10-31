@@ -3,6 +3,8 @@ package registry
 import (
 	"encoding/base64"
 	"testing"
+	"math"
+	"math/big"
 
 	"github.com/stretchr/testify/require"
 
@@ -111,6 +113,41 @@ func TestDecodeAsReportProcessed(t *testing.T) {
 					require.Equal(t, m, *result[i])
 				}
 			}
+		})
+	}
+}
+func TestToInt64(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    *big.Int
+		expected int64
+	}{
+		{
+			name:     "Positive number within int64 range",
+			input:    big.NewInt(1234567890),
+			expected: 1234567890,
+		},
+		{
+			name:     "Negative number within int64 range",
+			input:    big.NewInt(-1234567890),
+			expected: -1234567890,
+		},
+		{
+			name:     "Positive number exceeding int64 range",
+			input:    new(big.Int).Add(big.NewInt(math.MaxInt64), big.NewInt(1)),
+			expected: math.MinInt64,
+		},
+		{
+			name:     "Negative number exceeding int64 range",
+			input:    new(big.Int).Sub(big.NewInt(math.MinInt64), big.NewInt(1)),
+			expected: math.MinInt64,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := toInt64(tt.input)
+			require.Equal(t, tt.expected, result)
 		})
 	}
 }
