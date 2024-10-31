@@ -144,6 +144,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		node:      c.nodeAddress,
 		forwarder: c.forwarderAddress,
 		receiver:  "N/A",
+		request:   request,
 		reportInfo: &reportInfo{
 			reportContext: nil,
 			report:        nil,
