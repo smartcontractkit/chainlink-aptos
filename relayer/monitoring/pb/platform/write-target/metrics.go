@@ -230,7 +230,6 @@ func (m *Metrics) OnWriteConfirmed(ctx context.Context, msg *WriteConfirmed, att
 		return fmt.Errorf("failed to parse block height: %w", err)
 	}
 	m.writeConfirmed.blockNumber.Record(ctx, blockHeightVal, attrs)
-
 	return nil
 }
 
