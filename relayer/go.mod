@@ -11,7 +11,7 @@ require (
 	github.com/hashicorp/go-plugin v1.6.2-0.20240829161738-06afb6d7ae99
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/pelletier/go-toml/v2 v2.2.0
-	github.com/smartcontractkit/chainlink-common v0.3.1-0.20241025170901-eed6b5f1be5d
+	github.com/smartcontractkit/chainlink-common v0.3.1-0.20241101093830-33711d0c3de7
 	github.com/stretchr/testify v1.9.0
 	go.opentelemetry.io/otel v1.30.0
 	go.opentelemetry.io/otel/metric v1.30.0

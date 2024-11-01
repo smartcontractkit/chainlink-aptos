@@ -2,9 +2,9 @@ package registry
 
 import (
 	"encoding/base64"
-	"testing"
 	"math"
 	"math/big"
+	"testing"
 
 	"github.com/stretchr/testify/require"
 
