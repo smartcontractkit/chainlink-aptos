@@ -354,21 +354,18 @@ func (a *AptosTxm) createRawTx(client *aptos.NodeClient, tx *AptosTx, nonce uint
 func (a *AptosTxm) createSignedTx(client *aptos.NodeClient, rawTx *aptos.RawTransaction, publicKey ed25519.PublicKey, fromAddress aptos.AccountAddress) (*aptos.SignedTransaction, error) {
 	signingMessage, err := rawTx.SigningMessage()
 	if err != nil {
-		a.logger.Errorw("failed to create signing message", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to create signing message: %w", err)
 	}
 
 	signature, err := a.keystore.Sign(context.Background(), fmt.Sprintf("%064x", publicKey), signingMessage)
 	if err != nil {
-		a.logger.Errorw("failed to sign message", "fromAddress", fromAddress, "error", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to sign message for address %s: %w", fromAddress, err)
 	}
 
 	sig := aptoscrypto.Ed25519Signature{}
 	err = sig.FromBytes(signature)
 	if err != nil {
-		a.logger.Errorw("failed to deserialize signature", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to deserialize signature: %w", err)
 	}
 
 	authenticator := &aptoscrypto.Ed25519Authenticator{
@@ -381,8 +378,7 @@ func (a *AptosTxm) createSignedTx(client *aptos.NodeClient, rawTx *aptos.RawTran
 		Auth:    authenticator,
 	})
 	if err != nil {
-		a.logger.Errorw("failed to sign tx", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to sign tx: %w", err)
 	}
 
 	return signedTx, nil
