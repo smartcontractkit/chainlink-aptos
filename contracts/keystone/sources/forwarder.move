@@ -25,6 +25,7 @@ module keystone::forwarder {
     const E_CANNOT_TRANSFER_TO_SELF: u64 = 13;
     const E_NOT_PROPOSED_OWNER: u64 = 14;
     const E_CONFIG_ID_NOT_FOUND: u64 = 15;
+    const E_INVALID_REPORT_VERSION: u64 = 16;
 
     const MAX_ORACLES: u64 = 31;
 
@@ -241,6 +242,9 @@ module keystone::forwarder {
 
         // parse out report metadata
         // version | workflow_execution_id | timestamp | don_id | config_version | ...
+        let report_version = *vector::borrow(&report, 0);
+        assert!(report_version == 1, E_INVALID_REPORT_VERSION);
+
         let workflow_execution_id = vector::slice(&report, 1, 33);
         // _timestamp
         let don_id = vector::slice(&report, 37, 41);
