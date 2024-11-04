@@ -42,6 +42,7 @@ func Decode(report []byte) (*Report, error) {
 }
 
 // GetReportType returns the report type sourced from the feedId
+// Notice: Data Stream (Asset DON) feed ID and the Data Stream feed ID are separate type of IDs, with different schemas
 func GetReportType(feedId [32]byte) uint16 {
 	// Get the first 2 bytes of the feedId
 	return binary.BigEndian.Uint16(feedId[:2])
