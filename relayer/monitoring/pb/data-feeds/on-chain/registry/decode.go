@@ -35,6 +35,7 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 
 	// Iterate over the underlying Mercury reports
 	for _, rf := range *reports {
+		// TODO: should we check the DF report feed ID to check if we expect a Mercury report here? (e.g., Byte 0: ID Format = 0x01)
 		// Decode the common Mercury report
 		rm, err := mercury_vX.Decode(rf.Data)
 		if err != nil {
@@ -58,8 +59,8 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				Benchmark:             rm.BenchmarkPrice.Bytes(), // Map big.Int as []byte
 				Report:                rf.Data,
 
-				// Notice: i192 will not fit if number bigger than 64 bits
-				BenchmarkVal: toInt64(rm.BenchmarkPrice),
+				// Notice: i192 will not fit if scaled number bigger than f64
+				BenchmarkVal: toBenchmarkVal(data_feeds.FeedID(rf.FeedId), rm.BenchmarkPrice),
 
 				// Notice: we skip head/tx data here (unknown), as we map from 'platform.write-target.WriteConfirmed'
 				// and not from tx/event data (e.g., 'platform.write-target.WriteTxConfirmed')
@@ -100,8 +101,8 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				Benchmark:             rm.BenchmarkPrice.Bytes(), // Map big.Int as []byte
 				Report:                rf.Data,
 
-				// Notice: i192 will not fit if number bigger than 64 bits
-				BenchmarkVal: toInt64(rm.BenchmarkPrice),
+				// Notice: i192 will not fit if scaled number bigger than f64
+				BenchmarkVal: toBenchmarkVal(data_feeds.FeedID(rf.FeedId), rm.BenchmarkPrice),
 
 				// Notice: we skip head/tx data here (unknown), as we map from 'platform.write-target.WriteConfirmed'
 				// and not from tx/event data (e.g., 'platform.write-target.WriteTxConfirmed')
@@ -136,66 +137,38 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 	return msgs, nil
 }
 
-// toInt64 converts a big.Int to int64
-// Returns a math.MinInt64 number that represents an error on overflow.
-// This is used to represent and detect huge i192 on-chain values that cannot be represented as int64.
-func toInt64(i *big.Int) int64 {
-	if i.IsInt64() {
-		return i.Int64()
-	}
-	// Return a number that represents an error (overflow)
-	return math.MinInt64 // -1 << 63 = -9223372036854775808
-}
-
-// FeedID represents a 32-byte feed ID
-type FeedID [32]byte
-
-// GetReportType returns the report type sourced from the feedId
+// toBenchmarkVal returns the benchmark i192 on-chain value decoded as an double (float64), scaled by number of decimals (e.g., 1e-18)
+// Where the number of decimals is extracted from the feed ID.
 //
-// [DF2.0 | Data ID Final Specification](https://docs.google.com/document/d/13ciwTx8lSUfyz1IdETwpxlIVSn1lwYzGtzOBBTpl5Vg/edit?usp=sharing)
-// Byte 0: ID Format - 256 options (base case)
-//   - Incrementing from 0
-//   - 0x00 = current Data Streams format
-//   - 0x01 = this format
-//   - 0x02 = PoR self-serve SA team allocated IDs (15 bytes)
-//   - 0x03 = PoR from feeds team
-//   - 0xFF can extend ID format to subsequent bytes, so 0xFF00 is first, then 0xFF01, etc.
-func (id FeedID) GetReportType() uint8 {
-	// Get the first byte of the feedId
-	return id[0]
-}
-
-// GetDecimals returns the number of decimals for the feed, derived from the feedId
+// This is the largest type Prometheus supports, and this conversion can overflow but so far was sufficient
+// for most use-cases. For big numbers, benchmark bytes should be used instead.
 //
-// [DF2.0 | Data ID Final Specification](https://docs.google.com/document/d/13ciwTx8lSUfyz1IdETwpxlIVSn1lwYzGtzOBBTpl5Vg/edit?usp=sharing)
-// Byte 7: Data Type - 256 options
-//   - Given the variety of buckets, a data type for the buckets will be useful for correct parsing
-//   - 0x00 = Boolean
-//   - 0x01= String
-//   - 0x02 = Address
-//   - 0x03 = Bytes
-//   - 0x04 = Bundle (Encoded Struct)
-//   - 0x05-0x1F reserved
-//   - 0x20 = Decimal0 (Integer)
-//   - 0x21 = Decimal1 (Float w/ 1 decimal place)
-//   - …
-//   - 0x28 = Decimal8
-//   - …
-//   - 0x32 = Decimal18
-//   - …
-//   - 0x60 = Decimal64
-//   - 0x61-0xFF reserved
-func (id FeedID) GetDataType() uint8 {
-	// Get the 8th byte (index 7) of the feedId
-	return id[7]
-}
-
-// GetDecimals returns the number of decimals for the fe7], derived from the data type
-// Returns false if the data type is not a number
-func GetDecimals(dataType uint8) (uint8, bool) {
-	if dataType >= 0x20 && dataType <= 0x60 {
-		return dataType - 0x20, true
+// Returns `math.NaN()` if report data type not a number, or `math.MaxFloat64` if number doesn't fit in double.
+func toBenchmarkVal(feedID data_feeds.FeedID, val *big.Int) float64 {
+	// Return NaN if the value is nil
+	if val == nil {
+		return math.NaN()
 	}
-	// Else if the data type is not a number
-	return 0, false
+
+	// Get the number of decimals from the feed ID
+	t := feedID.GetDataType()
+	decimals, isNumber := data_feeds.GetDecimals(t)
+
+	// Return NaN if the value is not a number
+	if !isNumber {
+		return math.NaN()
+	}
+
+	// Convert the i192 to a big Float, scaled by the number of decimals
+	valF := new(big.Float).SetInt(val)
+
+	if decimals > 0 {
+		denominator := new(big.Float).SetInt64(int64(math.Pow10(int(decimals))))
+		valF = new(big.Float).Quo(valF, denominator)
+	}
+
+	// Notice: this can overflow, but so far was sufficient for most use-cases
+	// On overflow, returns +/-Inf (valid Prometheus value)
+	valRes, _ := valF.Float64()
+	return valRes
 }

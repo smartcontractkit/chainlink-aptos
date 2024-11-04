@@ -2,7 +2,6 @@ package registry
 
 import (
 	"encoding/base64"
-	"encoding/hex"
 	"math"
 	"math/big"
 	"testing"
@@ -10,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	wt_msg "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/write-target"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/data_feeds"
 )
 
 func TestDecodeAsReportProcessed(t *testing.T) {
@@ -57,7 +57,7 @@ func TestDecodeAsReportProcessed(t *testing.T) {
 					Benchmark:             []uint8{0x4, 0x94, 0x25},
 					Report:                []uint8{0x0, 0x3, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x66, 0xf5, 0xbf, 0x69, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x66, 0xf5, 0xbf, 0x69, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x94, 0x25, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x94, 0x25, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x67, 0x5, 0x1, 0xa9, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x94, 0x25, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x94, 0x25, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x94, 0x25},
 
-					BenchmarkVal: 0x49425,
+					BenchmarkVal: math.NaN(),
 
 					BlockHash:      "0xaa",
 					BlockHeight:    "17",
@@ -69,7 +69,7 @@ func TestDecodeAsReportProcessed(t *testing.T) {
 					Benchmark:             []uint8{0x4, 0x94, 0x25},
 					Report:                []uint8{0x0, 0x3, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x66, 0xf5, 0xbf, 0x69, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x66, 0xf5, 0xbf, 0x69, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x94, 0x25, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x94, 0x25, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x67, 0x5, 0x1, 0xa9, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x94, 0x25, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x94, 0x25, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x94, 0x25},
 
-					BenchmarkVal: 0x49425,
+					BenchmarkVal: 3000.69,
 
 					BlockHash:      "0xaa",
 					BlockHeight:    "17",
@@ -111,6 +111,14 @@ func TestDecodeAsReportProcessed(t *testing.T) {
 				require.Equal(t, len(tt.expected), len(result))
 
 				for i, m := range tt.expected {
+					// Notice: if BenchmarkVal is NaN we can't compare directly
+					if math.IsNaN(m.BenchmarkVal) {
+						require.True(t, math.IsNaN(result[i].BenchmarkVal))
+						// Skip the comparison (nullify the value)
+						m.BenchmarkVal = -1
+						result[i].BenchmarkVal = -1
+					}
+					// Finally, compare the values
 					require.Equal(t, m, *result[i])
 				}
 			}
@@ -118,192 +126,107 @@ func TestDecodeAsReportProcessed(t *testing.T) {
 	}
 }
 
-func TestToInt64(t *testing.T) {
+func TestToBenchmarkVal(t *testing.T) {
+	// Helper function to set a big.Int value (base 10)
+	mustSetString := func(s string) *big.Int {
+		val, _ := new(big.Int).SetString(s, 10)
+		return val
+	}
+
 	tests := []struct {
-		name     string
-		input    *big.Int
-		expected int64
+		name             string
+		feedID           string
+		val              *big.Int
+		expected         float64
+		expectedDecimals uint8
 	}{
 		{
-			name:     "Positive number within int64 range",
-			input:    big.NewInt(1234567890),
-			expected: 1234567890,
+			name:             "Number (price value) with 18 decimals",
+			feedID:           "018e16c39e000032000000000000000000000000000000000000000000000000",
+			val:              big.NewInt(1000000000000000000),
+			expected:         1.0,
+			expectedDecimals: 18,
 		},
 		{
-			name:     "Negative number within int64 range",
-			input:    big.NewInt(-1234567890),
-			expected: -1234567890,
+			name:             "Number (price value) with 8 decimals",
+			feedID:           "01e880c2b3000028000000000000000000000000000000000000000000000000",
+			val:              big.NewInt(1000000000000000000),
+			expected:         10000000000.0,
+			expectedDecimals: 8,
 		},
 		{
-			name:     "Positive number exceeding int64 range",
-			input:    new(big.Int).Add(big.NewInt(math.MaxInt64), big.NewInt(1)),
-			expected: math.MinInt64,
+			name:             "Number (price value) with 18 decimals - feed ID #2",
+			feedID:           "01e880c2b3000132000000000000000000000000000000000000000000000000",
+			val:              big.NewInt(1000000012340000000), // 1 ETH
+			expected:         1.00000001234,
+			expectedDecimals: 18,
 		},
 		{
-			name:     "Negative number exceeding int64 range",
-			input:    new(big.Int).Sub(big.NewInt(math.MinInt64), big.NewInt(1)),
-			expected: math.MinInt64,
+			name:             "Number (24-hour global volume) as integer",
+			feedID:           "01e880c2b3000820000000000000000000000000000000000000000000000000",
+			val:              big.NewInt(1000000000000000000), // 1 ETH
+			expected:         1000000000000000000.0,
+			expectedDecimals: 0,
 		},
 		{
-			name: "Big number example from staging",
-			input: func() *big.Int {
-				n, _ := new(big.Int).SetString("2470739882628720000000", 10)
-				return n
-			}(),
-			expected: math.MinInt64,
+			name:             "Number (price value) with 18 decimals - feed ID #3",
+			feedID:           "018933b5e4001032000000000000000000000000000000000000000000000000",
+			val:              big.NewInt(1000000000000000087), // 1 ETH
+			expected:         1.000000000000000087,
+			expectedDecimals: 18,
+		},
+		{
+			name:             "NaN value (NAV issuer name) as a string",
+			feedID:           "018933b5e4001101000000000000000000000000000000000000000000000000",
+			val:              big.NewInt(1000000000000000000),
+			expected:         math.NaN(),
+			expectedDecimals: 0,
+		},
+		{
+			name:             "NaN value (NAV registry location) as an address",
+			feedID:           "018933b5e4001202000000000000000000000000000000000000000000000000",
+			val:              big.NewInt(1000000000000000000),
+			expected:         math.NaN(),
+			expectedDecimals: 0,
+		},
+		{
+			name:             "Number (price value) with 18 decimals - feed ID #4",
+			feedID:           "011e22d6bf000332000000000000000000000000000000000000000000000000",
+			val:              mustSetString("9990000000000000009"),
+			expected:         9.990000000000000009,
+			expectedDecimals: 18,
+		},
+		{
+			name:             "Number (price value) with 8 decimals - feed ID #2",
+			feedID:           "01a80ff216000328000000000000000000000000000000000000000000000000",
+			val:              mustSetString("9990000000000000009"),
+			expected:         99900000000.00000009,
+			expectedDecimals: 8,
+		},
+		{
+			name:             "Number (price value) with 8 decimals - feed ID #2 - huge number (overflow)",
+			feedID:           "01a80ff216000328000000000000000000000000000000000000000000000000",
+			val:              new(big.Int).Exp(big.NewInt(10), big.NewInt(400), nil), // Very large number
+			expected:         math.Inf(1),                                            // positive infinity
+			expectedDecimals: 8,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := toInt64(tt.input)
-			require.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestGetDecimals(t *testing.T) {
-	tests := []struct {
-		name     string
-		dataType uint8
-		expected uint8
-		isNumber bool
-	}{
-		{
-			name:     "Decimal0 (Integer)",
-			dataType: 0x20,
-			expected: 0,
-			isNumber: true,
-		},
-		{
-			name:     "Decimal8",
-			dataType: 0x28,
-			expected: 8,
-			isNumber: true,
-		},
-		{
-			name:     "Decimal18",
-			dataType: 0x32,
-			expected: 18,
-			isNumber: true,
-		},
-		{
-			name:     "Decimal64",
-			dataType: 0x60,
-			expected: 64,
-			isNumber: true,
-		},
-		{
-			name:     "Non-numeric data type",
-			dataType: 0x01,
-			expected: 0,
-			isNumber: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			decimals, isNumber := GetDecimals(tt.dataType)
-			require.Equal(t, tt.expected, decimals)
-			require.Equal(t, tt.isNumber, isNumber)
-		})
-	}
-}
-
-// Examples: [DF2.0 | Data ID Final Specification](https://docs.google.com/document/d/13ciwTx8lSUfyz1IdETwpxlIVSn1lwYzGtzOBBTpl5Vg/edit?usp=sharing)
-// 0x01 8e16c39e 0000 32 000000000000000000000000000000000000000000000000 = ETH/USD Benchmark Price with 18 decimals
-// 0x01 e880c2b3 0000 28 000000000000000000000000000000000000000000000000 = BTC/USD Benchmark Price with 8 decimals
-// 0x01 e880c2b3 0001 32 000000000000000000000000000000000000000000000000 = BTC/USD Best Bid Price with 18 decimals
-// 0x01 e880c2b3 0008 20 000000000000000000000000000000000000000000000000 = BTC/USD 24-hour global volume as integer
-// 0x01 8933b5e4 0010 32 000000000000000000000000000000000000000000000000 = ARK BTC NAV value with 18 decimals
-// 0x01 8933b5e4 0011 01 000000000000000000000000000000000000000000000000 = ARK BTC NAV issuer name as a string
-// 0x01 8933b5e4 0012 02 000000000000000000000000000000000000000000000000 = ARK BTC NAV registry location as an address
-// 0x01 1e22d6bf 0003 32 000000000000000000000000000000000000000000000000 = X/Y Price with 18 decimals
-// 0x01 a80ff216 0003 28 000000000000000000000000000000000000000000000000 = X/Y Price with 8 decimals
-func TestFeedIDGetDataTypeDecimals(t *testing.T) {
-	tests := []struct {
-		name     string
-		feedId   string
-		expected uint8
-		isNumber bool
-	}{
-		{
-			name:     "ETH/USD Benchmark Price with 18 decimals",
-			feedId:   "018e16c39e000032000000000000000000000000000000000000000000000000",
-			expected: 0x32,
-			isNumber: true,
-		},
-		{
-			name:     "BTC/USD Benchmark Price with 8 decimals",
-			feedId:   "01e880c2b3000028000000000000000000000000000000000000000000000000",
-			expected: 0x28,
-			isNumber: true,
-		},
-		{
-			name:     "BTC/USD Best Bid Price with 18 decimals",
-			feedId:   "01e880c2b3000132000000000000000000000000000000000000000000000000",
-			expected: 0x32,
-			isNumber: true,
-		},
-		{
-			name:     "BTC/USD 24-hour global volume as integer",
-			feedId:   "01e880c2b3000820000000000000000000000000000000000000000000000000",
-			expected: 0x20,
-			isNumber: true,
-		},
-		{
-			name:     "ARK BTC NAV value with 18 decimals",
-			feedId:   "018933b5e4001032000000000000000000000000000000000000000000000000",
-			expected: 0x32,
-			isNumber: true,
-		},
-		{
-			name:     "ARK BTC NAV issuer name as a string",
-			feedId:   "018933b5e4001101000000000000000000000000000000000000000000000000",
-			expected: 0x01,
-			isNumber: false,
-		},
-
-		{
-			name:     "ARK BTC NAV registry location as an address",
-			feedId:   "018933b5e4001202000000000000000000000000000000000000000000000000",
-			expected: 0x02,
-			isNumber: false,
-		},
-
-		{
-			name:     "X/Y Price with 18 decimals",
-			feedId:   "011e22d6bf000332000000000000000000000000000000000000000000000000",
-			expected: 0x32,
-			isNumber: true,
-		},
-
-		{
-			name:     "X/Y Price with 8 decimals",
-			feedId:   "01a80ff216000328000000000000000000000000000000000000000000000000",
-			expected: 0x28,
-			isNumber: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			feedIdBytes, err := hex.DecodeString(tt.feedId)
+			feedID, err := data_feeds.NewFeedIDFromHex(tt.feedID)
 			require.NoError(t, err)
 
-			var feedIdBytes32 [32]byte
-			copy(feedIdBytes32[:], feedIdBytes)
+			decimals, isNumber := data_feeds.GetDecimals(feedID.GetDataType())
 
-			dataType := FeedID(feedIdBytes32).GetDataType()
-			require.Equal(t, tt.expected, dataType)
-
-			decimals, isNumber := GetDecimals(dataType)
-			require.Equal(t, tt.isNumber, isNumber)
-
-			if isNumber {
-				require.Equal(t, tt.expected-0x20, decimals)
+			result := toBenchmarkVal(feedID, tt.val)
+			if math.IsNaN(tt.expected) {
+				require.False(t, isNumber)
+				require.True(t, math.IsNaN(result))
 			} else {
-				require.Equal(t, uint8(0), decimals)
+				require.True(t, isNumber)
+				require.Equal(t, tt.expected, result)
+				require.Equal(t, tt.expectedDecimals, decimals)
 			}
 		})
 	}

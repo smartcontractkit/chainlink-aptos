@@ -62,7 +62,7 @@ type Metrics struct {
 	feedUpdated struct {
 		count                 metric.Int64Counter
 		observationsTimestamp metric.Int64Gauge
-		benchmark             metric.Int64Gauge
+		benchmark             metric.Float64Gauge
 		blockTimestamp        metric.Int64Gauge
 		blockNumber           metric.Int64Gauge
 	}
@@ -87,7 +87,7 @@ func NewMetrics() (*Metrics, error) {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
 
-	m.feedUpdated.benchmark, err = feedUpdated.benchmark.NewInt64Gauge(meter)
+	m.feedUpdated.benchmark, err = feedUpdated.benchmark.NewFloat64Gauge(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
