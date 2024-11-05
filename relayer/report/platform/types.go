@@ -32,6 +32,11 @@ func Decode(rawReport []byte) (*Report, error) {
 	}
 	report.Version = uint32(versionByte)
 
+	// Notice: we only support version 1 currently
+	if report.Version != 1 {
+		return nil, fmt.Errorf("invalid report version: %d", report.Version)
+	}
+
 	// Decode workflow_execution_id
 	var workflowExecutionIDBytes [32]byte
 	if _, err := buf.Read(workflowExecutionIDBytes[:]); err != nil {

@@ -596,21 +596,20 @@ func (r RetryReason) String() string {
 }
 
 func (a *AptosTxm) maybeRetry(unconfirmedTx *UnconfirmedTx, retryReason RetryReason) bool {
-		if unconfirmedTx.Tx.Attempt >= a.config.MaxTxRetryAttempts {
-			a.logger.Errorw("tx reached max num of retries and will be discarded", "txID", unconfirmedTx.Tx.ID, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
-			return false
-		}
+	if unconfirmedTx.Tx.Attempt >= a.config.MaxTxRetryAttempts {
+		a.logger.Errorw("tx reached max num of retries and will be discarded", "txID", unconfirmedTx.Tx.ID, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
+		return false
+	}
 
-		a.logger.Debugw("retrying tx", "txID", unconfirmedTx.Tx.ID, "attempt", unconfirmedTx.Tx.Attempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
-		select {
-		case a.broadcastChan <- unconfirmedTx.Tx.ID:
-		default:
-			a.logger.Errorw("failed to enqueue tx for rebroadcast", "txID", unconfirmedTx.Tx.ID, "attempt", unconfirmedTx.Tx.Attempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
-		}
+	a.logger.Debugw("retrying tx", "txID", unconfirmedTx.Tx.ID, "attempt", unconfirmedTx.Tx.Attempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
+	select {
+	case a.broadcastChan <- unconfirmedTx.Tx.ID:
+	default:
+		a.logger.Errorw("failed to enqueue tx for rebroadcast", "txID", unconfirmedTx.Tx.ID, "attempt", unconfirmedTx.Tx.Attempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
+	}
 
-		return true
+	return true
 }
-
 
 func (a *AptosTxm) InflightCount() (int, int) {
 	return len(a.broadcastChan), a.accountStore.GetTotalInflightCount()
