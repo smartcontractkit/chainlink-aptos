@@ -44,7 +44,8 @@ module keystone::storage {
     }
 
     /// Registers an account and callback for future dispatching, and a proof type `T`
-    /// for the callback function to retrieve arguments.
+    /// for the callback function to retrieve arguments. Note that the function will
+    /// abort if the account has already been registered.
     ///
     /// The address of `account` is used to represent the callback by the dispatcher.
     /// See the `dispatch` function in `forwarder.move`.
