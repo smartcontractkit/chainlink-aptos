@@ -16,6 +16,7 @@ module keystone::storage {
     friend keystone::forwarder;
 
     const E_UNKNOWN_RECEIVER: u64 = 1;
+    const E_INVALID_METADATA_LENGTH: u64 = 2;
 
     struct Entry has key, store, drop {
         metadata: Object<Metadata>,
@@ -125,6 +126,8 @@ module keystone::storage {
         // workflow_name            // offset 32, size 10
         // workflow_owner           // offset 42, size 20
         // report_name              // offset 62, size  2
+
+        assert!(vector::length(&metadata) == 64, E_INVALID_METADATA_LENGTH);
 
         let workflow_cid = vector::slice(&metadata, 0, 32);
         let workflow_name = vector::slice(&metadata, 32, 42);
