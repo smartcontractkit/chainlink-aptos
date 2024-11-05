@@ -43,8 +43,15 @@ module keystone::storage {
         report_name: vector<u8>
     }
 
-    /// Register a `T` to callback. Providing an instance of `T` guarantees that only the
-    /// originating module can call `register` for that type.
+    /// Registers an account and callback for future dispatching, and a proof type `T`
+    /// for the callback function to retrieve arguments.
+    ///
+    /// The address of `account` is used to represent the callback by the dispatcher.
+    /// See the `dispatch` function in `forwarder.move`.
+    ///
+    /// Providing an instance of `T` guarantees that only a privileged module can call `register` for that type.
+    /// The type `T` should ideally only have the `drop` ability and no other abilities to prevent
+    /// copying and persisting in global storage.
     public fun register<T: drop>(
         account: &signer, callback: FunctionInfo, _proof: T
     ) acquires Dispatcher {

@@ -289,8 +289,12 @@ module data_feeds::registry {
         aptos_std::from_bcs::to_u256(data)
     }
 
+    /// Serves as a proof type for the dispatch engine, used to authenticate and handle incoming message callbacks.
+    /// This identifier links callback registration with the `on_report` event and enables secure retrieval of callback data.
+    /// Only has the `drop` ability to prevent copying and persisting in global storage.
     struct OnReceive has drop {}
 
+    /// Creates a new OnReceive object.
     inline fun new_proof(): OnReceive {
         OnReceive {}
     }
