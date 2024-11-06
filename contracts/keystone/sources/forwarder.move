@@ -85,6 +85,8 @@ module keystone::forwarder {
     }
 
     fun init_module(publisher: &signer) {
+        assert!(signer::address_of(publisher) == @keystone, 1);
+
         let constructor_ref = object::create_named_object(
             publisher, APP_OBJECT_SEED
         );
