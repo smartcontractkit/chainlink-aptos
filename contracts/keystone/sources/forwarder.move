@@ -202,7 +202,7 @@ module keystone::forwarder {
         );
     }
 
-    public entry fun report(
+    entry fun report(
         transmitter: &signer,
         receiver: address,
         raw_report: vector<u8>,
