@@ -166,7 +166,7 @@ func toBenchmarkVal(feedID data_feeds.FeedID, val *big.Int) float64 {
 	valF := new(big.Float).SetInt(val)
 
 	if decimals > 0 {
-		denominator := new(big.Float).SetInt64(int64(math.Pow10(int(decimals))))
+		denominator := big.NewFloat(math.Pow10(int(decimals)))
 		valF = new(big.Float).Quo(valF, denominator)
 	}
 
