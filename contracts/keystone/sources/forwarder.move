@@ -213,7 +213,7 @@ module keystone::forwarder {
         );
 
         let (metadata, data) =
-            validate_report(transmitter, receiver, raw_report, signatures);
+            validate_and_process_report(transmitter, receiver, raw_report, signatures);
         // NOTE: unable to catch failure here
         dispatch(receiver, metadata, data);
     }
@@ -230,7 +230,7 @@ module keystone::forwarder {
         aptos_std::from_bcs::to_u32(data)
     }
 
-    fun validate_report(
+    fun validate_and_process_report(
         transmitter: &signer,
         receiver: address,
         raw_report: vector<u8>,
@@ -501,7 +501,7 @@ module keystone::forwarder {
         let signatures = sign_report(&config, report, report_context);
 
         // call entrypoint
-        validate_report(owner, signer::address_of(publisher), raw_report, signatures);
+        validate_and_process_report(owner, signer::address_of(publisher), raw_report, signatures);
     }
 
     #[test(owner = @owner, publisher = @keystone, new_owner = @0xbeef)]
