@@ -35,7 +35,10 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 
 	// Iterate over the underlying Mercury reports
 	for _, rf := range *reports {
-		// TODO: should we check the DF report feed ID to check if we expect a Mercury report here? (e.g., Byte 0: ID Format = 0x01)
+		// Notice: we assume that Mercury will be the only source of reports used for Data Feeds,
+		// at least for the foreseeable future. If this assumption changes, we should check the
+		// the report type here (potentially encoded in the feed ID) and decode accordingly.
+
 		// Decode the common Mercury report
 		rm, err := mercury_vX.Decode(rf.Data)
 		if err != nil {
@@ -143,7 +146,7 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 // This is the largest type Prometheus supports, and this conversion can overflow but so far was sufficient
 // for most use-cases. For big numbers, benchmark bytes should be used instead.
 //
-// Returns `math.NaN()` if report data type not a number, or `math.MaxFloat64` if number doesn't fit in double.
+// Returns `math.NaN()` if report data type not a number, or `+/-Inf` if number doesn't fit in double.
 func toBenchmarkVal(feedID data_feeds.FeedID, val *big.Int) float64 {
 	// Return NaN if the value is nil
 	if val == nil {

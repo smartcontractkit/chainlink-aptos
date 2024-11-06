@@ -36,7 +36,7 @@ type FeedUpdated struct {
 	// This is the largest type Prometheus supports, and this conversion can overflow but so far was sufficient
 	// for most use-cases. For big numbers, benchmark bytes should be used instead.
 	//
-	// Set as `math.NaN()` if report data type not a number, or `math.MaxFloat64` if number doesn't fit in double.
+	// Set as `math.NaN()` if report data type not a number, or `+/-Inf` if number doesn't fit in double.
 	BenchmarkVal float64 `protobuf:"fixed64,5,opt,name=benchmark_val,json=benchmarkVal,proto3" json:"benchmark_val,omitempty"`
 	// Head data - when was the event produced on-chain
 	BlockHash      string `protobuf:"bytes,6,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty"`
