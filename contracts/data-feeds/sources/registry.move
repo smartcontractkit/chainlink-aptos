@@ -196,26 +196,26 @@ module data_feeds::registry {
             error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS)
         );
 
-        vector::zip(
-            feed_ids,
-            descriptions,
+        vector::zip_ref(
+            &feed_ids,
+            &descriptions,
             |feed_id, description| {
                 assert!(
-                    !simple_map::contains_key(&registry.feeds, &feed_id),
+                    !simple_map::contains_key(&registry.feeds, feed_id),
                     error::invalid_argument(EFEED_EXISTS)
                 );
 
                 let feed = Feed {
-                    description,
+                    description: *description,
                     config_id,
                     benchmark: 0,
                     report: vector::empty(),
                     observation_timestamp: 0
                 };
-                simple_map::add(&mut registry.feeds, feed_id, feed);
+                simple_map::add(&mut registry.feeds, *feed_id, feed);
 
                 event::emit(
-                    FeedSet { feed_id, description, config_id }
+                    FeedSet { feed_id: *feed_id, description: *description, config_id }
                 );
             }
         );
@@ -252,20 +252,20 @@ module data_feeds::registry {
             error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS)
         );
 
-        vector::zip(
-            feed_ids,
-            descriptions,
+        vector::zip_ref(
+            &feed_ids,
+            &descriptions,
             |feed_id, description| {
                 assert!(
-                    simple_map::contains_key(&registry.feeds, &feed_id),
+                    simple_map::contains_key(&registry.feeds, feed_id),
                     error::invalid_argument(EFEED_NOT_CONFIGURED)
                 );
 
-                let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
-                feed.description = description;
+                let feed = simple_map::borrow_mut(&mut registry.feeds, feed_id);
+                feed.description = *description;
 
                 event::emit(
-                    FeedDescriptionUpdated { feed_id, description }
+                    FeedDescriptionUpdated { feed_id: *feed_id, description: *description }
                 );
             }
         );
@@ -319,11 +319,11 @@ module data_feeds::registry {
         );
 
         let (feed_ids, reports) = parse_raw_report(data);
-        vector::zip(
-            feed_ids,
-            reports,
+        vector::zip_ref(
+            &feed_ids,
+            &reports,
             |feed_id, report| {
-                perform_update(registry, feed_id, report);
+                perform_update(registry, *feed_id, *report);
             }
         );
 
