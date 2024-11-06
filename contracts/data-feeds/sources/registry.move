@@ -271,19 +271,19 @@ module data_feeds::registry {
         );
     }
 
-    fun to_u16be(data: vector<u8>): u16 {
+    inline fun to_u16be(data: vector<u8>): u16 {
         // reverse big endian to little endian
         vector::reverse(&mut data);
         aptos_std::from_bcs::to_u16(data)
     }
 
-    fun to_u32be(data: vector<u8>): u32 {
+    inline fun to_u32be(data: vector<u8>): u32 {
         // reverse big endian to little endian
         vector::reverse(&mut data);
         aptos_std::from_bcs::to_u32(data)
     }
 
-    fun to_u256be(data: vector<u8>): u256 {
+    inline fun to_u256be(data: vector<u8>): u256 {
         // reverse big endian to little endian
         vector::reverse(&mut data);
         aptos_std::from_bcs::to_u256(data)
