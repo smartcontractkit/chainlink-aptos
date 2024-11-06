@@ -83,10 +83,10 @@ module keystone::storage {
     /// Insert into this module as the callback needs to retrieve and avoid a cyclical dependency:
     /// engine -> storage and then engine -> callback -> storage
     public(friend) fun insert(
-        address: address, meta: vector<u8>, data: vector<u8>
+        receiver: address, meta: vector<u8>, data: vector<u8>
     ): Object<Metadata> acquires Dispatcher {
         let dispatcher = borrow_global<Dispatcher>(@keystone);
-        let typeinfo = *table::borrow(&dispatcher.address_to_typeinfo, address);
+        let typeinfo = *table::borrow(&dispatcher.address_to_typeinfo, receiver);
         assert!(table::contains(&dispatcher.dispatcher, typeinfo), E_UNKNOWN_RECEIVER);
         let Entry { metadata, extend_ref } =
             table::borrow(&dispatcher.dispatcher, typeinfo);

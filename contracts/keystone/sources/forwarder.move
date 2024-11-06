@@ -189,9 +189,9 @@ module keystone::forwarder {
 
     /// The dispatch call knows both storage and indirectly the callback, thus the separate module.
     fun dispatch(
-        address: address, metadata: vector<u8>, data: vector<u8>
+        receiver: address, metadata: vector<u8>, data: vector<u8>
     ) {
-        let meta = keystone::storage::insert(address, metadata, data);
+        let meta = keystone::storage::insert(receiver, metadata, data);
         aptos_framework::dispatchable_fungible_asset::derived_supply(meta);
         let obj_address =
             object::object_address<aptos_framework::fungible_asset::Metadata>(&meta);
@@ -418,12 +418,12 @@ module keystone::forwarder {
         let signatures = vector[];
         let required_signatures = config.f + 1;
         for (i in 0..required_signatures) {
-            let signer = vector::borrow(&config.signers, (i as u64));
+            let config_signer = vector::borrow(&config.signers, (i as u64));
             let public_key =
                 ed25519::new_unvalidated_public_key_from_bytes(
                     *vector::borrow(&config.oracles, (i as u64))
                 );
-            let sig = ed25519::sign_arbitrary_bytes(signer, msg);
+            let sig = ed25519::sign_arbitrary_bytes(config_signer, msg);
             vector::push_back(
                 &mut signatures,
                 Signature { sig, public_key }
