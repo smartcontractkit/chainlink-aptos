@@ -17,7 +17,7 @@ type ChainInfo struct {
 	NetworkNameFull string
 }
 
-// TODO: Add chain info to use for execution context
+// messageBuilder is a helper component to build monitoring messages
 type messageBuilder struct {
 	ChainInfo ChainInfo
 	CapInfo   capabilities.CapabilityInfo
@@ -64,7 +64,10 @@ func (m *messageBuilder) buildWriteError(i *requestInfo, code uint32, summary, c
 		ReportId:  uint32(i.reportInfo.reportID),
 
 		// Execution Context - Chain
-		// TODO: Add chain info
+		MetaChainFamilyName: m.ChainInfo.ChainFamilyName,
+		MetaChainId:         m.ChainInfo.ChainID,
+		MetaNetworkName:     m.ChainInfo.NetworkName,
+		MetaNetworkNameFull: m.ChainInfo.NetworkNameFull,
 
 		// Execution Context - Workflow (capabilities.RequestMetadata)
 		MetaWorkflowId:               i.request.Metadata.WorkflowID,
@@ -89,7 +92,10 @@ func (m *messageBuilder) buildWriteInitiated(i *requestInfo) *wt.WriteInitiated 
 		ReportId:  uint32(i.reportInfo.reportID),
 
 		// Execution Context - Chain
-		// TODO: Add chain info
+		MetaChainFamilyName: m.ChainInfo.ChainFamilyName,
+		MetaChainId:         m.ChainInfo.ChainID,
+		MetaNetworkName:     m.ChainInfo.NetworkName,
+		MetaNetworkNameFull: m.ChainInfo.NetworkNameFull,
 
 		// Execution Context - Workflow (capabilities.RequestMetadata)
 		MetaWorkflowId:               i.request.Metadata.WorkflowID,
@@ -115,7 +121,10 @@ func (m *messageBuilder) buildWriteSkipped(i *requestInfo, reason string) *wt.Wr
 		Reason:    reason,
 
 		// Execution Context - Chain
-		// TODO: Add chain info
+		MetaChainFamilyName: m.ChainInfo.ChainFamilyName,
+		MetaChainId:         m.ChainInfo.ChainID,
+		MetaNetworkName:     m.ChainInfo.NetworkName,
+		MetaNetworkNameFull: m.ChainInfo.NetworkNameFull,
 
 		// Execution Context - Workflow (capabilities.RequestMetadata)
 		MetaWorkflowId:               i.request.Metadata.WorkflowID,
@@ -146,7 +155,10 @@ func (m *messageBuilder) buildWriteSent(i *requestInfo, head types.Head, txID st
 		BlockTimestamp: head.Timestamp,
 
 		// Execution Context - Chain
-		// TODO: Add chain info
+		MetaChainFamilyName: m.ChainInfo.ChainFamilyName,
+		MetaChainId:         m.ChainInfo.ChainID,
+		MetaNetworkName:     m.ChainInfo.NetworkName,
+		MetaNetworkNameFull: m.ChainInfo.NetworkNameFull,
 
 		// Execution Context - Workflow (capabilities.RequestMetadata)
 		MetaWorkflowId:               i.request.Metadata.WorkflowID,
@@ -183,7 +195,10 @@ func (m *messageBuilder) buildWriteConfirmed(i *requestInfo, head types.Head) *w
 		Success:     i.reportTransmissionState.Success,
 
 		// Execution Context - Chain
-		// TODO: Add chain info
+		MetaChainFamilyName: m.ChainInfo.ChainFamilyName,
+		MetaChainId:         m.ChainInfo.ChainID,
+		MetaNetworkName:     m.ChainInfo.NetworkName,
+		MetaNetworkNameFull: m.ChainInfo.NetworkNameFull,
 
 		// Execution Context - Workflow (capabilities.RequestMetadata)
 		MetaWorkflowId:               i.request.Metadata.WorkflowID,
