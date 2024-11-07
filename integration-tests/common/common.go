@@ -84,7 +84,7 @@ consensus:
      encoder_config:
        abi: "(bytes32 FeedID, bytes RawReport)[] Reports"
 targets:
- - id: "write-target_aptos-localnet@1.0.0"
+ - id: "write_aptos-localnet@1.0.0"
    inputs:
      signed_report: "$(aptos_feeds.outputs)" # TODO: annotate with network if not shared across networks
    config:
