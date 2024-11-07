@@ -23,7 +23,9 @@ AllowOrigins = '*'
 
 [[Aptos]]
 Enabled = true
-ChainID = "localnet"
+ChainID = "4"
+NetworkName = "localnet" # optional
+NetworkNameFull = "aptos-localnet" # optional, CLL naming convention
 
 [Aptos.Workflow]
 ForwarderAddress = "$KEYSTONE_ADDR"

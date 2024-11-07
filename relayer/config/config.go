@@ -17,6 +17,9 @@ import (
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/write_target"
 )
 
+// Name of the chain family (e.g., "ethereum", "solana", "aptos")
+const ChainFamilyName = "aptos"
+
 var DefaultConfigSet = ConfigSet{
 	TransactionManager: txm.DefaultConfigSet,
 	BalanceMonitor: monitor.Config{
@@ -42,18 +45,6 @@ type Chain struct {
 	BalanceMonitor     *monitor.Config
 	WriteTargetCap     *write_target.Config
 	Workflow           WorkflowConfig
-}
-
-func (c *Chain) SetDefaults() {
-	if c.TransactionManager == nil {
-		c.TransactionManager = &DefaultConfigSet.TransactionManager
-	}
-	if c.BalanceMonitor == nil {
-		c.BalanceMonitor = &DefaultConfigSet.BalanceMonitor
-	}
-	if c.WriteTargetCap == nil {
-		c.WriteTargetCap = &DefaultConfigSet.WriteTargetCap
-	}
 }
 
 type Node struct {
@@ -134,8 +125,15 @@ func (cs TOMLConfigs) validateKeys() (err error) {
 type TOMLConfig struct {
 	// Do not access directly. Use [IsEnabled]
 	Enabled bool
-	ChainID string
+
+	// Chain configuration
+	ChainID         string
+	NetworkName     string
+	NetworkNameFull string
+
+	// Chain-specific components configuration
 	Chain
+
 	Nodes Nodes
 }
 
@@ -166,11 +164,42 @@ func (c *TOMLConfig) IsEnabled() bool {
 }
 
 func (c *TOMLConfig) SetFrom(f *TOMLConfig) {
-	c.ChainID = f.ChainID
 	c.Enabled = f.Enabled
+
+	c.ChainID = f.ChainID
+	c.NetworkName = f.NetworkName
+	c.NetworkNameFull = f.NetworkNameFull
 
 	setFromChain(&c.Chain, &f.Chain)
 	c.Nodes.SetFrom(&f.Nodes)
+}
+
+func (c *TOMLConfig) SetDefaults() {
+	if c.TransactionManager == nil {
+		c.TransactionManager = &DefaultConfigSet.TransactionManager
+	}
+	if c.BalanceMonitor == nil {
+		c.BalanceMonitor = &DefaultConfigSet.BalanceMonitor
+	}
+	if c.WriteTargetCap == nil {
+		c.WriteTargetCap = &DefaultConfigSet.WriteTargetCap
+	}
+
+	// Set network name defaults
+	if c.NetworkName == "" {
+		// Check if known network by chain ID
+		network, err := GetNetworkConfig(c.ChainID)
+		if err == nil {
+			c.NetworkName = network.Name
+		} else {
+			c.NetworkName = "unknown"
+		}
+	}
+
+	// Set network name full defaults
+	if c.NetworkNameFull == "" {
+		c.NetworkNameFull = fmt.Sprintf("%s-%s", ChainFamilyName, c.NetworkName)
+	}
 }
 
 func setFromChain(c, f *Chain) {
@@ -189,6 +218,14 @@ func setFromChain(c, f *Chain) {
 func (c *TOMLConfig) ValidateConfig() (err error) {
 	if c.ChainID == "" {
 		err = errors.Join(err, config.ErrEmpty{Name: "ChainID", Msg: "required for all chains"})
+	}
+
+	// If network name is set, ensure it matches a known network if chain ID is known
+	if c.NetworkName != "" {
+		network, err := GetNetworkConfig(c.ChainID)
+		if err == nil && c.NetworkName != network.Name {
+			err = errors.Join(err, config.ErrInvalid{Name: "NetworkName", Msg: "does not match known network for chain ID"})
+		}
 	}
 
 	if len(c.Nodes) == 0 {
