@@ -7,9 +7,10 @@ import (
 // TODO: Refactor as a proto referenced from the other proto files (telemetry messages)
 type ExecutionMetadata struct {
 	// Execution Context - Chain
-	ChainName      string
-	NetworkName    string
-	NetworkChainId string
+	ChainFamilyName string
+	ChainId         string
+	NetworkName     string
+	NetworkNameFull string
 	// Execution Context - Workflow (capabilities.RequestMetadata)
 	WorkflowId               string
 	WorkflowOwner            string
@@ -27,9 +28,10 @@ type ExecutionMetadata struct {
 func (m ExecutionMetadata) Attributes() []attribute.KeyValue {
 	return []attribute.KeyValue{
 		// Execution Context - Chain
-		attribute.String("chain_name", valOrUnknown(m.ChainName)),
+		attribute.String("chain_family_name", valOrUnknown(m.ChainFamilyName)),
+		attribute.String("chain_id", valOrUnknown(m.ChainId)),
 		attribute.String("network_name", valOrUnknown(m.NetworkName)),
-		attribute.String("network_chain_id", valOrUnknown(m.NetworkChainId)),
+		attribute.String("network_name_full", valOrUnknown(m.NetworkNameFull)),
 		// Execution Context - Workflow (capabilities.RequestMetadata)
 		attribute.String("workflow_id", valOrUnknown(m.WorkflowId)),
 		attribute.String("workflow_owner", valOrUnknown(m.WorkflowOwner)),

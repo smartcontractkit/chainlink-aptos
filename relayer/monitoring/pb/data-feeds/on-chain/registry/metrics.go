@@ -135,9 +135,10 @@ func (m *Metrics) OnFeedUpdated(ctx context.Context, msg *FeedUpdated, attrKVs .
 func (m *FeedUpdated) Attributes() []attribute.KeyValue {
 	context := utils.ExecutionMetadata{
 		// Execution Context - Chain
-		ChainName:      m.MetaChainName,
-		NetworkName:    m.MetaNetworkName,
-		NetworkChainId: m.MetaNetworkChainId,
+		ChainFamilyName: m.MetaChainFamilyName,
+		ChainId:         m.MetaChainId,
+		NetworkName:     m.MetaNetworkName,
+		NetworkNameFull: m.MetaNetworkNameFull,
 		// Execution Context - Workflow (capabilities.RequestMetadata)
 		WorkflowId:               m.MetaWorkflowId,
 		WorkflowOwner:            m.MetaWorkflowOwner,

@@ -237,9 +237,10 @@ func (m *Metrics) OnWriteConfirmed(ctx context.Context, msg *WriteConfirmed, att
 func (m *WriteInitiated) Attributes() []attribute.KeyValue {
 	context := utils.ExecutionMetadata{
 		// Execution Context - Chain
-		ChainName:      m.MetaChainName,
-		NetworkName:    m.MetaNetworkName,
-		NetworkChainId: m.MetaNetworkChainId,
+		ChainFamilyName: m.MetaChainFamilyName,
+		ChainId:         m.MetaChainId,
+		NetworkName:     m.MetaNetworkName,
+		NetworkNameFull: m.MetaNetworkNameFull,
 		// Execution Context - Workflow (capabilities.RequestMetadata)
 		WorkflowId:               m.MetaWorkflowId,
 		WorkflowOwner:            m.MetaWorkflowOwner,
@@ -267,9 +268,10 @@ func (m *WriteInitiated) Attributes() []attribute.KeyValue {
 func (m *WriteError) Attributes() []attribute.KeyValue {
 	context := utils.ExecutionMetadata{
 		// Execution Context - Chain
-		ChainName:      m.MetaChainName,
-		NetworkName:    m.MetaNetworkName,
-		NetworkChainId: m.MetaNetworkChainId,
+		ChainFamilyName: m.MetaChainFamilyName,
+		ChainId:         m.MetaChainId,
+		NetworkName:     m.MetaNetworkName,
+		NetworkNameFull: m.MetaNetworkNameFull,
 		// Execution Context - Workflow (capabilities.RequestMetadata)
 		WorkflowId:               m.MetaWorkflowId,
 		WorkflowOwner:            m.MetaWorkflowOwner,
@@ -300,9 +302,10 @@ func (m *WriteError) Attributes() []attribute.KeyValue {
 func (m *WriteSent) Attributes() []attribute.KeyValue {
 	context := utils.ExecutionMetadata{
 		// Execution Context - Chain
-		ChainName:      m.MetaChainName,
-		NetworkName:    m.MetaNetworkName,
-		NetworkChainId: m.MetaNetworkChainId,
+		ChainFamilyName: m.MetaChainFamilyName,
+		ChainId:         m.MetaChainId,
+		NetworkName:     m.MetaNetworkName,
+		NetworkNameFull: m.MetaNetworkNameFull,
 		// Execution Context - Workflow (capabilities.RequestMetadata)
 		WorkflowId:               m.MetaWorkflowId,
 		WorkflowOwner:            m.MetaWorkflowOwner,
@@ -330,9 +333,10 @@ func (m *WriteSent) Attributes() []attribute.KeyValue {
 func (m *WriteConfirmed) Attributes() []attribute.KeyValue {
 	context := utils.ExecutionMetadata{
 		// Execution Context - Chain
-		ChainName:      m.MetaChainName,
-		NetworkName:    m.MetaNetworkName,
-		NetworkChainId: m.MetaNetworkChainId,
+		ChainFamilyName: m.MetaChainFamilyName,
+		ChainId:         m.MetaChainId,
+		NetworkName:     m.MetaNetworkName,
+		NetworkNameFull: m.MetaNetworkNameFull,
 		// Execution Context - Workflow (capabilities.RequestMetadata)
 		WorkflowId:               m.MetaWorkflowId,
 		WorkflowOwner:            m.MetaWorkflowOwner,

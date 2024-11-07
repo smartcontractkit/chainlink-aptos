@@ -104,9 +104,10 @@ func (m *Metrics) OnReportProcessed(ctx context.Context, msg *ReportProcessed, a
 func (m *ReportProcessed) Attributes() []attribute.KeyValue {
 	context := utils.ExecutionMetadata{
 		// Execution Context - Chain
-		ChainName:      m.MetaChainName,
-		NetworkName:    m.MetaNetworkName,
-		NetworkChainId: m.MetaNetworkChainId,
+		ChainFamilyName: m.MetaChainFamilyName,
+		ChainId:         m.MetaChainId,
+		NetworkName:     m.MetaNetworkName,
+		NetworkNameFull: m.MetaNetworkNameFull,
 		// Execution Context - Workflow (capabilities.RequestMetadata)
 		WorkflowId:               m.MetaWorkflowId,
 		WorkflowOwner:            m.MetaWorkflowOwner,

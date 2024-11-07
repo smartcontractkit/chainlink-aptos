@@ -8,6 +8,7 @@ import (
 	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/write-target"
 )
 
+// TODO: Add chain info to use for execution context
 type messageBuilder struct{}
 
 func (m *messageBuilder) buildWriteError(i *requestInfo, code uint32, summary, cause string) *wt.WriteError {

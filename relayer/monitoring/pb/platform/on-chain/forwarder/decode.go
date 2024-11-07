@@ -38,9 +38,10 @@ func DecodeAsReportProcessed(m *wt_msg.WriteConfirmed) (*ReportProcessed, error)
 		BlockTimestamp: m.BlockTimestamp,
 
 		// Execution Context - Chain
-		MetaChainName:      m.MetaChainName,
-		MetaNetworkName:    m.MetaNetworkName,
-		MetaNetworkChainId: m.MetaNetworkChainId,
+		MetaChainFamilyName: m.MetaChainFamilyName,
+		MetaChainId:         m.MetaChainId,
+		MetaNetworkName:     m.MetaNetworkName,
+		MetaNetworkNameFull: m.MetaNetworkNameFull,
 
 		// Execution Context - Workflow (capabilities.RequestMetadata)
 		MetaWorkflowId:               m.MetaWorkflowId,
