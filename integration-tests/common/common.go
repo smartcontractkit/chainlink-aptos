@@ -84,9 +84,9 @@ consensus:
      encoder_config:
        abi: "(bytes32 FeedID, bytes RawReport)[] Reports"
 targets:
- - id: "write_aptos@1.0.0" # TODO: annotate with devnet
+ - id: "write-target_aptos-localnet@1.0.0"
    inputs:
-     signed_report: "$(aptos_feeds.outputs)" # TODO: annotate with devnet
+     signed_report: "$(aptos_feeds.outputs)" # TODO: annotate with network if not shared across networks
    config:
      address: "%s"
      deltaStage: "45s"

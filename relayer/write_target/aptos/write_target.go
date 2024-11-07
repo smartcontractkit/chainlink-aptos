@@ -22,18 +22,22 @@ import (
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/write_target"
 )
 
+const version = "1.0.0"
+
 func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Logger) (capabilities.TargetCapability, error) {
-	// generate ID based on chain selector
-	// id := fmt.Sprintf("write_%v@1.0.0", chain.ID())
-	// chainName, err := chainselectors.NameFromChainId(chain.ID().Uint64())
-	// if err == nil {
-	// 	id = fmt.Sprintf("write_%v@1.0.0", chainName)
-	// }
-
-	id := fmt.Sprintf("write_aptos@1.0.0")
-	lggr = logger.Named(lggr, id)
-
 	config := chain.Config()
+
+	// TODO: generate ID based on chain selector (we're currently using Aptos Go SDK to get name for chain ID)
+	// chainName, err := chainselectors.NameFromChainId(chain.ID().Uint64())
+
+	// Construct the ID for the WT (e.g., "write-target_aptos-localnet@1.0.0")
+	id, err := write_target.NewWriteTargetID(aptosconfig.ChainFamilyName, config.NetworkName, version)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create write target ID: %+w", err)
+	}
+
+	// All subcomponents constructed by this WT will use the same logger
+	lggr = logger.Named(lggr, id)
 
 	client, err := chain.GetClient()
 	if err != nil {
@@ -95,9 +99,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 			},
 		},
 	})
-	// if err != nil {
-	// 	return nil, err
-	// }
+
 	err = cr.Bind(ctx, []commontypes.BoundContract{{
 		Address: config.Workflow.ForwarderAddress,
 		Name:    "forwarder",

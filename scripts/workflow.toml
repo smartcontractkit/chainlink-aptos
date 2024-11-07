@@ -38,9 +38,9 @@ consensus:
        # abi: "(bytes32 FeedID, uint224 Price, uint32 Timestamp)[] Reports"
        abi: "(bytes32 FeedID, bytes RawReport)[] Reports"
 targets:
- - id: "write_aptos@1.0.0" # TODO: annotate with devnet
+ - id: "write-target_aptos-localnet@1.0.0"
    inputs:
-     signed_report: "$(aptos_feeds.outputs)" # TODO: annotate with devnet
+     signed_report: "$(aptos_feeds.outputs)" # TODO: annotate with network if not shared across networks
    config:
      # TODO: should be replaced with a variable which is populated at setup time
      address: "0x580846c1c1f72fecd6e1d13099b9044f3d0293c556417cd7889908277d5ebc6c"

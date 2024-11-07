@@ -94,16 +94,25 @@ type TransmissionState struct {
 	Success     bool
 }
 
+// NewWriteTargetID returns the capability ID for the write target
+func NewWriteTargetID(chainFamilyName, networkName, version string) (string, error) {
+	// Input args should not be empty
+	if chainFamilyName == "" || networkName == "" || version == "" {
+		return "", fmt.Errorf("invalid input: chainFamilyName, networkName, and version must not be empty")
+	}
+
+	return fmt.Sprintf("%s_%s-%s@%s", CapabilityName, chainFamilyName, networkName, version), nil
+}
+
 // TODO: opts.Config input is not validated for sanity
 func NewWriteTarget(opts WriteTargetOpts) capabilities.TargetCapability {
 	capInfo := capabilities.MustNewCapabilityInfo(opts.ID, capabilities.CapabilityTypeTarget, CapabilityName)
-	selfLogger := logger.Named(opts.Logger, CapabilityName)
 
 	return &writeTarget{
 		capInfo,
 		opts.Config,
 		opts.ChainInfo,
-		selfLogger,
+		opts.Logger,
 		opts.Beholder,
 		opts.ChainService,
 		opts.ContractReader,
