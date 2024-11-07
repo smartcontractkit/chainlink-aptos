@@ -12,6 +12,7 @@ import (
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chainreader"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chainwriter"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
+	aptosconfig "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/config"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
@@ -149,11 +150,21 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 		return nil, fmt.Errorf("failed to get transmitter: %+w", err)
 	}
 
+	// Construct the chain information from the config
+	chainInfo := write_target.ChainInfo{
+		ChainFamilyName: aptosconfig.ChainFamilyName, // static for this plugin
+		ChainID:         config.ChainID,
+		NetworkName:     config.NetworkName,
+		NetworkNameFull: config.NetworkNameFull,
+	}
+
 	// Create the WT capability
 	opts := write_target.WriteTargetOpts{
-		ID:               id,
-		Logger:           lggr,
-		Config:           *config.WriteTargetCap,
+		ID:     id,
+		Logger: lggr,
+		Config: *config.WriteTargetCap,
+		// TODO: simplify by passing via ChainService.GetChainStatus fn
+		ChainInfo:        chainInfo,
 		Beholder:         beholder,
 		ChainService:     chain,
 		ContractReader:   cr,

@@ -47,7 +47,8 @@ const (
 type writeTarget struct {
 	capabilities.CapabilityInfo
 
-	config Config
+	config    Config
+	chainInfo ChainInfo
 
 	lggr logger.Logger
 	// Local beholder client, also hosting the protobuf emitter
@@ -67,6 +68,9 @@ type WriteTargetOpts struct {
 
 	// toml: [<CHAIN>.WriteTargetCap]
 	Config Config
+	// ChainInfo contains the chain information (used as execution context)
+	// TODO: simplify by passing via ChainService.GetChainStatus fn
+	ChainInfo ChainInfo
 
 	Logger   logger.Logger
 	Beholder *monitor.BeholderClient
@@ -98,6 +102,7 @@ func NewWriteTarget(opts WriteTargetOpts) capabilities.TargetCapability {
 	return &writeTarget{
 		capInfo,
 		opts.Config,
+		opts.ChainInfo,
 		selfLogger,
 		opts.Beholder,
 		opts.ChainService,
@@ -113,27 +118,6 @@ func success() capabilities.CapabilityResponse {
 	return capabilities.CapabilityResponse{}
 }
 
-type reportInfo struct {
-	reportContext []byte
-	report        []byte
-	signersNum    uint32
-
-	// Decoded report fields
-	reportID uint16
-}
-
-type requestInfo struct {
-	capInfo capabilities.CapabilityInfo
-
-	node      string
-	forwarder string
-	receiver  string
-
-	request                 capabilities.CapabilityRequest
-	reportInfo              *reportInfo
-	reportTransmissionState *TransmissionState
-}
-
 func (c *writeTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (capabilities.CapabilityResponse, error) {
 	attrs := c.traceAttributes(request.Metadata.WorkflowExecutionID)
 	_, span := c.beholder.Tracer.Start(ctx, "Execute", trace.WithAttributes(attrs...))
@@ -144,13 +128,12 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 
 	c.lggr.Debugw("Execute", "request", request, "capInfo", capInfo)
 
-	// Helper to keep track of the info
+	// Helper to keep track of the request info
 	info := &requestInfo{
 		node:      c.nodeAddress,
 		forwarder: c.forwarderAddress,
 		receiver:  "N/A",
 		request:   request,
-		capInfo:   capInfo,
 		reportInfo: &reportInfo{
 			reportContext: nil,
 			report:        nil,
@@ -160,7 +143,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		reportTransmissionState: nil,
 	}
 	// Helper to build monitoring (Beholder) messages
-	builder := &messageBuilder{}
+	builder := NewMessageBuilder(c.chainInfo, capInfo)
 
 	// Parse the request (WT-specific) config
 	var reqConfig ReqConfig
@@ -418,7 +401,9 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 	defer ticker.Stop()
 
 	// Helper to build monitoring (Beholder) messages
-	builder := &messageBuilder{}
+	// Notice: error skipped as implementation always returns nil
+	capInfo, _ := c.Info(ctx)
+	builder := NewMessageBuilder(c.chainInfo, capInfo)
 
 	// Fn helpers
 	checkAcceptedStatus := func(ctx context.Context) (commontypes.TransactionStatus, bool, error) {

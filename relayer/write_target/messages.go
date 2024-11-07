@@ -3,13 +3,54 @@ package write_target
 import (
 	"encoding/hex"
 
+	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 
 	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/write-target"
 )
 
+// ChainInfo contains the chain information (used as execution context)
+type ChainInfo struct {
+	ChainFamilyName string
+	ChainID         string
+	NetworkName     string
+	NetworkNameFull string
+}
+
 // TODO: Add chain info to use for execution context
-type messageBuilder struct{}
+type messageBuilder struct {
+	ChainInfo ChainInfo
+	CapInfo   capabilities.CapabilityInfo
+}
+
+// NewMessageBuilder creates a new message builder
+func NewMessageBuilder(chainInfo ChainInfo, capInfo capabilities.CapabilityInfo) *messageBuilder {
+	return &messageBuilder{
+		ChainInfo: chainInfo,
+		CapInfo:   capInfo,
+	}
+}
+
+// reportInfo contains the report data for the request
+type reportInfo struct {
+	reportContext []byte
+	report        []byte
+	signersNum    uint32
+
+	// Decoded report fields
+	reportID uint16
+}
+
+// requestInfo contains the request data for the capability triggered
+type requestInfo struct {
+	node      string
+	forwarder string
+	receiver  string
+
+	request                 capabilities.CapabilityRequest
+	reportInfo              *reportInfo
+	reportTransmissionState *TransmissionState
+}
 
 func (m *messageBuilder) buildWriteError(i *requestInfo, code uint32, summary, cause string) *wt.WriteError {
 	return &wt.WriteError{
@@ -35,8 +76,8 @@ func (m *messageBuilder) buildWriteError(i *requestInfo, code uint32, summary, c
 		MetaReferenceId:              i.request.Metadata.ReferenceID,
 
 		// Execution Context - Capability
-		MetaCapabilityType: string(i.capInfo.CapabilityType),
-		MetaCapabilityId:   i.capInfo.ID,
+		MetaCapabilityType: string(m.CapInfo.CapabilityType),
+		MetaCapabilityId:   m.CapInfo.ID,
 	}
 }
 
@@ -60,8 +101,8 @@ func (m *messageBuilder) buildWriteInitiated(i *requestInfo) *wt.WriteInitiated 
 		MetaReferenceId:              i.request.Metadata.ReferenceID,
 
 		// Execution Context - Capability
-		MetaCapabilityType: string(i.capInfo.CapabilityType),
-		MetaCapabilityId:   i.capInfo.ID,
+		MetaCapabilityType: string(m.CapInfo.CapabilityType),
+		MetaCapabilityId:   m.CapInfo.ID,
 	}
 }
 
@@ -86,8 +127,8 @@ func (m *messageBuilder) buildWriteSkipped(i *requestInfo, reason string) *wt.Wr
 		MetaReferenceId:              i.request.Metadata.ReferenceID,
 
 		// Execution Context - Capability
-		MetaCapabilityType: string(i.capInfo.CapabilityType),
-		MetaCapabilityId:   i.capInfo.ID,
+		MetaCapabilityType: string(m.CapInfo.CapabilityType),
+		MetaCapabilityId:   m.CapInfo.ID,
 	}
 }
 
@@ -117,8 +158,8 @@ func (m *messageBuilder) buildWriteSent(i *requestInfo, head types.Head, txID st
 		MetaReferenceId:              i.request.Metadata.ReferenceID,
 
 		// Execution Context - Capability
-		MetaCapabilityType: string(i.capInfo.CapabilityType),
-		MetaCapabilityId:   i.capInfo.ID,
+		MetaCapabilityType: string(m.CapInfo.CapabilityType),
+		MetaCapabilityId:   m.CapInfo.ID,
 	}
 }
 
@@ -154,7 +195,7 @@ func (m *messageBuilder) buildWriteConfirmed(i *requestInfo, head types.Head) *w
 		MetaReferenceId:              i.request.Metadata.ReferenceID,
 
 		// Execution Context - Capability
-		MetaCapabilityType: string(i.capInfo.CapabilityType),
-		MetaCapabilityId:   i.capInfo.ID,
+		MetaCapabilityType: string(m.CapInfo.CapabilityType),
+		MetaCapabilityId:   m.CapInfo.ID,
 	}
 }
