@@ -1,9 +1,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
-	"errors"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 )

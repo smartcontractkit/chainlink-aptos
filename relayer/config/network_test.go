@@ -3,8 +3,8 @@ package config
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/aptos-labs/aptos-go-sdk"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetNetworkConfig(t *testing.T) {
