@@ -32,7 +32,7 @@ var (
 
 // required field of target's config in the workflow spec
 const (
-	CapabilityName = "write-target"
+	CapabilityName = "write"
 
 	// Input keys
 	KeySignedReport = "signed_report"
@@ -95,13 +95,22 @@ type TransmissionState struct {
 }
 
 // NewWriteTargetID returns the capability ID for the write target
-func NewWriteTargetID(chainFamilyName, networkName, version string) (string, error) {
+func NewWriteTargetID(chainFamilyName, networkName, chainID, version string) (string, error) {
 	// Input args should not be empty
-	if chainFamilyName == "" || networkName == "" || version == "" {
-		return "", fmt.Errorf("invalid input: chainFamilyName, networkName, and version must not be empty")
+	if chainFamilyName == "" || version == "" {
+		return "", fmt.Errorf("invalid input: chainFamilyName, and version must not be empty")
 	}
 
-	return fmt.Sprintf("%s_%s-%s@%s", CapabilityName, chainFamilyName, networkName, version), nil
+	// Network ID: network name is optional, if not provided, use the chain ID
+	networkID := networkName
+	if networkID == "" {
+		if chainID == "" {
+			return "", fmt.Errorf("invalid input: networkName or chainID must not be empty")
+		}
+		networkID = chainID
+	}
+
+	return fmt.Sprintf("%s_%s-%s@%s", CapabilityName, chainFamilyName, networkID, version), nil
 }
 
 // TODO: opts.Config input is not validated for sanity

@@ -31,7 +31,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	// chainName, err := chainselectors.NameFromChainId(chain.ID().Uint64())
 
 	// Construct the ID for the WT (e.g., "write-target_aptos-localnet@1.0.0")
-	id, err := write_target.NewWriteTargetID(aptosconfig.ChainFamilyName, config.NetworkName, version)
+	id, err := write_target.NewWriteTargetID(aptosconfig.ChainFamilyName, config.NetworkName, config.ChainID, version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create write target ID: %+w", err)
 	}
