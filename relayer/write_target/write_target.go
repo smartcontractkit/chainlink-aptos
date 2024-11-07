@@ -103,10 +103,10 @@ func NewWriteTargetID(chainFamilyName, networkName, chainID, version string) (st
 
 	// Network ID: network name is optional, if not provided, use the chain ID
 	networkID := networkName
-	if networkID == "" {
-		if chainID == "" {
-			return "", fmt.Errorf("invalid input: networkName or chainID must not be empty")
-		}
+	if networkID == "" && chainID == "" {
+		return "", fmt.Errorf("invalid input: networkName or chainID must not be empty")
+	}
+	if networkID == "" || networkID == "unknown" {
 		networkID = chainID
 	}
 
