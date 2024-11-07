@@ -41,7 +41,7 @@ module keystone::storage {
         workflow_cid: vector<u8>,
         workflow_name: vector<u8>,
         workflow_owner: vector<u8>,
-        report_name: vector<u8>
+        report_id: vector<u8>
     }
 
     /// Registers an account and callback for future dispatching, and a proof type `T`
@@ -125,16 +125,16 @@ module keystone::storage {
         // workflow_cid             // offset 0,  size 32
         // workflow_name            // offset 32, size 10
         // workflow_owner           // offset 42, size 20
-        // report_name              // offset 62, size  2
+        // report_id                // offset 62, size  2
 
         assert!(vector::length(&metadata) == 64, E_INVALID_METADATA_LENGTH);
 
         let workflow_cid = vector::slice(&metadata, 0, 32);
         let workflow_name = vector::slice(&metadata, 32, 42);
         let workflow_owner = vector::slice(&metadata, 42, 62);
-        let report_name = vector::slice(&metadata, 62, 64);
+        let report_id = vector::slice(&metadata, 62, 64);
 
-        ReportMetadata { workflow_cid, workflow_name, workflow_owner, report_name }
+        ReportMetadata { workflow_cid, workflow_name, workflow_owner, report_id }
     }
 
     /// Prepares the dispatch table.
@@ -181,10 +181,10 @@ module keystone::storage {
         report_metadata.workflow_owner
     }
 
-    public fun get_report_metadata_report_name(
+    public fun get_report_metadata_report_id(
         report_metadata: &ReportMetadata
     ): vector<u8> {
-        report_metadata.report_name
+        report_metadata.report_id
     }
 
     #[test_only]
@@ -200,12 +200,12 @@ module keystone::storage {
             x"6d795f6964000000000000000000000000000000000000000000000000000000";
         let expected_workflow_name = x"000000000000DEADBEEF";
         let expected_workflow_owner = x"0000000000000000000000000000000000000051";
-        let expected_report_name = x"0001";
+        let expected_report_id = x"0001";
 
         let parsed_metadata = parse_report_metadata(metadata);
         assert!(parsed_metadata.workflow_cid == expected_workflow_cid, 1);
         assert!(parsed_metadata.workflow_name == expected_workflow_name, 1);
         assert!(parsed_metadata.workflow_owner == expected_workflow_owner, 1);
-        assert!(parsed_metadata.report_name == expected_report_name, 1);
+        assert!(parsed_metadata.report_id == expected_report_id, 1);
     }
 }
