@@ -63,6 +63,9 @@ func (m *messageBuilder) buildWriteError(i *requestInfo, code uint32, summary, c
 		Receiver:  i.receiver,
 		ReportId:  uint32(i.reportInfo.reportID),
 
+		// Execution Context - Source
+		MetaSourceId: i.node,
+
 		// Execution Context - Chain
 		MetaChainFamilyName: m.ChainInfo.ChainFamilyName,
 		MetaChainId:         m.ChainInfo.ChainID,
@@ -90,6 +93,9 @@ func (m *messageBuilder) buildWriteInitiated(i *requestInfo) *wt.WriteInitiated 
 		Forwarder: i.forwarder,
 		Receiver:  i.receiver,
 		ReportId:  uint32(i.reportInfo.reportID),
+
+		// Execution Context - Source
+		MetaSourceId: i.node,
 
 		// Execution Context - Chain
 		MetaChainFamilyName: m.ChainInfo.ChainFamilyName,
@@ -119,6 +125,9 @@ func (m *messageBuilder) buildWriteSkipped(i *requestInfo, reason string) *wt.Wr
 		Receiver:  i.receiver,
 		ReportId:  uint32(i.reportInfo.reportID),
 		Reason:    reason,
+
+		// Execution Context - Source
+		MetaSourceId: i.node,
 
 		// Execution Context - Chain
 		MetaChainFamilyName: m.ChainInfo.ChainFamilyName,
@@ -153,6 +162,9 @@ func (m *messageBuilder) buildWriteSent(i *requestInfo, head types.Head, txID st
 		BlockHash:      hex.EncodeToString(head.Hash),
 		BlockHeight:    head.Height,
 		BlockTimestamp: head.Timestamp,
+
+		// Execution Context - Source
+		MetaSourceId: i.node,
 
 		// Execution Context - Chain
 		MetaChainFamilyName: m.ChainInfo.ChainFamilyName,
@@ -193,6 +205,9 @@ func (m *messageBuilder) buildWriteConfirmed(i *requestInfo, head types.Head) *w
 		// Transmission Info
 		Transmitter: i.reportTransmissionState.Transmitter,
 		Success:     i.reportTransmissionState.Success,
+
+		// Execution Context - Source
+		MetaSourceId: i.node,
 
 		// Execution Context - Chain
 		MetaChainFamilyName: m.ChainInfo.ChainFamilyName,

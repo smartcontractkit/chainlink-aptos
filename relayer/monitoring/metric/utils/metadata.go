@@ -6,6 +6,8 @@ import (
 
 // TODO: Refactor as a proto referenced from the other proto files (telemetry messages)
 type ExecutionMetadata struct {
+	// Execution Context - Source
+	SourceId string
 	// Execution Context - Chain
 	ChainFamilyName string
 	ChainId         string
@@ -27,6 +29,8 @@ type ExecutionMetadata struct {
 // Attributes returns common attributes used for metrics
 func (m ExecutionMetadata) Attributes() []attribute.KeyValue {
 	return []attribute.KeyValue{
+		// Execution Context - Source
+		attribute.String("source_id", valOrUnknown(m.SourceId)),
 		// Execution Context - Chain
 		attribute.String("chain_family_name", valOrUnknown(m.ChainFamilyName)),
 		attribute.String("chain_id", valOrUnknown(m.ChainId)),

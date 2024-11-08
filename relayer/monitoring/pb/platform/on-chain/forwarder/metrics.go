@@ -103,6 +103,8 @@ func (m *Metrics) OnReportProcessed(ctx context.Context, msg *ReportProcessed, a
 // Attributes returns the attributes for the ReportProcessed message to be used in metrics
 func (m *ReportProcessed) Attributes() []attribute.KeyValue {
 	context := utils.ExecutionMetadata{
+		// Execution Context - Source
+		SourceId: m.MetaSourceId,
 		// Execution Context - Chain
 		ChainFamilyName: m.MetaChainFamilyName,
 		ChainId:         m.MetaChainId,

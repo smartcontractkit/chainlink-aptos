@@ -72,6 +72,9 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				BlockHeight:    m.BlockHeight,
 				BlockTimestamp: m.BlockTimestamp,
 
+				// Execution Context - Source
+				MetaSourceId: m.MetaSourceId,
+
 				// Execution Context - Chain
 				MetaChainFamilyName: m.MetaChainFamilyName,
 				MetaChainId:         m.MetaChainId,
@@ -114,6 +117,9 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				BlockHash:      m.BlockHash,
 				BlockHeight:    m.BlockHeight,
 				BlockTimestamp: m.BlockTimestamp,
+
+				// Execution Context - Source
+				MetaSourceId: m.MetaSourceId,
 
 				// Execution Context - Chain
 				MetaChainFamilyName: m.MetaChainFamilyName,

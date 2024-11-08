@@ -236,6 +236,8 @@ func (m *Metrics) OnWriteConfirmed(ctx context.Context, msg *WriteConfirmed, att
 // Attributes returns the attributes for the WriteInitiated message to be used in metrics
 func (m *WriteInitiated) Attributes() []attribute.KeyValue {
 	context := utils.ExecutionMetadata{
+		// Execution Context - Source
+		SourceId: m.MetaSourceId,
 		// Execution Context - Chain
 		ChainFamilyName: m.MetaChainFamilyName,
 		ChainId:         m.MetaChainId,
@@ -267,6 +269,8 @@ func (m *WriteInitiated) Attributes() []attribute.KeyValue {
 // Attributes returns the attributes for the WriteError message to be used in metrics
 func (m *WriteError) Attributes() []attribute.KeyValue {
 	context := utils.ExecutionMetadata{
+		// Execution Context - Source
+		SourceId: m.MetaSourceId,
 		// Execution Context - Chain
 		ChainFamilyName: m.MetaChainFamilyName,
 		ChainId:         m.MetaChainId,
@@ -301,6 +305,8 @@ func (m *WriteError) Attributes() []attribute.KeyValue {
 // Attributes returns the attributes for the WriteSent message to be used in metrics
 func (m *WriteSent) Attributes() []attribute.KeyValue {
 	context := utils.ExecutionMetadata{
+		// Execution Context - Source
+		SourceId: m.MetaSourceId,
 		// Execution Context - Chain
 		ChainFamilyName: m.MetaChainFamilyName,
 		ChainId:         m.MetaChainId,
@@ -332,6 +338,8 @@ func (m *WriteSent) Attributes() []attribute.KeyValue {
 // Attributes returns the attributes for the WriteConfirmed message to be used in metrics
 func (m *WriteConfirmed) Attributes() []attribute.KeyValue {
 	context := utils.ExecutionMetadata{
+		// Execution Context - Source
+		SourceId: m.MetaSourceId,
 		// Execution Context - Chain
 		ChainFamilyName: m.MetaChainFamilyName,
 		ChainId:         m.MetaChainId,

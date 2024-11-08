@@ -37,6 +37,9 @@ func DecodeAsReportProcessed(m *wt_msg.WriteConfirmed) (*ReportProcessed, error)
 		BlockHeight:    m.BlockHeight,
 		BlockTimestamp: m.BlockTimestamp,
 
+		// Execution Context - Source
+		MetaSourceId: m.MetaSourceId,
+
 		// Execution Context - Chain
 		MetaChainFamilyName: m.MetaChainFamilyName,
 		MetaChainId:         m.MetaChainId,

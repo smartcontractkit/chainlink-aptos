@@ -134,6 +134,8 @@ func (m *Metrics) OnFeedUpdated(ctx context.Context, msg *FeedUpdated, attrKVs .
 // Attributes returns the attributes for the FeedUpdated message to be used in metrics
 func (m *FeedUpdated) Attributes() []attribute.KeyValue {
 	context := utils.ExecutionMetadata{
+		// Execution Context - Source
+		SourceId: m.MetaSourceId,
 		// Execution Context - Chain
 		ChainFamilyName: m.MetaChainFamilyName,
 		ChainId:         m.MetaChainId,
