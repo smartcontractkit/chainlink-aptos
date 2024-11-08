@@ -70,7 +70,7 @@ Enabled = true
 # CollectorTarget is the logical address of the OTEL Tracing Collector.
 CollectorTarget = 'otelcollector:4317'
 # NodeID is an unique name for this node relative to any other node traces are collected for.
-NodeID = '7331' # Example
+NodeID = 'node-local-$IDX' # Example
 # SamplingRatio is the ratio of traces to sample for this node.
 SamplingRatio = 1.0 # Example
 # Mode is a string value. `tls` or `unencrypted` are the only values allowed. If set to `unencrypted`, `TLSCertPath` can be unset, meaning traces will be sent over plaintext to the collector.
@@ -80,8 +80,8 @@ Mode = 'unencrypted' # Default
 
 # Tracing.Attributes are user specified key-value pairs to associate in the context of the traces
 [Tracing.Attributes]
-# example user specified key-value pair
-aptos-tracing-attr = 'test' # Example
+# example user specified key-value pair tracing attributes
+aptos_tracing_attr = 'test' # Example
 
 # Telemetry holds OTEL settings.
 # This data includes open telemetry metrics, traces, & logs.
@@ -102,8 +102,8 @@ TraceSampleRatio = 1
 
 # ResourceAttributes are global metadata to include with all telemetry.
 [Telemetry.ResourceAttributes]
-# example resource attribute
-aptos-telemetry-attr = 'test' # Example
+# example user specified key-value pair telemetry resource attributes
+node_id = 'node-local-$IDX' # Example
 
 # [[EVM]]
 # ChainID = '$SOURCE_CHAIN_ID'
