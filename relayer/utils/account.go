@@ -29,3 +29,13 @@ func Ed25519PublicKeyToAccount(key ed25519.PublicKey) aptos.AccountAddress {
 	authKey := sha3.Sum256(append([]byte(key), 0x00 /* account key prefix */))
 	return aptos.AccountAddress(authKey)
 }
+
+func HexToAccountAddressString(hexKey string) (string, error) {
+	publicKey, err := HexToEd25519PublicKey(hexKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert hex to public key: %v", err)
+	}
+
+	accountAddress := Ed25519PublicKeyToAccount(publicKey)
+	return accountAddress.String(), nil
+}
