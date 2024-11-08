@@ -11,6 +11,8 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
+
+	aptosutils "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/utils"
 )
 
 // Config defines the balance monitor configuration.
@@ -157,7 +159,7 @@ func (m *balanceMonitor) updateBalances(ctx context.Context) {
 	}
 
 	var gotSomeBals bool
-	for _, k := range keys {
+	for _, pk := range keys {
 		// Check for shutdown signal, since Balance blocks and may be slow.
 		select {
 		case <-m.stop:
@@ -165,13 +167,21 @@ func (m *balanceMonitor) updateBalances(ctx context.Context) {
 		default:
 		}
 
-		balance, err := reader.GetAccountBalance(k)
+		// Account address can always be derived from the public key currently
+		// TODO: if we need to support key rotation, the keystore should store the address explicitly
+		accAddr, err := aptosutils.HexToAccountAddressString(pk)
 		if err != nil {
-			m.lggr.Errorw("Failed to get balance", "account", k, "err", err)
+			m.lggr.Errorw("Failed to convert public key to account address", "err", err)
+			continue
+		}
+
+		balance, err := reader.GetAccountBalance(accAddr)
+		if err != nil {
+			m.lggr.Errorw("Failed to get balance", "account", accAddr, "err", err)
 			continue
 		}
 		gotSomeBals = true
-		m.updateFn(ctx, k, balance)
+		m.updateFn(ctx, accAddr, balance)
 	}
 
 	// Try a new client next time. // TODO: This is for multinode
