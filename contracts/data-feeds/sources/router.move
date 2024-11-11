@@ -5,16 +5,17 @@ module data_feeds::router {
     use std::string::String;
     use std::vector;
 
-    use aptos_framework::object::{Self, ExtendRef};
+    use aptos_framework::object::{Self, ExtendRef, TransferRef};
 
     use data_feeds::registry::{Self, Benchmark, Report};
 
     const APP_OBJECT_SEED: vector<u8> = b"ROUTER";
 
     struct Router has key, store, drop {
-        extend_ref: ExtendRef,
         owner_address: address,
-        pending_owner_address: address
+        pending_owner_address: address,
+        extend_ref: ExtendRef,
+        transfer_ref: TransferRef
     }
 
     #[event]
@@ -47,11 +48,12 @@ module data_feeds::router {
         );
 
         let extend_ref = object::generate_extend_ref(&constructor_ref);
+        let transfer_ref = object::generate_transfer_ref(&constructor_ref);
         let object_signer = object::generate_signer(&constructor_ref);
 
         move_to(
             &object_signer,
-            Router { owner_address: @owner, pending_owner_address: @0x0, extend_ref }
+            Router { owner_address: @owner, pending_owner_address: @0x0, extend_ref, transfer_ref }
         );
     }
 

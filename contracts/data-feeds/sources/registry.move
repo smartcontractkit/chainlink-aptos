@@ -7,7 +7,7 @@ module data_feeds::registry {
     use std::string::{Self, String};
     use std::vector;
 
-    use aptos_framework::object::{Self, ExtendRef, Object};
+    use aptos_framework::object::{Self, ExtendRef, TransferRef, Object};
 
     friend data_feeds::router;
 
@@ -15,6 +15,7 @@ module data_feeds::registry {
 
     struct Registry has key, store, drop {
         extend_ref: ExtendRef,
+        transfer_ref: TransferRef,
         owner_address: address,
         pending_owner_address: address,
         feeds: SimpleMap<vector<u8>, Feed>,
@@ -136,6 +137,7 @@ module data_feeds::registry {
         );
 
         let extend_ref = object::generate_extend_ref(&constructor_ref);
+        let transfer_ref = object::generate_transfer_ref(&constructor_ref);
         let object_signer = object::generate_signer(&constructor_ref);
 
         // register to receive keystone::forwarder reports
@@ -153,6 +155,7 @@ module data_feeds::registry {
                 owner_address: @owner,
                 pending_owner_address: @0x0,
                 extend_ref,
+                transfer_ref,
                 feeds: simple_map::new(),
                 allowed_workflow_names: vector[],
                 allowed_workflow_owners: vector[]

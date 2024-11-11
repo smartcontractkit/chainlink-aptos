@@ -1,5 +1,5 @@
 module keystone::forwarder {
-    use aptos_framework::object::{Self, ExtendRef};
+    use aptos_framework::object::{Self, ExtendRef, TransferRef};
     use aptos_std::smart_table::{SmartTable, Self};
 
     use std::error;
@@ -40,6 +40,7 @@ module keystone::forwarder {
         owner_address: address,
         pending_owner_address: address,
         extend_ref: ExtendRef,
+        transfer_ref: TransferRef,
 
         // (don_id, config_version) => config
         configs: SmartTable<ConfigId, Config>,
@@ -93,6 +94,7 @@ module keystone::forwarder {
         );
 
         let extend_ref = object::generate_extend_ref(&constructor_ref);
+        let transfer_ref = object::generate_transfer_ref(&constructor_ref);
         let app_signer = &object::generate_signer(&constructor_ref);
 
         move_to(
@@ -102,7 +104,8 @@ module keystone::forwarder {
                 pending_owner_address: @0x0,
                 configs: smart_table::new(),
                 reports: smart_table::new(),
-                extend_ref
+                extend_ref,
+                transfer_ref
             }
         );
     }

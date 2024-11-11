@@ -11,7 +11,7 @@ module keystone::storage {
     use aptos_framework::dispatchable_fungible_asset;
     use aptos_framework::function_info::FunctionInfo;
     use aptos_framework::fungible_asset::{Self, Metadata};
-    use aptos_framework::object::{Self, ExtendRef, Object};
+    use aptos_framework::object::{Self, ExtendRef, TransferRef, Object};
 
     const APP_OBJECT_SEED: vector<u8> = b"STORAGE";
 
@@ -30,7 +30,8 @@ module keystone::storage {
         dispatcher: Table<TypeInfo, Entry>,
         address_to_typeinfo: Table<address, TypeInfo>,
         /// Used to store temporary data for dispatching.
-        extend_ref: ExtendRef
+        extend_ref: ExtendRef,
+        transfer_ref: TransferRef
     }
 
     /// Store the data to dispatch here.
@@ -146,6 +147,7 @@ module keystone::storage {
         let constructor_ref = object::create_named_object(publisher, APP_OBJECT_SEED);
 
         let extend_ref = object::generate_extend_ref(&constructor_ref);
+        let transfer_ref = object::generate_transfer_ref(&constructor_ref);
         let object_signer = object::generate_signer(&constructor_ref);
 
         move_to(
@@ -153,7 +155,8 @@ module keystone::storage {
             Dispatcher {
                 dispatcher: table::new(),
                 address_to_typeinfo: table::new(),
-                extend_ref: extend_ref,
+                extend_ref,
+                transfer_ref
             }
         );
     }
