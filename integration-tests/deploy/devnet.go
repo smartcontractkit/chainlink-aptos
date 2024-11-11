@@ -119,15 +119,15 @@ func (d *Deployer) FundDevnet(account string) error {
 	return nil
 }
 
-func (d *Deployer) DeployKeystone() error {
+func (d *Deployer) DeployPlatform() error {
 	cmdStr := []string{
 		"aptos",
 		"move",
 		"create-object-and-publish-package",
-		"--package-dir=/contracts/keystone",
-		"--address-name=keystone",
+		"--package-dir=/contracts/platform",
+		"--address-name=platform",
 		"--named-addresses",
-		fmt.Sprintf("keystone=%s,owner=%s", DEVNET_ACC, DEVNET_ACC),
+		fmt.Sprintf("platform=%s,owner=%s", DEVNET_ACC, DEVNET_ACC),
 		"--profile=default",
 		"--assume-yes",
 	}
@@ -149,7 +149,7 @@ func (d *Deployer) DeployKeystone() error {
 	return nil
 }
 
-func (d *Deployer) DeployDataFeeds(keystoneAddress string) error {
+func (d *Deployer) DeployDataFeeds(platformAddress string) error {
 	cmdStr := []string{
 		"aptos",
 		"move",
@@ -157,7 +157,7 @@ func (d *Deployer) DeployDataFeeds(keystoneAddress string) error {
 		"--package-dir=/contracts/data-feeds",
 		"--address-name=data_feeds",
 		"--named-addresses",
-		fmt.Sprintf("data_feeds=%s,keystone=%s,owner=%s", DEVNET_ACC, keystoneAddress, DEVNET_ACC),
+		fmt.Sprintf("data_feeds=%s,platform=%s,owner=%s", DEVNET_ACC, platformAddress, DEVNET_ACC),
 		"--profile=default",
 		"--assume-yes",
 	}

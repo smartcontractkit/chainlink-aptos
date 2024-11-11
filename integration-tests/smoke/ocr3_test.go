@@ -43,8 +43,8 @@ func TestOCR3Keystone(t *testing.T) {
 	err = deployer.DeployDevnet()
 	require.NoError(t, err, "Could not deploy Devnet")
 
-	err = deployer.DeployKeystone()
-	require.NoError(t, err, "Could not deploy Keystone")
+	err = deployer.DeployPlatform()
+	require.NoError(t, err, "Could not deploy Platform")
 
 	err = deployer.DeployDataFeeds(deployer.Contracts.KeystoneAddress)
 	require.NoError(t, err, "Could not deploy Data Feeds")
