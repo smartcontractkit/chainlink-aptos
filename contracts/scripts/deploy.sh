@@ -4,7 +4,7 @@ set -euxo pipefail
 PUBLISHER_PROFILE=default
 PUBLISHER_ADDR=0x$(aptos config show-profiles --profile=$PUBLISHER_PROFILE | grep 'account' | sed -n 's/.*"account": \"\(.*\)\".*/\1/p')
 
-KEYSTONE_ADDR=$(cat keystone/contract_address.txt)
+PLATFORM_ADDR=$(cat platform/contract_address.txt)
 DATA_FEEDS_ADDR=$(cat data-feeds/contract_address.txt)
 
 # data_feeds::router::set_workflow_config(workflow_owners, workflow_names)

@@ -1,4 +1,4 @@
-module keystone::forwarder {
+module platform::forwarder {
     use aptos_framework::object::{Self, ExtendRef, TransferRef};
     use aptos_std::smart_table::{SmartTable, Self};
 
@@ -87,7 +87,7 @@ module keystone::forwarder {
     }
 
     fun init_module(publisher: &signer) {
-        assert!(signer::address_of(publisher) == @keystone, 1);
+        assert!(signer::address_of(publisher) == @platform, 1);
 
         let constructor_ref = object::create_named_object(
             publisher, APP_OBJECT_SEED
@@ -111,7 +111,7 @@ module keystone::forwarder {
     }
 
     inline fun get_state_addr(): address {
-        object::create_object_address(&@keystone, APP_OBJECT_SEED)
+        object::create_object_address(&@platform, APP_OBJECT_SEED)
     }
 
     public entry fun set_config(
@@ -197,12 +197,12 @@ module keystone::forwarder {
     fun dispatch(
         receiver: address, metadata: vector<u8>, data: vector<u8>
     ) {
-        let meta = keystone::storage::insert(receiver, metadata, data);
+        let meta = platform::storage::insert(receiver, metadata, data);
         aptos_framework::dispatchable_fungible_asset::derived_supply(meta);
         let obj_address =
             object::object_address<aptos_framework::fungible_asset::Metadata>(&meta);
         assert!(
-            !keystone::storage::storage_exists(obj_address), E_CALLBACK_DATA_NOT_CONSUMED
+            !platform::storage::storage_exists(obj_address), E_CALLBACK_DATA_NOT_CONSUMED
         );
     }
 
@@ -441,7 +441,7 @@ module keystone::forwarder {
         signatures
     }
 
-    #[test(owner = @owner, publisher = @keystone)]
+    #[test(owner = @owner, publisher = @platform)]
     public entry fun test_happy_path(owner: &signer, publisher: &signer) acquires State {
         set_up_test(owner, publisher);
 
@@ -511,7 +511,7 @@ module keystone::forwarder {
         validate_and_process_report(owner, signer::address_of(publisher), raw_report, signatures);
     }
 
-    #[test(owner = @owner, publisher = @keystone, new_owner = @0xbeef)]
+    #[test(owner = @owner, publisher = @platform, new_owner = @0xbeef)]
     fun test_transfer_ownership_success(
         owner: &signer, publisher: &signer, new_owner: &signer
     ) acquires State {
@@ -525,8 +525,8 @@ module keystone::forwarder {
         assert!(get_owner() == signer::address_of(new_owner), 2);
     }
 
-    #[test(owner = @owner, publisher = @keystone, unknown_user = @0xbeef)]
-    #[expected_failure(abort_code = 327687, location = keystone::forwarder)]
+    #[test(owner = @owner, publisher = @platform, unknown_user = @0xbeef)]
+    #[expected_failure(abort_code = 327687, location = platform::forwarder)]
     fun test_transfer_ownership_failure_not_owner(
         owner: &signer,
         publisher: &signer,
@@ -539,8 +539,8 @@ module keystone::forwarder {
         transfer_ownership(unknown_user, signer::address_of(unknown_user));
     }
 
-    #[test(owner = @owner, publisher = @keystone)]
-    #[expected_failure(abort_code = 65549, location = keystone::forwarder)]
+    #[test(owner = @owner, publisher = @platform)]
+    #[expected_failure(abort_code = 65549, location = platform::forwarder)]
     fun test_transfer_ownership_failure_transfer_to_self(
         owner: &signer, publisher: &signer
     ) acquires State {
@@ -551,8 +551,8 @@ module keystone::forwarder {
         transfer_ownership(owner, signer::address_of(owner));
     }
 
-    #[test(owner = @owner, publisher = @keystone, new_owner = @0xbeef)]
-    #[expected_failure(abort_code = 327694, location = keystone::forwarder)]
+    #[test(owner = @owner, publisher = @platform, new_owner = @0xbeef)]
+    #[expected_failure(abort_code = 327694, location = platform::forwarder)]
     fun test_transfer_ownership_failure_not_proposed_owner(
         owner: &signer, publisher: &signer, new_owner: &signer
     ) acquires State {

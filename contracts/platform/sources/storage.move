@@ -1,5 +1,5 @@
 /// The storage module stores all the state associated with the dispatch service.
-module keystone::storage {
+module platform::storage {
     use std::option;
     use std::string;
     use std::signer;
@@ -15,7 +15,7 @@ module keystone::storage {
 
     const APP_OBJECT_SEED: vector<u8> = b"STORAGE";
 
-    friend keystone::forwarder;
+    friend platform::forwarder;
 
     const E_UNKNOWN_RECEIVER: u64 = 1;
     const E_INVALID_METADATA_LENGTH: u64 = 2;
@@ -142,7 +142,7 @@ module keystone::storage {
 
     /// Prepares the dispatch table.
     fun init_module(publisher: &signer) {
-        assert!(signer::address_of(publisher) == @keystone, 1);
+        assert!(signer::address_of(publisher) == @platform, 1);
 
         let constructor_ref = object::create_named_object(publisher, APP_OBJECT_SEED);
 
@@ -162,7 +162,7 @@ module keystone::storage {
     }
 
     inline fun storage_address(): address acquires Dispatcher {
-        object::create_object_address(&@keystone, APP_OBJECT_SEED)
+        object::create_object_address(&@platform, APP_OBJECT_SEED)
     }
 
     inline fun storage_signer(): signer acquires Dispatcher {

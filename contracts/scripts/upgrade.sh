@@ -4,13 +4,13 @@ set -euxo pipefail
 PUBLISHER_PROFILE=default
 PUBLISHER_ADDR=0x$(aptos config show-profiles --profile=$PUBLISHER_PROFILE | grep 'account' | sed -n 's/.*"account": \"\(.*\)\".*/\1/p')
 
-# deploy keystone forwarder
+# deploy platform forwarder
 
-KEYSTONE_ADDR=$(cat keystone/contract_address.txt)
+PLATFORM_ADDR=$(cat platform/contract_address.txt)
 
 aptos move upgrade-object-package \
-  --package-dir keystone \
-  --object-address $KEYSTONE_ADDR \
-  --named-addresses keystone=$KEYSTONE_ADDR,owner=$PUBLISHER_ADDR \
+  --package-dir platform \
+  --object-address $PLATFORM_ADDR \
+  --named-addresses platform=$PLATFORM_ADDR,owner=$PUBLISHER_ADDR \
   --profile $PUBLISHER_PROFILE \
 	--assume-yes

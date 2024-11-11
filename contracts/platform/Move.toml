@@ -1,14 +1,14 @@
 [package]
-name = "ChainlinkKeystone"
+name = "ChainlinkPlatform"
 version = "1.0.0"
 authors = []
 
 [addresses]
-keystone = "_"
+platform = "_"
 owner = "_"
 
 [dev-addresses]
-keystone = "0x100"
+platform = "0x100"
 owner = "0xcafe"
 
 [dependencies]

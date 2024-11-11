@@ -140,14 +140,14 @@ module data_feeds::registry {
         let transfer_ref = object::generate_transfer_ref(&constructor_ref);
         let object_signer = object::generate_signer(&constructor_ref);
 
-        // register to receive keystone::forwarder reports
+        // register to receive platform::forwarder reports
         let cb =
             aptos_framework::function_info::new_function_info(
                 publisher,
                 string::utf8(b"registry"),
                 string::utf8(b"on_report")
             );
-        keystone::storage::register(publisher, cb, new_proof());
+        platform::storage::register(publisher, cb, new_proof());
 
         move_to(
             &object_signer,
@@ -303,23 +303,23 @@ module data_feeds::registry {
         OnReceive {}
     }
 
-    // Keystone receiver function interface
+    // Platform receiver function interface
     public fun on_report<T: key>(_metadata: Object<T>): option::Option<u128> acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
 
-        let (metadata, data) = keystone::storage::retrieve(new_proof());
+        let (metadata, data) = platform::storage::retrieve(new_proof());
 
-        let parsed_metadata = keystone::storage::parse_report_metadata(metadata);
+        let parsed_metadata = platform::storage::parse_report_metadata(metadata);
 
         let workflow_owner =
-            keystone::storage::get_report_metadata_workflow_owner(&parsed_metadata);
+            platform::storage::get_report_metadata_workflow_owner(&parsed_metadata);
         assert!(
             vector::contains(&registry.allowed_workflow_owners, &workflow_owner),
             EUNAUTHORIZED_WORKFLOW_OWNER
         );
 
         let workflow_name =
-            keystone::storage::get_report_metadata_workflow_name(&parsed_metadata);
+            platform::storage::get_report_metadata_workflow_name(&parsed_metadata);
         assert!(
             vector::is_empty(&registry.allowed_workflow_names)
                 || vector::contains(&registry.allowed_workflow_names, &workflow_name),
@@ -655,23 +655,23 @@ module data_feeds::registry {
     }
 
     #[test_only]
-    fun set_up_test(publisher: &signer, keystone: &signer) {
+    fun set_up_test(publisher: &signer, platform: &signer) {
         use aptos_framework::account::{Self};
         account::create_account_for_test(signer::address_of(publisher));
 
-        keystone::forwarder::init_module_for_testing(keystone);
-        keystone::storage::init_module_for_testing(keystone);
+        platform::forwarder::init_module_for_testing(platform);
+        platform::storage::init_module_for_testing(platform);
 
         init_module(publisher);
     }
 
-    #[test(owner = @owner, publisher = @data_feeds, keystone = @keystone)]
+    #[test(owner = @owner, publisher = @data_feeds, platform = @platform)]
     fun test_perform_update_v3(
         owner: &signer,
         publisher: &signer,
-        keystone: &signer
+        platform: &signer
     ) acquires Registry {
-        set_up_test(publisher, keystone);
+        set_up_test(publisher, platform);
 
         let report_data = x"0003fbba4fce42f65d6032b18aee53efdf526cc734ad296cb57565979d883bdd0000000000000000000000000000000000000000000000000000000066ed173e0000000000000000000000000000000000000000000000000000000066ed174200000000000000007fffffffffffffffffffffffffffffffffffffffffffffff00000000000000007fffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000066ee68c2000000000000000000000000000000000000000000000d808cc35e6ed670bd00000000000000000000000000000000000000000000000d808590c35425347980000000000000000000000000000000000000000000000d8093f5f989878e7c00";
         let feed_id = vector::slice(&report_data, 0, 32);
@@ -699,15 +699,15 @@ module data_feeds::registry {
     }
 
     #[test(
-        owner = @owner, publisher = @data_feeds, keystone = @keystone, new_owner = @0xbeef
+        owner = @owner, publisher = @data_feeds, platform = @platform, new_owner = @0xbeef
     )]
     fun test_transfer_ownership_success(
         owner: &signer,
         publisher: &signer,
-        keystone: &signer,
+        platform: &signer,
         new_owner: &signer
     ) acquires Registry {
-        set_up_test(publisher, keystone);
+        set_up_test(publisher, platform);
 
         assert!(get_owner() == @owner, 1);
 
@@ -717,28 +717,28 @@ module data_feeds::registry {
         assert!(get_owner() == signer::address_of(new_owner), 2);
     }
 
-    #[test(publisher = @data_feeds, keystone = @keystone, unknown_user = @0xbeef)]
+    #[test(publisher = @data_feeds, platform = @platform, unknown_user = @0xbeef)]
     #[expected_failure(abort_code = 327681, location = data_feeds::registry)]
     fun test_transfer_ownership_failure_not_owner(
         publisher: &signer,
-        keystone: &signer,
+        platform: &signer,
         unknown_user: &signer
     ) acquires Registry {
-        set_up_test(publisher, keystone);
+        set_up_test(publisher, platform);
 
         assert!(get_owner() == @owner, 1);
 
         transfer_ownership(unknown_user, signer::address_of(unknown_user));
     }
 
-    #[test(owner = @owner, publisher = @data_feeds, keystone = @keystone)]
+    #[test(owner = @owner, publisher = @data_feeds, platform = @platform)]
     #[expected_failure(abort_code = 65546, location = data_feeds::registry)]
     fun test_transfer_ownership_failure_transfer_to_self(
         owner: &signer,
         publisher: &signer,
-        keystone: &signer
+        platform: &signer
     ) acquires Registry {
-        set_up_test(publisher, keystone);
+        set_up_test(publisher, platform);
 
         assert!(get_owner() == @owner, 1);
 
@@ -746,16 +746,16 @@ module data_feeds::registry {
     }
 
     #[test(
-        owner = @owner, publisher = @data_feeds, keystone = @keystone, new_owner = @0xbeef
+        owner = @owner, publisher = @data_feeds, platform = @platform, new_owner = @0xbeef
     )]
     #[expected_failure(abort_code = 327691, location = data_feeds::registry)]
     fun test_transfer_ownership_failure_not_proposed_owner(
         owner: &signer,
         publisher: &signer,
-        keystone: &signer,
+        platform: &signer,
         new_owner: &signer
     ) acquires Registry {
-        set_up_test(publisher, keystone);
+        set_up_test(publisher, platform);
 
         assert!(get_owner() == @owner, 1);
 

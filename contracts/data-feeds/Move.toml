@@ -6,15 +6,15 @@ authors = []
 [addresses]
 data_feeds = "_"
 owner = "_"
-keystone = "_"
+platform = "_"
 
 [dev-addresses]
 data_feeds = "0x100"
 owner = "0xcafe"
-keystone = "0xbaba"
+platform = "0xbaba"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "mainnet", subdir = "aptos-move/framework/aptos-framework" }
-ChainlinkKeystone = { local = "../keystone" }
+ChainlinkPlatform = { local = "../platform" }
 
 [dev-dependencies]
