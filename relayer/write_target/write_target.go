@@ -434,7 +434,9 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 		lggr.Debugw("txm - tx status", "txID", txID, "status", status)
 
 		// Check if the transaction was accepted (included in a chain block, not required to be finalized)
-		if status == commontypes.Unconfirmed || status == commontypes.Finalized {
+		// Notice: 'Unconfirmed' is used by TXM to indicate the transaction is not yet included in a block,
+		// while 'Included' (N/A yet) could be used to indicate the transaction is included in a block but not yet finalized.
+		if /* status == commontypes.Included || */ status == commontypes.Finalized {
 			return status, true, nil
 		}
 
@@ -474,6 +476,7 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 				}
 
 				lggr.Infow("accepted", "txID", txID, "status", status)
+				// Notice: report write confirmation is only possible after a tx is accepted without an error
 				// TODO: [Beholder] Emit 'platform.write-target.WriteAccepted' (useful to source tx hash, block number, and tx status/error)
 
 				// TODO: check if accepted with an error (e.g., on-chain revert)

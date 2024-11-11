@@ -8,10 +8,10 @@ require (
 	github.com/aptos-labs/aptos-go-sdk v0.7.0
 	github.com/ethereum/go-ethereum v1.14.5
 	github.com/google/uuid v1.6.0
-	github.com/hashicorp/go-plugin v1.6.2-0.20240829161738-06afb6d7ae99
+	github.com/hashicorp/go-plugin v1.6.2
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/pelletier/go-toml/v2 v2.2.0
-	github.com/smartcontractkit/chainlink-common v0.3.1-0.20241101093830-33711d0c3de7
+	github.com/smartcontractkit/chainlink-common v0.3.1-0.20241111104504-d37df61b04c3
 	github.com/stretchr/testify v1.9.0
 	go.opentelemetry.io/otel v1.30.0
 	go.opentelemetry.io/otel/metric v1.30.0
