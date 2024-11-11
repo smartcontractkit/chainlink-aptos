@@ -86,6 +86,8 @@ module keystone::forwarder {
     }
 
     fun init_module(publisher: &signer) {
+        assert!(signer::address_of(publisher) == @keystone, 1);
+
         let constructor_ref = object::create_named_object(
             publisher, APP_OBJECT_SEED
         );
@@ -190,9 +192,9 @@ module keystone::forwarder {
 
     /// The dispatch call knows both storage and indirectly the callback, thus the separate module.
     fun dispatch(
-        address: address, metadata: vector<u8>, data: vector<u8>
+        receiver: address, metadata: vector<u8>, data: vector<u8>
     ) {
-        let meta = keystone::storage::insert(address, metadata, data);
+        let meta = keystone::storage::insert(receiver, metadata, data);
         aptos_framework::dispatchable_fungible_asset::derived_supply(meta);
         let obj_address =
             object::object_address<aptos_framework::fungible_asset::Metadata>(&meta);
@@ -201,7 +203,7 @@ module keystone::forwarder {
         );
     }
 
-    public entry fun report(
+    entry fun report(
         transmitter: &signer,
         receiver: address,
         raw_report: vector<u8>,
@@ -212,24 +214,24 @@ module keystone::forwarder {
         );
 
         let (metadata, data) =
-            validate_report(transmitter, receiver, raw_report, signatures);
+            validate_and_process_report(transmitter, receiver, raw_report, signatures);
         // NOTE: unable to catch failure here
         dispatch(receiver, metadata, data);
     }
 
-    fun to_u16be(data: vector<u8>): u16 {
+    inline fun to_u16be(data: vector<u8>): u16 {
         // reverse big endian to little endian
         vector::reverse(&mut data);
         aptos_std::from_bcs::to_u16(data)
     }
 
-    fun to_u32be(data: vector<u8>): u32 {
+    inline fun to_u32be(data: vector<u8>): u32 {
         // reverse big endian to little endian
         vector::reverse(&mut data);
         aptos_std::from_bcs::to_u32(data)
     }
 
-    fun validate_report(
+    fun validate_and_process_report(
         transmitter: &signer,
         receiver: address,
         raw_report: vector<u8>,
@@ -422,12 +424,12 @@ module keystone::forwarder {
         let signatures = vector[];
         let required_signatures = config.f + 1;
         for (i in 0..required_signatures) {
-            let signer = vector::borrow(&config.signers, (i as u64));
+            let config_signer = vector::borrow(&config.signers, (i as u64));
             let public_key =
                 ed25519::new_unvalidated_public_key_from_bytes(
                     *vector::borrow(&config.oracles, (i as u64))
                 );
-            let sig = ed25519::sign_arbitrary_bytes(signer, msg);
+            let sig = ed25519::sign_arbitrary_bytes(config_signer, msg);
             vector::push_back(
                 &mut signatures,
                 Signature { sig, public_key }
@@ -503,7 +505,7 @@ module keystone::forwarder {
         let signatures = sign_report(&config, report, report_context);
 
         // call entrypoint
-        validate_report(owner, signer::address_of(publisher), raw_report, signatures);
+        validate_and_process_report(owner, signer::address_of(publisher), raw_report, signatures);
     }
 
     #[test(owner = @owner, publisher = @keystone, new_owner = @0xbeef)]

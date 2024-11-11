@@ -129,10 +129,11 @@ module data_feeds::registry {
     }
 
     fun init_module(publisher: &signer) {
+        assert!(signer::address_of(publisher) == @data_feeds, 1);
+
         let constructor_ref = object::create_named_object(
             publisher, APP_OBJECT_SEED
         );
-        let _object_address = object::address_from_constructor_ref(&constructor_ref);
 
         let extend_ref = object::generate_extend_ref(&constructor_ref);
         let object_signer = object::generate_signer(&constructor_ref);
@@ -196,26 +197,26 @@ module data_feeds::registry {
             error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS)
         );
 
-        vector::zip(
-            feed_ids,
-            descriptions,
+        vector::zip_ref(
+            &feed_ids,
+            &descriptions,
             |feed_id, description| {
                 assert!(
-                    !simple_map::contains_key(&registry.feeds, &feed_id),
+                    !simple_map::contains_key(&registry.feeds, feed_id),
                     error::invalid_argument(EFEED_EXISTS)
                 );
 
                 let feed = Feed {
-                    description,
+                    description: *description,
                     config_id,
                     benchmark: 0,
                     report: vector::empty(),
                     observation_timestamp: 0
                 };
-                simple_map::add(&mut registry.feeds, feed_id, feed);
+                simple_map::add(&mut registry.feeds, *feed_id, feed);
 
                 event::emit(
-                    FeedSet { feed_id, description, config_id }
+                    FeedSet { feed_id: *feed_id, description: *description, config_id }
                 );
             }
         );
@@ -252,38 +253,38 @@ module data_feeds::registry {
             error::invalid_argument(EUNEQUAL_ARRAY_LENGTHS)
         );
 
-        vector::zip(
-            feed_ids,
-            descriptions,
+        vector::zip_ref(
+            &feed_ids,
+            &descriptions,
             |feed_id, description| {
                 assert!(
-                    simple_map::contains_key(&registry.feeds, &feed_id),
+                    simple_map::contains_key(&registry.feeds, feed_id),
                     error::invalid_argument(EFEED_NOT_CONFIGURED)
                 );
 
-                let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
-                feed.description = description;
+                let feed = simple_map::borrow_mut(&mut registry.feeds, feed_id);
+                feed.description = *description;
 
                 event::emit(
-                    FeedDescriptionUpdated { feed_id, description }
+                    FeedDescriptionUpdated { feed_id: *feed_id, description: *description }
                 );
             }
         );
     }
 
-    fun to_u16be(data: vector<u8>): u16 {
+    inline fun to_u16be(data: vector<u8>): u16 {
         // reverse big endian to little endian
         vector::reverse(&mut data);
         aptos_std::from_bcs::to_u16(data)
     }
 
-    fun to_u32be(data: vector<u8>): u32 {
+    inline fun to_u32be(data: vector<u8>): u32 {
         // reverse big endian to little endian
         vector::reverse(&mut data);
         aptos_std::from_bcs::to_u32(data)
     }
 
-    fun to_u256be(data: vector<u8>): u256 {
+    inline fun to_u256be(data: vector<u8>): u256 {
         // reverse big endian to little endian
         vector::reverse(&mut data);
         aptos_std::from_bcs::to_u256(data)
@@ -323,11 +324,11 @@ module data_feeds::registry {
         );
 
         let (feed_ids, reports) = parse_raw_report(data);
-        vector::zip(
-            feed_ids,
-            reports,
+        vector::zip_ref(
+            &feed_ids,
+            &reports,
             |feed_id, report| {
-                perform_update(registry, feed_id, report);
+                perform_update(registry, *feed_id, *report);
             }
         );
 

@@ -13,6 +13,8 @@ module keystone::storage {
     use aptos_framework::fungible_asset::{Self, Metadata};
     use aptos_framework::object::{Self, ExtendRef, Object};
 
+    const APP_OBJECT_SEED: vector<u8> = b"STORAGE";
+
     friend keystone::forwarder;
 
     const E_UNKNOWN_RECEIVER: u64 = 1;
@@ -28,7 +30,7 @@ module keystone::storage {
         dispatcher: Table<TypeInfo, Entry>,
         address_to_typeinfo: Table<address, TypeInfo>,
         /// Used to store temporary data for dispatching.
-        obj_ref: ExtendRef
+        extend_ref: ExtendRef
     }
 
     /// Store the data to dispatch here.
@@ -76,7 +78,7 @@ module keystone::storage {
             &constructor_ref, option::some(callback)
         );
 
-        let dispatcher = borrow_global_mut<Dispatcher>(@keystone);
+        let dispatcher = borrow_global_mut<Dispatcher>(storage_address());
         table::add(
             &mut dispatcher.dispatcher,
             type_info::type_of<T>(),
@@ -92,16 +94,16 @@ module keystone::storage {
     /// Insert into this module as the callback needs to retrieve and avoid a cyclical dependency:
     /// engine -> storage and then engine -> callback -> storage
     public(friend) fun insert(
-        address: address, meta: vector<u8>, data: vector<u8>
+        receiver: address, callback_metadata: vector<u8>, callback_data: vector<u8>
     ): Object<Metadata> acquires Dispatcher {
-        let dispatcher = borrow_global<Dispatcher>(@keystone);
-        let typeinfo = *table::borrow(&dispatcher.address_to_typeinfo, address);
+        let dispatcher = borrow_global<Dispatcher>(storage_address());
+        let typeinfo = *table::borrow(&dispatcher.address_to_typeinfo, receiver);
         assert!(table::contains(&dispatcher.dispatcher, typeinfo), E_UNKNOWN_RECEIVER);
-        let Entry { metadata, extend_ref } =
+        let Entry { metadata: asset_metadata, extend_ref } =
             table::borrow(&dispatcher.dispatcher, typeinfo);
         let obj_signer = object::generate_signer_for_extending(extend_ref);
-        move_to(&obj_signer, Storage { data, metadata: meta });
-        *metadata
+        move_to(&obj_signer, Storage { data: callback_data, metadata: callback_metadata });
+        *asset_metadata
     }
 
     public(friend) fun storage_exists(obj_address: address): bool {
@@ -111,7 +113,7 @@ module keystone::storage {
     /// Second half of the process for retrieving. This happens outside engine to prevent the
     /// cyclical dependency.
     public fun retrieve<T: drop>(_proof: T): (vector<u8>, vector<u8>) acquires Dispatcher, Storage {
-        let dispatcher = borrow_global<Dispatcher>(@keystone);
+        let dispatcher = borrow_global<Dispatcher>(storage_address());
         let typeinfo = type_info::type_of<T>();
         let Entry { metadata: _, extend_ref } =
             table::borrow(&dispatcher.dispatcher, typeinfo);
@@ -139,25 +141,30 @@ module keystone::storage {
 
     /// Prepares the dispatch table.
     fun init_module(publisher: &signer) {
-        let constructor_ref = object::create_object(@keystone);
+        assert!(signer::address_of(publisher) == @keystone, 1);
+
+        let constructor_ref = object::create_named_object(publisher, APP_OBJECT_SEED);
+
+        let extend_ref = object::generate_extend_ref(&constructor_ref);
+        let object_signer = object::generate_signer(&constructor_ref);
 
         move_to(
-            publisher,
+            &object_signer,
             Dispatcher {
                 dispatcher: table::new(),
                 address_to_typeinfo: table::new(),
-                obj_ref: object::generate_extend_ref(&constructor_ref)
+                extend_ref: extend_ref,
             }
         );
     }
 
     inline fun storage_address(): address acquires Dispatcher {
-        object::address_from_extend_ref(&borrow_global<Dispatcher>(@keystone).obj_ref)
+        object::create_object_address(&@keystone, APP_OBJECT_SEED)
     }
 
     inline fun storage_signer(): signer acquires Dispatcher {
         object::generate_signer_for_extending(
-            &borrow_global<Dispatcher>(@keystone).obj_ref
+            &borrow_global<Dispatcher>(storage_address()).extend_ref
         )
     }
 

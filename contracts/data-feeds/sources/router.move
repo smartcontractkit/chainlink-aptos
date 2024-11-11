@@ -40,10 +40,11 @@ module data_feeds::router {
     }
 
     fun init_module(publisher: &signer) {
+        assert!(signer::address_of(publisher) == @data_feeds, 1);
+
         let constructor_ref = object::create_named_object(
             publisher, APP_OBJECT_SEED
         );
-        let _object_address = object::address_from_constructor_ref(&constructor_ref);
 
         let extend_ref = object::generate_extend_ref(&constructor_ref);
         let object_signer = object::generate_signer(&constructor_ref);
