@@ -43,9 +43,7 @@ module data_feeds::router {
     fun init_module(publisher: &signer) {
         assert!(signer::address_of(publisher) == @data_feeds, 1);
 
-        let constructor_ref = object::create_named_object(
-            publisher, APP_OBJECT_SEED
-        );
+        let constructor_ref = object::create_named_object(publisher, APP_OBJECT_SEED);
 
         let extend_ref = object::generate_extend_ref(&constructor_ref);
         let transfer_ref = object::generate_transfer_ref(&constructor_ref);
@@ -53,7 +51,12 @@ module data_feeds::router {
 
         move_to(
             &object_signer,
-            Router { owner_address: @owner, pending_owner_address: @0x0, extend_ref, transfer_ref }
+            Router {
+                owner_address: @owner,
+                pending_owner_address: @0x0,
+                extend_ref,
+                transfer_ref
+            }
         );
     }
 
@@ -111,14 +114,13 @@ module data_feeds::router {
         let router = borrow_global_mut<Router>(get_state_addr());
         assert_is_owner(router, signer::address_of(authority));
         assert!(
-            router.owner_address != to, error::invalid_argument(ECANNOT_TRANSFER_TO_SELF)
+            router.owner_address != to,
+            error::invalid_argument(ECANNOT_TRANSFER_TO_SELF)
         );
 
         router.pending_owner_address = to;
 
-        event::emit(
-            OwnershipTransferRequested { from: router.owner_address, to }
-        );
+        event::emit(OwnershipTransferRequested { from: router.owner_address, to });
     }
 
     public entry fun accept_ownership(authority: &signer) acquires Router {

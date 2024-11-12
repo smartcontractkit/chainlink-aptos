@@ -129,7 +129,6 @@ module platform::storage {
         // workflow_name            // offset 32, size 10
         // workflow_owner           // offset 42, size 20
         // report_id                // offset 62, size  2
-
         assert!(vector::length(&metadata) == 64, E_INVALID_METADATA_LENGTH);
 
         let workflow_cid = vector::slice(&metadata, 0, 32);

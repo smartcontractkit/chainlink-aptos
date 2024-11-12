@@ -196,7 +196,10 @@ module mcms::multisig {
 
     #[view]
     public fun get_multisig_addr(): address acquires MCMState {
-        assert!(exists<MCMState>(get_state_addr()), ENO_MULTISIG);
+        assert!(
+            exists<MCMState>(get_state_addr()),
+            ENO_MULTISIG
+        );
         borrow_global<MCMState>(get_state_addr()).addr
     }
 
@@ -408,9 +411,7 @@ module mcms::multisig {
             &multisig_signer, multisig_addr, data
         );
 
-        event::emit(
-            OpExecuted { nonce: op.nonce, data: op.data }
-        )
+        event::emit(OpExecuted { nonce: op.nonce, data: op.data })
     }
 
     public entry fun set_config(
@@ -433,7 +434,8 @@ module mcms::multisig {
             ESIGNER_GROUPS_LEN_MISMATCH
         );
         assert!(
-            vector::length(&group_quorums) == (NUM_GROUPS as u64), EINVALID_GROUP_QUORUM_LEN
+            vector::length(&group_quorums) == (NUM_GROUPS as u64),
+            EINVALID_GROUP_QUORUM_LEN
         );
         assert!(
             vector::length(&group_parents) == (NUM_GROUPS as u64),
@@ -462,8 +464,14 @@ module mcms::multisig {
             // - the root should have itself as parent
             // - all other groups should have a parent group with a lower index
             let group_parent = vector::borrow(&group_parents, (i as u64));
-            assert!(i == 0 || *group_parent < i, EGROUP_TREE_NOT_WELL_FORMED);
-            assert!(i != 0 || *group_parent == 0, EGROUP_TREE_NOT_WELL_FORMED);
+            assert!(
+                i == 0 || *group_parent < i,
+                EGROUP_TREE_NOT_WELL_FORMED
+            );
+            assert!(
+                i != 0 || *group_parent == 0,
+                EGROUP_TREE_NOT_WELL_FORMED
+            );
 
             let group_quorum = vector::borrow(&group_quorums, (i as u64));
             let disabled = *group_quorum == 0;
@@ -570,7 +578,11 @@ module mcms::multisig {
         // create multisig account with the resource account and @owner as owners, requiring 2 signatures.
         // this is necessary because we need an EOA account to execute the 0x1::multisig_account transaction.
         multisig_account::create_with_owners(
-            &resource_signer, vector[@owner], 2, vector[], vector[]
+            &resource_signer,
+            vector[@owner],
+            2,
+            vector[],
+            vector[]
         );
 
         move_to(
@@ -622,11 +634,7 @@ module mcms::multisig {
 
         // retrieve signer public key
         let public_key =
-            aptos_std::secp256k1::ecdsa_recover(
-                eth_signed_message_hash,
-                v,
-                &sig
-            );
+            aptos_std::secp256k1::ecdsa_recover(eth_signed_message_hash, v, &sig);
         assert!(option::is_some(&public_key), EFAILED_ECDSA_RECOVER);
 
         // return last 20 bytes of hashed public key as the recovered ethereum address
@@ -667,7 +675,9 @@ module mcms::multisig {
         };
 
         let hash_preimage: vector<u8> = vector[];
-        vector::append(&mut hash_preimage, MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA);
+        vector::append(
+            &mut hash_preimage, MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA
+        );
         vector::append(&mut hash_preimage, chain_id);
         vector::append(&mut hash_preimage, multisig);
         vector::append(&mut hash_preimage, pre_op_count);
@@ -705,7 +715,9 @@ module mcms::multisig {
     }
 
     fun verify_merkle_proof(
-        proof: vector<vector<u8>>, root: vector<u8>, leaf: vector<u8>
+        proof: vector<vector<u8>>,
+        root: vector<u8>,
+        leaf: vector<u8>
     ): bool {
         let computed_hash = leaf;
         vector::for_each(
@@ -727,7 +739,10 @@ module mcms::multisig {
 
     // retrieve signer for multisig account - should be protected with appropriate guards
     fun multisig_signer(): signer acquires MCMState {
-        assert!(exists<MCMState>(get_state_addr()), ENO_MULTISIG);
+        assert!(
+            exists<MCMState>(get_state_addr()),
+            ENO_MULTISIG
+        );
         account::create_signer_with_capability(
             &borrow_global<MCMState>(get_state_addr()).signer_cap
         )
@@ -932,7 +947,13 @@ module mcms::multisig {
 
     #[test_only]
     fun call_execute(args: ExecuteArgs) acquires MCMState {
-        execute(args.chain_id, args.multisig, args.nonce, args.data, args.proof);
+        execute(
+            args.chain_id,
+            args.multisig,
+            args.nonce,
+            args.data,
+            args.proof
+        );
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
@@ -980,7 +1001,10 @@ module mcms::multisig {
         // transaction.
         let multisig_address = get_multisig_addr();
         assert!(!multisig_account::can_be_executed(multisig_address, 1), 4);
-        assert!(multisig_account::can_execute(@owner, multisig_address, 1), 5);
+        assert!(
+            multisig_account::can_execute(@owner, multisig_address, 1),
+            5
+        );
     }
 
     //// set_root tests ////
@@ -1345,7 +1369,14 @@ module mcms::multisig {
         // empty signer addresses and groups
         let signer_addr = vector[];
         let signer_group = vector[];
-        set_config(owner, signer_addr, signer_group, vector[], vector[], false);
+        set_config(
+            owner,
+            signer_addr,
+            signer_group,
+            vector[],
+            vector[],
+            false
+        );
     }
 
     #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
@@ -1872,7 +1903,8 @@ module mcms::multisig {
         let hash = compute_eth_message_hash(root, valid_until);
         // test output computed from equivalent solidity function: ECDSA.toEthSignedMessageHash(keccak256(abi.encode(root, validUntil)));
         assert!(
-            hash == x"032705bd71839baef725154f00f87ddcc1d95c4b5189c9fb5983f26ad6c95102", 1
+            hash == x"032705bd71839baef725154f00f87ddcc1d95c4b5189c9fb5983f26ad6c95102",
+            1
         );
     }
 
@@ -1888,7 +1920,8 @@ module mcms::multisig {
         let hash = hash_metadata_leaf(metadata);
         // test output computed from equivalent solidity function: keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA, metadata))
         assert!(
-            hash == x"ea6938e5cfa9b72197343db029e3146dec767d24f830eb750252076e439ccffa", 1
+            hash == x"ea6938e5cfa9b72197343db029e3146dec767d24f830eb750252076e439ccffa",
+            1
         );
     }
 

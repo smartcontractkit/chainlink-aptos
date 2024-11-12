@@ -82,16 +82,15 @@ module platform::forwarder {
 
     inline fun assert_is_owner(state: &State, target_address: address) {
         assert!(
-            state.owner_address == target_address, error::permission_denied(E_NOT_OWNER)
+            state.owner_address == target_address,
+            error::permission_denied(E_NOT_OWNER)
         );
     }
 
     fun init_module(publisher: &signer) {
         assert!(signer::address_of(publisher) == @platform, 1);
 
-        let constructor_ref = object::create_named_object(
-            publisher, APP_OBJECT_SEED
-        );
+        let constructor_ref = object::create_named_object(publisher, APP_OBJECT_SEED);
 
         let extend_ref = object::generate_extend_ref(&constructor_ref);
         let transfer_ref = object::generate_transfer_ref(&constructor_ref);
@@ -176,7 +175,8 @@ module platform::forwarder {
 
     public fun signature_from_bytes(bytes: vector<u8>): Signature {
         assert!(
-            vector::length(&bytes) == 96, error::invalid_argument(E_MALFORMED_SIGNATURE)
+            vector::length(&bytes) == 96,
+            error::invalid_argument(E_MALFORMED_SIGNATURE)
         );
         let public_key =
             ed25519::new_unvalidated_public_key_from_bytes(vector::slice(&bytes, 0, 32));
@@ -202,7 +202,8 @@ module platform::forwarder {
         let obj_address =
             object::object_address<aptos_framework::fungible_asset::Metadata>(&meta);
         assert!(
-            !platform::storage::storage_exists(obj_address), E_CALLBACK_DATA_NOT_CONSUMED
+            !platform::storage::storage_exists(obj_address),
+            E_CALLBACK_DATA_NOT_CONSUMED
         );
     }
 
@@ -261,7 +262,7 @@ module platform::forwarder {
         let metadata = vector::slice(&report, 45, 109);
         let data = vector::slice(&report, 109, vector::length(&report));
 
-        let config_id =  ConfigId { don_id, config_version };
+        let config_id = ConfigId { don_id, config_version };
         assert!(smart_table::contains(&state.configs, config_id), E_CONFIG_ID_NOT_FOUND);
         let config = smart_table::borrow(&state.configs, config_id);
 
@@ -309,9 +310,7 @@ module platform::forwarder {
             &mut state.reports, transmission_id, signer::address_of(transmitter)
         );
 
-        event::emit(
-            ReportProcessed { receiver, workflow_execution_id, report_id }
-        );
+        event::emit(ReportProcessed { receiver, workflow_execution_id, report_id });
 
         (metadata, data)
     }
@@ -351,14 +350,13 @@ module platform::forwarder {
         let state = borrow_global_mut<State>(get_state_addr());
         assert_is_owner(state, signer::address_of(authority));
         assert!(
-            state.owner_address != to, error::invalid_argument(E_CANNOT_TRANSFER_TO_SELF)
+            state.owner_address != to,
+            error::invalid_argument(E_CANNOT_TRANSFER_TO_SELF)
         );
 
         state.pending_owner_address = to;
 
-        event::emit(
-            OwnershipTransferRequested { from: state.owner_address, to }
-        );
+        event::emit(OwnershipTransferRequested { from: state.owner_address, to });
     }
 
     public entry fun accept_ownership(authority: &signer) acquires State {
@@ -433,10 +431,7 @@ module platform::forwarder {
                     *vector::borrow(&config.oracles, (i as u64))
                 );
             let sig = ed25519::sign_arbitrary_bytes(config_signer, msg);
-            vector::push_back(
-                &mut signatures,
-                Signature { sig, public_key }
-            );
+            vector::push_back(&mut signatures, Signature { sig, public_key });
         };
         signatures
     }
@@ -508,7 +503,12 @@ module platform::forwarder {
         let signatures = sign_report(&config, report, report_context);
 
         // call entrypoint
-        validate_and_process_report(owner, signer::address_of(publisher), raw_report, signatures);
+        validate_and_process_report(
+            owner,
+            signer::address_of(publisher),
+            raw_report,
+            signatures
+        );
     }
 
     #[test(owner = @owner, publisher = @platform, new_owner = @0xbeef)]
@@ -528,9 +528,7 @@ module platform::forwarder {
     #[test(owner = @owner, publisher = @platform, unknown_user = @0xbeef)]
     #[expected_failure(abort_code = 327687, location = platform::forwarder)]
     fun test_transfer_ownership_failure_not_owner(
-        owner: &signer,
-        publisher: &signer,
-        unknown_user: &signer
+        owner: &signer, publisher: &signer, unknown_user: &signer
     ) acquires State {
         set_up_test(owner, publisher);
 

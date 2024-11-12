@@ -43,7 +43,7 @@ module data_feeds::registry {
 
     struct FeedMetadata has store, drop, key {
         description: String,
-        config_id: vector<u8>,
+        config_id: vector<u8>
     }
 
     #[event]
@@ -113,7 +113,8 @@ module data_feeds::registry {
         registry: &Registry, target_address: address
     ) {
         assert!(
-            registry.owner_address == target_address, error::permission_denied(ENOT_OWNER)
+            registry.owner_address == target_address,
+            error::permission_denied(ENOT_OWNER)
         );
     }
 
@@ -132,9 +133,7 @@ module data_feeds::registry {
     fun init_module(publisher: &signer) {
         assert!(signer::address_of(publisher) == @data_feeds, 1);
 
-        let constructor_ref = object::create_named_object(
-            publisher, APP_OBJECT_SEED
-        );
+        let constructor_ref = object::create_named_object(publisher, APP_OBJECT_SEED);
 
         let extend_ref = object::generate_extend_ref(&constructor_ref);
         let transfer_ref = object::generate_transfer_ref(&constructor_ref);
@@ -345,7 +344,10 @@ module data_feeds::registry {
     ) acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
         assert_is_owner(registry, signer::address_of(authority));
-        assert!(!vector::is_empty(&allowed_workflow_owners), error::invalid_argument(EEMPTY_WORKFLOW_OWNERS));
+        assert!(
+            !vector::is_empty(&allowed_workflow_owners),
+            error::invalid_argument(EEMPTY_WORKFLOW_OWNERS)
+        );
 
         registry.allowed_workflow_owners = allowed_workflow_owners;
         registry.allowed_workflow_names = allowed_workflow_names;
@@ -354,7 +356,10 @@ module data_feeds::registry {
     // Parse ETH ABI encoded raw data into multiple reports
     fun parse_raw_report(data: vector<u8>): (vector<vector<u8>>, vector<vector<u8>>) {
         let offset = 0;
-        assert!(to_u256be(vector::slice(&data, offset, offset + 32)) == 32, 32);
+        assert!(
+            to_u256be(vector::slice(&data, offset, offset + 32)) == 32,
+            32
+        );
         offset = offset + 32;
 
         let count = to_u256be(vector::slice(&data, offset, offset + 32));
@@ -373,7 +378,10 @@ module data_feeds::registry {
             vector::push_back(&mut feed_ids, feed_id);
             offset = offset + 32;
 
-            assert!(to_u256be(vector::slice(&data, offset, offset + 32)) == 64, 64);
+            assert!(
+                to_u256be(vector::slice(&data, offset, offset + 32)) == 64,
+                64
+            );
             offset = offset + 32;
 
             let len = (to_u256be(vector::slice(&data, offset, offset + 32)) as u64);
@@ -404,7 +412,9 @@ module data_feeds::registry {
         let benchmark_price: u256;
         if (schema == SCHEMA_V3 || schema == SCHEMA_V4) {
             // offsets are the same for timestamp and benchmark in v3 and v4.
-            observation_timestamp = (to_u32be(vector::slice(&report_data, 3 * 32 - 4, 3 * 32)) as u256);
+            observation_timestamp = (
+                to_u32be(vector::slice(&report_data, 3 * 32 - 4, 3 * 32)) as u256
+            );
             // NOTE: aptos has no signed integer types, so can't parse as i196, this is a raw representation
             benchmark_price = to_u256be(vector::slice(&report_data, 6 * 32, 7 * 32));
         } else {
@@ -413,10 +423,10 @@ module data_feeds::registry {
 
         if (feed.observation_timestamp >= observation_timestamp) {
             event::emit(
-                StaleReport{
+                StaleReport {
                     feed_id,
                     latest_timestamp: feed.observation_timestamp,
-                    report_timestamp: observation_timestamp,
+                    report_timestamp: observation_timestamp
                 }
             );
         };
@@ -522,10 +532,7 @@ module data_feeds::registry {
 
                 let feed = simple_map::borrow(&registry.feeds, &feed_id);
 
-                FeedMetadata {
-                    description: feed.description,
-                    config_id: feed.config_id,
-                }
+                FeedMetadata { description: feed.description, config_id: feed.config_id }
             }
         )
     }
@@ -542,16 +549,13 @@ module data_feeds::registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
         assert_is_owner(registry, signer::address_of(authority));
         assert!(
-            registry.owner_address != to, error::invalid_argument(
-                ECANNOT_TRANSFER_TO_SELF
-            )
+            registry.owner_address != to,
+            error::invalid_argument(ECANNOT_TRANSFER_TO_SELF)
         );
 
         registry.pending_owner_address = to;
 
-        event::emit(
-            OwnershipTransferRequested { from: registry.owner_address, to }
-        );
+        event::emit(OwnershipTransferRequested { from: registry.owner_address, to });
     }
 
     public entry fun accept_ownership(authority: &signer) acquires Registry {
@@ -667,13 +671,12 @@ module data_feeds::registry {
 
     #[test(owner = @owner, publisher = @data_feeds, platform = @platform)]
     fun test_perform_update_v3(
-        owner: &signer,
-        publisher: &signer,
-        platform: &signer
+        owner: &signer, publisher: &signer, platform: &signer
     ) acquires Registry {
         set_up_test(publisher, platform);
 
-        let report_data = x"0003fbba4fce42f65d6032b18aee53efdf526cc734ad296cb57565979d883bdd0000000000000000000000000000000000000000000000000000000066ed173e0000000000000000000000000000000000000000000000000000000066ed174200000000000000007fffffffffffffffffffffffffffffffffffffffffffffff00000000000000007fffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000066ee68c2000000000000000000000000000000000000000000000d808cc35e6ed670bd00000000000000000000000000000000000000000000000d808590c35425347980000000000000000000000000000000000000000000000d8093f5f989878e7c00";
+        let report_data =
+            x"0003fbba4fce42f65d6032b18aee53efdf526cc734ad296cb57565979d883bdd0000000000000000000000000000000000000000000000000000000066ed173e0000000000000000000000000000000000000000000000000000000066ed174200000000000000007fffffffffffffffffffffffffffffffffffffffffffffff00000000000000007fffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000066ee68c2000000000000000000000000000000000000000000000d808cc35e6ed670bd00000000000000000000000000000000000000000000000d808590c35425347980000000000000000000000000000000000000000000000d8093f5f989878e7c00";
         let feed_id = vector::slice(&report_data, 0, 32);
         let expected_timestamp = 0x000066ed1742;
         let expected_benchmark = 0x000d808cc35e6ed670bd00;
@@ -685,7 +688,7 @@ module data_feeds::registry {
             vector[feed_id],
             vector[string::utf8(b"description")],
             config_id
-            );
+        );
 
         let registry = borrow_global_mut<Registry>(get_state_addr());
         perform_update(registry, feed_id, report_data);
@@ -698,9 +701,14 @@ module data_feeds::registry {
         assert!(benchmark.observation_timestamp == expected_timestamp, 1);
     }
 
-    #[test(
-        owner = @owner, publisher = @data_feeds, platform = @platform, new_owner = @0xbeef
-    )]
+    #[
+        test(
+            owner = @owner,
+            publisher = @data_feeds,
+            platform = @platform,
+            new_owner = @0xbeef
+        )
+    ]
     fun test_transfer_ownership_success(
         owner: &signer,
         publisher: &signer,
@@ -720,9 +728,7 @@ module data_feeds::registry {
     #[test(publisher = @data_feeds, platform = @platform, unknown_user = @0xbeef)]
     #[expected_failure(abort_code = 327681, location = data_feeds::registry)]
     fun test_transfer_ownership_failure_not_owner(
-        publisher: &signer,
-        platform: &signer,
-        unknown_user: &signer
+        publisher: &signer, platform: &signer, unknown_user: &signer
     ) acquires Registry {
         set_up_test(publisher, platform);
 
@@ -734,9 +740,7 @@ module data_feeds::registry {
     #[test(owner = @owner, publisher = @data_feeds, platform = @platform)]
     #[expected_failure(abort_code = 65546, location = data_feeds::registry)]
     fun test_transfer_ownership_failure_transfer_to_self(
-        owner: &signer,
-        publisher: &signer,
-        platform: &signer
+        owner: &signer, publisher: &signer, platform: &signer
     ) acquires Registry {
         set_up_test(publisher, platform);
 
@@ -745,9 +749,14 @@ module data_feeds::registry {
         transfer_ownership(owner, signer::address_of(owner));
     }
 
-    #[test(
-        owner = @owner, publisher = @data_feeds, platform = @platform, new_owner = @0xbeef
-    )]
+    #[
+        test(
+            owner = @owner,
+            publisher = @data_feeds,
+            platform = @platform,
+            new_owner = @0xbeef
+        )
+    ]
     #[expected_failure(abort_code = 327691, location = data_feeds::registry)]
     fun test_transfer_ownership_failure_not_proposed_owner(
         owner: &signer,

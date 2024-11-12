@@ -13,7 +13,10 @@ module test::counter {
     }
 
     public entry fun increment_mult(
-        _account: &signer, counter_address: address, a: u64, b: u64
+        _account: &signer,
+        counter_address: address,
+        a: u64,
+        b: u64
     ) acquires Counter {
         let counter = borrow_global_mut<Counter>(counter_address);
         counter.value = counter.value + (a * b);
