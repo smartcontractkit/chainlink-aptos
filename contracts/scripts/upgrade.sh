@@ -6,11 +6,11 @@ PUBLISHER_ADDR=0x$(aptos config show-profiles --profile=$PUBLISHER_PROFILE | gre
 
 # deploy platform forwarder
 
-PLATFORM_ADDR=$(cat platform/contract_address.txt)
+PLATFORM_FORWARDER_ADDR=$(cat platform/contract_address.txt)
 
 aptos move upgrade-object-package \
   --package-dir platform \
-  --object-address $PLATFORM_ADDR \
-  --named-addresses platform=$PLATFORM_ADDR,owner=$PUBLISHER_ADDR \
+  --object-address $PLATFORM_FORWARDER_ADDR \
+  --named-addresses platform=$PLATFORM_FORWARDER_ADDR,owner=$PUBLISHER_ADDR \
   --profile $PUBLISHER_PROFILE \
 	--assume-yes

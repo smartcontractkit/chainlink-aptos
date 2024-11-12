@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 CONTAINER_VERSION="latest"
-PLATFORM_ADDR=$(cat "$(dirname -- "$0")"/../contracts/platform/contract_address.txt)
+PLATFORM_FORWARDER_ADDR=$(cat "$(dirname -- "$0")"/../contracts/platform/contract_address.txt)
 
 # Check if .env file exists in the parent directory
 if [ -f "../.env" ]; then
@@ -19,9 +19,9 @@ container_name="chainlink.core"
 api_email="notreal@fakeemail.ch"
 api_password="fj293fbBnlQ!f9vNs"
 
-# read the core config file and replace the PLATFORM_ADDR with the actual address
+# read the core config file and replace the PLATFORM_FORWARDER_ADDR with the actual address
 CL_CONFIG_TEMPLATE=$(cat "$(dirname -- "$0")/core.config.toml")
-CL_CONFIG=$(echo "$CL_CONFIG_TEMPLATE" | sed "s/\$PLATFORM_ADDR/${PLATFORM_ADDR}/")
+CL_CONFIG=$(echo "$CL_CONFIG_TEMPLATE" | sed "s/\$PLATFORM_FORWARDER_ADDR/${PLATFORM_FORWARDER_ADDR}/")
 
 if [[ -z "${CL_CONFIG:-}" ]]; then
 	echo "No CL_CONFIG env var provided." >&2

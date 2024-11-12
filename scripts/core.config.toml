@@ -28,7 +28,7 @@ NetworkName = "localnet" # optional
 NetworkNameFull = "aptos-localnet" # optional, CLL naming convention
 
 [Aptos.Workflow]
-ForwarderAddress = "$PLATFORM_ADDR"
+ForwarderAddress = "$PLATFORM_FORWARDER_ADDR"
 PublicKey = ""
 
 [[Aptos.Nodes]]

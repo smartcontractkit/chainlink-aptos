@@ -15,8 +15,8 @@ OUTPUT=$(aptos move create-object-and-publish-package \
  
 # # Extract the deployed contract address and save it to a file
 echo "$OUTPUT" | grep "Code was successfully deployed to object address" | awk '{print $NF}' | sed 's/\.$//' > platform/contract_address.txt
-PLATFORM_ADDR=$(cat platform/contract_address.txt)
-echo "Contract deployed to address: $PLATFORM_ADDR"
+PLATFORM_FORWARDER_ADDR=$(cat platform/contract_address.txt)
+echo "Contract deployed to address: $PLATFORM_FORWARDER_ADDR"
 echo "Contract address saved to contract_address.txt"
 
 # deploy data feeds
@@ -24,7 +24,7 @@ echo "Contract address saved to contract_address.txt"
  OUTPUT=$(aptos move create-object-and-publish-package \
   --package-dir data-feeds \
   --address-name data_feeds \
-  --named-addresses data_feeds=$PUBLISHER_ADDR,platform=$PLATFORM_ADDR,owner=$PUBLISHER_ADDR \
+  --named-addresses data_feeds=$PUBLISHER_ADDR,platform=$PLATFORM_FORWARDER_ADDR,owner=$PUBLISHER_ADDR \
   --profile $PUBLISHER_PROFILE \
  --assume-yes)
 
