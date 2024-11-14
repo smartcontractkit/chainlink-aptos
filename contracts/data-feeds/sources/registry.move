@@ -23,7 +23,7 @@ module data_feeds::registry {
         allowed_workflow_names: vector<vector<u8>>
     }
 
-    struct Feed has key, store, drop {
+    struct Feed has key, store, drop, copy {
         description: String,
         config_id: vector<u8>,
         benchmark: u256,
@@ -44,6 +44,16 @@ module data_feeds::registry {
     struct FeedMetadata has store, drop, key {
         description: String,
         config_id: vector<u8>
+    }
+
+    struct WorkflowConfig {
+        allowed_workflow_owners: vector<vector<u8>>,
+        allowed_workflow_names: vector<vector<u8>>
+    }
+
+    struct FeedConfig {
+        feed_id: vector<u8>,
+        feed: Feed
     }
 
     #[event]
@@ -351,6 +361,34 @@ module data_feeds::registry {
 
         registry.allowed_workflow_owners = allowed_workflow_owners;
         registry.allowed_workflow_names = allowed_workflow_names;
+    }
+
+    #[view]
+    public fun get_workflow_config(): WorkflowConfig acquires Registry {
+        let registry = borrow_global<Registry>(get_state_addr());
+
+        WorkflowConfig {
+            allowed_workflow_owners: registry.allowed_workflow_owners,
+            allowed_workflow_names: registry.allowed_workflow_names
+        }
+    }
+
+    #[view]
+    public fun get_feeds(): vector<FeedConfig> acquires Registry {
+        let registry = borrow_global<Registry>(get_state_addr());
+        let feed_configs = vector[];
+        let (feed_ids, feeds) = simple_map::to_vec_pair(registry.feeds);
+        vector::zip_ref(
+            &feed_ids,
+            &feeds,
+            |feed_id, feed| {
+                vector::push_back(
+                    &mut feed_configs,
+                    FeedConfig { feed_id: *feed_id, feed: *feed }
+                );
+            }
+        );
+        feed_configs
     }
 
     // Parse ETH ABI encoded raw data into multiple reports
