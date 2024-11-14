@@ -2,10 +2,9 @@ package monitor
 
 import (
 	"context"
-	"fmt"
 
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/runtime/protoimpl"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
@@ -68,7 +67,12 @@ func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any
 func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs ...any) error {
 	attrKVs = e.appendRequiredAttrs(m, attrKVs)
 
-	mStr := fmt.Sprintf("{%s}", protoimpl.X.MessageStringOf(m))
+	// Marshal the message as JSON and log before emitting
+	// https://protobuf.dev/programming-guides/json/
+	mStr := protojson.MarshalOptions{
+		UseProtoNames:   true,
+		EmitUnpopulated: true,
+	}.Format(m)
 	e.lggr.Infow("[Beholder.emit]", "message", mStr, "attributes", attrKVs)
 
 	return e.Emit(ctx, m, attrKVs...)

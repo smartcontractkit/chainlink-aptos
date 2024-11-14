@@ -8,7 +8,7 @@ option go_package = ".;forwarder";
 message ReportProcessed {
   // Event data
   string receiver = 1;
-  bytes workflow_execution_id = 2;
+  string workflow_execution_id = 2; // bytes as hex string for readability
   uint32 report_id = 3;
   bool success = 4;
 

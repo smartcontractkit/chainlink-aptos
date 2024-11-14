@@ -7,7 +7,7 @@ option go_package = ".;registry";
 // the write-target WriteConfirmed event, after a write was confirmed (@see message: write-target.WriteConfirmed).
 message FeedUpdated {
   // Event data
-  bytes feed_id = 1;
+  string feed_id = 1; // bytes as hex string for readability
   uint32 observations_timestamp = 2;
   bytes benchmark = 3;
   bytes report = 4;

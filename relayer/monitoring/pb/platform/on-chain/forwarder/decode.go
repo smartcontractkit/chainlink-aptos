@@ -1,7 +1,6 @@
 package forwarder
 
 import (
-	"encoding/hex"
 	"fmt"
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/platform"
@@ -18,15 +17,10 @@ func DecodeAsReportProcessed(m *wt_msg.WriteConfirmed) (*ReportProcessed, error)
 		return nil, fmt.Errorf("failed to decode report: %w", err)
 	}
 
-	executionID, err := hex.DecodeString(r.ExecutionID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode execution ID: %w", err)
-	}
-
 	return &ReportProcessed{
 		// Event data
 		Receiver:            m.Receiver,
-		WorkflowExecutionId: executionID,
+		WorkflowExecutionId: r.ExecutionID,
 		ReportId:            m.ReportId,
 		Success:             m.Success,
 

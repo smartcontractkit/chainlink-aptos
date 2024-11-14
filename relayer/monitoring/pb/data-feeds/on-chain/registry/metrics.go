@@ -2,7 +2,6 @@ package registry
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"strconv"
 
@@ -155,7 +154,7 @@ func (m *FeedUpdated) Attributes() []attribute.KeyValue {
 	}
 
 	attrs := []attribute.KeyValue{
-		attribute.String("feed_id", hex.EncodeToString(m.FeedId)),
+		attribute.String("feed_id", m.FeedId),
 
 		// TODO: do we need these attributes? (available in WriteConfirmed)
 		// attribute.String("node", m.Node),

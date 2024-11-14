@@ -42,6 +42,7 @@ func Decode(rawReport []byte) (*Report, error) {
 	if _, err := buf.Read(workflowExecutionIDBytes[:]); err != nil {
 		return nil, err
 	}
+	// TODO: should we prefix with 0x?
 	report.ExecutionID = hex.EncodeToString(workflowExecutionIDBytes[:])
 
 	// Decode timestamp
@@ -70,6 +71,7 @@ func Decode(rawReport []byte) (*Report, error) {
 	if _, err := buf.Read(workflowIDBytes[:]); err != nil {
 		return nil, err
 	}
+	// TODO: should we prefix with 0x?
 	report.WorkflowID = hex.EncodeToString(workflowIDBytes[:])
 
 	// Decode workflow_name (UTF-8)
@@ -84,6 +86,7 @@ func Decode(rawReport []byte) (*Report, error) {
 	if _, err := buf.Read(workflowOwnerBytes[:]); err != nil {
 		return nil, err
 	}
+	// TODO: should we prefix with 0x?
 	report.WorkflowOwner = hex.EncodeToString(workflowOwnerBytes[:])
 
 	// Decode report_id
@@ -91,6 +94,8 @@ func Decode(rawReport []byte) (*Report, error) {
 	if _, err := buf.Read(reportIDBytes[:]); err != nil {
 		return nil, err
 	}
+	// TODO: should we prefix with 0x?
+	// TODO: should this be hex encoded or UTF-8 string?
 	report.ReportID = hex.EncodeToString(reportIDBytes[:])
 
 	// Decode data

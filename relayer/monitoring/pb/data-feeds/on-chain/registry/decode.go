@@ -47,6 +47,10 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 
 		// Parse the report type
 		t := mercury_vX.GetReportType(rm.FeedId)
+
+		// Notice: we publish the DataFeed FeedID, not the unrelying DataStream FeedID
+		feedID := data_feeds.FeedID(rf.FeedId)
+
 		switch t {
 		case uint16(3):
 			rm, err := mercury_v3.Decode(rf.Data)
@@ -56,14 +60,13 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 
 			msgs = append(msgs, &FeedUpdated{
 				// Event data
-				// Notice: we publish DataFeed FeedID, not the unrelying DataStream FeedID
-				FeedId:                rf.FeedId[:], // Convert [32]byte to []byte
+				FeedId:                feedID.String(),
 				ObservationsTimestamp: rm.ObservationsTimestamp,
 				Benchmark:             rm.BenchmarkPrice.Bytes(), // Map big.Int as []byte
 				Report:                rf.Data,
 
 				// Notice: i192 will not fit if scaled number bigger than f64
-				BenchmarkVal: toBenchmarkVal(data_feeds.FeedID(rf.FeedId), rm.BenchmarkPrice),
+				BenchmarkVal: toBenchmarkVal(feedID, rm.BenchmarkPrice),
 
 				// Notice: we skip head/tx data here (unknown), as we map from 'platform.write-target.WriteConfirmed'
 				// and not from tx/event data (e.g., 'platform.write-target.WriteTxConfirmed')
@@ -102,14 +105,13 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 
 			msgs = append(msgs, &FeedUpdated{
 				// Event data
-				// Notice: we publish DataFeed FeedID, not the unrelying DataStream FeedID
-				FeedId:                rf.FeedId[:], // Convert [32]byte to []byte
+				FeedId:                feedID.String(),
 				ObservationsTimestamp: rm.ObservationsTimestamp,
 				Benchmark:             rm.BenchmarkPrice.Bytes(), // Map big.Int as []byte
 				Report:                rf.Data,
 
 				// Notice: i192 will not fit if scaled number bigger than f64
-				BenchmarkVal: toBenchmarkVal(data_feeds.FeedID(rf.FeedId), rm.BenchmarkPrice),
+				BenchmarkVal: toBenchmarkVal(feedID, rm.BenchmarkPrice),
 
 				// Notice: we skip head/tx data here (unknown), as we map from 'platform.write-target.WriteConfirmed'
 				// and not from tx/event data (e.g., 'platform.write-target.WriteTxConfirmed')

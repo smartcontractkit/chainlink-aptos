@@ -36,6 +36,11 @@ func hexDecodeStringAsByte32(s string) ([32]byte, error) {
 	return b, nil
 }
 
+// String returns the FeedID as a 0x prefixed hex string
+func (id FeedID) String() string {
+	return "0x" + hex.EncodeToString(id[:])
+}
+
 // GetReportType returns the report type sourced from the feedId
 //
 // [DF2.0 | Data ID Final Specification](https://docs.google.com/document/d/13ciwTx8lSUfyz1IdETwpxlIVSn1lwYzGtzOBBTpl5Vg/edit?usp=sharing)
