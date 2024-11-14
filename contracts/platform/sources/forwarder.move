@@ -47,7 +47,7 @@ module platform::forwarder {
         reports: SmartTable<vector<u8>, address>
     }
 
-    struct Config has key, store, drop {
+    struct Config has key, store, drop, copy {
         f: u8,
         // oracles: SimpleMap<address, Oracle>,
         oracles: vector<ed25519::UnvalidatedPublicKey>
@@ -344,6 +344,13 @@ module platform::forwarder {
     public fun get_owner(): address acquires State {
         let state = borrow_global<State>(get_state_addr());
         state.owner_address
+    }
+
+    #[view]
+    public fun get_config(don_id: u32, config_version: u32): Config acquires State {
+        let state = borrow_global<State>(get_state_addr());
+        let config_id = ConfigId { don_id, config_version };
+        *smart_table::borrow(&state.configs, config_id)
     }
 
     public entry fun transfer_ownership(authority: &signer, to: address) acquires State {
