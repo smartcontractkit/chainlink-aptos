@@ -20,13 +20,15 @@ bash "scripts/core.sh"
 
 pushd "../../chainlink/core/scripts/keystone"
 
-rm artefacts/deployed_contracts.json || true
-rm .cache/PublicKeys.json || true
 
 # Fund deployment key
 geth attach --exec "eth.sendTransaction({from: eth.accounts[0], to: '$ADDRESS', value: 20000000000000000000000})" http://127.0.0.1:8544
 
-go run main.go deploy-contracts --ocrfile=ocr_config.json --chainid=1337 --ethurl=http://localhost:8544 --accountkey=$ACCOUNT_KEY
+go run main.go toolkit deploy-ocr3-and-forwarder-contracts \
+  --ethurl=http://localhost:8544 \
+  --accountkey=$ACCOUNT_KEY \
+  --chainid=1337 \
+  --ocrfile=ocr_config.json 
 
 popd
 
@@ -42,8 +44,12 @@ popd
 
 pushd "../../chainlink/core/scripts/keystone"
 
-go run main.go deploy-jobspecs --chainid=1337 --p2pport=6691 --onlyreplay=false
+go run main.go toolkit deploy-ocr3-jobspecs \
+  --ethurl=http://localhost:8544 \
+  --accountkey=$ACCOUNT_KEY \
+  --chainid=1337
 
-go run main.go deploy-workflows --workflow=../../../../chainlink-internal-integrations/aptos/scripts/workflow.toml
+go run main.go toolkit deploy-workflows \
+  --workflow=../../../../chainlink-internal-integrations/aptos/scripts/workflow.toml
 
 # docker logs -f chainlink.core.2 | rg -F '"Hash"'

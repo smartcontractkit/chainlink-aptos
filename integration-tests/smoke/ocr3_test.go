@@ -61,7 +61,7 @@ func TestOCR3Keystone(t *testing.T) {
 	err = deployer.CreateNodeLists()
 	require.NoError(t, err, "Could not create nodes list")
 
-	deployer.Keystone.DeployContracts(deploy.GETH_ACC_KEY)
+	deployer.Keystone.DeployOCR3Contracts(deploy.GETH_ACC_KEY)
 	nodeKeys, err := common.LoadPublicKeys(deployer.Keystone.PublicKeys, lggr)
 
 	var pubKeys []string
@@ -80,7 +80,7 @@ func TestOCR3Keystone(t *testing.T) {
 	err = deployer.SaveWorkflowToml(deployer.Contracts.DataFeedsAddress, workflowOwner)
 	require.NoError(t, err, "Could not create workflow toml")
 
-	deployer.Keystone.DeployJobSpecs()
+	deployer.Keystone.DeployOCR3JobSpecs(deploy.GETH_ACC_KEY)
 	deployer.Keystone.DeployWorkflows(deployer.Configs.KeystoneWorkflow)
 
 	maxRuntime := 10 * time.Minute

@@ -88,6 +88,7 @@ func main() {
 			cacheFolder := jobsFlags.String("cacheFolder", "", "The test folder containing the nodelists and other test artifacts")
 			gethRpc := jobsFlags.String("gethRpc", "", "Local geth http RPC url")
 			chainId := jobsFlags.String("chainId", "", "Geth chain ID")
+			privKey := jobsFlags.String("gethPrivKey", "", "Private key for geth")
 
 			err := jobsFlags.Parse(os.Args[3:])
 			if err != nil {
@@ -107,7 +108,7 @@ func main() {
 				log.Fatalf("Could not load .env file: %v", err)
 			}
 
-			DeployJobSpecs(*cacheFolder, *gethRpc, *chainId)
+			DeployJobSpecs(*cacheFolder, *gethRpc, *chainId, *privKey)
 
 		case "workflows":
 			workflowsFlags := flag.NewFlagSet("workflows", flag.ExitOnError)
@@ -138,70 +139,6 @@ func main() {
 
 		default:
 			fmt.Printf("Invalid subcommand for deploy: %s. Use 'services' or 'contracts or jobspecs or workflows'.\n", subCmd)
-			os.Exit(1)
-		}
-
-	case "delete":
-		if len(os.Args) < 3 {
-			fmt.Println("Usage: go run main.go delete [subcommand] --flags")
-			fmt.Println("Subcommands: workflows, jobspecs")
-			os.Exit(1)
-		}
-
-		subCmd := os.Args[2]
-
-		switch subCmd {
-
-		case "workflows":
-			workflowsFlags := flag.NewFlagSet("workflows", flag.ExitOnError)
-			cacheFolder := workflowsFlags.String("cacheFolder", "", "The test folder containing the nodelists and other test artifacts")
-
-			err := workflowsFlags.Parse(os.Args[3:])
-			if err != nil {
-				workflowsFlags.Usage()
-				os.Exit(1)
-			}
-
-			if *cacheFolder == "" {
-				workflowsFlags.Usage()
-				os.Exit(1)
-			}
-
-			checkCacheFolder(*cacheFolder)
-
-			err = scripts.LoadEnv()
-			if err != nil {
-				log.Fatalf("Could not load .env file: %v", err)
-			}
-
-			DeleteWorkflows(*cacheFolder)
-
-		case "jobspecs":
-			jobspecsFlags := flag.NewFlagSet("jobspecs", flag.ExitOnError)
-			cacheFolder := jobspecsFlags.String("cacheFolder", "", "The test folder containing the nodelists and other test artifacts")
-
-			err := jobspecsFlags.Parse(os.Args[3:])
-			if err != nil {
-				jobspecsFlags.Usage()
-				os.Exit(1)
-			}
-
-			if *cacheFolder == "" {
-				jobspecsFlags.Usage()
-				os.Exit(1)
-			}
-
-			checkCacheFolder(*cacheFolder)
-
-			err = scripts.LoadEnv()
-			if err != nil {
-				log.Fatalf("Could not load .env file: %v", err)
-			}
-
-			DeleteJobSpecs(*cacheFolder)
-
-		default:
-			fmt.Printf("Invalid subcommand for delete: %s. Use 'workflows' or 'jobspecs'.\n", subCmd)
 			os.Exit(1)
 		}
 
@@ -281,10 +218,10 @@ func DeployContracts(cacheFolder string, gethHttpRpc string, chainId string, get
 		ChainId:       chainId,
 	}
 
-	kc.DeployContracts(gethPrivKey)
+	kc.DeployOCR3Contracts(gethPrivKey)
 }
 
-func DeployJobSpecs(cacheFolder string, gethHttpRpc string, chainId string) {
+func DeployJobSpecs(cacheFolder string, gethHttpRpc string, chainId string, gethPrivKey string) {
 	kc := deploy.Keystone{
 		LocalNodeList: fmt.Sprintf("%s/NodeList.local.txt", cacheFolder),
 		ArtefactsDir:  cacheFolder,
@@ -294,7 +231,7 @@ func DeployJobSpecs(cacheFolder string, gethHttpRpc string, chainId string) {
 		P2PPort:       6690,
 	}
 
-	kc.DeployJobSpecs()
+	kc.DeployOCR3JobSpecs(gethPrivKey)
 }
 
 func DeployWorkflows(workflowFile string, cacheFolder string, gethHttpRpc string, chainId string) {
@@ -307,26 +244,6 @@ func DeployWorkflows(workflowFile string, cacheFolder string, gethHttpRpc string
 	}
 
 	kc.DeployWorkflows(workflowFile)
-}
-
-func DeleteWorkflows(cacheFolder string) {
-	kc := deploy.Keystone{
-		LocalNodeList: fmt.Sprintf("%s/NodeList.local.txt", cacheFolder),
-		ArtefactsDir:  cacheFolder,
-		PublicKeys:    fmt.Sprintf("%s/PublicKeys.json", cacheFolder),
-	}
-
-	kc.DeleteWorkflows()
-}
-
-func DeleteJobSpecs(cacheFolder string) {
-	kc := deploy.Keystone{
-		LocalNodeList: fmt.Sprintf("%s/NodeList.local.txt", cacheFolder),
-		ArtefactsDir:  cacheFolder,
-		PublicKeys:    fmt.Sprintf("%s/PublicKeys.json", cacheFolder),
-	}
-
-	kc.DeleteJobSpecs()
 }
 
 func buildImages(dir string) {

@@ -371,10 +371,10 @@ func (d *Deployer) CreateNodeLists() error {
 	defer ef.Close()
 
 	for _, coreClient := range d.Core {
-		externalUrl := fmt.Sprintf("http://%s:%d %s %s", coreClient.Name, coreClient.ExternalPort, coreClient.Config.Email, coreClient.Config.Password)
+		externalUrl := fmt.Sprintf("%s:%d %s %s", coreClient.Name, coreClient.ExternalPort, coreClient.Config.Email, coreClient.Config.Password)
 		externalNodeUrls = append(externalNodeUrls, externalUrl)
 
-		localUrl := fmt.Sprintf("http://localhost:%d http://%s:6688 %s %s", coreClient.ExternalPort, coreClient.Name, coreClient.Config.Email, coreClient.Config.Password)
+		localUrl := fmt.Sprintf("localhost:%d %s:6688 %s %s", coreClient.ExternalPort, coreClient.Name, coreClient.Config.Email, coreClient.Config.Password)
 		localNodeURLs = append(localNodeURLs, localUrl)
 	}
 
