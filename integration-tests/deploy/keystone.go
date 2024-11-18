@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"integration-tests/scripts"
 
-	functions "github.com/smartcontractkit/chainlink/core/scripts/functions/src"
 	keystone "github.com/smartcontractkit/chainlink/core/scripts/keystone/src"
 )
 
@@ -16,14 +15,6 @@ type Keystone struct {
 	ChainId       string
 	GethHttpRPC   string
 	P2PPort       int
-}
-
-func (k *Keystone) FetchKeys() {
-	functions.NewFetchKeysCommand().Run([]string{
-		fmt.Sprintf("--output=%s", k.PublicKeys),
-		"-nodes", k.LocalNodeList,
-		"--chainid", k.ChainId,
-	})
 }
 
 // Deploy OCR3 contracts
