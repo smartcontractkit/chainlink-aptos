@@ -189,7 +189,7 @@ func deployServices() {
 		log.Fatalf("Could not deploy Core: %v", err)
 	}
 
-	if err := deployer.CreateNodeList(); err != nil {
+	if err := deployer.CreateNodesList(); err != nil {
 		log.Fatalf("Could not create node list: %v", err)
 	}
 
@@ -211,7 +211,7 @@ func deployServices() {
 
 func DeployContracts(cacheFolder string, gethHttpRpc string, chainId string, gethPrivKey string) {
 	kc := deploy.Keystone{
-		NodeList:     fmt.Sprintf("%s/NodeList.txt", cacheFolder),
+		NodesList:     fmt.Sprintf("%s/NodesList.txt", cacheFolder),
 		ArtefactsDir: cacheFolder,
 		GethHttpRPC:  gethHttpRpc,
 		ChainId:      chainId,
@@ -222,7 +222,7 @@ func DeployContracts(cacheFolder string, gethHttpRpc string, chainId string, get
 
 func DeployJobSpecs(cacheFolder string, gethHttpRpc string, chainId string, gethPrivKey string) {
 	kc := deploy.Keystone{
-		NodeList:     fmt.Sprintf("%s/NodeList.txt", cacheFolder),
+		NodesList:     fmt.Sprintf("%s/NodesList.txt", cacheFolder),
 		ArtefactsDir: cacheFolder,
 		GethHttpRPC:  gethHttpRpc,
 		ChainId:      chainId,
@@ -234,7 +234,7 @@ func DeployJobSpecs(cacheFolder string, gethHttpRpc string, chainId string, geth
 
 func DeployWorkflows(workflowFile string, cacheFolder string, gethHttpRpc string, chainId string) {
 	kc := deploy.Keystone{
-		NodeList:     fmt.Sprintf("%s/NodeList.txt", cacheFolder),
+		NodesList:     fmt.Sprintf("%s/NodesList.txt", cacheFolder),
 		ArtefactsDir: cacheFolder,
 		GethHttpRPC:  gethHttpRpc,
 		ChainId:      chainId,
@@ -344,7 +344,7 @@ func checkCacheFolder(cacheFolder string) {
 			panic("Cache folder does not exist")
 		}
 	}
-	if _, err := os.Stat(fmt.Sprintf("%s/NodeList.txt", cacheFolder)); err != nil {
+	if _, err := os.Stat(fmt.Sprintf("%s/NodesList.txt", cacheFolder)); err != nil {
 		if os.IsNotExist(err) {
 			panic("Node list not present in cache folder")
 		}

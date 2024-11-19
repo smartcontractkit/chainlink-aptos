@@ -51,9 +51,9 @@ type Deployer struct {
 }
 
 type Configs struct {
-	TestFolder       string
-	NodeListFilePath string
-	KeystoneWorkflow string
+	TestFolder        string
+	NodesListFilePath string
+	KeystoneWorkflow  string
 }
 
 type CoreClient struct {
@@ -94,7 +94,7 @@ func New(lggr *zerolog.Logger) *Deployer {
 	testFolder := fmt.Sprintf("%s/%s", scripts.Cache, scripts.GetRandomName(10))
 	os.MkdirAll(testFolder, os.ModePerm)
 
-	nodeListFile := fmt.Sprintf("%s/%s", testFolder, "NodeList.txt")
+	nodesListFile := fmt.Sprintf("%s/%s", testFolder, "NodesList.txt")
 
 	network, err := createNetwork()
 	if err != nil {
@@ -105,12 +105,12 @@ func New(lggr *zerolog.Logger) *Deployer {
 		Network:       network,
 		containerLggr: &StdoutLogConsumer{lggr: lggr},
 		Keystone: &Keystone{
-			NodeList:     nodeListFile,
+			NodesList:    nodesListFile,
 			ArtefactsDir: testFolder,
 		},
 		Configs: &Configs{
-			NodeListFilePath: nodeListFile,
-			TestFolder:       testFolder,
+			NodesListFilePath: nodesListFile,
+			TestFolder:        testFolder,
 		},
 		Contracts: &Contracts{},
 	}
@@ -346,10 +346,10 @@ func (d *Deployer) DeployCore() error {
 	return nil
 }
 
-func (d *Deployer) CreateNodeList() error {
+func (d *Deployer) CreateNodesList() error {
 	var nodeURLs []string
 
-	lf, err := os.OpenFile(d.Keystone.NodeList, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	lf, err := os.OpenFile(d.Keystone.NodesList, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}

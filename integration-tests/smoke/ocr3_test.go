@@ -56,7 +56,7 @@ func TestOCR3Keystone(t *testing.T) {
 	err = deployer.DeployCore()
 	require.NoError(t, err, "Could not deploy Core")
 
-	err = deployer.CreateNodeList()
+	err = deployer.CreateNodesList()
 	require.NoError(t, err, "Could not create node list")
 
 	lggr.Info().Msg("Deploying OCR3 contracts")

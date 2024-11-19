@@ -8,12 +8,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCreateNodeList(t *testing.T) {
+func TestCreateNodesList(t *testing.T) {
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 	deployer := &Deployer{
 		lggr: &logger,
 		Keystone: &Keystone{
-			NodeList: "test_node_list.txt",
+			NodesList: "test_nodes_list.txt",
 		},
 		Core: []*CoreClient{
 			{
@@ -35,17 +35,17 @@ func TestCreateNodeList(t *testing.T) {
 		},
 	}
 
-	err := deployer.CreateNodeList()
+	err := deployer.CreateNodesList()
 	assert.NoError(t, err)
 
-	nodeList, err := os.ReadFile(deployer.Keystone.NodeList)
+	nodeList, err := os.ReadFile(deployer.Keystone.NodesList)
 	assert.NoError(t, err)
-	expectedNodeList := `localhost:8000 core-0:6688 test-email-0 test-password-0
+	expectedNodesList := `localhost:8000 core-0:6688 test-email-0 test-password-0
 localhost:8001 core-1:6688 test-email-1 test-password-1`
-	assert.Equal(t, expectedNodeList, string(nodeList))
+	assert.Equal(t, expectedNodesList, string(nodeList))
 
 	assert.NoError(t, err)
 
 	// Clean up
-	os.Remove(deployer.Keystone.NodeList)
+	os.Remove(deployer.Keystone.NodesList)
 }
