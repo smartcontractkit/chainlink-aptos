@@ -29,8 +29,10 @@ go run main.go toolkit deploy-ocr3-contracts \
   --ethurl=http://localhost:8544 \
   --accountkey=$ACCOUNT_KEY \
   --chainid=1337 \
-  --ocrfile=ocr_config.json 
+  --ocrfile=ocr_config.json
 
+go run main.go toolkit get-aptos-keys \
+  --chainid=1337
 popd
 
 pushd "contracts"
@@ -45,14 +47,16 @@ scripts/set_config.sh
 
 popd
 
-pushd "$keystone_dir" 
+pushd "$keystone_dir"
 
 go run main.go toolkit deploy-ocr3-jobspecs \
   --ethurl=http://localhost:8544 \
   --accountkey=$ACCOUNT_KEY \
-  --chainid=1337
+  --chainid=1337 \
+  --p2pport=6691
 
 go run main.go toolkit deploy-workflows \
   --workflow=../../../../chainlink-internal-integrations/aptos/scripts/workflow.toml
+popd
 
 # docker logs -f chainlink.core.2 | rg -F '"Hash"'
