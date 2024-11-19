@@ -21,6 +21,7 @@ Create a shared network for the containers
 
 ```bash
 docker network create chainlink
+docker network create beholder_default
 ```
 
 Build a core image with plugins (OCR3 capability) and the aptos relayer
@@ -46,7 +47,7 @@ Add a node list file under `.cache`
 
 (Ports from the node are forwarded so that host can talk to them if running in rootless containers to which DNS can't be resolved)
 
-`NodeList.txt`
+`NodesList.txt`
 
 ```
 localhost:50100 chainlink.core.1:50100 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
