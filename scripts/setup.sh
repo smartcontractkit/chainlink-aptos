@@ -18,7 +18,8 @@ popd
 
 bash "scripts/core.sh"
 
-pushd "../../chainlink/core/scripts/keystone"
+keystone_dir="$(realpath ../../chainlink/core/scripts/keystone)"
+pushd "$keystone_dir"
 
 
 # Fund deployment key
@@ -34,15 +35,17 @@ popd
 
 pushd "contracts"
 
-export ORACLE_ACCOUNTS=$(cat ../../../chainlink/core/scripts/keystone/.cache/PublicKeys.json | jq -r '.[].AptosAccount')
+pubnodekeyspath="$keystone_dir/artefacts/pubnodekeys.json"
+
+export ORACLE_ACCOUNTS=$(cat "$pubnodekeyspath" | jq -r '.[].AptosAccount')
 echo "$ORACLE_ACCOUNTS" | xargs -L1 aptos account fund-with-faucet --account
 
-export ORACLE_PUBKEYS=$(cat ../../../chainlink/core/scripts/keystone/.cache/PublicKeys.json | jq '.[].AptosOnchainPublicKey' | paste -sd ",")
+export ORACLE_PUBKEYS=$(cat "$pubnodekeyspath" | jq '.[].AptosOnchainPublicKey' | paste -sd ",")
 scripts/set_config.sh
 
 popd
 
-pushd "../../chainlink/core/scripts/keystone"
+pushd "$keystone_dir" 
 
 go run main.go toolkit deploy-ocr3-jobspecs \
   --ethurl=http://localhost:8544 \
