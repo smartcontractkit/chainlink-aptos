@@ -189,7 +189,7 @@ func deployServices() {
 		log.Fatalf("Could not deploy Core: %v", err)
 	}
 
-	if err := deployer.CreateNodeLists(); err != nil {
+	if err := deployer.CreateNodeList(); err != nil {
 		log.Fatalf("Could not create node list: %v", err)
 	}
 
@@ -211,11 +211,10 @@ func deployServices() {
 
 func DeployContracts(cacheFolder string, gethHttpRpc string, chainId string, gethPrivKey string) {
 	kc := deploy.Keystone{
-		LocalNodeList: fmt.Sprintf("%s/NodeList.local.txt", cacheFolder),
-		ArtefactsDir:  cacheFolder,
-		PublicKeys:    fmt.Sprintf("%s/PublicKeys.json", cacheFolder),
-		GethHttpRPC:   gethHttpRpc,
-		ChainId:       chainId,
+		NodeList:     fmt.Sprintf("%s/NodeList.txt", cacheFolder),
+		ArtefactsDir: cacheFolder,
+		GethHttpRPC:  gethHttpRpc,
+		ChainId:      chainId,
 	}
 
 	kc.DeployOCR3Contracts(gethPrivKey)
@@ -223,12 +222,11 @@ func DeployContracts(cacheFolder string, gethHttpRpc string, chainId string, get
 
 func DeployJobSpecs(cacheFolder string, gethHttpRpc string, chainId string, gethPrivKey string) {
 	kc := deploy.Keystone{
-		LocalNodeList: fmt.Sprintf("%s/NodeList.local.txt", cacheFolder),
-		ArtefactsDir:  cacheFolder,
-		PublicKeys:    fmt.Sprintf("%s/PublicKeys.json", cacheFolder),
-		GethHttpRPC:   gethHttpRpc,
-		ChainId:       chainId,
-		P2PPort:       6690,
+		NodeList:     fmt.Sprintf("%s/NodeList.txt", cacheFolder),
+		ArtefactsDir: cacheFolder,
+		GethHttpRPC:  gethHttpRpc,
+		ChainId:      chainId,
+		P2PPort:      6690,
 	}
 
 	kc.DeployOCR3JobSpecs(gethPrivKey)
@@ -236,11 +234,10 @@ func DeployJobSpecs(cacheFolder string, gethHttpRpc string, chainId string, geth
 
 func DeployWorkflows(workflowFile string, cacheFolder string, gethHttpRpc string, chainId string) {
 	kc := deploy.Keystone{
-		LocalNodeList: fmt.Sprintf("%s/NodeList.local.txt", cacheFolder),
-		ArtefactsDir:  cacheFolder,
-		PublicKeys:    fmt.Sprintf("%s/PublicKeys.json", cacheFolder),
-		GethHttpRPC:   gethHttpRpc,
-		ChainId:       chainId,
+		NodeList:     fmt.Sprintf("%s/NodeList.txt", cacheFolder),
+		ArtefactsDir: cacheFolder,
+		GethHttpRPC:  gethHttpRpc,
+		ChainId:      chainId,
 	}
 
 	kc.DeployWorkflows(workflowFile)
@@ -347,19 +344,12 @@ func checkCacheFolder(cacheFolder string) {
 			panic("Cache folder does not exist")
 		}
 	}
-
 	if _, err := os.Stat(fmt.Sprintf("%s/NodeList.txt", cacheFolder)); err != nil {
 		if os.IsNotExist(err) {
 			panic("Node list not present in cache folder")
 		}
 	}
-
-	if _, err := os.Stat(fmt.Sprintf("%s/NodeList.local.txt", cacheFolder)); err != nil {
-		if os.IsNotExist(err) {
-			panic("Node list not present in cache folder")
-		}
-	}
-	if _, err := os.Stat(fmt.Sprintf("%s/PublicKeys.json", cacheFolder)); err != nil {
+	if _, err := os.Stat(fmt.Sprintf("%s/pubnodekeys.json", cacheFolder)); err != nil {
 		if os.IsNotExist(err) {
 			panic("Public keys not present in cache folder")
 		}

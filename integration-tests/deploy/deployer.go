@@ -51,10 +51,9 @@ type Deployer struct {
 }
 
 type Configs struct {
-	TestFolder               string
-	LocalNodeListFilePath    string
-	ExternalNodeListFilePath string
-	KeystoneWorkflow         string
+	TestFolder       string
+	NodeListFilePath string
+	KeystoneWorkflow string
 }
 
 type CoreClient struct {
@@ -92,13 +91,10 @@ type Contracts struct {
 }
 
 func New(lggr *zerolog.Logger) *Deployer {
-
 	testFolder := fmt.Sprintf("%s/%s", scripts.Cache, scripts.GetRandomName(10))
 	os.MkdirAll(testFolder, os.ModePerm)
 
-	localNodeListFile := fmt.Sprintf("%s/%s", testFolder, "NodeList.local.txt")
 	nodeListFile := fmt.Sprintf("%s/%s", testFolder, "NodeList.txt")
-	publicKeysFile := fmt.Sprintf("%s/PublicKeys.json", testFolder)
 
 	network, err := createNetwork()
 	if err != nil {
@@ -109,15 +105,12 @@ func New(lggr *zerolog.Logger) *Deployer {
 		Network:       network,
 		containerLggr: &StdoutLogConsumer{lggr: lggr},
 		Keystone: &Keystone{
-			LocalNodeList: localNodeListFile,
-			NodeList:      nodeListFile,
-			ArtefactsDir:  testFolder,
-			PublicKeys:    publicKeysFile,
+			NodeList:     nodeListFile,
+			ArtefactsDir: testFolder,
 		},
 		Configs: &Configs{
-			LocalNodeListFilePath:    localNodeListFile,
-			ExternalNodeListFilePath: nodeListFile,
-			TestFolder:               testFolder,
+			NodeListFilePath: nodeListFile,
+			TestFolder:       testFolder,
 		},
 		Contracts: &Contracts{},
 	}
@@ -353,39 +346,27 @@ func (d *Deployer) DeployCore() error {
 	return nil
 }
 
-func (d *Deployer) CreateNodeLists() error {
-	var localNodeURLs []string
-	var externalNodeUrls []string
+func (d *Deployer) CreateNodeList() error {
+	var nodeURLs []string
 
-	lf, err := os.OpenFile(d.Keystone.LocalNodeList, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
-	if err != nil {
-		return err
-	}
-
-	ef, err := os.OpenFile(d.Keystone.NodeList, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	lf, err := os.OpenFile(d.Keystone.NodeList, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
 
 	defer lf.Close()
-	defer ef.Close()
 
 	for _, coreClient := range d.Core {
-		externalUrl := fmt.Sprintf("%s:%d %s %s", coreClient.Name, coreClient.ExternalPort, coreClient.Config.Email, coreClient.Config.Password)
-		externalNodeUrls = append(externalNodeUrls, externalUrl)
-
-		localUrl := fmt.Sprintf("localhost:%d %s:6688 %s %s", coreClient.ExternalPort, coreClient.Name, coreClient.Config.Email, coreClient.Config.Password)
-		localNodeURLs = append(localNodeURLs, localUrl)
+		url := fmt.Sprintf("localhost:%d %s:6688 %s %s", coreClient.ExternalPort, coreClient.Name, coreClient.Config.Email, coreClient.Config.Password)
+		nodeURLs = append(nodeURLs, url)
 	}
 
-	localOutput := strings.Join(localNodeURLs, "\n")
-	_, err = lf.WriteString(localOutput)
+	output := strings.Join(nodeURLs, "\n")
+	_, err = lf.WriteString(output)
 	if err != nil {
 		return err
 	}
 
-	externalOutput := strings.Join(externalNodeUrls, "\n")
-	_, err = ef.WriteString(externalOutput)
 	if err != nil {
 		return err
 	}
