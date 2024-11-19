@@ -25,7 +25,7 @@ pushd "$keystone_dir"
 # Fund deployment key
 geth attach --exec "eth.sendTransaction({from: eth.accounts[0], to: '$ADDRESS', value: 20000000000000000000000})" http://127.0.0.1:8544
 
-go run main.go toolkit deploy-ocr3-and-forwarder-contracts \
+go run main.go toolkit deploy-ocr3-contracts \
   --ethurl=http://localhost:8544 \
   --accountkey=$ACCOUNT_KEY \
   --chainid=1337 \
