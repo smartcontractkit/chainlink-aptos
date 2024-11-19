@@ -63,13 +63,7 @@ Switch back to the `aptos` repository.
 scripts/setup.sh
 ```
 
-To remove workflows:
-
-```bash
-go run main.go delete-workflows
-```
-
-Then restart the core node, the workflows don't seem to shut down otherwise.
+To update workflows, run the same `deploy-workflows` command, it'll upsert the workflows, then restart the core node, the workflows don't seem to shut down otherwise.
 
 # Atlas/Beholder local env
 
