@@ -8,12 +8,20 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/config"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
-	"github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
 	aptosutils "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/utils"
 )
+
+// TODO: duplicate of "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/write_target.ChainInfo" (reuse)
+// ChainInfo contains the chain information (used as execution context)
+type ChainInfo struct {
+	ChainFamilyName string
+	ChainID         string
+	NetworkName     string
+	NetworkNameFull string
+}
 
 // Config defines the balance monitor configuration.
 type Config struct {
@@ -27,7 +35,7 @@ type BalanceClient interface {
 
 // BalanceMonitorOpts contains the options for creating a new balance monitor.
 type BalanceMonitorOpts struct {
-	RelayID             types.RelayID
+	ChainInfo           ChainInfo
 	ChainNativeCurrency string
 
 	Config           Config
@@ -61,7 +69,7 @@ func newBalanceMonitor(opts BalanceMonitorOpts) (*balanceMonitor, error) {
 		newReader: opts.NewBalanceClient,
 		updateFn: func(ctx context.Context, acc string, balance float64) {
 			lggr.Infow("Account balance updated", "unit", opts.ChainNativeCurrency, "account", acc, "balance", balance)
-			gauge.Record(ctx, balance, acc, opts.RelayID.ChainID, opts.RelayID.Network)
+			gauge.Record(ctx, balance, acc, opts.ChainInfo)
 		},
 
 		stop: make(chan struct{}),

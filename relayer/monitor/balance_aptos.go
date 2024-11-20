@@ -7,13 +7,12 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
-	"github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 )
 
 // AptosAccBalanceMonitorOpts contains the options for creating a new Aptos account balance monitor.
 type AptosAccBalanceMonitorOpts struct {
-	ChainID string
+	ChainInfo ChainInfo
 
 	Config    Config
 	Logger    logger.Logger
@@ -23,11 +22,8 @@ type AptosAccBalanceMonitorOpts struct {
 
 // NewAptosAccBalanceMonitor returns a balance monitoring services.Service which reports balance of all Keystore accounts.
 func NewAptosAccBalanceMonitor(opts AptosAccBalanceMonitorOpts) (services.Service, error) {
-	return newBalanceMonitor(BalanceMonitorOpts{
-		RelayID: types.RelayID{
-			Network: "aptos",
-			ChainID: opts.ChainID,
-		},
+	return NewBalanceMonitor(BalanceMonitorOpts{
+		ChainInfo:           opts.ChainInfo,
 		ChainNativeCurrency: "APT",
 
 		Config:   opts.Config,

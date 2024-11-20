@@ -107,9 +107,17 @@ func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logg
 		return nil, err
 	}
 
+	// Construct the chain information from the config
+	chainInfo := monitor.ChainInfo{
+		ChainFamilyName: config.ChainFamilyName, // static for this plugin
+		ChainID:         cfg.ChainID,
+		NetworkName:     cfg.NetworkName,
+		NetworkNameFull: cfg.NetworkNameFull,
+	}
+
 	// Setup accounts balance monitor
 	ch.balanceMonitor, err = monitor.NewAptosAccBalanceMonitor(monitor.AptosAccBalanceMonitorOpts{
-		ChainID: ch.ID(),
+		ChainInfo: chainInfo,
 
 		Config:    *cfg.BalanceMonitor,
 		Logger:    lggr,
