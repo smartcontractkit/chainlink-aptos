@@ -63,7 +63,14 @@ Switch back to the `aptos` repository.
 scripts/setup.sh
 ```
 
+After the setup, you'll want to redeploy the workflows to include the correct data feeds address. You can get the data feeds address via `$(cat contracts/data-feeds-contract_address.txt)`, then modify your workflow and redeploy it. The workflow is located at `scripts/workflow.toml`. The field to modify is `.targets[0].config.address`.
+
+
 To update workflows, run the same `deploy-workflows` command, it'll upsert the workflows, then restart the core node, the workflows don't seem to shut down otherwise.
+
+```bash
+docker restart $(docker ps -q --filter "name=chainlink.core*")
+```
 
 # Atlas/Beholder local env
 
