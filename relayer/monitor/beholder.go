@@ -2,12 +2,21 @@ package monitor
 
 import (
 	"context"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
+)
+
+const (
+	AttrKeyTimestampLocal = "timestamp_local"
+
+	// Helper keys to avoid duplicating attributes
+	CtxKeySkipAppendAttrs               = "skip_append_attrs"
+	CtxKeySkipAppendAttrsTimestampLocal = "skip_append_attrs.timestamp_local"
 )
 
 // BeholderClient is a Beholder client extension with a custom ProtoEmitter
@@ -50,7 +59,11 @@ func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any
 		return err
 	}
 
-	attrKVs = e.appendRequiredAttrs(m, attrKVs)
+	// Skip appending attributes if the context says it's already done that
+	if skip, ok := ctx.Value(CtxKeySkipAppendAttrs).(bool); !ok || !skip {
+		attrKVs = e.appendAttrsRequired(ctx, m, attrKVs)
+		attrKVs = e.appendAttrsCommon(ctx, m, attrKVs)
+	}
 
 	// Emit the message with attributes
 	err = e.client.Emitter.Emit(ctx, payload, attrKVs...)
@@ -65,7 +78,10 @@ func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any
 
 // EmitWithLog emits a protobuf message with attributes and logs the emitted message
 func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs ...any) error {
-	attrKVs = e.appendRequiredAttrs(m, attrKVs)
+	attrKVs = e.appendAttrsRequired(ctx, m, attrKVs)
+	attrKVs = e.appendAttrsCommon(ctx, m, attrKVs)
+	// attach a bool switch to ctx to avoid duplicating common attrs
+	ctx = context.WithValue(ctx, CtxKeySkipAppendAttrs, true)
 
 	// Marshal the message as JSON and log before emitting
 	// https://protobuf.dev/programming-guides/json/
@@ -78,10 +94,28 @@ func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs
 	return e.Emit(ctx, m, attrKVs...)
 }
 
-// appendRequiredAttrs appends required attributes to the attribute key-value list
-func (e *protoEmitter) appendRequiredAttrs(m proto.Message, attrKVs []any) []any {
+// appendAttrsRequired appends required attributes to the attribute key-value list
+func (e *protoEmitter) appendAttrsRequired(ctx context.Context, m proto.Message, attrKVs []any) []any {
 	attrKVs = appendRequiredAttrDataSchema(m, attrKVs, e.schemaBasePath)
 	attrKVs = appendRequiredAttrEntity(m, attrKVs)
 	attrKVs = appendRequiredAttrDomain(m, attrKVs)
+	return attrKVs
+}
+
+// appendAttrsCommon appends common attributes to the attribute key-value list
+func (e *protoEmitter) appendAttrsCommon(ctx context.Context, m proto.Message, attrKVs []any) []any {
+	// Append the timestamp, or skip if the context requests it
+	if skip, ok := ctx.Value(CtxKeySkipAppendAttrsTimestampLocal).(bool); !ok || !skip {
+		attrKVs = AppendTimestampLocalToAttrs(m, attrKVs)
+	}
+
+	return attrKVs
+}
+
+// AppendTimestampLocalToAttrs appends the local timestamp as an attribute
+func AppendTimestampLocalToAttrs(_ proto.Message, attrKVs []any) []any {
+	key := AttrKeyTimestampLocal
+	attrKVs = append(attrKVs, key)
+	attrKVs = append(attrKVs, time.Now().Format(time.RFC3339))
 	return attrKVs
 }

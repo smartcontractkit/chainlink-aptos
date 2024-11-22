@@ -70,6 +70,10 @@ type protoEmitter struct {
 
 // Emit emits a proto.Message and runs additional processing
 func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any) error {
+	// Append local timestamp to attributes and notify underlying emitter to skip (avoid duplicating)
+	attrKVs = monitor.AppendTimestampLocalToAttrs(m, attrKVs)
+	ctx = context.WithValue(ctx, monitor.CtxKeySkipAppendAttrsTimestampLocal, true)
+
 	err := e.emitter.Emit(ctx, m, attrKVs...)
 	if err != nil {
 		return fmt.Errorf("failed to emit: %w", err)
@@ -81,6 +85,10 @@ func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any
 
 // EmitWithLog emits a proto.Message and runs additional processing
 func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs ...any) error {
+	// Append local timestamp to attributes and notify underlying emitter to skip (avoid duplicating)
+	attrKVs = monitor.AppendTimestampLocalToAttrs(m, attrKVs)
+	ctx = context.WithValue(ctx, monitor.CtxKeySkipAppendAttrsTimestampLocal, true)
+
 	err := e.emitter.EmitWithLog(ctx, m, attrKVs...)
 	if err != nil {
 		return fmt.Errorf("failed to emit with log: %w", err)
