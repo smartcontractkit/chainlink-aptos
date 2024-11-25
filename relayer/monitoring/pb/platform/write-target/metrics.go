@@ -21,25 +21,38 @@ func ns(name string) string {
 // Define metrics configuration
 var (
 	writeInitiated = struct {
-		count utils.MetricInfo
+		count   utils.MetricInfo
+		tsLocal utils.MetricInfo
 	}{
 		count: utils.MetricInfo{
 			Name:        ns("write_initiated_count"),
 			Unit:        "",
 			Description: "The count of message: 'platform.write-target.WriteInitiated' emitted",
 		},
+		tsLocal: utils.MetricInfo{
+			Name:        ns("write_initiated_timestamp_local"),
+			Unit:        "ms",
+			Description: "The timestamp (local) at message: 'platform.write-target.WriteInitiated' emit",
+		},
 	}
 	writeError = struct {
-		count utils.MetricInfo
+		count   utils.MetricInfo
+		tsLocal utils.MetricInfo
 	}{
 		count: utils.MetricInfo{
 			Name:        ns("write_error_count"),
 			Unit:        "",
 			Description: "The count of message: 'platform.write-target.WriteError' emitted",
 		},
+		tsLocal: utils.MetricInfo{
+			Name:        ns("write_error_timestamp_local"),
+			Unit:        "ms",
+			Description: "The timestamp (local) at message: 'platform.write-target.WriteError' emit",
+		},
 	}
 	writeSent = struct {
 		count          utils.MetricInfo
+		tsLocal        utils.MetricInfo
 		blockTimestamp utils.MetricInfo
 		blockNumber    utils.MetricInfo
 	}{
@@ -47,6 +60,11 @@ var (
 			Name:        ns("write_sent_count"),
 			Unit:        "",
 			Description: "The count of message: 'platform.write-target.WriteSent' emitted",
+		},
+		tsLocal: utils.MetricInfo{
+			Name:        ns("write_sent_timestamp_local"),
+			Unit:        "ms",
+			Description: "The timestamp (local) at message: 'platform.write-target.WriteSent' emit",
 		},
 		blockTimestamp: utils.MetricInfo{
 			Name:        ns("write_sent_block_timestamp"),
@@ -61,6 +79,7 @@ var (
 	}
 	writeConfirmed = struct {
 		count          utils.MetricInfo
+		tsLocal        utils.MetricInfo
 		blockTimestamp utils.MetricInfo
 		blockNumber    utils.MetricInfo
 		signersNumber  utils.MetricInfo
@@ -69,6 +88,11 @@ var (
 			Name:        ns("write_confirmed_count"),
 			Unit:        "",
 			Description: "The count of message: 'platform.write-target.WriteConfirmed' emitted",
+		},
+		tsLocal: utils.MetricInfo{
+			Name:        ns("write_confirmed_timestamp_local"),
+			Unit:        "ms",
+			Description: "The timestamp (local) at message: 'platform.write-target.WriteConfirmed' emit",
 		},
 		blockTimestamp: utils.MetricInfo{
 			Name:        ns("write_confirmed_block_timestamp"),
@@ -92,21 +116,25 @@ var (
 type Metrics struct {
 	// Define on WriteInitiated metrics
 	writeInitiated struct {
-		count metric.Int64Counter
+		count   metric.Int64Counter
+		tsLocal metric.Int64Gauge
 	}
 	// Define on WriteError metrics
 	writeError struct {
-		count metric.Int64Counter
+		count   metric.Int64Counter
+		tsLocal metric.Int64Gauge
 	}
 	// Define on WriteSent metrics
 	writeSent struct {
 		count          metric.Int64Counter
+		tsLocal        metric.Int64Gauge
 		blockTimestamp metric.Int64Gauge
 		blockNumber    metric.Int64Gauge
 	}
 	// Define on WriteConfirmed metrics
 	writeConfirmed struct {
 		count          metric.Int64Counter
+		tsLocal        metric.Int64Gauge
 		blockTimestamp metric.Int64Gauge
 		blockNumber    metric.Int64Gauge
 		signersNumber  metric.Int64Gauge
@@ -128,16 +156,31 @@ func NewMetrics() (*Metrics, error) {
 		return nil, fmt.Errorf("failed to create new counter: %w", err)
 	}
 
+	m.writeInitiated.tsLocal, err = writeInitiated.tsLocal.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
+	}
+
 	// WriteError
 	m.writeError.count, err = writeError.count.NewInt64Counter(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new counter: %w", err)
 	}
 
+	m.writeError.tsLocal, err = writeError.tsLocal.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
+	}
+
 	// WriteSent
 	m.writeSent.count, err = writeSent.count.NewInt64Counter(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new counter: %w", err)
+	}
+
+	m.writeSent.tsLocal, err = writeSent.tsLocal.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
 
 	m.writeSent.blockTimestamp, err = writeSent.blockTimestamp.NewInt64Gauge(meter)
@@ -154,6 +197,11 @@ func NewMetrics() (*Metrics, error) {
 	m.writeConfirmed.count, err = writeConfirmed.count.NewInt64Counter(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new counter: %w", err)
+	}
+
+	m.writeConfirmed.tsLocal, err = writeConfirmed.tsLocal.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
 
 	m.writeConfirmed.blockTimestamp, err = writeConfirmed.blockTimestamp.NewInt64Gauge(meter)
@@ -180,6 +228,9 @@ func (m *Metrics) OnWriteInitiated(ctx context.Context, msg *WriteInitiated, att
 
 	// Count events
 	m.writeInitiated.count.Add(ctx, 1, attrs)
+
+	// Timestamp events
+	m.writeInitiated.tsLocal.Record(ctx, getTimestampLocal(attrKVs), attrs)
 	return nil
 }
 
@@ -189,6 +240,9 @@ func (m *Metrics) OnWriteError(ctx context.Context, msg *WriteError, attrKVs ...
 
 	// Count events
 	m.writeError.count.Add(ctx, 1, attrs)
+
+	// Timestamp events
+	m.writeError.tsLocal.Record(ctx, getTimestampLocal(attrKVs), attrs)
 	return nil
 }
 
@@ -198,6 +252,9 @@ func (m *Metrics) OnWriteSent(ctx context.Context, msg *WriteSent, attrKVs ...an
 
 	// Count events
 	m.writeSent.count.Add(ctx, 1, attrs)
+
+	// Timestamp events
+	m.writeSent.tsLocal.Record(ctx, getTimestampLocal(attrKVs), attrs)
 
 	// Block timestamp
 	m.writeSent.blockTimestamp.Record(ctx, int64(msg.BlockTimestamp), attrs)
@@ -218,6 +275,9 @@ func (m *Metrics) OnWriteConfirmed(ctx context.Context, msg *WriteConfirmed, att
 	// Count events
 	m.writeConfirmed.count.Add(ctx, 1, attrs)
 
+	// Timestamp events
+	m.writeConfirmed.tsLocal.Record(ctx, getTimestampLocal(attrKVs), attrs)
+
 	// Signers number
 	m.writeConfirmed.signersNumber.Record(ctx, int64(msg.SignersNum), attrs)
 
@@ -231,6 +291,18 @@ func (m *Metrics) OnWriteConfirmed(ctx context.Context, msg *WriteConfirmed, att
 	}
 	m.writeConfirmed.blockNumber.Record(ctx, blockHeightVal, attrs)
 	return nil
+}
+
+// getTimestampLocal returns the timestamp_local attribute value from the given attribute key-values
+func getTimestampLocal(attrKVs []any) int64 {
+	for i := 0; i < len(attrKVs); i += 2 {
+		if key, ok := attrKVs[i].(string); ok && key == "timestamp_local" {
+			if ts, ok := attrKVs[i+1].(int64); ok {
+				return ts
+			}
+		}
+	}
+	return 0
 }
 
 // Attributes returns the attributes for the WriteInitiated message to be used in metrics

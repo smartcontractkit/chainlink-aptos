@@ -33,5 +33,8 @@
     ++ lib.optionals stdenv.isLinux [
       # Notice: currently only available on Linux, needs to be packaged for other platforms (e.g. macOS)
       (pkgs.callPackage ./aptos.nix {})
+    ]
+    ++ lib.optionals stdenv.hostPlatform.isDarwin [
+      libiconv
     ];
 }

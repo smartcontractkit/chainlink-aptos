@@ -116,6 +116,6 @@ func (e *protoEmitter) appendAttrsCommon(ctx context.Context, m proto.Message, a
 func AppendTimestampLocalToAttrs(_ proto.Message, attrKVs []any) []any {
 	key := AttrKeyTimestampLocal
 	attrKVs = append(attrKVs, key)
-	attrKVs = append(attrKVs, time.Now().Format(time.RFC3339))
+	attrKVs = append(attrKVs, time.Now().UnixMilli()) // milliseconds
 	return attrKVs
 }
