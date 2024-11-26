@@ -2,6 +2,7 @@ package write_target
 
 import (
 	"encoding/hex"
+	"time"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
@@ -43,6 +44,8 @@ type reportInfo struct {
 
 // requestInfo contains the request data for the capability triggered
 type requestInfo struct {
+	tsStart int64
+
 	node      string
 	forwarder string
 	receiver  string
@@ -82,8 +85,10 @@ func (m *messageBuilder) buildWriteError(i *requestInfo, code uint32, summary, c
 		MetaReferenceId:              i.request.Metadata.ReferenceID,
 
 		// Execution Context - Capability
-		MetaCapabilityType: string(m.CapInfo.CapabilityType),
-		MetaCapabilityId:   m.CapInfo.ID,
+		MetaCapabilityType:           string(m.CapInfo.CapabilityType),
+		MetaCapabilityId:             m.CapInfo.ID,
+		MetaCapabilityTimestampStart: uint64(i.tsStart),
+		MetaCapabilityTimestampEmit:  uint64(time.Now().UnixMilli()),
 	}
 }
 
@@ -113,8 +118,10 @@ func (m *messageBuilder) buildWriteInitiated(i *requestInfo) *wt.WriteInitiated 
 		MetaReferenceId:              i.request.Metadata.ReferenceID,
 
 		// Execution Context - Capability
-		MetaCapabilityType: string(m.CapInfo.CapabilityType),
-		MetaCapabilityId:   m.CapInfo.ID,
+		MetaCapabilityType:           string(m.CapInfo.CapabilityType),
+		MetaCapabilityId:             m.CapInfo.ID,
+		MetaCapabilityTimestampStart: uint64(i.tsStart),
+		MetaCapabilityTimestampEmit:  uint64(time.Now().UnixMilli()),
 	}
 }
 
@@ -145,8 +152,10 @@ func (m *messageBuilder) buildWriteSkipped(i *requestInfo, reason string) *wt.Wr
 		MetaReferenceId:              i.request.Metadata.ReferenceID,
 
 		// Execution Context - Capability
-		MetaCapabilityType: string(m.CapInfo.CapabilityType),
-		MetaCapabilityId:   m.CapInfo.ID,
+		MetaCapabilityType:           string(m.CapInfo.CapabilityType),
+		MetaCapabilityId:             m.CapInfo.ID,
+		MetaCapabilityTimestampStart: uint64(i.tsStart),
+		MetaCapabilityTimestampEmit:  uint64(time.Now().UnixMilli()),
 	}
 }
 
@@ -182,8 +191,10 @@ func (m *messageBuilder) buildWriteSent(i *requestInfo, head types.Head, txID st
 		MetaReferenceId:              i.request.Metadata.ReferenceID,
 
 		// Execution Context - Capability
-		MetaCapabilityType: string(m.CapInfo.CapabilityType),
-		MetaCapabilityId:   m.CapInfo.ID,
+		MetaCapabilityType:           string(m.CapInfo.CapabilityType),
+		MetaCapabilityId:             m.CapInfo.ID,
+		MetaCapabilityTimestampStart: uint64(i.tsStart),
+		MetaCapabilityTimestampEmit:  uint64(time.Now().UnixMilli()),
 	}
 }
 
@@ -225,7 +236,9 @@ func (m *messageBuilder) buildWriteConfirmed(i *requestInfo, head types.Head) *w
 		MetaReferenceId:              i.request.Metadata.ReferenceID,
 
 		// Execution Context - Capability
-		MetaCapabilityType: string(m.CapInfo.CapabilityType),
-		MetaCapabilityId:   m.CapInfo.ID,
+		MetaCapabilityType:           string(m.CapInfo.CapabilityType),
+		MetaCapabilityId:             m.CapInfo.ID,
+		MetaCapabilityTimestampStart: uint64(i.tsStart),
+		MetaCapabilityTimestampEmit:  uint64(time.Now().UnixMilli()),
 	}
 }

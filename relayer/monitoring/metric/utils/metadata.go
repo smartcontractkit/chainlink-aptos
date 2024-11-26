@@ -27,8 +27,10 @@ type ExecutionMetadata struct {
 	WorkflowDonConfigVersion uint32
 	ReferenceId              string
 	// Execution Context - Capability
-	CapabilityType string
-	CapabilityId   string
+	CapabilityType           string
+	CapabilityId             string
+	CapabilityTimestampStart uint32
+	CapabilityTimestampEmit  uint32
 }
 
 // Attributes returns common attributes used for metrics
@@ -54,6 +56,7 @@ func (m ExecutionMetadata) Attributes() []attribute.KeyValue {
 		// Execution Context - Capability
 		attribute.String("capability_type", ValOrUnknown(m.CapabilityType)),
 		attribute.String("capability_id", ValOrUnknown(m.CapabilityId)),
+		// Notice: we don't include the timestamps here (high cardinality)
 	}
 }
 

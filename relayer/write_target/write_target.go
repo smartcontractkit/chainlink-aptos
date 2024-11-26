@@ -137,6 +137,10 @@ func success() capabilities.CapabilityResponse {
 }
 
 func (c *writeTarget) Execute(ctx context.Context, request capabilities.CapabilityRequest) (capabilities.CapabilityResponse, error) {
+	// Take the local timestamp
+	tsStart := time.Now().UnixMilli()
+
+	// Trace the execution
 	attrs := c.traceAttributes(request.Metadata.WorkflowExecutionID)
 	_, span := c.beholder.Tracer.Start(ctx, "Execute", trace.WithAttributes(attrs...))
 	defer span.End()
@@ -148,6 +152,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 
 	// Helper to keep track of the request info
 	info := &requestInfo{
+		tsStart:   tsStart,
 		node:      c.nodeAddress,
 		forwarder: c.forwarderAddress,
 		receiver:  "N/A",

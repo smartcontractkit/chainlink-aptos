@@ -21,38 +21,68 @@ func ns(name string) string {
 // Define metrics configuration
 var (
 	writeInitiated = struct {
-		count   utils.MetricInfo
-		tsLocal utils.MetricInfo
+		// common
+		count             utils.MetricInfo
+		capTimestampStart utils.MetricInfo
+		capTimestampEmit  utils.MetricInfo
+		capDuration       utils.MetricInfo // ts.emit - ts.start
 	}{
 		count: utils.MetricInfo{
 			Name:        ns("write_initiated_count"),
 			Unit:        "",
 			Description: "The count of message: 'platform.write-target.WriteInitiated' emitted",
 		},
-		tsLocal: utils.MetricInfo{
-			Name:        ns("write_initiated_timestamp_local"),
+		capTimestampStart: utils.MetricInfo{
+			Name:        ns("write_initiated_cap_timestamp_start"),
+			Unit:        "ms",
+			Description: "The timestamp (local) at capability exec start that resulted in message: 'platform.write-target.WriteInitiated' emit",
+		},
+		capTimestampEmit: utils.MetricInfo{
+			Name:        ns("write_initiated_cap_timestamp_emit"),
 			Unit:        "ms",
 			Description: "The timestamp (local) at message: 'platform.write-target.WriteInitiated' emit",
 		},
+		capDuration: utils.MetricInfo{
+			Name:        ns("write_initiated_cap_duration"),
+			Unit:        "ms",
+			Description: "The duration (local) since capability exec start for message: 'platform.write-target.WriteInitiated' emit",
+		},
 	}
 	writeError = struct {
-		count   utils.MetricInfo
-		tsLocal utils.MetricInfo
+		// common
+		count             utils.MetricInfo
+		capTimestampStart utils.MetricInfo
+		capTimestampEmit  utils.MetricInfo
+		capDuration       utils.MetricInfo // ts.emit - ts.start
 	}{
 		count: utils.MetricInfo{
 			Name:        ns("write_error_count"),
 			Unit:        "",
 			Description: "The count of message: 'platform.write-target.WriteError' emitted",
 		},
-		tsLocal: utils.MetricInfo{
-			Name:        ns("write_error_timestamp_local"),
+		capTimestampStart: utils.MetricInfo{
+			Name:        ns("write_error_cap_timestamp_start"),
+			Unit:        "ms",
+			Description: "The timestamp (local) at capability exec start that resulted in message: 'platform.write-target.WriteError' emit",
+		},
+		capTimestampEmit: utils.MetricInfo{
+			Name:        ns("write_error_cap_timestamp_emit"),
 			Unit:        "ms",
 			Description: "The timestamp (local) at message: 'platform.write-target.WriteError' emit",
 		},
+		capDuration: utils.MetricInfo{
+			Name:        ns("write_error_cap_duration"),
+			Unit:        "ms",
+			Description: "The duration (local) since capability exec start for message: 'platform.write-target.WriteError' emit",
+		},
 	}
 	writeSent = struct {
-		count          utils.MetricInfo
-		tsLocal        utils.MetricInfo
+		// common
+		count             utils.MetricInfo
+		capTimestampStart utils.MetricInfo
+		capTimestampEmit  utils.MetricInfo
+		capDuration       utils.MetricInfo // ts.emit - ts.start
+		// specific to WriteSent
 		blockTimestamp utils.MetricInfo
 		blockNumber    utils.MetricInfo
 	}{
@@ -61,10 +91,20 @@ var (
 			Unit:        "",
 			Description: "The count of message: 'platform.write-target.WriteSent' emitted",
 		},
-		tsLocal: utils.MetricInfo{
-			Name:        ns("write_sent_timestamp_local"),
+		capTimestampStart: utils.MetricInfo{
+			Name:        ns("write_sent_cap_timestamp_start"),
+			Unit:        "ms",
+			Description: "The timestamp (local) at capability exec start that resulted in message: 'platform.write-target.WriteSent' emit",
+		},
+		capTimestampEmit: utils.MetricInfo{
+			Name:        ns("write_sent_cap_timestamp_emit"),
 			Unit:        "ms",
 			Description: "The timestamp (local) at message: 'platform.write-target.WriteSent' emit",
+		},
+		capDuration: utils.MetricInfo{
+			Name:        ns("write_sent_cap_duration"),
+			Unit:        "ms",
+			Description: "The duration (local) since capability exec start for message: 'platform.write-target.WriteSent' emit",
 		},
 		blockTimestamp: utils.MetricInfo{
 			Name:        ns("write_sent_block_timestamp"),
@@ -78,8 +118,12 @@ var (
 		},
 	}
 	writeConfirmed = struct {
-		count          utils.MetricInfo
-		tsLocal        utils.MetricInfo
+		// common
+		count             utils.MetricInfo
+		capTimestampStart utils.MetricInfo
+		capTimestampEmit  utils.MetricInfo
+		capDuration       utils.MetricInfo // ts.emit - ts.start
+		// specific to WriteSent
 		blockTimestamp utils.MetricInfo
 		blockNumber    utils.MetricInfo
 		signersNumber  utils.MetricInfo
@@ -89,10 +133,20 @@ var (
 			Unit:        "",
 			Description: "The count of message: 'platform.write-target.WriteConfirmed' emitted",
 		},
-		tsLocal: utils.MetricInfo{
-			Name:        ns("write_confirmed_timestamp_local"),
+		capTimestampStart: utils.MetricInfo{
+			Name:        ns("write_confirmed_cap_timestamp_start"),
+			Unit:        "ms",
+			Description: "The timestamp (local) at capability exec start that resulted in message: 'platform.write-target.WriteConfirmed' emit",
+		},
+		capTimestampEmit: utils.MetricInfo{
+			Name:        ns("write_confirmed_cap_timestamp_emit"),
 			Unit:        "ms",
 			Description: "The timestamp (local) at message: 'platform.write-target.WriteConfirmed' emit",
+		},
+		capDuration: utils.MetricInfo{
+			Name:        ns("write_confirmed_cap_duration"),
+			Unit:        "ms",
+			Description: "The duration (local) since capability exec start for message: 'platform.write-target.WriteConfirmed' emit",
 		},
 		blockTimestamp: utils.MetricInfo{
 			Name:        ns("write_confirmed_block_timestamp"),
@@ -116,25 +170,39 @@ var (
 type Metrics struct {
 	// Define on WriteInitiated metrics
 	writeInitiated struct {
-		count   metric.Int64Counter
-		tsLocal metric.Int64Gauge
+		// common
+		count             metric.Int64Counter
+		capTimestampStart metric.Int64Gauge
+		capTimestampEmit  metric.Int64Gauge
+		capDuration       metric.Int64Gauge // ts.emit - ts.start
 	}
 	// Define on WriteError metrics
 	writeError struct {
-		count   metric.Int64Counter
-		tsLocal metric.Int64Gauge
+		// common
+		count             metric.Int64Counter
+		capTimestampStart metric.Int64Gauge
+		capTimestampEmit  metric.Int64Gauge
+		capDuration       metric.Int64Gauge // ts.emit - ts.start
 	}
 	// Define on WriteSent metrics
 	writeSent struct {
-		count          metric.Int64Counter
-		tsLocal        metric.Int64Gauge
+		// common
+		count             metric.Int64Counter
+		capTimestampStart metric.Int64Gauge
+		capTimestampEmit  metric.Int64Gauge
+		capDuration       metric.Int64Gauge // ts.emit - ts.start
+		// specific to WriteSent
 		blockTimestamp metric.Int64Gauge
 		blockNumber    metric.Int64Gauge
 	}
 	// Define on WriteConfirmed metrics
 	writeConfirmed struct {
-		count          metric.Int64Counter
-		tsLocal        metric.Int64Gauge
+		// common
+		count             metric.Int64Counter
+		capTimestampStart metric.Int64Gauge
+		capTimestampEmit  metric.Int64Gauge
+		capDuration       metric.Int64Gauge // ts.emit - ts.start
+		// specific to WriteConfirmed
 		blockTimestamp metric.Int64Gauge
 		blockNumber    metric.Int64Gauge
 		signersNumber  metric.Int64Gauge
@@ -156,7 +224,17 @@ func NewMetrics() (*Metrics, error) {
 		return nil, fmt.Errorf("failed to create new counter: %w", err)
 	}
 
-	m.writeInitiated.tsLocal, err = writeInitiated.tsLocal.NewInt64Gauge(meter)
+	m.writeInitiated.capTimestampStart, err = writeInitiated.capTimestampStart.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
+	}
+
+	m.writeInitiated.capTimestampEmit, err = writeInitiated.capTimestampEmit.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
+	}
+
+	m.writeInitiated.capDuration, err = writeInitiated.capDuration.NewInt64Gauge(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
@@ -167,7 +245,17 @@ func NewMetrics() (*Metrics, error) {
 		return nil, fmt.Errorf("failed to create new counter: %w", err)
 	}
 
-	m.writeError.tsLocal, err = writeError.tsLocal.NewInt64Gauge(meter)
+	m.writeError.capTimestampStart, err = writeError.capTimestampStart.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
+	}
+
+	m.writeError.capTimestampEmit, err = writeError.capTimestampEmit.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
+	}
+
+	m.writeError.capDuration, err = writeError.capDuration.NewInt64Gauge(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
@@ -178,7 +266,17 @@ func NewMetrics() (*Metrics, error) {
 		return nil, fmt.Errorf("failed to create new counter: %w", err)
 	}
 
-	m.writeSent.tsLocal, err = writeSent.tsLocal.NewInt64Gauge(meter)
+	m.writeSent.capTimestampStart, err = writeSent.capTimestampStart.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
+	}
+
+	m.writeSent.capTimestampEmit, err = writeSent.capTimestampEmit.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
+	}
+
+	m.writeSent.capDuration, err = writeSent.capDuration.NewInt64Gauge(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
@@ -199,7 +297,17 @@ func NewMetrics() (*Metrics, error) {
 		return nil, fmt.Errorf("failed to create new counter: %w", err)
 	}
 
-	m.writeConfirmed.tsLocal, err = writeConfirmed.tsLocal.NewInt64Gauge(meter)
+	m.writeConfirmed.capTimestampStart, err = writeConfirmed.capTimestampStart.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
+	}
+
+	m.writeConfirmed.capTimestampEmit, err = writeConfirmed.capTimestampEmit.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
+	}
+
+	m.writeConfirmed.capDuration, err = writeConfirmed.capDuration.NewInt64Gauge(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
@@ -230,7 +338,10 @@ func (m *Metrics) OnWriteInitiated(ctx context.Context, msg *WriteInitiated, att
 	m.writeInitiated.count.Add(ctx, 1, attrs)
 
 	// Timestamp events
-	m.writeInitiated.tsLocal.Record(ctx, utils.GetTimestampLocal(attrKVs), attrs)
+	start, emit := msg.MetaCapabilityTimestampStart, msg.MetaCapabilityTimestampEmit
+	m.writeInitiated.capTimestampStart.Record(ctx, int64(start), attrs)
+	m.writeInitiated.capTimestampEmit.Record(ctx, int64(emit), attrs)
+	m.writeInitiated.capDuration.Record(ctx, int64(emit-start), attrs)
 	return nil
 }
 
@@ -242,7 +353,10 @@ func (m *Metrics) OnWriteError(ctx context.Context, msg *WriteError, attrKVs ...
 	m.writeError.count.Add(ctx, 1, attrs)
 
 	// Timestamp events
-	m.writeError.tsLocal.Record(ctx, utils.GetTimestampLocal(attrKVs), attrs)
+	start, emit := msg.MetaCapabilityTimestampStart, msg.MetaCapabilityTimestampEmit
+	m.writeError.capTimestampStart.Record(ctx, int64(start), attrs)
+	m.writeError.capTimestampEmit.Record(ctx, int64(emit), attrs)
+	m.writeError.capDuration.Record(ctx, int64(emit-start), attrs)
 	return nil
 }
 
@@ -254,7 +368,10 @@ func (m *Metrics) OnWriteSent(ctx context.Context, msg *WriteSent, attrKVs ...an
 	m.writeSent.count.Add(ctx, 1, attrs)
 
 	// Timestamp events
-	m.writeSent.tsLocal.Record(ctx, utils.GetTimestampLocal(attrKVs), attrs)
+	start, emit := msg.MetaCapabilityTimestampStart, msg.MetaCapabilityTimestampEmit
+	m.writeSent.capTimestampStart.Record(ctx, int64(start), attrs)
+	m.writeSent.capTimestampEmit.Record(ctx, int64(emit), attrs)
+	m.writeSent.capDuration.Record(ctx, int64(emit-start), attrs)
 
 	// Block timestamp
 	m.writeSent.blockTimestamp.Record(ctx, int64(msg.BlockTimestamp), attrs)
@@ -276,7 +393,10 @@ func (m *Metrics) OnWriteConfirmed(ctx context.Context, msg *WriteConfirmed, att
 	m.writeConfirmed.count.Add(ctx, 1, attrs)
 
 	// Timestamp events
-	m.writeConfirmed.tsLocal.Record(ctx, utils.GetTimestampLocal(attrKVs), attrs)
+	start, emit := msg.MetaCapabilityTimestampStart, msg.MetaCapabilityTimestampEmit
+	m.writeConfirmed.capTimestampStart.Record(ctx, int64(start), attrs)
+	m.writeConfirmed.capTimestampEmit.Record(ctx, int64(emit), attrs)
+	m.writeConfirmed.capDuration.Record(ctx, int64(emit-start), attrs)
 
 	// Signers number
 	m.writeConfirmed.signersNumber.Record(ctx, int64(msg.SignersNum), attrs)

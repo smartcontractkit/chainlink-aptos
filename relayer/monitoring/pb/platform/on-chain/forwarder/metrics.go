@@ -21,8 +21,12 @@ func ns(name string) string {
 // Define metrics configuration
 var (
 	reportProcessed = struct {
-		count          utils.MetricInfo
-		tsLocal        utils.MetricInfo
+		// common
+		count             utils.MetricInfo
+		capTimestampStart utils.MetricInfo
+		capTimestampEmit  utils.MetricInfo
+		capDuration       utils.MetricInfo // ts.emit - ts.start
+		// specific to ReportProcessed
 		blockTimestamp utils.MetricInfo
 		blockNumber    utils.MetricInfo
 	}{
@@ -31,10 +35,20 @@ var (
 			Unit:        "",
 			Description: "The count of message: 'platform.on-chain.forwarder.ReportProcessed' emitted",
 		},
-		tsLocal: utils.MetricInfo{
-			Name:        ns("report_processed_timestamp_local"),
+		capTimestampStart: utils.MetricInfo{
+			Name:        ns("report_processed_cap_timestamp_start"),
+			Unit:        "ms",
+			Description: "The timestamp (local) at capability exec start that resulted in message: 'platform.on-chain.forwarder.ReportProcessed' emit",
+		},
+		capTimestampEmit: utils.MetricInfo{
+			Name:        ns("report_processed_cap_timestamp_emit"),
 			Unit:        "ms",
 			Description: "The timestamp (local) at message: 'platform.on-chain.forwarder.ReportProcessed' emit",
+		},
+		capDuration: utils.MetricInfo{
+			Name:        ns("report_processed_cap_duration"),
+			Unit:        "ms",
+			Description: "The duration (local) since capability exec start for message: 'platform.on-chain.forwarder.ReportProcessed' emit",
 		},
 		blockTimestamp: utils.MetricInfo{
 			Name:        ns("report_processed_block_timestamp"),
@@ -53,8 +67,12 @@ var (
 type Metrics struct {
 	// Define on ReportProcessed metrics
 	reportProcessed struct {
-		count          metric.Int64Counter
-		tsLocal        metric.Int64Gauge
+		// common
+		count             metric.Int64Counter
+		capTimestampStart metric.Int64Gauge
+		capTimestampEmit  metric.Int64Gauge
+		capDuration       metric.Int64Gauge // ts.emit - ts.start
+		// specific to ReportProcessed
 		blockTimestamp metric.Int64Gauge
 		blockNumber    metric.Int64Gauge
 	}
@@ -74,7 +92,17 @@ func NewMetrics() (*Metrics, error) {
 		return nil, fmt.Errorf("failed to create new counter: %w", err)
 	}
 
-	m.reportProcessed.tsLocal, err = reportProcessed.tsLocal.NewInt64Gauge(meter)
+	m.reportProcessed.capTimestampStart, err = reportProcessed.capTimestampStart.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
+	}
+
+	m.reportProcessed.capTimestampEmit, err = reportProcessed.capTimestampEmit.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
+	}
+
+	m.reportProcessed.capDuration, err = reportProcessed.capDuration.NewInt64Gauge(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
@@ -100,7 +128,10 @@ func (m *Metrics) OnReportProcessed(ctx context.Context, msg *ReportProcessed, a
 	m.reportProcessed.count.Add(ctx, 1, attrs)
 
 	// Timestamp events
-	m.reportProcessed.tsLocal.Record(ctx, utils.GetTimestampLocal(attrKVs), attrs)
+	start, emit := msg.MetaCapabilityTimestampStart, msg.MetaCapabilityTimestampEmit
+	m.reportProcessed.capTimestampStart.Record(ctx, int64(start), attrs)
+	m.reportProcessed.capTimestampEmit.Record(ctx, int64(emit), attrs)
+	m.reportProcessed.capDuration.Record(ctx, int64(emit-start), attrs)
 
 	// Block timestamp
 	m.reportProcessed.blockTimestamp.Record(ctx, int64(msg.BlockTimestamp), attrs)

@@ -94,8 +94,10 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				MetaReferenceId:              m.MetaReferenceId,
 
 				// Execution Context - Capability
-				MetaCapabilityType: m.MetaCapabilityType,
-				MetaCapabilityId:   m.MetaCapabilityId,
+				MetaCapabilityType:           m.MetaCapabilityType,
+				MetaCapabilityId:             m.MetaCapabilityId,
+				MetaCapabilityTimestampStart: m.MetaCapabilityTimestampStart,
+				MetaCapabilityTimestampEmit:  m.MetaCapabilityTimestampEmit,
 			})
 		case uint16(4):
 			rm, err := mercury_v4.Decode(rf.Data)
@@ -139,8 +141,10 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				MetaReferenceId:              m.MetaReferenceId,
 
 				// Execution Context - Capability
-				MetaCapabilityType: m.MetaCapabilityType,
-				MetaCapabilityId:   m.MetaCapabilityId,
+				MetaCapabilityType:           m.MetaCapabilityType,
+				MetaCapabilityId:             m.MetaCapabilityId,
+				MetaCapabilityTimestampStart: m.MetaCapabilityTimestampStart,
+				MetaCapabilityTimestampEmit:  m.MetaCapabilityTimestampEmit,
 			})
 		default:
 			return nil, fmt.Errorf("unsupported Mercury report type: %d", t)

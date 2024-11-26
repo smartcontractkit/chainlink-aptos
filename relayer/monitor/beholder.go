@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"context"
-	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -12,11 +11,8 @@ import (
 )
 
 const (
-	AttrKeyTimestampLocal = "timestamp_local"
-
 	// Helper keys to avoid duplicating attributes
-	CtxKeySkipAppendAttrs               = "skip_append_attrs"
-	CtxKeySkipAppendAttrsTimestampLocal = "skip_append_attrs.timestamp_local"
+	CtxKeySkipAppendAttrs = "skip_append_attrs"
 )
 
 // BeholderClient is a Beholder client extension with a custom ProtoEmitter
@@ -62,7 +58,6 @@ func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any
 	// Skip appending attributes if the context says it's already done that
 	if skip, ok := ctx.Value(CtxKeySkipAppendAttrs).(bool); !ok || !skip {
 		attrKVs = e.appendAttrsRequired(ctx, m, attrKVs)
-		attrKVs = e.appendAttrsCommon(ctx, m, attrKVs)
 	}
 
 	// Emit the message with attributes
@@ -79,7 +74,6 @@ func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any
 // EmitWithLog emits a protobuf message with attributes and logs the emitted message
 func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs ...any) error {
 	attrKVs = e.appendAttrsRequired(ctx, m, attrKVs)
-	attrKVs = e.appendAttrsCommon(ctx, m, attrKVs)
 	// attach a bool switch to ctx to avoid duplicating common attrs
 	ctx = context.WithValue(ctx, CtxKeySkipAppendAttrs, true)
 
@@ -99,23 +93,5 @@ func (e *protoEmitter) appendAttrsRequired(ctx context.Context, m proto.Message,
 	attrKVs = appendRequiredAttrDataSchema(m, attrKVs, e.schemaBasePath)
 	attrKVs = appendRequiredAttrEntity(m, attrKVs)
 	attrKVs = appendRequiredAttrDomain(m, attrKVs)
-	return attrKVs
-}
-
-// appendAttrsCommon appends common attributes to the attribute key-value list
-func (e *protoEmitter) appendAttrsCommon(ctx context.Context, m proto.Message, attrKVs []any) []any {
-	// Append the timestamp, or skip if the context requests it
-	if skip, ok := ctx.Value(CtxKeySkipAppendAttrsTimestampLocal).(bool); !ok || !skip {
-		attrKVs = AppendTimestampLocalToAttrs(m, attrKVs)
-	}
-
-	return attrKVs
-}
-
-// AppendTimestampLocalToAttrs appends the local timestamp as an attribute
-func AppendTimestampLocalToAttrs(_ proto.Message, attrKVs []any) []any {
-	key := AttrKeyTimestampLocal
-	attrKVs = append(attrKVs, key)
-	attrKVs = append(attrKVs, time.Now().UnixMilli()) // milliseconds
 	return attrKVs
 }

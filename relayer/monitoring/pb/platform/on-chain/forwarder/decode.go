@@ -50,7 +50,9 @@ func DecodeAsReportProcessed(m *wt_msg.WriteConfirmed) (*ReportProcessed, error)
 		MetaReferenceId:              m.MetaReferenceId,
 
 		// Execution Context - Capability
-		MetaCapabilityType: m.MetaCapabilityType,
-		MetaCapabilityId:   m.MetaCapabilityId,
+		MetaCapabilityType:           m.MetaCapabilityType,
+		MetaCapabilityId:             m.MetaCapabilityId,
+		MetaCapabilityTimestampStart: m.MetaCapabilityTimestampStart,
+		MetaCapabilityTimestampEmit:  m.MetaCapabilityTimestampEmit,
 	}, nil
 }

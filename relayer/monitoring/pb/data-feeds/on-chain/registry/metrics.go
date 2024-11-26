@@ -21,8 +21,12 @@ func ns(name string) string {
 // Define metrics configuration
 var (
 	feedUpdated = struct {
-		count                 utils.MetricInfo
-		tsLocal               utils.MetricInfo
+		// common
+		count             utils.MetricInfo
+		capTimestampStart utils.MetricInfo
+		capTimestampEmit  utils.MetricInfo
+		capDuration       utils.MetricInfo // ts.emit - ts.start
+		// specific to FeedUpdated
 		observationsTimestamp utils.MetricInfo
 		benchmark             utils.MetricInfo
 		blockTimestamp        utils.MetricInfo
@@ -33,10 +37,20 @@ var (
 			Unit:        "",
 			Description: "The count of message: 'data-feeds.on-chain.registry.FeedUpdated' emitted",
 		},
-		tsLocal: utils.MetricInfo{
-			Name:        ns("feed_updated_timestamp_local"),
+		capTimestampStart: utils.MetricInfo{
+			Name:        ns("feed_updated_cap_timestamp_start"),
 			Unit:        "ms",
-			Description: "The timestamp (local) at message: 'platform.on-chain.forwarder.ReportProcessed' emit",
+			Description: "The timestamp (local) at capability exec start that resulted in message: 'data-feeds.on-chain.registry.FeedUpdated' emit",
+		},
+		capTimestampEmit: utils.MetricInfo{
+			Name:        ns("feed_updated_cap_timestamp_emit"),
+			Unit:        "ms",
+			Description: "The timestamp (local) at message: 'data-feeds.on-chain.registry.FeedUpdated' emit",
+		},
+		capDuration: utils.MetricInfo{
+			Name:        ns("feed_updated_cap_duration"),
+			Unit:        "ms",
+			Description: "The duration (local) since capability exec start for message: 'data-feeds.on-chain.registry.FeedUpdated' emit",
 		},
 		observationsTimestamp: utils.MetricInfo{
 			Name:        ns("feed_updated_observations_timestamp"),
@@ -65,8 +79,12 @@ var (
 type Metrics struct {
 	// Define on FeedUpdated metrics
 	feedUpdated struct {
-		count                 metric.Int64Counter
-		tsLocal               metric.Int64Gauge
+		// common
+		count             metric.Int64Counter
+		capTimestampStart metric.Int64Gauge
+		capTimestampEmit  metric.Int64Gauge
+		capDuration       metric.Int64Gauge // ts.emit - ts.start
+		// specific to FeedUpdated
 		observationsTimestamp metric.Int64Gauge
 		benchmark             metric.Float64Gauge
 		blockTimestamp        metric.Int64Gauge
@@ -88,7 +106,17 @@ func NewMetrics() (*Metrics, error) {
 		return nil, fmt.Errorf("failed to create new counter: %w", err)
 	}
 
-	m.feedUpdated.tsLocal, err = feedUpdated.tsLocal.NewInt64Gauge(meter)
+	m.feedUpdated.capTimestampStart, err = feedUpdated.capTimestampStart.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
+	}
+
+	m.feedUpdated.capTimestampEmit, err = feedUpdated.capTimestampEmit.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
+	}
+
+	m.feedUpdated.capDuration, err = feedUpdated.capDuration.NewInt64Gauge(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
@@ -124,7 +152,10 @@ func (m *Metrics) OnFeedUpdated(ctx context.Context, msg *FeedUpdated, attrKVs .
 	m.feedUpdated.count.Add(ctx, 1, attrs)
 
 	// Timestamp events
-	m.feedUpdated.tsLocal.Record(ctx, utils.GetTimestampLocal(attrKVs), attrs)
+	start, emit := msg.MetaCapabilityTimestampStart, msg.MetaCapabilityTimestampEmit
+	m.feedUpdated.capTimestampStart.Record(ctx, int64(start), attrs)
+	m.feedUpdated.capTimestampEmit.Record(ctx, int64(emit), attrs)
+	m.feedUpdated.capDuration.Record(ctx, int64(emit-start), attrs)
 
 	// Timestamp
 	m.feedUpdated.observationsTimestamp.Record(ctx, int64(msg.ObservationsTimestamp), attrs)

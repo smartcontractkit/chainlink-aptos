@@ -35,4 +35,6 @@ message WriteSkipped {
   // Execution Context - Capability
   string meta_capability_type = 32;
   string meta_capability_id = 33;
+  uint64 meta_capability_timestamp_start = 34;
+  uint64 meta_capability_timestamp_emit = 35;
 }
