@@ -45,7 +45,7 @@ var (
 		capDuration: utils.MetricInfo{
 			Name:        ns("write_initiated_cap_duration"),
 			Unit:        "ms",
-			Description: "The duration (local) since capability exec start for message: 'platform.write-target.WriteInitiated' emit",
+			Description: "The duration (local) since capability exec start to message: 'platform.write-target.WriteInitiated' emit",
 		},
 	}
 	writeError = struct {
@@ -73,7 +73,7 @@ var (
 		capDuration: utils.MetricInfo{
 			Name:        ns("write_error_cap_duration"),
 			Unit:        "ms",
-			Description: "The duration (local) since capability exec start for message: 'platform.write-target.WriteError' emit",
+			Description: "The duration (local) since capability exec start to message: 'platform.write-target.WriteError' emit",
 		},
 	}
 	writeSent = struct {
@@ -104,7 +104,7 @@ var (
 		capDuration: utils.MetricInfo{
 			Name:        ns("write_sent_cap_duration"),
 			Unit:        "ms",
-			Description: "The duration (local) since capability exec start for message: 'platform.write-target.WriteSent' emit",
+			Description: "The duration (local) since capability exec start to message: 'platform.write-target.WriteSent' emit",
 		},
 		blockTimestamp: utils.MetricInfo{
 			Name:        ns("write_sent_block_timestamp"),
@@ -146,7 +146,7 @@ var (
 		capDuration: utils.MetricInfo{
 			Name:        ns("write_confirmed_cap_duration"),
 			Unit:        "ms",
-			Description: "The duration (local) since capability exec start for message: 'platform.write-target.WriteConfirmed' emit",
+			Description: "The duration (local) since capability exec start to message: 'platform.write-target.WriteConfirmed' emit",
 		},
 		blockTimestamp: utils.MetricInfo{
 			Name:        ns("write_confirmed_block_timestamp"),

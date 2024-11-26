@@ -48,7 +48,7 @@ var (
 		capDuration: utils.MetricInfo{
 			Name:        ns("report_processed_cap_duration"),
 			Unit:        "ms",
-			Description: "The duration (local) since capability exec start for message: 'platform.on-chain.forwarder.ReportProcessed' emit",
+			Description: "The duration (local) since capability exec start to message: 'platform.on-chain.forwarder.ReportProcessed' emit",
 		},
 		blockTimestamp: utils.MetricInfo{
 			Name:        ns("report_processed_block_timestamp"),

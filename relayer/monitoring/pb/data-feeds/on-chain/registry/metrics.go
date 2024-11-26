@@ -28,6 +28,7 @@ var (
 		capDuration       utils.MetricInfo // ts.emit - ts.start
 		// specific to FeedUpdated
 		observationsTimestamp utils.MetricInfo
+		duration              utils.MetricInfo // ts.emit - ts.observation
 		benchmark             utils.MetricInfo
 		blockTimestamp        utils.MetricInfo
 		blockNumber           utils.MetricInfo
@@ -50,12 +51,17 @@ var (
 		capDuration: utils.MetricInfo{
 			Name:        ns("feed_updated_cap_duration"),
 			Unit:        "ms",
-			Description: "The duration (local) since capability exec start for message: 'data-feeds.on-chain.registry.FeedUpdated' emit",
+			Description: "The duration (local) since capability exec start to message: 'data-feeds.on-chain.registry.FeedUpdated' emit",
 		},
 		observationsTimestamp: utils.MetricInfo{
 			Name:        ns("feed_updated_observations_timestamp"),
 			Unit:        "ms",
 			Description: "The observations timestamp for the latest confirmed update (as reported)",
+		},
+		duration: utils.MetricInfo{
+			Name:        ns("feed_updated_duration"),
+			Unit:        "ms",
+			Description: "The duration (local) since observation to message: 'data-feeds.on-chain.registry.FeedUpdated' emit",
 		},
 		benchmark: utils.MetricInfo{
 			Name:        ns("feed_updated_benchmark"),
@@ -159,6 +165,8 @@ func (m *Metrics) OnFeedUpdated(ctx context.Context, msg *FeedUpdated, attrKVs .
 
 	// Timestamp
 	m.feedUpdated.observationsTimestamp.Record(ctx, int64(msg.ObservationsTimestamp), attrs)
+	observation := uint64(msg.ObservationsTimestamp) * 1000 // convert to milliseconds
+	m.feedUpdated.capDuration.Record(ctx, int64(emit-observation), attrs)
 
 	// Benchmark
 	m.feedUpdated.benchmark.Record(ctx, msg.BenchmarkVal, attrs)
