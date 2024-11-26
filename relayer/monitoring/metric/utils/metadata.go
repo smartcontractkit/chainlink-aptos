@@ -4,6 +4,11 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
+const (
+	// WorkflowExecutionIDShortLen is the length of the short version of the WorkflowExecutionId (label)
+	WorkflowExecutionIDShortLen = 3 // first 3 characters, 16^3 = 4.096 possibilities (mid-high cardinality)
+)
+
 // TODO: Refactor as a proto referenced from the other proto files (telemetry messages)
 type ExecutionMetadata struct {
 	// Execution Context - Source
@@ -39,7 +44,9 @@ func (m ExecutionMetadata) Attributes() []attribute.KeyValue {
 		// Execution Context - Workflow (capabilities.RequestMetadata)
 		attribute.String("workflow_id", ValOrUnknown(m.WorkflowId)),
 		attribute.String("workflow_owner", ValOrUnknown(m.WorkflowOwner)),
-		// Notice: WorkflowExecutionId is not used by metrics (skipped b/c high cardinality)
+		// Notice: We lower the cardinality on the WorkflowExecutionId so it can be used by metrics
+		// This label has good chances to be unique per workflow, in a reasonable bounded time window
+		attribute.String("workflow_execution_id_short", ValShortOrUnknown(m.WorkflowExecutionId, WorkflowExecutionIDShortLen)),
 		attribute.String("workflow_name", ValOrUnknown(m.WorkflowName)),
 		attribute.Int64("workflow_don_id", int64(m.WorkflowDonId)),
 		attribute.Int64("workflow_don_config_version", int64(m.WorkflowDonConfigVersion)),
@@ -58,4 +65,15 @@ func ValOrUnknown(val string) string {
 		return "unknown"
 	}
 	return val
+}
+
+// ValShortOrUnknown returns the short len value if not empty or available, otherwise it returns "unknown"
+func ValShortOrUnknown(val string, _len int) string {
+	if val == "" || _len <= 0 {
+		return "unknown"
+	}
+	if _len > len(val) {
+		return val
+	}
+	return val[:_len]
 }
