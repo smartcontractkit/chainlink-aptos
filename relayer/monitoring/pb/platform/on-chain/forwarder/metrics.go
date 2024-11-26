@@ -22,6 +22,7 @@ func ns(name string) string {
 var (
 	reportProcessed = struct {
 		count          utils.MetricInfo
+		tsLocal        utils.MetricInfo
 		blockTimestamp utils.MetricInfo
 		blockNumber    utils.MetricInfo
 	}{
@@ -29,6 +30,11 @@ var (
 			Name:        ns("report_processed_count"),
 			Unit:        "",
 			Description: "The count of message: 'platform.on-chain.forwarder.ReportProcessed' emitted",
+		},
+		tsLocal: utils.MetricInfo{
+			Name:        ns("report_processed_timestamp_local"),
+			Unit:        "ms",
+			Description: "The timestamp (local) at message: 'platform.on-chain.forwarder.ReportProcessed' emit",
 		},
 		blockTimestamp: utils.MetricInfo{
 			Name:        ns("report_processed_block_timestamp"),
@@ -48,6 +54,7 @@ type Metrics struct {
 	// Define on ReportProcessed metrics
 	reportProcessed struct {
 		count          metric.Int64Counter
+		tsLocal        metric.Int64Gauge
 		blockTimestamp metric.Int64Gauge
 		blockNumber    metric.Int64Gauge
 	}
@@ -65,6 +72,11 @@ func NewMetrics() (*Metrics, error) {
 	m.reportProcessed.count, err = reportProcessed.count.NewInt64Counter(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new counter: %w", err)
+	}
+
+	m.reportProcessed.tsLocal, err = reportProcessed.tsLocal.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
 
 	m.reportProcessed.blockTimestamp, err = reportProcessed.blockTimestamp.NewInt64Gauge(meter)
@@ -86,6 +98,9 @@ func (m *Metrics) OnReportProcessed(ctx context.Context, msg *ReportProcessed, a
 
 	// Count events
 	m.reportProcessed.count.Add(ctx, 1, attrs)
+
+	// Timestamp events
+	m.reportProcessed.tsLocal.Record(ctx, utils.GetTimestampLocal(attrKVs), attrs)
 
 	// Block timestamp
 	m.reportProcessed.blockTimestamp.Record(ctx, int64(msg.BlockTimestamp), attrs)

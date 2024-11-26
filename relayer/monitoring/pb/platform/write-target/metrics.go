@@ -230,7 +230,7 @@ func (m *Metrics) OnWriteInitiated(ctx context.Context, msg *WriteInitiated, att
 	m.writeInitiated.count.Add(ctx, 1, attrs)
 
 	// Timestamp events
-	m.writeInitiated.tsLocal.Record(ctx, getTimestampLocal(attrKVs), attrs)
+	m.writeInitiated.tsLocal.Record(ctx, utils.GetTimestampLocal(attrKVs), attrs)
 	return nil
 }
 
@@ -242,7 +242,7 @@ func (m *Metrics) OnWriteError(ctx context.Context, msg *WriteError, attrKVs ...
 	m.writeError.count.Add(ctx, 1, attrs)
 
 	// Timestamp events
-	m.writeError.tsLocal.Record(ctx, getTimestampLocal(attrKVs), attrs)
+	m.writeError.tsLocal.Record(ctx, utils.GetTimestampLocal(attrKVs), attrs)
 	return nil
 }
 
@@ -254,7 +254,7 @@ func (m *Metrics) OnWriteSent(ctx context.Context, msg *WriteSent, attrKVs ...an
 	m.writeSent.count.Add(ctx, 1, attrs)
 
 	// Timestamp events
-	m.writeSent.tsLocal.Record(ctx, getTimestampLocal(attrKVs), attrs)
+	m.writeSent.tsLocal.Record(ctx, utils.GetTimestampLocal(attrKVs), attrs)
 
 	// Block timestamp
 	m.writeSent.blockTimestamp.Record(ctx, int64(msg.BlockTimestamp), attrs)
@@ -276,7 +276,7 @@ func (m *Metrics) OnWriteConfirmed(ctx context.Context, msg *WriteConfirmed, att
 	m.writeConfirmed.count.Add(ctx, 1, attrs)
 
 	// Timestamp events
-	m.writeConfirmed.tsLocal.Record(ctx, getTimestampLocal(attrKVs), attrs)
+	m.writeConfirmed.tsLocal.Record(ctx, utils.GetTimestampLocal(attrKVs), attrs)
 
 	// Signers number
 	m.writeConfirmed.signersNumber.Record(ctx, int64(msg.SignersNum), attrs)
@@ -291,18 +291,6 @@ func (m *Metrics) OnWriteConfirmed(ctx context.Context, msg *WriteConfirmed, att
 	}
 	m.writeConfirmed.blockNumber.Record(ctx, blockHeightVal, attrs)
 	return nil
-}
-
-// getTimestampLocal returns the timestamp_local attribute value from the given attribute key-values
-func getTimestampLocal(attrKVs []any) int64 {
-	for i := 0; i < len(attrKVs); i += 2 {
-		if key, ok := attrKVs[i].(string); ok && key == "timestamp_local" {
-			if ts, ok := attrKVs[i+1].(int64); ok {
-				return ts
-			}
-		}
-	}
-	return 0
 }
 
 // Attributes returns the attributes for the WriteInitiated message to be used in metrics
