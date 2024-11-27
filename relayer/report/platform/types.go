@@ -79,7 +79,7 @@ func Decode(rawReport []byte) (*Report, error) {
 	if _, err := buf.Read(workflowNameBytes[:]); err != nil {
 		return nil, err
 	}
-	report.WorkflowName = string(workflowNameBytes[:])
+	report.WorkflowName = hex.EncodeToString(workflowNameBytes[:])
 
 	// Decode workflow_owner
 	var workflowOwnerBytes [20]byte

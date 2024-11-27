@@ -2,6 +2,7 @@ package platform
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,7 +26,12 @@ func TestDecodeReport(t *testing.T) {
 	require.Equal(t, uint32(0x01), r.DONConfigVersion)
 
 	require.Equal(t, "bc06f300e797d5a8575637a14aae13e3f8508008d1fc54f4c4611fff17a68cb0", r.WorkflowID)
-	require.Equal(t, "0000FOOBAR", r.WorkflowName)
+	require.Equal(t, "30303030464f4f424152", r.WorkflowName)
+
+	workflowNameBytes, err := hex.DecodeString(r.WorkflowName)
+	require.NoError(t, err)
+
+	require.Equal(t, "0000FOOBAR", string(workflowNameBytes))
 	require.Equal(t, "00000000000000000000000000000000000000aa", r.WorkflowOwner)
 	require.Equal(t, "0001", r.ReportID)
 }

@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"encoding/hex"
+
 	"go.opentelemetry.io/otel/attribute"
 )
 
@@ -35,6 +37,9 @@ type ExecutionMetadata struct {
 
 // Attributes returns common attributes used for metrics
 func (m ExecutionMetadata) Attributes() []attribute.KeyValue {
+	// Decode workflow name attribute for output
+	workflowName := m.decodeWorkflowName()
+
 	return []attribute.KeyValue{
 		// Execution Context - Source
 		attribute.String("source_id", ValOrUnknown(m.SourceId)),
@@ -49,7 +54,7 @@ func (m ExecutionMetadata) Attributes() []attribute.KeyValue {
 		// Notice: We lower the cardinality on the WorkflowExecutionId so it can be used by metrics
 		// This label has good chances to be unique per workflow, in a reasonable bounded time window
 		attribute.String("workflow_execution_id_short", ValShortOrUnknown(m.WorkflowExecutionId, WorkflowExecutionIDShortLen)),
-		attribute.String("workflow_name", ValOrUnknown(m.WorkflowName)),
+		attribute.String("workflow_name", ValOrUnknown(workflowName)),
 		attribute.Int64("workflow_don_id", int64(m.WorkflowDonId)),
 		attribute.Int64("workflow_don_config_version", int64(m.WorkflowDonConfigVersion)),
 		attribute.String("reference_id", ValOrUnknown(m.ReferenceId)),
@@ -58,6 +63,16 @@ func (m ExecutionMetadata) Attributes() []attribute.KeyValue {
 		attribute.String("capability_id", ValOrUnknown(m.CapabilityId)),
 		// Notice: we don't include the timestamps here (high cardinality)
 	}
+}
+
+// decodeWorkflowName decodes the workflow name from hex string to raw string (underlying, output)
+func (m ExecutionMetadata) decodeWorkflowName() string {
+	bytes, err := hex.DecodeString(m.WorkflowName)
+	if err != nil {
+		// This should never happen
+		bytes = []byte("unknown-decode-error")
+	}
+	return string(bytes)
 }
 
 // This is needed to avoid issues during exporting OTel metrics to Prometheus
