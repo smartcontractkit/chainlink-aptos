@@ -92,6 +92,7 @@ type Metrics struct {
 		capDuration       metric.Int64Gauge // ts.emit - ts.start
 		// specific to FeedUpdated
 		observationsTimestamp metric.Int64Gauge
+		duration              metric.Int64Gauge // ts.emit - ts.observation
 		benchmark             metric.Float64Gauge
 		blockTimestamp        metric.Int64Gauge
 		blockNumber           metric.Int64Gauge
@@ -132,6 +133,11 @@ func NewMetrics() (*Metrics, error) {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
 	}
 
+	m.feedUpdated.duration, err = feedUpdated.duration.NewInt64Gauge(meter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new gauge: %w", err)
+	}
+
 	m.feedUpdated.benchmark, err = feedUpdated.benchmark.NewFloat64Gauge(meter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new gauge: %w", err)
@@ -163,10 +169,10 @@ func (m *Metrics) OnFeedUpdated(ctx context.Context, msg *FeedUpdated, attrKVs .
 	m.feedUpdated.capTimestampEmit.Record(ctx, int64(emit), attrs)
 	m.feedUpdated.capDuration.Record(ctx, int64(emit-start), attrs)
 
-	// Timestamp
+	// Timestamp e2e observation update
 	m.feedUpdated.observationsTimestamp.Record(ctx, int64(msg.ObservationsTimestamp), attrs)
 	observation := uint64(msg.ObservationsTimestamp) * 1000 // convert to milliseconds
-	m.feedUpdated.capDuration.Record(ctx, int64(emit-observation), attrs)
+	m.feedUpdated.duration.Record(ctx, int64(emit-observation), attrs)
 
 	// Benchmark
 	m.feedUpdated.benchmark.Record(ctx, msg.BenchmarkVal, attrs)
