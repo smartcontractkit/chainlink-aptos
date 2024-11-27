@@ -53,7 +53,8 @@ func (m ExecutionMetadata) Attributes() []attribute.KeyValue {
 		attribute.String("workflow_owner", ValOrUnknown(m.WorkflowOwner)),
 		// Notice: We lower the cardinality on the WorkflowExecutionId so it can be used by metrics
 		// This label has good chances to be unique per workflow, in a reasonable bounded time window
-		attribute.String("workflow_execution_id_short", ValShortOrUnknown(m.WorkflowExecutionId, WorkflowExecutionIDShortLen)),
+		// TODO: enable this when sufficiently tested (PromQL queries like alerts might need to change if this is used)
+		// attribute.String("workflow_execution_id_short", ValShortOrUnknown(m.WorkflowExecutionId, WorkflowExecutionIDShortLen)),
 		attribute.String("workflow_name", ValOrUnknown(workflowName)),
 		attribute.Int64("workflow_don_id", int64(m.WorkflowDonId)),
 		attribute.Int64("workflow_don_config_version", int64(m.WorkflowDonConfigVersion)),
