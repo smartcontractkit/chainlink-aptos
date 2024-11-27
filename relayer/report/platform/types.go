@@ -95,7 +95,6 @@ func Decode(rawReport []byte) (*Report, error) {
 		return nil, err
 	}
 	// TODO: should we prefix with 0x?
-	// TODO: should this be hex encoded or UTF-8 string?
 	report.ReportID = hex.EncodeToString(reportIDBytes[:])
 
 	// Decode data
