@@ -62,6 +62,9 @@ func TestDecodeAsReportProcessed(t *testing.T) {
 					BlockHash:      "0xaa",
 					BlockHeight:    "17",
 					BlockTimestamp: 0x66f5bf69,
+
+					TxSender:   "example-transmitter",
+					TxReceiver: "example-forwarder",
 				},
 				{
 					FeedId:                "0x0003222222222222222200000000000000000000000000000000000000000000",
@@ -74,6 +77,9 @@ func TestDecodeAsReportProcessed(t *testing.T) {
 					BlockHash:      "0xaa",
 					BlockHeight:    "17",
 					BlockTimestamp: 0x66f5bf69,
+
+					TxSender:   "example-transmitter",
+					TxReceiver: "example-forwarder",
 				},
 			},
 			wantErr: false,

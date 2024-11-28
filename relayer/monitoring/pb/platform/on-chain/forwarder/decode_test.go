@@ -56,6 +56,9 @@ func TestDecodeAsReportProcessed(t *testing.T) {
 				BlockHash:      "0xaa",
 				BlockHeight:    "17",
 				BlockTimestamp: 0x66f5bf69,
+
+				TxSender:   "example-transmitter",
+				TxReceiver: "example-forwarder",
 			},
 			wantErr: false,
 		},

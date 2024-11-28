@@ -12,12 +12,17 @@ message ReportProcessed {
   uint32 report_id = 3;
   bool success = 4;
 
-  // TODO: Transaction data - tx that mained the event (e.g., hash, gas, transmitter, payload, etc.)
-
   // Head data - when was the event produced on-chain
   string block_hash = 5;
   string block_height = 6;
   uint64 block_timestamp = 7;
+
+  // Transaction data - info about the tx that mained the event (optional)
+  string tx_id = 10; // TXM ref
+  string tx_hash = 11;
+  string tx_sender = 12;
+  string tx_receiver = 13;
+  string tx_status = 14;
 
   // [Execution Context]
   // TODO: replace with a proto reference once supported

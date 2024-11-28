@@ -130,6 +130,12 @@ func (m *ReportProcessed) Attributes() []attribute.KeyValue {
 		attribute.Int64("report_id", int64(m.ReportId)), // uint32 -> int64
 		// attribute.String("transmitter", m.Transmitter),
 		attribute.Bool("success", m.Success),
+
+		// We mark confrmations by transmitter so we can query for only initial (fast) confirmations
+		// with PromQL, and ignore the slower confirmations by other signers for SLA measurements.
+		attribute.Bool("observed_by_transmitter", m.TxSender == m.MetaSourceId), // source_id == node account
+		// TODO: remove once NOT_SET bug with non-string labels is fixed
+		attribute.String("observed_by_transmitter_str", strconv.FormatBool(m.TxSender == m.MetaSourceId)),
 	}
 
 	return append(attrs, context.Attributes()...)

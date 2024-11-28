@@ -19,12 +19,17 @@ message FeedUpdated {
   // Set as `math.NaN()` if report data type not a number, or `+/-Inf` if number doesn't fit in double.
   double benchmark_val = 5;
 
-  // TODO: Transaction data - tx that mained the event (e.g., hash, gas, transmitter, payload, etc.)
-
   // Head data - when was the event produced on-chain
   string block_hash = 6;
   string block_height = 7;
   uint64 block_timestamp = 8;
+
+  // Transaction data - info about the tx that mained the event (optional)
+  string tx_id = 10; // TXM ref
+  string tx_hash = 11;
+  string tx_sender = 12;
+  string tx_receiver = 13;
+  string tx_status = 14;
 
   // [Execution Context]
   // TODO: replace with a proto reference once supported

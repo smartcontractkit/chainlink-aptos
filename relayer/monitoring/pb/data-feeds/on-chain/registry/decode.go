@@ -68,12 +68,16 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 				// Notice: i192 will not fit if scaled number bigger than f64
 				BenchmarkVal: toBenchmarkVal(feedID, rm.BenchmarkPrice),
 
-				// Notice: we skip head/tx data here (unknown), as we map from 'platform.write-target.WriteConfirmed'
-				// and not from tx/event data (e.g., 'platform.write-target.WriteTxConfirmed')
-
+				// Head data - when was the event produced on-chain
 				BlockHash:      m.BlockHash,
 				BlockHeight:    m.BlockHeight,
 				BlockTimestamp: m.BlockTimestamp,
+
+				// Transaction data - info about the tx that mained the event (optional)
+				// Notice: we skip SOME head/tx data here (unknown), as we map from 'platform.write-target.WriteConfirmed'
+				// and not from tx/event data (e.g., 'platform.write-target.WriteTxConfirmed')
+				TxSender:   m.Transmitter,
+				TxReceiver: m.Forwarder,
 
 				// Execution Context - Source
 				MetaSourceId: m.MetaSourceId,
