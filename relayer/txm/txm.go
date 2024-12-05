@@ -483,7 +483,8 @@ func (a *AptosTxm) confirmLoop() {
 	_, cancel := utils.ContextFromChan(a.stop)
 	defer cancel()
 
-	tick := time.After(time.Duration(a.config.ConfirmPollSecs) * time.Second)
+	pollDuration := time.Duration(a.config.ConfirmPollSecs) * time.Second
+	tick := time.After(pollDuration)
 
 	a.logger.Debugw("confirmLoop: started")
 
@@ -494,8 +495,12 @@ func (a *AptosTxm) confirmLoop() {
 
 			a.checkUnconfirmed()
 
-			remaining := time.Duration(a.config.ConfirmPollSecs) - time.Since(start)
-			tick = time.After(utils.WithJitter(remaining.Abs()))
+			remaining := pollDuration - time.Since(start)
+			if remaining > 0 {
+				tick = time.After(utils.WithJitter(remaining))
+			} else {
+				tick = time.After(utils.WithJitter(pollDuration))
+			}
 		case <-a.stop:
 			a.logger.Debugw("confirmLoop: stopped")
 			return
