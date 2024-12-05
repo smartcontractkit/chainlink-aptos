@@ -261,6 +261,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}
 
 	// Fetch the latest head from the chain (timestamp), retry with a default backoff strategy
+	ctx = context.WithValue(ctx, utils.CtxKeyTracingID, info.request.Metadata.WorkflowExecutionID)
 	head, err := utils.WithRetry(ctx, c.lggr, c.cs.LatestHead)
 	if err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to fetch the latest head", err.Error())

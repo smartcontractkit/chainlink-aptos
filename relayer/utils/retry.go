@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jpillora/backoff"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 )
+
+// CtxKeyTracingID is the context key for tracing ID
+const CtxKeyTracingID = "tracingID"
 
 // Exponential backoff (default) is used to handle retries with increasing wait times in case of errors
 var BackoffStrategyDefault = backoff.Backoff{
@@ -19,6 +23,12 @@ var BackoffStrategyDefault = backoff.Backoff{
 
 // WithRetryStrategy applies a retry strategy to a given function.
 func WithRetryStrategy[R any](ctx context.Context, lggr logger.Logger, strategy backoff.Backoff, fn func(ctx context.Context) (R, error)) (R, error) {
+	// Generate a new tracing ID if not present, used to track retries
+	tracingID, ok := ctx.Value(CtxKeyTracingID).(string)
+	if !ok {
+		tracingID = uuid.New().String()
+	}
+
 	for {
 		result, err := fn(ctx)
 		if err == nil {
@@ -26,7 +36,7 @@ func WithRetryStrategy[R any](ctx context.Context, lggr logger.Logger, strategy 
 		}
 
 		wait := strategy.Duration()
-		lggr.Warnw(fmt.Sprintf("Failed to execute function, retrying in %s ...", wait), "wait", wait, "err", err)
+		lggr.Warnw(fmt.Sprintf("Failed to execute function, retrying in %s ...", wait), "wait", wait, "tracingID", tracingID, "err", err)
 
 		select {
 		case <-ctx.Done():
