@@ -8,18 +8,16 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
 
+	aptosacc "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/account"
 	chain "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chain"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chainreader"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chainwriter"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
 	aptosconfig "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/config"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/write_target"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
-
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/utils"
-
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/write_target"
 )
 
 const version = "1.0.0"
@@ -196,11 +194,11 @@ func getTransmitter(cwConfig chainwriter.ChainWriterConfig) (string, error) {
 	if transmitter == "" {
 		// If the address is not specified, we assume the public key is for its corresponding address
 		// and not for an address with a rotated authentication key.
-		ed25519PublicKey, err := utils.HexToEd25519PublicKey(functionConfig.PublicKey)
+		ed25519PublicKey, err := aptosacc.HexToEd25519PublicKey(functionConfig.PublicKey)
 		if err != nil {
 			return "", fmt.Errorf("failed to convert public key: %+w", err)
 		}
-		acc := utils.Ed25519PublicKeyToAccount(ed25519PublicKey)
+		acc := aptosacc.Ed25519PublicKeyToAccount(ed25519PublicKey)
 		transmitter = acc.String()
 	}
 	return transmitter, nil

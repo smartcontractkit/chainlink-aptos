@@ -21,7 +21,7 @@ import (
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
-	aptosutils "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/utils"
+	aptosacc "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/account"
 )
 
 var _ services.Service = &AptosTxm{}
@@ -106,7 +106,7 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 		}
 	}
 
-	ed25519PublicKey, err := aptosutils.HexToEd25519PublicKey(publicKey)
+	ed25519PublicKey, err := aptosacc.HexToEd25519PublicKey(publicKey)
 	if err != nil {
 		return fmt.Errorf("failed to convert public key: %+w", err)
 	}
@@ -114,7 +114,7 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 	if fromAddress == "" {
 		// If the address is not specified, we assume the public key is for its corresponding address
 		// and not for an address with a rotated authentication key.
-		acc := aptosutils.Ed25519PublicKeyToAccount(ed25519PublicKey)
+		acc := aptosacc.Ed25519PublicKeyToAccount(ed25519PublicKey)
 		fromAddress = acc.String()
 	}
 

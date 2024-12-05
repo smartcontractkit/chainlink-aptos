@@ -1,6 +1,7 @@
-package monitor
+package aptos
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/aptos-labs/aptos-go-sdk"
@@ -8,33 +9,39 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
+
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
 )
 
-// AptosAccBalanceMonitorOpts contains the options for creating a new Aptos account balance monitor.
-type AptosAccBalanceMonitorOpts struct {
-	ChainInfo ChainInfo
+// BalanceMonitorOpts contains the options for creating a new Aptos account balance monitor.
+type BalanceMonitorOpts struct {
+	ChainInfo monitor.ChainInfo
 
-	Config    Config
+	Config    monitor.Config
 	Logger    logger.Logger
 	Keystore  core.Keystore
 	NewClient func() (*aptos.NodeClient, error)
 }
 
-// NewAptosAccBalanceMonitor returns a balance monitoring services.Service which reports balance of all Keystore accounts.
-func NewAptosAccBalanceMonitor(opts AptosAccBalanceMonitorOpts) (services.Service, error) {
-	return NewBalanceMonitor(BalanceMonitorOpts{
+// NewBalanceMonitor returns a balance monitoring services.Service which reports balance of all Keystore accounts.
+func NewBalanceMonitor(opts BalanceMonitorOpts) (services.Service, error) {
+	return monitor.NewBalanceMonitor(monitor.BalanceMonitorOpts{
 		ChainInfo:           opts.ChainInfo,
 		ChainNativeCurrency: "APT",
 
 		Config:   opts.Config,
 		Logger:   opts.Logger,
 		Keystore: opts.Keystore,
-		NewBalanceClient: func() (BalanceClient, error) {
+		NewBalanceClient: func() (monitor.BalanceClient, error) {
 			client, err := opts.NewClient()
 			if err != nil {
 				return nil, fmt.Errorf("failed to get new client: %w", err)
 			}
 			return balanceClient{client}, nil
+		},
+		KeyToAccountMapper: func(ctx context.Context, pk string) (string, error) {
+			// We need to convert the Aptos public key to an account address
+			return HexToAccountAddressString(pk)
 		},
 	})
 }

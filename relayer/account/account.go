@@ -1,4 +1,4 @@
-package utils
+package aptos
 
 import (
 	"crypto/ed25519"

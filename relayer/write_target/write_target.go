@@ -22,6 +22,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/platform"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/utils"
 
 	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/write-target"
 )
@@ -259,8 +260,8 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		ReportID:            info.reportInfo.reportID,
 	}
 
-	// Fetch the latest head from the chain (timestamp)
-	head, err := c.cs.LatestHead(ctx)
+	// Fetch the latest head from the chain (timestamp), retry with a default backoff strategy
+	head, err := utils.WithRetry(ctx, c.lggr, c.cs.LatestHead)
 	if err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to fetch the latest head", err.Error())
 		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
@@ -322,7 +323,8 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		return &TransmissionState{Transmitter: transmitter.Vec[0], Success: true}, nil
 	}
 
-	state, err := query(ctx)
+	// Fetch the transmission state, retry with a default backoff strategy
+	state, err := utils.WithRetry(ctx, c.lggr, query)
 	if err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to fetch [TransmissionState]", err.Error())
 		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)

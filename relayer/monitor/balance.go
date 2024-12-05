@@ -10,8 +10,6 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
-
-	aptosutils "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/utils"
 )
 
 // TODO: duplicate of "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/write_target.ChainInfo" (reuse)
@@ -42,6 +40,9 @@ type BalanceMonitorOpts struct {
 	Logger           logger.Logger
 	Keystore         core.Keystore
 	NewBalanceClient func() (BalanceClient, error)
+
+	// Maps a public key to an account address (optional, can return key as is)
+	KeyToAccountMapper func(context.Context, string) (string, error)
 }
 
 // TODO: This implementation is chain-agnotic, so it should be moved to the common package and reused by all chains.
@@ -66,7 +67,8 @@ func newBalanceMonitor(opts BalanceMonitorOpts) (*balanceMonitor, error) {
 		lggr: lggr,
 		ks:   opts.Keystore,
 
-		newReader: opts.NewBalanceClient,
+		newReader:          opts.NewBalanceClient,
+		keyToAccountMapper: opts.KeyToAccountMapper,
 		updateFn: func(ctx context.Context, acc string, balance float64) {
 			lggr.Infow("Account balance updated", "unit", opts.ChainNativeCurrency, "account", acc, "balance", balance)
 			gauge.Record(ctx, balance, acc, opts.ChainInfo)
@@ -85,6 +87,8 @@ type balanceMonitor struct {
 
 	// Returns a new BalanceClient
 	newReader func() (BalanceClient, error)
+	// Maps a public key to an account address (optional, can return key as is)
+	keyToAccountMapper func(context.Context, string) (string, error)
 	// Updates the balance metric
 	updateFn func(ctx context.Context, acc string, balance float64) // overridable for testing
 
@@ -177,7 +181,8 @@ func (m *balanceMonitor) updateBalances(ctx context.Context) {
 
 		// Account address can always be derived from the public key currently
 		// TODO: if we need to support key rotation, the keystore should store the address explicitly
-		accAddr, err := aptosutils.HexToAccountAddressString(pk)
+		// Notice: this is chain-specific key to account mapping injected (e.g., relevant for Aptos key management)
+		accAddr, err := m.keyToAccountMapper(ctx, pk)
 		if err != nil {
 			m.lggr.Errorw("Failed to convert public key to account address", "err", err)
 			continue
