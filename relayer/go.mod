@@ -9,6 +9,7 @@ require (
 	github.com/ethereum/go-ethereum v1.14.5
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-plugin v1.6.2
+	github.com/jpillora/backoff v1.0.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/pelletier/go-toml/v2 v2.2.0
 	github.com/smartcontractkit/chainlink-common v0.3.1-0.20241111104504-d37df61b04c3
@@ -52,7 +53,6 @@ require (
 	github.com/hdevalence/ed25519consensus v0.2.0 // indirect
 	github.com/holiman/uint256 v1.2.4 // indirect
 	github.com/invopop/jsonschema v0.12.0 // indirect
-	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/leodido/go-urn v1.2.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
