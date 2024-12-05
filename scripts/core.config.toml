@@ -68,7 +68,7 @@ Nodes = [
 # Enabled turns trace collection on or off. On requires an OTEL Tracing Collector.
 Enabled = true
 # CollectorTarget is the logical address of the OTEL Tracing Collector.
-CollectorTarget = 'otelcollector:4317'
+CollectorTarget = 'otelcollectoragent:4317'
 # NodeID is an unique name for this node relative to any other node traces are collected for.
 NodeID = 'node-local-$IDX' # Example
 # SamplingRatio is the ratio of traces to sample for this node.
@@ -90,7 +90,7 @@ aptos_tracing_attr = 'test' # Example
 # Enabled turns telemetry collection on or off.
 Enabled = true
 # Endpoint of the OTEL Collector.
-Endpoint = 'otelcollector:4317'
+Endpoint = 'otelcollectoragent:4317'
 # CACertFile is the file path of the TLS certificate used for secure communication with the OTEL Collector.
 # Required unless InescureConnection is true.
 # CACertFile = 'cert-file' # Example
