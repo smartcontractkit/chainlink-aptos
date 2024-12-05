@@ -29,11 +29,9 @@ func WithRetryStrategy[R any](ctx context.Context, lggr logger.Logger, strategy 
 		tracingID = uuid.New().String()
 	}
 
+	// Track the number of retries
 	numRetries := 0
 	for {
-		// Track the number of retries
-		numRetries++
-
 		result, err := fn(ctx)
 		if err == nil {
 			return result, nil
@@ -47,6 +45,8 @@ func WithRetryStrategy[R any](ctx context.Context, lggr logger.Logger, strategy 
 		case <-ctx.Done():
 			return result, fmt.Errorf("context done while executing function {tracingID=%s, numRetries=%d}: %w", tracingID, numRetries, ctx.Err())
 		case <-time.After(wait):
+			numRetries++
+			// Continue with the next retry
 		}
 	}
 }
