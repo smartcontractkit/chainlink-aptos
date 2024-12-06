@@ -123,12 +123,13 @@ func (m *ReportProcessed) Attributes() []attribute.KeyValue {
 	}
 
 	attrs := []attribute.KeyValue{
-		// TODO: do we need these attributes? (available in WriteConfirmed)
-		// attribute.String("node", m.Node),
-		// attribute.String("forwarder", m.Forwarder),
+		// Transaction Data
+		attribute.String("tx_sender", m.TxSender),
+		attribute.String("tx_receiver", m.TxReceiver),
+
+		// Event Data
 		attribute.String("receiver", m.Receiver),
 		attribute.Int64("report_id", int64(m.ReportId)), // uint32 -> int64
-		// attribute.String("transmitter", m.Transmitter),
 		attribute.Bool("success", m.Success),
 
 		// We mark confrmations by transmitter so we can query for only initial (fast) confirmations

@@ -167,14 +167,14 @@ func (m *FeedUpdated) Attributes() []attribute.KeyValue {
 	}
 
 	attrs := []attribute.KeyValue{
-		attribute.String("feed_id", m.FeedId),
+		// Transaction Data
+		attribute.String("tx_sender", m.TxSender),
+		attribute.String("tx_receiver", m.TxReceiver),
 
+		// Event Data
+		attribute.String("feed_id", m.FeedId),
 		// TODO: do we need these attributes? (available in WriteConfirmed)
-		// attribute.String("node", m.Node),
-		// attribute.String("forwarder", m.Forwarder),
-		// attribute.String("receiver", m.Receiver),
 		// attribute.Int64("report_id", int64(m.ReportId)), // uint32 -> int64
-		// attribute.String("transmitter", m.Transmitter),
 
 		// We mark confrmations by transmitter so we can query for only initial (fast) confirmations
 		// with PromQL, and ignore the slower confirmations by other signers for SLA measurements.
