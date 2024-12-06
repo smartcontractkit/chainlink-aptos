@@ -215,7 +215,7 @@ module platform::storage {
         );
     }
 
-    inline fun storage_address(): address acquires Dispatcher {
+    inline fun storage_address(): address {
         object::create_object_address(&@platform, APP_OBJECT_SEED)
     }
 
