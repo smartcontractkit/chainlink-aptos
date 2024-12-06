@@ -497,9 +497,11 @@ func (a *AptosTxm) confirmLoop() {
 
 			remaining := pollDuration - time.Since(start)
 			if remaining > 0 {
+				// reset tick for the remaining time
 				tick = time.After(utils.WithJitter(remaining))
 			} else {
-				tick = time.After(utils.WithJitter(pollDuration))
+				// reset tick to fire immediately
+				tick = time.After(0)
 			}
 		case <-a.stop:
 			a.logger.Debugw("confirmLoop: stopped")
