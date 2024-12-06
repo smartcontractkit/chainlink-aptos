@@ -6,6 +6,7 @@ module platform::storage {
     use std::vector;
 
     use aptos_std::table::{Self, Table};
+    use aptos_std::smart_table::{SmartTable, Self};
     use aptos_std::type_info::{Self, TypeInfo};
 
     use aptos_framework::dispatchable_fungible_asset;
@@ -34,6 +35,11 @@ module platform::storage {
         transfer_ref: TransferRef
     }
 
+    struct DispatcherV2 has key {
+        dispatcher: SmartTable<TypeInfo, Entry>,
+        address_to_typeinfo: SmartTable<address, TypeInfo>
+    }
+
     /// Store the data to dispatch here.
     struct Storage has drop, key {
         metadata: vector<u8>,
@@ -59,7 +65,7 @@ module platform::storage {
     /// copying and persisting in global storage.
     public fun register<T: drop>(
         account: &signer, callback: FunctionInfo, _proof: T
-    ) acquires Dispatcher {
+    ) acquires Dispatcher, DispatcherV2 {
         let typename = type_info::type_name<T>();
         let constructor_ref =
             object::create_named_object(&storage_signer(), *string::bytes(&typename));
@@ -79,16 +85,54 @@ module platform::storage {
             &constructor_ref, option::some(callback)
         );
 
-        let dispatcher = borrow_global_mut<Dispatcher>(storage_address());
-        table::add(
+        let dispatcher = borrow_global_mut<DispatcherV2>(storage_address());
+        smart_table::add(
             &mut dispatcher.dispatcher,
             type_info::type_of<T>(),
             Entry { metadata, extend_ref }
         );
-        table::add(
+        smart_table::add(
             &mut dispatcher.address_to_typeinfo,
             signer::address_of(account),
             type_info::type_of<T>()
+        );
+    }
+
+    public entry fun migrate_to_v2(
+        callback_addresses: vector<address>
+    ) acquires Dispatcher, DispatcherV2 {
+        let addr = storage_address();
+
+        if (!exists<DispatcherV2>(addr)) {
+            move_to(
+                &storage_signer(),
+                DispatcherV2 {
+                    dispatcher: smart_table::new(),
+                    address_to_typeinfo: smart_table::new()
+                }
+            );
+        };
+
+        let dispatcher = borrow_global_mut<Dispatcher>(addr);
+        let dispatcher_v2 = borrow_global_mut<DispatcherV2>(addr);
+
+        vector::for_each_ref(
+            &callback_addresses,
+            |callback_address| {
+                // Aborts if the callback address does not exist.
+                let type_info =
+                    table::remove(
+                        &mut dispatcher.address_to_typeinfo, *callback_address
+                    );
+                let entry = table::remove(&mut dispatcher.dispatcher, type_info);
+
+                smart_table::add(
+                    &mut dispatcher_v2.address_to_typeinfo,
+                    *callback_address,
+                    type_info
+                );
+                smart_table::add(&mut dispatcher_v2.dispatcher, type_info, entry);
+            }
         );
     }
 
@@ -96,12 +140,15 @@ module platform::storage {
     /// engine -> storage and then engine -> callback -> storage
     public(friend) fun insert(
         receiver: address, callback_metadata: vector<u8>, callback_data: vector<u8>
-    ): Object<Metadata> acquires Dispatcher {
-        let dispatcher = borrow_global<Dispatcher>(storage_address());
-        let typeinfo = *table::borrow(&dispatcher.address_to_typeinfo, receiver);
-        assert!(table::contains(&dispatcher.dispatcher, typeinfo), E_UNKNOWN_RECEIVER);
+    ): Object<Metadata> acquires DispatcherV2 {
+        let dispatcher = borrow_global<DispatcherV2>(storage_address());
+        let typeinfo = *smart_table::borrow(&dispatcher.address_to_typeinfo, receiver);
+        assert!(
+            smart_table::contains(&dispatcher.dispatcher, typeinfo),
+            E_UNKNOWN_RECEIVER
+        );
         let Entry { metadata: asset_metadata, extend_ref } =
-            table::borrow(&dispatcher.dispatcher, typeinfo);
+            smart_table::borrow(&dispatcher.dispatcher, typeinfo);
         let obj_signer = object::generate_signer_for_extending(extend_ref);
         move_to(&obj_signer, Storage { data: callback_data, metadata: callback_metadata });
         *asset_metadata
@@ -113,11 +160,11 @@ module platform::storage {
 
     /// Second half of the process for retrieving. This happens outside engine to prevent the
     /// cyclical dependency.
-    public fun retrieve<T: drop>(_proof: T): (vector<u8>, vector<u8>) acquires Dispatcher, Storage {
-        let dispatcher = borrow_global<Dispatcher>(storage_address());
+    public fun retrieve<T: drop>(_proof: T): (vector<u8>, vector<u8>) acquires DispatcherV2, Storage {
+        let dispatcher = borrow_global<DispatcherV2>(storage_address());
         let typeinfo = type_info::type_of<T>();
         let Entry { metadata: _, extend_ref } =
-            table::borrow(&dispatcher.dispatcher, typeinfo);
+            smart_table::borrow(&dispatcher.dispatcher, typeinfo);
         let obj_address = object::address_from_extend_ref(extend_ref);
         let data = move_from<Storage>(obj_address);
         (data.metadata, data.data)
@@ -216,5 +263,184 @@ module platform::storage {
         assert!(parsed_metadata.workflow_name == expected_workflow_name, 1);
         assert!(parsed_metadata.workflow_owner == expected_workflow_owner, 1);
         assert!(parsed_metadata.report_id == expected_report_id, 1);
+    }
+
+    #[test_only]
+    fun register_deprecated<T: drop>(
+        account: &signer, callback: FunctionInfo, _proof: T
+    ) acquires Dispatcher {
+        let typename = type_info::type_name<T>();
+        let constructor_ref =
+            object::create_named_object(&storage_signer(), *string::bytes(&typename));
+        let extend_ref = object::generate_extend_ref(&constructor_ref);
+        let metadata =
+            fungible_asset::add_fungibility(
+                &constructor_ref,
+                option::none(),
+                // this was `typename` but it fails due to ENAME_TOO_LONG
+                string::utf8(b"storage"),
+                string::utf8(b"dis"),
+                0,
+                string::utf8(b""),
+                string::utf8(b"")
+            );
+        dispatchable_fungible_asset::register_derive_supply_dispatch_function(
+            &constructor_ref, option::some(callback)
+        );
+
+        let dispatcher = borrow_global_mut<Dispatcher>(storage_address());
+        table::add(
+            &mut dispatcher.dispatcher,
+            type_info::type_of<T>(),
+            Entry { metadata, extend_ref }
+        );
+        table::add(
+            &mut dispatcher.address_to_typeinfo,
+            signer::address_of(account),
+            type_info::type_of<T>()
+        );
+    }
+
+    #[test_only]
+    struct TestProof has drop {}
+
+    #[test_only]
+    struct TestProof2 has drop {}
+
+    #[test_only]
+    struct TestProof3 has drop {}
+
+    #[test_only]
+    struct TestProof4 has drop {}
+
+    #[test_only]
+    public fun test_callback<T: key>(_metadata: Object<T>): option::Option<u128> {
+        option::none()
+    }
+
+    #[test(publisher = @platform)]
+    fun test_v2_migration(publisher: &signer) acquires Dispatcher, DispatcherV2 {
+        init_module_for_testing(publisher);
+        let test_callback =
+            aptos_framework::function_info::new_function_info(
+                publisher,
+                string::utf8(b"storage"),
+                string::utf8(b"test_callback")
+            );
+
+        register_deprecated(publisher, test_callback, TestProof {});
+
+        let (derived_publisher, _) =
+            aptos_framework::account::create_resource_account(
+                publisher, b"TEST_V2_MIGRATION"
+            );
+        let (derived_publisher2, _) =
+            aptos_framework::account::create_resource_account(
+                publisher, b"TEST_V2_MIGRATION_2"
+            );
+        let (derived_publisher3, _) =
+            aptos_framework::account::create_resource_account(
+                publisher, b"TEST_V2_MIGRATION_3"
+            );
+
+        register_deprecated(&derived_publisher, test_callback, TestProof2 {});
+        register_deprecated(&derived_publisher2, test_callback, TestProof3 {});
+
+        {
+            let derived_addr = signer::address_of(&derived_publisher);
+            migrate_to_v2(vector[@platform, derived_addr]);
+
+            let dispatcher = borrow_global<Dispatcher>(storage_address());
+            assert!(
+                !table::contains(
+                    &dispatcher.dispatcher, type_info::type_of<TestProof>()
+                ),
+                1
+            );
+            assert!(!table::contains(&dispatcher.address_to_typeinfo, @platform), 1);
+            assert!(
+                !table::contains(
+                    &dispatcher.dispatcher, type_info::type_of<TestProof2>()
+                ),
+                1
+            );
+            assert!(!table::contains(&dispatcher.address_to_typeinfo, derived_addr), 1);
+
+            let dispatcher_v2 = borrow_global<DispatcherV2>(storage_address());
+            assert!(
+                smart_table::contains(
+                    &dispatcher_v2.dispatcher, type_info::type_of<TestProof>()
+                ),
+                1
+            );
+            assert!(
+                smart_table::contains(&dispatcher_v2.address_to_typeinfo, @platform),
+                1
+            );
+            assert!(
+                smart_table::contains(
+                    &dispatcher_v2.dispatcher, type_info::type_of<TestProof2>()
+                ),
+                1
+            );
+            assert!(
+                smart_table::contains(&dispatcher_v2.address_to_typeinfo, derived_addr),
+                1
+            );
+        };
+
+        // migrate a second time, when DispatcherV2 already exists.
+        {
+            let derived_addr = signer::address_of(&derived_publisher2);
+            migrate_to_v2(vector[derived_addr]);
+
+            let dispatcher = borrow_global<Dispatcher>(storage_address());
+            assert!(
+                !table::contains(
+                    &dispatcher.dispatcher, type_info::type_of<TestProof3>()
+                ),
+                1
+            );
+            assert!(!table::contains(&dispatcher.address_to_typeinfo, derived_addr), 1);
+
+            let dispatcher_v2 = borrow_global<DispatcherV2>(storage_address());
+            assert!(
+                smart_table::contains(
+                    &dispatcher_v2.dispatcher, type_info::type_of<TestProof3>()
+                ),
+                1
+            );
+            assert!(
+                smart_table::contains(&dispatcher_v2.address_to_typeinfo, derived_addr),
+                1
+            );
+        };
+
+        // test the upgraded register function
+        {
+            let derived_addr = signer::address_of(&derived_publisher3);
+            register(&derived_publisher3, test_callback, TestProof4 {});
+
+            let dispatcher = borrow_global<Dispatcher>(storage_address());
+            assert!(
+                !table::contains(
+                    &dispatcher.dispatcher, type_info::type_of<TestProof4>()
+                ),
+                1
+            );
+            assert!(!table::contains(&dispatcher.address_to_typeinfo, derived_addr), 1);
+
+            let dispatcher_v2 = borrow_global<DispatcherV2>(storage_address());
+            assert!(
+                smart_table::contains(
+                    &dispatcher_v2.dispatcher, type_info::type_of<TestProof4>()
+                ),
+                1
+            );
+            assert!(
+                smart_table::contains(&dispatcher_v2.address_to_typeinfo, derived_addr),
+                1
+            );
+        }
     }
 }
