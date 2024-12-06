@@ -205,6 +205,14 @@ module platform::storage {
                 transfer_ref
             }
         );
+
+        move_to(
+            &object_signer,
+            DispatcherV2 {
+                dispatcher: smart_table::new(),
+                address_to_typeinfo: smart_table::new()
+            }
+        );
     }
 
     inline fun storage_address(): address acquires Dispatcher {
@@ -266,6 +274,35 @@ module platform::storage {
     }
 
     #[test_only]
+    fun init_module_deprecated(publisher: &signer) {
+        assert!(signer::address_of(publisher) == @platform, 1);
+
+        let constructor_ref = object::create_named_object(publisher, APP_OBJECT_SEED);
+
+        let extend_ref = object::generate_extend_ref(&constructor_ref);
+        let transfer_ref = object::generate_transfer_ref(&constructor_ref);
+        let object_signer = object::generate_signer(&constructor_ref);
+
+        move_to(
+            &object_signer,
+            Dispatcher {
+                dispatcher: table::new(),
+                address_to_typeinfo: table::new(),
+                extend_ref,
+                transfer_ref
+            }
+        );
+
+        move_to(
+            &object_signer,
+            DispatcherV2 {
+                dispatcher: smart_table::new(),
+                address_to_typeinfo: smart_table::new()
+            }
+        );
+    }
+
+    #[test_only]
     fun register_deprecated<T: drop>(
         account: &signer, callback: FunctionInfo, _proof: T
     ) acquires Dispatcher {
@@ -320,7 +357,8 @@ module platform::storage {
 
     #[test(publisher = @platform)]
     fun test_v2_migration(publisher: &signer) acquires Dispatcher, DispatcherV2 {
-        init_module_for_testing(publisher);
+        init_module_deprecated(publisher);
+
         let test_callback =
             aptos_framework::function_info::new_function_info(
                 publisher,
