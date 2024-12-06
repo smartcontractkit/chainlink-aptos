@@ -27,6 +27,8 @@ func WithRetryStrategy[R any](ctx context.Context, lggr logger.Logger, strategy 
 	tracingID, ok := ctx.Value(CtxKeyTracingID).(string)
 	if !ok {
 		tracingID = uuid.New().String()
+		// Add the generated tracing ID to the context (as it was not already present)
+		ctx = context.WithValue(ctx, CtxKeyTracingID, tracingID)
 	}
 
 	// Track the number of retries
