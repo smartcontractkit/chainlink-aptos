@@ -19,6 +19,7 @@ module mcms::mcms_dispatcher {
 
     const EPROOF_ALREADY_EXISTS: u64 = 1;
     const EPROOF_NOT_REGISTERED: u64 = 2;
+    const EMODULE_NAME_TOO_LONG: u64 = 3;
 
     struct RegisteredObject has key, store, drop {
       metadata: Object<Metadata>,
@@ -39,6 +40,8 @@ module mcms::mcms_dispatcher {
 
     public fun register<T: drop>(
       account: &signer, module_name: String, _proof: T) acquires Dispatcher {
+      assert!(string::length(&module_name) <= 64, EMODULE_NAME_TOO_LONG);
+
       let callback_key = create_callback_key(signer::address_of(account), module_name);
 
       let type_name = type_info::type_name<T>();
