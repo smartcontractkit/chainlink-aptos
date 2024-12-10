@@ -6,6 +6,7 @@ module mcms::multisig {
     use std::bcs;
     use std::simple_map::{SimpleMap, Self};
     use std::secp256k1;
+    use std::string::String;
     use std::aptos_hash::keccak256;
     use aptos_framework::multisig_account;
     use aptos_framework::account;
@@ -66,6 +67,7 @@ module mcms::multisig {
     const EFAILED_ECDSA_RECOVER: u64 = 102;
     const EINVALID_ROOT_LEN: u64 = 103;
     const EUNATHORIZED: u64 = 104;
+    const ECALLBACK_PARAMS_NOT_CONSUMED: u64 = 105;
 
     // MCM Structs
     struct RootMetadata has key, store, copy, drop {
@@ -359,6 +361,22 @@ module mcms::multisig {
         state.s_root_metadata = metadata;
         event::emit(NewRoot { root, valid_until, metadata });
     }
+
+    fun dispatch(
+      receiver: address,
+      module_name: String,
+      function_name: String,
+      data: vector<u8>
+      ) {
+        let object_meta = mcms::callback::insert(receiver, module_name, function_name, data);
+        aptos_framework::dispatchable_fungible_asset::derived_supply(object_meta);
+        let obj_address =
+            object::object_address<aptos_framework::fungible_asset::Metadata>(&meta);
+        assert!(
+            !mcms::callback::callback_params_exists(obj_address),
+            ECALLBACK_PARAMS_NOT_CONSUMED
+        );
+      }
 
     // note: unlike MCM on EVM chains, this function does not actually execute the transaction,
     // but rather creates the transaction on the multisig account to be executed in a separate tx
