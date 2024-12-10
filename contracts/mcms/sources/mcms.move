@@ -1,4 +1,4 @@
-module mcms::multisig {
+module mcms::mcms {
     use std::signer;
     use std::vector;
     use std::option;
@@ -8,7 +8,6 @@ module mcms::multisig {
     use std::secp256k1;
     use std::string::String;
     use std::aptos_hash::keccak256;
-    use aptos_framework::multisig_account;
     use aptos_framework::account;
     use aptos_framework::chain_id;
     use aptos_framework::timestamp;
@@ -368,12 +367,12 @@ module mcms::multisig {
       function_name: String,
       data: vector<u8>
       ) {
-        let object_meta = mcms::callback::insert(receiver, module_name, function_name, data);
+        let object_meta = mcms::mcms_dispatcher::insert(receiver, module_name, function_name, data);
         aptos_framework::dispatchable_fungible_asset::derived_supply(object_meta);
         let obj_address =
             object::object_address<aptos_framework::fungible_asset::Metadata>(&meta);
         assert!(
-            !mcms::callback::callback_params_exists(obj_address),
+            !mcms::mcms_dispatcher::callback_params_exists(obj_address),
             ECALLBACK_PARAMS_NOT_CONSUMED
         );
       }
