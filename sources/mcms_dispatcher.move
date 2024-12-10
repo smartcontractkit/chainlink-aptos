@@ -1,4 +1,4 @@
-module mcms::callback {
+module mcms::mcms_dispatcher {
     use std::bcs;
     use std::option;
     use std::string::{Self, String};
@@ -13,7 +13,7 @@ module mcms::callback {
     use aptos_framework::fungible_asset::{Self, Metadata};
     use aptos_framework::object::{Self, ExtendRef, TransferRef, Object};
 
-    friend mcms::multisig;
+    friend mcms::mcms;
 
     const APP_OBJECT_SEED: vector<u8> = b"MCMS_CALLBACK";
 
