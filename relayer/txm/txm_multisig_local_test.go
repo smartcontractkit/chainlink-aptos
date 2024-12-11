@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/google/uuid"
-	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/sha3"
 
@@ -114,13 +113,12 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	deployerAddress := deployer.accountAddress.String()
 	deployerPublicKeyHex := hex.EncodeToString([]byte(deployer.publicKey))
 
-	counterDeployer := accounts[1]
-	counterDeployerAddress := counterDeployer.accountAddress.String()
-	counterDeployerPublicKeyHex := hex.EncodeToString([]byte(counterDeployer.publicKey))
+	mcmsUserDeployer := accounts[1]
+	mcmsUserDeployerAddress := mcmsUserDeployer.accountAddress.String()
+	mcmsUserDeployerPublicKeyHex := hex.EncodeToString([]byte(mcmsUserDeployer.publicKey))
 
-	multisigPackageMetadataBytes, multisigModuleBytecodeBytes := compileMultisigContract(t, deployer.accountAddress, deployer.accountAddress)
-
-	compilationResult := testutils.CompileTestModule(t, counterDeployer.accountAddress)
+	mcmsPackageMetadataBytes, mcmsModuleBytecodeBytes := compileMcmsContract(t, deployer.accountAddress, deployer.accountAddress)
+	mcmsUserPackageMetadataBytes, mcmsUserModuleBytecodeBytes := compileMcmsUserContract(t, mcmsUserDeployer.accountAddress, deployer.accountAddress)
 
 	client, err := aptos.NewNodeClient(rpcURL, 0)
 	require.NoError(t, err)
@@ -141,55 +139,22 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		"0x1::code::publish_package_txn",
 		/* typeArgs= */ []string{},
 		/* paramTypes= */ []string{"vector<u8>", "vector<vector<u8>>"},
-		/* paramValues= */ []any{multisigPackageMetadataBytes, [][]byte{multisigModuleBytecodeBytes}},
-		/* simulateTx= */ true,
-	)
-	require.NoError(t, err)
-
-	// deploy and initialize counter module
-	err = txm.Enqueue(
-		uuid.New().String(),
-		getSampleTxMetadata(),
-		counterDeployerAddress,
-		counterDeployerPublicKeyHex,
-		"0x1::code::publish_package_txn",
-		/* typeArgs= */ []string{},
-		/* paramTypes= */ []string{"vector<u8>", "vector<vector<u8>>"},
-		/* paramValues= */ []any{compilationResult.PackageMetadata, compilationResult.BytecodeModules},
-		/* simulateTx= */ true,
-	)
-	require.NoError(t, err)
-
-	err = txm.Enqueue(
-		uuid.New().String(),
-		getSampleTxMetadata(),
-		counterDeployerAddress,
-		counterDeployerPublicKeyHex,
-		counterDeployerAddress+"::counter::initialize",
-		[]string{},
-		[]string{},
-		[]any{},
+		/* paramValues= */ []any{mcmsPackageMetadataBytes, mcmsModuleBytecodeBytes},
 		/* simulateTx= */ true,
 	)
 	require.NoError(t, err)
 
 	// resource account address derived in init_module, creates the multisig account and is one of the signers
-	mcmsResourceAddress := deployer.accountAddress.ResourceAccount([]byte("CHAINLINK_MCMS_MULTISIG"))
+	mcmsStateAddress := deployer.accountAddress.NamedObjectAddress([]byte("CHAINLINK_MCMS_MULTISIG"))
 
-	// ref: https://github.com/aptos-labs/aptos-core/blob/cf32dedc899592c533d95ad9e2e290102f2d8ecf/aptos-move/framework/aptos-framework/sources/multisig_account.move#L1274
-	accountSeed := []byte("aptos_framework::multisig_account")
-	// u64 encoded account nonce of owner, which is 0 since this is a newly generated resource account
-	accountSeed = append(accountSeed, 0, 0, 0, 0, 0, 0, 0, 0)
-	aptosMultisigAddress := mcmsResourceAddress.ResourceAccount(accountSeed)
-
-	logger.Debugw("published module", "deployerAddress", deployerAddress, "mcmsResourceAddress", mcmsResourceAddress.String(), "aptosMultisigAddress", aptosMultisigAddress.String())
+	logger.Debugw("published module", "deployerAddress", deployerAddress, "mcmsStateAddress", mcmsStateAddress.String())
 
 	// Wait for the multisig to be initialized
 	{
 		pollEndTime := time.Now().Add(time.Second * 30)
 		var resource map[string]any
 		for time.Now().Before(pollEndTime) {
-			resource, err = client.AccountResource(mcmsResourceAddress, deployerAddress+"::multisig::MCMState")
+			resource, err = client.AccountResource(mcmsStateAddress, deployerAddress+"::mcms::State")
 			if err != nil {
 				time.Sleep(time.Second * 1)
 				continue
@@ -198,24 +163,20 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 			break
 		}
 		require.NotNil(t, resource)
-
-		var result struct {
-			Data struct {
-				Addr string
-			}
-		}
-
-		err := mapstructure.Decode(resource, &result)
-		require.NoError(t, err)
-
-		logger.Debugw("Read resource", "multisig address", result.Data.Addr)
-
-		// The actual multisig Address stored in MCMState should match our hashed Address.
-		actualAddress := aptos.AccountAddress{}
-		err = actualAddress.ParseStringRelaxed(result.Data.Addr)
-		require.NoError(t, err)
-		require.Equal(t, aptosMultisigAddress.String(), actualAddress.String())
 	}
+
+	// deploy and initialize mcms user modile
+	err = txm.Enqueue(
+		uuid.New().String(),
+		mcmsUserDeployerAddress,
+		mcmsUserDeployerPublicKeyHex,
+		"0x1::code::publish_package_txn",
+		/* typeArgs= */ []string{},
+		/* paramTypes= */ []string{"vector<u8>", "vector<vector<u8>>"},
+		/* paramValues= */ []any{mcmsUserPackageMetadataBytes, [][]byte{mcmsUserModuleBytecodeBytes}},
+		/* simulateTx= */ true,
+	)
+	require.NoError(t, err)
 
 	// Call set_config to set signers
 	{
@@ -237,7 +198,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 			getSampleTxMetadata(),
 			deployerAddress,
 			deployerPublicKeyHex,
-			deployerAddress+"::multisig::set_config",
+			deployerAddress+"::mcms::set_config",
 			[]string{},
 			[]string{"vector<vector<u8>>", "vector<u8>", "vector<u8>", "vector<u8>", "bool"},
 			[]any{
@@ -258,61 +219,38 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	require.NoError(t, err)
 	chainIdBig := new(big.Int).SetUint64(uint64(chainId))
 
-	multisigIncrementPayload := &aptos.MultisigTransactionPayload{
-		Variant: aptos.MultisigTransactionPayloadVariantEntryFunction,
-		Payload: &aptos.EntryFunction{
-			Module: aptos.ModuleId{
-				Address: counterDeployer.accountAddress,
-				Name:    "counter",
-			},
-			Function: "increment",
-			ArgTypes: []aptos.TypeTag{},
-			Args:     [][]byte{counterDeployer.accountAddress[:]},
-		},
-	}
-
-	multisigIncrementMultPayload := &aptos.MultisigTransactionPayload{
-		Variant: aptos.MultisigTransactionPayloadVariantEntryFunction,
-		Payload: &aptos.EntryFunction{
-			Module: aptos.ModuleId{
-				Address: counterDeployer.accountAddress,
-				Name:    "counter",
-			},
-			Function: "increment_mult",
-			ArgTypes: []aptos.TypeTag{},
-			Args: [][]byte{
-				counterDeployer.accountAddress[:],
-				binary.LittleEndian.AppendUint64(nil, 3),
-				binary.LittleEndian.AppendUint64(nil, 4),
-			},
-		},
-	}
-
-	multisigIncrementPayloadBytes, err := bcs.SerializeSingle(func(ser *bcs.Serializer) {
-		multisigIncrementPayload.MarshalBCS(ser)
+	// function_one(arg1: String, arg2: vector<u8>)
+	functionOneParamBytes, err := bcs.SerializeSingle(func(ser *bcs.Serializer) {
+		ser.WriteString("hello")
+		ser.WriteBytes([]byte{5, 4, 3, 2, 1})
 	})
 	require.NoError(t, err)
 
-	multisigIncrementMultPayloadBytes, err := bcs.SerializeSingle(func(ser *bcs.Serializer) {
-		multisigIncrementMultPayload.MarshalBCS(ser)
+	// function_two(arg1: address, arg2: u128)
+	functionTwoParamBytes, err := bcs.SerializeSingle(func(ser *bcs.Serializer) {
+		ser.FixedBytes(mcmsUserDeployer.accountAddress[:])
+		ser.U128(*big.NewInt(42))
 	})
 	require.NoError(t, err)
-
-	multisigIncrementPayloadHash := sha3.Sum256(multisigIncrementPayloadBytes)
-	multisigIncrementMultPayloadHash := sha3.Sum256(multisigIncrementMultPayloadBytes)
 
 	ops := []Op{
 		{
-			ChainID:  chainIdBig,
-			MultiSig: deployer.accountAddress,
-			Nonce:    0,
-			Data:     multisigIncrementPayloadHash[:],
+			ChainID:    chainIdBig,
+			MultiSig:   deployer.accountAddress,
+			Nonce:      0,
+			To:         mcmsUserDeployer.accountAddress,
+			ModuleName: "mcms_user",
+			Function:   "function_one",
+			Data:       functionOneParamBytes,
 		},
 		{
-			ChainID:  chainIdBig,
-			MultiSig: deployer.accountAddress,
-			Nonce:    1,
-			Data:     multisigIncrementMultPayloadHash[:],
+			ChainID:    chainIdBig,
+			MultiSig:   deployer.accountAddress,
+			Nonce:      1,
+			To:         mcmsUserDeployer.accountAddress,
+			ModuleName: "mcms_user",
+			Function:   "function_two",
+			Data:       functionTwoParamBytes,
 		},
 	}
 
@@ -411,6 +349,9 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 				"u256",
 				"address",
 				"u64",
+				"address",
+				"0x1::string::String",
+				"0x1::string::String",
 				"vector<u8>",
 				"vector<vector<u8>>",
 			},
@@ -418,6 +359,9 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 				op.ChainID,
 				op.MultiSig,
 				op.Nonce,
+				op.To,
+				op.ModuleName,
+				op.Function,
 				op.Data,
 				proof[:],
 			},
@@ -428,11 +372,11 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		waitForTxmId(t, txm, txId, time.Second*30)
 	}
 
-	expectedCounterValue := uint64(0)
+	//expectedCounterValue := uint64(0)
 
-	counterValue := testutils.ReadCounterValue(t, client, counterDeployer.accountAddress)
-	logger.Debugw("Read initial counter value", "value", counterValue)
-	require.Equal(t, expectedCounterValue, counterValue)
+	//counterValue := testutils.ReadCounterValue(t, client, counterDeployer.accountAddress)
+	//logger.Debugw("Read initial counter value", "value", counterValue)
+	//require.Equal(t, expectedCounterValue, counterValue)
 
 	// TODO: we should be able to executeOp(0), check state, executeOp(1), check state.
 	// We can't do this at the moment because the txm can't handle multisig payloads so
@@ -441,45 +385,22 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	executeOp(0)
 	executeOp(1)
 
-	{
-		multisigIncrementTxPayload := aptos.TransactionPayload{
-			Payload: &aptos.Multisig{
-				MultisigAddress: aptosMultisigAddress,
-				Payload:         multisigIncrementPayload,
-			},
-		}
-		response := broadcastPayload(t, client, keystore, deployer.accountAddress, deployer.publicKey, multisigIncrementTxPayload)
-		waitForTx(t, client, response.Hash, time.Second*30)
-		expectedCounterValue = expectedCounterValue + 1
-
-		counterValue = testutils.ReadCounterValue(t, client, counterDeployer.accountAddress)
-		logger.Debugw("Read counter value post increment", "value", counterValue)
-		require.Equal(t, expectedCounterValue, counterValue)
-	}
-
-	{
-		multisigIncrementMultTxPayload := aptos.TransactionPayload{
-			Payload: &aptos.Multisig{
-				MultisigAddress: aptosMultisigAddress,
-				Payload:         multisigIncrementMultPayload,
-			},
-		}
-		response := broadcastPayload(t, client, keystore, deployer.accountAddress, deployer.publicKey, multisigIncrementMultTxPayload)
-		waitForTx(t, client, response.Hash, time.Second*30)
-		expectedCounterValue = expectedCounterValue + (3 * 4)
-
-		counterValue = testutils.ReadCounterValue(t, client, counterDeployer.accountAddress)
-		logger.Debugw("Read counter value post increment_mult", "value", counterValue)
-		require.Equal(t, expectedCounterValue, counterValue)
-	}
-
 	// TODO: check mcms state post-execution
 }
 
-func compileMultisigContract(t *testing.T, deployerAddress, ownerAddress aptos.AccountAddress) ([]byte, []byte) {
+func compileMcmsContract(t *testing.T, deployerAddress, ownerAddress aptos.AccountAddress) ([]byte, [][]byte) {
 	compileResult := testutils.CompileMovePackage(t, "mcms", map[string]aptos.AccountAddress{
-		"mcms":  deployerAddress,
-		"owner": ownerAddress,
+		"mcms":       deployerAddress,
+		"mcms_owner": ownerAddress,
+	})
+
+	return compileResult.PackageMetadata, compileResult.BytecodeModules
+}
+
+func compileMcmsUserContract(t *testing.T, deployerAddress, mcmsAddress aptos.AccountAddress) ([]byte, []byte) {
+	compileResult := testutils.CompileMovePackage(t, "mcms_test", map[string]aptos.AccountAddress{
+		"mcms_test": deployerAddress,
+		"mcms":      mcmsAddress,
 	})
 
 	require.Equal(t, 1, len(compileResult.BytecodeModules))
@@ -495,10 +416,13 @@ type RootMetadata struct {
 }
 
 type Op struct {
-	ChainID  *big.Int
-	MultiSig aptos.AccountAddress
-	Nonce    uint64
-	Data     []byte
+	ChainID    *big.Int
+	MultiSig   aptos.AccountAddress
+	Nonce      uint64
+	To         aptos.AccountAddress
+	ModuleName string
+	Function   string
+	Data       []byte
 }
 
 func generateMerkleTree(ops []Op, rootMetadata RootMetadata) (MerkleTree, error) {
@@ -539,6 +463,16 @@ func hashOp(op *Op) [32]byte {
 	packed = append(packed, common.LeftPadBytes(op.ChainID.Bytes(), 32)...)
 	packed = append(packed, op.MultiSig[:]...)
 	packed = append(packed, common.LeftPadBytes(new(big.Int).SetUint64(op.Nonce).Bytes(), 32)...)
+	packed = append(packed, op.To[:]...)
+
+	// Pack ModuleName with 64-byte left padding
+	moduleNamePadded := common.LeftPadBytes([]byte(op.ModuleName), 64)
+	packed = append(packed, moduleNamePadded...)
+
+	// Pack Function with 64-byte left padding
+	functionPadded := common.LeftPadBytes([]byte(op.Function), 64)
+	packed = append(packed, functionPadded...)
+
 	packed = append(packed, op.Data...)
 	padAmount := 32 - (len(op.Data) % 32)
 	for i := 0; i < padAmount; i++ {
