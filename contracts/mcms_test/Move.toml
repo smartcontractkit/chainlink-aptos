@@ -1,0 +1,18 @@
+[package]
+name = "TestModule"
+version = "1.0.0"
+authors = []
+
+[addresses]
+mcms_test = "_"
+mcms = "_"
+mcms_owner = "_"
+
+[dev-addresses]
+mcms_test = "0x100"
+mcms = "0x101"
+mcms_owner = "0x102"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "mainnet", subdir = "aptos-move/framework/aptos-framework" }
+ChainlinkManyChainMultisig = { local = "../mcms" }
