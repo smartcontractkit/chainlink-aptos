@@ -15,11 +15,12 @@ module mcms::mcms_dispatcher {
 
     friend mcms::mcms;
 
-    const APP_OBJECT_SEED: vector<u8> = b"MCMS_CALLBACK";
+    const DISPATCHER_OBJECT_SEED: vector<u8> = b"CHAINLINK_MCMS_DISPATCHER";
 
     const EPROOF_ALREADY_EXISTS: u64 = 1;
     const EPROOF_NOT_REGISTERED: u64 = 2;
     const EMODULE_NAME_TOO_LONG: u64 = 3;
+    const EMISSING_CALLBACK_PARAMS: u64 = 4;
 
     struct RegisteredObject has key, store, drop {
       metadata: Object<Metadata>,
@@ -104,14 +105,31 @@ module mcms::mcms_dispatcher {
         *metadata
     }
 
-  public(friend) fun callback_params_exists(obj_address: address): bool {
+  public(friend) fun callback_params_exist(obj_address: address): bool {
     object::object_exists<CallbackParams>(obj_address)
+  }
+
+  public fun get_callback_params<T: drop>(_proof: T): (String, vector<u8>) acquires Dispatcher, CallbackParams {
+    let dispatcher = borrow_global<Dispatcher>(storage_address());
+    let type_info = type_info::type_of<T>();
+
+    assert!(smart_table::contains(&dispatcher.registered_objects, type_info), EPROOF_NOT_REGISTERED);
+
+    let RegisteredObject { metadata: _, extend_ref } = smart_table::borrow(&dispatcher.registered_objects, type_info);
+
+    let obj_address = object::address_from_extend_ref(extend_ref);
+
+    assert!(callback_params_exist(obj_address), EMISSING_CALLBACK_PARAMS);
+
+    let callback_params = move_from<CallbackParams>(obj_address);
+
+    (callback_params.function, callback_params.data)
   }
 
   fun init_module(publisher: &signer) {
       assert!(signer::address_of(publisher) == @mcms, 1);
 
-      let constructor_ref = object::create_named_object(publisher, APP_OBJECT_SEED);
+      let constructor_ref = object::create_named_object(publisher, DISPATCHER_OBJECT_SEED);
 
       let extend_ref = object::generate_extend_ref(&constructor_ref);
       let transfer_ref = object::generate_transfer_ref(&constructor_ref);
@@ -129,7 +147,7 @@ module mcms::mcms_dispatcher {
   }
 
   inline fun storage_address(): address acquires Dispatcher {
-    object::create_object_address(&@mcms, APP_OBJECT_SEED)
+    object::create_object_address(&@mcms, DISPATCHER_OBJECT_SEED)
   }
 
   inline fun storage_signer(): signer acquires Dispatcher {
