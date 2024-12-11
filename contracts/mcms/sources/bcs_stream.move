@@ -272,6 +272,19 @@ module mcms::bcs_stream {
         v
     }
 
+    public fun deserialize_vector_u8(stream: &mut BCSStream): vector<u8> {
+        let len = deserialize_uleb128(stream);
+        let data = &stream.data;
+        let cur = stream.cur;
+
+        assert!(cur + len <= vector::length(data), error::out_of_range(EOUT_OF_BYTES));
+
+        let res = vector::slice(data, cur, cur + len);
+        stream.cur = cur + len;
+
+        res
+    }
+
     /// Deserializes utf-8 `String` from the stream.
     /// First, reads the length of the String, which is in uleb128 format.
     /// After determining the length, it then reads the contents of the String.
