@@ -1,7 +1,6 @@
 module mcms::mcms {
     use std::signer;
     use std::vector;
-    use std::object;
     use std::option;
     use std::event;
     use std::bcs;
@@ -9,11 +8,11 @@ module mcms::mcms {
     use std::secp256k1;
     use std::string::{Self, String};
     use std::aptos_hash::keccak256;
-    use aptos_framework::account;
     use aptos_framework::chain_id;
     use aptos_framework::timestamp;
+    use aptos_framework::object::{Self, ExtendRef, TransferRef};
 
-    const MULTISIG_SEED: vector<u8> = b"CHAINLINK_MCMS_MULTISIG";
+    const STATE_OBJECT_SEED: vector<u8> = b"CHAINLINK_MCMS_MULTISIG";
 
     // MCM Consts
     const NUM_GROUPS: u8 = 32;
@@ -140,10 +139,10 @@ module mcms::mcms {
         s_expiring_root_and_op_count: ExpiringRootAndOpCount,
         s_root_metadata: RootMetadata,
 
-        signer_cap: account::SignerCapability,
-
         // Ownable fields
-        owner: address
+        owner: address,
+        extend_ref: ExtendRef,
+        transfer_ref: TransferRef
     }
 
     #[event]
@@ -347,7 +346,7 @@ module mcms::mcms {
         let obj_address =
             object::object_address<aptos_framework::fungible_asset::Metadata>(&object_meta);
         assert!(
-            !mcms::mcms_dispatcher::callback_params_exists(obj_address),
+            !mcms::mcms_dispatcher::callback_params_exist(obj_address),
             ECALLBACK_PARAMS_NOT_CONSUMED
         );
       }
@@ -552,16 +551,16 @@ module mcms::mcms {
     }
 
     // Internal functions
-    fun init_module(account: &signer) {
-        assert!(signer::address_of(account) == @mcms, 1);
+    fun init_module(publisher: &signer) {
+        assert!(signer::address_of(publisher) == @mcms, 1);
 
-        // TODO: create object instead so that state address calculations are the same as in other modules
-        let (resource_signer, resource_signer_cap) =
-            account::create_resource_account(account, MULTISIG_SEED);
-        let resource_address = signer::address_of(&resource_signer);
+        let constructor_ref = object::create_named_object(publisher, STATE_OBJECT_SEED);
+        let extend_ref = object::generate_extend_ref(&constructor_ref);
+        let transfer_ref = object::generate_transfer_ref(&constructor_ref);
+        let object_signer = object::generate_signer(&constructor_ref);
 
         move_to(
-            &resource_signer,
+            &object_signer,
             State {
                 s_signers: simple_map::new(),
                 s_config: Config {
@@ -582,14 +581,15 @@ module mcms::mcms {
                     post_op_count: 0,
                     override_previous_root: false
                 },
-                signer_cap: resource_signer_cap,
-                owner: @owner
+                owner: @mcms_owner,
+                extend_ref,
+                transfer_ref,
             }
         );
     }
 
-    fun get_state_addr(): address {
-        account::create_resource_address(&@mcms, MULTISIG_SEED)
+    inline fun get_state_addr(): address {
+        object::create_object_address(&@mcms, STATE_OBJECT_SEED)
     }
 
     fun ecdsa_recover_evm_addr(
@@ -720,17 +720,6 @@ module mcms::mcms {
             }
         );
         computed_hash == root
-    }
-
-    // retrieve signer for multisig account - should be protected with appropriate guards
-    fun multisig_signer(): signer acquires State {
-        assert!(
-            exists<State>(get_state_addr()),
-            ENO_MULTISIG
-        );
-        account::create_signer_with_capability(
-            &borrow_global<State>(get_state_addr()).signer_cap
-        )
     }
 
     // helper function to convert any input type to bytes
@@ -941,7 +930,7 @@ module mcms::mcms {
         );
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     public entry fun test_e2e(
         deployer: &signer, owner: &signer, framework: &signer
     ) acquires State {
@@ -982,12 +971,12 @@ module mcms::mcms {
         assert!(op_count == 1, 3);
 
         // check tx can be executed by provided multisig owner. can_be_executed() is expected
-        // to return false since @owner (the EOA) gives its vote when broadcasting the
+        // to return false since @mcms_owner (the EOA) gives its vote when broadcasting the
         // transaction.
         let multisig_address = get_multisig_addr();
         assert!(!multisig_account::can_be_executed(multisig_address, 1), 4);
         assert!(
-            multisig_account::can_execute(@owner, multisig_address, 1),
+            multisig_account::can_execute(@mcms_owner, multisig_address, 1),
             5
         );
     }
@@ -1060,7 +1049,7 @@ module mcms::mcms {
         computed_hash
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EALREADY_SEEN_HASH)]
     public entry fun test_set_root__already_seen_hash(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1235,7 +1224,7 @@ module mcms::mcms {
         call_set_root(set_root_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_ADDR_MUST_BE_INCREASING)]
     public entry fun test_set_root__out_of_order_signatures(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1257,7 +1246,7 @@ module mcms::mcms {
         call_set_root(set_root_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EINVALID_SIGNER)]
     public entry fun test_set_root__signature_from_invalid_signer(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1278,7 +1267,7 @@ module mcms::mcms {
         call_set_root(set_root_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EINSUFFICIENT_SIGNERS)]
     public entry fun test_set_root__signer_quorum_not_met(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1298,7 +1287,7 @@ module mcms::mcms {
         call_set_root(set_root_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     public entry fun test_set_root__success(
         deployer: &signer, owner: &signer, framework: &signer
     ) acquires State {
@@ -1345,7 +1334,7 @@ module mcms::mcms {
         );
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EINVALID_NUM_SIGNERS)]
     public entry fun test_set_config__invalid_number_of_signers(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1364,7 +1353,7 @@ module mcms::mcms {
         );
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_ADDR_MUST_BE_INCREASING)]
     public entry fun test_set_config__signers_must_be_distinct(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1382,7 +1371,7 @@ module mcms::mcms {
         );
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_ADDR_MUST_BE_INCREASING)]
     public entry fun test_set_config__signers_must_be_increasing(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1400,7 +1389,7 @@ module mcms::mcms {
         );
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = ECMP_VECTORS_DIFF_LEN)]
     public entry fun test_set_config__invalid_signer_address(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1419,7 +1408,7 @@ module mcms::mcms {
         );
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EOUT_OF_BOUNDS_GROUP)]
     public entry fun test_set_config__out_of_bounds_signer_group(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1438,7 +1427,7 @@ module mcms::mcms {
         );
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EOUT_OF_BOUNDS_GROUP_QUORUM)]
     public entry fun test_set_config__out_of_bounds_group_quorum(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1459,7 +1448,7 @@ module mcms::mcms {
         );
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EGROUP_TREE_NOT_WELL_FORMED)]
     public entry fun test_set_config__root_is_not_its_own_parent(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1478,7 +1467,7 @@ module mcms::mcms {
         );
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EGROUP_TREE_NOT_WELL_FORMED)]
     public entry fun test_set_config__non_root_is_its_own_parent(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1497,7 +1486,7 @@ module mcms::mcms {
         );
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EGROUP_TREE_NOT_WELL_FORMED)]
     public entry fun test_set_config__group_parent_higher_index(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1516,7 +1505,7 @@ module mcms::mcms {
         );
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EOUT_OF_BOUNDS_GROUP_QUORUM)]
     public entry fun test_set_config__quorum_cannot_be_met(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1535,7 +1524,7 @@ module mcms::mcms {
         );
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_IN_DISABLED_GROUP)]
     public entry fun test_set_config__signer_in_disabled_group(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1554,7 +1543,7 @@ module mcms::mcms {
         );
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = ESIGNER_GROUPS_LEN_MISMATCH)]
     public entry fun test_set_config__signer_group_len_mismatch(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1573,7 +1562,7 @@ module mcms::mcms {
         );
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     public entry fun test_set_config__success(
         deployer: &signer, owner: &signer, framework: &signer
     ) acquires State {
@@ -1665,7 +1654,7 @@ module mcms::mcms {
         call_execute(execute_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPOST_OP_COUNT_REACHED)]
     public entry fun test_execute__post_op_count_reached(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1687,7 +1676,7 @@ module mcms::mcms {
         call_execute(execute_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_CHAIN_ID)]
     public entry fun test_execute__wrong_chain_id(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1707,7 +1696,7 @@ module mcms::mcms {
         call_execute(execute_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_MULTISIG)]
     public entry fun test_execute__wrong_multisig_addr(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1727,7 +1716,7 @@ module mcms::mcms {
         call_execute(execute_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EROOT_EXPIRED)]
     public entry fun test_execute__root_expired(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1749,7 +1738,7 @@ module mcms::mcms {
         call_execute(execute_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EWRONG_NONCE)]
     public entry fun test_execute__wrong_nonce(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1769,7 +1758,7 @@ module mcms::mcms {
         call_execute(execute_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
     public entry fun test_execute__bad_op_proof(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1789,7 +1778,7 @@ module mcms::mcms {
         call_execute(execute_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
     public entry fun test_execute__empty_proof(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1809,7 +1798,7 @@ module mcms::mcms {
         call_execute(execute_args);
     }
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     #[expected_failure(abort_code = EPROOF_CANNOT_BE_VERIFIED)]
     public entry fun test_execute__ops_executed_in_order(
         deployer: &signer, framework: &signer
@@ -1831,7 +1820,7 @@ module mcms::mcms {
 
     // todo: test send values
 
-    #[test(deployer = @mcms, owner = @owner, framework = @aptos_framework)]
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     public entry fun test_ownable__transfer_ownership(
         deployer: &signer, owner: &signer, framework: &signer
     ) acquires State {
