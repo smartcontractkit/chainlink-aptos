@@ -9,7 +9,7 @@ module mcms::mcms_dispatcher {
     use aptos_std::type_info::{Self, TypeInfo};
 
     use aptos_framework::dispatchable_fungible_asset;
-    use aptos_framework::function_info;
+    use aptos_framework::function_info::{Self, FunctionInfo};
     use aptos_framework::fungible_asset::{Self, Metadata};
     use aptos_framework::object::{Self, ExtendRef, TransferRef, Object};
 
@@ -22,13 +22,18 @@ module mcms::mcms_dispatcher {
     const EMODULE_NAME_TOO_LONG: u64 = 3;
     const EMISSING_CALLBACK_PARAMS: u64 = 4;
 
+    struct RegisteredType has key, store, drop {
+      type_info: TypeInfo,
+      function_info: FunctionInfo
+    }
+
     struct RegisteredObject has key, store, drop {
       metadata: Object<Metadata>,
       extend_ref: ExtendRef
     }
 
     struct Dispatcher has key {
-      registered_types: SmartTable<vector<u8>, TypeInfo>,
+      registered_types: SmartTable<vector<u8>, RegisteredType>,
       registered_objects: SmartTable<TypeInfo, RegisteredObject>,
       extend_ref: ExtendRef,
       transfer_ref: TransferRef
@@ -50,7 +55,7 @@ module mcms::mcms_dispatcher {
         object::create_named_object(&storage_signer(), *string::bytes(&type_name));
       let extend_ref = object::generate_extend_ref(&constructor_ref);
 
-      let callback = function_info::new_function_info(account, module_name, string::utf8(b"mcms_entrypoint"));
+      let function_info = function_info::new_function_info(account, module_name, string::utf8(b"mcms_entrypoint"));
 
       let metadata =
           fungible_asset::add_fungibility(
@@ -64,7 +69,7 @@ module mcms::mcms_dispatcher {
           );
 
       dispatchable_fungible_asset::register_derive_supply_dispatch_function(
-          &constructor_ref, option::some(callback)
+          &constructor_ref, option::some(function_info)
       );
 
       let dispatcher = borrow_global_mut<Dispatcher>(storage_address());
@@ -75,7 +80,10 @@ module mcms::mcms_dispatcher {
       smart_table::add(
           &mut dispatcher.registered_types,
           callback_key,
-          type_info,
+          RegisteredType {
+            type_info,
+            function_info
+          },
       );
       smart_table::add(
           &mut dispatcher.registered_objects,
@@ -92,12 +100,12 @@ module mcms::mcms_dispatcher {
         let callback_key = create_callback_key(callback_address, callback_module_name);
 
         let dispatcher = borrow_global<Dispatcher>(storage_address());
-        let type_info = *smart_table::borrow(&dispatcher.registered_types, callback_key);
+        let RegisteredType { type_info, function_info: _ } = smart_table::borrow(&dispatcher.registered_types, callback_key);
 
-        assert!(smart_table::contains(&dispatcher.registered_objects, type_info), EPROOF_NOT_REGISTERED);
+        assert!(smart_table::contains(&dispatcher.registered_objects, *type_info), EPROOF_NOT_REGISTERED);
 
         let RegisteredObject { metadata, extend_ref } =
-            smart_table::borrow(&dispatcher.registered_objects, type_info);
+            smart_table::borrow(&dispatcher.registered_objects, *type_info);
 
         let obj_signer = object::generate_signer_for_extending(extend_ref);
 
