@@ -78,11 +78,11 @@ func NewChain(cfg *config.TOMLConfig, opts ChainOpts) (Chain, error) {
 	if !cfg.IsEnabled() {
 		return nil, fmt.Errorf("cannot create new chain with ID %s: chain is disabled", cfg.ChainID)
 	}
-	return newChain(cfg.ChainID, cfg, opts.KeyStore, opts.Logger)
+	return newChain(cfg, opts.KeyStore, opts.Logger)
 }
 
-func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger) (*chain, error) {
-	lggr = logger.With(lggr, "chainID", id)
+func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger) (*chain, error) {
+	lggr = logger.With(lggr, "chainID", cfg.ChainID)
 
 	// TEMP: fetch the first account in the store to use for transmissions to avoid having to specify it in TOML
 	accounts, err := loopKs.Accounts(context.Background())
@@ -92,10 +92,16 @@ func newChain(id string, cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logg
 	if len(accounts) == 0 {
 		return nil, fmt.Errorf("No aptos account available")
 	}
+
+	_, err = strconv.ParseUint(cfg.ChainID, 10, 8)
+	if err != nil {
+		return nil, fmt.Errorf("invalid chain ID %s: could not parse as an integer: %w", cfg.ChainID, err)
+	}
+
 	cfg.Chain.Workflow.PublicKey = accounts[0]
 
 	ch := &chain{
-		id:   id,
+		id:   cfg.ChainID,
 		cfg:  cfg,
 		lggr: logger.Named(lggr, "Chain"),
 	}
@@ -162,11 +168,21 @@ func (c *chain) GetClient() (*aptos.NodeClient, error) {
 	index := rand.Perm(len(nodes)) // list of node indexes to try
 	for _, i := range index {
 		node = nodes[i]
-		// create client and check
-		client, err = aptos.NewNodeClient(node.URL.String(), 0) // TODO: chainId
+		// create client and check. provide a chainId of 0 so that it's fetched when
+		// GetChainId is invoked.
+		client, err = aptos.NewNodeClient(node.URL.String(), 0)
 		// if error, try another node
 		if err != nil {
-			c.lggr.Warnw("failed to create node", "name", node.Name, "aptos-url", node.URL, "err", err.Error())
+			c.lggr.Warnw("failed to create node", "name", node.Name, "aptos-url", node.URL, "err", err)
+			continue
+		}
+		chainId, err := client.GetChainId()
+		if err != nil {
+			c.lggr.Errorw("failed to fetch chain id", "name", node.Name, "err", err)
+			continue
+		}
+		if strconv.FormatUint(uint64(chainId), 10) != c.id {
+			c.lggr.Errorw("unexpected chain id", "name", node.Name, "localChainId", c.id, "remoteChainId", chainId)
 			continue
 		}
 		// if all checks passed, mark found and break loop
