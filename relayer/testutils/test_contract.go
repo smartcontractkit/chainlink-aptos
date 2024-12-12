@@ -11,7 +11,7 @@ import (
 func CompileTestModule(t *testing.T, moduleAddress aptos.AccountAddress) CompilationResult {
 	return CompileMovePackage(t, "test", map[string]aptos.AccountAddress{
 		"test": moduleAddress,
-	})
+	}, nil)
 }
 
 func HasCounterResource(client *aptos.NodeClient, counterAddress aptos.AccountAddress) bool {

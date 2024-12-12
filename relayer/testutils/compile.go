@@ -23,6 +23,7 @@ func CompileMovePackage(
 	t *testing.T,
 	contractsDir string,
 	namedAddresses map[string]aptos.AccountAddress,
+	moduleOrder []string,
 ) CompilationResult {
 	outputDir, err := ioutil.TempDir("", "aptos_compile")
 	if err != nil {
@@ -93,19 +94,33 @@ func CompileMovePackage(
 	bytecodeModules := [][]byte{}
 	bytecodeDir := filepath.Join(buildDir, "bytecode_modules")
 
-	files, err := os.ReadDir(bytecodeDir)
-	if err != nil {
-		t.Fatalf("Failed to read bytecode directory: %v", err)
-	}
-
-	for _, file := range files {
-		if !file.IsDir() && strings.HasSuffix(file.Name(), ".mv") {
-			path := filepath.Join(bytecodeDir, file.Name())
-			bytecode, err := os.ReadFile(path)
+	// allow providing the module order, because deployment will fail if modules
+	// depend on each other and the dependency does not appear first in the list
+	// of module bytecode.
+	if len(moduleOrder) > 0 {
+		for _, moduleName := range moduleOrder {
+			expectedPath := filepath.Join(bytecodeDir, moduleName+".mv")
+			bytecode, err := os.ReadFile(expectedPath)
 			if err != nil {
-				t.Fatalf("Failed to read bytecode file %s: %v", path, err)
+				t.Fatalf("Failed to read expected bytecode file %s: %v", expectedPath, err)
 			}
 			bytecodeModules = append(bytecodeModules, bytecode)
+		}
+	} else {
+		files, err := os.ReadDir(bytecodeDir)
+		if err != nil {
+			t.Fatalf("Failed to read bytecode directory: %v", err)
+		}
+
+		for _, file := range files {
+			if !file.IsDir() && strings.HasSuffix(file.Name(), ".mv") {
+				path := filepath.Join(bytecodeDir, file.Name())
+				bytecode, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatalf("Failed to read bytecode file %s: %v", path, err)
+				}
+				bytecodeModules = append(bytecodeModules, bytecode)
+			}
 		}
 	}
 
