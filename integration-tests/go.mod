@@ -12,7 +12,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/moby/term v0.5.0
 	github.com/rs/zerolog v1.33.0
-	github.com/smartcontractkit/chainlink/core/scripts v0.0.0-20241212003547-4aea6f720fb5
+	github.com/smartcontractkit/chainlink/core/scripts v0.0.0-20241212011003-de1a8f5e5b42
 	github.com/stretchr/testify v1.9.0
 	github.com/testcontainers/testcontainers-go v0.34.0
 )
@@ -303,8 +303,8 @@ require (
 	github.com/smartcontractkit/chainlink-solana v1.1.1-0.20241204153209-c3a71b0eef99 // indirect
 	github.com/smartcontractkit/chainlink-starknet/relayer v0.1.1-0.20241202202529-2033490e77b8 // indirect
 	github.com/smartcontractkit/chainlink-testing-framework/lib v1.50.13 // indirect
-	github.com/smartcontractkit/chainlink/deployment v0.0.0-20241206210521-125d98cdaf66 // indirect
-	github.com/smartcontractkit/chainlink/v2 v2.14.0-mercury-20240807.0.20241106193309-5560cd76211a // indirect
+	github.com/smartcontractkit/chainlink/deployment v0.0.0-20241212003547-4aea6f720fb5 // indirect
+	github.com/smartcontractkit/chainlink/v2 v2.0.0-20241212003547-4aea6f720fb5 // indirect
 	github.com/smartcontractkit/grpc-proxy v0.0.0-20240830132753-a7e17fec5ab7 // indirect
 	github.com/smartcontractkit/libocr v0.0.0-20241007185508-adbe57025f12 // indirect
 	github.com/smartcontractkit/tdh2/go/ocr2/decryptionplugin v0.0.0-20241009055228-33d0c0bf38de // indirect
@@ -415,6 +415,7 @@ require (
 
 replace (
 	github.com/btcsuite/btcd => github.com/btcsuite/btcd v0.22.1
+	github.com/btcsuite/btcd/btcec/v2 => github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 	// until merged upstream: https://github.com/hashicorp/go-plugin/pull/257
 	github.com/hashicorp/go-plugin => github.com/smartcontractkit/go-plugin v0.0.0-20240208201424-b3b91517de16
