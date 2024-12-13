@@ -15,10 +15,6 @@ Local development and tests how to
     - This will deploy everything locally and explose the ports so you can access the nodes and logs
     - You need the env vars from `.example.env` with the information and images
 
-#### Delete
-    - You can delete workflows with `go main delete workflows --chainId={chainId} --gethRpc={httpRpc} --cacheFolder={cacheFolder}`
-    - You can delete jobspecs with `go main delete jobspecs --chainId={chainId} --gethRpc={httpRpc} --cacheFolder={cacheFolder}`
-
 ### Integration tests
 1. `cp .example.env .env`
 2. `cd integration-tests/smoke`
