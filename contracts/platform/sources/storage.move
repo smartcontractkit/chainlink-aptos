@@ -292,14 +292,6 @@ module platform::storage {
                 transfer_ref
             }
         );
-
-        move_to(
-            &object_signer,
-            DispatcherV2 {
-                dispatcher: smart_table::new(),
-                address_to_typeinfo: smart_table::new()
-            }
-        );
     }
 
     #[test_only]
