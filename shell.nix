@@ -7,8 +7,8 @@
 (pkgs.mkShell.override {stdenv = pkgs.clangStdenv;}) {
   buildInputs = with pkgs;
     [
-      # Go 1.22 + tools
-      go_1_22
+      # Go 1.23 + tools
+      go_1_23
       gopls
       delve
       (golangci-lint.override {buildGoModule = buildGo122Module;})
