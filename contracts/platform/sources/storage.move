@@ -140,7 +140,22 @@ module platform::storage {
     /// engine -> storage and then engine -> callback -> storage
     public(friend) fun insert(
         receiver: address, callback_metadata: vector<u8>, callback_data: vector<u8>
-    ): Object<Metadata> acquires DispatcherV2 {
+    ): Object<Metadata> acquires Dispatcher, DispatcherV2 {
+        // TODO: delete this clause after migration completes
+        if (!exists<DispatcherV2>(storage_address())) {
+          let dispatcher = borrow_global<Dispatcher>(storage_address());
+          let typeinfo = *table::borrow(&dispatcher.address_to_typeinfo, receiver);
+          assert!(
+              table::contains(&dispatcher.dispatcher, typeinfo),
+              E_UNKNOWN_RECEIVER
+              );
+          let Entry { metadata: asset_metadata, extend_ref } =
+            table::borrow(&dispatcher.dispatcher, typeinfo);
+          let obj_signer = object::generate_signer_for_extending(extend_ref);
+          move_to(&obj_signer, Storage { data: callback_data, metadata: callback_metadata });
+          return *asset_metadata
+        };
+
         let dispatcher = borrow_global<DispatcherV2>(storage_address());
         let typeinfo = *smart_table::borrow(&dispatcher.address_to_typeinfo, receiver);
         assert!(
@@ -160,7 +175,17 @@ module platform::storage {
 
     /// Second half of the process for retrieving. This happens outside engine to prevent the
     /// cyclical dependency.
-    public fun retrieve<T: drop>(_proof: T): (vector<u8>, vector<u8>) acquires DispatcherV2, Storage {
+    public fun retrieve<T: drop>(_proof: T): (vector<u8>, vector<u8>) acquires Dispatcher, DispatcherV2, Storage {
+        // TODO: delete this clause after migration completes
+        if (!exists<DispatcherV2>(storage_address())) {
+          let dispatcher = borrow_global<Dispatcher>(storage_address());
+          let typeinfo = type_info::type_of<T>();
+          let Entry { metadata: _, extend_ref } =
+              table::borrow(&dispatcher.dispatcher, typeinfo);
+          let obj_address = object::address_from_extend_ref(extend_ref);
+          let data = move_from<Storage>(obj_address);
+          return (data.metadata, data.data)
+        };
         let dispatcher = borrow_global<DispatcherV2>(storage_address());
         let typeinfo = type_info::type_of<T>();
         let Entry { metadata: _, extend_ref } =
@@ -348,7 +373,7 @@ module platform::storage {
     }
 
     #[test(publisher = @platform)]
-    fun test_v2_migration(publisher: &signer) acquires Dispatcher, DispatcherV2 {
+    fun test_v2_migration(publisher: &signer) acquires Dispatcher, DispatcherV2, Storage {
         init_module_deprecated(publisher);
 
         let test_callback =
@@ -376,9 +401,25 @@ module platform::storage {
         register_deprecated(&derived_publisher, test_callback, TestProof2 {});
         register_deprecated(&derived_publisher2, test_callback, TestProof3 {});
 
+        let callback_metadata = vector[1,2,3,4];
+        let callback_data = vector[5,6,7,8,9];
+
+        // test initial migration
         {
+            // test that insert and retrieve work before migration
+            insert(signer::address_of(publisher), callback_metadata, callback_data);
+            let (received_metadata, received_data) = retrieve<TestProof>(TestProof{});
+            assert!(callback_metadata == received_metadata, 1);
+            assert!(callback_data == received_data, 1);
+
             let derived_addr = signer::address_of(&derived_publisher);
             migrate_to_v2(vector[@platform, derived_addr]);
+
+            // test that insert and retrieve still work after migration
+            insert(signer::address_of(publisher), callback_metadata, callback_data);
+            let (received_metadata, received_data) = retrieve<TestProof>(TestProof{});
+            assert!(callback_metadata == received_metadata, 1);
+            assert!(callback_data == received_data, 1);
 
             let dispatcher = borrow_global<Dispatcher>(storage_address());
             assert!(
