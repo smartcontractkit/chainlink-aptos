@@ -39,3 +39,13 @@ func HexToAccountAddressString(hexKey string) (string, error) {
 	accountAddress := Ed25519PublicKeyToAccount(publicKey)
 	return accountAddress.String(), nil
 }
+
+// ToAccountAddress converts a hex string to an Aptos account address.
+// Notice: will force [32]byte hex decoding for canonical address representation
+func ToAccountAddress(addr string) (aptos.AccountAddress, error) {
+	var address aptos.AccountAddress
+	if err := address.ParseStringRelaxed(addr); err != nil {
+		return aptos.AccountAddress{}, fmt.Errorf("failed to parse account address: %v", err)
+	}
+	return address, nil
+}
