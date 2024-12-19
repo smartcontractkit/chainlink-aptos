@@ -2,7 +2,6 @@ package smoke_test
 
 import (
 	"fmt"
-	"integration-tests/common"
 	"integration-tests/deploy"
 	"integration-tests/scripts"
 	"os"
@@ -51,18 +50,21 @@ func TestOCR3Keystone(t *testing.T) {
 
 	err = deployer.SetWorkflowConfigs(deployer.Contracts.DataFeedsAddress, workflowOwner)
 	require.NoError(t, err, "Could not set feed configs")
-
 	err = deployer.SetFeeds(deployer.Contracts.DataFeedsAddress)
 	require.NoError(t, err, "Could not set feeds")
 
 	err = deployer.DeployCore()
 	require.NoError(t, err, "Could not deploy Core")
 
-	err = deployer.CreateNodeLists()
-	require.NoError(t, err, "Could not create nodes list")
+	err = deployer.CreateNodesList()
+	require.NoError(t, err, "Could not create node list")
 
-	deployer.Keystone.DeployContracts(deploy.GETH_ACC_KEY)
-	nodeKeys, err := common.LoadPublicKeys(deployer.Keystone.PublicKeys, lggr)
+	lggr.Info().Msg("Deploying OCR3 contracts")
+	deployer.Keystone.DeployOCR3Contracts(deploy.GETH_ACC_KEY)
+
+	lggr.Info().Msg("Fetching node keys")
+	nodeKeys, err := deployer.Keystone.FetchNodeKeys()
+	require.NoError(t, err, "Could not fetch node keys")
 
 	var pubKeys []string
 	var accounts []string
@@ -80,21 +82,27 @@ func TestOCR3Keystone(t *testing.T) {
 	err = deployer.SaveWorkflowToml(deployer.Contracts.DataFeedsAddress, workflowOwner)
 	require.NoError(t, err, "Could not create workflow toml")
 
-	deployer.Keystone.DeployJobSpecs()
+	lggr.Info().Msg("Deploying OCR3 job specs")
+	deployer.Keystone.DeployOCR3JobSpecs(deploy.GETH_ACC_KEY)
+
+	lggr.Info().Msg("Deploying workflows")
 	deployer.Keystone.DeployWorkflows(deployer.Configs.KeystoneWorkflow)
 
-	maxRuntime := 10 * time.Minute
+	lggr.Info().Msg("Waiting for OCR3 jobs to complete")
+	maxRuntime := time.Duration(10)
+	maxRuntimeMinutes := maxRuntime * time.Minute
 	prevBenchmark := 0
-	timer := time.NewTimer(maxRuntime)
-	successfullTransactions := []string{}
+	successfulTransactionThreshold := 2
+	timer := time.NewTimer(maxRuntimeMinutes)
+	successfulTransactions := []string{}
 	defer timer.Stop()
 loop:
 	for {
 		select {
 		case <-timer.C:
-			panic("Max runtime of 10 minutes reached, exiting loop.")
+			panic(fmt.Sprintf("Max runtime of %d minutes reached, exiting loop.", maxRuntime))
 		default:
-			if len(successfullTransactions) >= 2 {
+			if len(successfulTransactions) >= successfulTransactionThreshold {
 				break loop
 			}
 			var allHashes []string
@@ -121,7 +129,7 @@ loop:
 					transaction, err := deployer.GetTransactionDetailsByHash(hash)
 					require.NoError(t, err, "Could not get transaction")
 					if transaction.Success {
-						if !slices.Contains(successfullTransactions, transaction.Hash) {
+						if !slices.Contains(successfulTransactions, transaction.Hash) {
 							var currBenchmark int
 							lggr.Info().Msgf("Found unique successful transaction: %s", transaction.Hash)
 							for _, event := range transaction.Events {
@@ -134,13 +142,12 @@ loop:
 								}
 							}
 							prevBenchmark = currBenchmark
-							successfullTransactions = append(successfullTransactions, transaction.Hash)
+							successfulTransactions = append(successfulTransactions, transaction.Hash)
 						}
 					}
 				}
-
 			}
-
+			lggr.Info().Msgf("Found %d successful transactions, required %d", len(successfulTransactions), successfulTransactionThreshold)
 			time.Sleep(time.Second * 5)
 		}
 	}
