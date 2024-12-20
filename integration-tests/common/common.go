@@ -1,48 +1,8 @@
 package common
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"os"
-
-	"github.com/rs/zerolog"
 )
-
-// mirrored from https://github.com/smartcontractkit/chainlink/blob/e9e885cb2dc08d24dc115587a1cab96eae38d779/integration-tests/deployment/keystone/ocr3config.go#L53
-type NodeKeys struct {
-	EthAddress            string `json:"EthAddress"`
-	AptosAccount          string `json:"AptosAccount"`
-	AptosBundleID         string `json:"AptosBundleID"`
-	AptosOnchainPublicKey string `json:"AptosOnchainPublicKey"`
-	P2PPeerID             string `json:"P2PPeerID"`             // p2p_<key>
-	OCR2BundleID          string `json:"OCR2BundleID"`          // used only in job spec
-	OCR2OnchainPublicKey  string `json:"OCR2OnchainPublicKey"`  // ocr2on_evm_<key>
-	OCR2OffchainPublicKey string `json:"OCR2OffchainPublicKey"` // ocr2off_evm_<key>
-	OCR2ConfigPublicKey   string `json:"OCR2ConfigPublicKey"`   // ocr2cfg_evm_<key>
-	CSAPublicKey          string `json:"CSAPublicKey"`
-	EncryptionPublicKey   string `json:"EncryptionPublicKey"`
-}
-
-func LoadPublicKeys(fileLocation string, logger zerolog.Logger) ([]NodeKeys, error) {
-	file, err := os.Open(fileLocation)
-	if err != nil {
-		return []NodeKeys{}, err
-	}
-	defer file.Close()
-
-	fileContent, err := io.ReadAll(file)
-	if err != nil {
-		return []NodeKeys{}, err
-	}
-
-	var accounts []NodeKeys
-	if err := json.Unmarshal(fileContent, &accounts); err != nil {
-		return []NodeKeys{}, err
-	}
-
-	return accounts, nil
-}
 
 func GenerateWorkflowToml(dataFeedsAddress string, workflowOwner string) string {
 	defaultToml := `

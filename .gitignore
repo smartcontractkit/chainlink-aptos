@@ -13,3 +13,7 @@ PublicKeys.json
 
 integration-tests/.cache/
 integration-tests/logs/
+
+.run.id
+go.work
+go.work.sum

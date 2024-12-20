@@ -21,6 +21,7 @@ Create a shared network for the containers
 
 ```bash
 docker network create chainlink
+docker network create beholder_default
 ```
 
 Build a core image with plugins (OCR3 capability) and the aptos relayer
@@ -46,14 +47,14 @@ Add a node list file under `.cache`
 
 (Ports from the node are forwarded so that host can talk to them if running in rootless containers to which DNS can't be resolved)
 
-`NodeList.txt`
+`NodesList.txt`
 
 ```
-http://localhost:50100 http://chainlink.core.1:50100 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
-http://localhost:50101 http://chainlink.core.2:50101 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
-http://localhost:50102 http://chainlink.core.3:50102 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
-http://localhost:50103 http://chainlink.core.4:50103 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
-http://localhost:50104 http://chainlink.core.5:50104 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
+localhost:50100 chainlink.core.1:50100 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
+localhost:50101 chainlink.core.2:50101 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
+localhost:50102 chainlink.core.3:50102 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
+localhost:50103 chainlink.core.4:50103 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
+localhost:50104 chainlink.core.5:50104 notreal@fakeemail.ch fj293fbBnlQ!f9vNs
 ```
 
 Switch back to the `aptos` repository.
@@ -62,13 +63,14 @@ Switch back to the `aptos` repository.
 scripts/setup.sh
 ```
 
-To remove workflows:
+After the setup, you'll want to redeploy the workflows to include the correct data feeds address. You can get the data feeds address via `$(cat contracts/data-feeds-contract_address.txt)`, then modify your workflow and redeploy it. The workflow is located at `scripts/workflow.toml`. The field to modify is `.targets[0].config.address`.
+
+
+To update workflows, run the same `deploy-workflows` command, it'll upsert the workflows, then restart the core node, the workflows don't seem to shut down otherwise.
 
 ```bash
-go run main.go delete-workflows
+docker restart $(docker ps -q --filter "name=chainlink.core*")
 ```
-
-Then restart the core node, the workflows don't seem to shut down otherwise.
 
 # Atlas/Beholder local env
 
