@@ -108,7 +108,7 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 
 	ctxLogger := GetContexedTxLogger(a.baseLogger, transactionID, txMetadata)
 
-	ed25519PublicKey, err := aptosacc.HexToEd25519PublicKey(publicKey)
+	ed25519PublicKey, err := aptosacc.HexPublicKeyToEd25519PublicKey(publicKey)
 	if err != nil {
 		return fmt.Errorf("failed to convert public key: %+w", err)
 	}

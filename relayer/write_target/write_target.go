@@ -25,6 +25,8 @@ import (
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/utils"
 
 	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/write-target"
+
+	aptosacc "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/account"
 )
 
 var (
@@ -306,22 +308,29 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 
 		// Fetch the transmitter address from the chain (decode output type)
 		// Notice: here we leak an Apots specific type and implementation - Option<string> (not-portable, not chain-agnostic)
-		var transmitter struct {
+		var transmitterAddr struct {
 			Vec []string
 		}
 		readTransmitter := binding.ReadIdentifier(ContractMethodName_getTransmitter)
-		err = c.cr.GetLatestValue(ctx, readTransmitter, primitives.Unconfirmed, queryInputs, &transmitter)
+		err = c.cr.GetLatestValue(ctx, readTransmitter, primitives.Unconfirmed, queryInputs, &transmitterAddr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to call [forwarder.getTransmitter]: %w", err)
 		}
 
-		c.lggr.Debugw("[forwarder.getTransmitter] call output", "transmitter", transmitter)
+		c.lggr.Debugw("[forwarder.getTransmitter] call output", "transmitterAddr", transmitterAddr)
 
-		if len(transmitter.Vec) == 0 {
+		if len(transmitterAddr.Vec) == 0 {
 			return nil, fmt.Errorf("failed to call [forwarder.getTransmitter]: unexpected empty result")
 		}
 
-		return &TransmissionState{Transmitter: transmitter.Vec[0], Success: true}, nil
+		// Notice: more Apots-specific logic to decode the transmitter address (not portable)
+		// Needs to be moved to CR codec (decoder), same as for Option<> type decoding above
+		address, err := aptosacc.HexAddrToAccountAddress(transmitterAddr.Vec[0])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse transmitter address: %w", err)
+		}
+
+		return &TransmissionState{Transmitter: address.String(), Success: true}, nil
 	}
 
 	// Fetch the transmission state, retry with a default backoff strategy

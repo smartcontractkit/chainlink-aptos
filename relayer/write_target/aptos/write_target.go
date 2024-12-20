@@ -194,7 +194,7 @@ func getTransmitter(cwConfig chainwriter.ChainWriterConfig) (string, error) {
 	if transmitter == "" {
 		// If the address is not specified, we assume the public key is for its corresponding address
 		// and not for an address with a rotated authentication key.
-		ed25519PublicKey, err := aptosacc.HexToEd25519PublicKey(functionConfig.PublicKey)
+		ed25519PublicKey, err := aptosacc.HexPublicKeyToEd25519PublicKey(functionConfig.PublicKey)
 		if err != nil {
 			return "", fmt.Errorf("failed to convert public key: %+w", err)
 		}
