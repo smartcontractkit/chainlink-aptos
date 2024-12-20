@@ -27,9 +27,9 @@ import (
 var _ services.Service = &AptosTxm{}
 
 type AptosTxm struct {
-	logger   logger.Logger
-	keystore loop.Keystore
-	config   Config
+	baseLogger logger.Logger
+	keystore   loop.Keystore
+	config     Config
 
 	transactions              map[string]*AptosTx
 	transactionsLock          sync.RWMutex
@@ -52,10 +52,10 @@ func New(lgr logger.Logger, keystore loop.Keystore, config Config, getClient fun
 	}
 
 	return &AptosTxm{
-		logger:   logger.Named(lgr, "AptosTxm"),
-		keystore: keystore,
-		config:   config,
-		client:   client,
+		baseLogger: logger.Named(lgr, "AptosTxm"),
+		keystore:   keystore,
+		config:     config,
+		client:     client,
 
 		transactions:              map[string]*AptosTx{},
 		transactionsLastPruneTime: getTimestampSecs(),
@@ -67,7 +67,7 @@ func New(lgr logger.Logger, keystore loop.Keystore, config Config, getClient fun
 }
 
 func (a *AptosTxm) Name() string {
-	return a.logger.Name()
+	return a.baseLogger.Name()
 }
 
 func (a *AptosTxm) Ready() error {
@@ -105,6 +105,8 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 			return errors.New("transaction already exists")
 		}
 	}
+
+	ctxLogger := logger.With(a.baseLogger, "txID", transactionID)
 
 	ed25519PublicKey, err := aptosacc.HexToEd25519PublicKey(publicKey)
 	if err != nil {
@@ -194,7 +196,7 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 			if (currentTimestamp - tx.Timestamp) < a.config.PruneTxExpirationSecs {
 				continue
 			}
-			a.logger.Debugw("Pruning transaction", "txID", txID, "status", tx.Status)
+			a.baseLogger.Debugw("Pruning transaction", "txID", txID, "status", tx.Status)
 			delete(a.transactions, txID)
 		}
 		a.transactionsLastPruneTime = currentTimestamp
@@ -204,7 +206,7 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 
 	select {
 	case a.broadcastChan <- transactionID:
-		a.logger.Debugw("Tx enqueued", "txID", transactionID, "fromAddr", fromAddress)
+		ctxLogger.Debugw("Tx enqueued", "fromAddr", fromAddress)
 	default:
 		return fmt.Errorf("failed to enqueue tx: %+v", tx)
 	}
@@ -233,7 +235,7 @@ func (a *AptosTxm) broadcastLoop() {
 	_, cancel := utils.ContextFromChan(a.stop)
 	defer cancel()
 
-	a.logger.Debugw("broadcastLoop: started")
+	a.baseLogger.Debugw("broadcastLoop: started")
 	for {
 		select {
 		case initialId := <-a.broadcastChan:
@@ -255,7 +257,7 @@ func (a *AptosTxm) broadcastLoop() {
 			for _, transactionId := range broadcastIds {
 				tx, ok := a.transactions[transactionId]
 				if !ok {
-					a.logger.Errorw("failed to find tx", "txID", transactionId)
+					a.baseLogger.Errorw("failed to find tx", "txID", transactionId)
 					continue
 				}
 				broadcastTxs = append(broadcastTxs, tx)
@@ -270,7 +272,7 @@ func (a *AptosTxm) broadcastLoop() {
 				a.signAndBroadcast(tx)
 			}
 		case <-a.stop:
-			a.logger.Debugw("broadcastLoop: stopped")
+			a.baseLogger.Debugw("broadcastLoop: stopped")
 			return
 		}
 	}
@@ -312,17 +314,21 @@ func (a *AptosTxm) createRawTx(client *aptos.NodeClient, tx *AptosTx, nonce uint
 		ChainId:                    chainId,
 	}
 
+	ctxLogger := logger.With(a.baseLogger, "txID", tx.ID)
+
 	// (if enabled for tx) simulate tx to estimate gas
 	if tx.Simulate {
 		simulatedTx, err := a.simulateTransaction(client, *rawTx, tx.FromAddress, tx.PublicKey)
 		if err == nil {
+			ctxLogger.Debugw("simulate tx successful", "gasUsed", simulatedTx.GasUsed, "gasUnitPrice", simulatedTx.GasUnitPrice)
+
 			// todo: configurable multiplier?
 			// fixed multiplier of 1.25 to account for potential discrepancies in gas estimation
 			rawTx.MaxGasAmount = uint64(float64(simulatedTx.GasUsed) * 1.25)
 			rawTx.GasUnitPrice = simulatedTx.GasUnitPrice
 		} else {
 			// do not error on failed estimate gas as it could fail due to conflicting in-flight txs
-			a.logger.Errorw("failed to simulate tx", "error", err)
+			ctxLogger.Errorw("failed to simulate tx", "error", err)
 		}
 	}
 
@@ -333,7 +339,7 @@ func (a *AptosTxm) createRawTx(client *aptos.NodeClient, tx *AptosTx, nonce uint
 			return nil, fmt.Errorf("failed to retrieve estimated gas price: %w", err)
 		}
 
-		a.logger.Debugw("estimated gas price", "gasEstimate", gasInfo.GasEstimate, "prioritizedGasEstimate", gasInfo.PrioritizedGasEstimate)
+		ctxLogger.Debugw("estimated gas price", "gasEstimate", gasInfo.GasEstimate, "prioritizedGasEstimate", gasInfo.PrioritizedGasEstimate)
 
 		// use prioritized fee for sebsequent attempts
 		if tx.Attempt > 0 {
@@ -345,7 +351,7 @@ func (a *AptosTxm) createRawTx(client *aptos.NodeClient, tx *AptosTx, nonce uint
 
 	if rawTx.MaxGasAmount == 0 {
 		rawTx.MaxGasAmount = a.config.DefaultMaxGasAmount
-		a.logger.Debugw("using default max gas amount", "maxGasAmount", a.config.DefaultMaxGasAmount)
+		ctxLogger.Debugw("using default max gas amount", "maxGasAmount", a.config.DefaultMaxGasAmount)
 	}
 
 	return rawTx, nil
@@ -386,18 +392,19 @@ func (a *AptosTxm) createSignedTx(client *aptos.NodeClient, rawTx *aptos.RawTran
 
 func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	client := a.client
+	ctxLogger := logger.With(a.baseLogger, "txID", tx.ID)
 
 	txStore := a.accountStore.GetTxStore(tx.FromAddress.String())
 	if txStore == nil {
 		sequenceNumber, err := a.getSequenceNumber(client, tx.FromAddress)
 		if err != nil {
-			a.logger.Errorw("failed to get sequence number", "error", err)
+			ctxLogger.Errorw("failed to get sequence number", "fromAddress", tx.FromAddress, "error", err)
 			tx.Status = commontypes.Failed
 			return
 		}
 		newTxStore, err := a.accountStore.CreateTxStore(tx.FromAddress.String(), sequenceNumber)
 		if err != nil {
-			a.logger.Errorw("failed to create tx store", "fromAddress", tx.FromAddress, "error", err)
+			ctxLogger.Errorw("failed to create tx store", "fromAddress", tx.FromAddress, "error", err)
 			tx.Status = commontypes.Failed
 			return
 		}
@@ -417,14 +424,14 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 
 		rawTx, err := a.createRawTx(client, tx, nonce)
 		if err != nil {
-			a.logger.Errorw("failed to create raw tx", "error", err)
+			ctxLogger.Errorw("failed to create raw tx", "error", err)
 			tx.Status = commontypes.Failed
 			return
 		}
 
 		signedTx, err := a.createSignedTx(client, rawTx, tx.PublicKey, tx.FromAddress)
 		if err != nil {
-			a.logger.Errorw("failed to create signed tx", "error", err)
+			ctxLogger.Errorw("failed to create signed tx", "error", err)
 			tx.Status = commontypes.Failed
 			return
 		}
@@ -432,18 +439,18 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		submitResponse, err := client.SubmitTransaction(signedTx)
 		if err == nil {
 			if submitResponse.Hash == "" {
-				a.logger.Errorw("did not receive hash after successful tx submission", "txID", tx.ID)
+				ctxLogger.Errorw("did not receive hash after successful tx submission")
 				tx.Status = commontypes.Failed
 				return
 			}
 
 			// tx included in the Mempool
-			a.logger.Debugw("submit tx successful", "txID", tx.ID, "attempt", tx.Attempt, "submitResponse", submitResponse)
+			ctxLogger.Debugw("submit tx successful", "attempt", tx.Attempt, "submitResponse", submitResponse)
 
 			err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, rawTx.ExpirationTimestampSeconds, tx)
 			if err != nil {
 				// TODO: figure out what to do here, this should never occur.
-				a.logger.Errorw("failed to add unconfirmed tx", "txID", tx.ID, "txHash", submitResponse.Hash, "error", err)
+				ctxLogger.Errorw("failed to add unconfirmed tx", "txHash", submitResponse.Hash, "error", err)
 				tx.Status = commontypes.Failed
 				return
 			}
@@ -457,12 +464,12 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			var httpError *aptos.HttpError
 			if !errors.As(err, &httpError) {
 				// Do not retry on unknown errors
-				a.logger.Errorw("failed to submit signed tx, discarding..", "txID", tx.ID, "error", err)
+				ctxLogger.Errorw("failed to submit signed tx, discarding..", "error", err)
 				tx.Status = commontypes.Failed
 				return
 			}
 
-			a.logger.Errorw("failed to submit signed tx, retrying..", "txID", tx.ID, "error", httpError)
+			ctxLogger.Errorw("failed to submit signed tx, retrying..", "error", httpError)
 			time.Sleep(time.Duration(a.config.SubmitDelayDuration) * time.Second)
 
 			httpErrorBody := string(httpError.Body)
@@ -473,7 +480,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		}
 	}
 
-	a.logger.Errorw("reached max retries for submitting the tx", "txID", tx.ID)
+	ctxLogger.Errorw("reached max retries for submitting the tx")
 	tx.Status = commontypes.Failed
 }
 
@@ -486,7 +493,7 @@ func (a *AptosTxm) confirmLoop() {
 	pollDuration := time.Duration(a.config.ConfirmPollSecs) * time.Second
 	tick := time.After(pollDuration)
 
-	a.logger.Debugw("confirmLoop: started")
+	a.baseLogger.Debugw("confirmLoop: started")
 
 	for {
 		select {
@@ -504,7 +511,7 @@ func (a *AptosTxm) confirmLoop() {
 				tick = time.After(0)
 			}
 		case <-a.stop:
-			a.logger.Debugw("confirmLoop: stopped")
+			a.baseLogger.Debugw("confirmLoop: stopped")
 			return
 		}
 	}
@@ -518,22 +525,23 @@ func (a *AptosTxm) checkUnconfirmed() {
 		txStore := a.accountStore.GetTxStore(accountAddress)
 
 		for _, unconfirmedTx := range unconfirmedTxs {
+			ctxLogger := logger.With(a.baseLogger, "txID", unconfirmedTx.Tx.ID)
 			hash := unconfirmedTx.Hash
 			chainTx, err := client.TransactionByHash(hash)
 
 			if err == nil && chainTx.Type != aptosapi.TransactionVariantPending {
 				// tx has been committed
 				if err := txStore.Confirm(unconfirmedTx.Nonce, hash, false); err != nil {
-					a.logger.Errorw("failed to confirm tx in TxStore", "hash", hash, "accountAddress", accountAddress, "error", err)
+					ctxLogger.Errorw("failed to confirm tx in TxStore", "hash", hash, "accountAddress", accountAddress, "error", err)
 				}
 
 				if chainTx.Type == aptosapi.TransactionVariantUser {
 					userTx, ok := chainTx.Inner.(*aptosapi.UserTransaction)
 					if ok {
 						if userTx.Success {
-							a.logger.Infow("confirmed tx: successful", "txID", unconfirmedTx.Tx.ID, "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
+							ctxLogger.Infow("confirmed tx: successful", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
 						} else {
-							a.logger.Infow("confirmed tx: unsuccessful", "txID", unconfirmedTx.Tx.ID, "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
+							ctxLogger.Infow("confirmed tx: unsuccessful", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
 							if userTx.VmStatus == "Out of gas" {
 								// https://github.com/aptos-labs/aptos-core/blob/77ff4bf413f54c41206bd5573e1891fa3a0dccf6/api/types/src/convert.rs#L1062
 								// Example transaction: https://api.testnet.aptoslabs.com/v1/transactions/by_hash/0x7a106db811c8d5dfd71ac98f374ca36e4f630ce5412b99c8f0e871e7feda37ea
@@ -545,32 +553,32 @@ func (a *AptosTxm) checkUnconfirmed() {
 							}
 						}
 					} else {
-						a.logger.Errorw("failed to read confirmed user tx", "hash", hash, "chainTxInner", chainTx.Inner)
+						ctxLogger.Errorw("failed to read confirmed user tx", "hash", hash, "chainTxInner", chainTx.Inner)
 					}
 				} else {
-					a.logger.Errorw("unexpected confirmed tx type", "txID", unconfirmedTx.Tx.ID, "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
+					ctxLogger.Errorw("unexpected confirmed tx type", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
 				}
 
 				unconfirmedTx.Tx.Status = commontypes.Finalized
 			} else {
-				a.logger.Debugw("tx still unconfirmed", "txID", unconfirmedTx.Tx.ID, "hash", hash, "chainTx", chainTx)
+				ctxLogger.Debugw("tx is still unconfirmed", "hash", hash, "chainTx", chainTx)
 				// Check using the ledger timestamp whether the transaction has expired.
 				ledgerTimestampSecs, err := a.getLedgerTimestampSecs(client)
 				if err != nil {
-					a.logger.Errorw("couldn't fetch ledger timestamp and check if tx expired", "txID", unconfirmedTx.Tx.ID)
+					ctxLogger.Errorw("couldn't fetch ledger timestamp and check if tx expired", "error", err)
 					continue
 				}
 
 				if ledgerTimestampSecs <= unconfirmedTx.ExpirationTimestampSecs {
 					// tx was neither committed nor expired yet
-					a.logger.Debugw("tx not found or pending in the mempool", "hash", hash)
+					ctxLogger.Debugw("tx not found or pending in the mempool", "hash", hash)
 					continue
 				}
 
 				// Confirm the transaction, mark as failed to reuse the nonce.
 				err = txStore.Confirm(unconfirmedTx.Nonce, hash, true)
 				if err != nil {
-					a.logger.Errorw("coudln't confirm expired tx", "error", err)
+					ctxLogger.Errorw("coudln't confirm expired tx", "error", err)
 					unconfirmedTx.Tx.Status = commontypes.Failed
 					continue
 				}
@@ -603,16 +611,17 @@ func (r RetryReason) String() string {
 }
 
 func (a *AptosTxm) maybeRetry(unconfirmedTx *UnconfirmedTx, retryReason RetryReason) bool {
+	ctxLogger := logger.With(a.baseLogger, "txID", unconfirmedTx.Tx.ID)
 	if unconfirmedTx.Tx.Attempt >= a.config.MaxTxRetryAttempts {
-		a.logger.Errorw("tx reached max num of retries and will be discarded", "txID", unconfirmedTx.Tx.ID, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
+		ctxLogger.Errorw("tx reached max num of retries and will be discarded", "hash", unconfirmedTx.Hash, "retryReason", retryReason)
 		return false
 	}
 
-	a.logger.Debugw("retrying tx", "txID", unconfirmedTx.Tx.ID, "attempt", unconfirmedTx.Tx.Attempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
+	ctxLogger.Debugw("retrying tx", "attempt", unconfirmedTx.Tx.Attempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
 	select {
 	case a.broadcastChan <- unconfirmedTx.Tx.ID:
 	default:
-		a.logger.Errorw("failed to enqueue tx for rebroadcast", "txID", unconfirmedTx.Tx.ID, "attempt", unconfirmedTx.Tx.Attempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
+		ctxLogger.Errorw("failed to enqueue tx for rebroadcast", "attempt", unconfirmedTx.Tx.Attempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
 	}
 
 	return true
@@ -625,13 +634,11 @@ func (a *AptosTxm) InflightCount() (int, int) {
 func (a *AptosTxm) getSequenceNumber(client *aptos.NodeClient, address aptos.AccountAddress) (uint64, error) {
 	accountInfo, err := client.Account(address)
 	if err != nil {
-		a.logger.Errorw("failed to fetch account data", "error", err)
-		return 0, err
+		return 0, fmt.Errorf("failed to fetch account data for address %s: %w", address, err)
 	}
 	sequenceNumber, err := accountInfo.SequenceNumber()
 	if err != nil {
-		a.logger.Errorw("failed to decode sequence number", "sequenceNumberStr", accountInfo.SequenceNumberStr, "error", err)
-		return 0, err
+		return 0, fmt.Errorf("failed to decode sequence number from %s: %w", accountInfo.SequenceNumberStr, err)
 	}
 	return sequenceNumber, nil
 }
@@ -639,7 +646,7 @@ func (a *AptosTxm) getSequenceNumber(client *aptos.NodeClient, address aptos.Acc
 func (a *AptosTxm) resyncNonce(client *aptos.NodeClient, address aptos.AccountAddress) error {
 	sequenceNumber, err := a.getSequenceNumber(client, address)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to resync nonce for address %s: %w", address.String(), err)
 	}
 
 	txStore := a.accountStore.GetTxStore(address.String())
@@ -650,8 +657,7 @@ func (a *AptosTxm) resyncNonce(client *aptos.NodeClient, address aptos.AccountAd
 	updatedNextNonce := txStore.GetNextNonce()
 	updatedLastOnchainNonce := txStore.GetLastResyncedNonce()
 
-	a.logger.Infow("resynced nonce", "sequenceNumber", sequenceNumber, "previousLastOnchainNonce", previousLastOnchainNonce, "updatedLastOnchainNonce", updatedLastOnchainNonce, "previousNextNonce", previousNextNonce, "updatedNextNonce", updatedNextNonce)
-
+	a.baseLogger.Infow("resynced nonce", "address", address.String(), "sequenceNumber", sequenceNumber, "previousLastOnchainNonce", previousLastOnchainNonce, "updatedLastOnchainNonce", updatedLastOnchainNonce, "previousNextNonce", previousNextNonce, "updatedNextNonce", updatedNextNonce)
 	return nil
 }
 
@@ -701,22 +707,21 @@ func (a *AptosTxm) simulateTransaction(client *aptos.NodeClient, rawTx aptos.Raw
 		// need to fetch latest sequence number on-chain since we could have other in-flight txs which results in an error SEQUENCE_NUMBER_TOO_NEW
 		sequenceNumber, err := a.getSequenceNumber(client, fromAddress)
 		if err != nil {
-			a.logger.Errorw("failed to get sequence number", "error", err)
-			return nil, err
+			return nil, fmt.Errorf("failed to get sequence number: %w", err)
 		}
 		rawTx.SequenceNumber = sequenceNumber
 
-		a.logger.Debugw("simulating tx", "attempt", attempt, "sequenceNumber", sequenceNumber)
 		// TODO: consider using EstimatePrioritizedGasUnitPrice(true)
 		txs, err := client.SimulateTransaction(&rawTx, signerForSimulation, aptos.EstimateMaxGasAmount(true), aptos.EstimateGasUnitPrice(true))
 		if err != nil {
-			a.logger.Debugw("failed to simulate tx", "error", err)
 			return nil, err
 		}
+
 		if len(txs) < 1 {
 			return nil, errors.New("no simulated tx returned")
 		}
 		simulateResponse := txs[0]
+
 		if !*(simulateResponse.TxnSuccess()) {
 			if simulateResponse.VmStatus == "SEQUENCE_NUMBER_TOO_OLD" || simulateResponse.VmStatus == "SEQUENCE_NUMBER_TOO_NEW" {
 				// race condition with tx confirmation incrementing the sequence number, retry
@@ -724,11 +729,10 @@ func (a *AptosTxm) simulateTransaction(client *aptos.NodeClient, rawTx aptos.Raw
 				attempt = attempt + 1
 				continue
 			}
-			a.logger.Debugw("simulated tx unexpected status", "vmStatus", simulateResponse.VmStatus)
+
 			return nil, fmt.Errorf("simulated tx unexpected status: %v", simulateResponse.VmStatus)
 		}
 
-		a.logger.Debugw("simulate tx successful", "vmStatus", simulateResponse.VmStatus, "gasUsed", simulateResponse.GasUsed, "gasUnitPrice", simulateResponse.GasUnitPrice)
 		return simulateResponse, nil
 	}
 
