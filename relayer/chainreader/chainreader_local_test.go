@@ -78,6 +78,7 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 	txId := uuid.New().String()
 	err = txmgr.Enqueue(
 		txId,
+		getSampleTxMetadata(),
 		accountAddress.String(),
 		publicKeyHex,
 		"0x1::code::publish_package_txn",
@@ -223,4 +224,12 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 	}{Value1: expectedU256}, &retU256)
 	require.NoError(t, err)
 	require.Equal(t, expectedU256, retU256)
+}
+
+func getSampleTxMetadata() *commontypes.TxMeta {
+	workflowID := "sample-workflow-id"
+	return &commontypes.TxMeta{
+		WorkflowExecutionID: &workflowID,
+		GasLimit:            big.NewInt(21000),
+	}
 }
