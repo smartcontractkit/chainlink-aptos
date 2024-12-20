@@ -10,9 +10,9 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 )
 
-// HexToEd25519PublicKey converts a hex string to an Ed25519 public key.
-func HexToEd25519PublicKey(hexKey string) (ed25519.PublicKey, error) {
-	keyBytes, err := hex.DecodeString(hexKey)
+// HexPublicKeyToEd25519PublicKey converts a hex string to an Ed25519 public key.
+func HexPublicKeyToEd25519PublicKey(key string) (ed25519.PublicKey, error) {
+	keyBytes, err := hex.DecodeString(key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode hex string: %v", err)
 	}
@@ -30,12 +30,22 @@ func Ed25519PublicKeyToAccount(key ed25519.PublicKey) aptos.AccountAddress {
 	return aptos.AccountAddress(authKey)
 }
 
-func HexToAccountAddressString(hexKey string) (string, error) {
-	publicKey, err := HexToEd25519PublicKey(hexKey)
+func HexPublicKeyToAccountAddrString(key string) (string, error) {
+	publicKey, err := HexPublicKeyToEd25519PublicKey(key)
 	if err != nil {
 		return "", fmt.Errorf("failed to convert hex to public key: %v", err)
 	}
 
 	accountAddress := Ed25519PublicKeyToAccount(publicKey)
 	return accountAddress.String(), nil
+}
+
+// HexAddrToAccountAddress converts a hex string to an Aptos account address.
+// Notice: will force [32]byte hex decoding for canonical address representation
+func HexAddrToAccountAddress(addr string) (aptos.AccountAddress, error) {
+	var address aptos.AccountAddress
+	if err := address.ParseStringRelaxed(addr); err != nil {
+		return aptos.AccountAddress{}, fmt.Errorf("failed to parse account address: %v", err)
+	}
+	return address, nil
 }

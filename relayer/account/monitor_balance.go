@@ -41,7 +41,7 @@ func NewBalanceMonitor(opts BalanceMonitorOpts) (services.Service, error) {
 		},
 		KeyToAccountMapper: func(ctx context.Context, pk string) (string, error) {
 			// We need to convert the Aptos public key to an account address
-			return HexToAccountAddressString(pk)
+			return HexPublicKeyToAccountAddrString(pk)
 		},
 	})
 }
