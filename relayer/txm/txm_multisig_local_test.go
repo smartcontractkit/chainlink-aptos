@@ -135,6 +135,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	// deploy mcms module
 	err = txm.Enqueue(
 		uuid.New().String(),
+		getSampleTxMetadata(),
 		deployerAddress,
 		deployerPublicKeyHex,
 		"0x1::code::publish_package_txn",
@@ -148,6 +149,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	// deploy and initialize counter module
 	err = txm.Enqueue(
 		uuid.New().String(),
+		getSampleTxMetadata(),
 		counterDeployerAddress,
 		counterDeployerPublicKeyHex,
 		"0x1::code::publish_package_txn",
@@ -160,6 +162,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 
 	err = txm.Enqueue(
 		uuid.New().String(),
+		getSampleTxMetadata(),
 		counterDeployerAddress,
 		counterDeployerPublicKeyHex,
 		counterDeployerAddress+"::counter::initialize",
@@ -231,6 +234,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 
 		err := txm.Enqueue(
 			uuid.New().String(),
+			getSampleTxMetadata(),
 			deployerAddress,
 			deployerPublicKeyHex,
 			deployerAddress+"::multisig::set_config",
@@ -343,6 +347,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 
 		err := txm.Enqueue(
 			uuid.New().String(),
+			getSampleTxMetadata(),
 			deployerAddress,
 			deployerPublicKeyHex,
 			deployerAddress+"::multisig::set_root",
@@ -397,6 +402,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 
 		err := txm.Enqueue(
 			txId,
+			getSampleTxMetadata(),
 			deployerAddress,
 			deployerPublicKeyHex,
 			deployerAddress+"::multisig::execute",

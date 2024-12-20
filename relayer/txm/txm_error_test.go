@@ -90,6 +90,7 @@ func runErrorsTest(t *testing.T, logger logger.Logger, config Config, rpcURL str
 
 		err = txm.Enqueue(
 			incrementId,
+			getSampleTxMetadata(),
 			accountAddress.String(),
 			publicKeyHex,
 			accountAddress.String()+"::counter::increment",

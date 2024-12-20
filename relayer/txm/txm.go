@@ -393,7 +393,7 @@ func (a *AptosTxm) createSignedTx(client *aptos.NodeClient, rawTx *aptos.RawTran
 
 func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	client := a.client
-	ctxLogger := logger.With(a.baseLogger, "txID", tx.ID)
+	ctxLogger := GetContexedTxLogger(a.baseLogger, tx.ID, tx.Metadata)
 
 	txStore := a.accountStore.GetTxStore(tx.FromAddress.String())
 	if txStore == nil {

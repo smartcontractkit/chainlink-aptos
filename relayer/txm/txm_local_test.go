@@ -7,6 +7,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
+	"math/big"
 	"testing"
 	"time"
 
@@ -101,6 +102,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 		incrementId := uuid.New().String()
 		err := txm.Enqueue(
 			incrementId,
+			getSampleTxMetadata(),
 			accountAddress.String(),
 			publicKeyHex,
 			accountAddress.String()+"::counter::increment",
@@ -116,6 +118,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 		incrementMultId := uuid.New().String()
 		err = txm.Enqueue(
 			incrementMultId,
+			getSampleTxMetadata(),
 			accountAddress.String(),
 			publicKeyHex,
 			accountAddress.String()+"::counter::increment_mult",
@@ -144,6 +147,7 @@ func deployTestModule(t *testing.T, txm *AptosTxm, fromAddress aptos.AccountAddr
 
 	err := txm.Enqueue(
 		uuid.New().String(),
+		getSampleTxMetadata(),
 		fromAddress.String(),
 		publicKeyHex,
 		"0x1::code::publish_package_txn",
@@ -157,6 +161,7 @@ func deployTestModule(t *testing.T, txm *AptosTxm, fromAddress aptos.AccountAddr
 	initializeId := uuid.New().String()
 	err = txm.Enqueue(
 		initializeId,
+		getSampleTxMetadata(),
 		fromAddress.String(),
 		publicKeyHex,
 		fromAddress.String()+"::counter::initialize",
@@ -182,4 +187,12 @@ func waitForTxmId(t *testing.T, txm *AptosTxm, txId string, duration time.Durati
 		}
 	}
 	t.Fatalf("Failed to wait for txmId %s", txId)
+}
+
+func getSampleTxMetadata() *commontypes.TxMeta {
+	workflowID := "sample-workflow-id"
+	return &commontypes.TxMeta{
+		WorkflowExecutionID: &workflowID,
+		GasLimit:            big.NewInt(21000),
+	}
 }
