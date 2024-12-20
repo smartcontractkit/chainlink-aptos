@@ -103,14 +103,11 @@ func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, 
 		functionName = method
 	}
 
-	workflowExecutionID := "unknown"
-	if meta.WorkflowExecutionID != nil {
-		workflowExecutionID = *meta.WorkflowExecutionID
-	}
-	ctxLogger := logger.With(a.logger, "txID", transactionID, "workflowExecutionID", workflowExecutionID)
+	ctxLogger := txm.GetContexedTxLogger(a.logger, transactionID, meta)
 
 	err = a.txm.Enqueue(
 		transactionID,
+		meta,
 		functionConfig.FromAddress,
 		functionConfig.PublicKey,
 		fmt.Sprintf("%s::%s::%s", toAddress, moduleName, functionName),
@@ -125,7 +122,7 @@ func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, 
 		return fmt.Errorf("failed to enqueue transaction %s: %+w", transactionID, err)
 	}
 
-	ctxLogger.Infow("submitted transaction", "contractName", contractName, "method", method, "toAddress", toAddress)
+	ctxLogger.Infow("Workflow DON submitted transaction for execution", "contractName", contractName, "method", method, "toAddress", toAddress)
 	return nil
 }
 

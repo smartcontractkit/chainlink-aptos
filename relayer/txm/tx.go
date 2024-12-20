@@ -10,6 +10,7 @@ import (
 
 type AptosTx struct {
 	ID              string
+	Metadata        *commontypes.TxMeta
 	Timestamp       uint64
 	FromAddress     aptos.AccountAddress
 	PublicKey       ed25519.PublicKey

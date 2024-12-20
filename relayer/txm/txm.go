@@ -94,7 +94,7 @@ func (a *AptosTxm) Close() error {
 	})
 }
 
-func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, function string, typeArgs []string, paramTypes []string, paramValues []any, simulateTx bool) error {
+func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta, fromAddress, publicKey, function string, typeArgs []string, paramTypes []string, paramValues []any, simulateTx bool) error {
 	if transactionID == "" {
 		transactionID = uuid.New().String()
 	} else {
@@ -106,7 +106,7 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 		}
 	}
 
-	ctxLogger := logger.With(a.baseLogger, "txID", transactionID)
+	ctxLogger := GetContexedTxLogger(a.baseLogger, transactionID, txMetadata)
 
 	ed25519PublicKey, err := aptosacc.HexToEd25519PublicKey(publicKey)
 	if err != nil {
@@ -175,6 +175,7 @@ func (a *AptosTxm) Enqueue(transactionID string, fromAddress, publicKey, functio
 	currentTimestamp := getTimestampSecs()
 	tx := &AptosTx{
 		ID:              transactionID,
+		Metadata:        txMetadata,
 		Timestamp:       currentTimestamp,
 		FromAddress:     *fromAccountAddress,
 		PublicKey:       ed25519PublicKey,
@@ -314,7 +315,7 @@ func (a *AptosTxm) createRawTx(client *aptos.NodeClient, tx *AptosTx, nonce uint
 		ChainId:                    chainId,
 	}
 
-	ctxLogger := logger.With(a.baseLogger, "txID", tx.ID)
+	ctxLogger := GetContexedTxLogger(a.baseLogger, tx.ID, tx.Metadata)
 
 	// (if enabled for tx) simulate tx to estimate gas
 	if tx.Simulate {
@@ -525,7 +526,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 		txStore := a.accountStore.GetTxStore(accountAddress)
 
 		for _, unconfirmedTx := range unconfirmedTxs {
-			ctxLogger := logger.With(a.baseLogger, "txID", unconfirmedTx.Tx.ID)
+			ctxLogger := GetContexedTxLogger(a.baseLogger, unconfirmedTx.Tx.ID, unconfirmedTx.Tx.Metadata)
 			hash := unconfirmedTx.Hash
 			chainTx, err := client.TransactionByHash(hash)
 
@@ -611,7 +612,7 @@ func (r RetryReason) String() string {
 }
 
 func (a *AptosTxm) maybeRetry(unconfirmedTx *UnconfirmedTx, retryReason RetryReason) bool {
-	ctxLogger := logger.With(a.baseLogger, "txID", unconfirmedTx.Tx.ID)
+	ctxLogger := GetContexedTxLogger(a.baseLogger, unconfirmedTx.Tx.ID, unconfirmedTx.Tx.Metadata)
 	if unconfirmedTx.Tx.Attempt >= a.config.MaxTxRetryAttempts {
 		ctxLogger.Errorw("tx reached max num of retries and will be discarded", "hash", unconfirmedTx.Hash, "retryReason", retryReason)
 		return false
