@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestToAccountAddressCanonicalRepresentation(t *testing.T) {
+func TestHexAddrToAccountAddressCanonicalRepresentation(t *testing.T) {
 	tests := []struct {
 		input          string
 		expectedOutput string
@@ -37,7 +37,7 @@ func TestToAccountAddressCanonicalRepresentation(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		output, err := ToAccountAddress(test.input)
+		output, err := HexAddrToAccountAddress(test.input)
 		if test.expectError {
 			if err == nil {
 				t.Errorf("expected error for input %s, but got none", test.input)

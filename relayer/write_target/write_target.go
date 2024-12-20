@@ -325,7 +325,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 
 		// Notice: more Apots-specific logic to decode the transmitter address (not portable)
 		// Needs to be moved to CR codec (decoder), same as for Option<> type decoding above
-		address, err := aptosacc.ToAccountAddress(transmitterAddr.Vec[0])
+		address, err := aptosacc.HexAddrToAccountAddress(transmitterAddr.Vec[0])
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse transmitter address: %w", err)
 		}
