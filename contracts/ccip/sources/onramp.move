@@ -1,7 +1,8 @@
 module ccip::onramp {
+  use std::account;
   use std::aptos_hash;
   use std::error;
-  use std::event;
+  use std::event::{Self, EventHandle};
   use std::fungible_asset::{Self, FungibleAsset};
   use std::object;
   use std::primary_fungible_store;
@@ -19,6 +20,12 @@ module ccip::onramp {
     allowlist_admin: address,
 
     dest_chain_configs: SmartTable<u64, DestChainConfig>,
+
+    config_set_events: EventHandle<ConfigSet>,
+    dest_chain_config_set_events: EventHandle<DestChainConfigSet>,
+    ccip_message_sent_events: EventHandle<CCIPMessageSent>,
+    allowlist_senders_added_events: EventHandle<AllowlistSendersAdded>,
+    allowlist_senders_removed_events: EventHandle<AllowlistSendersRemoved>,
   }
 
   struct DestChainConfig has store, drop {
@@ -33,7 +40,7 @@ module ccip::onramp {
     allowed_senders: vector<address>,
   }
 
-  struct RampMessageHeader has store, drop {
+  struct RampMessageHeader has store, drop, copy {
     message_id: vector<u8>,
     source_chain_selector: u64,
     dest_chain_selector: u64,
@@ -41,7 +48,7 @@ module ccip::onramp {
     nonce: u64,
   }
 
-  struct Aptos2AnyRampMessage has store, drop {
+  struct Aptos2AnyRampMessage has store, drop, copy {
     header: RampMessageHeader,
     sender: address,
     data: vector<u8>,
@@ -54,7 +61,7 @@ module ccip::onramp {
     token_amounts: vector<Aptos2AnyTokenTransfer>,
   }
 
-  struct Aptos2AnyTokenTransfer has store, drop {
+  struct Aptos2AnyTokenTransfer has store, drop, copy {
     source_pool_address: address,
     dest_token_address: vector<u8>,
     extra_data: vector<u8>,
@@ -124,6 +131,12 @@ module ccip::onramp {
       allowlist_admin: @0x0,
 
       dest_chain_configs: smart_table::new(),
+
+      config_set_events: account::new_event_handle(caller),
+      dest_chain_config_set_events: account::new_event_handle(caller),
+      ccip_message_sent_events: account::new_event_handle(caller),
+      allowlist_senders_added_events: account::new_event_handle(caller),
+      allowlist_senders_removed_events: account::new_event_handle(caller),
     };
 
     move_to(caller, state);
@@ -146,6 +159,10 @@ module ccip::onramp {
     state.allowlist_admin = allowlist_admin;
 
     event::emit(ConfigSet {
+      chain_selector: state.chain_selector,
+      allowlist_admin,
+    });
+    event::emit_event(&mut state.config_set_events, ConfigSet {
       chain_selector: state.chain_selector,
       allowlist_admin,
     });
@@ -240,6 +257,11 @@ module ccip::onramp {
       sequence_number,
       message,
     });
+    event::emit_event(&mut state.ccip_message_sent_events, CCIPMessageSent {
+      dest_chain_selector,
+      sequence_number,
+      message,
+    });
 
     message_id
   }
@@ -327,6 +349,7 @@ module ccip::onramp {
         });
 
         event::emit(AllowlistSendersAdded { dest_chain_selector, senders: add_allowed_senders });
+        event::emit_event(&mut state.allowlist_senders_added_events, AllowlistSendersAdded { dest_chain_selector, senders: add_allowed_senders });
       };
 
       if (vector::length(&remove_allowed_senders) > 0) {
@@ -338,6 +361,7 @@ module ccip::onramp {
         });
 
         event::emit(AllowlistSendersRemoved { dest_chain_selector, senders: remove_allowed_senders });
+        event::emit_event(&mut state.allowlist_senders_removed_events, AllowlistSendersRemoved { dest_chain_selector, senders: remove_allowed_senders });
       };
 
       i = i + 1;
@@ -412,6 +436,12 @@ module ccip::onramp {
       dest_chain_config.allowlist_enabled = allowlist_enabled;
 
       event::emit(DestChainConfigSet {
+        dest_chain_selector,
+        is_enabled,
+        sequence_number: dest_chain_config.sequence_number,
+        allowlist_enabled: dest_chain_config.allowlist_enabled,
+      });
+      event::emit_event(&mut state.dest_chain_config_set_events, DestChainConfigSet {
         dest_chain_selector,
         is_enabled,
         sequence_number: dest_chain_config.sequence_number,
