@@ -206,7 +206,8 @@ module ccip::offramp {
 
   #[view]
   public fun get_execution_state(source_chain_selector: u64, sequence_number: u64): u8 acquires OffRampState {
-    let state = borrow_global<OffRampState>(@ccip);
+    let state = borrow_state();
+
     assert!(smart_table::contains(&state.execution_states, source_chain_selector), error::invalid_argument(E_UNKNOWN_SOURCE_CHAIN_SELECTOR));
     let source_chain_execution_states = smart_table::borrow(&state.execution_states, source_chain_selector);
     let execution_state = smart_table::borrow(source_chain_execution_states, sequence_number);
@@ -289,7 +290,7 @@ module ccip::offramp {
   }
 
   fun execute_single_report(execution_report: ExecutionReport, manual_execution: bool) acquires OffRampState {
-    let state = borrow_global_mut<OffRampState>(@ccip);
+    let state = borrow_state_mut();
 
     let source_chain_selector = execution_report.source_chain_selector;
 
@@ -349,7 +350,7 @@ module ccip::offramp {
   }
 
   public entry fun commit(caller: &signer, report_context: vector<vector<u8>>, report: vector<u8>, signatures: vector<vector<u8>>) acquires OffRampState {
-    let state = borrow_global_mut<OffRampState>(@ccip);
+    let state = borrow_state_mut();
 
     let commit_report = deserialize_commit_report(report);
     assert!(commit_report.offramp_address == @ccip, error::invalid_argument(E_INVALID_OFFRAMP_ADDRESS));
@@ -391,12 +392,12 @@ module ccip::offramp {
 
   #[view]
   public fun get_latest_price_sequence_number(): u64 acquires OffRampState {
-    borrow_global<OffRampState>(@ccip).latest_price_sequence_number
+    borrow_state().latest_price_sequence_number
   }
 
   #[view]
   public fun get_merkle_root(source_chain_selector: u64, root: vector<u8>): u64 acquires OffRampState {
-    let state = borrow_global<OffRampState>(@ccip);
+    let state = borrow_state();
     assert!(smart_table::contains(&state.roots, source_chain_selector), error::invalid_argument(E_UNKNOWN_SOURCE_CHAIN_SELECTOR));
 
     let source_chain_roots = smart_table::borrow(&state.roots, source_chain_selector);
@@ -407,17 +408,17 @@ module ccip::offramp {
 
   #[view]
   public fun get_chain_selector(): u64 acquires OffRampState {
-    borrow_global<OffRampState>(@ccip).chain_selector
+    borrow_state().chain_selector
   }
 
   #[view]
   public fun get_permissionless_execution_threshold_secs(): u32 acquires OffRampState {
-    borrow_global<OffRampState>(@ccip).permissionless_execution_threshold_secs
+    borrow_state().permissionless_execution_threshold_secs
   }
 
   #[view]
   public fun get_source_chain_config(source_chain_selector: u64): (bool, u64) acquires OffRampState {
-    let state = borrow_global<OffRampState>(@ccip);
+    let state = borrow_state();
     assert!(smart_table::contains(&state.source_chain_configs, source_chain_selector), error::invalid_argument(E_UNKNOWN_SOURCE_CHAIN_SELECTOR));
 
     let source_chain_config = smart_table::borrow(&state.source_chain_configs, source_chain_selector);
@@ -425,15 +426,23 @@ module ccip::offramp {
   }
 
   public entry fun apply_source_chain_config_updates(caller: &signer, source_chain_selectors: vector<u64>, source_chain_is_enabled: vector<bool>) acquires OffRampState {
-    ownable::assert_only_owner(signer::address_of(caller), &borrow_global<OffRampState>(@ccip).ownable_state);
+    ownable::assert_only_owner(signer::address_of(caller), &borrow_state().ownable_state);
 
     apply_source_chain_config_updates_unchecked(source_chain_selectors, source_chain_is_enabled)
   }
 
   public entry fun set_dynamic_config(caller: &signer, permissionless_execution_threshold_secs: u32) acquires OffRampState {
-    ownable::assert_only_owner(signer::address_of(caller), &borrow_global<OffRampState>(@ccip).ownable_state);
+    ownable::assert_only_owner(signer::address_of(caller), &borrow_state().ownable_state);
 
     set_dynamic_config_unchecked(permissionless_execution_threshold_secs)
+  }
+
+  inline fun borrow_state(): &OffRampState {
+    borrow_global<OffRampState>(@ccip)
+  }
+
+  inline fun borrow_state_mut(): &mut OffRampState {
+    borrow_global_mut<OffRampState>(@ccip)
   }
 
   inline fun execute_single_message(message: &Any2AptosRampMessage, offchain_token_data: &vector<vector<u8>>): Option<u128> {
@@ -442,7 +451,7 @@ module ccip::offramp {
   }
 
   inline fun set_dynamic_config_unchecked(permissionless_execution_threshold_secs: u32) acquires OffRampState {
-    let state = borrow_global_mut<OffRampState>(@ccip);
+    let state = borrow_state_mut();
     state.permissionless_execution_threshold_secs = permissionless_execution_threshold_secs;
     event::emit(DynamicConfigSet { permissionless_execution_threshold_secs });
   }
@@ -452,7 +461,7 @@ module ccip::offramp {
     source_chain_selectors: vector<u64>,
     source_chain_is_enabled: vector<bool>,
   ) acquires OffRampState {
-    let state = borrow_global_mut<OffRampState>(@ccip);
+    let state = borrow_state_mut();
 
     vector::zip_ref(&source_chain_selectors, &source_chain_is_enabled, |source_chain_selector, is_enabled| {
       let source_chain_selector: u64 = *source_chain_selector;
@@ -575,7 +584,7 @@ module ccip::offramp {
     signers: vector<vector<u8>>,
     transmitters: vector<address>,
   ) acquires OffRampState {
-    let state = borrow_global_mut<OffRampState>(@ccip);
+    let state = borrow_state_mut();
     ocr3_base::set_ocr3_config(
       signer::address_of(caller),
       &state.ownable_state,
@@ -590,24 +599,24 @@ module ccip::offramp {
 
   #[view]
   public fun latest_config_details(ocr_plugin_type: u8): (vector<u8>, u8, u8, bool, vector<vector<u8>>, vector<address>) acquires OffRampState {
-    let state = borrow_global<OffRampState>(@ccip);
+    let state = borrow_state();
     ocr3_base::latest_config_details(&state.ocr3_base_state, ocr_plugin_type)
   }
 
   // ccip::ownable functions
   #[view]
   public fun owner(): address acquires OffRampState {
-    let state = borrow_global<OffRampState>(@ccip);
+    let state = borrow_state();
     ownable::owner(&state.ownable_state)
   }
 
   public entry fun transfer_ownership(caller: &signer, to: address) acquires OffRampState {
-    let state = borrow_global_mut<OffRampState>(@ccip);
+    let state = borrow_state_mut();
     ownable::transfer_ownership(signer::address_of(caller), &mut state.ownable_state, to)
   }
 
   public entry fun accept_ownership(caller: &signer) acquires OffRampState {
-    let state = borrow_global_mut<OffRampState>(@ccip);
+    let state = borrow_state_mut();
     ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
   }
 }
