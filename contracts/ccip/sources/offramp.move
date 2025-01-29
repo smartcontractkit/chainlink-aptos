@@ -1,6 +1,5 @@
 module ccip::offramp {
   use std::aptos_hash;
-  use std::bcs;
   use std::error;
   use std::event;
   use std::option::{Self, Option};
@@ -331,7 +330,7 @@ module ccip::offramp {
       return
     };
 
-    // TODO: message.header.nonce handling
+    // TODO(nonce): message.header.nonce handling
 
     assert!(vector::length(&execution_report.message.token_amounts) == vector::length(&execution_report.offchain_token_data), error::invalid_argument(E_TOKEN_DATA_MISMATCH));
 
@@ -359,7 +358,7 @@ module ccip::offramp {
       let ocr_sequence_number = ocr3_base::deserialize_sequence_bytes(*vector::borrow(&report_context, 1));
       if (state.latest_price_sequence_number < ocr_sequence_number) {
         state.latest_price_sequence_number = ocr_sequence_number;
-        // TODO: handle price updates
+        // TODO(fee-quoter): handle price updates
       } else {
         assert!(vector::length(&commit_report.merkle_roots) > 0, error::invalid_argument(E_STALE_COMMIT_REPORT));
       }
@@ -494,24 +493,10 @@ module ccip::offramp {
     dest_chain_selector: u64,
   ): vector<u8> {
     let packed = vector[];
-    vector::append(&mut packed, aptos_hash::keccak256(b"Any2AptosMessageHashV1"));
-
-    let source_chain_selector_bytes = bcs::to_bytes(&source_chain_selector);
-    while (vector::length(&source_chain_selector_bytes) < 32) {
-      vector::push_back(&mut source_chain_selector_bytes, 0);
-    };
-    // reverse to convert from little endian to big endian, and put padded zero's
-    // at the front.
-    vector::reverse(&mut source_chain_selector_bytes);
-    vector::append(&mut packed, source_chain_selector_bytes);
-
-    let dest_chain_selector_bytes = bcs::to_bytes(&dest_chain_selector);
-    while (vector::length(&dest_chain_selector_bytes) < 32) {
-      vector::push_back(&mut dest_chain_selector_bytes, 0);
-    };
-    vector::reverse(&mut dest_chain_selector_bytes);
-    vector::append(&mut packed, dest_chain_selector_bytes);
-
+    eth_abi::encode_bytes32(&mut packed, aptos_hash::keccak256(b"Any2AptosMessageHashV1"));
+    eth_abi::encode_u64(&mut packed, source_chain_selector);
+    eth_abi::encode_u64(&mut packed, dest_chain_selector);
+    eth_abi::encode_address(&mut packed, @ccip);
     aptos_hash::keccak256(packed)
   }
 
@@ -574,7 +559,10 @@ module ccip::offramp {
     CommitReport { token_price_updates, gas_price_updates, merkle_roots, offramp_address }
   }
 
+  //
   // ccip::ocr3_base functions
+  //
+
   public entry fun set_ocr3_config(
     caller: &signer,
     config_digest: vector<u8>,
@@ -603,7 +591,10 @@ module ccip::offramp {
     ocr3_base::latest_config_details(&state.ocr3_base_state, ocr_plugin_type)
   }
 
+  //
   // ccip::ownable functions
+  //
+
   #[view]
   public fun owner(): address acquires OffRampState {
     let state = borrow_state();
