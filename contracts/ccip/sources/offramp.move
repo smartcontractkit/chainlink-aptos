@@ -171,7 +171,7 @@ module ccip::offramp {
   const E_STALE_COMMIT_REPORT: u64 = 17;
 
   public fun initialize(
-    publisher: &signer,
+    caller: &signer,
     chain_selector: u64,
     permissionless_execution_threshold_secs: u32,
 
@@ -179,7 +179,7 @@ module ccip::offramp {
     source_chain_selectors: vector<u64>,
     source_chain_is_enabled: vector<bool>,
   ) acquires OffRampState {
-    assert!(signer::address_of(publisher) == @ccip, error::invalid_argument(E_NOT_PUBLISHER));
+    assert!(signer::address_of(caller) == @ccip, error::invalid_argument(E_NOT_PUBLISHER));
     assert!(!exists<OffRampState>(@ccip), error::invalid_argument(E_ALREADY_INITIALIZED));
     assert!(vector::length(&source_chain_selectors) == vector::length(&source_chain_is_enabled), error::invalid_argument(E_SOURCE_CHAIN_SELECTORS_MISMATCH));
 
@@ -196,7 +196,7 @@ module ccip::offramp {
       latest_price_sequence_number: 0,
     };
 
-    move_to(publisher, state);
+    move_to(caller, state);
 
     event::emit(StaticConfigSet { chain_selector });
 
@@ -450,7 +450,7 @@ module ccip::offramp {
     option::none()
   }
 
-  inline fun set_dynamic_config_unchecked(permissionless_execution_threshold_secs: u32) acquires OffRampState {
+  inline fun set_dynamic_config_unchecked(permissionless_execution_threshold_secs: u32) {
     let state = borrow_state_mut();
     state.permissionless_execution_threshold_secs = permissionless_execution_threshold_secs;
     event::emit(DynamicConfigSet { permissionless_execution_threshold_secs });
@@ -460,7 +460,7 @@ module ccip::offramp {
     // pairs of (source chain selector, is enabled)
     source_chain_selectors: vector<u64>,
     source_chain_is_enabled: vector<bool>,
-  ) acquires OffRampState {
+  ) {
     let state = borrow_state_mut();
 
     vector::zip_ref(&source_chain_selectors, &source_chain_is_enabled, |source_chain_selector, is_enabled| {
