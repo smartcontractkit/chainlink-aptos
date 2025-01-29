@@ -13,6 +13,9 @@ module ccip::ocr3_base {
 
   const MAX_NUM_ORACLES: u64 = 256;
 
+  const OCR_PLUGIN_TYPE_COMMIT: u8 = 1;
+  const OCR_PLUGIN_TYPE_EXECUTION: u8 = 2;
+
   struct ConfigInfo has store, drop {
     config_digest: vector<u8>,
     big_f: u8,
@@ -85,6 +88,14 @@ module ccip::ocr3_base {
       signer_oracles: table::new(),
       transmitter_oracles: table::new(),
     }
+  }
+
+  public fun ocr_plugin_type_commit(): u8 {
+    OCR_PLUGIN_TYPE_COMMIT
+  }
+
+  public fun ocr_plugin_type_execution(): u8 {
+    OCR_PLUGIN_TYPE_EXECUTION
   }
 
   public fun set_ocr3_config(
@@ -228,7 +239,7 @@ module ccip::ocr3_base {
   }
 
   // equivalent of uint64(uint256(reportContext[1]))
-  inline fun deserialize_sequence_bytes(sequence_bytes: vector<u8>): u64 {
+  public inline fun deserialize_sequence_bytes(sequence_bytes: vector<u8>): u64 {
     let len = vector::length(&sequence_bytes);
     let result: u64 = 0;
     let i = len - 8;
