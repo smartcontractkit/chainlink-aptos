@@ -1,7 +1,8 @@
 module ccip::offramp {
+  use std::account;
   use std::aptos_hash;
   use std::error;
-  use std::event;
+  use std::event::{Self, EventHandle};
   use std::option::{Self, Option};
   use std::signer;
   use std::smart_table::{Self, SmartTable};
@@ -39,6 +40,14 @@ module ccip::offramp {
     roots: SmartTable<u64, SmartTable<vector<u8>, u64>>,
 
     latest_price_sequence_number: u64,
+
+    static_config_set_events: EventHandle<StaticConfigSet>,
+    dynamic_config_set_events: EventHandle<DynamicConfigSet>,
+    source_chain_config_set_events: EventHandle<SourceChainConfigSet>,
+    skipped_already_executed_events: EventHandle<SkippedAlreadyExecuted>,
+    already_attempted_events: EventHandle<AlreadyAttempted>,
+    execution_state_changed_events: EventHandle<ExecutionStateChanged>,
+    commit_report_accepted_events: EventHandle<CommitReportAccepted>,
   }
 
   struct SourceChainConfig has store, drop {
@@ -82,7 +91,7 @@ module ccip::offramp {
     proof_flag_bits: u256,
   }
 
-  struct CommitReport has store, drop {
+  struct CommitReport has store, drop, copy {
     token_price_updates: vector<TokenPriceUpdate>,
     gas_price_updates: vector<GasPriceUpdate>,
     merkle_roots: vector<MerkleRoot>,
@@ -92,17 +101,17 @@ module ccip::offramp {
     offramp_address: address,
   }
 
-  struct TokenPriceUpdate has store, drop {
+  struct TokenPriceUpdate has store, drop, copy {
     source_token: address,
     usd_per_token: u256,
   }
 
-  struct GasPriceUpdate has store, drop {
+  struct GasPriceUpdate has store, drop, copy {
     dest_chain_selector: u64,
     usd_per_unit_gas: u256,
   }
 
-  struct MerkleRoot has store, drop {
+  struct MerkleRoot has store, drop, copy {
     source_chain_selector: u64,
     min_sequence_number: u64,
     max_sequence_number: u64,
@@ -126,7 +135,7 @@ module ccip::offramp {
   }
 
   #[event]
-  struct SkippedAlreadyExecutedMessage has store, drop {
+  struct SkippedAlreadyExecuted has store, drop {
     source_chain_selector: u64,
     sequence_number: u64,
   }
@@ -193,11 +202,21 @@ module ccip::offramp {
       execution_states: smart_table::new(),
       roots: smart_table::new(),
       latest_price_sequence_number: 0,
+
+      static_config_set_events: account::new_event_handle(caller),
+      dynamic_config_set_events: account::new_event_handle(caller),
+      source_chain_config_set_events: account::new_event_handle(caller),
+      skipped_already_executed_events: account::new_event_handle(caller),
+      already_attempted_events: account::new_event_handle(caller),
+      execution_state_changed_events: account::new_event_handle(caller),
+      commit_report_accepted_events: account::new_event_handle(caller),
     };
 
     move_to(caller, state);
+    let state = borrow_state_mut();
 
     event::emit(StaticConfigSet { chain_selector });
+    event::emit_event(&mut state.static_config_set_events, StaticConfigSet { chain_selector });
 
     set_dynamic_config_unchecked(permissionless_execution_threshold_secs);
     apply_source_chain_config_updates_unchecked(source_chain_selectors, source_chain_is_enabled);
@@ -318,7 +337,8 @@ module ccip::offramp {
     let original_state = *smart_table::borrow(source_chain_execution_states, sequence_number);
 
     if (original_state != EXECUTION_STATE_UNTOUCHED) {
-      event::emit(SkippedAlreadyExecutedMessage { source_chain_selector, sequence_number });
+      event::emit(SkippedAlreadyExecuted { source_chain_selector, sequence_number });
+      event::emit_event(&mut state.skipped_already_executed_events, SkippedAlreadyExecuted { source_chain_selector, sequence_number });
       return
     };
 
@@ -327,6 +347,7 @@ module ccip::offramp {
       assert!(is_old_commit_report, error::permission_denied(E_MANUAL_EXECUTION_NOT_YET_ENABLED));
     } else {
       event::emit(AlreadyAttempted { source_chain_selector, sequence_number });
+      event::emit_event(&mut state.already_attempted_events, AlreadyAttempted { source_chain_selector, sequence_number });
       return
     };
 
@@ -340,6 +361,13 @@ module ccip::offramp {
     *execution_state_ref = EXECUTION_STATE_SUCCESS;
 
     event::emit(ExecutionStateChanged {
+      source_chain_selector,
+      sequence_number,
+      message_id: execution_report.message.header.message_id,
+      message_hash,
+      return_data,
+    });
+    event::emit_event(&mut state.execution_state_changed_events, ExecutionStateChanged {
       source_chain_selector,
       sequence_number,
       message_id: execution_report.message.header.message_id,
@@ -385,6 +413,7 @@ module ccip::offramp {
     });
 
     event::emit(CommitReportAccepted { commit_report });
+    event::emit_event(&mut state.commit_report_accepted_events, CommitReportAccepted { commit_report });
 
     ocr3_base::transmit(&state.ocr3_base_state, signer::address_of(caller), ocr3_base::ocr_plugin_type_commit(), report_context, report, signatures)
   }
@@ -453,6 +482,7 @@ module ccip::offramp {
     let state = borrow_state_mut();
     state.permissionless_execution_threshold_secs = permissionless_execution_threshold_secs;
     event::emit(DynamicConfigSet { permissionless_execution_threshold_secs });
+    event::emit_event(&mut state.dynamic_config_set_events, DynamicConfigSet { permissionless_execution_threshold_secs });
   }
 
   inline fun apply_source_chain_config_updates_unchecked(
@@ -481,6 +511,10 @@ module ccip::offramp {
       config.is_enabled = is_enabled;
 
       event::emit(SourceChainConfigSet {
+        is_enabled: config.is_enabled,
+        min_sequence_number: config.min_sequence_number
+      });
+      event::emit_event(&mut state.source_chain_config_set_events, SourceChainConfigSet {
         is_enabled: config.is_enabled,
         min_sequence_number: config.min_sequence_number
       });
