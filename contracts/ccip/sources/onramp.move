@@ -126,7 +126,7 @@ module ccip::onramp {
     assert!(!exists<OnRampState>(@ccip), error::invalid_argument(E_ALREADY_INITIALIZED));
 
     let state = OnRampState {
-      ownable_state: ownable::new(@ccip, @0x0),
+      ownable_state: ownable::new(caller, @0x0),
       chain_selector,
       allowlist_admin: @0x0,
 

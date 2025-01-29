@@ -192,7 +192,7 @@ module ccip::offramp {
     assert!(vector::length(&source_chain_selectors) == vector::length(&source_chain_is_enabled), error::invalid_argument(E_SOURCE_CHAIN_SELECTORS_MISMATCH));
 
     let state = OffRampState {
-      ownable_state: ownable::new(@ccip, @0x0),
+      ownable_state: ownable::new(caller, @0x0),
       ocr3_base_state: ocr3_base::new(),
 
       chain_selector,
