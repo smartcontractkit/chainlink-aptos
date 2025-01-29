@@ -193,7 +193,7 @@ module ccip::offramp {
 
     let state = OffRampState {
       ownable_state: ownable::new(caller, @0x0),
-      ocr3_base_state: ocr3_base::new(),
+      ocr3_base_state: ocr3_base::new(caller),
 
       chain_selector,
       permissionless_execution_threshold_secs: 0,
@@ -415,7 +415,7 @@ module ccip::offramp {
     event::emit(CommitReportAccepted { commit_report });
     event::emit_event(&mut state.commit_report_accepted_events, CommitReportAccepted { commit_report });
 
-    ocr3_base::transmit(&state.ocr3_base_state, signer::address_of(caller), ocr3_base::ocr_plugin_type_commit(), report_context, report, signatures)
+    ocr3_base::transmit(&mut state.ocr3_base_state, signer::address_of(caller), ocr3_base::ocr_plugin_type_commit(), report_context, report, signatures)
   }
 
   #[view]

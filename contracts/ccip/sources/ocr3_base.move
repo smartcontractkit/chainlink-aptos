@@ -1,10 +1,11 @@
 module ccip::ocr3_base {
+  use std::account;
   use std::aptos_hash;
   use std::bit_vector;
   use std::chain_id;
   use std::ed25519;
   use std::error;
-  use std::event;
+  use std::event::{Self, EventHandle};
   use std::option;
   use std::table::{Self, Table};
   use std::vector;
@@ -42,6 +43,9 @@ module ccip::ocr3_base {
     signer_oracles: Table<u8, vector<ed25519::UnvalidatedPublicKey>>,
     // ocr plugin type -> transmitters
     transmitter_oracles: Table<u8, vector<address>>,
+
+    config_set_events: EventHandle<ConfigSet>,
+    transmitted_events: EventHandle<Transmitted>,
   }
 
   #[event]
@@ -81,12 +85,15 @@ module ccip::ocr3_base {
   const E_INVALID_SIGNATURE: u64 = 19;
   const E_FORKED_CHAIN: u64 = 20;
 
-  public fun new(): OCR3BaseState {
+  public fun new(caller: &signer): OCR3BaseState {
     OCR3BaseState {
       chain_id: chain_id::get(),
       ocr3_configs: table::new(),
       signer_oracles: table::new(),
       transmitter_oracles: table::new(),
+
+      config_set_events: account::new_event_handle(caller),
+      transmitted_events: account::new_event_handle(caller),
     }
   }
 
@@ -163,6 +170,9 @@ module ccip::ocr3_base {
     event::emit(ConfigSet {
       ocr_plugin_type, config_digest, signers, transmitters, big_f
     });
+    event::emit_event(&mut ocr3_state.config_set_events, ConfigSet {
+      ocr_plugin_type, config_digest, signers, transmitters, big_f
+    });
   }
 
   inline fun assign_signer_oracles(signer_oracles: &mut Table<u8, vector<ed25519::UnvalidatedPublicKey>>, ocr_plugin_type: u8, signers: &vector<vector<u8>>) {
@@ -183,7 +193,7 @@ module ccip::ocr3_base {
     table::upsert(transmitter_oracles, ocr_plugin_type, *transmitters);
   }
 
-  public fun transmit(ocr3_state: &OCR3BaseState, transmitter: address, ocr_plugin_type: u8, report_context: vector<vector<u8>>, report: vector<u8>, signatures: vector<vector<u8>>) {
+  public fun transmit(ocr3_state: &mut OCR3BaseState, transmitter: address, ocr_plugin_type: u8, report_context: vector<vector<u8>>, report: vector<u8>, signatures: vector<vector<u8>>) {
     let ocr_config = table::borrow(&ocr3_state.ocr3_configs, ocr_plugin_type);
     let config_info = &ocr_config.config_info;
 
@@ -214,6 +224,11 @@ module ccip::ocr3_base {
 
     let sequence_number: u64 = deserialize_sequence_bytes(sequence_bytes);
     event::emit(Transmitted {
+      ocr_plugin_type,
+      config_digest,
+      sequence_number
+    });
+    event::emit_event(&mut ocr3_state.transmitted_events, Transmitted {
       ocr_plugin_type,
       config_digest,
       sequence_number
