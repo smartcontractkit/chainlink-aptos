@@ -14,8 +14,6 @@ module ccip::token_admin_registry {
 
     friend ccip::token_admin_dispatcher;
 
-    const TOKEN_POOL_MODULE_NAME: vector<u8> = b"ccip_token_pool";
-
     const EXECUTION_STATE_IDLE: u8 = 1;
     const EXECUTION_STATE_LOCK_OR_BURN: u8 = 2;
     const EXECUTION_STATE_RELEASE_OR_MINT: u8 = 3;
@@ -110,6 +108,7 @@ module ccip::token_admin_registry {
 
     public fun register_admin<ProofType: drop>(
         token_pool_signer: &signer,
+        token_pool_module_name: vector<u8>,
         fungible_asset_metadata: Object<Metadata>,
         _proof: ProofType
     ) acquires TokenAdminRegistryState {
@@ -131,7 +130,7 @@ module ccip::token_admin_registry {
         let lock_or_burn_function =
             function_info::new_function_info(
                 token_pool_signer,
-                string::utf8(TOKEN_POOL_MODULE_NAME),
+                string::utf8(token_pool_module_name),
                 string::utf8(b"lock_or_burn")
             );
         let proof_typeinfo = type_info::type_of<ProofType>();
@@ -140,14 +139,14 @@ module ccip::token_admin_registry {
             error::invalid_argument(E_PROOF_NOT_AT_TOKEN_POOL_ADDRESS)
         );
         assert!(
-            type_info::module_name(&proof_typeinfo) == TOKEN_POOL_MODULE_NAME,
+            type_info::module_name(&proof_typeinfo) == token_pool_module_name,
             error::invalid_argument(E_PROOF_NOT_IN_TOKEN_POOL_MODULE)
         );
 
         let release_or_mint_function =
             function_info::new_function_info(
                 token_pool_signer,
-                string::utf8(TOKEN_POOL_MODULE_NAME),
+                string::utf8(token_pool_module_name),
                 string::utf8(b"release_or_mint")
             );
 
