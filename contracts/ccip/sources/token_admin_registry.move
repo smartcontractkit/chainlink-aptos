@@ -75,8 +75,18 @@ module ccip::token_admin_registry {
     const E_DUPLICATE_PROOF_TYPES: u64 = 7;
     const E_PROOF_NOT_IN_TOKEN_POOL_MODULE: u64 = 8;
     const E_PROOF_NOT_AT_TOKEN_POOL_ADDRESS: u64 = 9;
-    const E_EXECUTING_ASSERTION_FAILED: u64 = 10;
-    const E_UNKNOWN_PROOF_TYPE: u64 = 11;
+    const E_UNKNOWN_PROOF_TYPE: u64 = 10;
+    const E_NOT_IN_IDLE_STATE: u64 = 11;
+    const E_NOT_IN_LOCK_OR_BURN_STATE: u64 = 12;
+    const E_NOT_IN_RELEASE_OR_MINT_STATE: u64 = 13;
+    const E_NON_EMPTY_LOCK_OR_BURN_INPUT: u64 = 14;
+    const E_NON_EMPTY_LOCK_OR_BURN_OUTPUT: u64 = 15;
+    const E_NON_EMPTY_RELEASE_OR_MINT_INPUT: u64 = 16;
+    const E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT: u64 = 17;
+    const E_MISSING_LOCK_OR_BURN_INPUT: u64 = 18;
+    const E_MISSING_LOCK_OR_BURN_OUTPUT: u64 = 19;
+    const E_MISSING_RELEASE_OR_MINT_INPUT: u64 = 20;
+    const E_MISSING_RELEASE_OR_MINT_OUTPUT: u64 = 21;
 
     fun init_module(publisher: &signer) {
         initialize(publisher)
@@ -256,23 +266,23 @@ module ccip::token_admin_registry {
 
         assert!(
             registration.execution_state == EXECUTION_STATE_LOCK_OR_BURN,
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NOT_IN_LOCK_OR_BURN_STATE)
         );
         assert!(
             option::is_some(&registration.executing_lock_or_burn_input),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_MISSING_LOCK_OR_BURN_INPUT)
         );
         assert!(
             option::is_none(&registration.executing_lock_or_burn_output),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_OUTPUT)
         );
         assert!(
             option::is_none(&registration.executing_release_or_mint_input),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_INPUT)
         );
         assert!(
             option::is_none(&registration.executing_release_or_mint_output),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT)
         );
 
         option::extract(&mut registration.executing_lock_or_burn_input)
@@ -293,23 +303,23 @@ module ccip::token_admin_registry {
 
         assert!(
             registration.execution_state == EXECUTION_STATE_LOCK_OR_BURN,
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NOT_IN_LOCK_OR_BURN_STATE)
         );
         assert!(
             option::is_none(&registration.executing_lock_or_burn_input),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_INPUT)
         );
         assert!(
             option::is_none(&registration.executing_lock_or_burn_output),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_OUTPUT)
         );
         assert!(
             option::is_none(&registration.executing_release_or_mint_input),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_INPUT)
         );
         assert!(
             option::is_none(&registration.executing_release_or_mint_output),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT)
         );
 
         option::fill(
@@ -330,23 +340,23 @@ module ccip::token_admin_registry {
 
         assert!(
             registration.execution_state == EXECUTION_STATE_RELEASE_OR_MINT,
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NOT_IN_RELEASE_OR_MINT_STATE)
         );
         assert!(
             option::is_some(&registration.executing_release_or_mint_input),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_MISSING_RELEASE_OR_MINT_INPUT)
         );
         assert!(
             option::is_none(&registration.executing_release_or_mint_output),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT)
         );
         assert!(
             option::is_none(&registration.executing_lock_or_burn_input),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_INPUT)
         );
         assert!(
             option::is_none(&registration.executing_lock_or_burn_output),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_OUTPUT)
         );
 
         option::extract(&mut registration.executing_release_or_mint_input)
@@ -364,23 +374,23 @@ module ccip::token_admin_registry {
 
         assert!(
             registration.execution_state == EXECUTION_STATE_RELEASE_OR_MINT,
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NOT_IN_RELEASE_OR_MINT_STATE)
         );
         assert!(
             option::is_none(&registration.executing_release_or_mint_input),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_INPUT)
         );
         assert!(
             option::is_none(&registration.executing_release_or_mint_output),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT)
         );
         assert!(
             option::is_none(&registration.executing_lock_or_burn_input),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_INPUT)
         );
         assert!(
             option::is_none(&registration.executing_lock_or_burn_output),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_OUTPUT)
         );
 
         option::fill(
@@ -447,23 +457,23 @@ module ccip::token_admin_registry {
 
         assert!(
             registration.execution_state == EXECUTION_STATE_IDLE,
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NOT_IN_IDLE_STATE)
         );
         assert!(
             option::is_none(&registration.executing_lock_or_burn_input),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_INPUT)
         );
         assert!(
             option::is_none(&registration.executing_lock_or_burn_output),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_OUTPUT)
         );
         assert!(
             option::is_none(&registration.executing_release_or_mint_input),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_INPUT)
         );
         assert!(
             option::is_none(&registration.executing_release_or_mint_output),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT)
         );
 
         registration.execution_state = EXECUTION_STATE_LOCK_OR_BURN;
@@ -482,23 +492,23 @@ module ccip::token_admin_registry {
 
         assert!(
             registration.execution_state == EXECUTION_STATE_LOCK_OR_BURN,
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NOT_IN_LOCK_OR_BURN_STATE)
         );
         assert!(
             option::is_none(&registration.executing_lock_or_burn_input),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_INPUT)
         );
         assert!(
             option::is_some(&registration.executing_lock_or_burn_output),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_MISSING_LOCK_OR_BURN_OUTPUT)
         );
         assert!(
             option::is_none(&registration.executing_release_or_mint_input),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_INPUT)
         );
         assert!(
             option::is_none(&registration.executing_release_or_mint_output),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT)
         );
 
         registration.execution_state = EXECUTION_STATE_IDLE;
@@ -530,23 +540,23 @@ module ccip::token_admin_registry {
 
         assert!(
             registration.execution_state == EXECUTION_STATE_IDLE,
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NOT_IN_IDLE_STATE)
         );
         assert!(
             option::is_none(&registration.executing_release_or_mint_input),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_INPUT)
         );
         assert!(
             option::is_none(&registration.executing_release_or_mint_output),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT)
         );
         assert!(
             option::is_none(&registration.executing_lock_or_burn_input),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_INPUT)
         );
         assert!(
             option::is_none(&registration.executing_lock_or_burn_output),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_OUTPUT)
         );
 
         registration.execution_state = EXECUTION_STATE_RELEASE_OR_MINT;
@@ -575,23 +585,23 @@ module ccip::token_admin_registry {
 
         assert!(
             registration.execution_state == EXECUTION_STATE_RELEASE_OR_MINT,
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NOT_IN_RELEASE_OR_MINT_STATE)
         );
         assert!(
             option::is_none(&registration.executing_release_or_mint_input),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_INPUT)
         );
         assert!(
             option::is_some(&registration.executing_release_or_mint_output),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_MISSING_RELEASE_OR_MINT_OUTPUT)
         );
         assert!(
             option::is_none(&registration.executing_lock_or_burn_input),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_INPUT)
         );
         assert!(
             option::is_none(&registration.executing_lock_or_burn_output),
-            error::invalid_state(E_EXECUTING_ASSERTION_FAILED)
+            error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_OUTPUT)
         );
 
         registration.execution_state = EXECUTION_STATE_IDLE;
