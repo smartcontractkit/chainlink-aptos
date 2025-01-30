@@ -28,9 +28,8 @@ module ccip::token_admin_registry {
 
     struct TokenPoolRegistration has key, store, drop {
         lock_or_burn_function: FunctionInfo,
-        lock_or_burn_proof_typeinfo: TypeInfo,
         release_or_mint_function: FunctionInfo,
-        release_or_mint_proof_typeinfo: TypeInfo,
+        proof_typeinfo: TypeInfo,
         dispatch_metadata: Object<Metadata>,
         dispatch_deposit_fungible_store: Object<FungibleStore>,
         dispatch_extend_ref: ExtendRef,
@@ -107,11 +106,10 @@ module ccip::token_admin_registry {
         move_to(caller, state);
     }
 
-    public fun register_admin<LockOrBurnProofType: drop, ReleaseOrMintProofType: drop>(
+    public fun register_admin<ProofType: drop>(
         token_pool_signer: &signer,
         fungible_asset_metadata: Object<Metadata>,
-        _lock_or_burn_proof: LockOrBurnProofType,
-        _release_or_mint_proof: ReleaseOrMintProofType
+        _proof: ProofType
     ) acquires TokenAdminRegistryState {
         assert!(
             object::object_exists<Metadata>(
@@ -134,15 +132,13 @@ module ccip::token_admin_registry {
                 string::utf8(TOKEN_POOL_MODULE_NAME),
                 string::utf8(b"lock_or_burn")
             );
-        let lock_or_burn_proof_typeinfo = type_info::type_of<LockOrBurnProofType>();
+        let proof_typeinfo = type_info::type_of<ProofType>();
         assert!(
-            type_info::account_address(&lock_or_burn_proof_typeinfo)
-                == token_pool_address,
+            type_info::account_address(&proof_typeinfo) == token_pool_address,
             error::invalid_argument(E_PROOF_NOT_AT_TOKEN_POOL_ADDRESS)
         );
         assert!(
-            type_info::module_name(&lock_or_burn_proof_typeinfo)
-                == TOKEN_POOL_MODULE_NAME,
+            type_info::module_name(&proof_typeinfo) == TOKEN_POOL_MODULE_NAME,
             error::invalid_argument(E_PROOF_NOT_IN_TOKEN_POOL_MODULE)
         );
 
@@ -152,22 +148,6 @@ module ccip::token_admin_registry {
                 string::utf8(TOKEN_POOL_MODULE_NAME),
                 string::utf8(b"release_or_mint")
             );
-        let release_or_mint_proof_typeinfo = type_info::type_of<ReleaseOrMintProofType>();
-        assert!(
-            type_info::account_address(&release_or_mint_proof_typeinfo)
-                == token_pool_address,
-            error::invalid_argument(E_PROOF_NOT_AT_TOKEN_POOL_ADDRESS)
-        );
-        assert!(
-            type_info::module_name(&release_or_mint_proof_typeinfo)
-                == TOKEN_POOL_MODULE_NAME,
-            error::invalid_argument(E_PROOF_NOT_IN_TOKEN_POOL_MODULE)
-        );
-
-        assert!(
-            lock_or_burn_proof_typeinfo != release_or_mint_proof_typeinfo,
-            error::invalid_argument(E_DUPLICATE_PROOF_TYPES)
-        );
 
         let state = borrow_state_mut();
         let dispatch_signer = object::generate_signer_for_extending(&state.extend_ref);
@@ -210,9 +190,8 @@ module ccip::token_admin_registry {
             token_pool_signer,
             TokenPoolRegistration {
                 lock_or_burn_function,
-                lock_or_burn_proof_typeinfo,
                 release_or_mint_function,
-                release_or_mint_proof_typeinfo,
+                proof_typeinfo,
                 dispatch_metadata,
                 dispatch_deposit_fungible_store,
                 dispatch_extend_ref,
@@ -264,14 +243,13 @@ module ccip::token_admin_registry {
         abort error::permission_denied(E_NOT_FUNGIBLE_ASSET_OWNER)
     }
 
-    public fun get_lock_or_burn_input<LockOrBurnProofType: drop>(
-        token_pool_address: address, _lock_or_burn_proof: LockOrBurnProofType
-    ): LockOrBurnInput acquires TokenPoolRegistration, {
+    public fun get_lock_or_burn_input<ProofType: drop>(
+        token_pool_address: address, _proof: ProofType
+    ): LockOrBurnInput acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
 
         assert!(
-            type_info::type_of<LockOrBurnProofType>()
-                == registration.lock_or_burn_proof_typeinfo,
+            type_info::type_of<ProofType>() == registration.proof_typeinfo,
             error::permission_denied(E_UNKNOWN_PROOF_TYPE)
         );
 
@@ -299,17 +277,16 @@ module ccip::token_admin_registry {
         option::extract(&mut registration.executing_lock_or_burn_input)
     }
 
-    public fun set_lock_or_burn_output<LockOrBurnProofType: drop>(
+    public fun set_lock_or_burn_output<ProofType: drop>(
         token_pool_address: address,
-        _lock_or_burn_proof: LockOrBurnProofType,
+        _proof: ProofType,
         dest_token_address: vector<u8>,
         dest_pool_data: vector<u8>
     ) acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
 
         assert!(
-            type_info::type_of<LockOrBurnProofType>()
-                == registration.lock_or_burn_proof_typeinfo,
+            type_info::type_of<ProofType>() == registration.proof_typeinfo,
             error::permission_denied(E_UNKNOWN_PROOF_TYPE)
         );
 
@@ -340,14 +317,13 @@ module ccip::token_admin_registry {
         )
     }
 
-    public fun get_release_or_mint_input<ReleaseOrMintProofType: drop>(
-        token_pool_address: address, _release_or_mint_proof: ReleaseOrMintProofType
+    public fun get_release_or_mint_input<ProofType: drop>(
+        token_pool_address: address, _proof: ProofType
     ): ReleaseOrMintInput acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
 
         assert!(
-            type_info::type_of<ReleaseOrMintProofType>()
-                == registration.release_or_mint_proof_typeinfo,
+            type_info::type_of<ProofType>() == registration.proof_typeinfo,
             error::permission_denied(E_UNKNOWN_PROOF_TYPE)
         );
 
@@ -375,16 +351,13 @@ module ccip::token_admin_registry {
         option::extract(&mut registration.executing_release_or_mint_input)
     }
 
-    public fun set_release_or_mint_output<ReleaseOrMintProofType: drop>(
-        token_pool_address: address,
-        _release_or_mint_proof: ReleaseOrMintProofType,
-        destination_amount: u256
+    public fun set_release_or_mint_output<ProofType: drop>(
+        token_pool_address: address, _proof: ProofType, destination_amount: u256
     ) acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
 
         assert!(
-            type_info::type_of<ReleaseOrMintProofType>()
-                == registration.release_or_mint_proof_typeinfo,
+            type_info::type_of<ProofType>() == registration.proof_typeinfo,
             error::permission_denied(E_UNKNOWN_PROOF_TYPE)
         );
 
