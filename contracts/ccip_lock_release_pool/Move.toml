@@ -1,0 +1,20 @@
+[package]
+name = "ChainlinkCCIPTokenPool"
+version = "1.0.0"
+authors = []
+
+[addresses]
+ccip = "_"
+ccip_lock_release_pool = "_"
+local_token = "_"
+
+[dev-addresses]
+ccip = "0x100"
+ccip_lock_release_pool = "0x101"
+local_token = "0x102"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "mainnet", subdir = "aptos-move/framework/aptos-framework" }
+ChainlinkCCIP = { local = "../ccip" }
+
+[dev-dependencies]
