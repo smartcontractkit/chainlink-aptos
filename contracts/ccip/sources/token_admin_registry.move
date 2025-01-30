@@ -62,8 +62,10 @@ module ccip::token_admin_registry {
         offchain_token_data: vector<u8>
     }
 
+    // TODO: consider removing ReleaseOrMintOutput, it exists only for a consistent UX across lock and release,
+    // since the withdraw() call's FungibleAsset would have the same amount.
     struct ReleaseOrMintOutput has store, drop {
-        destination_amount: u256
+        destination_amount: u64
     }
 
     const E_NOT_PUBLISHER: u64 = 1;
@@ -352,7 +354,7 @@ module ccip::token_admin_registry {
     }
 
     public fun set_release_or_mint_output<ProofType: drop>(
-        token_pool_address: address, _proof: ProofType, destination_amount: u256
+        token_pool_address: address, _proof: ProofType, destination_amount: u64
     ) acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
 
@@ -569,7 +571,7 @@ module ccip::token_admin_registry {
 
     public(friend) fun finish_release_or_mint(
         token_pool_address: address
-    ): u256 acquires TokenPoolRegistration {
+    ): u64 acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
 
         assert!(

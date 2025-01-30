@@ -1,11 +1,14 @@
 module ccip::token_admin_dispatcher {
     use std::dispatchable_fungible_asset;
-    use std::fungible_asset::FungibleAsset;
+    use std::error;
+    use std::fungible_asset::{Self, FungibleAsset};
 
     use ccip::token_admin_registry;
 
     friend ccip::onramp;
     friend ccip::offramp;
+
+    const E_WITHDRAW_AMOUNT_MISMATCH: u64 = 1;
 
     public(friend) fun dispatch_lock_or_burn(
         token_pool_address: address,
@@ -36,7 +39,7 @@ module ccip::token_admin_dispatcher {
         source_pool_address: vector<u8>,
         source_pool_data: vector<u8>,
         offchain_token_data: vector<u8>
-    ): (FungibleAsset, u256) {
+    ): (FungibleAsset, u64) {
         let (dispatch_owner, dispatch_fungible_store) =
             token_admin_registry::start_release_or_mint(
                 token_pool_address,
@@ -55,6 +58,13 @@ module ccip::token_admin_dispatcher {
 
         let destination_amount =
             token_admin_registry::finish_release_or_mint(token_pool_address);
+
+        let fa_amount = fungible_asset::amount(&fa);
+
+        assert!(
+            destination_amount == fa_amount,
+            error::invalid_state(E_WITHDRAW_AMOUNT_MISMATCH)
+        );
 
         (fa, destination_amount)
     }
