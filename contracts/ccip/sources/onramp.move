@@ -115,7 +115,7 @@ module ccip::onramp {
         dest_chain_selectors: vector<u64>,
         dest_chain_enabled: vector<bool>,
         dest_chain_allowlist_enabled: vector<bool>
-    ) acquires OnRampState {
+    ) {
         state_object::assert_can_initialize(caller);
 
         assert!(
@@ -141,13 +141,16 @@ module ccip::onramp {
             )
         };
 
-        move_to(&state_object_signer, state);
+        set_dynamic_config_internal(&mut state, allowlist_admin);
 
-        set_dynamic_config_unchecked(allowlist_admin);
-
-        apply_dest_chain_config_updates_unchecked(
-            dest_chain_selectors, dest_chain_enabled, dest_chain_allowlist_enabled
+        apply_dest_chain_config_updates_internal(
+            &mut state,
+            dest_chain_selectors,
+            dest_chain_enabled,
+            dest_chain_allowlist_enabled
         );
+
+        move_to(&state_object_signer, state);
     }
 
     #[view]
@@ -160,17 +163,6 @@ module ccip::onramp {
         let dest_chain_config =
             smart_table::borrow(&state.dest_chain_configs, dest_chain_selector);
         dest_chain_config.sequence_number + 1
-    }
-
-    inline fun set_dynamic_config_unchecked(allowlist_admin: address) {
-        let state = borrow_state_mut();
-        state.allowlist_admin = allowlist_admin;
-
-        event::emit(ConfigSet { chain_selector: state.chain_selector, allowlist_admin });
-        event::emit_event(
-            &mut state.config_set_events,
-            ConfigSet { chain_selector: state.chain_selector, allowlist_admin }
-        );
     }
 
     public fun ccip_send(
@@ -289,11 +281,10 @@ module ccip::onramp {
     public entry fun set_dynamic_config(
         caller: &signer, allowlist_admin: address
     ) acquires OnRampState {
-        ownable::assert_only_owner(
-            signer::address_of(caller), &borrow_state().ownable_state
-        );
+        let state = borrow_state_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
-        set_dynamic_config_unchecked(allowlist_admin)
+        set_dynamic_config_internal(state, allowlist_admin)
     }
 
     public entry fun apply_dest_chain_config_updates(
@@ -302,12 +293,14 @@ module ccip::onramp {
         dest_chain_enabled: vector<bool>,
         dest_chain_allowlist_enabled: vector<bool>
     ) acquires OnRampState {
-        ownable::assert_only_owner(
-            signer::address_of(caller), &borrow_state().ownable_state
-        );
+        let state = borrow_state_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
-        apply_dest_chain_config_updates_unchecked(
-            dest_chain_selectors, dest_chain_enabled, dest_chain_allowlist_enabled
+        apply_dest_chain_config_updates_internal(
+            state,
+            dest_chain_selectors,
+            dest_chain_enabled,
+            dest_chain_allowlist_enabled
         )
     }
 
@@ -470,6 +463,18 @@ module ccip::onramp {
         };
     }
 
+    inline fun set_dynamic_config_internal(
+        state: &mut OnRampState, allowlist_admin: address
+    ) {
+        state.allowlist_admin = allowlist_admin;
+
+        event::emit(ConfigSet { chain_selector: state.chain_selector, allowlist_admin });
+        event::emit_event(
+            &mut state.config_set_events,
+            ConfigSet { chain_selector: state.chain_selector, allowlist_admin }
+        );
+    }
+
     inline fun calculate_metadata_hash(
         source_chain_selector: u64, dest_chain_selector: u64
     ): vector<u8> {
@@ -533,7 +538,8 @@ module ccip::onramp {
         aptos_hash::keccak256(outer_hash)
     }
 
-    inline fun apply_dest_chain_config_updates_unchecked(
+    inline fun apply_dest_chain_config_updates_internal(
+        state: &mut OnRampState,
         dest_chain_selectors: vector<u64>,
         dest_chain_enabled: vector<bool>,
         dest_chain_allowlist_enabled: vector<bool>
@@ -547,8 +553,6 @@ module ccip::onramp {
             dest_chains_len == vector::length(&dest_chain_allowlist_enabled),
             error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
         );
-
-        let state = borrow_state_mut();
 
         let i = 0;
         while (i < dest_chains_len) {

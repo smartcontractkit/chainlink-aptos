@@ -187,7 +187,7 @@ module ccip::offramp {
         // pairs of (source chain selector, is enabled)
         source_chain_selectors: vector<u64>,
         source_chain_is_enabled: vector<bool>
-    ) acquires OffRampState {
+    ) {
         state_object::assert_can_initialize(caller);
 
         assert!(
@@ -224,18 +224,17 @@ module ccip::offramp {
             commit_report_accepted_events: account::new_event_handle(&state_object_signer)
         };
 
-        move_to(&state_object_signer, state);
-        let state = borrow_state_mut();
-
         event::emit(StaticConfigSet { chain_selector });
         event::emit_event(
             &mut state.static_config_set_events, StaticConfigSet { chain_selector }
         );
 
-        set_dynamic_config_unchecked(permissionless_execution_threshold_secs);
-        apply_source_chain_config_updates_unchecked(
-            source_chain_selectors, source_chain_is_enabled
+        set_dynamic_config_internal(&mut state, permissionless_execution_threshold_secs);
+        apply_source_chain_config_updates_internal(
+            &mut state, source_chain_selectors, source_chain_is_enabled
         );
+
+        move_to(&state_object_signer, state);
     }
 
     #[view]
@@ -629,23 +628,21 @@ module ccip::offramp {
         source_chain_selectors: vector<u64>,
         source_chain_is_enabled: vector<bool>
     ) acquires OffRampState {
-        ownable::assert_only_owner(
-            signer::address_of(caller), &borrow_state().ownable_state
-        );
+        let state = borrow_state_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
-        apply_source_chain_config_updates_unchecked(
-            source_chain_selectors, source_chain_is_enabled
+        apply_source_chain_config_updates_internal(
+            state, source_chain_selectors, source_chain_is_enabled
         )
     }
 
     public entry fun set_dynamic_config(
         caller: &signer, permissionless_execution_threshold_secs: u32
     ) acquires OffRampState {
-        ownable::assert_only_owner(
-            signer::address_of(caller), &borrow_state().ownable_state
-        );
+        let state = borrow_state_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
-        set_dynamic_config_unchecked(permissionless_execution_threshold_secs)
+        set_dynamic_config_internal(state, permissionless_execution_threshold_secs)
     }
 
     inline fun borrow_state(): &OffRampState {
@@ -663,10 +660,9 @@ module ccip::offramp {
         option::none()
     }
 
-    inline fun set_dynamic_config_unchecked(
-        permissionless_execution_threshold_secs: u32
+    inline fun set_dynamic_config_internal(
+        state: &mut OffRampState, permissionless_execution_threshold_secs: u32
     ) {
-        let state = borrow_state_mut();
         state.permissionless_execution_threshold_secs = permissionless_execution_threshold_secs;
         event::emit(DynamicConfigSet { permissionless_execution_threshold_secs });
         event::emit_event(
@@ -675,13 +671,12 @@ module ccip::offramp {
         );
     }
 
-    inline fun apply_source_chain_config_updates_unchecked(
+    inline fun apply_source_chain_config_updates_internal(
+        state: &mut OffRampState,
         // pairs of (source chain selector, is enabled)
         source_chain_selectors: vector<u64>,
         source_chain_is_enabled: vector<bool>
     ) {
-        let state = borrow_state_mut();
-
         vector::zip_ref(
             &source_chain_selectors,
             &source_chain_is_enabled,
