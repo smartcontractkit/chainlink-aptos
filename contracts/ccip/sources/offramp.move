@@ -179,7 +179,7 @@ module ccip::offramp {
     const E_ROOT_ALREADY_COMMITTED: u64 = 16;
     const E_STALE_COMMIT_REPORT: u64 = 17;
 
-    public fun initialize(
+    public entry fun initialize(
         caller: &signer,
         chain_selector: u64,
         permissionless_execution_threshold_secs: u32,

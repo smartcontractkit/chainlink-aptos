@@ -108,7 +108,7 @@ module ccip::onramp {
     const E_INVALID_ALLOWLIST_REQUEST: u64 = 9;
     const E_INVALID_ALLOWLIST_ADDRESS: u64 = 10;
 
-    public fun initialize(
+    public entry fun initialize(
         caller: &signer,
         chain_selector: u64,
         allowlist_admin: address,

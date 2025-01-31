@@ -106,10 +106,11 @@ module ccip::token_admin_registry {
     const E_FUNGIBLE_ASSET_ALREADY_REGISTERED: u64 = 23;
 
     fun init_module(publisher: &signer) {
+        // Automatically initialized on deployment.
         initialize(publisher)
     }
 
-    public fun initialize(caller: &signer) {
+    fun initialize(caller: &signer) {
         assert!(
             signer::address_of(caller) == @ccip,
             error::invalid_argument(E_NOT_PUBLISHER)
