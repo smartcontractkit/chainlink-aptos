@@ -66,6 +66,7 @@ module ccip::token_admin_registry {
     }
 
     struct ReleaseOrMintInput has store, drop {
+        fungible_asset_metadata_address: address,
         sender: vector<u8>,
         remote_chain_selector: u64,
         receiver: address,
@@ -188,9 +189,7 @@ module ccip::token_admin_registry {
 
     #[view]
     public fun get_all_configured_tokens(
-        starting_bucket_index: u64,
-        starting_vector_index: u64,
-        max_count: u64
+        starting_bucket_index: u64, starting_vector_index: u64, max_count: u64
     ): (vector<address>, Option<u64>, Option<u64>) acquires TokenAdminRegistryState {
         // see the SmartTable documentation for descriptions of the function paramters and return values.
         // ref: https://github.com/aptos-labs/aptos-core/blob/6593fb81261f25490ffddc2252a861c994234c2a/aptos-move/framework/aptos-stdlib/sources/data_structures/smart_table.move#L212
@@ -488,6 +487,12 @@ module ccip::token_admin_registry {
     }
 
     // ReleaseOrMintInput accessors
+    public fun get_release_or_mint_fungible_asset_metadata_address(
+        input: &ReleaseOrMintInput
+    ): address {
+        input.fungible_asset_metadata_address
+    }
+
     public fun get_release_or_mint_sender(input: &ReleaseOrMintInput): vector<u8> {
         input.sender
     }
@@ -602,6 +607,7 @@ module ccip::token_admin_registry {
 
     public(friend) fun start_release_or_mint(
         token_pool_address: address,
+        fungible_asset_metadata_address: address,
         sender: vector<u8>,
         remote_chain_selector: u64,
         receiver: address,
@@ -636,6 +642,7 @@ module ccip::token_admin_registry {
         option::fill(
             &mut registration.executing_release_or_mint_input,
             ReleaseOrMintInput {
+                fungible_asset_metadata_address,
                 sender,
                 remote_chain_selector,
                 receiver,

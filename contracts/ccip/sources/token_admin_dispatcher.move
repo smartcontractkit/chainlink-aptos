@@ -32,6 +32,7 @@ module ccip::token_admin_dispatcher {
 
     public(friend) fun dispatch_release_or_mint(
         token_pool_address: address,
+        fungible_asset_metadata_address: address,
         amount: u64,
         sender: vector<u8>,
         remote_chain_selector: u64,
@@ -43,6 +44,7 @@ module ccip::token_admin_dispatcher {
         let (dispatch_owner, dispatch_fungible_store) =
             token_admin_registry::start_release_or_mint(
                 token_pool_address,
+                fungible_asset_metadata_address,
                 sender,
                 remote_chain_selector,
                 receiver,
