@@ -7,8 +7,10 @@ module ccip::token_admin_registry {
     use std::object::{Self, Object, ObjectCore, ExtendRef, TransferRef};
     use std::option::{Self, Option};
     use std::signer;
+    use std::smart_table::{Self, SmartTable};
     use std::string;
     use std::type_info::{Self, TypeInfo};
+    use std::vector;
 
     use ccip::ownable;
 
@@ -21,7 +23,19 @@ module ccip::token_admin_registry {
     struct TokenAdminRegistryState has key, store {
         ownable_state: ownable::OwnableState,
         extend_ref: ExtendRef,
-        transfer_ref: TransferRef
+        transfer_ref: TransferRef,
+
+        // fungible asset metadata address -> TokenConfig
+        // TODO: there were previously raised concerns during an audit that a user could maliciously calculate the bucket for a key and
+        // cause repeated splitting, but we need to retrieve all the keys, which isn't available in Table.
+        // consider other solutions.
+        token_configs: SmartTable<address, TokenConfig>
+    }
+
+    struct TokenConfig has store, drop, copy {
+        token_pool_address: address,
+        administrator: address,
+        pending_administrator: address
     }
 
     struct TokenPoolRegistration has key, store, drop {
@@ -87,6 +101,8 @@ module ccip::token_admin_registry {
     const E_MISSING_LOCK_OR_BURN_OUTPUT: u64 = 19;
     const E_MISSING_RELEASE_OR_MINT_INPUT: u64 = 20;
     const E_MISSING_RELEASE_OR_MINT_OUTPUT: u64 = 21;
+    const E_TOKEN_POOL_NOT_OBJECT: u64 = 22;
+    const E_FUNGIBLE_ASSET_ALREADY_REGISTERED: u64 = 23;
 
     fun init_module(publisher: &signer) {
         initialize(publisher)
@@ -110,14 +126,86 @@ module ccip::token_admin_registry {
         let state = TokenAdminRegistryState {
             ownable_state: ownable::new(caller, @0x0),
             extend_ref,
-            transfer_ref
+            transfer_ref,
+            token_configs: smart_table::new()
         };
 
         move_to(caller, state);
     }
 
-    public fun register_admin<ProofType: drop>(
-        token_pool_signer: &signer,
+    #[view]
+    public fun get_pools(
+        fungible_assets: vector<address>
+    ): vector<address> acquires TokenAdminRegistryState {
+        let state = borrow_state();
+
+        vector::map_ref(
+            &fungible_assets,
+            |fungible_asset_address| {
+                let fungible_asset_address: address = *fungible_asset_address;
+                if (smart_table::contains(&state.token_configs, fungible_asset_address)) {
+                    let token_config =
+                        smart_table::borrow(
+                            &state.token_configs, fungible_asset_address
+                        );
+                    token_config.token_pool_address
+                } else {
+                    // returns @0x0 for assets without token pools.
+                    @0x0
+                }
+            }
+        )
+    }
+
+    #[view]
+    public fun get_pool(fungible_asset: address): address acquires TokenAdminRegistryState {
+        let state = borrow_state();
+        if (smart_table::contains(&state.token_configs, fungible_asset)) {
+            let token_config = smart_table::borrow(&state.token_configs, fungible_asset);
+            token_config.token_pool_address
+        } else {
+            // returns @0x0 for assets without token pools.
+            @0x0
+        }
+    }
+
+    #[view]
+    public fun get_token_config(
+        fungible_asset: address
+    ): (address, address, address) acquires TokenAdminRegistryState {
+        let state = borrow_state();
+        if (smart_table::contains(&state.token_configs, fungible_asset)) {
+            let token_config = smart_table::borrow(&state.token_configs, fungible_asset);
+            (
+                token_config.token_pool_address,
+                token_config.administrator,
+                token_config.pending_administrator
+            )
+        } else {
+            (@0x0, @0x0, @0x0)
+        }
+    }
+
+    #[view]
+    public fun get_all_configured_tokens(
+        starting_bucket_index: u64,
+        starting_vector_index: u64,
+        max_count: u64
+    ): (vector<address>, Option<u64>, Option<u64>) acquires TokenAdminRegistryState {
+        // see the SmartTable documentation for descriptions of the function paramters and return values.
+        // ref: https://github.com/aptos-labs/aptos-core/blob/6593fb81261f25490ffddc2252a861c994234c2a/aptos-move/framework/aptos-stdlib/sources/data_structures/smart_table.move#L212
+
+        let state = borrow_state();
+        smart_table::keys_paginated(
+            &state.token_configs,
+            starting_bucket_index,
+            starting_vector_index,
+            max_count
+        )
+    }
+
+    public fun register_pool<ProofType: drop>(
+        token_pool_account: &signer,
         token_pool_module_name: vector<u8>,
         fungible_asset_metadata: Object<Metadata>,
         _proof: ProofType
@@ -129,17 +217,40 @@ module ccip::token_admin_registry {
             error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
         );
 
-        let token_pool_address = signer::address_of(token_pool_signer);
+        let token_pool_address = signer::address_of(token_pool_account);
         assert!(
             !exists<TokenPoolRegistration>(token_pool_address),
             error::invalid_argument(E_ALREADY_REGISTERED)
         );
 
-        assert_is_fungible_asset_owner(fungible_asset_metadata, token_pool_address);
+        let state = borrow_state_mut();
+
+        assert_can_register(
+            ownable::owner(&state.ownable_state),
+            signer::address_of(token_pool_account),
+            fungible_asset_metadata
+        );
+
+        let fungible_asset_address = object::object_address(&fungible_asset_metadata);
+        assert!(
+            !smart_table::contains(&state.token_configs, fungible_asset_address),
+            error::invalid_argument(E_FUNGIBLE_ASSET_ALREADY_REGISTERED)
+        );
+
+        // the initial administrator will always be the token pool account.
+        // callers can immediately propose a new administrator afterwards if
+        // needed.
+        let token_config = TokenConfig {
+            token_pool_address,
+            administrator: token_pool_address,
+            pending_administrator: @0x0
+        };
+
+        smart_table::add(&mut state.token_configs, fungible_asset_address, token_config);
 
         let lock_or_burn_function =
             function_info::new_function_info(
-                token_pool_signer,
+                token_pool_account,
                 string::utf8(token_pool_module_name),
                 string::utf8(b"lock_or_burn")
             );
@@ -155,12 +266,11 @@ module ccip::token_admin_registry {
 
         let release_or_mint_function =
             function_info::new_function_info(
-                token_pool_signer,
+                token_pool_account,
                 string::utf8(token_pool_module_name),
                 string::utf8(b"release_or_mint")
             );
 
-        let state = borrow_state_mut();
         let dispatch_signer = object::generate_signer_for_extending(&state.extend_ref);
 
         let dispatch_constructor_ref =
@@ -198,7 +308,7 @@ module ccip::token_admin_registry {
         );
 
         move_to(
-            token_pool_signer,
+            token_pool_account,
             TokenPoolRegistration {
                 lock_or_burn_function,
                 release_or_mint_function,
@@ -215,43 +325,6 @@ module ccip::token_admin_registry {
                 executing_release_or_mint_output: option::none()
             }
         );
-    }
-
-    fun assert_is_fungible_asset_owner(
-        fungible_asset_metadata: Object<Metadata>, token_pool_address: address
-    ) {
-        if (object::is_owner(fungible_asset_metadata, token_pool_address)) { return };
-
-        /*
-          We only allow a single token pool at an address. Users can use the CLI `deploy-object` action to put the token pool module
-          at a new object address, or programatically a separate module might want to manage multiple token pools, eg:
-
-          let token_pool_constructor_ref = object::create_named_object(fungible_asset_owner, b"TokenPool1");
-          let token_pool_signer = object::generate_signer(token_pool_constructor_ref);
-          register_admin(token_pool_signer, ..);
-
-          So check if the token pool address is already an object, and if so, allow for a common owner (or common root owner).
-
-          TODO: double-check and validate this logic.
-        */
-        if (object::is_object(token_pool_address)) {
-            let token_pool_object =
-                object::address_to_object<ObjectCore>(token_pool_address);
-            let token_pool_owner = object::owner(token_pool_object);
-            let token_pool_root_owner = object::root_owner(token_pool_object);
-
-            if (token_pool_owner == object::owner(fungible_asset_metadata)
-                || token_pool_owner == object::root_owner(fungible_asset_metadata)) {
-                return
-            };
-
-            if (token_pool_root_owner == object::owner(fungible_asset_metadata)
-                || token_pool_root_owner == object::root_owner(fungible_asset_metadata)) {
-                return
-            };
-        };
-
-        abort error::permission_denied(E_NOT_FUNGIBLE_ASSET_OWNER)
     }
 
     public fun get_lock_or_burn_input<ProofType: drop>(
@@ -621,6 +694,36 @@ module ccip::token_admin_registry {
         );
 
         output.destination_amount
+    }
+
+    fun assert_can_register(
+        registry_owner_address: address,
+        token_pool_address: address,
+        fungible_asset_metadata: Object<Metadata>
+    ) {
+        assert!(
+            object::is_object(token_pool_address),
+            error::invalid_argument(E_TOKEN_POOL_NOT_OBJECT)
+        );
+        let token_pool_object = object::address_to_object<ObjectCore>(token_pool_address);
+
+        let fungible_asset_object_owner_address = object::owner(fungible_asset_metadata);
+        let fungible_asset_object_root_owner_address =
+            object::root_owner(fungible_asset_metadata);
+
+        let token_pool_object_owner_address = object::owner(token_pool_object);
+        if (token_pool_object_owner_address == registry_owner_address) { return };
+        if (token_pool_object_owner_address == fungible_asset_object_owner_address
+            || token_pool_object_owner_address
+                == fungible_asset_object_root_owner_address) { return };
+
+        let token_pool_object_root_owner_address = object::root_owner(token_pool_object);
+        if (token_pool_object_root_owner_address == registry_owner_address) { return };
+        if (token_pool_object_root_owner_address == fungible_asset_object_owner_address
+            || token_pool_object_root_owner_address
+                == fungible_asset_object_root_owner_address) { return };
+
+        abort error::permission_denied(E_NOT_FUNGIBLE_ASSET_OWNER)
     }
 
     inline fun borrow_state(): &TokenAdminRegistryState {
