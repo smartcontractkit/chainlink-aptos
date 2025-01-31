@@ -1,7 +1,9 @@
 module ccip::token_admin_registry {
+    use std::account;
     use std::bcs;
     use std::dispatchable_fungible_asset;
     use std::error;
+    use std::event::{Self, EventHandle};
     use std::function_info::{Self, FunctionInfo};
     use std::fungible_asset::{Self, Metadata, FungibleStore};
     use std::object::{Self, Object, ObjectCore, ExtendRef, TransferRef};
@@ -29,7 +31,10 @@ module ccip::token_admin_registry {
         // TODO: there were previously raised concerns during an audit that a user could maliciously calculate the bucket for a key and
         // cause repeated splitting, but we need to retrieve all the keys, which isn't available in Table.
         // consider other solutions.
-        token_configs: SmartTable<address, TokenConfig>
+        token_configs: SmartTable<address, TokenConfig>,
+        pool_set_events: EventHandle<PoolSet>,
+        administrator_transfer_requested_events: EventHandle<AdministratorTransferRequested>,
+        administrator_transferred_events: EventHandle<AdministratorTransferred>
     }
 
     struct TokenConfig has store, drop, copy {
@@ -81,6 +86,26 @@ module ccip::token_admin_registry {
         destination_amount: u64
     }
 
+    #[event]
+    struct PoolSet has store, drop {
+        fungible_asset: address,
+        previous_pool_address: address,
+        new_pool_address: address
+    }
+
+    #[event]
+    struct AdministratorTransferRequested has store, drop {
+        fungible_asset: address,
+        current_admin: address,
+        new_admin: address
+    }
+
+    #[event]
+    struct AdministratorTransferred has store, drop {
+        fungible_asset: address,
+        new_admin: address
+    }
+
     const E_NOT_PUBLISHER: u64 = 1;
     const E_ALREADY_INITIALIZED: u64 = 2;
     const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
@@ -104,6 +129,9 @@ module ccip::token_admin_registry {
     const E_MISSING_RELEASE_OR_MINT_OUTPUT: u64 = 21;
     const E_TOKEN_POOL_NOT_OBJECT: u64 = 22;
     const E_FUNGIBLE_ASSET_ALREADY_REGISTERED: u64 = 23;
+    const E_FUNGIBLE_ASSET_NOT_REGISTERED: u64 = 24;
+    const E_NOT_ADMINISTRATOR: u64 = 25;
+    const E_NOT_PENDING_ADMINISTRATOR: u64 = 26;
 
     fun init_module(publisher: &signer) {
         // Automatically initialized on deployment.
@@ -129,7 +157,10 @@ module ccip::token_admin_registry {
             ownable_state: ownable::new(caller, @0x0),
             extend_ref,
             transfer_ref,
-            token_configs: smart_table::new()
+            token_configs: smart_table::new(),
+            pool_set_events: account::new_event_handle(caller),
+            administrator_transfer_requested_events: account::new_event_handle(caller),
+            administrator_transferred_events: account::new_event_handle(caller)
         };
 
         move_to(caller, state);
@@ -210,12 +241,7 @@ module ccip::token_admin_registry {
         fungible_asset_metadata: Object<Metadata>,
         _proof: ProofType
     ) acquires TokenAdminRegistryState {
-        assert!(
-            object::object_exists<Metadata>(
-                object::object_address(&fungible_asset_metadata)
-            ),
-            error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
-        );
+        assert_is_fungible_asset(object::object_address(&fungible_asset_metadata));
 
         let token_pool_address = signer::address_of(token_pool_account);
         assert!(
@@ -325,6 +351,140 @@ module ccip::token_admin_registry {
                 executing_release_or_mint_output: option::none()
             }
         );
+    }
+
+    public entry fun set_pool(
+        caller: &signer, fungible_asset: address, token_pool_address: address
+    ) acquires TokenAdminRegistryState {
+        assert_is_fungible_asset(fungible_asset);
+        assert!(
+            exists<TokenPoolRegistration>(token_pool_address),
+            error::invalid_argument(E_INVALID_TOKEN_POOL)
+        );
+
+        let state = borrow_state_mut();
+
+        assert!(
+            smart_table::contains(&state.token_configs, fungible_asset),
+            error::invalid_argument(E_FUNGIBLE_ASSET_NOT_REGISTERED)
+        );
+
+        let token_config =
+            smart_table::borrow_mut(&mut state.token_configs, fungible_asset);
+
+        assert!(
+            token_config.administrator == signer::address_of(caller),
+            error::permission_denied(E_NOT_ADMINISTRATOR)
+        );
+
+        let previous_pool_address = token_config.token_pool_address;
+        if (previous_pool_address != token_pool_address) {
+            token_config.token_pool_address = token_pool_address;
+
+            event::emit(
+                PoolSet {
+                    fungible_asset,
+                    previous_pool_address,
+                    new_pool_address: token_pool_address
+                }
+            );
+            event::emit_event(
+                &mut state.pool_set_events,
+                PoolSet {
+                    fungible_asset,
+                    previous_pool_address,
+                    new_pool_address: token_pool_address
+                }
+            );
+        }
+    }
+
+    public entry fun transfer_admin_role(
+        caller: &signer, fungible_asset: address, new_admin: address
+    ) acquires TokenAdminRegistryState {
+        let state = borrow_state_mut();
+
+        assert!(
+            smart_table::contains(&state.token_configs, fungible_asset),
+            error::invalid_argument(E_FUNGIBLE_ASSET_NOT_REGISTERED)
+        );
+
+        let token_config =
+            smart_table::borrow_mut(&mut state.token_configs, fungible_asset);
+
+        assert!(
+            token_config.administrator == signer::address_of(caller),
+            error::permission_denied(E_NOT_ADMINISTRATOR)
+        );
+
+        // can be @0x0 to cancel a pending transfer.
+        token_config.pending_administrator = new_admin;
+
+        event::emit(
+            AdministratorTransferRequested {
+                fungible_asset,
+                current_admin: token_config.administrator,
+                new_admin
+            }
+        );
+        event::emit_event(
+            &mut state.administrator_transfer_requested_events,
+            AdministratorTransferRequested {
+                fungible_asset,
+                current_admin: token_config.administrator,
+                new_admin
+            }
+        );
+    }
+
+    public entry fun accept_admin_role(
+        caller: &signer, fungible_asset: address
+    ) acquires TokenAdminRegistryState {
+        let state = borrow_state_mut();
+
+        assert!(
+            smart_table::contains(&state.token_configs, fungible_asset),
+            error::invalid_argument(E_FUNGIBLE_ASSET_NOT_REGISTERED)
+        );
+
+        let token_config =
+            smart_table::borrow_mut(&mut state.token_configs, fungible_asset);
+
+        assert!(
+            token_config.pending_administrator == signer::address_of(caller),
+            error::permission_denied(E_NOT_PENDING_ADMINISTRATOR)
+        );
+
+        token_config.administrator = token_config.pending_administrator;
+        token_config.pending_administrator = @0x0;
+
+        event::emit(
+            AdministratorTransferred {
+                fungible_asset,
+                new_admin: token_config.administrator
+            }
+        );
+        event::emit_event(
+            &mut state.administrator_transferred_events,
+            AdministratorTransferred {
+                fungible_asset,
+                new_admin: token_config.administrator
+            }
+        );
+    }
+
+    #[view]
+    public fun is_administrator(
+        fungible_asset: address, administrator: address
+    ): bool acquires TokenAdminRegistryState {
+        let state = borrow_state();
+        assert!(
+            smart_table::contains(&state.token_configs, fungible_asset),
+            error::invalid_argument(E_FUNGIBLE_ASSET_NOT_REGISTERED)
+        );
+
+        let token_config = smart_table::borrow(&state.token_configs, fungible_asset);
+        token_config.administrator == administrator
     }
 
     public fun get_lock_or_burn_input<ProofType: drop>(
@@ -732,6 +892,15 @@ module ccip::token_admin_registry {
                 == fungible_asset_object_root_owner_address) { return };
 
         abort error::permission_denied(E_NOT_FUNGIBLE_ASSET_OWNER)
+    }
+
+    inline fun assert_is_fungible_asset(
+        fungible_asset_metadata_address: address
+    ) {
+        assert!(
+            object::object_exists<Metadata>(fungible_asset_metadata_address),
+            error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
+        );
     }
 
     inline fun borrow_state(): &TokenAdminRegistryState {
