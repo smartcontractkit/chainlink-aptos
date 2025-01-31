@@ -899,4 +899,26 @@ module ccip::token_admin_registry {
         );
         borrow_global_mut<TokenPoolRegistration>(token_pool_address)
     }
+
+    //
+    // ccip::ownable functions
+    //
+
+    #[view]
+    public fun owner(): address acquires TokenAdminRegistryState {
+        let state = borrow_state();
+        ownable::owner(&state.ownable_state)
+    }
+
+    public entry fun transfer_ownership(caller: &signer, to: address) acquires TokenAdminRegistryState {
+        let state = borrow_state_mut();
+        ownable::transfer_ownership(
+            signer::address_of(caller), &mut state.ownable_state, to
+        )
+    }
+
+    public entry fun accept_ownership(caller: &signer) acquires TokenAdminRegistryState {
+        let state = borrow_state_mut();
+        ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
+    }
 }
