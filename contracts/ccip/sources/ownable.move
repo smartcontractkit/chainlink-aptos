@@ -5,6 +5,9 @@ module ccip::ownable {
     use std::signer;
 
     struct OwnableState has store {
+        // TODO: instead of storing `owner`, consider switching this module to use the object ownership module,
+        // and referring to object::owner() as the true owner. we can store the object TransferRef here
+        // and keep the 2-step ownership proposal flow.
         owner: address,
         pending_owner: address,
         ownership_transfer_requested_events: EventHandle<OwnershipTransferRequested>,
