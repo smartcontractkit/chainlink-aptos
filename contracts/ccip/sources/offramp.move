@@ -14,6 +14,7 @@ module ccip::offramp {
     use ccip::merkle_multi_proof;
     use ccip::ownable;
     use ccip::ocr3_base;
+    use ccip::state_object;
 
     const EXECUTION_STATE_UNTOUCHED: u8 = 1;
     const EXECUTION_STATE_SUCCESS: u8 = 2;
@@ -161,23 +162,22 @@ module ccip::offramp {
         commit_report: CommitReport
     }
 
-    const E_NOT_PUBLISHER: u64 = 1;
-    const E_ALREADY_INITIALIZED: u64 = 2;
-    const E_SOURCE_CHAIN_SELECTORS_MISMATCH: u64 = 3;
-    const E_ZERO_CHAIN_SELECTOR: u64 = 4;
-    const E_UNKNOWN_SOURCE_CHAIN_SELECTOR: u64 = 5;
-    const E_TOKEN_TRANSFER_DATA_MISMATCH: u64 = 6;
-    const E_SOURCE_CHAIN_SELECTOR_MISMATCH: u64 = 7;
-    const E_DEST_CHAIN_SELECTOR_MISMATCH: u64 = 8;
-    const E_TOKEN_DATA_MISMATCH: u64 = 9;
-    const E_ROOT_NOT_COMMITTED: u64 = 10;
-    const E_MANUAL_EXECUTION_NOT_YET_ENABLED: u64 = 11;
-    const E_SOURCE_CHAIN_NOT_ENABLED: u64 = 12;
-    const E_INVALID_OFFRAMP_ADDRESS: u64 = 13;
-    const E_INVALID_INTERVAL: u64 = 14;
-    const E_INVALID_ROOT: u64 = 15;
-    const E_ROOT_ALREADY_COMMITTED: u64 = 16;
-    const E_STALE_COMMIT_REPORT: u64 = 17;
+    const E_ALREADY_INITIALIZED: u64 = 1;
+    const E_SOURCE_CHAIN_SELECTORS_MISMATCH: u64 = 2;
+    const E_ZERO_CHAIN_SELECTOR: u64 = 3;
+    const E_UNKNOWN_SOURCE_CHAIN_SELECTOR: u64 = 4;
+    const E_TOKEN_TRANSFER_DATA_MISMATCH: u64 = 5;
+    const E_SOURCE_CHAIN_SELECTOR_MISMATCH: u64 = 6;
+    const E_DEST_CHAIN_SELECTOR_MISMATCH: u64 = 7;
+    const E_TOKEN_DATA_MISMATCH: u64 = 8;
+    const E_ROOT_NOT_COMMITTED: u64 = 9;
+    const E_MANUAL_EXECUTION_NOT_YET_ENABLED: u64 = 10;
+    const E_SOURCE_CHAIN_NOT_ENABLED: u64 = 11;
+    const E_INVALID_OFFRAMP_ADDRESS: u64 = 12;
+    const E_INVALID_INTERVAL: u64 = 13;
+    const E_INVALID_ROOT: u64 = 14;
+    const E_ROOT_ALREADY_COMMITTED: u64 = 15;
+    const E_STALE_COMMIT_REPORT: u64 = 16;
 
     public entry fun initialize(
         caller: &signer,
@@ -188,12 +188,10 @@ module ccip::offramp {
         source_chain_selectors: vector<u64>,
         source_chain_is_enabled: vector<bool>
     ) acquires OffRampState {
+        state_object::assert_can_initialize(caller);
+
         assert!(
-            signer::address_of(caller) == @ccip,
-            error::invalid_argument(E_NOT_PUBLISHER)
-        );
-        assert!(
-            !exists<OffRampState>(@ccip),
+            !exists<OffRampState>(state_object::object_address()),
             error::invalid_argument(E_ALREADY_INITIALIZED)
         );
         assert!(
@@ -202,25 +200,31 @@ module ccip::offramp {
             error::invalid_argument(E_SOURCE_CHAIN_SELECTORS_MISMATCH)
         );
 
+        let state_object_signer = state_object::object_signer();
+
         let state = OffRampState {
-            ownable_state: ownable::new(caller, @0x0),
-            ocr3_base_state: ocr3_base::new(caller),
+            ownable_state: ownable::new(
+                &state_object_signer, signer::address_of(caller), @0x0
+            ),
+            ocr3_base_state: ocr3_base::new(&state_object_signer),
             chain_selector,
             permissionless_execution_threshold_secs: 0,
             source_chain_configs: smart_table::new(),
             execution_states: smart_table::new(),
             roots: smart_table::new(),
             latest_price_sequence_number: 0,
-            static_config_set_events: account::new_event_handle(caller),
-            dynamic_config_set_events: account::new_event_handle(caller),
-            source_chain_config_set_events: account::new_event_handle(caller),
-            skipped_already_executed_events: account::new_event_handle(caller),
-            already_attempted_events: account::new_event_handle(caller),
-            execution_state_changed_events: account::new_event_handle(caller),
-            commit_report_accepted_events: account::new_event_handle(caller)
+            static_config_set_events: account::new_event_handle(&state_object_signer),
+            dynamic_config_set_events: account::new_event_handle(&state_object_signer),
+            source_chain_config_set_events: account::new_event_handle(&state_object_signer),
+            skipped_already_executed_events: account::new_event_handle(
+                &state_object_signer
+            ),
+            already_attempted_events: account::new_event_handle(&state_object_signer),
+            execution_state_changed_events: account::new_event_handle(&state_object_signer),
+            commit_report_accepted_events: account::new_event_handle(&state_object_signer)
         };
 
-        move_to(caller, state);
+        move_to(&state_object_signer, state);
         let state = borrow_state_mut();
 
         event::emit(StaticConfigSet { chain_selector });
@@ -645,11 +649,11 @@ module ccip::offramp {
     }
 
     inline fun borrow_state(): &OffRampState {
-        borrow_global<OffRampState>(@ccip)
+        borrow_global<OffRampState>(state_object::object_address())
     }
 
     inline fun borrow_state_mut(): &mut OffRampState {
-        borrow_global_mut<OffRampState>(@ccip)
+        borrow_global_mut<OffRampState>(state_object::object_address())
     }
 
     inline fun execute_single_message(

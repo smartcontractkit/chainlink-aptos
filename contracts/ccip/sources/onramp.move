@@ -13,6 +13,7 @@ module ccip::onramp {
     use ccip::eth_abi;
     use ccip::merkle_multi_proof;
     use ccip::ownable;
+    use ccip::state_object;
 
     struct OnRampState has key, store {
         ownable_state: ownable::OwnableState,
@@ -97,16 +98,15 @@ module ccip::onramp {
         senders: vector<address>
     }
 
-    const E_NOT_PUBLISHER: u64 = 1;
-    const E_ALREADY_INITIALIZED: u64 = 2;
-    const E_DEST_CHAIN_ARGUMENT_MISMATCH: u64 = 3;
-    const E_INVALID_DEST_CHAIN_SELECTOR: u64 = 4;
-    const E_UNKNOWN_DEST_CHAIN_SELECTOR: u64 = 5;
-    const E_DEST_CHAIN_NOT_ENABLED: u64 = 6;
-    const E_SENDER_NOT_ALLOWED: u64 = 7;
-    const E_ONLY_CALLABLE_BY_OWNER_OR_ALLOWLIST_ADMIN: u64 = 8;
-    const E_INVALID_ALLOWLIST_REQUEST: u64 = 9;
-    const E_INVALID_ALLOWLIST_ADDRESS: u64 = 10;
+    const E_ALREADY_INITIALIZED: u64 = 1;
+    const E_DEST_CHAIN_ARGUMENT_MISMATCH: u64 = 2;
+    const E_INVALID_DEST_CHAIN_SELECTOR: u64 = 3;
+    const E_UNKNOWN_DEST_CHAIN_SELECTOR: u64 = 4;
+    const E_DEST_CHAIN_NOT_ENABLED: u64 = 5;
+    const E_SENDER_NOT_ALLOWED: u64 = 6;
+    const E_ONLY_CALLABLE_BY_OWNER_OR_ALLOWLIST_ADMIN: u64 = 7;
+    const E_INVALID_ALLOWLIST_REQUEST: u64 = 8;
+    const E_INVALID_ALLOWLIST_ADDRESS: u64 = 9;
 
     public entry fun initialize(
         caller: &signer,
@@ -116,28 +116,32 @@ module ccip::onramp {
         dest_chain_enabled: vector<bool>,
         dest_chain_allowlist_enabled: vector<bool>
     ) acquires OnRampState {
+        state_object::assert_can_initialize(caller);
+
         assert!(
-            signer::address_of(caller) == @ccip,
-            error::invalid_argument(E_NOT_PUBLISHER)
-        );
-        assert!(
-            !exists<OnRampState>(@ccip),
+            !exists<OnRampState>(state_object::object_address()),
             error::invalid_argument(E_ALREADY_INITIALIZED)
         );
 
+        let state_object_signer = state_object::object_signer();
+
         let state = OnRampState {
-            ownable_state: ownable::new(caller, @0x0),
+            ownable_state: ownable::new(
+                &state_object_signer, signer::address_of(caller), @0x0
+            ),
             chain_selector,
             allowlist_admin: @0x0,
             dest_chain_configs: smart_table::new(),
-            config_set_events: account::new_event_handle(caller),
-            dest_chain_config_set_events: account::new_event_handle(caller),
-            ccip_message_sent_events: account::new_event_handle(caller),
-            allowlist_senders_added_events: account::new_event_handle(caller),
-            allowlist_senders_removed_events: account::new_event_handle(caller)
+            config_set_events: account::new_event_handle(&state_object_signer),
+            dest_chain_config_set_events: account::new_event_handle(&state_object_signer),
+            ccip_message_sent_events: account::new_event_handle(&state_object_signer),
+            allowlist_senders_added_events: account::new_event_handle(&state_object_signer),
+            allowlist_senders_removed_events: account::new_event_handle(
+                &state_object_signer
+            )
         };
 
-        move_to(caller, state);
+        move_to(&state_object_signer, state);
 
         set_dynamic_config_unchecked(allowlist_admin);
 
@@ -595,11 +599,11 @@ module ccip::onramp {
     }
 
     inline fun borrow_state(): &OnRampState {
-        borrow_global<OnRampState>(@ccip)
+        borrow_global<OnRampState>(state_object::object_address())
     }
 
     inline fun borrow_state_mut(): &mut OnRampState {
-        borrow_global_mut<OnRampState>(@ccip)
+        borrow_global_mut<OnRampState>(state_object::object_address())
     }
 
     //

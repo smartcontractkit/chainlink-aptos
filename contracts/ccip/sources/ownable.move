@@ -2,7 +2,6 @@ module ccip::ownable {
     use std::account;
     use std::error;
     use std::event::{Self, EventHandle};
-    use std::signer;
 
     struct OwnableState has store {
         // TODO: instead of storing `owner`, consider switching this module to use the object ownership module,
@@ -31,18 +30,18 @@ module ccip::ownable {
         to: address
     }
 
-    public fun new(new_owner: &signer, pending_owner: address): OwnableState {
+    public fun new(
+        event_account: &signer, new_owner: address, pending_owner: address
+    ): OwnableState {
         let new_state = OwnableState {
-            owner: signer::address_of(new_owner),
+            owner: new_owner,
             pending_owner: @0x0,
-            ownership_transfer_requested_events: account::new_event_handle(new_owner),
-            ownership_transferred_events: account::new_event_handle(new_owner)
+            ownership_transfer_requested_events: account::new_event_handle(event_account),
+            ownership_transferred_events: account::new_event_handle(event_account)
         };
 
         if (pending_owner != @0x0) {
-            transfer_ownership(
-                signer::address_of(new_owner), &mut new_state, pending_owner
-            );
+            transfer_ownership(new_owner, &mut new_state, pending_owner);
         };
 
         new_state

@@ -84,14 +84,14 @@ module ccip::ocr3_base {
     const E_INVALID_SIGNATURE: u64 = 19;
     const E_FORKED_CHAIN: u64 = 20;
 
-    public fun new(caller: &signer): OCR3BaseState {
+    public fun new(event_account: &signer): OCR3BaseState {
         OCR3BaseState {
             chain_id: chain_id::get(),
             ocr3_configs: table::new(),
             signer_oracles: table::new(),
             transmitter_oracles: table::new(),
-            config_set_events: account::new_event_handle(caller),
-            transmitted_events: account::new_event_handle(caller)
+            config_set_events: account::new_event_handle(event_account),
+            transmitted_events: account::new_event_handle(event_account)
         }
     }
 
