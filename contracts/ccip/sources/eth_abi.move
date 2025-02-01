@@ -1,6 +1,7 @@
 // module to do the equivalent packing as ethereum's abi.encode and abi.encodePacked
 module ccip::eth_abi {
     use std::bcs;
+    use std::from_bcs;
     use std::vector;
 
     const E_INVALID_BYTES32: u64 = 1;
@@ -95,5 +96,11 @@ module ccip::eth_abi {
         // little endian to big endian
         vector::reverse(&mut value_bytes);
         vector::append(out, value_bytes)
+    }
+
+    public inline fun decode_u256(value_bytes: vector<u8>): u256 {
+        // big endian to little endian
+        vector::reverse(&mut value_bytes);
+        from_bcs::to_u256(value_bytes)
     }
 }
