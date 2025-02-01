@@ -271,10 +271,7 @@ module ccip::ocr3_base {
             error::invalid_argument(E_CONFIG_DIGEST_MISMATCH)
         );
 
-        assert!(
-            chain_id::get() == ocr3_state.chain_id,
-            error::invalid_state(E_FORKED_CHAIN)
-        );
+        assert_chain_not_forked(ocr3_state);
 
         let plugin_transmitters =
             table::borrow(&ocr3_state.transmitter_oracles, ocr_plugin_type);
@@ -318,18 +315,11 @@ module ccip::ocr3_base {
         )
     }
 
-    // equivalent of keccak256(abi.encodePacked(keccak256(report), reportContext))
-    // TODO: consider switching to blake2b which is less costly
-    inline fun hash_report(
-        report: vector<u8>, config_digest: vector<u8>, sequence_bytes: vector<u8>
-    ): vector<u8> {
-        let bytes = vector[];
-
-        vector::append(&mut bytes, aptos_hash::keccak256(report));
-        vector::append(&mut bytes, config_digest);
-        vector::append(&mut bytes, sequence_bytes);
-
-        aptos_hash::keccak256(bytes)
+    public fun assert_chain_not_forked(ocr3_state: &OCR3BaseState) {
+        assert!(
+            chain_id::get() == ocr3_state.chain_id,
+            error::invalid_state(E_FORKED_CHAIN)
+        );
     }
 
     // equivalent of uint64(uint256(reportContext[1]))
@@ -344,6 +334,19 @@ module ccip::ocr3_base {
             i = i + 1;
         };
         result
+    }
+
+    // equivalent of keccak256(abi.encodePacked(keccak256(report), reportContext))
+    inline fun hash_report(
+        report: vector<u8>, config_digest: vector<u8>, sequence_bytes: vector<u8>
+    ): vector<u8> {
+        let bytes = vector[];
+
+        vector::append(&mut bytes, aptos_hash::keccak256(report));
+        vector::append(&mut bytes, config_digest);
+        vector::append(&mut bytes, sequence_bytes);
+
+        aptos_hash::keccak256(bytes)
     }
 
     inline fun verify_signature(
