@@ -3,9 +3,8 @@ module ccip::onramp {
     use std::aptos_hash;
     use std::error;
     use std::event::{Self, EventHandle};
-    use std::fungible_asset::{Self, FungibleAsset};
+    use std::fungible_asset::{Self, FungibleAsset, Metadata};
     use std::object;
-    use std::primary_fungible_store;
     use std::signer;
     use std::smart_table::{Self, SmartTable};
     use std::vector;
@@ -14,6 +13,8 @@ module ccip::onramp {
     use ccip::merkle_multi_proof;
     use ccip::ownable;
     use ccip::state_object;
+    use ccip::token_admin_dispatcher;
+    use ccip::token_admin_registry;
 
     struct OnRampState has key, store {
         ownable_state: ownable::OwnableState,
@@ -61,7 +62,7 @@ module ccip::onramp {
         source_pool_address: address,
         dest_token_address: vector<u8>,
         extra_data: vector<u8>,
-        amount: u64,
+        amount: u256,
         dest_exec_data: vector<u8>
     }
 
@@ -107,6 +108,8 @@ module ccip::onramp {
     const E_ONLY_CALLABLE_BY_OWNER_OR_ALLOWLIST_ADMIN: u64 = 7;
     const E_INVALID_ALLOWLIST_REQUEST: u64 = 8;
     const E_INVALID_ALLOWLIST_ADDRESS: u64 = 9;
+    const E_UNSUPPORTED_TOKEN: u64 = 10;
+    const E_INVALID_FEE_TOKEN: u64 = 11;
 
     public entry fun initialize(
         caller: &signer,
@@ -171,7 +174,7 @@ module ccip::onramp {
         receiver: vector<u8>,
         data: vector<u8>,
         token_transfers: vector<FungibleAsset>,
-        fee_token: FungibleAsset,
+        fee_token: address,
         extra_args: vector<u8>
     ): vector<u8> acquires OnRampState {
 
@@ -197,32 +200,50 @@ module ccip::onramp {
             );
         };
 
-        let fee_token_metadata = fungible_asset::metadata_from_asset(&fee_token);
-        let fee_token_amount = fungible_asset::amount(&fee_token);
+        // TODO(fee-quoter): we need to handle `fee_token`, checking that it's a valid accepted fungible
+        // asset, eg APT (https://explorer.aptoslabs.com/fungible_asset/0xa?network=mainnet) and
+        // then retrieving the correct amount from the caller's primary fungible store.
+        // for now, do a sanity check that fee_token is a valid fungible asset.
+        assert!(
+            object::object_exists<Metadata>(fee_token),
+            error::invalid_argument(E_INVALID_FEE_TOKEN)
+        );
+        let fee_token_amount = 0;
 
-        // TODO(fee-quoter): we need to handle `fee_token`. unlike EVM, we can't perform an ERC20 transfer
-        // in the middle of the function, the user can only pass us tokens as a `FungibleAsset` object.
-        // we should call fee_quoter::get_fee(), calculate the fee, take the fee from `fee_token`, and then
-        // return the unused fee amount back to the user, either by depositing back into their primary fungible
-        // store, or as a `FungibleAsset` return value.
-        // for now, we simply put it in our primary store.
-        primary_fungible_store::deposit(@ccip, fee_token);
+        let sender = signer::address_of(caller);
 
         let token_amounts = vector::map(
             token_transfers,
-            |token_transfer| {
-                let _metadata = fungible_asset::metadata_from_asset(&token_transfer);
-                let amount = fungible_asset::amount(&token_transfer);
+            |fa| {
+                let fa_metadata = fungible_asset::metadata_from_asset(&fa);
+                let fa_amount = fungible_asset::amount(&fa);
 
-                // TODO(token-pool): we need to put these `FungibleAsset`s into the proper pool and populate the Aptos2AnyTokenTransfer below.
-                // for now, we simply put it in our primary store.
-                primary_fungible_store::deposit(@ccip, token_transfer);
+                let token_pool_address =
+                    token_admin_registry::get_pool(object::object_address(&fa_metadata));
+                assert!(
+                    token_pool_address != @0x0,
+                    error::invalid_argument(E_UNSUPPORTED_TOKEN)
+                );
+
+                let dest_pool_data =
+                    encode_local_decimals(fungible_asset::decimals(fa_metadata));
+
+                let dest_token_address =
+                    token_admin_dispatcher::dispatch_lock_or_burn(
+                        token_pool_address,
+                        fa,
+                        sender,
+                        dest_chain_selector,
+                        receiver
+                    );
+
+                let encoded_amount = fa_amount as u256;
 
                 Aptos2AnyTokenTransfer {
-                    source_pool_address: @0x0,
-                    dest_token_address: vector[],
-                    extra_data: vector[],
-                    amount,
+                    source_pool_address: token_pool_address,
+                    dest_token_address,
+                    extra_data: dest_pool_data,
+                    amount: encoded_amount,
                     dest_exec_data: vector[]
                 }
             }
@@ -247,7 +268,7 @@ module ccip::onramp {
             receiver,
             // TODO(fee-quoter): `extra_args` passed in by the user is converted by the FeeQuoter on EVM and set here, do we need it?
             extra_args: vector[],
-            fee_token: object::object_address(&fee_token_metadata),
+            fee_token,
             fee_token_amount,
             token_amounts
         };
@@ -525,7 +546,7 @@ module ccip::onramp {
                     &mut token_hash, token_transfer.dest_token_address
                 );
                 eth_abi::encode_bytes(&mut token_hash, token_transfer.extra_data);
-                eth_abi::encode_u64(&mut token_hash, token_transfer.amount);
+                eth_abi::encode_u256(&mut token_hash, token_transfer.amount);
                 eth_abi::encode_bytes(&mut token_hash, token_transfer.dest_exec_data);
             }
         );
@@ -600,6 +621,12 @@ module ccip::onramp {
 
             i = i + 1;
         };
+    }
+
+    inline fun encode_local_decimals(decimals: u8): vector<u8> {
+        let ret = vector[];
+        eth_abi::encode_u8(&mut ret, decimals);
+        ret
     }
 
     inline fun borrow_state(): &OnRampState {

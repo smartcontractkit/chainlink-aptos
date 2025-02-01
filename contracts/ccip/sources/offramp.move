@@ -3,7 +3,10 @@ module ccip::offramp {
     use std::aptos_hash;
     use std::error;
     use std::event::{Self, EventHandle};
+    use std::fungible_asset::{Self, Metadata};
+    use std::object;
     use std::option::{Self, Option};
+    use std::primary_fungible_store;
     use std::signer;
     use std::smart_table::{Self, SmartTable};
     use std::timestamp;
@@ -15,6 +18,8 @@ module ccip::offramp {
     use ccip::ownable;
     use ccip::ocr3_base;
     use ccip::state_object;
+    use ccip::token_admin_dispatcher;
+    use ccip::token_admin_registry;
 
     const EXECUTION_STATE_UNTOUCHED: u8 = 1;
     const EXECUTION_STATE_SUCCESS: u8 = 2;
@@ -80,9 +85,9 @@ module ccip::offramp {
         dest_token_address: address,
         dest_gas_amount: u32,
         extra_data: vector<u8>,
-        // this is u256 on EVM, but for both 0x1::coin and 0x1::fungible_asset, amount
-        // is a u64.
-        amount: u64
+
+        // This is the amount to transfer, as set on the source chain.
+        amount: u256
     }
 
     struct ExecutionReport has drop {
@@ -118,6 +123,11 @@ module ccip::offramp {
         min_sequence_number: u64,
         max_sequence_number: u64,
         merkle_root: vector<u8>
+    }
+
+    struct AptosTokenAmount has drop {
+        token: address,
+        amount: u64
     }
 
     #[event]
@@ -178,6 +188,9 @@ module ccip::offramp {
     const E_INVALID_ROOT: u64 = 14;
     const E_ROOT_ALREADY_COMMITTED: u64 = 15;
     const E_STALE_COMMIT_REPORT: u64 = 16;
+    const E_UNSUPPORTED_TOKEN: u64 = 17;
+    const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 18;
+    const E_INVALID_ENCODED_AMOUNT: u64 = 19;
 
     public entry fun initialize(
         caller: &signer,
@@ -274,7 +287,7 @@ module ccip::offramp {
         dest_token_addresses: vector<address>,
         dest_gas_amounts: vector<u32>,
         extra_datas: vector<vector<u8>>,
-        token_amounts: vector<u64>,
+        token_amounts: vector<u256>,
 
         // execution report footer
         offchain_token_data: vector<vector<u8>>,
@@ -574,6 +587,12 @@ module ccip::offramp {
         )
     }
 
+    public entry fun execute(
+        report_context: vector<vector<u8>>, report: vector<u8>
+    ) {
+        // TODO
+    }
+
     #[view]
     public fun get_latest_price_sequence_number(): u64 acquires OffRampState {
         borrow_state().latest_price_sequence_number
@@ -656,8 +675,153 @@ module ccip::offramp {
     inline fun execute_single_message(
         message: &Any2AptosRampMessage, offchain_token_data: &vector<vector<u8>>
     ): Option<u128> {
+        let _dest_token_amounts =
+            release_or_mint_tokens(
+                &message.token_amounts,
+                offchain_token_data,
+                message.sender,
+                message.receiver,
+                message.header.source_chain_selector
+            );
+
         // TODO
+
         option::none()
+    }
+
+    inline fun release_or_mint_tokens(
+        token_amounts: &vector<Any2AptosTokenTransfer>,
+        offchain_token_data: &vector<vector<u8>>,
+        sender: vector<u8>,
+        receiver: address,
+        source_chain_selector: u64
+    ): vector<AptosTokenAmount> {
+
+        // execute_single_report already checks that the vector lengths match.
+        vector::zip_map_ref(
+            token_amounts,
+            offchain_token_data,
+            |token_transfer, current_offchain_token_data| {
+                let token_transfer: &Any2AptosTokenTransfer = token_transfer;
+                let current_offchain_token_data: vector<u8> =
+                    *current_offchain_token_data;
+
+                let local_token = token_transfer.dest_token_address;
+                let token_pool_address = token_admin_registry::get_pool(local_token);
+                assert!(
+                    token_pool_address != @0x0,
+                    error::invalid_state(E_UNSUPPORTED_TOKEN)
+                );
+
+                // This should not revert because token_admin_registry already checked that the local token
+                // is a valid fungible asset upon pool registration.
+                let fa_metadata = object::address_to_object<Metadata>(local_token);
+                let local_decimals = fungible_asset::decimals(fa_metadata);
+
+                // On EVM, the conversion from source amount to destination amount happens
+                // in the TokenPool, but we need to do it before it reaches the TokenPool,
+                // because the dynamic dispatch call for withdraw() already expects a local
+                // u64 amount.
+                // We cannot easily switch to another dispatchable fungible asset callback,
+                // because dispatchable_withdraw() returns a FungibleAsset, which cannot be stored.
+                //
+                // TODO: investigate whether this is acceptable. if not, a much more complex
+                // solution is required:
+                // - the TokenPool returns a FungibleAsset via token_admin_registry::set_release_or_mint_output
+                // - TokenAdminRegistry transfers the FungibleAsset to its own FungibleStore temporarily
+                // - the TokenPool callback ends
+                // - TokenAdminRegistry withdraws the same amount from its own FungibleStore into a new
+                //   FungibleAsset and returns it here
+
+                let encoded_amount = token_transfer.amount;
+                let source_pool_data = token_transfer.extra_data;
+                let remote_decimals =
+                    parse_remote_decimals(source_pool_data, local_decimals);
+                let local_amount =
+                    calculate_local_amount(
+                        encoded_amount, remote_decimals, local_decimals
+                    );
+
+                let fa =
+                    token_admin_dispatcher::dispatch_release_or_mint(
+                        token_pool_address,
+                        local_token,
+                        local_amount,
+                        sender,
+                        source_chain_selector,
+                        receiver,
+                        token_transfer.source_pool_address,
+                        token_transfer.extra_data,
+                        current_offchain_token_data
+                    );
+
+                primary_fungible_store::deposit(receiver, fa);
+
+                AptosTokenAmount { token: local_token, amount: local_amount }
+            }
+        )
+    }
+
+    fun parse_remote_decimals(
+        source_pool_data: vector<u8>, local_decimals: u8
+    ): u8 {
+        let data_len = vector::length(&source_pool_data);
+        if (data_len == 0) {
+            // Fallback to the local value.
+            return local_decimals
+        };
+
+        assert!(data_len == 32, error::invalid_state(E_INVALID_REMOTE_CHAIN_DECIMALS));
+
+        let remote_decimals = eth_abi::decode_u256(source_pool_data);
+        assert!(
+            remote_decimals <= 255,
+            error::invalid_state(E_INVALID_REMOTE_CHAIN_DECIMALS)
+        );
+
+        remote_decimals as u8
+    }
+
+    inline fun calculate_local_amount(
+        encoded_amount: u256, remote_decimals: u8, local_decimals: u8
+    ): u64 {
+        let local_amount =
+            calculate_local_amount_internal(
+                encoded_amount, remote_decimals, local_decimals
+            );
+        // check that the calculated amount fits in a u64
+        assert!(
+            local_amount <= 18446744073709551615,
+            error::invalid_state(E_INVALID_ENCODED_AMOUNT)
+        );
+        local_amount as u64
+    }
+
+    fun calculate_local_amount_internal(
+        encoded_amount: u256, remote_decimals: u8, local_decimals: u8
+    ): u256 {
+        // TODO: check for overflows
+        if (remote_decimals == local_decimals) {
+            return encoded_amount
+        } else if (remote_decimals > local_decimals) {
+            let decimals_diff = remote_decimals - local_decimals;
+            let i = 0;
+            let current_amount = encoded_amount;
+            while (i < decimals_diff) {
+                current_amount = current_amount / 10;
+                i = i + 1;
+            };
+            return current_amount
+        } else {
+            let decimals_diff = local_decimals - remote_decimals;
+            let i = 0;
+            let current_amount = encoded_amount;
+            while (i < decimals_diff) {
+                current_amount = current_amount * 10;
+                i = i + 1;
+            };
+            return current_amount
+        }
     }
 
     inline fun set_dynamic_config_internal(
@@ -780,7 +944,7 @@ module ccip::offramp {
                 );
                 eth_abi::encode_u32(&mut token_hash, token_transfer.dest_gas_amount);
                 eth_abi::encode_bytes(&mut token_hash, token_transfer.extra_data);
-                eth_abi::encode_u64(&mut token_hash, token_transfer.amount);
+                eth_abi::encode_u256(&mut token_hash, token_transfer.amount);
             }
         );
         eth_abi::encode_bytes32(&mut outer_hash, aptos_hash::keccak256(token_hash));

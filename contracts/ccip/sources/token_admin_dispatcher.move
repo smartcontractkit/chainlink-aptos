@@ -14,18 +14,11 @@ module ccip::token_admin_dispatcher {
 
     public(friend) fun dispatch_lock_or_burn(
         token_pool_address: address,
-        local_token: address,
         fa: FungibleAsset,
         sender: address,
         remote_chain_selector: u64,
         receiver: vector<u8>
-    ): (vector<u8>, vector<u8>) {
-        let fa_metadata = fungible_asset::metadata_from_asset(&fa);
-        assert!(
-            object::object_address(&fa_metadata) == local_token,
-            error::invalid_state(E_FUNGIBLE_ASSET_MISMATCH)
-        );
-
+    ): vector<u8> {
         let dispatch_fungible_store =
             token_admin_registry::start_lock_or_burn(
                 token_pool_address,
@@ -49,7 +42,7 @@ module ccip::token_admin_dispatcher {
         source_pool_address: vector<u8>,
         source_pool_data: vector<u8>,
         offchain_token_data: vector<u8>
-    ): (FungibleAsset, u64) {
+    ): FungibleAsset {
         let (dispatch_owner, dispatch_fungible_store) =
             token_admin_registry::start_release_or_mint(
                 token_pool_address,
@@ -67,8 +60,7 @@ module ccip::token_admin_dispatcher {
                 &dispatch_owner, dispatch_fungible_store, amount
             );
 
-        let destination_amount =
-            token_admin_registry::finish_release_or_mint(token_pool_address);
+        token_admin_registry::finish_release_or_mint(token_pool_address);
 
         let fa_metadata = fungible_asset::metadata_from_asset(&fa);
         let fa_amount = fungible_asset::amount(&fa);
@@ -77,10 +69,10 @@ module ccip::token_admin_dispatcher {
             error::invalid_state(E_FUNGIBLE_ASSET_MISMATCH)
         );
         assert!(
-            destination_amount == fa_amount,
+            amount == fa_amount,
             error::invalid_state(E_WITHDRAW_AMOUNT_MISMATCH)
         );
 
-        (fa, destination_amount)
+        fa
     }
 }
