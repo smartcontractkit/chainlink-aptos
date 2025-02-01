@@ -98,15 +98,22 @@ module ccip::merkle_multi_proof {
             len == vector::length(b), error::invalid_argument(E_VECTOR_LENGTH_MISMATCH)
         );
 
+        if (len == 0) {
+            return false
+        };
+
         let i = len - 1;
         // compare each byte until not equal
-        while (i >= 0) {
+        while (true) {
             let byte_a = *vector::borrow(a, i);
             let byte_b = *vector::borrow(b, i);
             if (byte_a > byte_b) {
                 return true
             } else if (byte_a < byte_b) {
                 return false
+            };
+            if (i == 0) {
+                break;
             };
             i = i - 1;
         };
