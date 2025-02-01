@@ -13,6 +13,7 @@ module ccip::state_object {
     use std::object::{Self, ExtendRef, ObjectCore, TransferRef};
     use std::signer;
 
+    friend ccip::fee_quoter;
     friend ccip::offramp;
     friend ccip::onramp;
     friend ccip::receiver_registry;
