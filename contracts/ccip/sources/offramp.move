@@ -12,7 +12,6 @@ module ccip::offramp {
     use std::timestamp;
     use std::vector;
 
-    use ccip::bcs_stream;
     use ccip::eth_abi;
     use ccip::merkle_multi_proof;
     use ccip::ownable;
@@ -109,6 +108,7 @@ module ccip::offramp {
     }
 
     struct TokenPriceUpdate has store, drop, copy {
+        // TODO: this is address on EVM, double check that this should be a local address.
         source_token: address,
         usd_per_token: u256
     }
@@ -773,7 +773,8 @@ module ccip::offramp {
 
         assert!(data_len == 32, error::invalid_state(E_INVALID_REMOTE_CHAIN_DECIMALS));
 
-        let remote_decimals = eth_abi::decode_u256(source_pool_data);
+        let stream = eth_abi::new_stream(source_pool_data);
+        let remote_decimals = eth_abi::deserialize_u256(&mut stream);
         assert!(
             remote_decimals <= 255,
             error::invalid_state(E_INVALID_REMOTE_CHAIN_DECIMALS)
@@ -953,35 +954,35 @@ module ccip::offramp {
     }
 
     inline fun deserialize_commit_report(report_bytes: vector<u8>): CommitReport {
-        let stream = bcs_stream::new(report_bytes);
+        let stream = eth_abi::new_stream(report_bytes);
         let token_price_updates =
-            bcs_stream::deserialize_vector(
+            eth_abi::deserialize_vector(
                 &mut stream,
                 |stream| {
-                    let source_token = bcs_stream::deserialize_address(stream);
-                    let usd_per_token = bcs_stream::deserialize_u256(stream);
+                    let source_token = eth_abi::deserialize_address(stream);
+                    let usd_per_token = eth_abi::deserialize_u256(stream);
                     TokenPriceUpdate { source_token, usd_per_token }
                 }
             );
 
         let gas_price_updates =
-            bcs_stream::deserialize_vector(
+            eth_abi::deserialize_vector(
                 &mut stream,
                 |stream| {
-                    let dest_chain_selector = bcs_stream::deserialize_u64(stream);
-                    let usd_per_unit_gas = bcs_stream::deserialize_u256(stream);
+                    let dest_chain_selector = eth_abi::deserialize_u64(stream);
+                    let usd_per_unit_gas = eth_abi::deserialize_u256(stream);
                     GasPriceUpdate { dest_chain_selector, usd_per_unit_gas }
                 }
             );
 
         let merkle_roots =
-            bcs_stream::deserialize_vector(
+            eth_abi::deserialize_vector(
                 &mut stream,
                 |stream| {
-                    let source_chain_selector = bcs_stream::deserialize_u64(stream);
-                    let min_sequence_number = bcs_stream::deserialize_u64(stream);
-                    let max_sequence_number = bcs_stream::deserialize_u64(stream);
-                    let merkle_root = bcs_stream::deserialize_vector_u8(stream);
+                    let source_chain_selector = eth_abi::deserialize_u64(stream);
+                    let min_sequence_number = eth_abi::deserialize_u64(stream);
+                    let max_sequence_number = eth_abi::deserialize_u64(stream);
+                    let merkle_root = eth_abi::deserialize_bytes32(stream);
 
                     MerkleRoot {
                         source_chain_selector,
@@ -992,7 +993,7 @@ module ccip::offramp {
                 }
             );
 
-        let offramp_address = bcs_stream::deserialize_address(&mut stream);
+        let offramp_address = eth_abi::deserialize_address(&mut stream);
 
         CommitReport {
             token_price_updates,
