@@ -21,6 +21,8 @@ module ccip::onramp {
         chain_selector: u64,
         allowlist_admin: address,
         dest_chain_configs: SmartTable<u64, DestChainConfig>,
+        // dest chain selector -> sender -> nonce
+        outbound_nonces: SmartTable<u64, SmartTable<address, u64>>,
         config_set_events: EventHandle<ConfigSet>,
         dest_chain_config_set_events: EventHandle<DestChainConfigSet>,
         ccip_message_sent_events: EventHandle<CCIPMessageSent>,
@@ -135,6 +137,7 @@ module ccip::onramp {
             chain_selector,
             allowlist_admin: @0x0,
             dest_chain_configs: smart_table::new(),
+            outbound_nonces: smart_table::new(),
             config_set_events: account::new_event_handle(&state_object_signer),
             dest_chain_config_set_events: account::new_event_handle(&state_object_signer),
             ccip_message_sent_events: account::new_event_handle(&state_object_signer),
@@ -253,6 +256,9 @@ module ccip::onramp {
 
         let sequence_number = dest_chain_config.sequence_number;
 
+        let sender = signer::address_of(caller);
+        let nonce = get_incremented_outbound_nonce(state, dest_chain_selector, sender);
+
         let message = Aptos2AnyRampMessage {
             header: RampMessageHeader {
                 // populated on completion
@@ -260,10 +266,9 @@ module ccip::onramp {
                 source_chain_selector: state.chain_selector,
                 dest_chain_selector,
                 sequence_number,
-                // TODO(nonce): handle nonce
-                nonce: 0
+                nonce
             },
-            sender: signer::address_of(caller),
+            sender,
             data,
             receiver,
             // TODO(fee-quoter): `extra_args` passed in by the user is converted by the FeeQuoter on EVM and set here, do we need it?
@@ -484,6 +489,20 @@ module ccip::onramp {
         };
     }
 
+    #[view]
+    public fun get_outbound_nonce(
+        dest_chain_selector: u64, sender: address
+    ): u64 acquires OnRampState {
+        let state = borrow_state();
+        assert!(
+            smart_table::contains(&state.outbound_nonces, dest_chain_selector),
+            error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
+        );
+        let dest_chain_nonces =
+            smart_table::borrow(&state.outbound_nonces, dest_chain_selector);
+        *smart_table::borrow_with_default(dest_chain_nonces, sender, &0)
+    }
+
     inline fun set_dynamic_config_internal(
         state: &mut OnRampState, allowlist_admin: address
     ) {
@@ -586,8 +605,8 @@ module ccip::onramp {
             let is_enabled = *vector::borrow(&dest_chain_enabled, i);
             let allowlist_enabled = *vector::borrow(&dest_chain_allowlist_enabled, i);
 
-            let dest_chain_config =
-                smart_table::borrow_mut_with_default(
+            if (!smart_table::contains(&state.dest_chain_configs, dest_chain_selector)) {
+                smart_table::add(
                     &mut state.dest_chain_configs,
                     dest_chain_selector,
                     DestChainConfig {
@@ -596,6 +615,15 @@ module ccip::onramp {
                         allowlist_enabled: false,
                         allowed_senders: vector[]
                     }
+                );
+                smart_table::add(
+                    &mut state.outbound_nonces, dest_chain_selector, smart_table::new()
+                );
+            };
+
+            let dest_chain_config =
+                smart_table::borrow_mut(
+                    &mut state.dest_chain_configs, dest_chain_selector
                 );
 
             dest_chain_config.is_enabled = is_enabled;
@@ -627,6 +655,23 @@ module ccip::onramp {
         let ret = vector[];
         eth_abi::encode_u8(&mut ret, decimals);
         ret
+    }
+
+    inline fun get_incremented_outbound_nonce(
+        state: &mut OnRampState, dest_chain_selector: u64, sender: address
+    ): u64 {
+        assert!(
+            smart_table::contains(&state.outbound_nonces, dest_chain_selector),
+            error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
+        );
+        let dest_chain_nonces =
+            smart_table::borrow_mut(&mut state.outbound_nonces, dest_chain_selector);
+        let nonce_ref = smart_table::borrow_mut_with_default(
+            dest_chain_nonces, sender, 0
+        );
+        let incremented_nonce = *nonce_ref + 1;
+        *nonce_ref = incremented_nonce;
+        incremented_nonce
     }
 
     inline fun borrow_state(): &OnRampState {
