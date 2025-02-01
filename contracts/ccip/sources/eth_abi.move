@@ -1,10 +1,13 @@
 // module to do the equivalent packing as ethereum's abi.encode and abi.encodePacked
 module ccip::eth_abi {
     use std::bcs;
+    use std::error;
     use std::from_bcs;
     use std::vector;
 
     const E_INVALID_BYTES32: u64 = 1;
+    const E_INVALID_ADDRESS: u64 = 2;
+    const E_OUT_OF_BYTES: u64 = 3;
 
     public inline fun encode_address(out: &mut vector<u8>, value: address) {
         vector::append(out, bcs::to_bytes(&value))
@@ -98,9 +101,120 @@ module ccip::eth_abi {
         vector::append(out, value_bytes)
     }
 
-    public inline fun decode_u256(value_bytes: vector<u8>): u256 {
-        // big endian to little endian
+    struct ABIStream has drop {
+        data: vector<u8>,
+        cur: u64
+    }
+
+    public fun new_stream(data: vector<u8>): ABIStream {
+        ABIStream { data, cur: 0 }
+    }
+
+    public fun deserialize_address(stream: &mut ABIStream): address {
+        let data = &stream.data;
+        let cur = stream.cur;
+
+        assert!(
+            cur + 32 <= vector::length(data),
+            error::out_of_range(E_OUT_OF_BYTES)
+        );
+
+        // Verify first 12 bytes are zero
+        let i = 0;
+        while (i < 12) {
+            assert!(
+                *vector::borrow(data, cur + i) == 0,
+                error::invalid_argument(E_INVALID_ADDRESS)
+            );
+            i = i + 1;
+        };
+
+        // Extract last 20 bytes for address
+        let addr_bytes = vector::slice(data, cur + 12, cur + 32);
+        stream.cur = cur + 32;
+
+        from_bcs::to_address(addr_bytes)
+    }
+
+    public fun deserialize_u256(stream: &mut ABIStream): u256 {
+        let data = &stream.data;
+        let cur = stream.cur;
+
+        assert!(
+            cur + 32 <= vector::length(data),
+            error::out_of_range(E_OUT_OF_BYTES)
+        );
+
+        let value_bytes = vector::slice(data, cur, cur + 32);
+        // Convert from big endian to little endian
         vector::reverse(&mut value_bytes);
+
+        stream.cur = cur + 32;
         from_bcs::to_u256(value_bytes)
+    }
+
+    public fun deserialize_u8(stream: &mut ABIStream): u8 {
+        (deserialize_u256(stream) as u8)
+    }
+
+    public fun deserialize_u32(stream: &mut ABIStream): u32 {
+        (deserialize_u256(stream) as u32)
+    }
+
+    public fun deserialize_u64(stream: &mut ABIStream): u64 {
+        (deserialize_u256(stream) as u64)
+    }
+
+    public fun deserialize_bytes32(stream: &mut ABIStream): vector<u8> {
+        let data = &stream.data;
+        let cur = stream.cur;
+
+        assert!(
+            cur + 32 <= vector::length(data),
+            error::out_of_range(E_OUT_OF_BYTES)
+        );
+
+        let bytes = vector::slice(data, cur, cur + 32);
+        stream.cur = cur + 32;
+        bytes
+    }
+
+    public fun deserialize_bytes(stream: &mut ABIStream): vector<u8> {
+        // First read length as u256
+        let length = (deserialize_u256(stream) as u64);
+
+        let data = &stream.data;
+        let cur = stream.cur;
+
+        assert!(
+            cur + length <= vector::length(data),
+            error::out_of_range(E_OUT_OF_BYTES)
+        );
+
+        let bytes = vector::slice(data, cur, cur + length);
+
+        // Skip padding bytes
+        let padding_len = if (length % 32 == 0) { 0 }
+        else {
+            32 - (length % 32)
+        };
+        stream.cur = cur + length + padding_len;
+
+        bytes
+    }
+
+    public inline fun deserialize_vector<E>(
+        stream: &mut ABIStream, elem_deserializer: |&mut ABIStream| E
+    ): vector<E> {
+        let len = deserialize_u256(stream);
+        let v = vector::empty();
+
+        let i = 0;
+        while (i < len) {
+            vector::push_back(&mut v, elem_deserializer(stream));
+            i = i + 1;
+        };
+
+        v
     }
 }
