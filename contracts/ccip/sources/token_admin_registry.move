@@ -298,10 +298,11 @@ module ccip::token_admin_registry {
 
         let dispatch_signer = object::generate_signer_for_extending(&state.extend_ref);
 
+        let dispatch_object_seed = bcs::to_bytes(&token_pool_address);
+        vector::append(&mut dispatch_object_seed, b"TokenPoolRegistration");
+
         let dispatch_constructor_ref =
-            object::create_named_object(
-                &dispatch_signer, bcs::to_bytes(&token_pool_address)
-            );
+            object::create_named_object(&dispatch_signer, dispatch_object_seed);
         let dispatch_extend_ref = object::generate_extend_ref(&dispatch_constructor_ref);
         let dispatch_transfer_ref =
             object::generate_transfer_ref(&dispatch_constructor_ref);
@@ -312,9 +313,10 @@ module ccip::token_admin_registry {
             fungible_asset::add_fungibility(
                 &dispatch_constructor_ref,
                 option::none(),
-                // this was `typename` but it fails due to ENAME_TOO_LONG
-                string::utf8(b"TokenAdminRegistry"),
-                string::utf8(b"TAR"),
+                // max name length is 32 chars
+                string::utf8(b"CCIPTokenAdminRegistry"),
+                // max symbol length is 10 chars
+                string::utf8(b"CCIPTAR"),
                 0,
                 string::utf8(b""),
                 string::utf8(b"")
