@@ -2,10 +2,13 @@ module ccip_ping_pong_demo::ping_pong_demo {
     use std::account::{Self, SignerCapability};
     use std::error;
     use std::event::{Self, EventHandle};
+    use std::fungible_asset::Metadata;
     use std::object::{Self, Object, ObjectCore};
     use std::option::{Self, Option};
+    use std::primary_fungible_store;
     use std::signer;
 
+    use ccip::client;
     use ccip::eth_abi;
     use ccip::onramp;
     use ccip::ownable;
@@ -22,7 +25,7 @@ module ccip_ping_pong_demo::ping_pong_demo {
     struct PingPongDemo has key, store {
         ownable_state: ownable::OwnableState,
         store_signer_cap: SignerCapability,
-        fee_token: address,
+        fee_token: Object<Metadata>,
         counterpart_chain_selector: u64,
         counterpart_address: vector<u8>,
         is_paused: bool,
@@ -43,6 +46,7 @@ module ccip_ping_pong_demo::ping_pong_demo {
     }
 
     const E_NOT_PUBLISHER: u64 = 1;
+    const E_INVALID_FEE_TOKEN: u64 = 2;
 
     fun init_module(publisher: &signer) {
         receiver_registry::register_receiver(
@@ -64,7 +68,7 @@ module ccip_ping_pong_demo::ping_pong_demo {
 
     public fun initialize(
         caller: &signer,
-        fee_token: address,
+        fee_token_address: address,
         counterpart_chain_selector: u64,
         counterpart_address: vector<u8>
     ) acquires PingPongDeployment {
@@ -74,6 +78,12 @@ module ccip_ping_pong_demo::ping_pong_demo {
             move_from<PingPongDeployment>(@ccip_ping_pong_demo);
 
         let store_signer = account::create_signer_with_capability(&store_signer_cap);
+
+        assert!(
+            object::object_exists<Metadata>(fee_token_address),
+            error::invalid_argument(E_INVALID_FEE_TOKEN)
+        );
+        let fee_token = object::address_to_object<Metadata>(fee_token_address);
 
         move_to(
             &store_signer,
@@ -94,7 +104,7 @@ module ccip_ping_pong_demo::ping_pong_demo {
 
     #[view]
     public fun get_fee_token(): address acquires PingPongDemo {
-        borrow_state().fee_token
+        object::object_address(&borrow_state().fee_token)
     }
 
     #[view]
@@ -148,23 +158,29 @@ module ccip_ping_pong_demo::ping_pong_demo {
         };
 
         let caller = account::create_signer_with_capability(&state.store_signer_cap);
+        let fee_token_store =
+            primary_fungible_store::ensure_primary_store_exists(
+                signer::address_of(&caller), state.fee_token
+            );
 
-        onramp::ccip_send(
-            &caller,
-            state.counterpart_chain_selector,
-            state.counterpart_address,
-            encode_count(ping_pong_count),
-            /* token_transfers= */ vector[],
-            state.fee_token,
-            /* extra_args= */ vector[]
-        );
+        let message =
+            client::new_aptos2any_message(
+                state.counterpart_address,
+                encode_count(ping_pong_count),
+                /* token_transfers= */ vector[],
+                state.fee_token,
+                fee_token_store,
+                /* extra_args= */ vector[]
+            );
+
+        onramp::ccip_send(&caller, state.counterpart_chain_selector, message);
     }
 
     public fun ccip_receive<T: key>(_metadata: Object<T>): Option<u128> acquires PingPongDemo {
         let state = borrow_state_mut();
         let message =
             receiver_registry::get_receiver_input(@ccip_ping_pong_demo, PingPongProof {});
-        let data = receiver_registry::get_data(&message);
+        let data = client::get_data(&message);
         let count = decode_count(data);
         if (!state.is_paused) {
             respond_internal(state, count + 1);
