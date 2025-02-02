@@ -13,6 +13,7 @@ module ccip::offramp {
     use std::vector;
 
     use ccip::eth_abi;
+    use ccip::fee_quoter;
     use ccip::merkle_multi_proof;
     use ccip::ownable;
     use ccip::ocr3_base;
@@ -39,6 +40,8 @@ module ccip::offramp {
         // dynamic config
         permissionless_execution_threshold_secs: u32,
 
+        // TODO: consider a single smart table of source chain selector -> all data,
+        // ie config + execution state + roots + inbound nonces.
         // source chain selector -> config
         source_chain_configs: SmartTable<u64, SourceChainConfig>,
 
@@ -103,13 +106,17 @@ module ccip::offramp {
     }
 
     struct CommitReport has store, drop, copy {
-        token_price_updates: vector<TokenPriceUpdate>,
-        gas_price_updates: vector<GasPriceUpdate>,
+        price_updates: PriceUpdates,
         merkle_roots: vector<MerkleRoot>,
 
         // TODO: this was added so that the hashed/verified report contains the target address,
         // since we don't have onramp address fields. check if we need this.
         offramp_address: address
+    }
+
+    struct PriceUpdates has store, drop, copy {
+        token_price_updates: vector<TokenPriceUpdate>,
+        gas_price_updates: vector<GasPriceUpdate>
     }
 
     struct TokenPriceUpdate has store, drop, copy {
@@ -468,15 +475,52 @@ module ccip::offramp {
             error::invalid_argument(E_INVALID_OFFRAMP_ADDRESS)
         );
 
-        if (vector::length(&commit_report.token_price_updates) > 0
-            || vector::length(&commit_report.gas_price_updates) > 0) {
+        if (vector::length(&commit_report.price_updates.token_price_updates) > 0
+            || vector::length(&commit_report.price_updates.gas_price_updates) > 0) {
             let ocr_sequence_number =
                 ocr3_base::deserialize_sequence_bytes(
                     *vector::borrow(&report_context, 1)
                 );
             if (state.latest_price_sequence_number < ocr_sequence_number) {
                 state.latest_price_sequence_number = ocr_sequence_number;
-                // TODO(fee-quoter): handle price updates
+
+                let source_tokens = vector[];
+                let source_usd_per_token = vector[];
+                vector::for_each_ref(
+                    &commit_report.price_updates.token_price_updates,
+                    |token_price_update| {
+                        vector::push_back(
+                            &mut source_tokens, token_price_update.source_token
+                        );
+                        vector::push_back(
+                            &mut source_usd_per_token,
+                            token_price_update.usd_per_token
+                        );
+                    }
+                );
+
+                let gas_dest_chain_selectors = vector[];
+                let gas_usd_per_unit_gas = vector[];
+                vector::for_each_ref(
+                    &commit_report.price_updates.gas_price_updates,
+                    |gas_price_update| {
+                        vector::push_back(
+                            &mut gas_dest_chain_selectors,
+                            gas_price_update.dest_chain_selector
+                        );
+                        vector::push_back(
+                            &mut gas_usd_per_unit_gas,
+                            gas_price_update.usd_per_unit_gas
+                        );
+                    }
+                );
+
+                fee_quoter::update_prices(
+                    source_tokens,
+                    source_usd_per_token,
+                    gas_dest_chain_selectors,
+                    gas_usd_per_unit_gas
+                );
             } else {
                 assert!(
                     vector::length(&commit_report.merkle_roots) > 0,
@@ -991,6 +1035,8 @@ module ccip::offramp {
                 }
             );
 
+        let price_updates = PriceUpdates { token_price_updates, gas_price_updates };
+
         let merkle_roots =
             eth_abi::decode_vector(
                 &mut stream,
@@ -1011,12 +1057,7 @@ module ccip::offramp {
 
         let offramp_address = eth_abi::decode_address(&mut stream);
 
-        CommitReport {
-            token_price_updates,
-            gas_price_updates,
-            merkle_roots,
-            offramp_address
-        }
+        CommitReport { price_updates, merkle_roots, offramp_address }
     }
 
     inline fun deserialize_execution_reports(reports_bytes: vector<u8>):
