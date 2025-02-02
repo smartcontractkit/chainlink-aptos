@@ -785,7 +785,7 @@ module ccip::offramp {
         assert!(data_len == 32, error::invalid_state(E_INVALID_REMOTE_CHAIN_DECIMALS));
 
         let stream = eth_abi::new_stream(source_pool_data);
-        let remote_decimals = eth_abi::deserialize_u256(&mut stream);
+        let remote_decimals = eth_abi::decode_u256(&mut stream);
         assert!(
             remote_decimals <= 255,
             error::invalid_state(E_INVALID_REMOTE_CHAIN_DECIMALS)
@@ -972,33 +972,33 @@ module ccip::offramp {
     inline fun deserialize_commit_report(report_bytes: vector<u8>): CommitReport {
         let stream = eth_abi::new_stream(report_bytes);
         let token_price_updates =
-            eth_abi::deserialize_vector(
+            eth_abi::decode_vector(
                 &mut stream,
                 |stream| {
-                    let source_token = eth_abi::deserialize_address(stream);
-                    let usd_per_token = eth_abi::deserialize_u256(stream);
+                    let source_token = eth_abi::decode_address(stream);
+                    let usd_per_token = eth_abi::decode_u256(stream);
                     TokenPriceUpdate { source_token, usd_per_token }
                 }
             );
 
         let gas_price_updates =
-            eth_abi::deserialize_vector(
+            eth_abi::decode_vector(
                 &mut stream,
                 |stream| {
-                    let dest_chain_selector = eth_abi::deserialize_u64(stream);
-                    let usd_per_unit_gas = eth_abi::deserialize_u256(stream);
+                    let dest_chain_selector = eth_abi::decode_u64(stream);
+                    let usd_per_unit_gas = eth_abi::decode_u256(stream);
                     GasPriceUpdate { dest_chain_selector, usd_per_unit_gas }
                 }
             );
 
         let merkle_roots =
-            eth_abi::deserialize_vector(
+            eth_abi::decode_vector(
                 &mut stream,
                 |stream| {
-                    let source_chain_selector = eth_abi::deserialize_u64(stream);
-                    let min_sequence_number = eth_abi::deserialize_u64(stream);
-                    let max_sequence_number = eth_abi::deserialize_u64(stream);
-                    let merkle_root = eth_abi::deserialize_bytes32(stream);
+                    let source_chain_selector = eth_abi::decode_u64(stream);
+                    let min_sequence_number = eth_abi::decode_u64(stream);
+                    let max_sequence_number = eth_abi::decode_u64(stream);
+                    let merkle_root = eth_abi::decode_bytes32(stream);
 
                     MerkleRoot {
                         source_chain_selector,
@@ -1009,7 +1009,7 @@ module ccip::offramp {
                 }
             );
 
-        let offramp_address = eth_abi::deserialize_address(&mut stream);
+        let offramp_address = eth_abi::decode_address(&mut stream);
 
         CommitReport {
             token_price_updates,
@@ -1022,10 +1022,10 @@ module ccip::offramp {
     inline fun deserialize_execution_reports(reports_bytes: vector<u8>):
         vector<ExecutionReport> {
         let stream = eth_abi::new_stream(reports_bytes);
-        eth_abi::deserialize_vector(
+        eth_abi::decode_vector(
             &mut stream,
             |stream| {
-                let report_bytes = eth_abi::deserialize_bytes(stream);
+                let report_bytes = eth_abi::decode_bytes(stream);
                 deserialize_execution_report(report_bytes)
             }
         )
@@ -1034,17 +1034,17 @@ module ccip::offramp {
     inline fun deserialize_execution_report(report_bytes: vector<u8>): ExecutionReport {
         let stream = eth_abi::new_stream(report_bytes);
 
-        let source_chain_selector = eth_abi::deserialize_u64(&mut stream);
+        let source_chain_selector = eth_abi::decode_u64(&mut stream);
 
         let messages =
-            eth_abi::deserialize_vector(
+            eth_abi::decode_vector(
                 &mut stream,
                 |stream| {
-                    let message_id = eth_abi::deserialize_bytes32(stream);
-                    let header_source_chain_selector = eth_abi::deserialize_u64(stream);
-                    let dest_chain_selector = eth_abi::deserialize_u64(stream);
-                    let sequence_number = eth_abi::deserialize_u64(stream);
-                    let nonce = eth_abi::deserialize_u64(stream);
+                    let message_id = eth_abi::decode_bytes32(stream);
+                    let header_source_chain_selector = eth_abi::decode_u64(stream);
+                    let dest_chain_selector = eth_abi::decode_u64(stream);
+                    let sequence_number = eth_abi::decode_u64(stream);
+                    let nonce = eth_abi::decode_u64(stream);
 
                     let header = RampMessageHeader {
                         message_id,
@@ -1059,22 +1059,20 @@ module ccip::offramp {
                         error::invalid_argument(E_SOURCE_CHAIN_SELECTOR_MISMATCH)
                     );
 
-                    let sender = eth_abi::deserialize_bytes(stream);
-                    let data = eth_abi::deserialize_bytes(stream);
-                    let receiver = eth_abi::deserialize_address(stream);
-                    let gas_limit = eth_abi::deserialize_u256(stream);
+                    let sender = eth_abi::decode_bytes(stream);
+                    let data = eth_abi::decode_bytes(stream);
+                    let receiver = eth_abi::decode_address(stream);
+                    let gas_limit = eth_abi::decode_u256(stream);
 
                     let token_amounts =
-                        eth_abi::deserialize_vector(
+                        eth_abi::decode_vector(
                             stream,
                             |stream| {
-                                let source_pool_address =
-                                    eth_abi::deserialize_bytes(stream);
-                                let dest_token_address =
-                                    eth_abi::deserialize_address(stream);
-                                let dest_gas_amount = eth_abi::deserialize_u32(stream);
-                                let extra_data = eth_abi::deserialize_bytes(stream);
-                                let amount = eth_abi::deserialize_u256(stream);
+                                let source_pool_address = eth_abi::decode_bytes(stream);
+                                let dest_token_address = eth_abi::decode_address(stream);
+                                let dest_gas_amount = eth_abi::decode_u32(stream);
+                                let extra_data = eth_abi::decode_bytes(stream);
+                                let amount = eth_abi::decode_u256(stream);
 
                                 Any2AptosTokenTransfer {
                                     source_pool_address,
@@ -1098,22 +1096,22 @@ module ccip::offramp {
             );
 
         let offchain_token_data =
-            eth_abi::deserialize_vector(
+            eth_abi::decode_vector(
                 &mut stream,
                 |stream| {
-                    eth_abi::deserialize_vector(
-                        stream, |stream| eth_abi::deserialize_bytes(stream)
+                    eth_abi::decode_vector(
+                        stream, |stream| eth_abi::decode_bytes(stream)
                     )
                 }
             );
 
         let proofs =
-            eth_abi::deserialize_vector(
+            eth_abi::decode_vector(
                 &mut stream,
-                |stream| eth_abi::deserialize_bytes32(stream)
+                |stream| eth_abi::decode_bytes32(stream)
             );
 
-        let proof_flag_bits = eth_abi::deserialize_u256(&mut stream);
+        let proof_flag_bits = eth_abi::decode_u256(&mut stream);
 
         ExecutionReport {
             source_chain_selector,

@@ -194,7 +194,7 @@ module ccip_ping_pong_demo::ping_pong_demo {
 
     inline fun decode_count(data: vector<u8>): u256 {
         let stream = eth_abi::new_stream(data);
-        eth_abi::deserialize_u256(&mut stream)
+        eth_abi::decode_u256(&mut stream)
     }
 
     fun assert_can_initialize(caller_address: address) {

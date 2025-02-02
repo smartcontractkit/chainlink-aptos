@@ -110,7 +110,7 @@ module ccip::eth_abi {
         ABIStream { data, cur: 0 }
     }
 
-    public fun deserialize_address(stream: &mut ABIStream): address {
+    public fun decode_address(stream: &mut ABIStream): address {
         let data = &stream.data;
         let cur = stream.cur;
 
@@ -136,7 +136,7 @@ module ccip::eth_abi {
         from_bcs::to_address(addr_bytes)
     }
 
-    public fun deserialize_u256(stream: &mut ABIStream): u256 {
+    public fun decode_u256(stream: &mut ABIStream): u256 {
         let data = &stream.data;
         let cur = stream.cur;
 
@@ -153,19 +153,19 @@ module ccip::eth_abi {
         from_bcs::to_u256(value_bytes)
     }
 
-    public fun deserialize_u8(stream: &mut ABIStream): u8 {
-        (deserialize_u256(stream) as u8)
+    public fun decode_u8(stream: &mut ABIStream): u8 {
+        (decode_u256(stream) as u8)
     }
 
-    public fun deserialize_u32(stream: &mut ABIStream): u32 {
-        (deserialize_u256(stream) as u32)
+    public fun decode_u32(stream: &mut ABIStream): u32 {
+        (decode_u256(stream) as u32)
     }
 
-    public fun deserialize_u64(stream: &mut ABIStream): u64 {
-        (deserialize_u256(stream) as u64)
+    public fun decode_u64(stream: &mut ABIStream): u64 {
+        (decode_u256(stream) as u64)
     }
 
-    public fun deserialize_bytes32(stream: &mut ABIStream): vector<u8> {
+    public fun decode_bytes32(stream: &mut ABIStream): vector<u8> {
         let data = &stream.data;
         let cur = stream.cur;
 
@@ -179,9 +179,9 @@ module ccip::eth_abi {
         bytes
     }
 
-    public fun deserialize_bytes(stream: &mut ABIStream): vector<u8> {
+    public fun decode_bytes(stream: &mut ABIStream): vector<u8> {
         // First read length as u256
-        let length = (deserialize_u256(stream) as u64);
+        let length = (decode_u256(stream) as u64);
 
         let data = &stream.data;
         let cur = stream.cur;
@@ -203,15 +203,15 @@ module ccip::eth_abi {
         bytes
     }
 
-    public inline fun deserialize_vector<E>(
-        stream: &mut ABIStream, elem_deserializer: |&mut ABIStream| E
+    public inline fun decode_vector<E>(
+        stream: &mut ABIStream, elem_decoder: |&mut ABIStream| E
     ): vector<E> {
-        let len = deserialize_u256(stream);
+        let len = decode_u256(stream);
         let v = vector::empty();
 
         let i = 0;
         while (i < len) {
-            vector::push_back(&mut v, elem_deserializer(stream));
+            vector::push_back(&mut v, elem_decoder(stream));
             i = i + 1;
         };
 
