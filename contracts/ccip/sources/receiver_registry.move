@@ -13,6 +13,7 @@ module ccip::receiver_registry {
     use std::string;
     use std::vector;
 
+    use ccip::client;
     use ccip::ownable;
     use ccip::state_object;
 
@@ -31,20 +32,7 @@ module ccip::receiver_registry {
         dispatch_metadata: Object<Metadata>,
         dispatch_extend_ref: ExtendRef,
         dispatch_transfer_ref: TransferRef,
-        executing_input: Option<Any2AptosMessage>
-    }
-
-    struct Any2AptosMessage has store, drop, copy {
-        message_id: vector<u8>,
-        source_chain_selector: u64,
-        sender: vector<u8>,
-        data: vector<u8>,
-        dest_token_amounts: vector<AptosTokenAmount>
-    }
-
-    struct AptosTokenAmount has store, drop, copy {
-        token: address,
-        amount: u64
+        executing_input: Option<client::Any2AptosMessage>
     }
 
     #[event]
@@ -152,7 +140,7 @@ module ccip::receiver_registry {
 
     public fun get_receiver_input<ProofType: drop>(
         receiver_address: address, _proof: ProofType
-    ): Any2AptosMessage acquires CCIPReceiverRegistration {
+    ): client::Any2AptosMessage acquires CCIPReceiverRegistration {
         let registration = get_registration_mut(receiver_address);
 
         assert!(
@@ -169,13 +157,7 @@ module ccip::receiver_registry {
     }
 
     public(friend) fun start_receive(
-        receiver_address: address,
-        message_id: vector<u8>,
-        source_chain_selector: u64,
-        sender: vector<u8>,
-        data: vector<u8>,
-        token_addresses: vector<address>,
-        token_amounts: vector<u64>
+        receiver_address: address, message: client::Any2AptosMessage
     ): Object<Metadata> acquires CCIPReceiverRegistration {
         let registration = get_registration_mut(receiver_address);
 
@@ -184,24 +166,7 @@ module ccip::receiver_registry {
             error::invalid_state(E_NON_EMPTY_INPUT)
         );
 
-        let dest_token_amounts = vector::zip_map_ref(
-            &token_addresses,
-            &token_amounts,
-            |token_address, token_amount| {
-                AptosTokenAmount { token: *token_address, amount: *token_amount }
-            }
-        );
-
-        option::fill(
-            &mut registration.executing_input,
-            Any2AptosMessage {
-                message_id,
-                source_chain_selector,
-                sender,
-                data,
-                dest_token_amounts
-            }
-        );
+        option::fill(&mut registration.executing_input, message);
 
         registration.dispatch_metadata
     }
@@ -213,36 +178,6 @@ module ccip::receiver_registry {
             option::is_none(&registration.executing_input),
             error::invalid_state(E_NON_EMPTY_INPUT)
         );
-    }
-
-    // Any2AptosMessage accessors
-    public fun get_message_id(input: &Any2AptosMessage): vector<u8> {
-        input.message_id
-    }
-
-    public fun get_source_chain_selector(input: &Any2AptosMessage): u64 {
-        input.source_chain_selector
-    }
-
-    public fun get_sender(input: &Any2AptosMessage): vector<u8> {
-        input.sender
-    }
-
-    public fun get_data(input: &Any2AptosMessage): vector<u8> {
-        input.data
-    }
-
-    public fun get_dest_token_amounts(input: &Any2AptosMessage): vector<AptosTokenAmount> {
-        input.dest_token_amounts
-    }
-
-    // AptosTokenAmount accessors
-    public fun get_token(input: &AptosTokenAmount): address {
-        input.token
-    }
-
-    public fun get_amount(input: &AptosTokenAmount): u64 {
-        input.amount
     }
 
     inline fun borrow_state(): &ReceiverRegistryState {

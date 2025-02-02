@@ -12,6 +12,7 @@ module ccip::offramp {
     use std::timestamp;
     use std::vector;
 
+    use ccip::client;
     use ccip::eth_abi;
     use ccip::fee_quoter;
     use ccip::merkle_multi_proof;
@@ -717,15 +718,19 @@ module ccip::offramp {
                 message.header.source_chain_selector
             );
 
-        receiver_dispatcher::dispatch_receive(
-            message.receiver,
-            message.header.message_id,
-            message.header.source_chain_selector,
-            message.sender,
-            message.data,
-            local_token_addresses,
-            local_token_amounts
-        )
+        let dest_token_amounts =
+            client::new_dest_token_amounts(local_token_addresses, local_token_amounts);
+
+        let any2aptos_message =
+            client::new_any2aptos_message(
+                message.header.message_id,
+                message.header.source_chain_selector,
+                message.sender,
+                message.data,
+                dest_token_amounts
+            );
+
+        receiver_dispatcher::dispatch_receive(message.receiver, any2aptos_message)
     }
 
     inline fun release_or_mint_tokens(

@@ -3,12 +3,13 @@ module ccip::onramp {
     use std::aptos_hash;
     use std::error;
     use std::event::{Self, EventHandle};
-    use std::fungible_asset::{Self, FungibleAsset, Metadata};
+    use std::fungible_asset::{Self, Metadata};
     use std::object;
     use std::signer;
     use std::smart_table::{Self, SmartTable};
     use std::vector;
 
+    use ccip::client;
     use ccip::eth_abi;
     use ccip::merkle_multi_proof;
     use ccip::ownable;
@@ -175,14 +176,12 @@ module ccip::onramp {
     }
 
     public fun ccip_send(
-        caller: &signer,
-        dest_chain_selector: u64,
-        receiver: vector<u8>,
-        data: vector<u8>,
-        token_transfers: vector<FungibleAsset>,
-        fee_token: address,
-        extra_args: vector<u8>
+        caller: &signer, message: client::Aptos2AnyMessage
     ): vector<u8> acquires OnRampState {
+        let (dest_chain_selector, receiver, data, fee_token, extra_args) =
+            client::get_aptos2any_fields(&message);
+
+        let token_transfers = client::unwrap_token_transfers(message);
 
         let state = borrow_state_mut();
         assert!(
