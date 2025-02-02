@@ -20,6 +20,9 @@ module ccip::onramp {
         ownable_state: ownable::OwnableState,
         chain_selector: u64,
         allowlist_admin: address,
+
+        // TODO: consider a single smart table of dest chain selector -> all data
+        // dest chain selector -> config
         dest_chain_configs: SmartTable<u64, DestChainConfig>,
         // dest chain selector -> sender -> nonce
         outbound_nonces: SmartTable<u64, SmartTable<address, u64>>,
