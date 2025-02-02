@@ -19,12 +19,13 @@ module ccip::fee_quoter {
     use std::error;
     use std::event::{Self, EventHandle};
     use std::fungible_asset::Metadata;
-    use std::object;
+    use std::object::{Self, Object};
     use std::signer;
     use std::smart_table::{Self, SmartTable};
     use std::timestamp;
     use std::vector;
 
+    use ccip::client;
     use ccip::ownable;
     use ccip::state_object;
 
@@ -253,8 +254,25 @@ module ccip::fee_quoter {
         );
     }
 
-    public(friend) fun get_fee() {
+    public(friend) fun get_fee(
+        _dest_chain_selector: u64, _message: &client::Aptos2AnyMessage
+    ): u64 {
         // TODO
+        0
+    }
+
+    public(friend) fun process_message_args(
+        _dest_chain_selector: u64,
+        _fee_token: Object<Metadata>,
+        _fee_token_amount: u64,
+        _extra_args: vector<u8>,
+        _local_token_addresses: vector<address>,
+        _local_token_amounts: vector<u64>,
+        _dest_token_addresses: vector<vector<u8>>,
+        _dest_pool_datas: vector<vector<u8>>
+    ): (u256, bool, vector<u8>, vector<vector<u8>>) {
+        // TODO
+        (0, false, vector[], vector[])
     }
 
     inline fun borrow_state(): &FeeQuoterState {

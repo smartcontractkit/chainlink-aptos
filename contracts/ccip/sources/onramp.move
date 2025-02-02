@@ -4,13 +4,15 @@ module ccip::onramp {
     use std::error;
     use std::event::{Self, EventHandle};
     use std::fungible_asset::{Self, Metadata};
-    use std::object;
+    use std::object::{Self, Object};
+    use std::primary_fungible_store;
     use std::signer;
     use std::smart_table::{Self, SmartTable};
     use std::vector;
 
     use ccip::client;
     use ccip::eth_abi;
+    use ccip::fee_quoter;
     use ccip::merkle_multi_proof;
     use ccip::ownable;
     use ccip::state_object;
@@ -59,7 +61,7 @@ module ccip::onramp {
         data: vector<u8>,
         receiver: vector<u8>,
         extra_args: vector<u8>,
-        fee_token: address,
+        fee_token: Object<Metadata>,
         fee_token_amount: u64,
         token_amounts: vector<Aptos2AnyTokenTransfer>
     }
@@ -178,10 +180,16 @@ module ccip::onramp {
     public fun ccip_send(
         caller: &signer, message: client::Aptos2AnyMessage
     ): vector<u8> acquires OnRampState {
-        let (dest_chain_selector, receiver, data, fee_token, extra_args) =
+        let (dest_chain_selector, receiver, data, fee_token, fee_token_store, extra_args) =
+
             client::get_aptos2any_fields(&message);
 
-        let token_transfers = client::unwrap_token_transfers(message);
+        let fee_token_amount = fee_quoter::get_fee(dest_chain_selector, &message);
+        if (fee_token_amount != 0) {
+            // deposit the fee in the state object's primary fungible store.
+            let fa = fungible_asset::withdraw(caller, fee_token_store, fee_token_amount);
+            primary_fungible_store::deposit(state_object::object_address(), fa);
+        };
 
         let state = borrow_state_mut();
         assert!(
@@ -205,20 +213,17 @@ module ccip::onramp {
             );
         };
 
-        // TODO(fee-quoter): we need to handle `fee_token`, checking that it's a valid accepted fungible
-        // asset, eg APT (https://explorer.aptoslabs.com/fungible_asset/0xa?network=mainnet) and
-        // then retrieving the correct amount from the caller's primary fungible store.
-        // for now, do a sanity check that fee_token is a valid fungible asset.
-        assert!(
-            object::object_exists<Metadata>(fee_token),
-            error::invalid_argument(E_INVALID_FEE_TOKEN)
-        );
-        let fee_token_amount = 0;
-
         let sender = signer::address_of(caller);
 
+        // get the token addresses and amounts before unwrapping.
+        let (local_token_addresses, local_token_amounts) =
+            client::get_aptos2any_token_transfers(&message);
+
+        let dest_token_addresses = vector[];
+        let dest_pool_datas = vector[];
+
         let token_amounts = vector::map(
-            token_transfers,
+            client::unwrap_token_transfers(message),
             |fa| {
                 let fa_metadata = fungible_asset::metadata_from_asset(&fa);
                 let fa_amount = fungible_asset::amount(&fa);
@@ -244,6 +249,9 @@ module ccip::onramp {
 
                 let encoded_amount = fa_amount as u256;
 
+                vector::push_back(&mut dest_token_addresses, dest_token_address);
+                vector::push_back(&mut dest_pool_datas, dest_pool_data);
+
                 Aptos2AnyTokenTransfer {
                     source_pool_address: token_pool_address,
                     dest_token_address,
@@ -258,8 +266,37 @@ module ccip::onramp {
 
         let sequence_number = dest_chain_config.sequence_number;
 
-        let sender = signer::address_of(caller);
-        let nonce = get_incremented_outbound_nonce(state, dest_chain_selector, sender);
+        // TODO: handle fee_value_juels or remove it
+        let (
+            fee_value_juels,
+            is_out_of_order_execution,
+            converted_extra_args,
+            dest_exec_data_per_token
+        ) =
+            fee_quoter::process_message_args(
+                dest_chain_selector,
+                fee_token,
+                fee_token_amount,
+                extra_args,
+                local_token_addresses,
+                local_token_amounts,
+                dest_token_addresses,
+                dest_pool_datas
+            );
+
+        vector::zip_mut(
+            &mut token_amounts,
+            &mut dest_exec_data_per_token,
+            |token_amount, dest_exec_data| {
+                token_amount.dest_exec_data = *dest_exec_data;
+            }
+        );
+
+        let nonce =
+            if (is_out_of_order_execution) { 0 }
+            else {
+                get_incremented_outbound_nonce(state, dest_chain_selector, sender)
+            };
 
         let message = Aptos2AnyRampMessage {
             header: RampMessageHeader {
@@ -273,14 +310,11 @@ module ccip::onramp {
             sender,
             data,
             receiver,
-            // TODO(fee-quoter): `extra_args` passed in by the user is converted by the FeeQuoter on EVM and set here, do we need it?
-            extra_args: vector[],
+            extra_args: converted_extra_args,
             fee_token,
             fee_token_amount,
             token_amounts
         };
-
-        // TODO(fee-quoter): processMessageArgs, out of order execution, converted extra args, dest exec data per token, etc.
 
         let metadata_hash =
             calculate_metadata_hash(state.chain_selector, dest_chain_selector);
@@ -543,7 +577,9 @@ module ccip::onramp {
         eth_abi::encode_address(&mut inner_hash, message.sender);
         eth_abi::encode_u64(&mut inner_hash, message.header.sequence_number);
         eth_abi::encode_u64(&mut inner_hash, message.header.nonce);
-        eth_abi::encode_address(&mut inner_hash, message.fee_token);
+        eth_abi::encode_address(
+            &mut inner_hash, object::object_address(&message.fee_token)
+        );
         eth_abi::encode_u64(&mut inner_hash, message.fee_token_amount);
         eth_abi::encode_bytes32(&mut outer_hash, aptos_hash::keccak256(inner_hash));
 
