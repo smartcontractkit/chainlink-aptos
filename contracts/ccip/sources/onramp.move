@@ -15,6 +15,7 @@ module ccip::onramp {
     use ccip::fee_quoter;
     use ccip::merkle_multi_proof;
     use ccip::ownable;
+    use ccip::rmn_remote;
     use ccip::state_object;
     use ccip::token_admin_dispatcher;
     use ccip::token_admin_registry;
@@ -127,6 +128,8 @@ module ccip::onramp {
     const E_INVALID_ALLOWLIST_ADDRESS: u64 = 9;
     const E_UNSUPPORTED_TOKEN: u64 = 10;
     const E_INVALID_FEE_TOKEN: u64 = 11;
+    const E_CURSED_BY_RMN: u64 = 12;
+    const E_BAD_RMN_SIGNAL: u64 = 13;
 
     public entry fun initialize(
         caller: &signer,
@@ -186,13 +189,32 @@ module ccip::onramp {
         dest_chain_config.sequence_number + 1
     }
 
+    // TODO: this should be #[view], remove the struct
+    public fun get_fee(
+        dest_chain_selector: u64, message: &client::Aptos2AnyMessage
+    ): u64 {
+        get_fee_internal(dest_chain_selector, message)
+    }
+
+    inline fun get_fee_internal(
+        dest_chain_selector: u64, message: &client::Aptos2AnyMessage
+    ): u64 {
+        assert!(
+            !rmn_remote::is_cursed_u128(dest_chain_selector as u128),
+            error::permission_denied(E_CURSED_BY_RMN)
+        );
+        fee_quoter::get_validated_fee(dest_chain_selector, message)
+    }
+
     public fun ccip_send(
         caller: &signer, dest_chain_selector: u64, message: client::Aptos2AnyMessage
     ): vector<u8> acquires OnRampState {
+        assert!(!rmn_remote::is_cursed_global(), error::permission_denied(E_BAD_RMN_SIGNAL));
+
         let (receiver, data, fee_token, fee_token_store, extra_args) =
             client::get_aptos2any_fields(&message);
 
-        let fee_token_amount = fee_quoter::get_fee(dest_chain_selector, &message);
+        let fee_token_amount = get_fee_internal(dest_chain_selector, &message);
         if (fee_token_amount != 0) {
             // deposit the fee in the state object's primary fungible store.
             let fa = fungible_asset::withdraw(caller, fee_token_store, fee_token_amount);
