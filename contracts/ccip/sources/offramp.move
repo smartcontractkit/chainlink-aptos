@@ -845,8 +845,7 @@ module ccip::offramp {
 
         assert!(data_len == 32, error::invalid_state(E_INVALID_REMOTE_CHAIN_DECIMALS));
 
-        let stream = eth_abi::new_stream(source_pool_data);
-        let remote_decimals = eth_abi::decode_u256(&mut stream);
+        let remote_decimals = eth_abi::decode_u256_value(source_pool_data);
         assert!(
             remote_decimals <= 255,
             error::invalid_state(E_INVALID_REMOTE_CHAIN_DECIMALS)

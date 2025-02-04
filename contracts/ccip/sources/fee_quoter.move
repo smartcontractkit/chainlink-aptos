@@ -807,8 +807,11 @@ module ccip::fee_quoter {
             error::invalid_argument(E_MESSAGE_COMPUTE_UNIT_LIMIT_TOO_HIGH)
         );
         if (require_valid_token_receiver) {
-            let stream = eth_abi::new_stream(token_receiver);
-            let token_receiver_uint = eth_abi::decode_u256(&mut stream);
+            assert!(
+                vector::length(&token_receiver) == 32,
+                error::invalid_argument(E_INVALID_TOKEN_RECEIVER)
+            );
+            let token_receiver_uint = eth_abi::decode_u256_value(token_receiver);
             assert!(
                 token_receiver_uint > 0,
                 error::invalid_argument(E_INVALID_TOKEN_RECEIVER)
@@ -827,8 +830,7 @@ module ccip::fee_quoter {
         if (args_tag == EVM_EXTRA_ARGS_V2_TAG) {
             decode_evm_extra_args_v2(args_data)
         } else if (args_tag == EVM_EXTRA_ARGS_V1_TAG) {
-            let stream = eth_abi::new_stream(args_data);
-            let gas_limit = eth_abi::decode_u256(&mut stream);
+            let gas_limit = eth_abi::decode_u256_value(args_data);
             (gas_limit, false)
         } else {
             abort error::invalid_argument(E_INVALID_EXTRA_ARGS_TAG)
@@ -1075,8 +1077,11 @@ module ccip::fee_quoter {
                 _accounts
             ) = decode_svm_extra_args(extra_args);
             if (is_message_with_token_transfers) {
-                let stream = eth_abi::new_stream(token_receiver);
-                let token_receiver_uint = eth_abi::decode_u256(&mut stream);
+                assert!(
+                    vector::length(&token_receiver) == 32,
+                    error::invalid_argument(E_INVALID_TOKEN_RECEIVER)
+                );
+                let token_receiver_uint = eth_abi::decode_u256_value(token_receiver);
                 assert!(
                     token_receiver_uint > 0,
                     error::invalid_argument(E_INVALID_TOKEN_RECEIVER)
@@ -1329,8 +1334,7 @@ module ccip::fee_quoter {
             encoded_address_len == 32, error::invalid_argument(E_INVALID_EVM_ADDRESS)
         );
 
-        let stream = eth_abi::new_stream(encoded_address);
-        let encoded_address_uint = eth_abi::decode_u256(&mut stream);
+        let encoded_address_uint = eth_abi::decode_u256_value(encoded_address);
 
         assert!(
             encoded_address_uint >= EVM_PRECOMPILE_SPACE,
@@ -1351,8 +1355,11 @@ module ccip::fee_quoter {
         );
 
         if (must_be_non_zero) {
-            let stream = eth_abi::new_stream(encoded_address);
-            let encoded_address_uint = eth_abi::decode_u256(&mut stream);
+            assert!(
+                vector::length(&encoded_address) == 32,
+                error::invalid_argument(E_INVALID_SVM_ADDRESS)
+            );
+            let encoded_address_uint = eth_abi::decode_u256_value(encoded_address);
             assert!(
                 encoded_address_uint > 0,
                 error::invalid_argument(E_INVALID_SVM_ADDRESS)
