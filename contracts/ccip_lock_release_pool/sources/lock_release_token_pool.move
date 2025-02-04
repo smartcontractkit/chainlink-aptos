@@ -571,8 +571,13 @@ module ccip_lock_release_pool::lock_release_token_pool {
         fa
     }
 
+    // TODO: separate functions due to deploy error, see ccip::state_object
     #[view]
-    public inline fun store_address(): address {
+    public fun get_store_address(): address {
+        store_address()
+    }
+
+    inline fun store_address(): address {
         account::create_resource_address(&@ccip_lock_release_pool, STORE_OBJECT_SEED)
     }
 
