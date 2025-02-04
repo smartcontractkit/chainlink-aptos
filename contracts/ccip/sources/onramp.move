@@ -261,10 +261,7 @@ module ccip::onramp {
                     error::invalid_argument(E_UNSUPPORTED_TOKEN)
                 );
 
-                let dest_pool_data =
-                    encode_local_decimals(fungible_asset::decimals(fa_metadata));
-
-                let dest_token_address =
+                let (dest_token_address, dest_pool_data) =
                     token_admin_dispatcher::dispatch_lock_or_burn(
                         token_pool_address,
                         fa,
@@ -713,12 +710,6 @@ module ccip::onramp {
 
             i = i + 1;
         };
-    }
-
-    inline fun encode_local_decimals(decimals: u8): vector<u8> {
-        let ret = vector[];
-        eth_abi::encode_u8(&mut ret, decimals);
-        ret
     }
 
     inline fun get_incremented_outbound_nonce(

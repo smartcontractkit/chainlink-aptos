@@ -67,21 +67,25 @@ module ccip::token_admin_registry {
     }
 
     struct LockOrBurnOutput has store, drop {
-        dest_token_address: vector<u8>
+        dest_token_address: vector<u8>,
+        dest_pool_data: vector<u8>,
     }
 
     struct ReleaseOrMintInput has store, drop {
-        local_token: address,
         sender: vector<u8>,
-        remote_chain_selector: u64,
         receiver: address,
+        source_amount: u256,
+        local_token: address,
+        remote_chain_selector: u64,
         source_pool_address: vector<u8>,
         source_pool_data: vector<u8>,
-        offchain_token_data: vector<u8>
+        offchain_token_data: vector<u8>,
     }
 
     // TODO: consider removing ReleaseOrMintOutput, it exists only for a consistent UX across lock and release.
-    struct ReleaseOrMintOutput has store, drop {}
+    struct ReleaseOrMintOutput has store, drop {
+        destination_amount: u64,
+    }
 
     #[event]
     struct PoolSet has store, drop {
@@ -513,7 +517,7 @@ module ccip::token_admin_registry {
     }
 
     public fun set_lock_or_burn_output<ProofType: drop>(
-        token_pool_address: address, _proof: ProofType, dest_token_address: vector<u8>
+        token_pool_address: address, _proof: ProofType, dest_token_address: vector<u8>, dest_pool_data: vector<u8>,
     ) acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
 
@@ -545,7 +549,7 @@ module ccip::token_admin_registry {
 
         option::fill(
             &mut registration.executing_lock_or_burn_output,
-            LockOrBurnOutput { dest_token_address }
+            LockOrBurnOutput { dest_token_address, dest_pool_data }
         )
     }
 
@@ -584,7 +588,8 @@ module ccip::token_admin_registry {
     }
 
     public fun set_release_or_mint_output<ProofType: drop>(
-        token_pool_address: address, _proof: ProofType
+        token_pool_address: address, _proof: ProofType,
+        destination_amount: u64
     ) acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
 
@@ -616,7 +621,7 @@ module ccip::token_admin_registry {
 
         option::fill(
             &mut registration.executing_release_or_mint_output,
-            ReleaseOrMintOutput {}
+            ReleaseOrMintOutput { destination_amount }
         )
     }
 
@@ -636,24 +641,28 @@ module ccip::token_admin_registry {
     }
 
     // ReleaseOrMintInput accessors
+    public fun get_release_or_mint_sender(input: &ReleaseOrMintInput): vector<u8> {
+        input.sender
+    }
+
+    public fun get_release_or_mint_receiver(input: &ReleaseOrMintInput): address {
+        input.receiver
+    }
+
+    public fun get_release_or_mint_source_amount(input: &ReleaseOrMintInput): u256 {
+        input.source_amount
+    }
+
     public fun get_release_or_mint_local_token(
         input: &ReleaseOrMintInput
     ): address {
         input.local_token
     }
 
-    public fun get_release_or_mint_sender(input: &ReleaseOrMintInput): vector<u8> {
-        input.sender
-    }
-
     public fun get_release_or_mint_remote_chain_selector(
         input: &ReleaseOrMintInput
     ): u64 {
         input.remote_chain_selector
-    }
-
-    public fun get_release_or_mint_receiver(input: &ReleaseOrMintInput): address {
-        input.receiver
     }
 
     public fun get_release_or_mint_source_pool_address(
@@ -714,7 +723,7 @@ module ccip::token_admin_registry {
 
     public(friend) fun finish_lock_or_burn(
         token_pool_address: address
-    ): vector<u8> acquires TokenPoolRegistration {
+    ): (vector<u8>, vector<u8>) acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
 
         assert!(
@@ -751,18 +760,19 @@ module ccip::token_admin_registry {
         };
 
         let output = option::extract(&mut registration.executing_lock_or_burn_output);
-        output.dest_token_address
+        (output.dest_token_address, output.dest_pool_data)
     }
 
     public(friend) fun start_release_or_mint(
         token_pool_address: address,
-        local_token: address,
         sender: vector<u8>,
-        remote_chain_selector: u64,
         receiver: address,
+        source_amount: u256,
+        local_token: address,
+        remote_chain_selector: u64,
         source_pool_address: vector<u8>,
         source_pool_data: vector<u8>,
-        offchain_token_data: vector<u8>
+        offchain_token_data: vector<u8>,
     ): (signer, Object<FungibleStore>) acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
 
@@ -791,10 +801,11 @@ module ccip::token_admin_registry {
         option::fill(
             &mut registration.executing_release_or_mint_input,
             ReleaseOrMintInput {
-                local_token,
                 sender,
-                remote_chain_selector,
                 receiver,
+                source_amount,
+                local_token,
+                remote_chain_selector,
                 source_pool_address,
                 source_pool_data,
                 offchain_token_data
@@ -809,7 +820,7 @@ module ccip::token_admin_registry {
 
     public(friend) fun finish_release_or_mint(
         token_pool_address: address
-    ) acquires TokenPoolRegistration {
+    ): u64 acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
 
         assert!(
@@ -845,9 +856,11 @@ module ccip::token_admin_registry {
             );
         };
 
-        let _output = option::extract(
+        let output = option::extract(
             &mut registration.executing_release_or_mint_output
         );
+
+        output.destination_amount
     }
 
     fun assert_can_register(

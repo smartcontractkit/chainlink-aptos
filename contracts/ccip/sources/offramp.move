@@ -3,8 +3,6 @@ module ccip::offramp {
     use std::aptos_hash;
     use std::error;
     use std::event::{Self, EventHandle};
-    use std::fungible_asset::{Self, Metadata};
-    use std::object;
     use std::option::Option;
     use std::primary_fungible_store;
     use std::signer;
@@ -871,111 +869,30 @@ module ccip::offramp {
             error::invalid_state(E_UNSUPPORTED_TOKEN)
         );
 
-        // This should not revert because token_admin_registry already checked that the local token
-        // is a valid fungible asset upon pool registration.
-        let fa_metadata = object::address_to_object<Metadata>(local_token);
-        let local_decimals = fungible_asset::decimals(fa_metadata);
-
-        // On EVM, the conversion from source amount to destination amount happens
-        // in the TokenPool, but we need to do it before it reaches the TokenPool,
-        // because the dynamic dispatch call for withdraw() already expects a local
-        // u64 amount.
-        // We cannot easily switch to another dispatchable fungible asset callback,
-        // because dispatchable_withdraw() returns a FungibleAsset, which cannot be stored.
-        //
-        // TODO: investigate whether this is acceptable. if not, a much more complex
-        // solution is required:
-        // - the TokenPool returns a FungibleAsset via token_admin_registry::set_release_or_mint_output
-        // - TokenAdminRegistry transfers the FungibleAsset to its own FungibleStore temporarily
-        // - the TokenPool callback ends
-        // - TokenAdminRegistry withdraws the same amount from its own FungibleStore into a new
-        //   FungibleAsset and returns it here
-
-        let encoded_amount = token_transfer.amount;
+        let source_amount = token_transfer.amount;
         let source_pool_data = token_transfer.extra_data;
-        let remote_decimals = parse_remote_decimals(source_pool_data, local_decimals);
-        let local_amount =
-            calculate_local_amount(encoded_amount, remote_decimals, local_decimals);
 
-        let fa =
+        let (fa, local_amount) =
             token_admin_dispatcher::dispatch_release_or_mint(
                 token_pool_address,
-                local_token,
-                local_amount,
                 sender,
-                source_chain_selector,
                 receiver,
+                source_amount,
+                local_token,
+                source_chain_selector,
                 token_transfer.source_pool_address,
-                token_transfer.extra_data,
+                source_pool_data,
                 *current_offchain_token_data
             );
 
+        // TODO: it's possible that the FungibleAsset's amount that is returned
+        // is different than the amount specified by `local_amount`. is this
+        // valid behavior, eg if this is a special token pool that deposits elsewhere?
         primary_fungible_store::deposit(receiver, fa);
 
         (local_token, local_amount)
     }
 
-    fun parse_remote_decimals(
-        source_pool_data: vector<u8>, local_decimals: u8
-    ): u8 {
-        let data_len = vector::length(&source_pool_data);
-        if (data_len == 0) {
-            // Fallback to the local value.
-            return local_decimals
-        };
-
-        assert!(data_len == 32, error::invalid_state(E_INVALID_REMOTE_CHAIN_DECIMALS));
-
-        let remote_decimals = eth_abi::decode_u256_value(source_pool_data);
-        assert!(
-            remote_decimals <= 255,
-            error::invalid_state(E_INVALID_REMOTE_CHAIN_DECIMALS)
-        );
-
-        remote_decimals as u8
-    }
-
-    inline fun calculate_local_amount(
-        encoded_amount: u256, remote_decimals: u8, local_decimals: u8
-    ): u64 {
-        let local_amount =
-            calculate_local_amount_internal(
-                encoded_amount, remote_decimals, local_decimals
-            );
-        // check that the calculated amount fits in a u64
-        assert!(
-            local_amount <= 18446744073709551615,
-            error::invalid_state(E_INVALID_ENCODED_AMOUNT)
-        );
-        local_amount as u64
-    }
-
-    fun calculate_local_amount_internal(
-        encoded_amount: u256, remote_decimals: u8, local_decimals: u8
-    ): u256 {
-        // TODO: check for overflows
-        if (remote_decimals == local_decimals) {
-            return encoded_amount
-        } else if (remote_decimals > local_decimals) {
-            let decimals_diff = remote_decimals - local_decimals;
-            let i = 0;
-            let current_amount = encoded_amount;
-            while (i < decimals_diff) {
-                current_amount = current_amount / 10;
-                i = i + 1;
-            };
-            return current_amount
-        } else {
-            let decimals_diff = local_decimals - remote_decimals;
-            let i = 0;
-            let current_amount = encoded_amount;
-            while (i < decimals_diff) {
-                current_amount = current_amount * 10;
-                i = i + 1;
-            };
-            return current_amount
-        }
-    }
 
     inline fun set_dynamic_config_internal(
         state: &mut OffRampState,
