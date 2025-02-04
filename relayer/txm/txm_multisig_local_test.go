@@ -497,7 +497,7 @@ func generateMerkleTree(ops []Op, rootMetadata RootMetadata) (MerkleTree, error)
 }
 
 func hashRootMetadata(metadata RootMetadata) [32]byte {
-	MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA := crypto.Keccak256([]byte("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA"))
+	MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA := crypto.Keccak256([]byte("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA_APTOS"))
 
 	packed := []byte{}
 	packed = append(packed, MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA...)
@@ -518,7 +518,7 @@ func hashRootMetadata(metadata RootMetadata) [32]byte {
 }
 
 func hashOp(op *Op) [32]byte {
-	MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP := crypto.Keccak256([]byte("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP"))
+	MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP := crypto.Keccak256([]byte("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP_APTOS"))
 
 	packed := []byte{}
 	packed = append(packed, MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP...)
