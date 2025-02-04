@@ -63,6 +63,7 @@ module ccip::onramp {
         extra_args: vector<u8>,
         fee_token: Object<Metadata>,
         fee_token_amount: u64,
+        fee_value_juels: u256,
         token_amounts: vector<Aptos2AnyTokenTransfer>
     }
 
@@ -214,10 +215,6 @@ module ccip::onramp {
 
         let sender = signer::address_of(caller);
 
-        // get the token addresses and amounts before unwrapping.
-        let (local_token_addresses, local_token_amounts) =
-            client::get_aptos2any_token_transfers(&message);
-
         let dest_token_addresses = vector[];
         let dest_pool_datas = vector[];
 
@@ -265,7 +262,6 @@ module ccip::onramp {
 
         let sequence_number = dest_chain_config.sequence_number;
 
-        // TODO: handle fee_value_juels or remove it
         let (
             fee_value_juels,
             is_out_of_order_execution,
@@ -277,8 +273,6 @@ module ccip::onramp {
                 fee_token,
                 fee_token_amount,
                 extra_args,
-                local_token_addresses,
-                local_token_amounts,
                 dest_token_addresses,
                 dest_pool_datas
             );
@@ -312,6 +306,7 @@ module ccip::onramp {
             extra_args: converted_extra_args,
             fee_token,
             fee_token_amount,
+            fee_value_juels,
             token_amounts
         };
 
