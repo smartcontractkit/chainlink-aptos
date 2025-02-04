@@ -138,6 +138,14 @@ module ccip::offramp {
         merkle_root: vector<u8>
     }
 
+    struct StaticConfig has store, drop {
+        chain_selector: u64
+    }
+
+    struct DynamicConfig has store, drop {
+        permissionless_execution_threshold_secs: u32
+    }
+
     #[event]
     struct StaticConfigSet has store, drop {
         chain_selector: u64
@@ -640,16 +648,6 @@ module ccip::offramp {
     }
 
     #[view]
-    public fun get_chain_selector(): u64 acquires OffRampState {
-        borrow_state().chain_selector
-    }
-
-    #[view]
-    public fun get_permissionless_execution_threshold_secs(): u32 acquires OffRampState {
-        borrow_state().permissionless_execution_threshold_secs
-    }
-
-    #[view]
     public fun get_source_chain_config(source_chain_selector: u64): (bool, u64) acquires OffRampState {
         let state = borrow_state();
         assert!(
@@ -696,6 +694,20 @@ module ccip::offramp {
         ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
         set_dynamic_config_internal(state, permissionless_execution_threshold_secs)
+    }
+
+    #[view]
+    public fun get_static_config(): StaticConfig acquires OffRampState {
+        let state = borrow_state();
+        StaticConfig { chain_selector: state.chain_selector }
+    }
+
+    #[view]
+    public fun get_dynamic_config(): DynamicConfig acquires OffRampState {
+        let state = borrow_state();
+        DynamicConfig {
+            permissionless_execution_threshold_secs: state.permissionless_execution_threshold_secs
+        }
     }
 
     inline fun borrow_state(): &OffRampState {
