@@ -178,10 +178,9 @@ module ccip::onramp {
     }
 
     public fun ccip_send(
-        caller: &signer, message: client::Aptos2AnyMessage
+        caller: &signer, dest_chain_selector: u64, message: client::Aptos2AnyMessage
     ): vector<u8> acquires OnRampState {
-        let (dest_chain_selector, receiver, data, fee_token, fee_token_store, extra_args) =
-
+        let (receiver, data, fee_token, fee_token_store, extra_args) =
             client::get_aptos2any_fields(&message);
 
         let fee_token_amount = fee_quoter::get_fee(dest_chain_selector, &message);

@@ -9,7 +9,6 @@ module ccip::client {
     friend ccip::fee_quoter;
 
     struct Aptos2AnyMessage {
-        dest_chain_selector: u64,
         receiver: vector<u8>,
         data: vector<u8>,
         token_transfers: vector<FungibleAsset>,
@@ -32,7 +31,6 @@ module ccip::client {
     }
 
     public fun new_aptos2any_message(
-        dest_chain_selector: u64,
         receiver: vector<u8>,
         data: vector<u8>,
         token_transfers: vector<FungibleAsset>,
@@ -41,7 +39,6 @@ module ccip::client {
         extra_args: vector<u8>
     ): Aptos2AnyMessage {
         Aptos2AnyMessage {
-            dest_chain_selector,
             receiver,
             data,
             token_transfers,
@@ -112,9 +109,8 @@ module ccip::client {
     /// Returns all fields except for FungibleAsset
     public(friend) fun get_aptos2any_fields(
         message: &Aptos2AnyMessage
-    ): (u64, vector<u8>, vector<u8>, Object<Metadata>, Object<FungibleStore>, vector<u8>) {
+    ): (vector<u8>, vector<u8>, Object<Metadata>, Object<FungibleStore>, vector<u8>) {
         (
-            message.dest_chain_selector,
             message.receiver,
             message.data,
             message.fee_token,

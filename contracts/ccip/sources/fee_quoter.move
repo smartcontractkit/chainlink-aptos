@@ -556,8 +556,7 @@ module ccip::fee_quoter {
     public(friend) fun get_fee(
         dest_chain_selector: u64, message: &client::Aptos2AnyMessage
     ): u64 acquires FeeQuoterState {
-        let (dest_chain_selector, receiver, data, fee_token, fee_token_store, extra_args) =
-
+        let (receiver, data, fee_token, fee_token_store, extra_args) =
             client::get_aptos2any_fields(message);
 
         let (local_token_addresses, local_token_amounts) =
