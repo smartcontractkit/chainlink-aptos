@@ -76,7 +76,11 @@ module ccip::fee_quoter {
         token_transfer_fee_config_added_events: EventHandle<TokenTransferFeeConfigAdded>,
         token_transfer_fee_config_removed_events: EventHandle<TokenTransferFeeConfigRemoved>,
         usd_per_token_updated_events: EventHandle<UsdPerTokenUpdated>,
-        usd_per_unit_gas_updated_events: EventHandle<UsdPerUnitGasUpdated>
+        usd_per_unit_gas_updated_events: EventHandle<UsdPerUnitGasUpdated>,
+        dest_chain_added_events: EventHandle<DestChainAdded>,
+        dest_chain_config_updated_events: EventHandle<DestChainConfigUpdated>,
+        premium_multiplier_wei_per_eth_updated_events: EventHandle<
+            PremiumMultiplierWeiPerEthUpdated>
     }
 
     struct StaticConfig has drop {
@@ -159,6 +163,24 @@ module ccip::fee_quoter {
         timestamp: u64
     }
 
+    #[event]
+    struct DestChainAdded has store, drop {
+        dest_chain_selector: u64,
+        dest_chain_config: DestChainConfig
+    }
+
+    #[event]
+    struct DestChainConfigUpdated has store, drop {
+        dest_chain_selector: u64,
+        dest_chain_config: DestChainConfig
+    }
+
+    #[event]
+    struct PremiumMultiplierWeiPerEthUpdated has store, drop {
+        token: address,
+        premium_multiplier_wei_per_eth: u64
+    }
+
     const E_ALREADY_INITIALIZED: u64 = 1;
     const E_INVALID_LINK_TOKEN: u64 = 2;
     const E_UNKNOWN_DEST_CHAIN_SELECTOR: u64 = 3;
@@ -184,6 +206,9 @@ module ccip::fee_quoter {
     const E_MESSAGE_COMPUTE_UNIT_LIMIT_TOO_HIGH: u64 = 23;
     const E_MESSAGE_FEE_TOO_HIGH: u64 = 24;
     const E_SOURCE_TOKEN_DATA_TOO_LARGE: u64 = 25;
+    const E_INVALID_DEST_CHAIN_SELECTOR: u64 = 26;
+    const E_INVALID_GAS_LIMIT: u64 = 27;
+    const E_INVALID_CHAIN_FAMILY_SELECTOR: u64 = 28;
 
     public entry fun initialize(
         caller: &signer,
@@ -229,6 +254,13 @@ module ccip::fee_quoter {
             ),
             usd_per_token_updated_events: account::new_event_handle(&state_object_signer),
             usd_per_unit_gas_updated_events: account::new_event_handle(
+                &state_object_signer
+            ),
+            dest_chain_added_events: account::new_event_handle(&state_object_signer),
+            dest_chain_config_updated_events: account::new_event_handle(
+                &state_object_signer
+            ),
+            premium_multiplier_wei_per_eth_updated_events: account::new_event_handle(
                 &state_object_signer
             )
         };
@@ -625,10 +657,8 @@ module ccip::fee_quoter {
                 ((dest_chain_config.network_fee_usd_cents as u256) * VAL_1E16, 0, 0)
             };
         let premium_multiplier =
-            *smart_table::borrow(
-                &state.premium_multiplier_wei_per_eth, fee_token_address
-            );
-        premium_fee_usd_wei = premium_fee_usd_wei * (premium_multiplier as u256);
+            get_premium_multiplier_wei_per_eth_internal(state, fee_token_address);
+        premium_fee_usd_wei = premium_fee_usd_wei * (premium_multiplier as u256); // Apply premium multiplier in wei/eth units
 
         let data_availability_cost_usd_36_decimals =
             if (dest_chain_config.dest_data_availability_multiplier_bps > 0) {
@@ -680,6 +710,57 @@ module ccip::fee_quoter {
             fee_token_cost <= MAX_U64, error::invalid_state(E_FEE_TOKEN_COST_TOO_HIGH)
         );
         fee_token_cost as u64
+    }
+
+    public entry fun apply_premium_multiplier_wei_per_eth_updates(
+        caller: &signer,
+        tokens: vector<address>,
+        premium_multiplier_wei_per_eth: vector<u64>
+    ) acquires FeeQuoterState {
+        let state = borrow_state_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+        vector::zip_ref(
+            &tokens,
+            &premium_multiplier_wei_per_eth,
+            |token, premium_multiplier_wei_per_eth| {
+                let token: address = *token;
+                let premium_multiplier_wei_per_eth: u64 = *premium_multiplier_wei_per_eth;
+                smart_table::upsert(
+                    &mut state.premium_multiplier_wei_per_eth,
+                    token,
+                    premium_multiplier_wei_per_eth
+                );
+                event::emit(
+                    PremiumMultiplierWeiPerEthUpdated {
+                        token,
+                        premium_multiplier_wei_per_eth
+                    }
+                );
+                event::emit_event(
+                    &mut state.premium_multiplier_wei_per_eth_updated_events,
+                    PremiumMultiplierWeiPerEthUpdated {
+                        token,
+                        premium_multiplier_wei_per_eth
+                    }
+                );
+            }
+        );
+    }
+
+    #[view]
+    public fun get_premium_multiplier_wei_per_eth(token: address): u64 acquires FeeQuoterState {
+        let state = borrow_state();
+        get_premium_multiplier_wei_per_eth_internal(state, token)
+    }
+
+    inline fun get_premium_multiplier_wei_per_eth_internal(
+        state: &FeeQuoterState, token: address
+    ): u64 {
+        assert!(
+            smart_table::contains(&state.premium_multiplier_wei_per_eth, token),
+            error::invalid_argument(E_UNKNOWN_TOKEN)
+        );
+        *smart_table::borrow(&state.premium_multiplier_wei_per_eth, token)
     }
 
     inline fun resolve_evm_gas_limit(
@@ -1071,8 +1152,90 @@ module ccip::fee_quoter {
         smart_table::borrow(&state.dest_chain_configs, dest_chain_selector)
     }
 
-    public entry fun apply_dest_chain_config_updates(caller: &signer) {
-        // TODO
+    public entry fun apply_dest_chain_config_updates(
+        caller: &signer,
+        dest_chain_selector: u64,
+        is_enabled: bool,
+        max_number_of_tokens_per_msg: u16,
+        max_data_bytes: u32,
+        max_per_msg_gas_limit: u32,
+        dest_gas_overhead: u32,
+        dest_gas_per_payload_byte_base: u8,
+        dest_gas_per_payload_byte_high: u8,
+        dest_gas_per_payload_byte_threshold: u16,
+        dest_data_availability_overhead_gas: u32,
+        dest_gas_per_data_availability_byte: u16,
+        dest_data_availability_multiplier_bps: u16,
+        chain_family_selector: vector<u8>,
+        enforce_out_of_order: bool,
+        default_token_fee_usd_cents: u16,
+        default_token_dest_gas_overhead: u32,
+        default_tx_gas_limit: u32,
+        gas_multiplier_wei_per_eth: u64,
+        gas_price_staleness_threshold: u32,
+        network_fee_usd_cents: u32
+    ) acquires FeeQuoterState {
+        let state = borrow_state_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+
+        assert!(
+            dest_chain_selector != 0,
+            error::invalid_argument(E_INVALID_DEST_CHAIN_SELECTOR)
+        );
+        assert!(
+            default_tx_gas_limit != 0 && default_tx_gas_limit <= max_per_msg_gas_limit,
+            error::invalid_argument(E_INVALID_GAS_LIMIT)
+        );
+
+        assert!(
+            chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM
+                || chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM,
+            error::invalid_argument(E_INVALID_CHAIN_FAMILY_SELECTOR)
+        );
+
+        let dest_chain_config = DestChainConfig {
+            is_enabled,
+            max_number_of_tokens_per_msg,
+            max_data_bytes,
+            max_per_msg_gas_limit,
+            dest_gas_overhead,
+            dest_gas_per_payload_byte_base,
+            dest_gas_per_payload_byte_high,
+            dest_gas_per_payload_byte_threshold,
+            dest_data_availability_overhead_gas,
+            dest_gas_per_data_availability_byte,
+            dest_data_availability_multiplier_bps,
+            chain_family_selector,
+            enforce_out_of_order,
+            default_token_fee_usd_cents,
+            default_token_dest_gas_overhead,
+            default_tx_gas_limit,
+            gas_multiplier_wei_per_eth,
+            gas_price_staleness_threshold,
+            network_fee_usd_cents
+        };
+
+        if (smart_table::contains(&state.dest_chain_configs, dest_chain_selector)) {
+            let dest_chain_config_ref =
+                smart_table::borrow_mut(
+                    &mut state.dest_chain_configs, dest_chain_selector
+                );
+            *dest_chain_config_ref = dest_chain_config;
+            event::emit(DestChainAdded { dest_chain_selector, dest_chain_config });
+            event::emit_event(
+                &mut state.dest_chain_added_events,
+                DestChainAdded { dest_chain_selector, dest_chain_config }
+            );
+        } else {
+            smart_table::add(
+                &mut state.dest_chain_configs, dest_chain_selector, dest_chain_config
+            );
+            event::emit(DestChainConfigUpdated { dest_chain_selector, dest_chain_config });
+            event::emit_event(
+                &mut state.dest_chain_config_updated_events,
+                DestChainConfigUpdated { dest_chain_selector, dest_chain_config }
+            );
+        }
     }
 
     #[view]
