@@ -19,6 +19,7 @@ module ccip::eth_abi {
     const E_INVALID_ADDRESS: u64 = 3;
     const E_INVALID_BOOL: u64 = 4;
     const E_INVALID_SELECTOR: u64 = 5;
+    const E_INVALID_U256_LENGTH: u64 = 6;
 
     public inline fun encode_address(out: &mut vector<u8>, value: address) {
         vector::append(out, bcs::to_bytes(&value))
@@ -43,7 +44,7 @@ module ccip::eth_abi {
         vector::append(out, value_bytes)
     }
 
-    public inline fun encode_bool(out: &mut vector<u8>, value: bool) {
+    public fun encode_bool(out: &mut vector<u8>, value: bool) {
         vector::append(out, if (value) ENCODED_BOOL_TRUE
         else ENCODED_BOOL_FALSE)
     }
@@ -73,9 +74,7 @@ module ccip::eth_abi {
         }
     }
 
-    public inline fun encode_selector(
-        out: &mut vector<u8>, value: vector<u8>
-    ) {
+    public fun encode_selector(out: &mut vector<u8>, value: vector<u8>) {
         assert!(vector::length(&value) == 4, error::invalid_argument(E_INVALID_SELECTOR));
         vector::append(out, value);
     }
@@ -258,5 +257,14 @@ module ccip::eth_abi {
         };
 
         v
+    }
+
+    public fun decode_u256_value(value_bytes: vector<u8>): u256 {
+        assert!(
+            vector::length(&value_bytes) == 32,
+            error::invalid_argument(E_INVALID_U256_LENGTH)
+        );
+        vector::reverse(&mut value_bytes);
+        from_bcs::to_u256(value_bytes)
     }
 }
