@@ -18,6 +18,7 @@ module ccip::eth_abi {
     const E_INVALID_BYTES32: u64 = 2;
     const E_INVALID_ADDRESS: u64 = 3;
     const E_INVALID_BOOL: u64 = 4;
+    const E_INVALID_SELECTOR: u64 = 5;
 
     public inline fun encode_address(out: &mut vector<u8>, value: address) {
         vector::append(out, bcs::to_bytes(&value))
@@ -70,6 +71,13 @@ module ccip::eth_abi {
             vector::push_back(out, 0);
             i = i + 1;
         }
+    }
+
+    public inline fun encode_selector(
+        out: &mut vector<u8>, value: vector<u8>
+    ) {
+        assert!(vector::length(&value) == 4, error::invalid_argument(E_INVALID_SELECTOR));
+        vector::append(out, value);
     }
 
     public inline fun encode_packed_address(
