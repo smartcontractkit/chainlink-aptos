@@ -17,6 +17,7 @@ module ccip::state_object {
     friend ccip::offramp;
     friend ccip::onramp;
     friend ccip::receiver_registry;
+    friend ccip::rmn_remote;
     friend ccip::token_admin_registry;
 
     struct StateObjectRefs has key {
