@@ -4,8 +4,9 @@ module ccip::client {
     use std::object::{Self, Object};
     use std::vector;
 
-    friend ccip::onramp;
     friend ccip::offramp;
+    friend ccip::onramp;
+    friend ccip::fee_quoter;
 
     struct Aptos2AnyMessage {
         dest_chain_selector: u64,
