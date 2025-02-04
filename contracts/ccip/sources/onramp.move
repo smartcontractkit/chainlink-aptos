@@ -75,6 +75,14 @@ module ccip::onramp {
         dest_exec_data: vector<u8>
     }
 
+    struct StaticConfig has store, drop {
+        chain_selector: u64
+    }
+
+    struct DynamicConfig has store, drop {
+        allowlist_admin: address
+    }
+
     #[event]
     struct ConfigSet has store, drop {
         chain_selector: u64,
@@ -324,16 +332,6 @@ module ccip::onramp {
         message_id
     }
 
-    #[view]
-    public fun get_chain_selector(): u64 acquires OnRampState {
-        borrow_state().chain_selector
-    }
-
-    #[view]
-    public fun get_allowlist_admin(): address acquires OnRampState {
-        borrow_state().allowlist_admin
-    }
-
     public entry fun set_dynamic_config(
         caller: &signer, allowlist_admin: address
     ) acquires OnRampState {
@@ -531,6 +529,18 @@ module ccip::onramp {
         let dest_chain_nonces =
             smart_table::borrow(&state.outbound_nonces, dest_chain_selector);
         *smart_table::borrow_with_default(dest_chain_nonces, sender, &0)
+    }
+
+    #[view]
+    public fun get_static_config(): StaticConfig acquires OnRampState {
+        let state = borrow_state();
+        StaticConfig { chain_selector: state.chain_selector }
+    }
+
+    #[view]
+    public fun get_dynamic_config(): DynamicConfig acquires OnRampState {
+        let state = borrow_state();
+        DynamicConfig { allowlist_admin: state.allowlist_admin }
     }
 
     inline fun set_dynamic_config_internal(
