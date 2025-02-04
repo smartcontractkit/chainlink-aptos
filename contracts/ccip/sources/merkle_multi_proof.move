@@ -92,19 +92,15 @@ module ccip::merkle_multi_proof {
         *vector::borrow(&hashes, total_hashes - 1)
     }
 
-    fun vector_u8_gt(a: &vector<u8>, b: &vector<u8>): bool {
+    public fun vector_u8_gt(a: &vector<u8>, b: &vector<u8>): bool {
         let len = vector::length(a);
         assert!(
             len == vector::length(b), error::invalid_argument(E_VECTOR_LENGTH_MISMATCH)
         );
 
-        if (len == 0) {
-            return false
-        };
-
-        let i = len - 1;
+        let i = 0;
         // compare each byte until not equal
-        while (true) {
+        while (i < len) {
             let byte_a = *vector::borrow(a, i);
             let byte_b = *vector::borrow(b, i);
             if (byte_a > byte_b) {
@@ -112,10 +108,8 @@ module ccip::merkle_multi_proof {
             } else if (byte_a < byte_b) {
                 return false
             };
-            if (i == 0) {
-                break;
-            };
-            i = i - 1;
+            if (i == 0) { break };
+            i = i + 1;
         };
 
         // vectors are equal, a == b
