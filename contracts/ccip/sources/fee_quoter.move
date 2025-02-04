@@ -587,7 +587,7 @@ module ccip::fee_quoter {
     }
 
     // TODO: should this be public?
-    public(friend) fun get_fee(
+    public(friend) fun get_validated_fee(
         dest_chain_selector: u64, message: &client::Aptos2AnyMessage
     ): u64 acquires FeeQuoterState {
         let (receiver, data, fee_token, _fee_token_store, extra_args) =
