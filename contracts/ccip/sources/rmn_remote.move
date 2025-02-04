@@ -3,10 +3,10 @@ module ccip::rmn_remote {
     use std::aptos_hash;
     use std::bcs;
     use std::chain_id;
-    use std::ed25519;
     use std::error;
     use std::event::{Self, EventHandle};
     use std::vector;
+    use std::secp256k1;
     use std::signer;
     use std::smart_table::{Self, SmartTable};
     use std::option;
@@ -92,6 +92,7 @@ module ccip::rmn_remote {
     const E_SIGNERS_MISMATCH: u64 = 17;
     const E_COULD_NOT_VALIDATE_SIGNER_KEY: u64 = 18;
     const E_INVALID_SUBJECT_LENGTH: u64 = 19;
+    const E_INVALID_PUBLIC_KEY_LENGTH: u64 = 20;
 
     public fun initialize(caller: &signer, local_chain_selector: u64) {
         state_object::assert_can_initialize(caller);
@@ -209,32 +210,41 @@ module ccip::rmn_remote {
         let digest = calculate_digest(&report);
 
         let i = 0;
-        let previous_public_key_bytes = vector[];
+        let previous_eth_address = vector[];
         while (i < signatures_len) {
-            let signature_bytes = vector::borrow(&signatures, i);
+            let signature_bytes = *vector::borrow(&signatures, i);
+            let signature = secp256k1::ecdsa_signature_from_bytes(signature_bytes);
 
-            let public_key_bytes = vector::slice(signature_bytes, 0, 32);
+            // rmn only generates signatures with v = 27, subtract the ethereum recover id offset of 27 to get zero.
+            let v = 0;
+            let maybe_public_key = secp256k1::ecdsa_recover(digest, v, &signature);
             assert!(
-                smart_table::contains(&state.signers, public_key_bytes),
+                option::is_some(&maybe_public_key),
+                error::invalid_argument(E_INVALID_SIGNATURE)
+            );
+
+            let public_key_bytes =
+                secp256k1::ecdsa_raw_public_key_to_bytes(
+                    &option::extract(&mut maybe_public_key)
+                );
+            // trim the first 12 bytes of the hash to recover the ethereum address.
+            let eth_address = vector::trim(
+                &mut aptos_hash::keccak256(public_key_bytes), 12
+            );
+
+            assert!(
+                smart_table::contains(&state.signers, eth_address),
                 error::invalid_argument(E_UNEXPECTED_SIGNER)
             );
             if (i > 0) {
                 assert!(
                     merkle_multi_proof::vector_u8_gt(
-                        &public_key_bytes, &previous_public_key_bytes
+                        &eth_address, &previous_eth_address
                     ),
                     error::invalid_argument(E_OUT_OF_ORDER_SIGNATURES)
                 );
             };
-            previous_public_key_bytes = public_key_bytes;
-
-            let public_key =
-                ed25519::new_unvalidated_public_key_from_bytes(public_key_bytes);
-            let signature =
-                ed25519::new_signature_from_bytes(vector::slice(signature_bytes, 32, 96));
-            let verified =
-                ed25519::signature_verify_strict(&signature, &public_key, digest);
-            assert!(verified, error::invalid_argument(E_INVALID_SIGNATURE));
+            previous_eth_address = eth_address;
 
             i = i + 1;
         };
@@ -292,11 +302,10 @@ module ccip::rmn_remote {
             |signer_public_key_bytes, node_indexes| {
                 let signer_public_key_bytes: vector<u8> = *signer_public_key_bytes;
                 let node_index: u64 = *node_indexes;
-                let maybe_validated_public_key =
-                    ed25519::new_validated_public_key_from_bytes(signer_public_key_bytes);
+                // expect an ethereum address of 20 bytes.
                 assert!(
-                    option::is_some(&maybe_validated_public_key),
-                    error::invalid_argument(E_COULD_NOT_VALIDATE_SIGNER_KEY)
+                    vector::length(&signer_public_key_bytes) == 20,
+                    error::invalid_argument(E_INVALID_PUBLIC_KEY_LENGTH)
                 );
                 assert!(
                     !smart_table::contains(&state.signers, signer_public_key_bytes),
