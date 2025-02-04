@@ -1,0 +1,428 @@
+module ccip::rmn_remote {
+    use std::account;
+    use std::aptos_hash;
+    use std::bcs;
+    use std::chain_id;
+    use std::ed25519;
+    use std::error;
+    use std::event::{Self, EventHandle};
+    use std::vector;
+    use std::signer;
+    use std::smart_table::{Self, SmartTable};
+    use std::option;
+
+    use ccip::eth_abi;
+    use ccip::merkle_multi_proof;
+    use ccip::ownable;
+    use ccip::state_object;
+
+    const GLOBAL_CURSE_SUBJECT: vector<u8> = x"01000000000000000000000000000001";
+
+    struct RMNRemoteState has key {
+        ownable_state: ownable::OwnableState,
+        local_chain_selector: u64,
+        config: Config,
+        config_count: u32,
+        signers: SmartTable<vector<u8>, bool>,
+        cursed_subjects: SmartTable<vector<u8>, bool>,
+        config_set_events: EventHandle<ConfigSet>,
+        cursed_events: EventHandle<Cursed>,
+        uncursed_events: EventHandle<Uncursed>
+    }
+
+    struct Config has copy, drop, store {
+        rmn_home_contract_config_digest: vector<u8>,
+        signers: vector<Signer>,
+        f_sign: u64
+    }
+
+    struct Signer has copy, drop, store {
+        onchain_public_key: vector<u8>,
+        node_index: u64
+    }
+
+    struct Report has drop {
+        dest_chain_id: u64,
+        dest_chain_selector: u64,
+        rmn_remote_contract_address: address,
+        offramp_address: address,
+        rmn_home_contract_config_digest: vector<u8>,
+        merkle_roots: vector<MerkleRoot>
+    }
+
+    struct MerkleRoot has drop {
+        source_chain_selector: u64,
+        min_sequence_number: u64,
+        max_sequence_number: u64,
+        merkle_root: vector<u8>
+    }
+
+    #[event]
+    struct ConfigSet has store, drop {
+        version: u32,
+        config: Config
+    }
+
+    #[event]
+    struct Cursed has store, drop {
+        subjects: vector<vector<u8>>
+    }
+
+    #[event]
+    struct Uncursed has store, drop {
+        subjects: vector<vector<u8>>
+    }
+
+    const E_ALREADY_INITIALIZED: u64 = 1;
+    const E_ALREADY_CURSED: u64 = 2;
+    const E_CONFIG_NOT_SET: u64 = 3;
+    const E_DUPLICATE_SIGNER: u64 = 4;
+    const E_INVALID_SIGNATURE: u64 = 5;
+    const E_INVALID_SIGNER_ORDER: u64 = 6;
+    const E_NOT_ENOUGH_SIGNERS: u64 = 7;
+    const E_NOT_CURSED: u64 = 8;
+    const E_OUT_OF_ORDER_SIGNATURES: u64 = 9;
+    const E_THRESHOLD_NOT_MET: u64 = 10;
+    const E_UNEXPECTED_SIGNER: u64 = 11;
+    const E_ZERO_VALUE_NOT_ALLOWED: u64 = 12;
+    const E_IS_BLESSED_NOT_AVAILABLE: u64 = 13;
+    const E_NOT_OWNER: u64 = 14;
+    const E_MERKLE_ROOT_LENGTH_MISMATCH: u64 = 15;
+    const E_INVALID_DIGEST_LENGTH: u64 = 16;
+    const E_SIGNERS_MISMATCH: u64 = 17;
+    const E_COULD_NOT_VALIDATE_SIGNER_KEY: u64 = 18;
+    const E_INVALID_SUBJECT_LENGTH: u64 = 19;
+
+    public fun initialize(caller: &signer, local_chain_selector: u64) {
+        state_object::assert_can_initialize(caller);
+
+        assert!(
+            local_chain_selector != 0,
+            error::invalid_argument(E_ZERO_VALUE_NOT_ALLOWED)
+        );
+
+        let state_object_signer = state_object::object_signer();
+        let state = RMNRemoteState {
+            ownable_state: ownable::new(
+                &state_object_signer, signer::address_of(caller), @0x0
+            ),
+            local_chain_selector,
+            config: Config {
+                rmn_home_contract_config_digest: vector[],
+                signers: vector[],
+                f_sign: 0
+            },
+            config_count: 0,
+            signers: smart_table::new(),
+            cursed_subjects: smart_table::new(),
+            config_set_events: account::new_event_handle(&state_object_signer),
+            cursed_events: account::new_event_handle(&state_object_signer),
+            uncursed_events: account::new_event_handle(&state_object_signer)
+        };
+
+        move_to(&state_object_signer, state);
+    }
+
+    inline fun calculate_digest(report: &Report): vector<u8> {
+        let digest = vector[];
+        eth_abi::encode_bytes32(&mut digest, get_report_digest_header());
+        eth_abi::encode_u64(&mut digest, report.dest_chain_id);
+        eth_abi::encode_u64(&mut digest, report.dest_chain_selector);
+        eth_abi::encode_address(&mut digest, report.rmn_remote_contract_address);
+        eth_abi::encode_address(&mut digest, report.offramp_address);
+        eth_abi::encode_bytes32(&mut digest, report.rmn_home_contract_config_digest);
+        vector::for_each_ref(
+            &report.merkle_roots,
+            |merkle_root| {
+                eth_abi::encode_u64(&mut digest, merkle_root.source_chain_selector);
+                eth_abi::encode_u64(&mut digest, merkle_root.min_sequence_number);
+                eth_abi::encode_u64(&mut digest, merkle_root.max_sequence_number);
+                eth_abi::encode_bytes32(&mut digest, merkle_root.merkle_root);
+            }
+        );
+        aptos_hash::keccak256(digest)
+    }
+
+    #[view]
+    public fun verify(
+        merkle_root_source_chain_selectors: vector<u64>,
+        merkle_root_min_sequence_numbers: vector<u64>,
+        merkle_root_max_sequence_numbers: vector<u64>,
+        merkle_root_values: vector<vector<u8>>,
+        signatures: vector<vector<u8>>
+    ): bool acquires RMNRemoteState {
+        let state = borrow_state();
+
+        assert!(state.config_count > 0, error::invalid_argument(E_CONFIG_NOT_SET));
+
+        let signatures_len = vector::length(&signatures);
+        assert!(
+            signatures_len >= (state.config.f_sign + 1),
+            error::invalid_argument(E_THRESHOLD_NOT_MET)
+        );
+
+        let merkle_root_len = vector::length(&merkle_root_source_chain_selectors);
+        assert!(
+            merkle_root_len == vector::length(&merkle_root_min_sequence_numbers),
+            error::invalid_argument(E_MERKLE_ROOT_LENGTH_MISMATCH)
+        );
+        assert!(
+            merkle_root_len == vector::length(&merkle_root_max_sequence_numbers),
+            error::invalid_argument(E_MERKLE_ROOT_LENGTH_MISMATCH)
+        );
+        assert!(
+            merkle_root_len == vector::length(&merkle_root_values),
+            error::invalid_argument(E_MERKLE_ROOT_LENGTH_MISMATCH)
+        );
+
+        let merkle_roots = vector[];
+        let i = 0;
+        while (i < merkle_root_len) {
+            let source_chain_selector =
+                *vector::borrow(&merkle_root_source_chain_selectors, i);
+            let min_sequence_number =
+                *vector::borrow(&merkle_root_min_sequence_numbers, i);
+            let max_sequence_number =
+                *vector::borrow(&merkle_root_max_sequence_numbers, i);
+            let merkle_root = *vector::borrow(&merkle_root_values, i);
+            vector::push_back(
+                &mut merkle_roots,
+                MerkleRoot {
+                    source_chain_selector,
+                    min_sequence_number,
+                    max_sequence_number,
+                    merkle_root
+                }
+            );
+            i = i + 1;
+        };
+
+        let report = Report {
+            dest_chain_id: (chain_id::get() as u64),
+            dest_chain_selector: state.local_chain_selector,
+            rmn_remote_contract_address: @ccip,
+            offramp_address: @ccip,
+            rmn_home_contract_config_digest: state.config.rmn_home_contract_config_digest,
+            merkle_roots
+        };
+
+        let digest = calculate_digest(&report);
+
+        let i = 0;
+        let previous_public_key_bytes = vector[];
+        while (i < signatures_len) {
+            let signature_bytes = vector::borrow(&signatures, i);
+
+            let public_key_bytes = vector::slice(signature_bytes, 0, 32);
+            assert!(
+                smart_table::contains(&state.signers, public_key_bytes),
+                error::invalid_argument(E_UNEXPECTED_SIGNER)
+            );
+            if (i > 0) {
+                assert!(
+                    merkle_multi_proof::vector_u8_gt(
+                        &public_key_bytes, &previous_public_key_bytes
+                    ),
+                    error::invalid_argument(E_OUT_OF_ORDER_SIGNATURES)
+                );
+            };
+            previous_public_key_bytes = public_key_bytes;
+
+            let public_key =
+                ed25519::new_unvalidated_public_key_from_bytes(public_key_bytes);
+            let signature =
+                ed25519::new_signature_from_bytes(vector::slice(signature_bytes, 32, 96));
+            let verified =
+                ed25519::signature_verify_strict(&signature, &public_key, digest);
+            assert!(verified, error::invalid_argument(E_INVALID_SIGNATURE));
+
+            i = i + 1;
+        };
+
+        true
+    }
+
+    public entry fun set_config(
+        caller: &signer,
+        rmn_home_contract_config_digest: vector<u8>,
+        signer_onchain_public_keys: vector<vector<u8>>,
+        node_indexes: vector<u64>,
+        f_sign: u64
+    ) acquires RMNRemoteState {
+        let state = borrow_state_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+
+        assert!(
+            vector::length(&rmn_home_contract_config_digest) == 32,
+            error::invalid_argument(E_INVALID_DIGEST_LENGTH)
+        );
+
+        assert!(
+            eth_abi::decode_u256_value(rmn_home_contract_config_digest) != 0,
+            error::invalid_argument(E_ZERO_VALUE_NOT_ALLOWED)
+        );
+
+        let signers_len = vector::length(&signer_onchain_public_keys);
+        assert!(
+            signers_len == vector::length(&node_indexes),
+            error::invalid_argument(E_SIGNERS_MISMATCH)
+        );
+
+        let i = 1;
+        while (i < signers_len) {
+            let previous_node_index = *vector::borrow(&node_indexes, i - 1);
+            let current_node_index = *vector::borrow(&node_indexes, i);
+            assert!(
+                previous_node_index < current_node_index,
+                error::invalid_argument(E_INVALID_SIGNER_ORDER)
+            );
+            i = i + 1;
+        };
+
+        assert!(
+            signers_len >= (2 * f_sign + 1),
+            error::invalid_argument(E_NOT_ENOUGH_SIGNERS)
+        );
+
+        smart_table::clear(&mut state.signers);
+
+        let signers = vector::zip_map_ref(
+            &signer_onchain_public_keys,
+            &node_indexes,
+            |signer_public_key_bytes, node_indexes| {
+                let signer_public_key_bytes: vector<u8> = *signer_public_key_bytes;
+                let node_index: u64 = *node_indexes;
+                let maybe_validated_public_key =
+                    ed25519::new_validated_public_key_from_bytes(signer_public_key_bytes);
+                assert!(
+                    option::is_some(&maybe_validated_public_key),
+                    error::invalid_argument(E_COULD_NOT_VALIDATE_SIGNER_KEY)
+                );
+                assert!(
+                    !smart_table::contains(&state.signers, signer_public_key_bytes),
+                    error::invalid_argument(E_DUPLICATE_SIGNER)
+                );
+                smart_table::add(&mut state.signers, signer_public_key_bytes, true);
+                Signer { onchain_public_key: signer_public_key_bytes, node_index }
+            }
+        );
+
+        let new_config = Config { rmn_home_contract_config_digest, signers, f_sign };
+        state.config = new_config;
+
+        let new_config_count = state.config_count + 1;
+        state.config_count = new_config_count;
+
+        event::emit(ConfigSet { version: new_config_count, config: new_config });
+
+        event::emit_event(
+            &mut state.config_set_events,
+            ConfigSet { version: new_config_count, config: new_config }
+        );
+    }
+
+    #[view]
+    public fun get_versioned_config(): (u32, Config) acquires RMNRemoteState {
+        let state = borrow_state();
+        (state.config_count, state.config)
+    }
+
+    #[view]
+    public fun get_local_chain_selector(): u64 acquires RMNRemoteState {
+        borrow_state().local_chain_selector
+    }
+
+    #[view]
+    public fun get_report_digest_header(): vector<u8> {
+        aptos_hash::keccak256(b"RMN_V1_6_ANY2EVM_REPORT")
+    }
+
+    public entry fun curse(caller: &signer, subject: vector<u8>) acquires RMNRemoteState {
+        curse_multiple(caller, vector[subject]);
+    }
+
+    public entry fun curse_multiple(
+        caller: &signer, subjects: vector<vector<u8>>
+    ) acquires RMNRemoteState {
+        let state = borrow_state_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+
+        vector::for_each_ref(
+            &subjects,
+            |subject| {
+                let subject: vector<u8> = *subject;
+                assert!(
+                    vector::length(&subject) == 16,
+                    error::invalid_argument(E_INVALID_SUBJECT_LENGTH)
+                );
+                assert!(
+                    !smart_table::contains(&state.cursed_subjects, subject),
+                    error::invalid_argument(E_ALREADY_CURSED)
+                );
+                smart_table::add(&mut state.cursed_subjects, subject, true);
+            }
+        );
+        event::emit(Cursed { subjects });
+        event::emit_event(&mut state.cursed_events, Cursed { subjects });
+    }
+
+    public entry fun uncurse(caller: &signer, subject: vector<u8>) acquires RMNRemoteState {
+        uncurse_multiple(caller, vector[subject]);
+    }
+
+    public entry fun uncurse_multiple(
+        caller: &signer, subjects: vector<vector<u8>>
+    ) acquires RMNRemoteState {
+        let state = borrow_state_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+
+        vector::for_each_ref(
+            &subjects,
+            |subject| {
+                let subject: vector<u8> = *subject;
+                assert!(
+                    smart_table::contains(&state.cursed_subjects, subject),
+                    error::invalid_argument(E_NOT_CURSED)
+                );
+                smart_table::remove(&mut state.cursed_subjects, subject);
+            }
+        );
+        event::emit(Uncursed { subjects });
+        event::emit_event(&mut state.uncursed_events, Uncursed { subjects });
+    }
+
+    public fun get_cursed_subjects(): vector<vector<u8>> acquires RMNRemoteState {
+        smart_table::keys(&borrow_state().cursed_subjects)
+    }
+
+    public fun is_cursed_global(): bool acquires RMNRemoteState {
+        let state = borrow_state();
+        if (smart_table::length(&state.cursed_subjects) == 0) {
+            return false
+        };
+        smart_table::contains(&state.cursed_subjects, GLOBAL_CURSE_SUBJECT)
+    }
+
+    public fun is_cursed(subject: vector<u8>): bool acquires RMNRemoteState {
+        let state = borrow_state();
+        if (smart_table::length(&state.cursed_subjects) == 0) {
+            return false
+        };
+        smart_table::contains(&state.cursed_subjects, subject)
+            || smart_table::contains(&state.cursed_subjects, GLOBAL_CURSE_SUBJECT)
+    }
+
+    public fun is_cursed_u128(subject_value: u128): bool acquires RMNRemoteState {
+        let subject = bcs::to_bytes(&subject_value);
+        vector::reverse(&mut subject);
+        is_cursed(subject)
+    }
+
+    inline fun borrow_state(): &RMNRemoteState {
+        borrow_global<RMNRemoteState>(state_object::object_address())
+    }
+
+    inline fun borrow_state_mut(): &mut RMNRemoteState {
+        borrow_global_mut<RMNRemoteState>(state_object::object_address())
+    }
+}
