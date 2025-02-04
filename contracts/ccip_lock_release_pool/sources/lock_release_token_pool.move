@@ -9,6 +9,7 @@ module ccip_lock_release_pool::lock_release_token_pool {
     use std::smart_table::{Self, SmartTable};
     use std::vector;
 
+    use ccip::eth_abi;
     use ccip::ownable;
     use ccip::token_admin_registry;
 
@@ -100,6 +101,8 @@ module ccip_lock_release_pool::lock_release_token_pool {
     const E_UNKNOWN_REMOTE_POOL: u64 = 10;
     const E_REMOTE_CHAIN_TO_ADD_MISMATCH: u64 = 11;
     const E_REMOTE_CHAIN_ALREADY_EXISTS: u64 = 12;
+    const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 13;
+    const E_INVALID_ENCODED_AMOUNT: u64 = 14;
 
     fun init_module(publisher: &signer) {
         // register the pool on deployment, because in the case of object code deployment,
@@ -467,6 +470,7 @@ module ccip_lock_release_pool::lock_release_token_pool {
 
         let fa_metadata = fungible_asset::metadata_from_asset(&fa);
         let fa_amount = fungible_asset::amount(&fa);
+        let fa_decimals = fungible_asset::decimals(fa_metadata);
 
         // make sure this is the expected fungible asset.
         assert!(
@@ -484,12 +488,14 @@ module ccip_lock_release_pool::lock_release_token_pool {
         let remote_chain_config =
             smart_table::borrow(&pool.remote_chain_configs, remote_chain_selector);
         let dest_token_address = remote_chain_config.remote_token_address;
+        let dest_pool_data = encode_local_decimals(fa_decimals);
 
         // set the output for this lock or burn operation.
         token_admin_registry::set_lock_or_burn_output(
             @ccip_lock_release_pool,
             CallbackProof {},
-            dest_token_address
+            dest_token_address,
+            dest_pool_data
         );
 
         event::emit(
@@ -508,7 +514,7 @@ module ccip_lock_release_pool::lock_release_token_pool {
     }
 
     public fun release_or_mint<T: key>(
-        _store: Object<T>, amount: u64, _transfer_ref: &TransferRef
+        _store: Object<T>, _amount: u64, _transfer_ref: &TransferRef
     ): FungibleAsset acquires LockReleaseTokenPool {
         // retrieve the input for this release or mint operation. if this function is invoked
         // outside of ccip::token_admin_registry, the transaction will abort.
@@ -528,34 +534,44 @@ module ccip_lock_release_pool::lock_release_token_pool {
             error::invalid_argument(E_UNKNOWN_FUNGIBLE_ASSET)
         );
 
+        let local_decimals = fungible_asset::decimals(pool.fa_metadata);
+
+        // calculate the local amount.
+        let source_amount =
+            token_admin_registry::get_release_or_mint_source_amount(&input);
+        let source_pool_data =
+            token_admin_registry::get_release_or_mint_source_pool_data(&input);
+        let remote_decimals = parse_remote_decimals(source_pool_data, local_decimals);
+        let local_amount =
+            calculate_local_amount(source_amount, remote_decimals, local_decimals);
+
         // TODO: do something with these fields.
         let _sender = token_admin_registry::get_release_or_mint_sender(&input);
         let _remote_chain_selector =
             token_admin_registry::get_release_or_mint_remote_chain_selector(&input);
         let _source_pool_address =
             token_admin_registry::get_release_or_mint_source_pool_address(&input);
-        let _source_pool_data =
-            token_admin_registry::get_release_or_mint_source_pool_data(&input);
         let _offchain_token_data =
             token_admin_registry::get_release_or_mint_offchain_token_data(&input);
 
         let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
 
         // withdraw the amount from the store for release. this will revert if the store has insufficient balance.
-        let fa = primary_fungible_store::withdraw(
-            &store_signer, pool.fa_metadata, amount
-        );
+        let fa =
+            primary_fungible_store::withdraw(
+                &store_signer, pool.fa_metadata, local_amount
+            );
 
         // set the output for this release or mint operation.
         token_admin_registry::set_release_or_mint_output(
-            @ccip_lock_release_pool, CallbackProof {}
+            @ccip_lock_release_pool, CallbackProof {}, local_amount
         );
 
         event::emit(
             Released {
                 local_token: object::object_address(&pool.fa_metadata),
                 recipient,
-                amount
+                amount: local_amount
             }
         );
         event::emit_event(
@@ -563,7 +579,7 @@ module ccip_lock_release_pool::lock_release_token_pool {
             Released {
                 local_token: object::object_address(&pool.fa_metadata),
                 recipient,
-                amount
+                amount: local_amount
             }
         );
 
@@ -642,6 +658,74 @@ module ccip_lock_release_pool::lock_release_token_pool {
                     }
                 }
             );
+        }
+    }
+
+    inline fun encode_local_decimals(decimals: u8): vector<u8> {
+        let ret = vector[];
+        eth_abi::encode_u8(&mut ret, decimals);
+        ret
+    }
+
+    fun parse_remote_decimals(
+        source_pool_data: vector<u8>, local_decimals: u8
+    ): u8 {
+        let data_len = vector::length(&source_pool_data);
+        if (data_len == 0) {
+            // Fallback to the local value.
+            return local_decimals
+        };
+
+        assert!(data_len == 32, error::invalid_state(E_INVALID_REMOTE_CHAIN_DECIMALS));
+
+        let remote_decimals = eth_abi::decode_u256_value(source_pool_data);
+        assert!(
+            remote_decimals <= 255,
+            error::invalid_state(E_INVALID_REMOTE_CHAIN_DECIMALS)
+        );
+
+        remote_decimals as u8
+    }
+
+    inline fun calculate_local_amount(
+        remote_amount: u256, remote_decimals: u8, local_decimals: u8
+    ): u64 {
+        let local_amount =
+            calculate_local_amount_internal(
+                remote_amount, remote_decimals, local_decimals
+            );
+        // check that the calculated amount fits in a u64
+        assert!(
+            local_amount <= 18446744073709551615,
+            error::invalid_state(E_INVALID_ENCODED_AMOUNT)
+        );
+        local_amount as u64
+    }
+
+    fun calculate_local_amount_internal(
+        remote_amount: u256, remote_decimals: u8, local_decimals: u8
+    ): u256 {
+        // TODO: check for overflows
+        if (remote_decimals == local_decimals) {
+            return remote_amount
+        } else if (remote_decimals > local_decimals) {
+            let decimals_diff = remote_decimals - local_decimals;
+            let i = 0;
+            let current_amount = remote_amount;
+            while (i < decimals_diff) {
+                current_amount = current_amount / 10;
+                i = i + 1;
+            };
+            return current_amount
+        } else {
+            let decimals_diff = local_decimals - remote_decimals;
+            let i = 0;
+            let current_amount = remote_amount;
+            while (i < decimals_diff) {
+                current_amount = current_amount * 10;
+                i = i + 1;
+            };
+            return current_amount
         }
     }
 
