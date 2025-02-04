@@ -189,8 +189,13 @@ module ccip_ping_pong_demo::ping_pong_demo {
         option::none()
     }
 
+    // TODO: separate functions due to deploy error, see ccip::state_object
     #[view]
-    public inline fun store_address(): address {
+    public fun get_store_address(): address {
+        store_address()
+    }
+
+    inline fun store_address(): address {
         account::create_resource_address(&@ccip_ping_pong_demo, STORE_OBJECT_SEED)
     }
 
