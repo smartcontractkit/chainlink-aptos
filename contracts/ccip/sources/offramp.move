@@ -19,6 +19,7 @@ module ccip::offramp {
     use ccip::ownable;
     use ccip::ocr3_base;
     use ccip::receiver_dispatcher;
+    use ccip::rmn_remote;
     use ccip::state_object;
     use ccip::token_admin_dispatcher;
     use ccip::token_admin_registry;
@@ -40,6 +41,7 @@ module ccip::offramp {
 
         // dynamic config
         permissionless_execution_threshold_secs: u32,
+        is_rmn_verification_disabled: bool,
 
         // TODO: consider a single smart table of source chain selector -> all data,
         // ie config + execution state + roots + inbound nonces.
@@ -62,7 +64,8 @@ module ccip::offramp {
         already_attempted_events: EventHandle<AlreadyAttempted>,
         execution_state_changed_events: EventHandle<ExecutionStateChanged>,
         commit_report_accepted_events: EventHandle<CommitReportAccepted>,
-        skipped_incorrect_nonce_events: EventHandle<SkippedIncorrectNonce>
+        skipped_incorrect_nonce_events: EventHandle<SkippedIncorrectNonce>,
+        skipped_report_execution_events: EventHandle<SkippedReportExecution>
     }
 
     struct SourceChainConfig has store, drop {
@@ -109,6 +112,7 @@ module ccip::offramp {
     struct CommitReport has store, drop, copy {
         price_updates: PriceUpdates,
         merkle_roots: vector<MerkleRoot>,
+        rmn_signatures: vector<vector<u8>>,
 
         // TODO: this was added so that the hashed/verified report contains the target address,
         // since we don't have onramp address fields. check if we need this.
@@ -143,7 +147,8 @@ module ccip::offramp {
     }
 
     struct DynamicConfig has store, drop {
-        permissionless_execution_threshold_secs: u32
+        permissionless_execution_threshold_secs: u32,
+        is_rmn_verification_disabled: bool
     }
 
     #[event]
@@ -153,7 +158,8 @@ module ccip::offramp {
 
     #[event]
     struct DynamicConfigSet has store, drop {
-        permissionless_execution_threshold_secs: u32
+        permissionless_execution_threshold_secs: u32,
+        is_rmn_verification_disabled: bool
     }
 
     #[event]
@@ -195,6 +201,11 @@ module ccip::offramp {
         sender: vector<u8>
     }
 
+    #[event]
+    struct SkippedReportExecution has store, drop {
+        source_chain_selector: u64
+    }
+
     const E_ALREADY_INITIALIZED: u64 = 1;
     const E_SOURCE_CHAIN_SELECTORS_MISMATCH: u64 = 2;
     const E_ZERO_CHAIN_SELECTOR: u64 = 3;
@@ -217,11 +228,14 @@ module ccip::offramp {
     const E_EMPTY_BATCH: u64 = 20;
     const E_EMPTY_REPORT: u64 = 21;
     const E_UNEXPECTED_TOKEN_DATA: u64 = 22;
+    const E_CURSED_BY_RMN: u64 = 23;
+    const E_BAD_RMN_SIGNAL: u64 = 24;
 
     public entry fun initialize(
         caller: &signer,
         chain_selector: u64,
         permissionless_execution_threshold_secs: u32,
+        is_rmn_verification_disabled: bool,
 
         // pairs of (source chain selector, is enabled)
         source_chain_selectors: vector<u64>,
@@ -248,6 +262,7 @@ module ccip::offramp {
             ocr3_base_state: ocr3_base::new(&state_object_signer),
             chain_selector,
             permissionless_execution_threshold_secs: 0,
+            is_rmn_verification_disabled: false,
             source_chain_configs: smart_table::new(),
             execution_states: smart_table::new(),
             roots: smart_table::new(),
@@ -262,7 +277,10 @@ module ccip::offramp {
             already_attempted_events: account::new_event_handle(&state_object_signer),
             execution_state_changed_events: account::new_event_handle(&state_object_signer),
             commit_report_accepted_events: account::new_event_handle(&state_object_signer),
-            skipped_incorrect_nonce_events: account::new_event_handle(&state_object_signer)
+            skipped_incorrect_nonce_events: account::new_event_handle(&state_object_signer),
+            skipped_report_execution_events: account::new_event_handle(
+                &state_object_signer
+            )
         };
 
         event::emit(StaticConfigSet { chain_selector });
@@ -270,7 +288,11 @@ module ccip::offramp {
             &mut state.static_config_set_events, StaticConfigSet { chain_selector }
         );
 
-        set_dynamic_config_internal(&mut state, permissionless_execution_threshold_secs);
+        set_dynamic_config_internal(
+            &mut state,
+            permissionless_execution_threshold_secs,
+            is_rmn_verification_disabled
+        );
         apply_source_chain_config_updates_internal(
             &mut state, source_chain_selectors, source_chain_is_enabled
         );
@@ -316,6 +338,17 @@ module ccip::offramp {
         state: &mut OffRampState, execution_report: ExecutionReport, manual_execution: bool
     ) {
         let source_chain_selector = execution_report.source_chain_selector;
+
+        if (rmn_remote::is_cursed_u128(source_chain_selector as u128)) {
+            assert!(!manual_execution, error::permission_denied(E_CURSED_BY_RMN));
+
+            event::emit(SkippedReportExecution { source_chain_selector });
+            event::emit_event(
+                &mut state.skipped_report_execution_events,
+                SkippedReportExecution { source_chain_selector }
+            );
+            return
+        };
 
         // assert that the source chain is enabled.
         assert!(
@@ -484,6 +517,40 @@ module ccip::offramp {
             error::invalid_argument(E_INVALID_OFFRAMP_ADDRESS)
         );
 
+        if (!state.is_rmn_verification_disabled
+            && !vector::is_empty(&commit_report.merkle_roots)) {
+            let merkle_root_source_chain_selectors = vector[];
+            let merkle_root_min_sequence_numbers = vector[];
+            let merkle_root_max_sequence_numbers = vector[];
+            let merkle_root_values = vector[];
+            vector::for_each_ref(
+                &commit_report.merkle_roots,
+                |merkle_root| {
+                    vector::push_back(
+                        &mut merkle_root_source_chain_selectors,
+                        merkle_root.source_chain_selector
+                    );
+                    vector::push_back(
+                        &mut merkle_root_min_sequence_numbers,
+                        merkle_root.min_sequence_number
+                    );
+                    vector::push_back(
+                        &mut merkle_root_max_sequence_numbers,
+                        merkle_root.max_sequence_number
+                    );
+                    vector::push_back(&mut merkle_root_values, merkle_root.merkle_root);
+                }
+            );
+
+            rmn_remote::verify(
+                merkle_root_source_chain_selectors,
+                merkle_root_min_sequence_numbers,
+                merkle_root_max_sequence_numbers,
+                merkle_root_values,
+                commit_report.rmn_signatures
+            );
+        };
+
         if (vector::length(&commit_report.price_updates.token_price_updates) > 0
             || vector::length(&commit_report.price_updates.gas_price_updates) > 0) {
             let ocr_sequence_number =
@@ -543,6 +610,11 @@ module ccip::offramp {
             |root| {
                 let root: &MerkleRoot = root;
                 let source_chain_selector = root.source_chain_selector;
+
+                assert!(
+                    !rmn_remote::is_cursed_u128(source_chain_selector as u128),
+                    error::permission_denied(E_CURSED_BY_RMN)
+                );
 
                 assert!(
                     smart_table::contains(
@@ -688,12 +760,18 @@ module ccip::offramp {
     }
 
     public entry fun set_dynamic_config(
-        caller: &signer, permissionless_execution_threshold_secs: u32
+        caller: &signer,
+        permissionless_execution_threshold_secs: u32,
+        is_rmn_verification_disabled: bool
     ) acquires OffRampState {
         let state = borrow_state_mut();
         ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
-        set_dynamic_config_internal(state, permissionless_execution_threshold_secs)
+        set_dynamic_config_internal(
+            state,
+            permissionless_execution_threshold_secs,
+            is_rmn_verification_disabled
+        )
     }
 
     #[view]
@@ -706,7 +784,8 @@ module ccip::offramp {
     public fun get_dynamic_config(): DynamicConfig acquires OffRampState {
         let state = borrow_state();
         DynamicConfig {
-            permissionless_execution_threshold_secs: state.permissionless_execution_threshold_secs
+            permissionless_execution_threshold_secs: state.permissionless_execution_threshold_secs,
+            is_rmn_verification_disabled: state.is_rmn_verification_disabled
         }
     }
 
@@ -721,6 +800,8 @@ module ccip::offramp {
     inline fun execute_single_message(
         message: &Any2AptosRampMessage, message_offchain_token_data: &vector<vector<u8>>
     ): Option<u128> {
+        assert!(!rmn_remote::is_cursed_global(), error::permission_denied(E_BAD_RMN_SIGNAL));
+
         let (local_token_addresses, local_token_amounts) =
             release_or_mint_tokens(
                 &message.token_amounts,
@@ -897,13 +978,24 @@ module ccip::offramp {
     }
 
     inline fun set_dynamic_config_internal(
-        state: &mut OffRampState, permissionless_execution_threshold_secs: u32
+        state: &mut OffRampState,
+        permissionless_execution_threshold_secs: u32,
+        is_rmn_verification_disabled: bool
     ) {
         state.permissionless_execution_threshold_secs = permissionless_execution_threshold_secs;
-        event::emit(DynamicConfigSet { permissionless_execution_threshold_secs });
+        state.is_rmn_verification_disabled = is_rmn_verification_disabled;
+        event::emit(
+            DynamicConfigSet {
+                permissionless_execution_threshold_secs,
+                is_rmn_verification_disabled
+            }
+        );
         event::emit_event(
             &mut state.dynamic_config_set_events,
-            DynamicConfigSet { permissionless_execution_threshold_secs }
+            DynamicConfigSet {
+                permissionless_execution_threshold_secs,
+                is_rmn_verification_disabled
+            }
         );
     }
 
@@ -1071,9 +1163,20 @@ module ccip::offramp {
                 }
             );
 
+        let rmn_signatures =
+            eth_abi::decode_vector(
+                &mut stream,
+                |stream| {
+                    let r = eth_abi::decode_bytes32(stream);
+                    let s = eth_abi::decode_bytes32(stream);
+                    vector::append(&mut r, s);
+                    r
+                }
+            );
+
         let offramp_address = eth_abi::decode_address(&mut stream);
 
-        CommitReport { price_updates, merkle_roots, offramp_address }
+        CommitReport { price_updates, merkle_roots, rmn_signatures, offramp_address }
     }
 
     inline fun deserialize_execution_reports(reports_bytes: vector<u8>):
