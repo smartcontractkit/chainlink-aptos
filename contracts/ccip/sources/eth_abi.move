@@ -5,9 +5,19 @@ module ccip::eth_abi {
     use std::from_bcs;
     use std::vector;
 
-    const E_INVALID_BYTES32: u64 = 1;
-    const E_INVALID_ADDRESS: u64 = 2;
-    const E_OUT_OF_BYTES: u64 = 3;
+    const ENCODED_BOOL_FALSE: vector<u8> = vector[
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0
+    ];
+    const ENCODED_BOOL_TRUE: vector<u8> = vector[
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 1
+    ];
+
+    const E_OUT_OF_BYTES: u64 = 1;
+    const E_INVALID_BYTES32: u64 = 2;
+    const E_INVALID_ADDRESS: u64 = 3;
+    const E_INVALID_BOOL: u64 = 4;
 
     public inline fun encode_address(out: &mut vector<u8>, value: address) {
         vector::append(out, bcs::to_bytes(&value))
@@ -30,6 +40,11 @@ module ccip::eth_abi {
         // little endian to big endian
         vector::reverse(&mut value_bytes);
         vector::append(out, value_bytes)
+    }
+
+    public inline fun encode_bool(out: &mut vector<u8>, value: bool) {
+        vector::append(out, if (value) ENCODED_BOOL_TRUE
+        else ENCODED_BOOL_FALSE)
     }
 
     public inline fun encode_bytes32(
@@ -163,6 +178,25 @@ module ccip::eth_abi {
 
     public fun decode_u64(stream: &mut ABIStream): u64 {
         (decode_u256(stream) as u64)
+    }
+
+    public fun decode_bool(stream: &mut ABIStream): bool {
+        let data = &stream.data;
+        let cur = stream.cur;
+
+        assert!(
+            cur + 32 <= vector::length(data),
+            error::out_of_range(E_OUT_OF_BYTES)
+        );
+
+        let value = vector::slice(data, cur, cur + 32);
+        stream.cur = cur + 32;
+
+        if (value == ENCODED_BOOL_FALSE) { false }
+        else if (value == ENCODED_BOOL_TRUE) { true }
+        else {
+            abort error::invalid_argument(E_INVALID_BOOL)
+        }
     }
 
     public fun decode_bytes32(stream: &mut ABIStream): vector<u8> {
