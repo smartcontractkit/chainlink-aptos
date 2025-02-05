@@ -155,7 +155,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		pollEndTime := time.Now().Add(time.Second * 3)
 		var resource map[string]any
 		for time.Now().Before(pollEndTime) {
-			resource, err = client.AccountResource(mcmsStateAddress, deployerAddress+"::mcms::State")
+			resource, err = client.AccountResource(mcmsStateAddress, deployerAddress+"::mcms::MCMSState")
 			if err != nil {
 				time.Sleep(time.Second * 1)
 				continue
