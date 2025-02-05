@@ -165,17 +165,17 @@ module mcms::mcms {
 
     #[view]
     public fun get_config(): Config acquires MCMSState {
-        borrow_global<MCMSState>(get_state_addr()).config
+        borrow_state().config
     }
 
     #[view]
     public fun get_op_count(): u64 acquires MCMSState {
-        borrow_global<MCMSState>(get_state_addr()).expiring_root_and_op_count.op_count
+      borrow_state().expiring_root_and_op_count.op_count
     }
 
     #[view]
     public fun get_root(): (vector<u8>, u64) acquires MCMSState {
-        let state = borrow_global<MCMSState>(get_state_addr());
+        let state = borrow_state();
         (
             state.expiring_root_and_op_count.root,
             state.expiring_root_and_op_count.valid_until
@@ -184,14 +184,19 @@ module mcms::mcms {
 
     #[view]
     public fun get_root_metadata(): RootMetadata acquires MCMSState {
-        borrow_global<MCMSState>(get_state_addr()).root_metadata
+      borrow_state().root_metadata
+    }
+
+    #[view]
+    public fun get_state_addr(): address {
+        state_addr()
     }
 
     // Ownable getters
 
     #[view]
     public fun owner(): address acquires MCMSState {
-        borrow_global<MCMSState>(get_state_addr()).owner
+        borrow_state().owner
     }
 
     // MCM Functions
@@ -206,6 +211,8 @@ module mcms::mcms {
         metadata_proof: vector<vector<u8>>,
         signatures: vector<vector<u8>>
     ) acquires MCMSState {
+        let state = borrow_state_mut();
+
         let metadata = RootMetadata {
             chain_id,
             multisig,
@@ -213,7 +220,7 @@ module mcms::mcms {
             post_op_count,
             override_previous_root
         };
-        let state = borrow_global_mut<MCMSState>(get_state_addr());
+
         // also checks root = 32 bytes
         let signed_hash = compute_eth_message_hash(root, valid_until);
 
@@ -374,7 +381,8 @@ module mcms::mcms {
         data: vector<u8>,
         proof: vector<vector<u8>>
     ) acquires MCMSState {
-        let state = borrow_global_mut<MCMSState>(get_state_addr());
+        let state = borrow_state_mut();
+
         let op = Op { chain_id, multisig, nonce, to, module_name, function, data };
 
         // op validations
@@ -511,7 +519,8 @@ module mcms::mcms {
         };
 
         // remove old signer addresses
-        let state = borrow_global_mut<MCMSState>(get_state_addr());
+        let state = borrow_state_mut();
+
         state.signers = simple_map::new();
         state.config.signers = vector[];
 
@@ -570,7 +579,8 @@ module mcms::mcms {
     // Ownable functions
     fun transfer_ownership(resource_account: &signer, new_owner: address) acquires MCMSState {
         only_owner(resource_account);
-        let state = borrow_global_mut<MCMSState>(get_state_addr());
+
+        let state = borrow_state_mut();
         state.owner = new_owner;
     }
 
@@ -612,8 +622,16 @@ module mcms::mcms {
         );
     }
 
-    inline fun get_state_addr(): address {
+    inline fun state_addr(): address {
         object::create_object_address(&@mcms, STATE_OBJECT_SEED)
+    }
+
+    inline fun borrow_state(): &MCMSState {
+        borrow_global<MCMSState>(state_addr())
+    }
+
+    inline fun borrow_state_mut(): &mut MCMSState {
+        borrow_global_mut<MCMSState>(state_addr())
     }
 
     inline fun ecdsa_recover_evm_addr(
