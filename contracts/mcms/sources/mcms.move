@@ -28,42 +28,6 @@ module mcms::mcms {
     // keccak256("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP_APTOS")
     const MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP: vector<u8> = x"e5a6d1256b00d7ec22512b6b60a3f4d75c559745d2dbf309f77b8b756caabe14";
 
-    // Error Codes
-    const E_NO_MULTISIG: u64 = 1;
-    const E_ALREADY_SEEN_HASH: u64 = 2;
-    const E_POST_OP_COUNT_REACHED: u64 = 3;
-    const E_WRONG_CHAIN_ID: u64 = 4;
-    const E_WRONG_MULTISIG: u64 = 5;
-    const E_ROOT_EXPIRED: u64 = 6;
-    const E_WRONG_NONCE: u64 = 7;
-    const E_VALID_UNTIL_EXPIRED: u64 = 8;
-    const E_INVALID_SIGNER: u64 = 9;
-    const E_MISSING_CONFIG: u64 = 10;
-    const E_INSUFFICIENT_SIGNERS: u64 = 11;
-    const E_PROOF_CANNOT_BE_VERIFIED: u64 = 12;
-    const E_PENDING_OPS: u64 = 13;
-    const E_WRONG_PRE_OP_COUNT: u64 = 14;
-    const E_WRONG_POST_OP_COUNT: u64 = 15;
-    const E_INVALID_NUM_SIGNERS: u64 = 9;
-    const E_SIGNER_GROUPS_LEN_MISMATCH: u64 = 10;
-    const E_INVALID_GROUP_QUORUM_LEN: u64 = 11;
-    const E_INVALID_GROUP_PARENTS_LEN: u64 = 12;
-    const E_OUT_OF_BOUNDS_GROUP: u64 = 13;
-    const E_GROUP_TREE_NOT_WELL_FORMED: u64 = 14;
-    const E_SIGNER_IN_DISABLED_GROUP: u64 = 15;
-    const E_OUT_OF_BOUNDS_GROUP_QUORUM: u64 = 17;
-    const E_SIGNER_ADDR_MUST_BE_INCREASING: u64 = 18;
-    const E_CMP_VECTORS_DIFF_LEN: u64 = 100;
-    const E_INVALID_V_SIGNATURE: u64 = 101;
-    const E_FAILED_ECDSA_RECOVER: u64 = 102;
-    const E_INVALID_ROOT_LEN: u64 = 103;
-    const E_UNATHORIZED: u64 = 104;
-    const E_CALLBACK_PARAMS_NOT_CONSUMED: u64 = 105;
-    const E_MODULE_NAME_TOO_LONG: u64 = 106;
-    const E_FUNCTION_NAME_TOO_LONG: u64 = 107;
-    const E_INVALID_SIGNER_ADDR_LEN: u64 = 108;
-    const E_INVALID_SIGNATURE_LEN: u64 = 109;
-
     // MCM Structs
     struct RootMetadata has key, store, copy, drop {
         chain_id: u256,
@@ -159,6 +123,43 @@ module mcms::mcms {
         function: String,
         data: vector<u8>
     }
+
+    // Error Codes
+
+    const E_NO_MULTISIG: u64 = 1;
+    const E_ALREADY_SEEN_HASH: u64 = 2;
+    const E_POST_OP_COUNT_REACHED: u64 = 3;
+    const E_WRONG_CHAIN_ID: u64 = 4;
+    const E_WRONG_MULTISIG: u64 = 5;
+    const E_ROOT_EXPIRED: u64 = 6;
+    const E_WRONG_NONCE: u64 = 7;
+    const E_VALID_UNTIL_EXPIRED: u64 = 8;
+    const E_INVALID_SIGNER: u64 = 9;
+    const E_MISSING_CONFIG: u64 = 10;
+    const E_INSUFFICIENT_SIGNERS: u64 = 11;
+    const E_PROOF_CANNOT_BE_VERIFIED: u64 = 12;
+    const E_PENDING_OPS: u64 = 13;
+    const E_WRONG_PRE_OP_COUNT: u64 = 14;
+    const E_WRONG_POST_OP_COUNT: u64 = 15;
+    const E_INVALID_NUM_SIGNERS: u64 = 9;
+    const E_SIGNER_GROUPS_LEN_MISMATCH: u64 = 10;
+    const E_INVALID_GROUP_QUORUM_LEN: u64 = 11;
+    const E_INVALID_GROUP_PARENTS_LEN: u64 = 12;
+    const E_OUT_OF_BOUNDS_GROUP: u64 = 13;
+    const E_GROUP_TREE_NOT_WELL_FORMED: u64 = 14;
+    const E_SIGNER_IN_DISABLED_GROUP: u64 = 15;
+    const E_OUT_OF_BOUNDS_GROUP_QUORUM: u64 = 17;
+    const E_SIGNER_ADDR_MUST_BE_INCREASING: u64 = 18;
+    const E_CMP_VECTORS_DIFF_LEN: u64 = 100;
+    const E_INVALID_V_SIGNATURE: u64 = 101;
+    const E_FAILED_ECDSA_RECOVER: u64 = 102;
+    const E_INVALID_ROOT_LEN: u64 = 103;
+    const E_UNATHORIZED: u64 = 104;
+    const E_CALLBACK_PARAMS_NOT_CONSUMED: u64 = 105;
+    const E_MODULE_NAME_TOO_LONG: u64 = 106;
+    const E_FUNCTION_NAME_TOO_LONG: u64 = 107;
+    const E_INVALID_SIGNER_ADDR_LEN: u64 = 108;
+    const E_INVALID_SIGNATURE_LEN: u64 = 109;
 
     // MCM Getters
 
