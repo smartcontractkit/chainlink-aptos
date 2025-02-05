@@ -163,17 +163,18 @@ module ccip_ping_pong_demo::ping_pong_demo {
                 signer::address_of(&caller), state.fee_token
             );
 
-        let message =
-            client::new_aptos2any_message(
-                state.counterpart_address,
-                encode_count(ping_pong_count),
-                /* token_transfers= */ vector[],
-                state.fee_token,
-                fee_token_store,
-                /* extra_args= */ vector[]
-            );
-
-        onramp::ccip_send(&caller, state.counterpart_chain_selector, message);
+        onramp::ccip_send(
+            &caller,
+            state.counterpart_chain_selector,
+            state.counterpart_address,
+            encode_count(ping_pong_count),
+            /* token_addresses= */ vector[],
+            /* token_amounts= */ vector[],
+            /* token_store_addresses= */ vector[],
+            object::object_address(&state.fee_token),
+            object::object_address(&fee_token_store),
+            /* extra_args= */ vector[]
+        );
     }
 
     public fun ccip_receive<T: key>(_metadata: Object<T>): Option<u128> acquires PingPongDemo {
