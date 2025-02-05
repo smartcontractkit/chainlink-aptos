@@ -649,7 +649,7 @@ module mcms::mcms {
         std::vector::trim((&mut keccak256(public_key_bytes)), 12) // trims publicKeyBytes to 12 bytes, returns trimmed last 20 bytes
     }
 
-    fun compute_eth_message_hash(root: vector<u8>, valid_until: u64): vector<u8> {
+    inline fun compute_eth_message_hash(root: vector<u8>, valid_until: u64): vector<u8> {
         // abi.encode(root (bytes32), valid_until)
         let valid_until_bytes = left_pad_vec(uint_to_bytes(valid_until), 32);
         assert!(vector::length(&root) == 32, error::invalid_argument(E_INVALID_ROOT_LEN)); // root should be 32 bytes
@@ -667,7 +667,7 @@ module mcms::mcms {
     }
 
     // computes keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA, metadata))
-    fun hash_metadata_leaf(metadata: RootMetadata): vector<u8> {
+    inline fun hash_metadata_leaf(metadata: RootMetadata): vector<u8> {
         let chain_id = left_pad_vec(uint_to_bytes(metadata.chain_id), 32);
         let multisig = bcs::to_bytes(&metadata.multisig);
         let pre_op_count = left_pad_vec(uint_to_bytes(metadata.pre_op_count), 32);
@@ -695,7 +695,7 @@ module mcms::mcms {
     }
 
     // computes keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP, op))
-    fun hash_op_leaf(op: Op): vector<u8> {
+    inline fun hash_op_leaf(op: Op): vector<u8> {
         let chain_id = left_pad_vec(uint_to_bytes(op.chain_id), 32);
         let multisig = bcs::to_bytes(&op.multisig);
         let nonce = left_pad_vec(uint_to_bytes(op.nonce), 32);
@@ -737,7 +737,7 @@ module mcms::mcms {
         keccak256(hash_preimage)
     }
 
-    fun verify_merkle_proof(
+    inline fun verify_merkle_proof(
         proof: vector<vector<u8>>,
         root: vector<u8>,
         leaf: vector<u8>
@@ -763,7 +763,7 @@ module mcms::mcms {
     // helper function to convert any input type to bytes
     // note: does not remove leading zero bytes, however this is fine as we are using this in the
     // context of computing hashes where we left pad to 32 bytes anyway.
-    fun uint_to_bytes<T: drop>(input: T): vector<u8> {
+    inline fun uint_to_bytes<T: drop>(input: T): vector<u8> {
         let bcs_bytes = bcs::to_bytes(&input);
         vector::reverse(&mut bcs_bytes);
         bcs_bytes
@@ -832,7 +832,7 @@ module mcms::mcms {
         false
     }
 
-    fun only_owner(caller: &signer) acquires MCMSState {
+    inline fun only_owner(caller: &signer) acquires MCMSState {
         let state = borrow_global<MCMSState>(get_state_addr());
         assert!(
             state.owner == signer::address_of(caller),
