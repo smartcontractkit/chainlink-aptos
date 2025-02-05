@@ -6,8 +6,8 @@ module mcms_test::mcms_user {
     use std::signer;
     use std::object::Object;
 
-    use mcms::mcms_dispatcher;
     use mcms::bcs_stream;
+    use mcms::mcms_registry;
 
     const EUNKNOWN_FUNCTION: u64 = 1;
 
@@ -44,7 +44,7 @@ module mcms_test::mcms_user {
         d: 0
       });
 
-      mcms_dispatcher::register(publisher, string::utf8(b"mcms_user"), SampleMcmsCallback{});
+      mcms_registry::register(publisher, string::utf8(b"mcms_user"), SampleMcmsCallback{});
     }
 
     struct SampleMcmsCallback has drop {}
@@ -52,7 +52,7 @@ module mcms_test::mcms_user {
     public fun mcms_entrypoint<T: key>(_metadata: Object<T>): option::Option<u128> acquires UserData {
         // for any caller of mcms_entrypoint except mcms, get_callback_params would
         // fail and the transaction would abort.
-        let (function, data) = mcms_dispatcher::get_callback_params(SampleMcmsCallback{});
+        let (function, data) = mcms_registry::get_callback_params(SampleMcmsCallback{});
 
         let function_bytes = *string::bytes(&function);
         let stream = bcs_stream::new(data);

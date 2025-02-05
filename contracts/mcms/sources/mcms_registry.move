@@ -1,4 +1,4 @@
-module mcms::mcms_dispatcher {
+module mcms::mcms_registry {
     use std::bcs;
     use std::option;
     use std::string::{Self, String};

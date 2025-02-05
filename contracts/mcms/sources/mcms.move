@@ -350,12 +350,12 @@ module mcms::mcms {
         data: vector<u8>
     ) {
         let object_meta =
-            mcms::mcms_dispatcher::insert(receiver, module_name, function_name, data);
+            mcms::mcms_registry::insert(receiver, module_name, function_name, data);
         aptos_framework::dispatchable_fungible_asset::derived_supply(object_meta);
         let obj_address =
             object::object_address<aptos_framework::fungible_asset::Metadata>(&object_meta);
         assert!(
-            !mcms::mcms_dispatcher::callback_params_exist(obj_address),
+            !mcms::mcms_registry::callback_params_exist(obj_address),
             error::invalid_argument(E_CALLBACK_PARAMS_NOT_CONSUMED)
         );
     }
