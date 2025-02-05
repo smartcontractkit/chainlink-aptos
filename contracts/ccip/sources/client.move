@@ -22,10 +22,10 @@ module ccip::client {
         source_chain_selector: u64,
         sender: vector<u8>,
         data: vector<u8>,
-        dest_token_amounts: vector<AptosTokenAmount>
+        dest_token_amounts: vector<Any2AptosTokenAmount>
     }
 
-    struct AptosTokenAmount has store, drop, copy {
+    struct Any2AptosTokenAmount has store, drop, copy {
         token: address,
         amount: u64
     }
@@ -65,16 +65,16 @@ module ccip::client {
         input.data
     }
 
-    public fun get_dest_token_amounts(input: &Any2AptosMessage): vector<AptosTokenAmount> {
+    public fun get_dest_token_amounts(input: &Any2AptosMessage): vector<Any2AptosTokenAmount> {
         input.dest_token_amounts
     }
 
-    // AptosTokenAmount accessors
-    public fun get_token(input: &AptosTokenAmount): address {
+    // Any2AptosTokenAmount accessors
+    public fun get_token(input: &Any2AptosTokenAmount): address {
         input.token
     }
 
-    public fun get_amount(input: &AptosTokenAmount): u64 {
+    public fun get_amount(input: &Any2AptosTokenAmount): u64 {
         input.amount
     }
 
@@ -83,7 +83,7 @@ module ccip::client {
         source_chain_selector: u64,
         sender: vector<u8>,
         data: vector<u8>,
-        dest_token_amounts: vector<AptosTokenAmount>
+        dest_token_amounts: vector<Any2AptosTokenAmount>
     ): Any2AptosMessage {
         Any2AptosMessage {
             message_id,
@@ -96,12 +96,12 @@ module ccip::client {
 
     public(friend) fun new_dest_token_amounts(
         token_addresses: vector<address>, token_amounts: vector<u64>
-    ): vector<AptosTokenAmount> {
+    ): vector<Any2AptosTokenAmount> {
         vector::zip_map_ref(
             &token_addresses,
             &token_amounts,
             |token_address, token_amount| {
-                AptosTokenAmount { token: *token_address, amount: *token_amount }
+                Any2AptosTokenAmount { token: *token_address, amount: *token_amount }
             }
         )
     }
