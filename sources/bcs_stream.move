@@ -28,15 +28,12 @@ module mcms::bcs_stream {
         /// Byte buffer containing the serialized data.
         data: vector<u8>,
         /// Cursor indicating the current position in the byte buffer.
-        cur: u64,
+        cur: u64
     }
 
     /// Constructs a new BCSStream instance from the provided byte array.
     public fun new(data: vector<u8>): BCSStream {
-        BCSStream {
-            data,
-            cur: 0,
-        }
+        BCSStream { data, cur: 0 }
     }
 
     /// Deserializes a ULEB128-encoded integer from the stream.
@@ -73,14 +70,15 @@ module mcms::bcs_stream {
 
     /// Deserializes a `bool` value from the stream.
     public fun deserialize_bool(stream: &mut BCSStream): bool {
-        assert!(stream.cur < vector::length(&stream.data), error::out_of_range(EOUT_OF_BYTES));
+        assert!(
+            stream.cur < vector::length(&stream.data),
+            error::out_of_range(EOUT_OF_BYTES)
+        );
         let byte = *vector::borrow(&stream.data, stream.cur);
         stream.cur = stream.cur + 1;
-        if (byte == 0) {
-            false
-        } else if (byte == 1) {
-            true
-        } else {
+        if (byte == 0) { false }
+        else if (byte == 1) { true }
+        else {
             abort error::invalid_argument(EMALFORMED_DATA)
         }
     }
@@ -93,7 +91,10 @@ module mcms::bcs_stream {
         let data = &stream.data;
         let cur = stream.cur;
 
-        assert!(cur + 32 <= vector::length(data), error::out_of_range(EOUT_OF_BYTES));
+        assert!(
+            cur + 32 <= vector::length(data),
+            error::out_of_range(EOUT_OF_BYTES)
+        );
         let res = from_bcs::to_address(vector::slice(data, cur, cur + 32));
 
         stream.cur = cur + 32;
@@ -120,11 +121,13 @@ module mcms::bcs_stream {
         let data = &stream.data;
         let cur = stream.cur;
 
-        assert!(cur + 2 <= vector::length(data), error::out_of_range(EOUT_OF_BYTES));
+        assert!(
+            cur + 2 <= vector::length(data),
+            error::out_of_range(EOUT_OF_BYTES)
+        );
         let res =
-            (*vector::borrow(data, cur) as u16) |
-                ((*vector::borrow(data, cur + 1) as u16) << 8)
-        ;
+            (*vector::borrow(data, cur) as u16)
+                | ((*vector::borrow(data, cur + 1) as u16) << 8);
 
         stream.cur = stream.cur + 2;
         res
@@ -136,13 +139,15 @@ module mcms::bcs_stream {
         let data = &stream.data;
         let cur = stream.cur;
 
-        assert!(cur + 4 <= vector::length(data), error::out_of_range(EOUT_OF_BYTES));
+        assert!(
+            cur + 4 <= vector::length(data),
+            error::out_of_range(EOUT_OF_BYTES)
+        );
         let res =
-            (*vector::borrow(data, cur) as u32) |
-                ((*vector::borrow(data, cur + 1) as u32) << 8) |
-                ((*vector::borrow(data, cur + 2) as u32) << 16) |
-                ((*vector::borrow(data, cur + 3) as u32) << 24)
-        ;
+            (*vector::borrow(data, cur) as u32)
+                | ((*vector::borrow(data, cur + 1) as u32) << 8)
+                | ((*vector::borrow(data, cur + 2) as u32) << 16)
+                | ((*vector::borrow(data, cur + 3) as u32) << 24);
 
         stream.cur = stream.cur + 4;
         res
@@ -154,17 +159,19 @@ module mcms::bcs_stream {
         let data = &stream.data;
         let cur = stream.cur;
 
-        assert!(cur + 8 <= vector::length(data), error::out_of_range(EOUT_OF_BYTES));
+        assert!(
+            cur + 8 <= vector::length(data),
+            error::out_of_range(EOUT_OF_BYTES)
+        );
         let res =
-            (*vector::borrow(data, cur) as u64) |
-                ((*vector::borrow(data, cur + 1) as u64) << 8) |
-                ((*vector::borrow(data, cur + 2) as u64) << 16) |
-                ((*vector::borrow(data, cur + 3) as u64) << 24) |
-                ((*vector::borrow(data, cur + 4) as u64) << 32) |
-                ((*vector::borrow(data, cur + 5) as u64) << 40) |
-                ((*vector::borrow(data, cur + 6) as u64) << 48) |
-                ((*vector::borrow(data, cur + 7) as u64) << 56)
-        ;
+            (*vector::borrow(data, cur) as u64)
+                | ((*vector::borrow(data, cur + 1) as u64) << 8)
+                | ((*vector::borrow(data, cur + 2) as u64) << 16)
+                | ((*vector::borrow(data, cur + 3) as u64) << 24)
+                | ((*vector::borrow(data, cur + 4) as u64) << 32)
+                | ((*vector::borrow(data, cur + 5) as u64) << 40)
+                | ((*vector::borrow(data, cur + 6) as u64) << 48)
+                | ((*vector::borrow(data, cur + 7) as u64) << 56);
 
         stream.cur = stream.cur + 8;
         res
@@ -176,25 +183,27 @@ module mcms::bcs_stream {
         let data = &stream.data;
         let cur = stream.cur;
 
-        assert!(cur + 16 <= vector::length(data), error::out_of_range(EOUT_OF_BYTES));
+        assert!(
+            cur + 16 <= vector::length(data),
+            error::out_of_range(EOUT_OF_BYTES)
+        );
         let res =
-            (*vector::borrow(data, cur) as u128) |
-                ((*vector::borrow(data, cur + 1) as u128) << 8) |
-                ((*vector::borrow(data, cur + 2) as u128) << 16) |
-                ((*vector::borrow(data, cur + 3) as u128) << 24) |
-                ((*vector::borrow(data, cur + 4) as u128) << 32) |
-                ((*vector::borrow(data, cur + 5) as u128) << 40) |
-                ((*vector::borrow(data, cur + 6) as u128) << 48) |
-                ((*vector::borrow(data, cur + 7) as u128) << 56) |
-                ((*vector::borrow(data, cur + 8) as u128) << 64) |
-                ((*vector::borrow(data, cur + 9) as u128) << 72) |
-                ((*vector::borrow(data, cur + 10) as u128) << 80) |
-                ((*vector::borrow(data, cur + 11) as u128) << 88) |
-                ((*vector::borrow(data, cur + 12) as u128) << 96) |
-                ((*vector::borrow(data, cur + 13) as u128) << 104) |
-                ((*vector::borrow(data, cur + 14) as u128) << 112) |
-                ((*vector::borrow(data, cur + 15) as u128) << 120)
-        ;
+            (*vector::borrow(data, cur) as u128)
+                | ((*vector::borrow(data, cur + 1) as u128) << 8)
+                | ((*vector::borrow(data, cur + 2) as u128) << 16)
+                | ((*vector::borrow(data, cur + 3) as u128) << 24)
+                | ((*vector::borrow(data, cur + 4) as u128) << 32)
+                | ((*vector::borrow(data, cur + 5) as u128) << 40)
+                | ((*vector::borrow(data, cur + 6) as u128) << 48)
+                | ((*vector::borrow(data, cur + 7) as u128) << 56)
+                | ((*vector::borrow(data, cur + 8) as u128) << 64)
+                | ((*vector::borrow(data, cur + 9) as u128) << 72)
+                | ((*vector::borrow(data, cur + 10) as u128) << 80)
+                | ((*vector::borrow(data, cur + 11) as u128) << 88)
+                | ((*vector::borrow(data, cur + 12) as u128) << 96)
+                | ((*vector::borrow(data, cur + 13) as u128) << 104)
+                | ((*vector::borrow(data, cur + 14) as u128) << 112)
+                | ((*vector::borrow(data, cur + 15) as u128) << 120);
 
         stream.cur = stream.cur + 16;
         res
@@ -206,41 +215,43 @@ module mcms::bcs_stream {
         let data = &stream.data;
         let cur = stream.cur;
 
-        assert!(cur + 32 <= vector::length(data), error::out_of_range(EOUT_OF_BYTES));
+        assert!(
+            cur + 32 <= vector::length(data),
+            error::out_of_range(EOUT_OF_BYTES)
+        );
         let res =
-            (*vector::borrow(data, cur) as u256) |
-                ((*vector::borrow(data, cur + 1) as u256) << 8) |
-                ((*vector::borrow(data, cur + 2) as u256) << 16) |
-                ((*vector::borrow(data, cur + 3) as u256) << 24) |
-                ((*vector::borrow(data, cur + 4) as u256) << 32) |
-                ((*vector::borrow(data, cur + 5) as u256) << 40) |
-                ((*vector::borrow(data, cur + 6) as u256) << 48) |
-                ((*vector::borrow(data, cur + 7) as u256) << 56) |
-                ((*vector::borrow(data, cur + 8) as u256) << 64) |
-                ((*vector::borrow(data, cur + 9) as u256) << 72) |
-                ((*vector::borrow(data, cur + 10) as u256) << 80) |
-                ((*vector::borrow(data, cur + 11) as u256) << 88) |
-                ((*vector::borrow(data, cur + 12) as u256) << 96) |
-                ((*vector::borrow(data, cur + 13) as u256) << 104) |
-                ((*vector::borrow(data, cur + 14) as u256) << 112) |
-                ((*vector::borrow(data, cur + 15) as u256) << 120) |
-                ((*vector::borrow(data, cur + 16) as u256) << 128) |
-                ((*vector::borrow(data, cur + 17) as u256) << 136) |
-                ((*vector::borrow(data, cur + 18) as u256) << 144) |
-                ((*vector::borrow(data, cur + 19) as u256) << 152) |
-                ((*vector::borrow(data, cur + 20) as u256) << 160) |
-                ((*vector::borrow(data, cur + 21) as u256) << 168) |
-                ((*vector::borrow(data, cur + 22) as u256) << 176) |
-                ((*vector::borrow(data, cur + 23) as u256) << 184) |
-                ((*vector::borrow(data, cur + 24) as u256) << 192) |
-                ((*vector::borrow(data, cur + 25) as u256) << 200) |
-                ((*vector::borrow(data, cur + 26) as u256) << 208) |
-                ((*vector::borrow(data, cur + 27) as u256) << 216) |
-                ((*vector::borrow(data, cur + 28) as u256) << 224) |
-                ((*vector::borrow(data, cur + 29) as u256) << 232) |
-                ((*vector::borrow(data, cur + 30) as u256) << 240) |
-                ((*vector::borrow(data, cur + 31) as u256) << 248)
-        ;
+            (*vector::borrow(data, cur) as u256)
+                | ((*vector::borrow(data, cur + 1) as u256) << 8)
+                | ((*vector::borrow(data, cur + 2) as u256) << 16)
+                | ((*vector::borrow(data, cur + 3) as u256) << 24)
+                | ((*vector::borrow(data, cur + 4) as u256) << 32)
+                | ((*vector::borrow(data, cur + 5) as u256) << 40)
+                | ((*vector::borrow(data, cur + 6) as u256) << 48)
+                | ((*vector::borrow(data, cur + 7) as u256) << 56)
+                | ((*vector::borrow(data, cur + 8) as u256) << 64)
+                | ((*vector::borrow(data, cur + 9) as u256) << 72)
+                | ((*vector::borrow(data, cur + 10) as u256) << 80)
+                | ((*vector::borrow(data, cur + 11) as u256) << 88)
+                | ((*vector::borrow(data, cur + 12) as u256) << 96)
+                | ((*vector::borrow(data, cur + 13) as u256) << 104)
+                | ((*vector::borrow(data, cur + 14) as u256) << 112)
+                | ((*vector::borrow(data, cur + 15) as u256) << 120)
+                | ((*vector::borrow(data, cur + 16) as u256) << 128)
+                | ((*vector::borrow(data, cur + 17) as u256) << 136)
+                | ((*vector::borrow(data, cur + 18) as u256) << 144)
+                | ((*vector::borrow(data, cur + 19) as u256) << 152)
+                | ((*vector::borrow(data, cur + 20) as u256) << 160)
+                | ((*vector::borrow(data, cur + 21) as u256) << 168)
+                | ((*vector::borrow(data, cur + 22) as u256) << 176)
+                | ((*vector::borrow(data, cur + 23) as u256) << 184)
+                | ((*vector::borrow(data, cur + 24) as u256) << 192)
+                | ((*vector::borrow(data, cur + 25) as u256) << 200)
+                | ((*vector::borrow(data, cur + 26) as u256) << 208)
+                | ((*vector::borrow(data, cur + 27) as u256) << 216)
+                | ((*vector::borrow(data, cur + 28) as u256) << 224)
+                | ((*vector::borrow(data, cur + 29) as u256) << 232)
+                | ((*vector::borrow(data, cur + 30) as u256) << 240)
+                | ((*vector::borrow(data, cur + 31) as u256) << 248);
 
         stream.cur = stream.cur + 32;
         res
@@ -248,10 +259,7 @@ module mcms::bcs_stream {
 
     /// Deserializes a `u256` value from the stream.
     public entry fun deserialize_u256_entry(data: vector<u8>, cursor: u64) {
-        let stream = BCSStream {
-            data: data,
-            cur: cursor,
-        };
+        let stream = BCSStream { data: data, cur: cursor };
         deserialize_u256(&mut stream);
     }
 
@@ -259,7 +267,9 @@ module mcms::bcs_stream {
     /// First, reads the length of the vector, which is in uleb128 format.
     /// After determining the length, it then reads the contents of the vector.
     /// The `elem_deserializer` lambda expression is used sequentially to deserialize each element of the vector.
-    public inline fun deserialize_vector<E>(stream: &mut BCSStream, elem_deserializer: |&mut BCSStream| E): vector<E> {
+    public inline fun deserialize_vector<E>(
+        stream: &mut BCSStream, elem_deserializer: |&mut BCSStream| E
+    ): vector<E> {
         let len = deserialize_uleb128(stream);
         let v = vector::empty();
 
@@ -277,7 +287,10 @@ module mcms::bcs_stream {
         let data = &stream.data;
         let cur = stream.cur;
 
-        assert!(cur + len <= vector::length(data), error::out_of_range(EOUT_OF_BYTES));
+        assert!(
+            cur + len <= vector::length(data),
+            error::out_of_range(EOUT_OF_BYTES)
+        );
 
         let res = vector::slice(data, cur, cur + len);
         stream.cur = cur + len;
@@ -293,7 +306,10 @@ module mcms::bcs_stream {
         let data = &stream.data;
         let cur = stream.cur;
 
-        assert!(cur + len <= vector::length(data), error::out_of_range(EOUT_OF_BYTES));
+        assert!(
+            cur + len <= vector::length(data),
+            error::out_of_range(EOUT_OF_BYTES)
+        );
 
         let res = string::utf8(vector::slice(data, cur, cur + len));
         stream.cur = cur + len;
@@ -305,7 +321,9 @@ module mcms::bcs_stream {
     /// First, reads a single byte representing the presence (0x01) or absence (0x00) of data.
     /// After determining the presence of data, it then reads the actual data if present.
     /// The `elem_deserializer` lambda expression is used to deserialize the element contained within the `Option`.
-    public inline fun deserialize_option<E>(stream: &mut BCSStream, elem_deserializer: |&mut BCSStream| E): Option<E> {
+    public inline fun deserialize_option<E>(
+        stream: &mut BCSStream, elem_deserializer: |&mut BCSStream| E
+    ): Option<E> {
         let is_data = deserialize_bool(stream);
         if (is_data) {
             option::some(elem_deserializer(stream))
