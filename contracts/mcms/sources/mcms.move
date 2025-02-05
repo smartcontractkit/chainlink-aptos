@@ -170,7 +170,7 @@ module mcms::mcms {
 
     #[view]
     public fun get_op_count(): u64 acquires MCMSState {
-      borrow_state().expiring_root_and_op_count.op_count
+        borrow_state().expiring_root_and_op_count.op_count
     }
 
     #[view]
@@ -184,7 +184,7 @@ module mcms::mcms {
 
     #[view]
     public fun get_root_metadata(): RootMetadata acquires MCMSState {
-      borrow_state().root_metadata
+        borrow_state().root_metadata
     }
 
     #[view]
@@ -668,9 +668,11 @@ module mcms::mcms {
         std::vector::trim((&mut keccak256(public_key_bytes)), 12) // trims publicKeyBytes to 12 bytes, returns trimmed last 20 bytes
     }
 
-    inline fun compute_eth_message_hash(root: vector<u8>, valid_until: u64): vector<u8> {
+    inline fun compute_eth_message_hash(
+        root: vector<u8>, valid_until: u64
+    ): vector<u8> {
         // abi.encode(root (bytes32), valid_until)
-        let valid_until_bytes = left_pad_vec(uint_to_bytes(valid_until), 32);
+        let valid_until_bytes = encode_uint(valid_until, 32);
         assert!(vector::length(&root) == 32, error::invalid_argument(E_INVALID_ROOT_LEN)); // root should be 32 bytes
         let abi_encoded_params = &mut root;
         vector::append(abi_encoded_params, valid_until_bytes);
@@ -687,17 +689,16 @@ module mcms::mcms {
 
     // computes keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA, metadata))
     inline fun hash_metadata_leaf(metadata: RootMetadata): vector<u8> {
-        let chain_id = left_pad_vec(uint_to_bytes(metadata.chain_id), 32);
+        let chain_id = encode_uint(metadata.chain_id, 32);
         let multisig = bcs::to_bytes(&metadata.multisig);
-        let pre_op_count = left_pad_vec(uint_to_bytes(metadata.pre_op_count), 32);
-        let post_op_count = left_pad_vec(uint_to_bytes(metadata.post_op_count), 32);
-        // let override_previous_root = left_pad_vec(uint_to_bytes(metadata.override_previous_root as u8), 32);
-        let override_previous_root: vector<u8>;
-        if (metadata.override_previous_root) {
-            override_previous_root = vector[1];
-        } else {
-            override_previous_root = vector[0];
-        };
+        let pre_op_count = encode_uint(metadata.pre_op_count, 32);
+        let post_op_count = encode_uint(metadata.post_op_count, 32);
+        let override_previous_root =
+            if (metadata.override_previous_root) {
+                vector[1]
+            } else {
+                vector[0]
+            };
 
         let hash_preimage: vector<u8> = vector[];
         vector::append(
@@ -715,10 +716,9 @@ module mcms::mcms {
 
     // computes keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP, op))
     inline fun hash_op_leaf(op: Op): vector<u8> {
-        let chain_id = left_pad_vec(uint_to_bytes(op.chain_id), 32);
+        let chain_id = encode_uint(op.chain_id, 32);
         let multisig = bcs::to_bytes(&op.multisig);
-        let nonce = left_pad_vec(uint_to_bytes(op.nonce), 32);
-
+        let nonce = encode_uint(op.nonce, 32);
         let to = bcs::to_bytes(&op.to);
 
         assert!(
@@ -779,46 +779,56 @@ module mcms::mcms {
         computed_hash == root
     }
 
-    // helper function to convert any input type to bytes
-    // note: does not remove leading zero bytes, however this is fine as we are using this in the
-    // context of computing hashes where we left pad to 32 bytes anyway.
-    inline fun uint_to_bytes<T: drop>(input: T): vector<u8> {
+    // helper function to encode a numeric type to bytes.
+    inline fun encode_uint<T: drop>(input: T, num_bytes: u64): vector<u8> {
         let bcs_bytes = bcs::to_bytes(&input);
+
+        let len = vector::length(&bcs_bytes);
+        if (len < num_bytes) {
+            let bytes_to_pad = num_bytes - len;
+            let i = 0;
+            while (i < bytes_to_pad) {
+                vector::push_back(&mut bcs_bytes, 0);
+                i = i + 1;
+            };
+        };
+
+        // little endian to big endian
         vector::reverse(&mut bcs_bytes);
+
         bcs_bytes
     }
 
     // helper function to right pad a vector<u8> with zero bytes to a specified length
     // this function returns the input if the input length is already equal to or greater than num_bytes
-    inline fun right_pad_vec(input: vector<u8>, num_bytes: u64): vector<u8> {
-        let len = vector::length(&input);
+    inline fun right_pad_vec(v: vector<u8>, num_bytes: u64): vector<u8> {
+        let len = vector::length(&v);
         if (len < num_bytes) {
             let bytes_to_pad = num_bytes - len;
-            let padded: vector<u8> = copy input;
             let i = 0;
             while (i < bytes_to_pad) {
-                vector::push_back(&mut padded, 0);
+                vector::push_back(&mut v, 0);
                 i = i + 1;
             };
-            padded
-        } else { input }
+        };
+        v
     }
 
     // helper function to left pad a vector<u8> with zero bytes to a specified length
     // this function returns the input if the input length is already equal to or greater than num_bytes
-    inline fun left_pad_vec(input: vector<u8>, num_bytes: u64): vector<u8> {
-        let len = vector::length(&input);
+    inline fun left_pad_vec(v: vector<u8>, num_bytes: u64): vector<u8> {
+        let len = vector::length(&v);
         if (len < num_bytes) {
             let bytes_to_pad = num_bytes - len;
-            let padded: vector<u8> = vector[];
             let i = 0;
+            vector::reverse(&mut v);
             while (i < bytes_to_pad) {
-                vector::push_back(&mut padded, 0);
+                vector::push_back(&mut v, 0);
                 i = i + 1;
             };
-            vector::append(&mut padded, input);
-            padded
-        } else { input }
+            vector::reverse(&mut v);
+        };
+        v
     }
 
     // helper function to compare two vector<u8> values. expects both vectors to be of equal length.
@@ -1905,32 +1915,41 @@ module mcms::mcms {
     //         assert!(recovered_addr == x"16c9fACed8a1e3C6aEA2B654EEca5617eb900EFf", 1);
     //     }
     //
-    //     #[test]
-    //     public entry fun test_utils__uint_to_bytes() {
-    //         let large_u64: u64 = 1748317727; // hex = 0x6835361F
-    //         let bytes = uint_to_bytes(large_u64);
-    //         assert!(bytes == x"000000006835361f", 1);
-    //
-    //         let u32_with_zero_bytes: u32 = 256; // hex = 0x0100
-    //         let bytes_with_zero = uint_to_bytes(u32_with_zero_bytes);
-    //         assert!(bytes_with_zero == x"00000100", 2);
-    //
-    //         let u128_with_zero_bytes_2: u128 = 262144; // hex = 0x040000
-    //         let bytes_with_zero_2 = uint_to_bytes(u128_with_zero_bytes_2);
-    //         assert!(bytes_with_zero_2 == x"00000000000000000000000000040000", 3);
-    //
-    //         let u256_num: u256 = 262144;
-    //         let bytes_256 = uint_to_bytes(u256_num);
-    //         assert!(
-    //             bytes_256
-    //                 == x"0000000000000000000000000000000000000000000000000000000000040000",
-    //             4
-    //         );
-    //
-    //         let max_u64: u64 = 18446744073709551615; // hex = 0xFFFFFFFFFFFFFFFF
-    //         let bytes_max = uint_to_bytes(max_u64);
-    //         assert!(bytes_max == x"ffffffffffffffff", 4);
-    //     }
+    #[test]
+    public entry fun test_encode_uint() {
+        let large_u64: u64 = 1748317727; // hex = 0x6835361F
+        let bytes = encode_uint(large_u64, 8);
+        assert!(bytes == x"000000006835361f", 1);
+
+        let u32_with_zero_bytes: u32 = 256; // hex = 0x0100
+        let bytes_with_zero = encode_uint(u32_with_zero_bytes, 4);
+        assert!(bytes_with_zero == x"00000100", 2);
+
+        let u128_with_zero_bytes_2: u128 = 262144; // hex = 0x040000
+        let bytes_with_zero_2 = encode_uint(u128_with_zero_bytes_2, 16);
+        assert!(bytes_with_zero_2 == x"00000000000000000000000000040000", 3);
+
+        let u128_with_padding: u128 = 262144;
+        let bytes_padded = encode_uint(u128_with_padding, 32);
+        assert!(
+            bytes_padded
+                == x"0000000000000000000000000000000000000000000000000000000000040000",
+            4
+        );
+
+        let u256_num: u256 = 262144;
+        let bytes_256 = encode_uint(u256_num, 32);
+        assert!(
+            bytes_256
+                == x"0000000000000000000000000000000000000000000000000000000000040000",
+            5
+        );
+
+        let max_u64: u64 = 18446744073709551615; // hex = 0xFFFFFFFFFFFFFFFF
+        let bytes_max = encode_uint(max_u64, 8);
+        assert!(bytes_max == x"ffffffffffffffff", 6);
+    }
+
     //
     //     #[test]
     //     public entry fun test_utils__compute_eth_message_hash() {
@@ -1978,24 +1997,24 @@ module mcms::mcms {
     //         assert!(hash == *expected_hash, 0);
     //     }
     //
-    //     #[test]
-    //     public entry fun test_utils__verify_merkle_proof() {
-    //         let root = x"8ad6edb34398f637ca17e46b0b51ce50e18f56287aa0bf728ae3b5c4119c1600";
-    //         let leaf_hash =
-    //             x"03783fac2efed8fbc9ad443e592ee30e61d65f471140c10ca155e937b435b760";
-    //         let proof = vector[
-    //             x"044852b2a670ade5407e78fb2863c51de9fcb96542a07186fe3aeda6bb8a116d",
-    //             x"156d92046fd42325cec0997498d663ce343243a1ff530521e60d08407dbb0580",
-    //             x"01b56d4f1b38f85ac9e8a826fb4d5210446e67a09594146d405f6f09f1a657f2",
-    //             x"44164eac6b478d58bcff0081e764768c68e20c031ded38f87e823ceff0f76854",
-    //             x"5b095d44d40824ca630f833c439211a0d8e63a0c2bb646b63b76de7cba9a35be",
-    //             x"5a97fb1f239d0789fbd9ab71901b0c7c0c0ad8c1530df72ec0a21e72647e5e46"
-    //         ];
-    //         assert!(verify_merkle_proof(proof, root, leaf_hash), 1);
-    //     }
-    //
     #[test]
-    public entry fun test_utils__vector_u8_gt() {
+    public entry fun test_verify_merkle_proof() {
+        let root = x"8ad6edb34398f637ca17e46b0b51ce50e18f56287aa0bf728ae3b5c4119c1600";
+        let leaf_hash =
+            x"03783fac2efed8fbc9ad443e592ee30e61d65f471140c10ca155e937b435b760";
+        let proof = vector[
+            x"044852b2a670ade5407e78fb2863c51de9fcb96542a07186fe3aeda6bb8a116d",
+            x"156d92046fd42325cec0997498d663ce343243a1ff530521e60d08407dbb0580",
+            x"01b56d4f1b38f85ac9e8a826fb4d5210446e67a09594146d405f6f09f1a657f2",
+            x"44164eac6b478d58bcff0081e764768c68e20c031ded38f87e823ceff0f76854",
+            x"5b095d44d40824ca630f833c439211a0d8e63a0c2bb646b63b76de7cba9a35be",
+            x"5a97fb1f239d0789fbd9ab71901b0c7c0c0ad8c1530df72ec0a21e72647e5e46"
+        ];
+        assert!(verify_merkle_proof(proof, root, leaf_hash), 1);
+    }
+
+    #[test]
+    public entry fun test_vector_u8_gt() {
         // a > b
         let a = vector[0x08, 0x0, 0x0, 0x0, 0x0];
         let b = vector[0x07, 0x4, 0x4, 0x3, 0x1];
@@ -2027,34 +2046,34 @@ module mcms::mcms {
             }
         );
     }
-    //
-    //     #[test]
-    //     public entry fun test_utils__right_pad_vec() {
-    //         let input = vector[0x08, 0x0, 0x0, 0x0, 0x0];
-    //         let padded = right_pad_vec(input, 10);
-    //         assert!(padded == vector[8, 0, 0, 0, 0, 0, 0, 0, 0, 0], 1);
-    //
-    //         let input2 = vector[];
-    //         let padded2 = right_pad_vec(input2, 5);
-    //         assert!(padded2 == vector[0, 0, 0, 0, 0], 2);
-    //
-    //         let input3 = vector[0x01, 0x2, 0x3, 0x4, 0x5];
-    //         let padded3 = right_pad_vec(input3, 4);
-    //         assert!(padded3 == vector[1, 2, 3, 4, 5], 3);
-    //     }
-    //
-    //     #[test]
-    //     public entry fun test_utils__left_pad_vec() {
-    //         let input = vector[0x08, 0x0, 0x0, 0x0, 0x0];
-    //         let padded = left_pad_vec(input, 10);
-    //         assert!(padded == vector[0, 0, 0, 0, 0, 8, 0, 0, 0, 0], 1);
-    //
-    //         let input2 = vector[];
-    //         let padded2 = left_pad_vec(input2, 5);
-    //         assert!(padded2 == vector[0, 0, 0, 0, 0], 2);
-    //
-    //         let input3 = vector[0x01, 0x2, 0x3, 0x4, 0x5];
-    //         let padded3 = left_pad_vec(input3, 4);
-    //         assert!(padded3 == vector[1, 2, 3, 4, 5], 3);
-    //     }
+
+    #[test]
+    public entry fun test_right_pad_vec() {
+        let input = vector[0x08, 0x0, 0x0, 0x0, 0x0];
+        let padded = right_pad_vec(input, 10);
+        assert!(padded == vector[8, 0, 0, 0, 0, 0, 0, 0, 0, 0], 1);
+
+        let input2 = vector[];
+        let padded2 = right_pad_vec(input2, 5);
+        assert!(padded2 == vector[0, 0, 0, 0, 0], 2);
+
+        let input3 = vector[0x01, 0x2, 0x3, 0x4, 0x5];
+        let padded3 = right_pad_vec(input3, 4);
+        assert!(padded3 == vector[1, 2, 3, 4, 5], 3);
+    }
+
+    #[test]
+    public entry fun test_left_pad_vec() {
+        let input = vector[0x08, 0x0, 0x0, 0x0, 0x0];
+        let padded = left_pad_vec(input, 10);
+        assert!(padded == vector[0, 0, 0, 0, 0, 8, 0, 0, 0, 0], 1);
+
+        let input2 = vector[];
+        let padded2 = left_pad_vec(input2, 5);
+        assert!(padded2 == vector[0, 0, 0, 0, 0], 2);
+
+        let input3 = vector[0x01, 0x2, 0x3, 0x4, 0x5];
+        let padded3 = left_pad_vec(input3, 4);
+        assert!(padded3 == vector[1, 2, 3, 4, 5], 3);
+    }
 }
