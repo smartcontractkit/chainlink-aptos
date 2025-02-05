@@ -75,16 +75,6 @@ module mcms::mcms {
         op_count: u64
     }
 
-    // todo: Since only an owner of the internal multisig account can execute the final
-    // transaction, we have to define and save an executor signer which is the only account
-    // that can execute the transaction. the internal multisig will be a 2-of-2 multisig
-    // where MCMS is one signer and the executor is the other signer. MCMS does not expose
-    // any methods to vote on transactions, and thus any txs proposed by the executor will
-    // never be able to be executed. this changes the MCMS model from (k of n) to ((k of n) +1)
-    // if we explore using the Aptos native multisig account (1 of N) as an executor, this
-    // can make it effectively more than one single signer, but this is still different to
-    // to original behaviour of MCMS on EVM chains.
-
     struct MCMSState has key, store, drop {
         // signers is used to easily validate the existence of the signer by its address. We still
         // have signers stored in config in order to easily deactivate them when a new config is set.
@@ -200,6 +190,7 @@ module mcms::mcms {
     }
 
     // MCM Functions
+
     public entry fun set_root(
         root: vector<u8>,
         valid_until: u64,
