@@ -17,9 +17,6 @@ module mcms::mcms {
     // MCM Consts
     const NUM_GROUPS: u8 = 32;
     const MAX_NUM_SIGNERS: u8 = 200;
-    // equivalent to address(0x0) in Solidity
-    const ZERO_EVM_ADDRESS: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0];
     // equivalent to initializing empty uint8[NUM_GROUPS] in Solidity
     const VEC_NUM_GROUPS: vector<u8> = vector[
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -70,6 +67,8 @@ module mcms::mcms {
 
     const EMODULE_NAME_TOO_LONG: u64 = 106;
     const EFUNCTION_NAME_TOO_LONG: u64 = 107;
+
+    const EINVALID_SIGNER_ADDR_LEN: u64 = 108;
 
     // MCM Structs
     struct RootMetadata has key, store, copy, drop {
@@ -264,55 +263,58 @@ module mcms::mcms {
         {
             // verify sigs and count number of signers in each group
             let signer: Signer;
-            let prev_address: vector<u8> = ZERO_EVM_ADDRESS;
+            let prev_address = vector[];
             let group_vote_counts: vector<u8> = right_pad_vec(vector[], NUM_GROUPS);
-            vector::for_each(
-                signatures,
-                |signature| {
-                    let signer_addr = ecdsa_recover_evm_addr(signed_hash, signature);
-                    // the off-chain system is required to sort the signatures by the
-                    // signer address in an increasing order
-                    assert!(
-                        vector_u8_gt(signer_addr, prev_address),
-                        ESIGNER_ADDR_MUST_BE_INCREASING
+            let i = 0;
+            let signatures_len = vector::length(&signatures);
+            while (i < signatures_len) {
+                let signature = *vector::borrow(&signatures, i);
+                let signer_addr = ecdsa_recover_evm_addr(signed_hash, signature);
+                // the off-chain system is required to sort the signatures by the
+                // signer address in an increasing order
+                if (i > 0) {
+                  assert!(
+                      vector_u8_gt(&signer_addr, &prev_address),
+                      ESIGNER_ADDR_MUST_BE_INCREASING
+                      );
+                };
+                prev_address = signer_addr;
+
+                assert!(
+                    simple_map::contains_key(&state.s_signers, &signer_addr),
+                    EINVALID_SIGNER
+                );
+                signer = *simple_map::borrow(&state.s_signers, &signer_addr);
+
+                // check group quorums
+                let group: u8 = signer.group;
+                while (true) {
+                    let group_vote_count = vector::borrow_mut(
+                        &mut group_vote_counts, (group as u64)
                     );
-                    prev_address = signer_addr;
+                    *group_vote_count = *group_vote_count + 1;
 
-                    assert!(
-                        simple_map::contains_key(&state.s_signers, &signer_addr),
-                        EINVALID_SIGNER
+                    let quorum = vector::borrow(
+                        &state.s_config.group_quorums, (group as u64)
                     );
-                    signer = *simple_map::borrow(&state.s_signers, &signer_addr);
-
-                    // check group quorums
-                    let group: u8 = signer.group;
-                    while (true) {
-                        let group_vote_count = vector::borrow_mut(
-                            &mut group_vote_counts, (group as u64)
-                        );
-                        *group_vote_count = *group_vote_count + 1;
-
-                        let quorum = vector::borrow(
-                            &state.s_config.group_quorums, (group as u64)
-                        );
-                        if (*group_vote_count != *quorum) {
-                            // bail out unless we just hit the quorum. we only hit each quorum once,
-                            // so we never move on to the parent of a group more than once.
-                            break
-                        };
-
-                        if (group == 0) {
-                            // root group reached
-                            break
-                        };
-
-                        // group quorum reached, restart loop and check parent group
-                        group = *vector::borrow(
-                            &state.s_config.group_parents, (group as u64)
-                        );
+                    if (*group_vote_count != *quorum) {
+                        // bail out unless we just hit the quorum. we only hit each quorum once,
+                        // so we never move on to the parent of a group more than once.
+                        break
                     };
-                }
-            );
+
+                    if (group == 0) {
+                        // root group reached
+                        break
+                    };
+
+                    // group quorum reached, restart loop and check parent group
+                    group = *vector::borrow(
+                        &state.s_config.group_parents, (group as u64)
+                    );
+                };
+                i = i + 1;
+            };
 
             // the group at the root of the tree (with index 0) determines whether the vote passed,
             // we cannot proceed if it isn't configured with a valid (non-zero) quorum
@@ -498,23 +500,25 @@ module mcms::mcms {
 
         // check signer addresses are in increasing order and save signers to state
         // evm zero address (20 bytes of 0) is the smallest address possible
-        let prev_signer_addr: vector<u8> = ZERO_EVM_ADDRESS;
+        let prev_signer_addr = vector[];
         let i = 0;
         while (i < vector::length(&signer_addresses)) {
-            let signer_addr = vector::borrow(&signer_addresses, (i as u64));
-            // this line checks:
-            // - signer address is exactly 20 bytes
-            // - signer is distinct
-            // - signer address is in increasing order
+            let signer_addr = vector::borrow(&signer_addresses, i);
             assert!(
-                vector_u8_gt(*signer_addr, prev_signer_addr),
-                ESIGNER_ADDR_MUST_BE_INCREASING
+                vector::length(signer_addr) == 20,
+                EINVALID_SIGNER_ADDR_LEN
             );
+            if (i > 0) {
+              assert!(
+                  vector_u8_gt(signer_addr, &prev_signer_addr),
+                  ESIGNER_ADDR_MUST_BE_INCREASING
+                  );
+            };
 
             let signer = Signer {
                 addr: *signer_addr,
                 index: (i as u8),
-                group: *vector::borrow(&signer_groups, (i as u64))
+                group: *vector::borrow(&signer_groups, i)
             };
             simple_map::add(&mut state.s_signers, *signer_addr, signer);
             vector::push_back(&mut state.s_config.signers, signer);
@@ -592,7 +596,7 @@ module mcms::mcms {
         object::create_object_address(&@mcms, STATE_OBJECT_SEED)
     }
 
-    fun ecdsa_recover_evm_addr(
+    inline fun ecdsa_recover_evm_addr(
         eth_signed_message_hash: vector<u8>, signature: vector<u8>
     ): vector<u8> {
         // ensure signature has correct length - (r,s,v) concatenated = 65 bytes
@@ -710,7 +714,7 @@ module mcms::mcms {
             |proof_element| {
                 let left = computed_hash;
                 let right = proof_element;
-                if (vector_u8_gt(computed_hash, proof_element)) {
+                if (vector_u8_gt(&computed_hash, &proof_element)) {
                     left = proof_element;
                     right = computed_hash;
                 };
@@ -768,25 +772,30 @@ module mcms::mcms {
 
     // helper function to compare two vector<u8> values. expects both vectors to be of equal length.
     // returns true if a > b, false otherwise
-    fun vector_u8_gt(a: vector<u8>, b: vector<u8>): bool {
-        let len = vector::length(&a);
-        assert!(len == vector::length(&b), ECMP_VECTORS_DIFF_LEN);
+    fun vector_u8_gt(a: &vector<u8>, b: &vector<u8>): bool {
+        let len = vector::length(a);
+        assert!(
+            len == vector::length(b), ECMP_VECTORS_DIFF_LEN
+        );
 
-        // reverse vectors to compare from most significant bytes first
-        let rev_a = copy a;
-        let rev_b = copy b;
-        vector::reverse(&mut rev_a);
-        vector::reverse(&mut rev_b);
+        if (len == 0) {
+            return false
+        };
 
+        let i = 0;
         // compare each byte until not equal
-        while (!vector::is_empty(&rev_a)) {
-            let byte_a = vector::pop_back(&mut rev_a);
-            let byte_b = vector::pop_back(&mut rev_b);
+        while (i < len) {
+            let byte_a = *vector::borrow(a, i);
+            let byte_b = *vector::borrow(b, i);
             if (byte_a > byte_b) {
                 return true
             } else if (byte_a < byte_b) {
                 return false
             };
+            if (i == 0) {
+                break
+            };
+            i = i + 1;
         };
 
         // vectors are equal, a == b
@@ -1933,39 +1942,39 @@ module mcms::mcms {
 //         assert!(verify_merkle_proof(proof, root, leaf_hash), 1);
 //     }
 // 
-//     #[test]
-//     public entry fun test_utils__vector_u8_gt() {
-//         // a > b
-//         let a = vector[0x08, 0x0, 0x0, 0x0, 0x0];
-//         let b = vector[0x07, 0x4, 0x4, 0x3, 0x1];
-//         assert!(vector_u8_gt(a, b), 1);
-// 
-//         // c = d
-//         let c = vector[0x08, 0x0, 0x0, 0x0, 0x0];
-//         let d = vector[0x08, 0x0, 0x0, 0x0, 0x0];
-//         assert!(!vector_u8_gt(c, d), 2);
-// 
-//         // e < f
-//         let e = vector[0x08, 0x0, 0x0, 0x0, 0x0];
-//         let f = vector[0x08, 0x0, 0x0, 0x0, 0x1];
-//         assert!(!vector_u8_gt(e, f), 3);
-// 
-//         let sorted_addresses = vector[
-//             x"1D607AAD8aDd843bD3f87602b4D40DDaD477e748",
-//             x"2A704Fd168bf117eba7Da3E66aae0E932cc9221e",
-//             x"87191E05969b311242a7fF0a93d66Ac8B7B0bbB1",
-//             x"C211d666f61afCC311821c5f17E769F6e1515795",
-//             x"e0F4758dbD92E2499C95cb2c57bF605be032AF42"
-//         ];
-//         let prev_address = x"0000000000000000000000000000000000000001";
-//         vector::for_each(
-//             sorted_addresses,
-//             |addr| {
-//                 assert!(vector_u8_gt(addr, prev_address), 7);
-//                 prev_address = addr;
-//             }
-//         );
-//     }
+#[test]
+public entry fun test_utils__vector_u8_gt() {
+   // a > b
+   let a = vector[0x08, 0x0, 0x0, 0x0, 0x0];
+   let b = vector[0x07, 0x4, 0x4, 0x3, 0x1];
+   assert!(vector_u8_gt(&a, &b), 1);
+
+   // c = d
+   let c = vector[0x08, 0x0, 0x0, 0x0, 0x0];
+   let d = vector[0x08, 0x0, 0x0, 0x0, 0x0];
+   assert!(!vector_u8_gt(&c, &d), 2);
+
+   // e < f
+   let e = vector[0x08, 0x0, 0x0, 0x0, 0x0];
+   let f = vector[0x08, 0x0, 0x0, 0x0, 0x1];
+   assert!(!vector_u8_gt(&e, &f), 3);
+
+   let sorted_addresses = vector[
+       x"1D607AAD8aDd843bD3f87602b4D40DDaD477e748",
+       x"2A704Fd168bf117eba7Da3E66aae0E932cc9221e",
+       x"87191E05969b311242a7fF0a93d66Ac8B7B0bbB1",
+       x"C211d666f61afCC311821c5f17E769F6e1515795",
+       x"e0F4758dbD92E2499C95cb2c57bF605be032AF42"
+   ];
+   let prev_address = x"0000000000000000000000000000000000000001";
+   vector::for_each_ref(
+       &sorted_addresses,
+       |addr| {
+           assert!(vector_u8_gt(addr, &prev_address), 7);
+           prev_address = *addr;
+       }
+   );
+}
 // 
 //     #[test]
 //     public entry fun test_utils__right_pad_vec() {
