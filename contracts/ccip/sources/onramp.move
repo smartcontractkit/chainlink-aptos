@@ -3,7 +3,8 @@ module ccip::onramp {
     use std::aptos_hash;
     use std::error;
     use std::event::{Self, EventHandle};
-    use std::fungible_asset::{Self, Metadata};
+    use std::dispatchable_fungible_asset;
+    use std::fungible_asset::{Self, Metadata, FungibleStore};
     use std::object::{Self, Object};
     use std::primary_fungible_store;
     use std::signer;
@@ -62,7 +63,7 @@ module ccip::onramp {
         data: vector<u8>,
         receiver: vector<u8>,
         extra_args: vector<u8>,
-        fee_token: Object<Metadata>,
+        fee_token: address,
         fee_token_amount: u64,
         fee_value_juels: u256,
         token_amounts: vector<Aptos2AnyTokenTransfer>
@@ -72,7 +73,7 @@ module ccip::onramp {
         source_pool_address: address,
         dest_token_address: vector<u8>,
         extra_data: vector<u8>,
-        amount: u256,
+        amount: u64,
         dest_exec_data: vector<u8>
     }
 
@@ -130,6 +131,10 @@ module ccip::onramp {
     const E_INVALID_FEE_TOKEN: u64 = 11;
     const E_CURSED_BY_RMN: u64 = 12;
     const E_BAD_RMN_SIGNAL: u64 = 13;
+    const E_INVALID_TOKEN: u64 = 14;
+    const E_INVALID_TOKEN_STORE: u64 = 15;
+    const E_UNEXPECTED_WITHDRAW_AMOUNT: u64 = 16;
+    const E_UNEXPECTED_FUNGIBLE_ASSET: u64 = 17;
 
     public entry fun initialize(
         caller: &signer,
@@ -189,11 +194,30 @@ module ccip::onramp {
         dest_chain_config.sequence_number + 1
     }
 
-    // TODO: this should be #[view], remove the struct
+    #[view]
     public fun get_fee(
-        dest_chain_selector: u64, message: &client::Aptos2AnyMessage
+        dest_chain_selector: u64,
+        receiver: vector<u8>,
+        data: vector<u8>,
+        token_addresses: vector<address>,
+        token_amounts: vector<u64>,
+        token_store_addresses: vector<address>,
+        fee_token: address,
+        fee_token_store: address,
+        extra_args: vector<u8>
     ): u64 {
-        get_fee_internal(dest_chain_selector, message)
+        let message =
+            client::new_aptos2any_message(
+                receiver,
+                data,
+                token_addresses,
+                token_amounts,
+                token_store_addresses,
+                fee_token,
+                fee_token_store,
+                extra_args
+            );
+        get_fee_internal(dest_chain_selector, &message)
     }
 
     inline fun get_fee_internal(
@@ -206,18 +230,108 @@ module ccip::onramp {
         fee_quoter::get_validated_fee(dest_chain_selector, message)
     }
 
-    public fun ccip_send(
-        caller: &signer, dest_chain_selector: u64, message: client::Aptos2AnyMessage
-    ): vector<u8> acquires OnRampState {
-        assert!(!rmn_remote::is_cursed_global(), error::permission_denied(E_BAD_RMN_SIGNAL));
+    inline fun resolve_fungible_asset(token: address): Object<Metadata> {
+        assert!(
+            object::object_exists<Metadata>(token),
+            error::invalid_argument(E_INVALID_TOKEN)
+        );
+        object::address_to_object<Metadata>(token)
+    }
 
-        let (receiver, data, fee_token, fee_token_store, extra_args) =
-            client::get_aptos2any_fields(&message);
+    inline fun resolve_fungible_store(
+        owner: address, token: Object<Metadata>, store_address: address
+    ): Object<FungibleStore> {
+        let resolved_address =
+            if (store_address == @0x0) {
+                primary_fungible_store::primary_store_address(owner, token)
+            } else {
+                store_address
+            };
+        assert!(
+            object::object_exists<FungibleStore>(resolved_address),
+            error::invalid_argument(E_INVALID_TOKEN_STORE)
+        );
+        object::address_to_object<FungibleStore>(resolved_address)
+    }
+
+    public entry fun ccip_send(
+        caller: &signer,
+        dest_chain_selector: u64,
+        receiver: vector<u8>,
+        data: vector<u8>,
+        token_addresses: vector<address>,
+        token_amounts: vector<u64>,
+        token_store_addresses: vector<address>,
+        fee_token: address,
+        fee_token_store: address,
+        extra_args: vector<u8>
+    ) acquires OnRampState {
+        ccip_send_with_message_id(
+            caller,
+            dest_chain_selector,
+            receiver,
+            data,
+            token_addresses,
+            token_amounts,
+            token_store_addresses,
+            fee_token,
+            fee_token_store,
+            extra_args
+        );
+    }
+
+    public fun ccip_send_with_message_id(
+        caller: &signer,
+        dest_chain_selector: u64,
+        receiver: vector<u8>,
+        data: vector<u8>,
+        token_addresses: vector<address>,
+        token_amounts: vector<u64>,
+        token_store_addresses: vector<address>,
+        fee_token: address,
+        fee_token_store: address,
+        extra_args: vector<u8>
+    ): vector<u8> acquires OnRampState {
+        assert!(
+            !rmn_remote::is_cursed_global(),
+            error::permission_denied(E_BAD_RMN_SIGNAL)
+        );
+
+        let message =
+            client::new_aptos2any_message(
+                receiver,
+                data,
+                token_addresses,
+                token_amounts,
+                token_store_addresses,
+                fee_token,
+                fee_token_store,
+                extra_args
+            );
 
         let fee_token_amount = get_fee_internal(dest_chain_selector, &message);
         if (fee_token_amount != 0) {
             // deposit the fee in the state object's primary fungible store.
-            let fa = fungible_asset::withdraw(caller, fee_token_store, fee_token_amount);
+            let fa_metadata = resolve_fungible_asset(fee_token);
+            let resolved_store =
+                resolve_fungible_store(
+                    signer::address_of(caller), fa_metadata, fee_token_store
+                );
+
+            let fa =
+                dispatchable_fungible_asset::withdraw(
+                    caller, resolved_store, fee_token_amount
+                );
+            // validate the withdrawn asset since we're potentially calling dispatchable fungible asset functions.
+            assert!(
+                fa_metadata == fungible_asset::metadata_from_asset(&fa),
+                error::invalid_state(E_UNEXPECTED_FUNGIBLE_ASSET)
+            );
+            assert!(
+                fee_token_amount == fungible_asset::amount(&fa),
+                error::invalid_state(E_UNEXPECTED_WITHDRAW_AMOUNT)
+            );
+
             primary_fungible_store::deposit(state_object::object_address(), fa);
         };
 
@@ -248,42 +362,61 @@ module ccip::onramp {
         let dest_token_addresses = vector[];
         let dest_pool_datas = vector[];
 
-        let token_amounts = vector::map(
-            client::unwrap_token_transfers(message),
-            |fa| {
-                let fa_metadata = fungible_asset::metadata_from_asset(&fa);
-                let fa_amount = fungible_asset::amount(&fa);
+        let i = 0;
+        let tokens_len = vector::length(&token_addresses);
+        let token_transfers = vector[];
+        while (i < tokens_len) {
+            let token = *vector::borrow(&token_addresses, i);
+            let amount = *vector::borrow(&token_amounts, i);
+            let token_store = *vector::borrow(&token_store_addresses, i);
 
-                let token_pool_address =
-                    token_admin_registry::get_pool(object::object_address(&fa_metadata));
-                assert!(
-                    token_pool_address != @0x0,
-                    error::invalid_argument(E_UNSUPPORTED_TOKEN)
+            let fa_metadata = resolve_fungible_asset(token);
+            let resolved_store = resolve_fungible_store(sender, fa_metadata, token_store);
+
+            let fa = dispatchable_fungible_asset::withdraw(
+                caller, resolved_store, amount
+            );
+
+            // validate the withdrawn asset since we're potentially calling dispatchable fungible asset functions.
+            assert!(
+                fa_metadata == fungible_asset::metadata_from_asset(&fa),
+                error::invalid_state(E_UNEXPECTED_FUNGIBLE_ASSET)
+            );
+            assert!(
+                amount == fungible_asset::amount(&fa),
+                error::invalid_state(E_UNEXPECTED_WITHDRAW_AMOUNT)
+            );
+
+            let token_pool_address = token_admin_registry::get_pool(token);
+            assert!(
+                token_pool_address != @0x0,
+                error::invalid_argument(E_UNSUPPORTED_TOKEN)
+            );
+
+            let (dest_token_address, dest_pool_data) =
+                token_admin_dispatcher::dispatch_lock_or_burn(
+                    token_pool_address,
+                    fa,
+                    sender,
+                    dest_chain_selector,
+                    receiver
                 );
 
-                let (dest_token_address, dest_pool_data) =
-                    token_admin_dispatcher::dispatch_lock_or_burn(
-                        token_pool_address,
-                        fa,
-                        sender,
-                        dest_chain_selector,
-                        receiver
-                    );
+            vector::push_back(&mut dest_token_addresses, dest_token_address);
+            vector::push_back(&mut dest_pool_datas, dest_pool_data);
 
-                let encoded_amount = fa_amount as u256;
-
-                vector::push_back(&mut dest_token_addresses, dest_token_address);
-                vector::push_back(&mut dest_pool_datas, dest_pool_data);
-
+            vector::push_back(
+                &mut token_transfers,
                 Aptos2AnyTokenTransfer {
                     source_pool_address: token_pool_address,
                     dest_token_address,
                     extra_data: dest_pool_data,
-                    amount: encoded_amount,
+                    amount,
                     dest_exec_data: vector[]
                 }
-            }
-        );
+            );
+            i = i + 1;
+        };
 
         dest_chain_config.sequence_number = dest_chain_config.sequence_number + 1;
 
@@ -305,7 +438,7 @@ module ccip::onramp {
             );
 
         vector::zip_mut(
-            &mut token_amounts,
+            &mut token_transfers,
             &mut dest_exec_data_per_token,
             |token_amount, dest_exec_data| {
                 token_amount.dest_exec_data = *dest_exec_data;
@@ -334,7 +467,7 @@ module ccip::onramp {
             fee_token,
             fee_token_amount,
             fee_value_juels,
-            token_amounts
+            token_amounts: token_transfers
         };
 
         let metadata_hash =
@@ -600,9 +733,7 @@ module ccip::onramp {
         eth_abi::encode_address(&mut inner_hash, message.sender);
         eth_abi::encode_u64(&mut inner_hash, message.header.sequence_number);
         eth_abi::encode_u64(&mut inner_hash, message.header.nonce);
-        eth_abi::encode_address(
-            &mut inner_hash, object::object_address(&message.fee_token)
-        );
+        eth_abi::encode_address(&mut inner_hash, message.fee_token);
         eth_abi::encode_u64(&mut inner_hash, message.fee_token_amount);
         eth_abi::encode_bytes32(&mut outer_hash, aptos_hash::keccak256(inner_hash));
 
@@ -626,7 +757,7 @@ module ccip::onramp {
                     &mut token_hash, token_transfer.dest_token_address
                 );
                 eth_abi::encode_bytes(&mut token_hash, token_transfer.extra_data);
-                eth_abi::encode_u256(&mut token_hash, token_transfer.amount);
+                eth_abi::encode_u64(&mut token_hash, token_transfer.amount);
                 eth_abi::encode_bytes(&mut token_hash, token_transfer.dest_exec_data);
             }
         );

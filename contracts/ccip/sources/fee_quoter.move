@@ -19,7 +19,7 @@ module ccip::fee_quoter {
     use std::error;
     use std::event::{Self, EventHandle};
     use std::fungible_asset::Metadata;
-    use std::object::{Self, Object};
+    use std::object;
     use std::signer;
     use std::smart_table::{Self, SmartTable};
     use std::timestamp;
@@ -606,9 +606,8 @@ module ccip::fee_quoter {
             error::invalid_argument(E_DEST_CHAIN_NOT_ENABLED)
         );
 
-        let fee_token_address = object::object_address(&fee_token);
         assert!(
-            vector::contains(&state.fee_tokens, &fee_token_address),
+            vector::contains(&state.fee_tokens, &fee_token),
             error::invalid_argument(E_FEE_TOKEN_NOT_SUPPORTED)
         );
 
@@ -635,7 +634,7 @@ module ccip::fee_quoter {
                 abort error::invalid_argument(E_UNKNOWN_CHAIN_FAMILY_SELECTOR)
             };
 
-        let fee_token_price = get_token_price_internal(state, fee_token_address);
+        let fee_token_price = get_token_price_internal(state, fee_token);
         let packed_gas_price =
             get_validated_gas_price_internal(
                 state, dest_chain_config, dest_chain_selector
@@ -648,7 +647,7 @@ module ccip::fee_quoter {
                     state,
                     dest_chain_config,
                     dest_chain_selector,
-                    fee_token_address,
+                    fee_token,
                     fee_token_price,
                     local_token_addresses,
                     local_token_amounts
@@ -657,7 +656,7 @@ module ccip::fee_quoter {
                 ((dest_chain_config.network_fee_usd_cents as u256) * VAL_1E16, 0, 0)
             };
         let premium_multiplier =
-            get_premium_multiplier_wei_per_eth_internal(state, fee_token_address);
+            get_premium_multiplier_wei_per_eth_internal(state, fee_token);
         premium_fee_usd_wei = premium_fee_usd_wei * (premium_multiplier as u256); // Apply premium multiplier in wei/eth units
 
         let data_availability_cost_usd_36_decimals =
@@ -918,7 +917,7 @@ module ccip::fee_quoter {
         state: &FeeQuoterState,
         dest_chain_config: &DestChainConfig,
         dest_chain_selector: u64,
-        fee_token_address: address,
+        fee_token: address,
         fee_token_price: TimestampedPrice,
         local_token_addresses: vector<address>,
         local_token_amounts: vector<u64>
@@ -951,7 +950,7 @@ module ccip::fee_quoter {
                     let bps_fee_usd_wei = 0;
                     if (transfer_fee_config.deci_bps > 0) {
                         let token_price =
-                            if (local_token_address == fee_token_address) {
+                            if (local_token_address == fee_token) {
                                 fee_token_price
                             } else {
                                 get_token_price_internal(state, local_token_address)
@@ -999,22 +998,20 @@ module ccip::fee_quoter {
 
     public(friend) fun process_message_args(
         dest_chain_selector: u64,
-        fee_token: Object<Metadata>,
+        fee_token: address,
         fee_token_amount: u64,
         extra_args: vector<u8>,
         dest_token_addresses: vector<vector<u8>>,
         dest_pool_datas: vector<vector<u8>>
     ): (u256, bool, vector<u8>, vector<vector<u8>>) acquires FeeQuoterState {
         let state = borrow_state();
-        let fee_token_address = object::object_address(&fee_token);
-
         let msg_fee_juels =
-            if (fee_token_address == state.link_token) {
+            if (fee_token == state.link_token) {
                 fee_token_amount as u256
             } else {
                 convert_token_amount_internal(
                     state,
-                    fee_token_address,
+                    fee_token,
                     fee_token_amount,
                     state.link_token
                 )
@@ -1029,9 +1026,7 @@ module ccip::fee_quoter {
             state, dest_chain_selector
         );
         let token_transfer_fee_config =
-            get_token_transfer_fee_config_internal(
-                state, dest_chain_selector, fee_token_address
-            );
+            get_token_transfer_fee_config_internal(state, dest_chain_selector, fee_token);
 
         let (converted_extra_args, is_out_of_order_execution) =
             process_chain_family_selector(

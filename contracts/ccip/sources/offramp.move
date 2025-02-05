@@ -798,7 +798,10 @@ module ccip::offramp {
     inline fun execute_single_message(
         message: &Any2AptosRampMessage, message_offchain_token_data: &vector<vector<u8>>
     ): Option<u128> {
-        assert!(!rmn_remote::is_cursed_global(), error::permission_denied(E_BAD_RMN_SIGNAL));
+        assert!(
+            !rmn_remote::is_cursed_global(),
+            error::permission_denied(E_BAD_RMN_SIGNAL)
+        );
 
         let (local_token_addresses, local_token_amounts) =
             release_or_mint_tokens(
@@ -892,7 +895,6 @@ module ccip::offramp {
 
         (local_token, local_amount)
     }
-
 
     inline fun set_dynamic_config_internal(
         state: &mut OffRampState,

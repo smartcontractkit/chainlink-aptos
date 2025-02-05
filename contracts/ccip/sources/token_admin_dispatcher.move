@@ -56,7 +56,8 @@ module ccip::token_admin_dispatcher {
                 &dispatch_owner, dispatch_fungible_store, 0
             );
 
-        let destination_amount = token_admin_registry::finish_release_or_mint(token_pool_address);
+        let destination_amount =
+            token_admin_registry::finish_release_or_mint(token_pool_address);
 
         (fa, destination_amount)
     }

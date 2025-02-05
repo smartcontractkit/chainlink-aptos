@@ -68,7 +68,7 @@ module ccip::token_admin_registry {
 
     struct LockOrBurnOutput has store, drop {
         dest_token_address: vector<u8>,
-        dest_pool_data: vector<u8>,
+        dest_pool_data: vector<u8>
     }
 
     struct ReleaseOrMintInput has store, drop {
@@ -79,12 +79,12 @@ module ccip::token_admin_registry {
         remote_chain_selector: u64,
         source_pool_address: vector<u8>,
         source_pool_data: vector<u8>,
-        offchain_token_data: vector<u8>,
+        offchain_token_data: vector<u8>
     }
 
     // TODO: consider removing ReleaseOrMintOutput, it exists only for a consistent UX across lock and release.
     struct ReleaseOrMintOutput has store, drop {
-        destination_amount: u64,
+        destination_amount: u64
     }
 
     #[event]
@@ -517,7 +517,10 @@ module ccip::token_admin_registry {
     }
 
     public fun set_lock_or_burn_output<ProofType: drop>(
-        token_pool_address: address, _proof: ProofType, dest_token_address: vector<u8>, dest_pool_data: vector<u8>,
+        token_pool_address: address,
+        _proof: ProofType,
+        dest_token_address: vector<u8>,
+        dest_pool_data: vector<u8>
     ) acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
 
@@ -588,8 +591,7 @@ module ccip::token_admin_registry {
     }
 
     public fun set_release_or_mint_output<ProofType: drop>(
-        token_pool_address: address, _proof: ProofType,
-        destination_amount: u64
+        token_pool_address: address, _proof: ProofType, destination_amount: u64
     ) acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
 
@@ -649,7 +651,9 @@ module ccip::token_admin_registry {
         input.receiver
     }
 
-    public fun get_release_or_mint_source_amount(input: &ReleaseOrMintInput): u256 {
+    public fun get_release_or_mint_source_amount(
+        input: &ReleaseOrMintInput
+    ): u256 {
         input.source_amount
     }
 
@@ -772,7 +776,7 @@ module ccip::token_admin_registry {
         remote_chain_selector: u64,
         source_pool_address: vector<u8>,
         source_pool_data: vector<u8>,
-        offchain_token_data: vector<u8>,
+        offchain_token_data: vector<u8>
     ): (signer, Object<FungibleStore>) acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
 
