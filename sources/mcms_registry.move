@@ -1,4 +1,5 @@
 module mcms::mcms_registry {
+    use std::account::{Self, SignerCapability};
     use std::dispatchable_fungible_asset;
     use std::error;
     use std::function_info::{Self, FunctionInfo};
@@ -33,8 +34,7 @@ module mcms::mcms_registry {
     }
 
     struct MCMSRegistryState has key {
-        extend_ref: ExtendRef,
-        transfer_ref: TransferRef
+        signer_cap: SignerCapability
     }
 
     struct CallbackParams has store, drop {
@@ -56,13 +56,9 @@ module mcms::mcms_registry {
     const E_NOT_REGISTERED: u64 = 11;
 
     fun init_module(publisher: &signer) {
-        let constructor_ref = object::create_named_object(
-            publisher, REGISTRY_OBJECT_SEED
-        );
-        let signer = object::generate_signer(&constructor_ref);
-        let extend_ref = object::generate_extend_ref(&constructor_ref);
-        let transfer_ref = object::generate_transfer_ref(&constructor_ref);
-        move_to(&signer, MCMSRegistryState { extend_ref, transfer_ref });
+        let (signer, signer_cap) =
+            account::create_resource_account(publisher, REGISTRY_OBJECT_SEED);
+        move_to(&signer, MCMSRegistryState { signer_cap });
     }
 
     #[view]
@@ -92,7 +88,7 @@ module mcms::mcms_registry {
             error::invalid_state(E_OBJECT_ALREADY_EXISTS)
         );
 
-        let registry_signer = object::generate_signer_for_extending(&state.extend_ref);
+        let registry_signer = account::create_signer_with_capability(&state.signer_cap);
         let owner_constructor_ref =
             object::create_named_object(&registry_signer, object_seed);
 
@@ -150,7 +146,7 @@ module mcms::mcms_registry {
 
         let account_address = signer::address_of(account);
         let registry_signer =
-            object::generate_signer_for_extending(&borrow_state().extend_ref);
+            account::create_signer_with_capability(&borrow_state().signer_cap);
 
         if (!exists<MCMSRegistration>(account_address)) {
             let owner_constructor_ref =
@@ -292,7 +288,7 @@ module mcms::mcms_registry {
     }
 
     inline fun state_address(): address {
-        object::create_object_address(&@mcms, REGISTRY_OBJECT_SEED)
+        account::create_resource_address(&@mcms, REGISTRY_OBJECT_SEED)
     }
 
     inline fun borrow_state(): &MCMSRegistryState {
