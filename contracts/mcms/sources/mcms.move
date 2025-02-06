@@ -17,8 +17,6 @@ module mcms::mcms {
 
     const STATE_OBJECT_SEED: vector<u8> = b"CHAINLINK_MCMS_MULTISIG";
 
-    const MCMS_DEPLOYER: vector<u8> = b"CHAINLINK_MCMS_DEPLOYER";
-
     // MCM Consts
     const NUM_GROUPS: u64 = 32;
     const MAX_NUM_SIGNERS: u64 = 200;
@@ -154,7 +152,6 @@ module mcms::mcms {
     const E_FUNCTION_NAME_TOO_LONG: u64 = 107;
     const E_INVALID_SIGNER_ADDR_LEN: u64 = 108;
     const E_INVALID_SIGNATURE_LEN: u64 = 109;
-    const E_INVALID_DEPLOYMENT_FUNCTION_NAME: u64 = 110;
 
     // MCM Getters
 
@@ -354,29 +351,10 @@ module mcms::mcms {
         function_name: String,
         data: vector<u8>
     ) {
-        let module_name_bytes = *string::bytes(&module_name);
-        if (module_name_bytes == MCMS_DEPLOYER) {
-            dispatch_deployment(receiver, *string::bytes(&function_name), data);
-        } else {
-            let object_meta =
-                mcms_registry::start_dispatch(receiver, module_name, function_name, data);
-            aptos_framework::dispatchable_fungible_asset::derived_supply(object_meta);
-            mcms_registry::finish_dispatch(receiver);
-        }
-    }
-
-    inline fun dispatch_deployment(
-        receiver: address, function_name: vector<u8>, data: vector<u8>
-    ) {
-        if (function_name == b"preregister") {
-            let object_seed = data;
-            mcms_registry::preregister(object_seed, receiver);
-        } else {
-            // TODO: validate that calling publish_package_txn works from the user module, when
-            // publishing into the same account. add large_packages and publish/upgrade hooks
-            // if it does not.
-            abort error::invalid_argument(E_INVALID_DEPLOYMENT_FUNCTION_NAME);
-        }
+        let object_meta =
+            mcms_registry::start_dispatch(receiver, module_name, function_name, data);
+        aptos_framework::dispatchable_fungible_asset::derived_supply(object_meta);
+        mcms_registry::finish_dispatch(receiver);
     }
 
     // note: unlike MCM on EVM chains, this function does not actually execute the transaction,
