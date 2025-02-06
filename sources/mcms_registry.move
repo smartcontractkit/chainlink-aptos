@@ -138,7 +138,7 @@ module mcms::mcms_registry {
 
     public fun register<T: drop>(
         account: &signer, module_name: String, _proof: T
-    ) acquires MCMSRegistryState, MCMSRegistration {
+    ): address acquires MCMSRegistryState, MCMSRegistration {
         assert!(
             string::length(&module_name) <= 64,
             error::invalid_argument(E_MODULE_NAME_TOO_LONG)
@@ -222,6 +222,8 @@ module mcms::mcms_registry {
         smart_table::add(
             &mut registration.registered_modules, module_name_bytes, registered_module
         );
+
+        object::address_from_extend_ref(&registration.owner_extend_ref)
     }
 
     public(friend) fun start_dispatch(
