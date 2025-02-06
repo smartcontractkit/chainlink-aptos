@@ -1,3 +1,13 @@
+/// This module is the Aptos implementation of Chainlink's MultiChainMultiSig contract.
+///
+/// Overview:
+/// - Self ownership:
+///   When ownership of the MCMS module has been transfered to its own state address, set_config can only be called
+///   using MCMS execution.
+///
+/// - Upgrading Mechanism:
+///   During initialization, the MCMS contract transfers object ownership to its own state address.
+///   All subsequent upgrades (via 0x1::code::publish_package_txn) can then only be performed using MCMS execution.
 module mcms::mcms {
     use std::account::{Self, SignerCapability};
     use std::aptos_hash::keccak256;
