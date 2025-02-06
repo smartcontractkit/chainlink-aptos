@@ -201,7 +201,7 @@ module mcms::mcms {
         move_to(publisher, MCMSDeployment { signer_cap });
     }
 
-    public fun initialize(caller: &signer) acquires MCMSDeployment {
+    public entry fun initialize(caller: &signer) acquires MCMSDeployment {
         assert!(
             exists<MCMSDeployment>(@mcms),
             error::not_found(E_ALREADY_INITIALIZED)
