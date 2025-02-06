@@ -52,7 +52,7 @@ module mcms_test::mcms_user {
     public fun mcms_entrypoint<T: key>(_metadata: Object<T>): option::Option<u128> acquires UserData {
         // for any caller of mcms_entrypoint except mcms, get_callback_params would
         // fail and the transaction would abort.
-        let (function, data) = mcms_registry::get_callback_params(SampleMcmsCallback{});
+        let (signer, function, data) = mcms_registry::get_callback_params(@mcms_test, SampleMcmsCallback{});
 
         let function_bytes = *string::bytes(&function);
         let stream = bcs_stream::new(data);
