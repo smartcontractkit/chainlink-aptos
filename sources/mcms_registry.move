@@ -79,9 +79,12 @@ module mcms::mcms_registry {
         object::create_object_address(&state_address(), object_seed)
     }
 
-    public(friend) fun preregister(
+    public entry fun preregister(
         object_seed: vector<u8>, expected_address: address
     ) acquires MCMSRegistryState {
+        // TODO: validate that calling publish_package_txn works from the user module, when
+        // publishing into the same account. add large_packages and publish/upgrade hooks
+        // to execute() if it does not.
         let state = borrow_state();
 
         assert!(
