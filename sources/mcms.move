@@ -1,10 +1,12 @@
 module mcms::mcms {
+    use std::account::{Self, SignerCapability};
     use std::aptos_hash::keccak256;
     use std::bcs;
     use std::chain_id;
+    use std::code;
     use std::error;
     use std::event;
-    use std::object::{Self, ExtendRef, TransferRef};
+    use std::object::{Self, ObjectCore};
     use std::option;
     use std::secp256k1;
     use std::simple_map::{SimpleMap, Self};
@@ -13,6 +15,7 @@ module mcms::mcms {
     use std::timestamp;
     use std::vector;
 
+    use mcms::bcs_stream;
     use mcms::mcms_registry;
 
     const STATE_OBJECT_SEED: vector<u8> = b"CHAINLINK_MCMS_MULTISIG";
@@ -29,6 +32,26 @@ module mcms::mcms {
     const MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA: vector<u8> = x"a71d47b6c00b64ee21af96a1d424cb2dcbbed12becdcd3b4e6c7fc4c2f80a697";
     // keccak256("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP_APTOS")
     const MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP: vector<u8> = x"e5a6d1256b00d7ec22512b6b60a3f4d75c559745d2dbf309f77b8b756caabe14";
+
+    struct MCMSState has key, store, drop {
+        owner: address,
+        pending_owner: address,
+        signer_cap: SignerCapability,
+
+        // signers is used to easily validate the existence of the signer by its address. We still
+        // have signers stored in config in order to easily deactivate them when a new config is set.
+        signers: SimpleMap<vector<u8>, Signer>,
+        config: Config,
+
+        // Remember signedHashes that this contract has seen. Each signedHash can only be set once.
+        seen_signed_hashes: SimpleMap<vector<u8>, bool>,
+        expiring_root_and_op_count: ExpiringRootAndOpCount,
+        root_metadata: RootMetadata
+    }
+
+    struct MCMSDeployment has key, store {
+        signer_cap: account::SignerCapability
+    }
 
     // MCM Structs
     struct RootMetadata has key, store, copy, drop {
@@ -77,23 +100,6 @@ module mcms::mcms {
         op_count: u64
     }
 
-    struct MCMSState has key, store, drop {
-        // signers is used to easily validate the existence of the signer by its address. We still
-        // have signers stored in config in order to easily deactivate them when a new config is set.
-        signers: SimpleMap<vector<u8>, Signer>,
-        config: Config,
-
-        // Remember signedHashes that this contract has seen. Each signedHash can only be set once.
-        seen_signed_hashes: SimpleMap<vector<u8>, bool>,
-        expiring_root_and_op_count: ExpiringRootAndOpCount,
-        root_metadata: RootMetadata,
-
-        // Ownable fields
-        owner: address,
-        extend_ref: ExtendRef,
-        transfer_ref: TransferRef
-    }
-
     #[event]
     struct ConfigSet has drop, store {
         config: Config,
@@ -116,42 +122,129 @@ module mcms::mcms {
         data: vector<u8>
     }
 
+    #[event]
+    struct OwnershipTransferRequested has store, drop {
+        from: address,
+        to: address
+    }
+
+    #[event]
+    struct OwnershipTransferred has store, drop {
+        from: address,
+        to: address
+    }
+
     // Error Codes
 
-    const E_NO_MULTISIG: u64 = 1;
-    const E_ALREADY_SEEN_HASH: u64 = 2;
-    const E_POST_OP_COUNT_REACHED: u64 = 3;
-    const E_WRONG_CHAIN_ID: u64 = 4;
-    const E_WRONG_MULTISIG: u64 = 5;
-    const E_ROOT_EXPIRED: u64 = 6;
-    const E_WRONG_NONCE: u64 = 7;
-    const E_VALID_UNTIL_EXPIRED: u64 = 8;
-    const E_INVALID_SIGNER: u64 = 9;
-    const E_MISSING_CONFIG: u64 = 10;
-    const E_INSUFFICIENT_SIGNERS: u64 = 11;
-    const E_PROOF_CANNOT_BE_VERIFIED: u64 = 12;
-    const E_PENDING_OPS: u64 = 13;
-    const E_WRONG_PRE_OP_COUNT: u64 = 14;
-    const E_WRONG_POST_OP_COUNT: u64 = 15;
-    const E_INVALID_NUM_SIGNERS: u64 = 9;
-    const E_SIGNER_GROUPS_LEN_MISMATCH: u64 = 10;
-    const E_INVALID_GROUP_QUORUM_LEN: u64 = 11;
-    const E_INVALID_GROUP_PARENTS_LEN: u64 = 12;
-    const E_OUT_OF_BOUNDS_GROUP: u64 = 13;
-    const E_GROUP_TREE_NOT_WELL_FORMED: u64 = 14;
-    const E_SIGNER_IN_DISABLED_GROUP: u64 = 15;
-    const E_OUT_OF_BOUNDS_GROUP_QUORUM: u64 = 17;
-    const E_SIGNER_ADDR_MUST_BE_INCREASING: u64 = 18;
-    const E_CMP_VECTORS_DIFF_LEN: u64 = 100;
-    const E_INVALID_V_SIGNATURE: u64 = 101;
-    const E_FAILED_ECDSA_RECOVER: u64 = 102;
-    const E_INVALID_ROOT_LEN: u64 = 103;
-    const E_UNATHORIZED: u64 = 104;
-    const E_CALLBACK_PARAMS_NOT_CONSUMED: u64 = 105;
-    const E_MODULE_NAME_TOO_LONG: u64 = 106;
-    const E_FUNCTION_NAME_TOO_LONG: u64 = 107;
-    const E_INVALID_SIGNER_ADDR_LEN: u64 = 108;
-    const E_INVALID_SIGNATURE_LEN: u64 = 109;
+    const E_NOT_OBJECT_DEPLOYMENT: u64 = 1;
+    const E_NOT_PUBLISHER: u64 = 2;
+    const E_ALREADY_INITIALIZED: u64 = 3;
+    const E_NO_MULTISIG: u64 = 4;
+    const E_ALREADY_SEEN_HASH: u64 = 5;
+    const E_POST_OP_COUNT_REACHED: u64 = 6;
+    const E_WRONG_CHAIN_ID: u64 = 7;
+    const E_WRONG_MULTISIG: u64 = 8;
+    const E_ROOT_EXPIRED: u64 = 9;
+    const E_WRONG_NONCE: u64 = 10;
+    const E_VALID_UNTIL_EXPIRED: u64 = 11;
+    const E_INVALID_SIGNER: u64 = 12;
+    const E_MISSING_CONFIG: u64 = 13;
+    const E_INSUFFICIENT_SIGNERS: u64 = 14;
+    const E_PROOF_CANNOT_BE_VERIFIED: u64 = 15;
+    const E_PENDING_OPS: u64 = 16;
+    const E_WRONG_PRE_OP_COUNT: u64 = 17;
+    const E_WRONG_POST_OP_COUNT: u64 = 18;
+    const E_INVALID_NUM_SIGNERS: u64 = 19;
+    const E_SIGNER_GROUPS_LEN_MISMATCH: u64 = 20;
+    const E_INVALID_GROUP_QUORUM_LEN: u64 = 21;
+    const E_INVALID_GROUP_PARENTS_LEN: u64 = 22;
+    const E_OUT_OF_BOUNDS_GROUP: u64 = 23;
+    const E_GROUP_TREE_NOT_WELL_FORMED: u64 = 24;
+    const E_SIGNER_IN_DISABLED_GROUP: u64 = 25;
+    const E_OUT_OF_BOUNDS_GROUP_QUORUM: u64 = 26;
+    const E_SIGNER_ADDR_MUST_BE_INCREASING: u64 = 27;
+    const E_CMP_VECTORS_DIFF_LEN: u64 = 28;
+    const E_INVALID_V_SIGNATURE: u64 = 29;
+    const E_FAILED_ECDSA_RECOVER: u64 = 30;
+    const E_INVALID_ROOT_LEN: u64 = 31;
+    const E_UNATHORIZED: u64 = 32;
+    const E_CALLBACK_PARAMS_NOT_CONSUMED: u64 = 33;
+    const E_MODULE_NAME_TOO_LONG: u64 = 34;
+    const E_FUNCTION_NAME_TOO_LONG: u64 = 35;
+    const E_INVALID_SIGNER_ADDR_LEN: u64 = 36;
+    const E_INVALID_SIGNATURE_LEN: u64 = 37;
+    const E_UNKNOWN_MCMS_MODULE_FUNCTION: u64 = 38;
+    const E_UNKNOWN_FRAMEWORK_MODULE_FUNCTION: u64 = 39;
+    const E_UNKNOWN_FRAMEWORK_MODULE: u64 = 40;
+    const E_CANNOT_TRANSFER_TO_SELF: u64 = 41;
+    const E_MUST_BE_PROPOSED_OWNER: u64 = 42;
+
+    fun init_module(publisher: &signer) {
+        assert!(
+            object::is_object(@mcms), error::invalid_state(E_NOT_OBJECT_DEPLOYMENT)
+        );
+
+        let (_, signer_cap) =
+            account::create_resource_account(publisher, STATE_OBJECT_SEED);
+
+        // TODO: add and use event handles?
+        move_to(publisher, MCMSDeployment { signer_cap });
+    }
+
+    public fun initialize(caller: &signer) acquires MCMSDeployment {
+        assert!(
+            exists<MCMSDeployment>(@mcms),
+            error::not_found(E_ALREADY_INITIALIZED)
+        );
+
+        let caller_address = signer::address_of(caller);
+
+        let mcms_object = object::address_to_object<ObjectCore>(@mcms);
+        assert!(
+            caller_address == object::owner(mcms_object),
+            error::permission_denied(E_NOT_PUBLISHER)
+        );
+
+        let MCMSDeployment { signer_cap } = move_from<MCMSDeployment>(@mcms);
+
+        let state_signer = account::create_signer_with_capability(&signer_cap);
+
+        // transfer the MCMS object to itself. all upgrades must now go through MCMS execution.
+        object::transfer(
+            caller,
+            object::address_to_object<ObjectCore>(@mcms),
+            signer::address_of(&state_signer)
+        );
+
+        move_to(
+            &state_signer,
+            MCMSState {
+                // the initial owner, in our internal ownership model, is still the deployer.
+                owner: caller_address,
+                pending_owner: @0x0,
+                signer_cap,
+                signers: simple_map::new(),
+                config: Config {
+                    signers: vector[],
+                    group_quorums: VEC_NUM_GROUPS,
+                    group_parents: VEC_NUM_GROUPS
+                },
+                seen_signed_hashes: simple_map::new(),
+                expiring_root_and_op_count: ExpiringRootAndOpCount {
+                    root: vector[],
+                    valid_until: 0,
+                    op_count: 0
+                },
+                root_metadata: RootMetadata {
+                    chain_id: 0,
+                    multisig: @mcms,
+                    pre_op_count: 0,
+                    post_op_count: 0,
+                    override_previous_root: false
+                }
+            }
+        );
+    }
 
     // MCM Getters
 
@@ -180,15 +273,8 @@ module mcms::mcms {
     }
 
     #[view]
-    public fun get_state_addr(): address {
-        state_addr()
-    }
-
-    // Ownable getters
-
-    #[view]
-    public fun owner(): address acquires MCMSState {
-        borrow_state().owner
+    public fun get_state_address(): address {
+        state_address()
     }
 
     // MCM Functions
@@ -219,7 +305,8 @@ module mcms::mcms {
 
         // check if hash has been seen already
         assert!(
-            simple_map::contains_key(&mut state.seen_signed_hashes, &signed_hash) == false,
+            simple_map::contains_key(&mut state.seen_signed_hashes, &signed_hash)
+                == false,
             error::invalid_argument(E_ALREADY_SEEN_HASH)
         );
 
@@ -345,18 +432,6 @@ module mcms::mcms {
         event::emit(NewRoot { root, valid_until, metadata });
     }
 
-    fun dispatch(
-        receiver: address,
-        module_name: String,
-        function_name: String,
-        data: vector<u8>
-    ) {
-        let object_meta =
-            mcms_registry::start_dispatch(receiver, module_name, function_name, data);
-        aptos_framework::dispatchable_fungible_asset::derived_supply(object_meta);
-        mcms_registry::finish_dispatch(receiver);
-    }
-
     // note: unlike MCM on EVM chains, this function does not actually execute the transaction,
     // but rather creates the transaction on the multisig account to be executed in a separate tx
     public entry fun execute(
@@ -410,22 +485,98 @@ module mcms::mcms {
         state.expiring_root_and_op_count.op_count = state.expiring_root_and_op_count.op_count
             + 1;
 
-        dispatch(to, module_name, function, data);
+        dispatch(state, to, module_name, function, data);
 
         event::emit(
             OpExecuted { nonce, to, module_name, function, data }
         );
     }
 
+    inline fun dispatch(
+        state: &MCMSState,
+        receiver: address,
+        module_name: String,
+        function_name: String,
+        data: vector<u8>
+    ) {
+        let module_name_bytes = *string::bytes(&module_name);
+        let function_name_bytes = *string::bytes(&function_name);
+        if (receiver == @mcms && module_name_bytes == b"mcms") {
+            // dispatch to this module's functions for ownership transfers and setting config.
+            // any calls would only succeed if ownership has been transferred to this module's
+            // state address.
+            dispatch_to_self(state, function_name_bytes, data);
+        } else if (receiver == @0x1) {
+            // dispatch to framework functions to allow mcms upgrades.
+            dispatch_to_framework(
+                state,
+                module_name_bytes,
+                function_name_bytes,
+                data
+            );
+        } else {
+            let object_meta =
+                mcms_registry::start_dispatch(receiver, module_name, function_name, data);
+            aptos_framework::dispatchable_fungible_asset::derived_supply(object_meta);
+            mcms_registry::finish_dispatch(receiver);
+        }
+    }
+
+    inline fun dispatch_to_self(
+        state: &MCMSState, function_name_bytes: vector<u8>, data: vector<u8>
+    ) {
+        let self_signer = account::create_signer_with_capability(&state.signer_cap);
+        let stream = bcs_stream::new(data);
+        if (function_name_bytes == b"transfer_ownership") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            transfer_ownership(&self_signer, to);
+        } else if (function_name_bytes == b"accept_ownership") {
+            bcs_stream::assert_is_consumed(&stream);
+            accept_ownership(&self_signer);
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_MCMS_MODULE_FUNCTION)
+        }
+    }
+
+    inline fun dispatch_to_framework(
+        state: &MCMSState,
+        module_name_bytes: vector<u8>,
+        function_name_bytes: vector<u8>,
+        data: vector<u8>
+    ) {
+        let self_signer = account::create_signer_with_capability(&state.signer_cap);
+        let stream = bcs_stream::new(data);
+        if (module_name_bytes == b"code") {
+            if (function_name_bytes == b"publish_package_txn") {
+                // TODO: invalidate that we can upgrade ourselves while executing inside the same package.
+                let metadata_serialized = bcs_stream::deserialize_vector_u8(&mut stream);
+                let code =
+                    bcs_stream::deserialize_vector(
+                        &mut stream,
+                        |stream| { bcs_stream::deserialize_vector_u8(stream) }
+                    );
+                bcs_stream::assert_is_consumed(&stream);
+                code::publish_package_txn(&self_signer, metadata_serialized, code);
+            } else {
+                abort error::invalid_argument(E_UNKNOWN_FRAMEWORK_MODULE_FUNCTION)
+            }
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_FRAMEWORK_MODULE)
+        }
+    }
+
     public entry fun set_config(
-        resource_account: &signer,
+        caller: &signer,
         signer_addresses: vector<vector<u8>>,
         signer_groups: vector<u8>,
         group_quorums: vector<u8>,
         group_parents: vector<u8>,
         clear_root: bool
     ) acquires MCMSState {
-        only_owner(resource_account);
+        let state = borrow_state_mut();
+
+        assert_only_owner(state, caller);
 
         assert!(
             vector::length(&signer_addresses) != 0
@@ -507,8 +658,6 @@ module mcms::mcms {
         };
 
         // remove old signer addresses
-        let state = borrow_state_mut();
-
         state.signers = simple_map::new();
         state.config.signers = vector[];
 
@@ -554,7 +703,7 @@ module mcms::mcms {
             };
             state.root_metadata = RootMetadata {
                 chain_id: (chain_id::get() as u256),
-                multisig: get_state_addr(),
+                multisig: get_state_address(),
                 pre_op_count: op_count,
                 post_op_count: op_count,
                 override_previous_root: true
@@ -565,61 +714,68 @@ module mcms::mcms {
     }
 
     // Ownable functions
-    fun transfer_ownership(resource_account: &signer, new_owner: address) acquires MCMSState {
-        only_owner(resource_account);
-
+    public entry fun transfer_ownership(caller: &signer, to: address) acquires MCMSState {
         let state = borrow_state_mut();
-        state.owner = new_owner;
+
+        assert_only_owner(state, caller);
+
+        assert!(
+            signer::address_of(caller) != to,
+            error::invalid_argument(E_CANNOT_TRANSFER_TO_SELF)
+        );
+
+        state.pending_owner = to;
+
+        event::emit(OwnershipTransferRequested { from: state.owner, to });
     }
 
-    // Internal functions
-    fun init_module(publisher: &signer) {
-        assert!(signer::address_of(publisher) == @mcms, error::permission_denied(1));
+    public entry fun transfer_ownership_to_self(caller: &signer) acquires MCMSState {
+        transfer_ownership(caller, state_address());
+    }
 
-        let constructor_ref = object::create_named_object(publisher, STATE_OBJECT_SEED);
-        let extend_ref = object::generate_extend_ref(&constructor_ref);
-        let transfer_ref = object::generate_transfer_ref(&constructor_ref);
-        let object_signer = object::generate_signer(&constructor_ref);
+    public fun accept_ownership(caller: &signer) acquires MCMSState {
+        let state = borrow_state_mut();
 
-        move_to(
-            &object_signer,
-            MCMSState {
-                signers: simple_map::new(),
-                config: Config {
-                    signers: vector[],
-                    group_quorums: VEC_NUM_GROUPS,
-                    group_parents: VEC_NUM_GROUPS
-                },
-                seen_signed_hashes: simple_map::new(),
-                expiring_root_and_op_count: ExpiringRootAndOpCount {
-                    root: vector[],
-                    valid_until: 0,
-                    op_count: 0
-                },
-                root_metadata: RootMetadata {
-                    chain_id: 0,
-                    multisig: get_state_addr(),
-                    pre_op_count: 0,
-                    post_op_count: 0,
-                    override_previous_root: false
-                },
-                owner: @mcms_owner,
-                extend_ref,
-                transfer_ref
-            }
+        let caller_address = signer::address_of(caller);
+        assert!(
+            caller_address == state.pending_owner,
+            error::permission_denied(E_MUST_BE_PROPOSED_OWNER)
+        );
+
+        let previous_owner = state.owner;
+        state.owner = caller_address;
+        state.pending_owner = @0x0;
+
+        event::emit(OwnershipTransferred { from: previous_owner, to: state.owner });
+    }
+
+    #[view]
+    public fun owner(): address acquires MCMSState {
+        borrow_state().owner
+    }
+
+    #[view]
+    public fun is_self_owned(): bool acquires MCMSState {
+        owner() == state_address()
+    }
+
+    inline fun assert_only_owner(state: &MCMSState, caller: &signer) {
+        assert!(
+            state.owner == signer::address_of(caller),
+            error::permission_denied(E_UNATHORIZED)
         );
     }
 
-    inline fun state_addr(): address {
-        object::create_object_address(&@mcms, STATE_OBJECT_SEED)
+    inline fun state_address(): address {
+        account::create_resource_address(&@mcms, STATE_OBJECT_SEED)
     }
 
     inline fun borrow_state(): &MCMSState {
-        borrow_global<MCMSState>(state_addr())
+        borrow_global<MCMSState>(state_address())
     }
 
     inline fun borrow_state_mut(): &mut MCMSState {
-        borrow_global_mut<MCMSState>(state_addr())
+        borrow_global_mut<MCMSState>(state_address())
     }
 
     inline fun ecdsa_recover_evm_addr(
@@ -849,14 +1005,6 @@ module mcms::mcms {
         false
     }
 
-    inline fun only_owner(caller: &signer) acquires MCMSState {
-        let state = borrow_global<MCMSState>(get_state_addr());
-        assert!(
-            state.owner == signer::address_of(caller),
-            error::permission_denied(E_UNATHORIZED)
-        );
-    }
-
     // TODO: update and reenable tests for dynamic dispatch
     //     //// TESTS ////
     //
@@ -955,7 +1103,7 @@ module mcms::mcms {
     //         // init multisig using internal fn as we cant use retrieve_resource_account_cap in a test (error: ECONTAINER_NOT_PUBLISHED)
     //         init_module(deployer);
     //
-    //         get_state_addr()
+    //         get_state_address()
     //     }
     //
     //     // helper struct for execute args in tests
@@ -1186,7 +1334,7 @@ module mcms::mcms {
     //     ) acquires MCMSState {
     //         setup(deployer, framework);
     //         // modify state to add pending ops
-    //         let state = borrow_global_mut<MCMSState>(get_state_addr());
+    //         let state = borrow_global_mut<MCMSState>(get_state_address());
     //         state.expiring_root_and_op_count = ExpiringRootAndOpCount {
     //             root: ROOT,
     //             valid_until: VALID_UNTIL,
@@ -1205,7 +1353,7 @@ module mcms::mcms {
     //     ) acquires MCMSState {
     //         setup(deployer, framework);
     //         // modify state to add pending ops
-    //         let state = borrow_global_mut<MCMSState>(get_state_addr());
+    //         let state = borrow_global_mut<MCMSState>(get_state_address());
     //         state.expiring_root_and_op_count = ExpiringRootAndOpCount {
     //             root: ROOT,
     //             valid_until: VALID_UNTIL,
@@ -1237,7 +1385,7 @@ module mcms::mcms {
     //         deployer: &signer, framework: &signer
     //     ) acquires MCMSState {
     //         setup(deployer, framework);
-    //         let state = borrow_global_mut<MCMSState>(get_state_addr());
+    //         let state = borrow_global_mut<MCMSState>(get_state_address());
     //         state.expiring_root_and_op_count = ExpiringRootAndOpCount {
     //             root: ROOT,
     //             valid_until: VALID_UNTIL,
@@ -1629,7 +1777,7 @@ module mcms::mcms {
     //         let mcms_addr = setup(deployer, framework);
     //
     //         // manually modify root state to check for modifications
-    //         let state = borrow_global_mut<MCMSState>(get_state_addr());
+    //         let state = borrow_global_mut<MCMSState>(get_state_address());
     //         state.expiring_root_and_op_count = ExpiringRootAndOpCount {
     //             root: vector[1, 2, 3],
     //             valid_until: 9999,
@@ -1730,7 +1878,7 @@ module mcms::mcms {
     //         );
     //         call_set_root(default_set_root_args());
     //         // set current op count to post op count
-    //         let state = borrow_global_mut<MCMSState>(get_state_addr());
+    //         let state = borrow_global_mut<MCMSState>(get_state_address());
     //         state.expiring_root_and_op_count.op_count = state.root_metadata.post_op_count;
     //         let execute_args = default_execute_args();
     //         call_execute(execute_args);
@@ -1792,7 +1940,7 @@ module mcms::mcms {
     //         );
     //         call_set_root(default_set_root_args());
     //         // modify valid until state directly - set valid_until to a time in the past
-    //         let state = borrow_global_mut<MCMSState>(get_state_addr());
+    //         let state = borrow_global_mut<MCMSState>(get_state_address());
     //         state.expiring_root_and_op_count.valid_until = TIMESTAMP - 1;
     //         let execute_args = default_execute_args();
     //         call_execute(execute_args);
@@ -1865,7 +2013,7 @@ module mcms::mcms {
     //     ) acquires MCMSState {
     //         setup(deployer, framework);
     //         // modify state to add pending ops
-    //         let state = borrow_global_mut<MCMSState>(get_state_addr());
+    //         let state = borrow_global_mut<MCMSState>(get_state_address());
     //         state.expiring_root_and_op_count = ExpiringRootAndOpCount {
     //             root: ROOT,
     //             valid_until: VALID_UNTIL,
