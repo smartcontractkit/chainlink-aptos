@@ -366,7 +366,6 @@ module mcms::mcms {
         // verify ECDSA signatures on (root, valid_until) and ensure that the root group is successful
         {
             // verify sigs and count number of signers in each group
-            let signer: Signer;
             let prev_address = vector[];
             let group_vote_counts: vector<u8> = right_pad_vec(vector[], NUM_GROUPS);
             let i = 0;
@@ -388,7 +387,7 @@ module mcms::mcms {
                     simple_map::contains_key(&state.signers, &signer_addr),
                     error::invalid_argument(E_INVALID_SIGNER)
                 );
-                signer = *simple_map::borrow(&state.signers, &signer_addr);
+                let signer = *simple_map::borrow(&state.signers, &signer_addr);
 
                 // check group quorums
                 let group: u8 = signer.group;
@@ -713,7 +712,7 @@ module mcms::mcms {
             };
             state.root_metadata = RootMetadata {
                 chain_id: (chain_id::get() as u256),
-                multisig: get_state_address(),
+                multisig: @mcms,
                 pre_op_count: op_count,
                 post_op_count: op_count,
                 override_previous_root: true
