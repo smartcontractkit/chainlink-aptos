@@ -1,4 +1,4 @@
-/// Copied from: https://github.com/aptos-labs/aptos-core/blob/9baf39b6fba7812f09238c91973f61fd0955057c/aptos-move/move-examples/bcs-stream/sources/stream.move
+/// Copied and modified from: https://github.com/aptos-labs/aptos-core/blob/9baf39b6fba7812f09238c91973f61fd0955057c/aptos-move/move-examples/bcs-stream/sources/stream.move
 ///
 /// This module enables the deserialization of BCS-formatted byte arrays into Move primitive types.
 /// Deserialization Strategies:
@@ -20,9 +20,11 @@ module mcms::bcs_stream {
     use aptos_std::from_bcs;
 
     /// The data does not fit the expected format.
-    const EMALFORMED_DATA: u64 = 1;
+    const E_MALFORMED_DATA: u64 = 1;
     /// There are not enough bytes to deserialize for the given type.
-    const EOUT_OF_BYTES: u64 = 2;
+    const E_OUT_OF_BYTES: u64 = 2;
+    /// The stream has not been consumed.
+    const E_NOT_CONSUMED: u64 = 3;
 
     struct BCSStream has drop {
         /// Byte buffer containing the serialized data.
@@ -34,6 +36,14 @@ module mcms::bcs_stream {
     /// Constructs a new BCSStream instance from the provided byte array.
     public fun new(data: vector<u8>): BCSStream {
         BCSStream { data, cur: 0 }
+    }
+
+    /// Asserts that the stream has been fully consumed.
+    public fun assert_is_consumed(stream: &BCSStream) {
+        assert!(
+            stream.cur == vector::length(&stream.data),
+            error::invalid_argument(E_NOT_CONSUMED)
+        );
     }
 
     /// Deserializes a ULEB128-encoded integer from the stream.
@@ -48,38 +58,38 @@ module mcms::bcs_stream {
 
             let val = ((byte & 0x7f) as u64);
             if (((val << shift) >> shift) != val) {
-                abort error::invalid_argument(EMALFORMED_DATA)
+                abort error::invalid_argument(E_MALFORMED_DATA)
             };
             res = res | (val << shift);
 
             if ((byte & 0x80) == 0) {
                 if (shift > 0 && val == 0) {
-                    abort error::invalid_argument(EMALFORMED_DATA)
+                    abort error::invalid_argument(E_MALFORMED_DATA)
                 };
                 return res
             };
 
             shift = shift + 7;
             if (shift > 64) {
-                abort error::invalid_argument(EMALFORMED_DATA)
+                abort error::invalid_argument(E_MALFORMED_DATA)
             };
         };
 
-        abort error::out_of_range(EOUT_OF_BYTES)
+        abort error::out_of_range(E_OUT_OF_BYTES)
     }
 
     /// Deserializes a `bool` value from the stream.
     public fun deserialize_bool(stream: &mut BCSStream): bool {
         assert!(
             stream.cur < vector::length(&stream.data),
-            error::out_of_range(EOUT_OF_BYTES)
+            error::out_of_range(E_OUT_OF_BYTES)
         );
         let byte = *vector::borrow(&stream.data, stream.cur);
         stream.cur = stream.cur + 1;
         if (byte == 0) { false }
         else if (byte == 1) { true }
         else {
-            abort error::invalid_argument(EMALFORMED_DATA)
+            abort error::invalid_argument(E_MALFORMED_DATA)
         }
     }
 
@@ -93,7 +103,7 @@ module mcms::bcs_stream {
 
         assert!(
             cur + 32 <= vector::length(data),
-            error::out_of_range(EOUT_OF_BYTES)
+            error::out_of_range(E_OUT_OF_BYTES)
         );
         let res = from_bcs::to_address(vector::slice(data, cur, cur + 32));
 
@@ -107,7 +117,7 @@ module mcms::bcs_stream {
         let data = &stream.data;
         let cur = stream.cur;
 
-        assert!(cur < vector::length(data), error::out_of_range(EOUT_OF_BYTES));
+        assert!(cur < vector::length(data), error::out_of_range(E_OUT_OF_BYTES));
 
         let res = *vector::borrow(data, cur);
 
@@ -123,7 +133,7 @@ module mcms::bcs_stream {
 
         assert!(
             cur + 2 <= vector::length(data),
-            error::out_of_range(EOUT_OF_BYTES)
+            error::out_of_range(E_OUT_OF_BYTES)
         );
         let res =
             (*vector::borrow(data, cur) as u16)
@@ -141,7 +151,7 @@ module mcms::bcs_stream {
 
         assert!(
             cur + 4 <= vector::length(data),
-            error::out_of_range(EOUT_OF_BYTES)
+            error::out_of_range(E_OUT_OF_BYTES)
         );
         let res =
             (*vector::borrow(data, cur) as u32)
@@ -161,7 +171,7 @@ module mcms::bcs_stream {
 
         assert!(
             cur + 8 <= vector::length(data),
-            error::out_of_range(EOUT_OF_BYTES)
+            error::out_of_range(E_OUT_OF_BYTES)
         );
         let res =
             (*vector::borrow(data, cur) as u64)
@@ -185,7 +195,7 @@ module mcms::bcs_stream {
 
         assert!(
             cur + 16 <= vector::length(data),
-            error::out_of_range(EOUT_OF_BYTES)
+            error::out_of_range(E_OUT_OF_BYTES)
         );
         let res =
             (*vector::borrow(data, cur) as u128)
@@ -217,7 +227,7 @@ module mcms::bcs_stream {
 
         assert!(
             cur + 32 <= vector::length(data),
-            error::out_of_range(EOUT_OF_BYTES)
+            error::out_of_range(E_OUT_OF_BYTES)
         );
         let res =
             (*vector::borrow(data, cur) as u256)
@@ -289,7 +299,7 @@ module mcms::bcs_stream {
 
         assert!(
             cur + len <= vector::length(data),
-            error::out_of_range(EOUT_OF_BYTES)
+            error::out_of_range(E_OUT_OF_BYTES)
         );
 
         let res = vector::slice(data, cur, cur + len);
@@ -308,7 +318,7 @@ module mcms::bcs_stream {
 
         assert!(
             cur + len <= vector::length(data),
-            error::out_of_range(EOUT_OF_BYTES)
+            error::out_of_range(E_OUT_OF_BYTES)
         );
 
         let res = string::utf8(vector::slice(data, cur, cur + len));
