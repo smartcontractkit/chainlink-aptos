@@ -1,4 +1,5 @@
 module mcms::mcms_registry {
+    use std::bcs;
     use std::dispatchable_fungible_asset;
     use std::error;
     use std::function_info::{Self, FunctionInfo};
@@ -9,13 +10,14 @@ module mcms::mcms_registry {
     use std::smart_table::{Self, SmartTable};
     use std::string::{Self, String};
     use std::type_info::{Self, TypeInfo};
+    use std::vector;
 
     use mcms::mcms_account;
 
     friend mcms::mcms;
 
-    const REGISTRY_OBJECT_SEED: vector<u8> = b"CHAINLINK_MCMS_REGISTRY";
-    const DISPATCHER_OBJECT_SEED: vector<u8> = b"CHAINLINK_MCMS_DISPATCHER";
+    const REGISTRATION_OBJECT_SEED: vector<u8> = b"CHAINLINK_MCMS_REGISTRATION";
+    const DISPATCH_OBJECT_SEED: vector<u8> = b"CHAINLINK_MCMS_DISPATCH_OBJECT";
 
     struct RegisteredModule has key, store, drop {
         callback_function_info: FunctionInfo,
@@ -49,8 +51,9 @@ module mcms::mcms_registry {
     const E_PROOF_NOT_AT_ACCOUNT_ADDRESS: u64 = 7;
     const E_PROOF_NOT_IN_MODULE: u64 = 8;
     const E_MODULE_ALREADY_REGISTERED: u64 = 9;
-    const E_MODULE_NAME_TOO_LONG: u64 = 10;
-    const E_NOT_REGISTERED: u64 = 11;
+    const E_EMPTY_MODULE_NAME: u64 = 10;
+    const E_MODULE_NAME_TOO_LONG: u64 = 11;
+    const E_NOT_REGISTERED: u64 = 12;
 
     #[view]
     public fun get_derived_address(object_seed: vector<u8>): address {
@@ -125,15 +128,28 @@ module mcms::mcms_registry {
     public fun register<T: drop>(
         account: &signer, module_name: String, _proof: T
     ): address acquires MCMSRegistration {
+        let account_address = signer::address_of(account);
+        let account_address_bytes = bcs::to_bytes(&account_address);
+
+        let module_name_bytes = *string::bytes(&module_name);
+        let module_name_len = vector::length(&module_name_bytes);
         assert!(
-            string::length(&module_name) <= 64,
+            module_name_len > 0,
+            error::invalid_argument(E_EMPTY_MODULE_NAME)
+        );
+        assert!(
+            module_name_len <= 64,
             error::invalid_argument(E_MODULE_NAME_TOO_LONG)
         );
 
-        let account_address = signer::address_of(account);
+        let mcms_signer = mcms_account::get_signer();
 
         if (!exists<MCMSRegistration>(account_address)) {
-            let owner_constructor_ref = object::create_sticky_object(@mcms);
+            let object_seed = REGISTRATION_OBJECT_SEED;
+            vector::append(&mut object_seed, account_address_bytes);
+
+            let owner_constructor_ref =
+                object::create_named_object(&mcms_signer, object_seed);
             let owner_extend_ref = object::generate_extend_ref(&owner_constructor_ref);
             let owner_transfer_ref =
                 object::generate_transfer_ref(&owner_constructor_ref);
@@ -152,7 +168,6 @@ module mcms::mcms_registry {
 
         let registration = borrow_registration_mut(account_address);
 
-        let module_name_bytes = *string::bytes(&module_name);
         assert!(
             !smart_table::contains(&registration.registered_modules, module_name_bytes),
             error::invalid_argument(E_MODULE_ALREADY_REGISTERED)
@@ -170,9 +185,12 @@ module mcms::mcms_registry {
             error::invalid_argument(E_PROOF_NOT_IN_MODULE)
         );
 
-        let mcms_signer = mcms_account::get_signer();
+        let object_seed = DISPATCH_OBJECT_SEED;
+        vector::append(&mut object_seed, account_address_bytes);
+        vector::append(&mut object_seed, module_name_bytes);
+
         let dispatch_constructor_ref =
-            object::create_named_object(&mcms_signer, *string::bytes(&proof_type_name));
+            object::create_named_object(&mcms_signer, object_seed);
         let dispatch_extend_ref = object::generate_extend_ref(&dispatch_constructor_ref);
         let dispatch_metadata =
             fungible_asset::add_fungibility(
