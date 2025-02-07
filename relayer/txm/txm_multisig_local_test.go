@@ -119,7 +119,11 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	mcmsUserDeployerAddress := mcmsUserDeployer.accountAddress.String()
 	mcmsUserDeployerPublicKeyHex := hex.EncodeToString([]byte(mcmsUserDeployer.publicKey))
 
-	mcmsPackageMetadataBytes, mcmsModuleBytecodeBytes := compileMcmsContract(t, deployer.accountAddress)
+	mcmsSeed := []byte("mcms_test")
+	mcmsAccount := deployer.accountAddress.ResourceAccount(mcmsSeed)
+	mcmsAddress := mcmsAccount.String()
+
+	mcmsPackageMetadataBytes, mcmsModuleBytecodeBytes := compileMcmsContract(t, mcmsAccount, deployer.accountAddress)
 
 	client, err := aptos.NewNodeClient(rpcURL, 0)
 	require.NoError(t, err)
@@ -137,25 +141,22 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		getSampleTxMetadata(),
 		deployerAddress,
 		deployerPublicKeyHex,
-		"0x1::code::publish_package_txn",
+		"0x1::resource_account::create_resource_account_and_publish_package",
 		/* typeArgs= */ []string{},
-		/* paramTypes= */ []string{"vector<u8>", "vector<vector<u8>>"},
-		/* paramValues= */ []any{mcmsPackageMetadataBytes, mcmsModuleBytecodeBytes},
+		/* paramTypes= */ []string{"vector<u8>", "vector<u8>", "vector<vector<u8>>"},
+		/* paramValues= */ []any{mcmsSeed, mcmsPackageMetadataBytes, mcmsModuleBytecodeBytes},
 		/* simulateTx= */ true,
 	)
 	require.NoError(t, err)
 
-	// resource account address derived in init_module, creates the multisig account and is one of the signers
-	mcmsStateAddress := deployer.accountAddress.NamedObjectAddress([]byte("CHAINLINK_MCMS_MULTISIG"))
-
-	logger.Infow("published module", "deployerAddress", deployerAddress, "mcmsStateAddress", mcmsStateAddress.String())
+	logger.Infow("published module", "deployerAddress", deployerAddress, "mcmsAddress", mcmsAddress)
 
 	// Wait for the multisig to be initialized
 	{
 		pollEndTime := time.Now().Add(time.Second * 3)
 		var resource map[string]any
 		for time.Now().Before(pollEndTime) {
-			resource, err = client.AccountResource(mcmsStateAddress, deployerAddress+"::mcms::MCMSState")
+			resource, err = client.AccountResource(mcmsAccount, mcmsAddress+"::mcms::MCMSState")
 			if err != nil {
 				time.Sleep(time.Second * 1)
 				continue
@@ -166,7 +167,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		require.NotNil(t, resource)
 	}
 
-	mcmsUserPackageMetadataBytes, mcmsUserModuleBytecodeBytes := compileMcmsUserContract(t, mcmsUserDeployer.accountAddress, deployer.accountAddress)
+	mcmsUserPackageMetadataBytes, mcmsUserModuleBytecodeBytes := compileMcmsUserContract(t, mcmsUserDeployer.accountAddress, mcmsAccount)
 
 	// deploy and initialize mcms user module
 	err = txm.Enqueue(
@@ -218,7 +219,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 			getSampleTxMetadata(),
 			deployerAddress,
 			deployerPublicKeyHex,
-			deployerAddress+"::mcms::set_config",
+			mcmsAddress+"::mcms::set_config",
 			[]string{},
 			[]string{"vector<vector<u8>>", "vector<u8>", "vector<u8>", "vector<u8>", "bool"},
 			[]any{
@@ -261,7 +262,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	ops := []Op{
 		{
 			ChainID:    chainIdBig,
-			MultiSig:   deployer.accountAddress,
+			MultiSig:   mcmsAccount,
 			Nonce:      0,
 			To:         mcmsUserDeployer.accountAddress,
 			ModuleName: "mcms_user",
@@ -270,7 +271,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		},
 		{
 			ChainID:    chainIdBig,
-			MultiSig:   deployer.accountAddress,
+			MultiSig:   mcmsAccount,
 			Nonce:      1,
 			To:         mcmsUserDeployer.accountAddress,
 			ModuleName: "mcms_user",
@@ -281,7 +282,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 
 	rootMetadata := RootMetadata{
 		ChainID:              chainIdBig,
-		MultiSig:             deployer.accountAddress,
+		MultiSig:             mcmsAccount,
 		PreOpCount:           0,
 		PostOpCount:          uint64(len(ops)),
 		OverridePreviousRoot: false,
@@ -313,7 +314,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 			getSampleTxMetadata(),
 			deployerAddress,
 			deployerPublicKeyHex,
-			deployerAddress+"::mcms::set_root",
+			mcmsAddress+"::mcms::set_root",
 			[]string{},
 			[]string{
 				"vector<u8>",
@@ -368,7 +369,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 			getSampleTxMetadata(),
 			deployerAddress,
 			deployerPublicKeyHex,
-			deployerAddress+"::mcms::execute",
+			mcmsAddress+"::mcms::execute",
 			[]string{},
 			[]string{
 				"u256",
@@ -445,13 +446,12 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	}
 }
 
-func compileMcmsContract(t *testing.T, deployerAddress aptos.AccountAddress) ([]byte, [][]byte) {
+func compileMcmsContract(t *testing.T, packageAddress aptos.AccountAddress, deployerAddress aptos.AccountAddress) ([]byte, [][]byte) {
 	compileResult := testutils.CompileMovePackage(t, "mcms", map[string]aptos.AccountAddress{
-		"mcms":       deployerAddress,
-		"mcms_owner": deployerAddress,
+		"mcms":          packageAddress,
+		"mcms_deployer": deployerAddress,
 	}, []string{
 		"bcs_stream",
-		"large_packages",
 		"mcms_registry",
 		"mcms",
 	})
@@ -459,11 +459,10 @@ func compileMcmsContract(t *testing.T, deployerAddress aptos.AccountAddress) ([]
 	return compileResult.PackageMetadata, compileResult.BytecodeModules
 }
 
-func compileMcmsUserContract(t *testing.T, deployerAddress, mcmsAddress aptos.AccountAddress) ([]byte, []byte) {
+func compileMcmsUserContract(t *testing.T, packageAddress, mcmsAddress aptos.AccountAddress) ([]byte, []byte) {
 	compileResult := testutils.CompileMovePackage(t, "mcms_test", map[string]aptos.AccountAddress{
-		"mcms_test":  deployerAddress,
-		"mcms":       mcmsAddress,
-		"mcms_owner": mcmsAddress,
+		"mcms_test": packageAddress,
+		"mcms":      mcmsAddress,
 	}, nil)
 
 	require.Equal(t, 1, len(compileResult.BytecodeModules))
