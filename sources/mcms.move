@@ -16,8 +16,8 @@ module mcms::mcms {
     use std::code;
     use std::error;
     use std::event;
-    use std::object::{Self, ObjectCore};
     use std::option;
+    use std::resource_account;
     use std::secp256k1;
     use std::simple_map::{SimpleMap, Self};
     use std::signer;
@@ -27,8 +27,6 @@ module mcms::mcms {
 
     use mcms::bcs_stream;
     use mcms::mcms_registry;
-
-    const STATE_OBJECT_SEED: vector<u8> = b"CHAINLINK_MCMS_MULTISIG";
 
     // MCM Consts
     const NUM_GROUPS: u64 = 32;
@@ -146,91 +144,55 @@ module mcms::mcms {
 
     // Error Codes
 
-    const E_NOT_OBJECT_DEPLOYMENT: u64 = 1;
-    const E_NOT_PUBLISHER: u64 = 2;
-    const E_ALREADY_INITIALIZED: u64 = 3;
-    const E_NO_MULTISIG: u64 = 4;
-    const E_ALREADY_SEEN_HASH: u64 = 5;
-    const E_POST_OP_COUNT_REACHED: u64 = 6;
-    const E_WRONG_CHAIN_ID: u64 = 7;
-    const E_WRONG_MULTISIG: u64 = 8;
-    const E_ROOT_EXPIRED: u64 = 9;
-    const E_WRONG_NONCE: u64 = 10;
-    const E_VALID_UNTIL_EXPIRED: u64 = 11;
-    const E_INVALID_SIGNER: u64 = 12;
-    const E_MISSING_CONFIG: u64 = 13;
-    const E_INSUFFICIENT_SIGNERS: u64 = 14;
-    const E_PROOF_CANNOT_BE_VERIFIED: u64 = 15;
-    const E_PENDING_OPS: u64 = 16;
-    const E_WRONG_PRE_OP_COUNT: u64 = 17;
-    const E_WRONG_POST_OP_COUNT: u64 = 18;
-    const E_INVALID_NUM_SIGNERS: u64 = 19;
-    const E_SIGNER_GROUPS_LEN_MISMATCH: u64 = 20;
-    const E_INVALID_GROUP_QUORUM_LEN: u64 = 21;
-    const E_INVALID_GROUP_PARENTS_LEN: u64 = 22;
-    const E_OUT_OF_BOUNDS_GROUP: u64 = 23;
-    const E_GROUP_TREE_NOT_WELL_FORMED: u64 = 24;
-    const E_SIGNER_IN_DISABLED_GROUP: u64 = 25;
-    const E_OUT_OF_BOUNDS_GROUP_QUORUM: u64 = 26;
-    const E_SIGNER_ADDR_MUST_BE_INCREASING: u64 = 27;
-    const E_CMP_VECTORS_DIFF_LEN: u64 = 28;
-    const E_INVALID_V_SIGNATURE: u64 = 29;
-    const E_FAILED_ECDSA_RECOVER: u64 = 30;
-    const E_INVALID_ROOT_LEN: u64 = 31;
-    const E_UNATHORIZED: u64 = 32;
-    const E_CALLBACK_PARAMS_NOT_CONSUMED: u64 = 33;
-    const E_MODULE_NAME_TOO_LONG: u64 = 34;
-    const E_FUNCTION_NAME_TOO_LONG: u64 = 35;
-    const E_INVALID_SIGNER_ADDR_LEN: u64 = 36;
-    const E_INVALID_SIGNATURE_LEN: u64 = 37;
-    const E_UNKNOWN_MCMS_MODULE_FUNCTION: u64 = 38;
-    const E_UNKNOWN_FRAMEWORK_MODULE_FUNCTION: u64 = 39;
-    const E_UNKNOWN_FRAMEWORK_MODULE: u64 = 40;
-    const E_CANNOT_TRANSFER_TO_SELF: u64 = 41;
-    const E_MUST_BE_PROPOSED_OWNER: u64 = 42;
+    const E_NO_MULTISIG: u64 = 1;
+    const E_ALREADY_SEEN_HASH: u64 = 2;
+    const E_POST_OP_COUNT_REACHED: u64 = 3;
+    const E_WRONG_CHAIN_ID: u64 = 4;
+    const E_WRONG_MULTISIG: u64 = 5;
+    const E_ROOT_EXPIRED: u64 = 6;
+    const E_WRONG_NONCE: u64 = 7;
+    const E_VALID_UNTIL_EXPIRED: u64 = 8;
+    const E_INVALID_SIGNER: u64 = 9;
+    const E_MISSING_CONFIG: u64 = 10;
+    const E_INSUFFICIENT_SIGNERS: u64 = 11;
+    const E_PROOF_CANNOT_BE_VERIFIED: u64 = 12;
+    const E_PENDING_OPS: u64 = 13;
+    const E_WRONG_PRE_OP_COUNT: u64 = 14;
+    const E_WRONG_POST_OP_COUNT: u64 = 15;
+    const E_INVALID_NUM_SIGNERS: u64 = 16;
+    const E_SIGNER_GROUPS_LEN_MISMATCH: u64 = 17;
+    const E_INVALID_GROUP_QUORUM_LEN: u64 = 18;
+    const E_INVALID_GROUP_PARENTS_LEN: u64 = 19;
+    const E_OUT_OF_BOUNDS_GROUP: u64 = 20;
+    const E_GROUP_TREE_NOT_WELL_FORMED: u64 = 21;
+    const E_SIGNER_IN_DISABLED_GROUP: u64 = 22;
+    const E_OUT_OF_BOUNDS_GROUP_QUORUM: u64 = 23;
+    const E_SIGNER_ADDR_MUST_BE_INCREASING: u64 = 24;
+    const E_CMP_VECTORS_DIFF_LEN: u64 = 25;
+    const E_INVALID_V_SIGNATURE: u64 = 26;
+    const E_FAILED_ECDSA_RECOVER: u64 = 27;
+    const E_INVALID_ROOT_LEN: u64 = 28;
+    const E_UNATHORIZED: u64 = 29;
+    const E_CALLBACK_PARAMS_NOT_CONSUMED: u64 = 30;
+    const E_MODULE_NAME_TOO_LONG: u64 = 31;
+    const E_FUNCTION_NAME_TOO_LONG: u64 = 32;
+    const E_INVALID_SIGNER_ADDR_LEN: u64 = 33;
+    const E_INVALID_SIGNATURE_LEN: u64 = 34;
+    const E_UNKNOWN_MCMS_MODULE_FUNCTION: u64 = 35;
+    const E_UNKNOWN_FRAMEWORK_MODULE_FUNCTION: u64 = 36;
+    const E_UNKNOWN_FRAMEWORK_MODULE: u64 = 37;
+    const E_CANNOT_TRANSFER_TO_SELF: u64 = 38;
+    const E_MUST_BE_PROPOSED_OWNER: u64 = 39;
 
     fun init_module(publisher: &signer) {
-        assert!(
-            object::is_object(@mcms), error::invalid_state(E_NOT_OBJECT_DEPLOYMENT)
-        );
+        let signer_cap = resource_account::retrieve_resource_account_cap(publisher, @mcms_deployer);
 
-        let (_, signer_cap) =
-            account::create_resource_account(publisher, STATE_OBJECT_SEED);
-
-        // TODO: add and use event handles?
-        move_to(publisher, MCMSDeployment { signer_cap });
-    }
-
-    public entry fun initialize(caller: &signer) acquires MCMSDeployment {
-        assert!(
-            exists<MCMSDeployment>(@mcms),
-            error::not_found(E_ALREADY_INITIALIZED)
-        );
-
-        let caller_address = signer::address_of(caller);
-
-        let mcms_object = object::address_to_object<ObjectCore>(@mcms);
-        assert!(
-            caller_address == object::owner(mcms_object),
-            error::permission_denied(E_NOT_PUBLISHER)
-        );
-
-        let MCMSDeployment { signer_cap } = move_from<MCMSDeployment>(@mcms);
-
-        let state_signer = account::create_signer_with_capability(&signer_cap);
-
-        // transfer the MCMS object to itself. all upgrades must now go through MCMS execution.
-        object::transfer(
-            caller,
-            object::address_to_object<ObjectCore>(@mcms),
-            signer::address_of(&state_signer)
-        );
+        let self_signer = account::create_signer_with_capability(&signer_cap);
 
         move_to(
-            &state_signer,
+            &self_signer,
             MCMSState {
-                // the initial owner, in our internal ownership model, is still the deployer.
-                owner: caller_address,
+                owner: @mcms_deployer,
                 pending_owner: @0x0,
                 signer_cap,
                 signers: simple_map::new(),
@@ -280,11 +242,6 @@ module mcms::mcms {
     #[view]
     public fun get_root_metadata(): RootMetadata acquires MCMSState {
         borrow_state().root_metadata
-    }
-
-    #[view]
-    public fun get_state_address(): address {
-        state_address()
     }
 
     // MCM Functions
@@ -739,7 +696,7 @@ module mcms::mcms {
     }
 
     public entry fun transfer_ownership_to_self(caller: &signer) acquires MCMSState {
-        transfer_ownership(caller, state_address());
+        transfer_ownership(caller, @mcms);
     }
 
     public fun accept_ownership(caller: &signer) acquires MCMSState {
@@ -765,7 +722,7 @@ module mcms::mcms {
 
     #[view]
     public fun is_self_owned(): bool acquires MCMSState {
-        owner() == state_address()
+        owner() == @mcms
     }
 
     inline fun assert_only_owner(state: &MCMSState, caller: &signer) {
@@ -775,16 +732,12 @@ module mcms::mcms {
         );
     }
 
-    inline fun state_address(): address {
-        account::create_resource_address(&@mcms, STATE_OBJECT_SEED)
-    }
-
     inline fun borrow_state(): &MCMSState {
-        borrow_global<MCMSState>(state_address())
+        borrow_global<MCMSState>(@mcms)
     }
 
     inline fun borrow_state_mut(): &mut MCMSState {
-        borrow_global_mut<MCMSState>(state_address())
+        borrow_global_mut<MCMSState>(@mcms)
     }
 
     inline fun ecdsa_recover_evm_addr(
