@@ -387,8 +387,6 @@ module mcms::mcms {
         event::emit(NewRoot { root, valid_until, metadata });
     }
 
-    // note: unlike MCM on EVM chains, this function does not actually execute the transaction,
-    // but rather creates the transaction on the multisig account to be executed in a separate tx
     public entry fun execute(
         chain_id: u256,
         multisig: address,
@@ -440,7 +438,7 @@ module mcms::mcms {
         state.expiring_root_and_op_count.op_count = state.expiring_root_and_op_count.op_count
             + 1;
 
-        dispatch(state, to, module_name, function, data);
+        dispatch(to, module_name, function, data);
 
         event::emit(
             OpExecuted { nonce, to, module_name, function, data }
@@ -448,7 +446,6 @@ module mcms::mcms {
     }
 
     inline fun dispatch(
-        state: &MCMSState,
         receiver: address,
         module_name: String,
         function_name: String,
@@ -484,6 +481,36 @@ module mcms::mcms {
         } else if (function_name_bytes == b"accept_ownership") {
             bcs_stream::assert_is_consumed(&stream);
             accept_ownership(&self_signer);
+        } else if (function_name_bytes == b"owned_object_publish") {
+            let object_seed = bcs_stream::deserialize_vector_u8(&mut stream);
+            let metadata_serialized = bcs_stream::deserialize_vector_u8(&mut stream);
+            let code =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            owned_object_publish(
+                &self_signer,
+                object_seed,
+                metadata_serialized,
+                code
+            );
+        } else if (function_name_bytes == b"owned_object_upgrade") {
+            let object_seed = bcs_stream::deserialize_vector_u8(&mut stream);
+            let metadata_serialized = bcs_stream::deserialize_vector_u8(&mut stream);
+            let code =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            owned_object_upgrade(
+                &self_signer,
+                object_seed,
+                metadata_serialized,
+                code
+            );
         } else {
             abort error::invalid_argument(E_UNKNOWN_MCMS_MODULE_FUNCTION)
         }
@@ -659,6 +686,43 @@ module mcms::mcms {
         };
 
         event::emit(ConfigSet { config: state.config, is_root_cleared: clear_root });
+    }
+
+    // Object publish and upgrade functions
+    #[view]
+    public fun owned_object_address(object_seed: vector<u8>): address {
+        mcms_registry::get_preregistered_address(object_seed)
+    }
+
+    public entry fun owned_object_publish(
+        caller: &signer,
+        object_seed: vector<u8>,
+        metadata_serialized: vector<u8>,
+        code: vector<vector<u8>>
+    ) acquires MCMSState {
+        let state = borrow_state();
+
+        assert_only_owner(state, caller);
+
+        let object_signer =
+            mcms_registry::create_preregistered_object_signer(object_seed);
+
+        code::publish_package_txn(&object_signer, metadata_serialized, code);
+    }
+
+    public entry fun owned_object_upgrade(
+        caller: &signer,
+        object_seed: vector<u8>,
+        metadata_serialized: vector<u8>,
+        code: vector<vector<u8>>
+    ) acquires MCMSState {
+        let state = borrow_state();
+
+        assert_only_owner(state, caller);
+
+        let object_signer = mcms_registry::get_preregistered_object_signer(object_seed);
+
+        code::publish_package_txn(&object_signer, metadata_serialized, code);
     }
 
     // Ownable functions

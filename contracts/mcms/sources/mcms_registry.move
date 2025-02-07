@@ -16,6 +16,7 @@ module mcms::mcms_registry {
 
     friend mcms::mcms;
 
+    const PREREGISTRATION_OBJECT_SEED: vector<u8> = b"CHAINLINK_MCMS_PREREGISTRATION";
     const REGISTRATION_OBJECT_SEED: vector<u8> = b"CHAINLINK_MCMS_REGISTRATION";
     const DISPATCH_OBJECT_SEED: vector<u8> = b"CHAINLINK_MCMS_DISPATCH_OBJECT";
 
@@ -47,29 +48,34 @@ module mcms::mcms_registry {
     const E_WRONG_PROOF_TYPE: u64 = 3;
     const E_CALLBACK_PARAMS_NOT_CONSUMED: u64 = 4;
     const E_OBJECT_ALREADY_EXISTS: u64 = 5;
-    const E_EXPECTED_ADDRESS_MISMATCH: u64 = 6;
-    const E_PROOF_NOT_AT_ACCOUNT_ADDRESS: u64 = 7;
-    const E_PROOF_NOT_IN_MODULE: u64 = 8;
-    const E_MODULE_ALREADY_REGISTERED: u64 = 9;
-    const E_EMPTY_MODULE_NAME: u64 = 10;
-    const E_MODULE_NAME_TOO_LONG: u64 = 11;
-    const E_NOT_REGISTERED: u64 = 12;
+    const E_PROOF_NOT_AT_ACCOUNT_ADDRESS: u64 = 6;
+    const E_PROOF_NOT_IN_MODULE: u64 = 7;
+    const E_MODULE_ALREADY_REGISTERED: u64 = 8;
+    const E_EMPTY_MODULE_NAME: u64 = 9;
+    const E_MODULE_NAME_TOO_LONG: u64 = 10;
+    const E_NOT_REGISTERED: u64 = 11;
+    const E_MISSING_REGISTRATION: u64 = 12;
+    const E_NOT_PREREGISTERED_OBJECT: u64 = 13;
 
-    #[view]
-    public fun get_derived_address(object_seed: vector<u8>): address {
-        get_derived_address_internal(object_seed)
+    public(friend) fun get_preregistered_address(object_seed: vector<u8>): address {
+        get_preregistered_address_internal(object_seed)
     }
 
-    inline fun get_derived_address_internal(object_seed: vector<u8>): address {
-        object::create_object_address(&@mcms, object_seed)
+    inline fun get_preregistered_address_internal(object_seed: vector<u8>): address {
+        object::create_object_address(&@mcms, preregistered_object_seed(object_seed))
     }
 
-    public entry fun preregister(
-        object_seed: vector<u8>, expected_address: address
-    ) {
-        // TODO: validate that calling publish_package_txn works from the user module, when
-        // publishing into the same account. add large_packages and publish/upgrade hooks
-        // to execute() if it does not.
+    inline fun preregistered_object_seed(object_seed: vector<u8>): vector<u8> {
+        let final_object_seed = PREREGISTRATION_OBJECT_SEED;
+        vector::append(&mut final_object_seed, object_seed);
+        final_object_seed
+    }
+
+    public(friend) fun create_preregistered_object_signer(
+        object_seed: vector<u8>
+    ): signer {
+        let expected_address = get_preregistered_address_internal(object_seed);
+
         assert!(
             !object::is_object(expected_address),
             error::invalid_state(E_OBJECT_ALREADY_EXISTS)
@@ -77,15 +83,10 @@ module mcms::mcms_registry {
 
         let mcms_signer = mcms_account::get_signer();
 
-        let owner_constructor_ref = object::create_named_object(
-            &mcms_signer, object_seed
-        );
-
-        assert!(
-            object::address_from_constructor_ref(&owner_constructor_ref)
-                == expected_address,
-            error::invalid_state(E_EXPECTED_ADDRESS_MISMATCH)
-        );
+        let owner_constructor_ref =
+            object::create_named_object(
+                &mcms_signer, preregistered_object_seed(object_seed)
+            );
 
         let owner_extend_ref = object::generate_extend_ref(&owner_constructor_ref);
         let owner_transfer_ref = object::generate_transfer_ref(&owner_constructor_ref);
@@ -101,6 +102,31 @@ module mcms::mcms_registry {
                 executing_callback_params: option::none()
             }
         );
+
+        // TODO: add event
+
+        owner_signer
+    }
+
+    public(friend) fun get_preregistered_object_signer(
+        object_seed: vector<u8>
+    ): signer acquires MCMSRegistration {
+        let expected_address = get_preregistered_address(object_seed);
+        assert!(
+            object::object_exists<MCMSRegistration>(expected_address),
+            error::invalid_state(E_MISSING_REGISTRATION)
+        );
+        let registration = borrow_registration(expected_address);
+        let owner_signer =
+            object::generate_signer_for_extending(&registration.owner_extend_ref);
+
+        // This occurs if the object has a callback registered using register(), but was not deployed using object_publish().
+        assert!(
+            signer::address_of(&owner_signer) == expected_address,
+            error::invalid_state(E_NOT_PREREGISTERED_OBJECT)
+        );
+
+        owner_signer
     }
 
     #[view]
@@ -173,7 +199,6 @@ module mcms::mcms_registry {
             error::invalid_argument(E_MODULE_ALREADY_REGISTERED)
         );
 
-        let proof_type_name = type_info::type_name<T>();
         let proof_type_info = type_info::type_of<T>();
 
         assert!(
