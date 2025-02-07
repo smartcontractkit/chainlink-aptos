@@ -20,6 +20,14 @@ func LoadAccountFromEnv(t *testing.T, logger logger.Logger) (ed25519.PrivateKey,
 		return nil, nil, aptos.AccountAddress{}
 	}
 
+	if privateKeyHex[0:2] == "0x" {
+		privateKeyHex = privateKeyHex[2:]
+	}
+
+	if len(privateKeyHex) != 128 {
+		t.Fatalf("PRIVATE_KEY must be a hex string of length 128, representing a 64-byte ed25519 key (private key + public key)")
+	}
+
 	privateKeyBytes, err := hex.DecodeString(privateKeyHex)
 	require.NoError(t, err)
 	privateKey := ed25519.PrivateKey(privateKeyBytes)
