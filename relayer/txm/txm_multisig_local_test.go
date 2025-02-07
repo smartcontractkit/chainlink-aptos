@@ -452,6 +452,7 @@ func compileMcmsContract(t *testing.T, packageAddress aptos.AccountAddress, depl
 		"mcms_deployer": deployerAddress,
 	}, []string{
 		"bcs_stream",
+		"mcms_account",
 		"mcms_registry",
 		"mcms",
 	})
