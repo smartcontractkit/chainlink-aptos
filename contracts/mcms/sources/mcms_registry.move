@@ -1,5 +1,4 @@
 module mcms::mcms_registry {
-    use std::account::{Self, SignerCapability};
     use std::dispatchable_fungible_asset;
     use std::error;
     use std::function_info::{Self, FunctionInfo};
@@ -10,6 +9,8 @@ module mcms::mcms_registry {
     use std::smart_table::{Self, SmartTable};
     use std::string::{Self, String};
     use std::type_info::{Self, TypeInfo};
+
+    use mcms::mcms_account;
 
     friend mcms::mcms;
 
@@ -33,10 +34,6 @@ module mcms::mcms_registry {
         executing_callback_params: Option<CallbackParams>
     }
 
-    struct MCMSRegistryState has key {
-        signer_cap: SignerCapability
-    }
-
     struct CallbackParams has store, drop {
         expected_type_info: TypeInfo,
         function: String,
@@ -55,42 +52,31 @@ module mcms::mcms_registry {
     const E_MODULE_NAME_TOO_LONG: u64 = 10;
     const E_NOT_REGISTERED: u64 = 11;
 
-    fun init_module(publisher: &signer) {
-        let (signer, signer_cap) =
-            account::create_resource_account(publisher, REGISTRY_OBJECT_SEED);
-        move_to(&signer, MCMSRegistryState { signer_cap });
-    }
-
-    #[view]
-    public fun get_state_address(): address {
-        state_address()
-    }
-
     #[view]
     public fun get_derived_address(object_seed: vector<u8>): address {
         get_derived_address_internal(object_seed)
     }
 
     inline fun get_derived_address_internal(object_seed: vector<u8>): address {
-        object::create_object_address(&state_address(), object_seed)
+        object::create_object_address(&@mcms, object_seed)
     }
 
     public entry fun preregister(
         object_seed: vector<u8>, expected_address: address
-    ) acquires MCMSRegistryState {
+    ) {
         // TODO: validate that calling publish_package_txn works from the user module, when
         // publishing into the same account. add large_packages and publish/upgrade hooks
         // to execute() if it does not.
-        let state = borrow_state();
-
         assert!(
             !object::is_object(expected_address),
             error::invalid_state(E_OBJECT_ALREADY_EXISTS)
         );
 
-        let registry_signer = account::create_signer_with_capability(&state.signer_cap);
-        let owner_constructor_ref =
-            object::create_named_object(&registry_signer, object_seed);
+        let mcms_signer = mcms_account::get_signer();
+
+        let owner_constructor_ref = object::create_named_object(
+            &mcms_signer, object_seed
+        );
 
         assert!(
             object::address_from_constructor_ref(&owner_constructor_ref)
@@ -138,19 +124,16 @@ module mcms::mcms_registry {
 
     public fun register<T: drop>(
         account: &signer, module_name: String, _proof: T
-    ): address acquires MCMSRegistryState, MCMSRegistration {
+    ): address acquires MCMSRegistration {
         assert!(
             string::length(&module_name) <= 64,
             error::invalid_argument(E_MODULE_NAME_TOO_LONG)
         );
 
         let account_address = signer::address_of(account);
-        let registry_signer =
-            account::create_signer_with_capability(&borrow_state().signer_cap);
 
         if (!exists<MCMSRegistration>(account_address)) {
-            let owner_constructor_ref =
-                object::create_sticky_object(signer::address_of(&registry_signer));
+            let owner_constructor_ref = object::create_sticky_object(@mcms);
             let owner_extend_ref = object::generate_extend_ref(&owner_constructor_ref);
             let owner_transfer_ref =
                 object::generate_transfer_ref(&owner_constructor_ref);
@@ -187,10 +170,9 @@ module mcms::mcms_registry {
             error::invalid_argument(E_PROOF_NOT_IN_MODULE)
         );
 
+        let mcms_signer = mcms_account::get_signer();
         let dispatch_constructor_ref =
-            object::create_named_object(
-                &registry_signer, *string::bytes(&proof_type_name)
-            );
+            object::create_named_object(&mcms_signer, *string::bytes(&proof_type_name));
         let dispatch_extend_ref = object::generate_extend_ref(&dispatch_constructor_ref);
         let dispatch_metadata =
             fungible_asset::add_fungibility(
@@ -287,17 +269,5 @@ module mcms::mcms_registry {
             object::generate_signer_for_extending(&registration.owner_extend_ref);
 
         (owner_signer, callback_params.function, callback_params.data)
-    }
-
-    inline fun state_address(): address {
-        account::create_resource_address(&@mcms, REGISTRY_OBJECT_SEED)
-    }
-
-    inline fun borrow_state(): &MCMSRegistryState {
-        borrow_global<MCMSRegistryState>(state_address())
-    }
-
-    inline fun borrow_state_mut(): &mut MCMSRegistryState {
-        borrow_global_mut<MCMSRegistryState>(state_address())
     }
 }
