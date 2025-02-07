@@ -76,6 +76,24 @@ func TestMultisigLocal(t *testing.T) {
 		keystore.AddKey(account.privateKey)
 	}
 
+	err := testutils.StartAptosNode()
+	require.NoError(t, err)
+	logger.Debugw("Started Aptos node")
+
+	rpcUrl := "http://localhost:8080/v1"
+	client, err := aptos.NewNodeClient(rpcUrl, 0)
+	require.NoError(t, err)
+
+	faucetUrl := "http://localhost:8081"
+	for _, account := range accounts {
+		err = testutils.FundWithFaucet(logger, client, account.accountAddress, faucetUrl)
+		require.NoError(t, err)
+	}
+
+	runMultisigTest(t, logger, rpcUrl, keystore, accounts, false)
+}
+
+func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore loop.Keystore, accounts []Account, skipEOATest bool) {
 	signers := []Signer{}
 	for i := 0; i < 3; i++ {
 		privateKey, err := crypto.GenerateKey()
@@ -92,41 +110,28 @@ func TestMultisigLocal(t *testing.T) {
 	sort.Slice(signers, func(i, j int) bool {
 		return bytes.Compare(signers[i].address, signers[j].address) < 0
 	})
-
-	err := testutils.StartAptosNode()
-	require.NoError(t, err)
-	logger.Debugw("Started Aptos node")
-
-	rpcUrl := "http://localhost:8080/v1"
-	client, err := aptos.NewNodeClient(rpcUrl, 0)
-	require.NoError(t, err)
-
-	faucetUrl := "http://localhost:8081"
-	for _, account := range accounts {
-		err = testutils.FundWithFaucet(logger, client, account.accountAddress, faucetUrl)
-		require.NoError(t, err)
-	}
-
-	runMultisigTest(t, logger, rpcUrl, keystore, accounts, signers)
-}
-
-func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore loop.Keystore, accounts []Account, signers []Signer) {
 	deployer := accounts[0]
 	deployerAddress := deployer.accountAddress.String()
 	deployerPublicKeyHex := hex.EncodeToString([]byte(deployer.publicKey))
 
-	mcmsUserDeployer := accounts[1]
-	mcmsUserDeployerAddress := mcmsUserDeployer.accountAddress.String()
-	mcmsUserDeployerPublicKeyHex := hex.EncodeToString([]byte(mcmsUserDeployer.publicKey))
+	// Use a random seed so it doesn't fail if we test repeatedly on testnet
+	mcmsSeed := make([]byte, 64)
+	_, err := rand.Read(mcmsSeed)
+	require.NoError(t, err)
 
-	mcmsSeed := []byte("mcms_test")
 	mcmsAccount := deployer.accountAddress.ResourceAccount(mcmsSeed)
 	mcmsAddress := mcmsAccount.String()
+
+	logger.Debugw("MCMS resource account", "address", mcmsAddress)
 
 	mcmsPackageMetadataBytes, mcmsModuleBytecodeBytes := compileMcmsContract(t, mcmsAccount, deployer.accountAddress)
 
 	client, err := aptos.NewNodeClient(rpcURL, 0)
 	require.NoError(t, err)
+
+	chainId, err := client.GetChainId()
+	require.NoError(t, err)
+	chainIdBig := new(big.Int).SetUint64(uint64(chainId))
 
 	config := DefaultConfigSet
 	getClient := func() (*aptos.NodeClient, error) { return client, nil }
@@ -167,38 +172,6 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		require.NotNil(t, resource)
 	}
 
-	mcmsUserPackageMetadataBytes, mcmsUserModuleBytecodeBytes := compileMcmsUserContract(t, mcmsUserDeployer.accountAddress, mcmsAccount)
-
-	// deploy and initialize mcms user module
-	err = txm.Enqueue(
-		uuid.New().String(),
-		getSampleTxMetadata(),
-		mcmsUserDeployerAddress,
-		mcmsUserDeployerPublicKeyHex,
-		"0x1::code::publish_package_txn",
-		/* typeArgs= */ []string{},
-		/* paramTypes= */ []string{"vector<u8>", "vector<vector<u8>>"},
-		/* paramValues= */ []any{mcmsUserPackageMetadataBytes, [][]byte{mcmsUserModuleBytecodeBytes}},
-		/* simulateTx= */ true,
-	)
-	require.NoError(t, err)
-
-	// Wait for the user contract to be initialized
-	{
-		pollEndTime := time.Now().Add(time.Second * 30)
-		var resource map[string]any
-		for time.Now().Before(pollEndTime) {
-			resource, err = client.AccountResource(mcmsUserDeployer.accountAddress, mcmsUserDeployerAddress+"::mcms_user::UserData")
-			if err != nil {
-				time.Sleep(time.Second * 1)
-				continue
-			}
-			logger.Debugw("Got resource", "resource", resource)
-			break
-		}
-		require.NotNil(t, resource)
-	}
-
 	// Call set_config to set signers
 	{
 		NUM_GROUPS := 32
@@ -214,8 +187,9 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		}
 		groupQuorums[0] = 2
 
+		setConfigId := uuid.New().String()
 		err := txm.Enqueue(
-			uuid.New().String(),
+			setConfigId,
 			getSampleTxMetadata(),
 			deployerAddress,
 			deployerPublicKeyHex,
@@ -233,16 +207,12 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		)
 		require.NoError(t, err)
 
-		// TODO: check for success
+		waitForTxmId(t, txm, setConfigId, time.Second*30)
 	}
-
-	chainId, err := client.GetChainId()
-	require.NoError(t, err)
-	chainIdBig := new(big.Int).SetUint64(uint64(chainId))
 
 	arg1 := "hello"
 	arg2 := []byte{5, 4, 3, 2, 1}
-	arg3 := mcmsUserDeployer.accountAddress[:]
+	arg3 := deployer.accountAddress[:]
 	arg4 := big.NewInt(42)
 
 	// function_one(arg1: String, arg2: vector<u8>)
@@ -259,40 +229,23 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	})
 	require.NoError(t, err)
 
-	ops := []Op{
-		{
-			ChainID:    chainIdBig,
-			MultiSig:   mcmsAccount,
-			Nonce:      0,
-			To:         mcmsUserDeployer.accountAddress,
-			ModuleName: "mcms_user",
-			Function:   "function_one",
-			Data:       functionOneParamBytes,
-		},
-		{
-			ChainID:    chainIdBig,
-			MultiSig:   mcmsAccount,
-			Nonce:      1,
-			To:         mcmsUserDeployer.accountAddress,
-			ModuleName: "mcms_user",
-			Function:   "function_two",
-			Data:       functionTwoParamBytes,
-		},
+	nextNonce := uint64(0)
+	getNextNonce := func() uint64 {
+		currentNonce := nextNonce
+		nextNonce++
+		return currentNonce
 	}
 
-	rootMetadata := RootMetadata{
-		ChainID:              chainIdBig,
-		MultiSig:             mcmsAccount,
-		PreOpCount:           0,
-		PostOpCount:          uint64(len(ops)),
-		OverridePreviousRoot: false,
+	postOpCount := uint64(0)
+	getPreOpCount := func() uint64 {
+		return postOpCount
+	}
+	getCumulativePostOpCount := func(numOps uint64) uint64 {
+		postOpCount += numOps
+		return postOpCount
 	}
 
-	merkleTree, err := generateMerkleTree(ops, rootMetadata)
-	require.NoError(t, err)
-
-	// call set_root
-	{
+	enqueueSetRoot := func(merkleTree MerkleTree, rootMetadata RootMetadata) string {
 		rootHash := merkleTree.getRoot()
 
 		// Set validUntil to be the current UTC timestamp + 1 week
@@ -309,8 +262,10 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 
 		require.True(t, merkleTree.verifyProof(metadataProof, hashRootMetadata(rootMetadata)))
 
-		err := txm.Enqueue(
-			uuid.New().String(),
+		setRootId := uuid.New().String()
+
+		err = txm.Enqueue(
+			setRootId,
 			getSampleTxMetadata(),
 			deployerAddress,
 			deployerPublicKeyHex,
@@ -342,107 +297,377 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		)
 		require.NoError(t, err)
 
-		// TODO: check for success
+		return setRootId
 	}
 
-	for {
-		queueLen, unconfirmedLen := txm.InflightCount()
-		logger.Debugw("Inflight count", "queued", queueLen, "unconfirmed", unconfirmedLen)
-		if queueLen == 0 && unconfirmedLen == 0 {
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
+	t.Run("TransferOwnershipAndExecuteMCMSDeployedUserContract", func(t *testing.T) {
 
-	executeOp := func(index int) {
-		logger.Debugw("Executing op", "index", index)
-
-		// offset +1 to account for the root metadata
-		proof := merkleTree.getProof(index + 1)
-		op := &ops[index]
-		require.True(t, merkleTree.verifyProof(proof, hashOp(op)))
-
-		txId := uuid.New().String()
-
+		transferOwnershipId := uuid.New().String()
 		err := txm.Enqueue(
-			txId,
+			transferOwnershipId,
 			getSampleTxMetadata(),
 			deployerAddress,
 			deployerPublicKeyHex,
-			mcmsAddress+"::mcms::execute",
+			mcmsAddress+"::mcms::transfer_ownership_to_self",
 			[]string{},
-			[]string{
-				"u256",
-				"address",
-				"u64",
-				"address",
-				"0x1::string::String",
-				"0x1::string::String",
-				"vector<u8>",
-				"vector<vector<u8>>",
-			},
-			[]any{
-				op.ChainID,
-				op.MultiSig,
-				op.Nonce,
-				op.To,
-				op.ModuleName,
-				op.Function,
-				op.Data,
-				proof[:],
-			},
+			[]string{},
+			[]any{},
 			/* simulateTx= */ true,
 		)
 		require.NoError(t, err)
+		waitForTxmId(t, txm, transferOwnershipId, time.Second*30)
 
-		waitForTxmId(t, txm, txId, time.Second*30)
-	}
+		userObjectSeed := []byte("mcms_owned_user_contract")
+		registryObjectSeed := append([]byte("CHAINLINK_MCMS_PREREGISTRATION"), userObjectSeed...)
+		userModuleAccount := mcmsAccount.NamedObjectAddress(registryObjectSeed)
 
-	logger.Infow("executing ops")
-	executeOp(0)
-	executeOp(1)
+		logger.Debugw("Preregistered user module account", "address", userModuleAccount.String())
 
-	// check that user contract state was updated
-	{
-		pollEndTime := time.Now().Add(time.Second * 30)
-		var resource map[string]any
+		mcmsUserPackageMetadataBytes, mcmsUserModuleBytecodeBytes := compileMcmsUserContract(t, userModuleAccount, mcmsAccount)
 
-		for time.Now().Before(pollEndTime) {
-			resource, err = client.AccountResource(mcmsUserDeployer.accountAddress, mcmsUserDeployerAddress+"::mcms_user::UserData")
-			if err != nil {
-				time.Sleep(time.Second * 1)
-				continue
-			}
-			logger.Debugw("Got resource", "resource", resource)
-			break
+		ownedObjectPublishBytes, err := bcs.SerializeSingle(func(ser *bcs.Serializer) {
+			ser.WriteBytes(userObjectSeed)
+			ser.WriteBytes(mcmsUserPackageMetadataBytes)
+			// length of the vector<vector<u8>>
+			ser.Uleb128(1)
+			ser.WriteBytes(mcmsUserModuleBytecodeBytes)
+		})
+		require.NoError(t, err)
+
+		ops := []Op{
+			{
+				ChainID:    chainIdBig,
+				MultiSig:   mcmsAccount,
+				Nonce:      getNextNonce(),
+				To:         mcmsAccount,
+				ModuleName: "mcms",
+				Function:   "accept_ownership",
+				Data:       []byte{},
+			},
+
+			{
+				ChainID:    chainIdBig,
+				MultiSig:   mcmsAccount,
+				Nonce:      getNextNonce(),
+				To:         mcmsAccount,
+				ModuleName: "mcms",
+				Function:   "owned_object_publish",
+				Data:       ownedObjectPublishBytes,
+			},
+			{
+				ChainID:    chainIdBig,
+				MultiSig:   mcmsAccount,
+				Nonce:      getNextNonce(),
+				To:         userModuleAccount,
+				ModuleName: "mcms_user",
+				Function:   "function_one",
+				Data:       functionOneParamBytes,
+			},
+			{
+				ChainID:    chainIdBig,
+				MultiSig:   mcmsAccount,
+				Nonce:      getNextNonce(),
+				To:         userModuleAccount,
+				ModuleName: "mcms_user",
+				Function:   "function_two",
+				Data:       functionTwoParamBytes,
+			},
 		}
-		require.NotNil(t, resource)
 
-		var result struct {
-			Data struct {
-				Invocations int
-				A           string
-				B           string
-				C           string
-				D           string
-			}
+		rootMetadata := RootMetadata{
+			ChainID:     chainIdBig,
+			MultiSig:    mcmsAccount,
+			PreOpCount:  getPreOpCount(),
+			PostOpCount: getCumulativePostOpCount(uint64(len(ops))),
+			// TODO: add test to override previous root
+			OverridePreviousRoot: false,
 		}
-		err = mapstructure.Decode(resource, &result)
+
+		merkleTree, err := generateMerkleTree(ops, rootMetadata)
 		require.NoError(t, err)
 
-		require.Equal(t, result.Data.A, arg1)
+		setRootId := enqueueSetRoot(merkleTree, rootMetadata)
 
-		bBytes, err := hex.DecodeString(strings.TrimPrefix(result.Data.B, "0x"))
-		require.NoError(t, err)
-		require.Equal(t, bBytes, arg2)
+		waitForTxmId(t, txm, setRootId, time.Second*30)
 
-		cBytes, err := hex.DecodeString(strings.TrimPrefix(result.Data.C, "0x"))
-		require.NoError(t, err)
-		require.Equal(t, cBytes, arg3)
+		for {
+			queueLen, unconfirmedLen := txm.InflightCount()
+			logger.Debugw("Inflight count", "queued", queueLen, "unconfirmed", unconfirmedLen)
+			if queueLen == 0 && unconfirmedLen == 0 {
+				break
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
 
-		dInt, ok := new(big.Int).SetString(result.Data.D, 10)
-		require.True(t, ok)
-		require.Equal(t, dInt, arg4)
+		executeOp := func(index int) {
+			logger.Debugw("Executing op", "index", index)
+
+			// offset +1 to account for the root metadata
+			proof := merkleTree.getProof(index + 1)
+			op := &ops[index]
+			require.True(t, merkleTree.verifyProof(proof, hashOp(op)))
+
+			txId := uuid.New().String()
+
+			err := txm.Enqueue(
+				txId,
+				getSampleTxMetadata(),
+				deployerAddress,
+				deployerPublicKeyHex,
+				mcmsAddress+"::mcms::execute",
+				[]string{},
+				[]string{
+					"u256",
+					"address",
+					"u64",
+					"address",
+					"0x1::string::String",
+					"0x1::string::String",
+					"vector<u8>",
+					"vector<vector<u8>>",
+				},
+				[]any{
+					op.ChainID,
+					op.MultiSig,
+					op.Nonce,
+					op.To,
+					op.ModuleName,
+					op.Function,
+					op.Data,
+					proof[:],
+				},
+				/* simulateTx= */ true,
+			)
+			require.NoError(t, err)
+
+			waitForTxmId(t, txm, txId, time.Second*30)
+		}
+
+		logger.Infow("executing ops")
+		executeOp(0)
+		executeOp(1)
+		executeOp(2)
+		executeOp(3)
+
+		// check that user contract state was updated
+		{
+			pollEndTime := time.Now().Add(time.Second * 30)
+			var resource map[string]any
+
+			for time.Now().Before(pollEndTime) {
+				resource, err = client.AccountResource(userModuleAccount, userModuleAccount.String()+"::mcms_user::UserData")
+				if err != nil {
+					time.Sleep(time.Second * 1)
+					continue
+				}
+				logger.Debugw("Got resource", "resource", resource)
+				break
+			}
+			require.NotNil(t, resource)
+
+			var result struct {
+				Data struct {
+					Invocations int
+					A           string
+					B           string
+					C           string
+					D           string
+				}
+			}
+			err = mapstructure.Decode(resource, &result)
+			require.NoError(t, err)
+
+			require.Equal(t, result.Data.A, arg1)
+
+			bBytes, err := hex.DecodeString(strings.TrimPrefix(result.Data.B, "0x"))
+			require.NoError(t, err)
+			require.Equal(t, bBytes, arg2)
+
+			cBytes, err := hex.DecodeString(strings.TrimPrefix(result.Data.C, "0x"))
+			require.NoError(t, err)
+			require.Equal(t, cBytes, arg3)
+
+			dInt, ok := new(big.Int).SetString(result.Data.D, 10)
+			require.True(t, ok)
+			require.Equal(t, dInt, arg4)
+		}
+	})
+
+	if !skipEOATest {
+		t.Run("ExecuteEOADeployedUserContract", func(t *testing.T) {
+			mcmsUserDeployer := accounts[1]
+			mcmsUserDeployerAddress := mcmsUserDeployer.accountAddress.String()
+			mcmsUserDeployerPublicKeyHex := hex.EncodeToString([]byte(mcmsUserDeployer.publicKey))
+
+			mcmsUserPackageMetadataBytes, mcmsUserModuleBytecodeBytes := compileMcmsUserContract(t, mcmsUserDeployer.accountAddress, mcmsAccount)
+
+			// deploy and initialize mcms user module
+			err = txm.Enqueue(
+				uuid.New().String(),
+				getSampleTxMetadata(),
+				mcmsUserDeployerAddress,
+				mcmsUserDeployerPublicKeyHex,
+				"0x1::code::publish_package_txn",
+				/* typeArgs= */ []string{},
+				/* paramTypes= */ []string{"vector<u8>", "vector<vector<u8>>"},
+				/* paramValues= */ []any{mcmsUserPackageMetadataBytes, [][]byte{mcmsUserModuleBytecodeBytes}},
+				/* simulateTx= */ true,
+			)
+			require.NoError(t, err)
+
+			// Wait for the user contract to be initialized
+			{
+				pollEndTime := time.Now().Add(time.Second * 30)
+				var resource map[string]any
+				for time.Now().Before(pollEndTime) {
+					resource, err = client.AccountResource(mcmsUserDeployer.accountAddress, mcmsUserDeployerAddress+"::mcms_user::UserData")
+					if err != nil {
+						time.Sleep(time.Second * 1)
+						continue
+					}
+					logger.Debugw("Got resource", "resource", resource)
+					break
+				}
+				require.NotNil(t, resource)
+			}
+
+			ops := []Op{
+				{
+					ChainID:    chainIdBig,
+					MultiSig:   mcmsAccount,
+					Nonce:      getNextNonce(),
+					To:         mcmsUserDeployer.accountAddress,
+					ModuleName: "mcms_user",
+					Function:   "function_one",
+					Data:       functionOneParamBytes,
+				},
+				{
+					ChainID:    chainIdBig,
+					MultiSig:   mcmsAccount,
+					Nonce:      getNextNonce(),
+					To:         mcmsUserDeployer.accountAddress,
+					ModuleName: "mcms_user",
+					Function:   "function_two",
+					Data:       functionTwoParamBytes,
+				},
+			}
+
+			rootMetadata := RootMetadata{
+				ChainID:              chainIdBig,
+				MultiSig:             mcmsAccount,
+				PreOpCount:           getPreOpCount(),
+				PostOpCount:          getCumulativePostOpCount(uint64(len(ops))),
+				OverridePreviousRoot: false,
+			}
+
+			merkleTree, err := generateMerkleTree(ops, rootMetadata)
+			require.NoError(t, err)
+
+			setRootId := enqueueSetRoot(merkleTree, rootMetadata)
+			require.NoError(t, err)
+
+			waitForTxmId(t, txm, setRootId, time.Second*30)
+
+			for {
+				queueLen, unconfirmedLen := txm.InflightCount()
+				logger.Debugw("Inflight count", "queued", queueLen, "unconfirmed", unconfirmedLen)
+				if queueLen == 0 && unconfirmedLen == 0 {
+					break
+				}
+				time.Sleep(500 * time.Millisecond)
+			}
+
+			executeOp := func(index int) {
+				logger.Debugw("Executing op", "index", index)
+
+				// offset +1 to account for the root metadata
+				proof := merkleTree.getProof(index + 1)
+				op := &ops[index]
+				require.True(t, merkleTree.verifyProof(proof, hashOp(op)))
+
+				txId := uuid.New().String()
+
+				err := txm.Enqueue(
+					txId,
+					getSampleTxMetadata(),
+					deployerAddress,
+					deployerPublicKeyHex,
+					mcmsAddress+"::mcms::execute",
+					[]string{},
+					[]string{
+						"u256",
+						"address",
+						"u64",
+						"address",
+						"0x1::string::String",
+						"0x1::string::String",
+						"vector<u8>",
+						"vector<vector<u8>>",
+					},
+					[]any{
+						op.ChainID,
+						op.MultiSig,
+						op.Nonce,
+						op.To,
+						op.ModuleName,
+						op.Function,
+						op.Data,
+						proof[:],
+					},
+					/* simulateTx= */ true,
+				)
+				require.NoError(t, err)
+
+				waitForTxmId(t, txm, txId, time.Second*30)
+			}
+
+			logger.Infow("executing ops")
+			executeOp(0)
+			executeOp(1)
+
+			// check that user contract state was updated
+			{
+				pollEndTime := time.Now().Add(time.Second * 30)
+				var resource map[string]any
+
+				for time.Now().Before(pollEndTime) {
+					resource, err = client.AccountResource(mcmsUserDeployer.accountAddress, mcmsUserDeployerAddress+"::mcms_user::UserData")
+					if err != nil {
+						time.Sleep(time.Second * 1)
+						continue
+					}
+					logger.Debugw("Got resource", "resource", resource)
+					break
+				}
+				require.NotNil(t, resource)
+
+				var result struct {
+					Data struct {
+						Invocations int
+						A           string
+						B           string
+						C           string
+						D           string
+					}
+				}
+				err = mapstructure.Decode(resource, &result)
+				require.NoError(t, err)
+
+				require.Equal(t, result.Data.A, arg1)
+
+				bBytes, err := hex.DecodeString(strings.TrimPrefix(result.Data.B, "0x"))
+				require.NoError(t, err)
+				require.Equal(t, bBytes, arg2)
+
+				cBytes, err := hex.DecodeString(strings.TrimPrefix(result.Data.C, "0x"))
+				require.NoError(t, err)
+				require.Equal(t, cBytes, arg3)
+
+				dInt, ok := new(big.Int).SetString(result.Data.D, 10)
+				require.True(t, ok)
+				require.Equal(t, dInt, arg4)
+			}
+		})
 	}
 }
 
@@ -455,6 +680,7 @@ func compileMcmsContract(t *testing.T, packageAddress aptos.AccountAddress, depl
 		"mcms_account",
 		"mcms_registry",
 		"mcms",
+		"mcms_executor",
 	})
 
 	return compileResult.PackageMetadata, compileResult.BytecodeModules
@@ -744,6 +970,8 @@ func broadcastPayload(t *testing.T, client *aptos.NodeClient, keystore loop.Keys
 
 	return submitResponse
 }
+
+// TODO: move these functions to testutils, and remove duplicates
 
 func waitForTx(t *testing.T, client *aptos.NodeClient, txHash string, duration time.Duration) {
 	stopTime := time.Now().Add(duration)
