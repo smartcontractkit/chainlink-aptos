@@ -9,7 +9,6 @@
 ///   During initialization, the MCMS contract transfers object ownership to its own state address.
 ///   All subsequent upgrades (via 0x1::code::publish_package_txn) can then only be performed using MCMS execution.
 module mcms::mcms {
-    use std::account::{Self, SignerCapability};
     use std::aptos_hash::keccak256;
     use std::bcs;
     use std::chain_id;
@@ -17,7 +16,6 @@ module mcms::mcms {
     use std::error;
     use std::event;
     use std::option;
-    use std::resource_account;
     use std::secp256k1;
     use std::simple_map::{SimpleMap, Self};
     use std::signer;
@@ -26,6 +24,7 @@ module mcms::mcms {
     use std::vector;
 
     use mcms::bcs_stream;
+    use mcms::mcms_account;
     use mcms::mcms_registry;
 
     // MCM Consts
@@ -44,7 +43,6 @@ module mcms::mcms {
     struct MCMSState has key, store, drop {
         owner: address,
         pending_owner: address,
-        signer_cap: SignerCapability,
 
         // signers is used to easily validate the existence of the signer by its address. We still
         // have signers stored in config in order to easily deactivate them when a new config is set.
@@ -55,10 +53,6 @@ module mcms::mcms {
         seen_signed_hashes: SimpleMap<vector<u8>, bool>,
         expiring_root_and_op_count: ExpiringRootAndOpCount,
         root_metadata: RootMetadata
-    }
-
-    struct MCMSDeployment has key, store {
-        signer_cap: account::SignerCapability
     }
 
     // MCM Structs
@@ -185,14 +179,11 @@ module mcms::mcms {
     const E_MUST_BE_PROPOSED_OWNER: u64 = 39;
 
     fun init_module(publisher: &signer) {
-        let signer_cap = resource_account::retrieve_resource_account_cap(publisher, @mcms_deployer);
-
         move_to(
             publisher,
             MCMSState {
                 owner: @mcms_deployer,
                 pending_owner: @0x0,
-                signer_cap,
                 signers: simple_map::new(),
                 config: Config {
                     signers: vector[],
@@ -469,15 +460,10 @@ module mcms::mcms {
             // dispatch to this module's functions for ownership transfers and setting config.
             // any calls would only succeed if ownership has been transferred to this module's
             // state address.
-            dispatch_to_self(state, function_name_bytes, data);
+            dispatch_to_self(function_name_bytes, data);
         } else if (receiver == @0x1) {
             // dispatch to framework functions to allow mcms upgrades.
-            dispatch_to_framework(
-                state,
-                module_name_bytes,
-                function_name_bytes,
-                data
-            );
+            dispatch_to_framework(module_name_bytes, function_name_bytes, data);
         } else {
             let object_meta =
                 mcms_registry::start_dispatch(receiver, module_name, function_name, data);
@@ -487,9 +473,9 @@ module mcms::mcms {
     }
 
     inline fun dispatch_to_self(
-        state: &MCMSState, function_name_bytes: vector<u8>, data: vector<u8>
+        function_name_bytes: vector<u8>, data: vector<u8>
     ) {
-        let self_signer = account::create_signer_with_capability(&state.signer_cap);
+        let self_signer = mcms_account::get_signer();
         let stream = bcs_stream::new(data);
         if (function_name_bytes == b"transfer_ownership") {
             let to = bcs_stream::deserialize_address(&mut stream);
@@ -504,12 +490,9 @@ module mcms::mcms {
     }
 
     inline fun dispatch_to_framework(
-        state: &MCMSState,
-        module_name_bytes: vector<u8>,
-        function_name_bytes: vector<u8>,
-        data: vector<u8>
+        module_name_bytes: vector<u8>, function_name_bytes: vector<u8>, data: vector<u8>
     ) {
-        let self_signer = account::create_signer_with_capability(&state.signer_cap);
+        let self_signer = mcms_account::get_signer();
         let stream = bcs_stream::new(data);
         if (module_name_bytes == b"code") {
             if (function_name_bytes == b"publish_package_txn") {
