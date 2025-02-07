@@ -185,7 +185,8 @@ module mcms::mcms {
     const E_MUST_BE_PROPOSED_OWNER: u64 = 39;
 
     fun init_module(publisher: &signer) {
-        let signer_cap = resource_account::retrieve_resource_account_cap(publisher, @mcms_deployer);
+        let signer_cap =
+            resource_account::retrieve_resource_account_cap(publisher, @mcms_deployer);
 
         let self_signer = account::create_signer_with_capability(&signer_cap);
 
@@ -272,8 +273,7 @@ module mcms::mcms {
 
         // check if hash has been seen already
         assert!(
-            simple_map::contains_key(&mut state.seen_signed_hashes, &signed_hash)
-                == false,
+            simple_map::contains_key(&mut state.seen_signed_hashes, &signed_hash) == false,
             error::invalid_argument(E_ALREADY_SEEN_HASH)
         );
 
@@ -324,7 +324,8 @@ module mcms::mcms {
         {
             // verify sigs and count number of signers in each group
             let prev_address = vector[];
-            let group_vote_counts: vector<u8> = right_pad_vec(vector[], NUM_GROUPS);
+            let group_vote_counts: vector<u8> = vector[];
+            right_pad_vec(&mut group_vote_counts, NUM_GROUPS);
             let i = 0;
             let signatures_len = vector::length(&signatures);
             while (i < signatures_len) {
@@ -564,7 +565,8 @@ module mcms::mcms {
 
         // validate group structure
         // counts number of children of each group
-        let group_children_counts = right_pad_vec(vector[], NUM_GROUPS);
+        let group_children_counts = vector[];
+        right_pad_vec(&mut group_children_counts, NUM_GROUPS);
         // first, we count the signers as children
         vector::for_each_ref(
             &signer_groups,
@@ -805,6 +807,7 @@ module mcms::mcms {
             } else {
                 vector[0]
             };
+        left_pad_vec(&mut override_previous_root, 32);
 
         let hash_preimage: vector<u8> = vector[];
         vector::append(
@@ -814,7 +817,7 @@ module mcms::mcms {
         vector::append(&mut hash_preimage, multisig);
         vector::append(&mut hash_preimage, pre_op_count);
         vector::append(&mut hash_preimage, post_op_count);
-        vector::append(&mut hash_preimage, left_pad_vec(override_previous_root, 32));
+        vector::append(&mut hash_preimage, override_previous_root);
         // since we are using this in a merkle tree/proof, hash_preimage should be greater than 64 bytes
         // to prevent collisions with internal nodes. the above operations already guarantee this so no need to check.
         keccak256(hash_preimage)
@@ -831,13 +834,15 @@ module mcms::mcms {
             string::length(&op.module_name) <= 64,
             error::invalid_argument(E_MODULE_NAME_TOO_LONG)
         );
-        let module_name = left_pad_vec(*string::bytes(&op.module_name), 64);
+        let module_name = *string::bytes(&op.module_name);
+        left_pad_vec(&mut module_name, 64);
 
         assert!(
             string::length(&op.function) <= 64,
             error::invalid_argument(E_FUNCTION_NAME_TOO_LONG)
         );
-        let function = left_pad_vec(*string::bytes(&op.function), 64);
+        let function = *string::bytes(&op.function);
+        left_pad_vec(&mut function, 64);
 
         let hash_preimage: vector<u8> = vector[];
         vector::append(&mut hash_preimage, MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP);
@@ -850,8 +855,8 @@ module mcms::mcms {
         vector::append(&mut hash_preimage, op.data);
 
         // right pad op.data to multiple of 32 bytes
-        // note that we can't use right_pad_vec which takes a u8 as length.
         let pad_amount = 32 - (vector::length(&op.data) % 32);
+        right_pad_vec(&mut hash_preimage, pad_amount);
         while (pad_amount > 0) {
             vector::push_back(&mut hash_preimage, 0);
             pad_amount = pad_amount - 1;
@@ -907,34 +912,32 @@ module mcms::mcms {
 
     // helper function to right pad a vector<u8> with zero bytes to a specified length
     // this function returns the input if the input length is already equal to or greater than num_bytes
-    inline fun right_pad_vec(v: vector<u8>, num_bytes: u64): vector<u8> {
-        let len = vector::length(&v);
+    inline fun right_pad_vec(v: &mut vector<u8>, num_bytes: u64) {
+        let len = vector::length(v);
         if (len < num_bytes) {
             let bytes_to_pad = num_bytes - len;
             let i = 0;
             while (i < bytes_to_pad) {
-                vector::push_back(&mut v, 0);
+                vector::push_back(v, 0);
                 i = i + 1;
             };
         };
-        v
     }
 
     // helper function to left pad a vector<u8> with zero bytes to a specified length
     // this function returns the input if the input length is already equal to or greater than num_bytes
-    inline fun left_pad_vec(v: vector<u8>, num_bytes: u64): vector<u8> {
-        let len = vector::length(&v);
+    inline fun left_pad_vec(v: &mut vector<u8>, num_bytes: u64) {
+        let len = vector::length(v);
         if (len < num_bytes) {
             let bytes_to_pad = num_bytes - len;
             let i = 0;
-            vector::reverse(&mut v);
+            vector::reverse(v);
             while (i < bytes_to_pad) {
-                vector::push_back(&mut v, 0);
+                vector::push_back(v, 0);
                 i = i + 1;
             };
-            vector::reverse(&mut v);
+            vector::reverse(v);
         };
-        v
     }
 
     // helper function to compare two vector<u8> values. expects both vectors to be of equal length.
@@ -2148,30 +2151,30 @@ module mcms::mcms {
     #[test]
     public entry fun test_right_pad_vec() {
         let input = vector[0x08, 0x0, 0x0, 0x0, 0x0];
-        let padded = right_pad_vec(input, 10);
-        assert!(padded == vector[8, 0, 0, 0, 0, 0, 0, 0, 0, 0], 1);
+        right_pad_vec(&mut input, 10);
+        assert!(input == vector[8, 0, 0, 0, 0, 0, 0, 0, 0, 0], 1);
 
         let input2 = vector[];
-        let padded2 = right_pad_vec(input2, 5);
-        assert!(padded2 == vector[0, 0, 0, 0, 0], 2);
+        right_pad_vec(&mut input2, 5);
+        assert!(input2 == vector[0, 0, 0, 0, 0], 2);
 
         let input3 = vector[0x01, 0x2, 0x3, 0x4, 0x5];
-        let padded3 = right_pad_vec(input3, 4);
-        assert!(padded3 == vector[1, 2, 3, 4, 5], 3);
+        right_pad_vec(&mut input3, 4);
+        assert!(input3 == vector[1, 2, 3, 4, 5], 3);
     }
 
     #[test]
     public entry fun test_left_pad_vec() {
         let input = vector[0x08, 0x0, 0x0, 0x0, 0x0];
-        let padded = left_pad_vec(input, 10);
-        assert!(padded == vector[0, 0, 0, 0, 0, 8, 0, 0, 0, 0], 1);
+        left_pad_vec(&mut input, 10);
+        assert!(input == vector[0, 0, 0, 0, 0, 8, 0, 0, 0, 0], 1);
 
         let input2 = vector[];
-        let padded2 = left_pad_vec(input2, 5);
-        assert!(padded2 == vector[0, 0, 0, 0, 0], 2);
+        left_pad_vec(&mut input2, 5);
+        assert!(input2 == vector[0, 0, 0, 0, 0], 2);
 
         let input3 = vector[0x01, 0x2, 0x3, 0x4, 0x5];
-        let padded3 = left_pad_vec(input3, 4);
-        assert!(padded3 == vector[1, 2, 3, 4, 5], 3);
+        left_pad_vec(&mut input3, 4);
+        assert!(input3 == vector[1, 2, 3, 4, 5], 3);
     }
 }
