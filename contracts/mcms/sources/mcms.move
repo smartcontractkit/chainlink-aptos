@@ -185,13 +185,10 @@ module mcms::mcms {
     const E_MUST_BE_PROPOSED_OWNER: u64 = 39;
 
     fun init_module(publisher: &signer) {
-        let signer_cap =
-            resource_account::retrieve_resource_account_cap(publisher, @mcms_deployer);
-
-        let self_signer = account::create_signer_with_capability(&signer_cap);
+        let signer_cap = resource_account::retrieve_resource_account_cap(publisher, @mcms_deployer);
 
         move_to(
-            &self_signer,
+            publisher,
             MCMSState {
                 owner: @mcms_deployer,
                 pending_owner: @0x0,
