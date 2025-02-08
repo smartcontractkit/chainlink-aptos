@@ -6,7 +6,6 @@ authors = []
 [addresses]
 mcms_test = "_"
 mcms = "_"
-mcms_deployer = "0x105"
 
 [dev-addresses]
 mcms_test = "0x100"
@@ -14,4 +13,4 @@ mcms = "0x101"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "mainnet", subdir = "aptos-move/framework/aptos-framework" }
-ChainlinkManyChainMultisig = { local = "../mcms" }
+ChainlinkManyChainMultisig = { local = "../mcms", addr_subst = { 'mcms_deployer' = '0x0' } }
