@@ -111,6 +111,7 @@ module ccip_lock_release_pool::lock_release_token_pool {
             !object::object_exists<Metadata>(@local_token),
             error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
         );
+        let metadata = object::address_to_object<Metadata>(@local_token);
 
         // the name of this module. if incorrect, callbacks will fail to be registered and
         // register_pool will revert.
@@ -126,6 +127,12 @@ module ccip_lock_release_pool::lock_release_token_pool {
         // create a resource account to be the owner of the primary FungibleStore we will use.
         let (store_signer, store_signer_cap) =
             account::create_resource_account(publisher, STORE_OBJECT_SEED);
+
+        // make sure this is a valid fungible asset that is primary fungible store enabled,
+        // ie. created with primary_fungible_store::create_primary_store_enabled_fungible_asset
+        primary_fungible_store::ensure_primary_store_exists(
+            signer::address_of(&store_signer), metadata
+        );
 
         move_to(
             publisher,
