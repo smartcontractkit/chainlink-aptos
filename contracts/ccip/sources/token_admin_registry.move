@@ -754,7 +754,9 @@ module ccip::token_admin_registry {
         registration.execution_state = EXECUTION_STATE_IDLE;
 
         // the dispatch callback is passed a fungible_asset::TransferRef reference which could allow the store to be frozen,
-        // causing future deposit/withdraw callbacks to fail.
+        // causing future deposit/withdraw callbacks to fail. note that this fungible store is only used as part of the dispatch
+        // mechanism.
+        // ref: https://github.com/aptos-labs/aptos-core/blob/7fc73792e9db11462c9a42038c4a9eb41cc00192/aptos-move/framework/aptos-framework/sources/fungible_asset.move#L923
         if (fungible_asset::is_frozen(registration.dispatch_deposit_fungible_store)) {
             fungible_asset::set_frozen_flag(
                 &registration.dispatch_fa_transfer_ref,
@@ -851,7 +853,9 @@ module ccip::token_admin_registry {
         registration.execution_state = EXECUTION_STATE_IDLE;
 
         // the dispatch callback is passed a fungible_asset::TransferRef reference which could allow the store to be frozen,
-        // causing future deposit/withdraw callbacks to fail.
+        // causing future deposit/withdraw callbacks to fail. note that this fungible store is only used as part of the dispatch
+        // mechanism.
+        // ref: https://github.com/aptos-labs/aptos-core/blob/7fc73792e9db11462c9a42038c4a9eb41cc00192/aptos-move/framework/aptos-framework/sources/fungible_asset.move#L936
         if (fungible_asset::is_frozen(registration.dispatch_deposit_fungible_store)) {
             fungible_asset::set_frozen_flag(
                 &registration.dispatch_fa_transfer_ref,
