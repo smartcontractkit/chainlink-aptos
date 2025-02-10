@@ -157,6 +157,7 @@ module ccip::client {
         vector::for_each_ref(
             &message.token_amounts,
             |token_amount| {
+                let token_amount: &Aptos2AnyTokenAmount = token_amount;
                 vector::push_back(&mut token_addresses, token_amount.token);
                 vector::push_back(&mut token_amounts, token_amount.amount);
             }

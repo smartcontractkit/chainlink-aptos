@@ -441,6 +441,7 @@ module ccip::onramp {
             &mut token_transfers,
             &mut dest_exec_data_per_token,
             |token_amount, dest_exec_data| {
+                let token_amount: &mut Aptos2AnyTokenTransfer = token_amount;
                 token_amount.dest_exec_data = *dest_exec_data;
             }
         );

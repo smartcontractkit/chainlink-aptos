@@ -373,6 +373,7 @@ module ccip::offramp {
         let hashed_leaves = vector::map_ref(
             &execution_report.messages,
             |message| {
+                let message: &Any2AptosRampMessage = message;
                 assert!(
                     message.header.source_chain_selector == source_chain_selector,
                     error::invalid_argument(E_SOURCE_CHAIN_SELECTOR_MISMATCH)
@@ -409,6 +410,10 @@ module ccip::offramp {
 
         let i = 0;
         while (i < messages_len) {
+            // needed for repeated use while looping
+            let state = state;
+            let source_chain_selector = source_chain_selector;
+
             let message = vector::borrow(&execution_report.messages, i);
             let message_hash = vector::borrow(&hashed_leaves, i);
             let sequence_number = message.header.sequence_number;
@@ -524,6 +529,7 @@ module ccip::offramp {
             vector::for_each_ref(
                 &commit_report.merkle_roots,
                 |merkle_root| {
+                    let merkle_root: &MerkleRoot = merkle_root;
                     vector::push_back(
                         &mut merkle_root_source_chain_selectors,
                         merkle_root.source_chain_selector
@@ -563,6 +569,7 @@ module ccip::offramp {
                 vector::for_each_ref(
                     &commit_report.price_updates.token_price_updates,
                     |token_price_update| {
+                        let token_price_update: &TokenPriceUpdate = token_price_update;
                         vector::push_back(
                             &mut source_tokens, token_price_update.source_token
                         );
@@ -578,6 +585,7 @@ module ccip::offramp {
                 vector::for_each_ref(
                     &commit_report.price_updates.gas_price_updates,
                     |gas_price_update| {
+                        let gas_price_update: &GasPriceUpdate = gas_price_update;
                         vector::push_back(
                             &mut gas_dest_chain_selectors,
                             gas_price_update.dest_chain_selector

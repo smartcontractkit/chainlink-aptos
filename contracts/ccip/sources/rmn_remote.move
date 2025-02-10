@@ -135,6 +135,7 @@ module ccip::rmn_remote {
         vector::for_each_ref(
             &report.merkle_roots,
             |merkle_root| {
+                let merkle_root: &MerkleRoot = merkle_root;
                 eth_abi::encode_u64(&mut digest, merkle_root.source_chain_selector);
                 eth_abi::encode_u64(&mut digest, merkle_root.min_sequence_number);
                 eth_abi::encode_u64(&mut digest, merkle_root.max_sequence_number);
