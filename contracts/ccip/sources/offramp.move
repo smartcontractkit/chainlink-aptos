@@ -3,6 +3,7 @@ module ccip::offramp {
     use std::aptos_hash;
     use std::error;
     use std::event::{Self, EventHandle};
+    use std::fungible_asset;
     use std::option::Option;
     use std::primary_fungible_store;
     use std::signer;
@@ -228,6 +229,7 @@ module ccip::offramp {
     const E_UNEXPECTED_TOKEN_DATA: u64 = 22;
     const E_CURSED_BY_RMN: u64 = 23;
     const E_BAD_RMN_SIGNAL: u64 = 24;
+    const E_FUNGIBLE_ASSET_AMOUNT_MISMATCH: u64 = 25;
 
     public entry fun initialize(
         caller: &signer,
@@ -896,9 +898,12 @@ module ccip::offramp {
                 *current_offchain_token_data
             );
 
-        // TODO: it's possible that the FungibleAsset's amount that is returned
-        // is different than the amount specified by `local_amount`. is this
-        // valid behavior, eg if this is a special token pool that deposits elsewhere?
+        // check that the returned amount in the fungible asset is exactly `local_amount`.
+        assert!(
+            fungible_asset::amount(&fa) == local_amount,
+            error::invalid_state(E_FUNGIBLE_ASSET_AMOUNT_MISMATCH)
+        );
+
         primary_fungible_store::deposit(receiver, fa);
 
         (local_token, local_amount)
