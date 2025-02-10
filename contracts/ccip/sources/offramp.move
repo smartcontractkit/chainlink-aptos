@@ -230,6 +230,8 @@ module ccip::offramp {
     const E_CURSED_BY_RMN: u64 = 23;
     const E_BAD_RMN_SIGNAL: u64 = 24;
     const E_FUNGIBLE_ASSET_AMOUNT_MISMATCH: u64 = 25;
+    const E_SIGNATURE_VERIFICATION_REQUIRED_IN_COMMIT_PLUGIN: u64 = 26;
+    const E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN: u64 = 27;
 
     public entry fun initialize(
         caller: &signer,
@@ -1276,7 +1278,31 @@ module ccip::offramp {
             is_signature_verification_enabled,
             signers,
             transmitters
-        )
+        );
+        after_ocr3_config_set(state, ocr_plugin_type, is_signature_verification_enabled);
+    }
+
+    inline fun after_ocr3_config_set(
+        state: &mut OffRampState,
+        ocr_plugin_type: u8,
+        is_signature_verification_enabled: bool
+    ) {
+        if (ocr_plugin_type == ocr3_base::ocr_plugin_type_commit()) {
+            assert!(
+                is_signature_verification_enabled,
+                error::invalid_argument(
+                    E_SIGNATURE_VERIFICATION_REQUIRED_IN_COMMIT_PLUGIN
+                )
+            );
+            state.latest_price_sequence_number = 0;
+        } else if (ocr_plugin_type == ocr3_base::ocr_plugin_type_execution()) {
+            assert!(
+                !is_signature_verification_enabled,
+                error::invalid_argument(
+                    E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN
+                )
+            );
+        };
     }
 
     #[view]
