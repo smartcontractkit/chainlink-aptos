@@ -12,7 +12,7 @@ ccip = "0x100"
 ccip_ping_pong_demo = "0x101"
 
 [dependencies]
-AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "mainnet", subdir = "aptos-move/framework/aptos-framework" }
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
 ChainlinkCCIP = { local = "../ccip" }
 
 [dev-dependencies]
