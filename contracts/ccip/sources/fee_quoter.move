@@ -60,7 +60,7 @@ module ccip::fee_quoter {
 
     struct FeeQuoterState has key, store {
         ownable_state: ownable::OwnableState,
-        max_fee_juels_per_msg: u128,
+        max_fee_juels_per_msg: u64,
         link_token: address,
         token_price_staleness_threshold: u64,
         fee_tokens: vector<address>,
@@ -69,7 +69,7 @@ module ccip::fee_quoter {
         dest_chain_configs: SmartTable<u64, DestChainConfig>,
         // dest chain selector -> local token -> TokenTransferFeeConfig
         token_transfer_fee_configs: SmartTable<u64, SmartTable<address, TokenTransferFeeConfig>>,
-        // TODO: should this be octa per apt?
+        // TODO: update calculations - should this be octa per apt?
         premium_multiplier_wei_per_eth: SmartTable<address, u64>,
         fee_token_added_events: EventHandle<FeeTokenAdded>,
         fee_token_removed_events: EventHandle<FeeTokenRemoved>,
@@ -84,7 +84,7 @@ module ccip::fee_quoter {
     }
 
     struct StaticConfig has drop {
-        max_fee_juels_per_msg: u128,
+        max_fee_juels_per_msg: u64,
         link_token: address,
         token_price_staleness_threshold: u64
     }
@@ -209,10 +209,11 @@ module ccip::fee_quoter {
     const E_INVALID_DEST_CHAIN_SELECTOR: u64 = 26;
     const E_INVALID_GAS_LIMIT: u64 = 27;
     const E_INVALID_CHAIN_FAMILY_SELECTOR: u64 = 28;
+    const E_TO_TOKEN_AMOUNT_TOO_LARGE: u64 = 29;
 
     public entry fun initialize(
         caller: &signer,
-        max_fee_juels_per_msg: u128,
+        max_fee_juels_per_msg: u64,
         link_token: address,
         token_price_staleness_threshold: u64,
         fee_tokens: vector<address>
@@ -310,7 +311,7 @@ module ccip::fee_quoter {
     #[view]
     public fun convert_token_amount(
         from_token: address, from_token_amount: u64, to_token: address
-    ): u256 acquires FeeQuoterState {
+    ): u64 acquires FeeQuoterState {
         let state = borrow_state();
         convert_token_amount_internal(state, from_token, from_token_amount, to_token)
     }
@@ -1003,11 +1004,11 @@ module ccip::fee_quoter {
         extra_args: vector<u8>,
         dest_token_addresses: vector<vector<u8>>,
         dest_pool_datas: vector<vector<u8>>
-    ): (u256, bool, vector<u8>, vector<vector<u8>>) acquires FeeQuoterState {
+    ): (u64, bool, vector<u8>, vector<vector<u8>>) acquires FeeQuoterState {
         let state = borrow_state();
         let msg_fee_juels =
             if (fee_token == state.link_token) {
-                fee_token_amount as u256
+                fee_token_amount
             } else {
                 convert_token_amount_internal(
                     state,
@@ -1018,7 +1019,7 @@ module ccip::fee_quoter {
             };
 
         assert!(
-            msg_fee_juels <= (state.max_fee_juels_per_msg as u256),
+            msg_fee_juels <= state.max_fee_juels_per_msg,
             error::invalid_argument(E_MESSAGE_FEE_TOO_HIGH)
         );
 
@@ -1303,11 +1304,17 @@ module ccip::fee_quoter {
         from_token: address,
         from_token_amount: u64,
         to_token: address
-    ): u256 {
+    ): u64 {
         let from_token_price = get_token_price_internal(state, from_token);
         let to_token_price = get_token_price_internal(state, to_token);
 
-        ((from_token_amount as u256) * from_token_price.price) / to_token_price.price
+        let to_token_amount =
+            ((from_token_amount as u256) * from_token_price.price) / to_token_price.price;
+        assert!(
+            to_token_amount <= MAX_U64,
+            error::invalid_argument(E_TO_TOKEN_AMOUNT_TOO_LARGE)
+        );
+        to_token_amount as u64
     }
 
     inline fun validate_message(

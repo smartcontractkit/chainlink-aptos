@@ -65,7 +65,7 @@ module ccip::onramp {
         extra_args: vector<u8>,
         fee_token: address,
         fee_token_amount: u64,
-        fee_value_juels: u256,
+        fee_value_juels: u64,
         token_amounts: vector<Aptos2AnyTokenTransfer>
     }
 
