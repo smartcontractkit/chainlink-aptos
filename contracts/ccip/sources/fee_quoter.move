@@ -25,8 +25,8 @@ module ccip::fee_quoter {
     use std::timestamp;
     use std::vector;
 
-    use ccip::client;
     use ccip::eth_abi;
+    use ccip::internal;
     use ccip::ownable;
     use ccip::state_object;
 
@@ -589,13 +589,13 @@ module ccip::fee_quoter {
 
     // TODO: should this be public?
     public(friend) fun get_validated_fee(
-        dest_chain_selector: u64, message: &client::Aptos2AnyMessage
+        dest_chain_selector: u64, message: &internal::Aptos2AnyMessage
     ): u64 acquires FeeQuoterState {
         let (receiver, data, fee_token, _fee_token_store, extra_args) =
-            client::get_aptos2any_fields(message);
+            internal::get_aptos2any_fields(message);
 
         let (local_token_addresses, local_token_amounts) =
-            client::get_aptos2any_token_transfers(message);
+            internal::get_aptos2any_token_transfers(message);
 
         let state = borrow_state_mut();
 

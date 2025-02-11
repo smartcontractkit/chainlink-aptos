@@ -11,9 +11,9 @@ module ccip::onramp {
     use std::smart_table::{Self, SmartTable};
     use std::vector;
 
-    use ccip::client;
     use ccip::eth_abi;
     use ccip::fee_quoter;
+    use ccip::internal;
     use ccip::merkle_multi_proof;
     use ccip::ownable;
     use ccip::rmn_remote;
@@ -207,7 +207,7 @@ module ccip::onramp {
         extra_args: vector<u8>
     ): u64 {
         let message =
-            client::new_aptos2any_message(
+            internal::new_aptos2any_message(
                 receiver,
                 data,
                 token_addresses,
@@ -221,7 +221,7 @@ module ccip::onramp {
     }
 
     inline fun get_fee_internal(
-        dest_chain_selector: u64, message: &client::Aptos2AnyMessage
+        dest_chain_selector: u64, message: &internal::Aptos2AnyMessage
     ): u64 {
         assert!(
             !rmn_remote::is_cursed_u128(dest_chain_selector as u128),
@@ -298,7 +298,7 @@ module ccip::onramp {
         );
 
         let message =
-            client::new_aptos2any_message(
+            internal::new_aptos2any_message(
                 receiver,
                 data,
                 token_addresses,
