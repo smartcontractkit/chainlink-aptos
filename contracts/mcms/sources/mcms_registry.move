@@ -71,62 +71,50 @@ module mcms::mcms_registry {
         final_object_seed
     }
 
-    public(friend) fun create_preregistered_object_signer(
-        object_seed: vector<u8>
-    ): signer {
-        let expected_address = get_preregistered_address_internal(object_seed);
-
-        assert!(
-            !object::is_object(expected_address),
-            error::invalid_state(E_OBJECT_ALREADY_EXISTS)
-        );
-
-        let mcms_signer = mcms_account::get_signer();
-
-        let owner_constructor_ref =
-            object::create_named_object(
-                &mcms_signer, preregistered_object_seed(object_seed)
-            );
-
-        let owner_extend_ref = object::generate_extend_ref(&owner_constructor_ref);
-        let owner_transfer_ref = object::generate_transfer_ref(&owner_constructor_ref);
-
-        let owner_signer = object::generate_signer(&owner_constructor_ref);
-        move_to(
-            &owner_signer,
-            MCMSRegistration {
-                is_self_owner: true,
-                owner_extend_ref,
-                owner_transfer_ref,
-                registered_modules: smart_table::new(),
-                executing_callback_params: option::none()
-            }
-        );
-
-        // TODO: add event
-
-        owner_signer
-    }
-
-    public(friend) fun get_preregistered_object_signer(
+    public(friend) fun create_or_get_preregistered_object_signer(
         object_seed: vector<u8>
     ): signer acquires MCMSRegistration {
-        let expected_address = get_preregistered_address(object_seed);
-        assert!(
-            object::object_exists<MCMSRegistration>(expected_address),
-            error::invalid_state(E_MISSING_REGISTRATION)
-        );
-        let registration = borrow_registration(expected_address);
-        let owner_signer =
-            object::generate_signer_for_extending(&registration.owner_extend_ref);
+        let expected_address = get_preregistered_address_internal(object_seed);
 
-        // This occurs if the object has a callback registered using register(), but was not deployed using object_publish().
-        assert!(
-            signer::address_of(&owner_signer) == expected_address,
-            error::invalid_state(E_NOT_PREREGISTERED_OBJECT)
-        );
+        if (!object::object_exists<MCMSRegistration>(expected_address)) {
+            let mcms_signer = mcms_account::get_signer();
 
-        owner_signer
+            let owner_constructor_ref =
+                object::create_named_object(
+                    &mcms_signer, preregistered_object_seed(object_seed)
+                );
+
+            let owner_extend_ref = object::generate_extend_ref(&owner_constructor_ref);
+            let owner_transfer_ref =
+                object::generate_transfer_ref(&owner_constructor_ref);
+
+            let owner_signer = object::generate_signer(&owner_constructor_ref);
+            move_to(
+                &owner_signer,
+                MCMSRegistration {
+                    is_self_owner: true,
+                    owner_extend_ref,
+                    owner_transfer_ref,
+                    registered_modules: smart_table::new(),
+                    executing_callback_params: option::none()
+                }
+            );
+
+            // TODO: add event
+
+            owner_signer
+        } else {
+            let registration = borrow_registration(expected_address);
+            let owner_signer =
+                object::generate_signer_for_extending(&registration.owner_extend_ref);
+
+            // This occurs if the object has a callback registered using register(), but was not deployed using object_publish().
+            assert!(
+                signer::address_of(&owner_signer) == expected_address,
+                error::invalid_state(E_NOT_PREREGISTERED_OBJECT)
+            );
+            owner_signer
+        }
     }
 
     #[view]

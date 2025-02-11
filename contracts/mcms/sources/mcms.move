@@ -496,21 +496,6 @@ module mcms::mcms {
                 metadata_serialized,
                 code
             );
-        } else if (function_name_bytes == b"owned_object_upgrade") {
-            let object_seed = bcs_stream::deserialize_vector_u8(&mut stream);
-            let metadata_serialized = bcs_stream::deserialize_vector_u8(&mut stream);
-            let code =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
-                );
-            bcs_stream::assert_is_consumed(&stream);
-            owned_object_upgrade(
-                &self_signer,
-                object_seed,
-                metadata_serialized,
-                code
-            );
         } else {
             abort error::invalid_argument(E_UNKNOWN_MCMS_MODULE_FUNCTION)
         }
@@ -694,6 +679,15 @@ module mcms::mcms {
         mcms_registry::get_preregistered_address(object_seed)
     }
 
+    // Publishes a module under a managed preregistered address. This allows
+    // the signer passed in get_callback_params() to be for the published
+    // module itself. Note that this gives the published module permission
+    // to manage object ownership, eg. transfer away from MCMS if desired.
+    //
+    // We only have a single function for both publish and upgrades.
+    // There is no real advantage to have both, because after an initial package
+    // deploy, the `upgrade` function supports both publishing new packages and
+    // upgrades anyway (even in 0x1::object_code_deployment).
     public entry fun owned_object_publish(
         caller: &signer,
         object_seed: vector<u8>,
@@ -705,22 +699,7 @@ module mcms::mcms {
         assert_only_owner(state, caller);
 
         let object_signer =
-            mcms_registry::create_preregistered_object_signer(object_seed);
-
-        code::publish_package_txn(&object_signer, metadata_serialized, code);
-    }
-
-    public entry fun owned_object_upgrade(
-        caller: &signer,
-        object_seed: vector<u8>,
-        metadata_serialized: vector<u8>,
-        code: vector<vector<u8>>
-    ) acquires MCMSState {
-        let state = borrow_state();
-
-        assert_only_owner(state, caller);
-
-        let object_signer = mcms_registry::get_preregistered_object_signer(object_seed);
+            mcms_registry::create_or_get_preregistered_object_signer(object_seed);
 
         code::publish_package_txn(&object_signer, metadata_serialized, code);
     }
