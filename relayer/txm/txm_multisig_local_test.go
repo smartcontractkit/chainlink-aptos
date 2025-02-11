@@ -141,8 +141,9 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	require.NoError(t, err)
 
 	// deploy mcms module
+	deployId := uuid.New().String()
 	err = txm.Enqueue(
-		uuid.New().String(),
+		deployId,
 		getSampleTxMetadata(),
 		deployerAddress,
 		deployerPublicKeyHex,
@@ -153,6 +154,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		/* simulateTx= */ true,
 	)
 	require.NoError(t, err)
+	waitForTxmId(t, txm, deployId, time.Second*30)
 
 	logger.Infow("published module", "deployerAddress", deployerAddress, "mcmsAddress", mcmsAddress)
 
@@ -443,9 +445,67 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 			waitForTxmId(t, txm, txId, time.Second*30)
 		}
 
+		executeStagedOp := func(index int) {
+			logger.Debugw("Executing op", "index", index)
+
+			// offset +1 to account for the root metadata
+			proof := merkleTree.getProof(index + 1)
+			op := &ops[index]
+			require.True(t, merkleTree.verifyProof(proof, hashOp(op)))
+
+			stageId := uuid.New().String()
+			err := txm.Enqueue(
+				stageId,
+				getSampleTxMetadata(),
+				deployerAddress,
+				deployerPublicKeyHex,
+				mcmsAddress+"::mcms_executor::stage_data",
+				[]string{},
+				[]string{"vector<u8>", "vector<vector<u8>>"},
+				[]any{op.Data, proof},
+				/* simulateTx= */ true)
+			require.NoError(t, err)
+
+			waitForTxmId(t, txm, stageId, time.Second*30)
+
+			executeId := uuid.New().String()
+			err = txm.Enqueue(
+				executeId,
+				getSampleTxMetadata(),
+				deployerAddress,
+				deployerPublicKeyHex,
+				mcmsAddress+"::mcms_executor::stage_data_and_execute",
+				[]string{},
+				[]string{
+					"u256",
+					"address",
+					"u64",
+					"address",
+					"0x1::string::String",
+					"0x1::string::String",
+					"vector<u8>",
+					"vector<vector<u8>>",
+				},
+				[]any{
+					op.ChainID,
+					op.MultiSig,
+					op.Nonce,
+					op.To,
+					op.ModuleName,
+					op.Function,
+					[]byte{},
+					[][]byte{},
+				},
+				/* simulateTx= */ true,
+			)
+			require.NoError(t, err)
+
+			waitForTxmId(t, txm, executeId, time.Second*30)
+		}
+
 		logger.Infow("executing ops")
 		executeOp(0)
-		executeOp(1)
+		executeStagedOp(1)
 		executeOp(2)
 		executeOp(3)
 
