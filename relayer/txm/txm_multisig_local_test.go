@@ -163,7 +163,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		pollEndTime := time.Now().Add(time.Second * 3)
 		var resource map[string]any
 		for time.Now().Before(pollEndTime) {
-			resource, err = client.AccountResource(mcmsAccount, mcmsAddress+"::mcms::MCMSState")
+			resource, err = client.AccountResource(mcmsAccount, mcmsAddress+"::mcms::MultisigState")
 			if err != nil {
 				time.Sleep(time.Second * 1)
 				continue
@@ -310,7 +310,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 			getSampleTxMetadata(),
 			deployerAddress,
 			deployerPublicKeyHex,
-			mcmsAddress+"::mcms::transfer_ownership_to_self",
+			mcmsAddress+"::mcms_account::transfer_ownership_to_self",
 			[]string{},
 			[]string{},
 			[]any{},
@@ -319,22 +319,39 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		require.NoError(t, err)
 		waitForTxmId(t, txm, transferOwnershipId, time.Second*30)
 
-		userObjectSeed := []byte("mcms_owned_user_contract")
-		registryObjectSeed := append([]byte("CHAINLINK_MCMS_PREREGISTRATION"), userObjectSeed...)
-		userModuleAccount := mcmsAccount.NamedObjectAddress(registryObjectSeed)
+		newOwnerSeed := []byte("mcms_user_contract")
+		codeObjectOwnerAccount := mcmsAccount.ResourceAccount(append([]byte("CHAINLINK_MCMS_NEW_OBJECT_REGISTRATION"), newOwnerSeed...))
 
-		logger.Debugw("Preregistered user module account", "address", userModuleAccount.String())
+		objectCodeDeploymentSeparator := []byte("aptos_framework::object_code_deployment")
+		objectCodeDeploymentSeparatorBytes, err := bcs.SerializeSingle(func(ser *bcs.Serializer) {
+			ser.WriteBytes(objectCodeDeploymentSeparator)
+		})
+		require.NoError(t, err)
+		sequenceOneBytes, err := bcs.SerializeSingle(func(ser *bcs.Serializer) {
+			ser.U64(1)
+		})
+		require.NoError(t, err)
+
+		userModuleAccount := codeObjectOwnerAccount.NamedObjectAddress(append(objectCodeDeploymentSeparatorBytes, sequenceOneBytes...))
+
+		logger.Debugw("Preregistered user module account", "owner address", codeObjectOwnerAccount.String(), "code object address", userModuleAccount.String())
 
 		mcmsUserPackageMetadataBytes, mcmsUserModuleBytecodeBytes := compileMcmsUserContract(t, userModuleAccount, mcmsAccount)
 
-		ownedObjectPublishBytes, err := bcs.SerializeSingle(func(ser *bcs.Serializer) {
-			ser.WriteBytes(userObjectSeed)
+		stageCodeChunkAndPublishToAccountBytes, err := bcs.SerializeSingle(func(ser *bcs.Serializer) {
 			ser.WriteBytes(mcmsUserPackageMetadataBytes)
-			// length of the vector<vector<u8>>
+
+			// code_indices = [0]
+			ser.Uleb128(1)
+			ser.U16(0)
+
+			// code_chunks = [user module bytecode]
 			ser.Uleb128(1)
 			ser.WriteBytes(mcmsUserModuleBytecodeBytes)
+
+			// new owner seed
+			ser.WriteBytes(newOwnerSeed)
 		})
-		require.NoError(t, err)
 
 		ops := []Op{
 			{
@@ -342,19 +359,18 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 				MultiSig:   mcmsAccount,
 				Nonce:      getNextNonce(),
 				To:         mcmsAccount,
-				ModuleName: "mcms",
+				ModuleName: "mcms_account",
 				Function:   "accept_ownership",
 				Data:       []byte{},
 			},
-
 			{
 				ChainID:    chainIdBig,
 				MultiSig:   mcmsAccount,
 				Nonce:      getNextNonce(),
 				To:         mcmsAccount,
-				ModuleName: "mcms",
-				Function:   "owned_object_publish",
-				Data:       ownedObjectPublishBytes,
+				ModuleName: "mcms_deployer",
+				Function:   "stage_code_chunk_and_publish_to_object",
+				Data:       stageCodeChunkAndPublishToAccountBytes,
 			},
 			{
 				ChainID:    chainIdBig,
@@ -445,67 +461,9 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 			waitForTxmId(t, txm, txId, time.Second*30)
 		}
 
-		executeStagedOp := func(index int) {
-			logger.Debugw("Executing op", "index", index)
-
-			// offset +1 to account for the root metadata
-			proof := merkleTree.getProof(index + 1)
-			op := &ops[index]
-			require.True(t, merkleTree.verifyProof(proof, hashOp(op)))
-
-			stageId := uuid.New().String()
-			err := txm.Enqueue(
-				stageId,
-				getSampleTxMetadata(),
-				deployerAddress,
-				deployerPublicKeyHex,
-				mcmsAddress+"::mcms_executor::stage_data",
-				[]string{},
-				[]string{"vector<u8>", "vector<vector<u8>>"},
-				[]any{op.Data, proof},
-				/* simulateTx= */ true)
-			require.NoError(t, err)
-
-			waitForTxmId(t, txm, stageId, time.Second*30)
-
-			executeId := uuid.New().String()
-			err = txm.Enqueue(
-				executeId,
-				getSampleTxMetadata(),
-				deployerAddress,
-				deployerPublicKeyHex,
-				mcmsAddress+"::mcms_executor::stage_data_and_execute",
-				[]string{},
-				[]string{
-					"u256",
-					"address",
-					"u64",
-					"address",
-					"0x1::string::String",
-					"0x1::string::String",
-					"vector<u8>",
-					"vector<vector<u8>>",
-				},
-				[]any{
-					op.ChainID,
-					op.MultiSig,
-					op.Nonce,
-					op.To,
-					op.ModuleName,
-					op.Function,
-					[]byte{},
-					[][]byte{},
-				},
-				/* simulateTx= */ true,
-			)
-			require.NoError(t, err)
-
-			waitForTxmId(t, txm, executeId, time.Second*30)
-		}
-
 		logger.Infow("executing ops")
 		executeOp(0)
-		executeStagedOp(1)
+		executeOp(1)
 		executeOp(2)
 		executeOp(3)
 
@@ -731,14 +689,15 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	}
 }
 
-func compileMcmsContract(t *testing.T, packageAddress aptos.AccountAddress, deployerAddress aptos.AccountAddress) ([]byte, [][]byte) {
+func compileMcmsContract(t *testing.T, packageAddress aptos.AccountAddress, ownerAddress aptos.AccountAddress) ([]byte, [][]byte) {
 	compileResult := testutils.CompileMovePackage(t, "mcms", map[string]aptos.AccountAddress{
-		"mcms":          packageAddress,
-		"mcms_deployer": deployerAddress,
+		"mcms":       packageAddress,
+		"mcms_owner": ownerAddress,
 	}, []string{
 		"bcs_stream",
 		"mcms_account",
 		"mcms_registry",
+		"mcms_deployer",
 		"mcms",
 		"mcms_executor",
 	})
@@ -750,6 +709,16 @@ func compileMcmsUserContract(t *testing.T, packageAddress, mcmsAddress aptos.Acc
 	compileResult := testutils.CompileMovePackage(t, "mcms_test", map[string]aptos.AccountAddress{
 		"mcms_test": packageAddress,
 		"mcms":      mcmsAddress,
+	}, nil)
+
+	require.Equal(t, 1, len(compileResult.BytecodeModules))
+	return compileResult.PackageMetadata, compileResult.BytecodeModules[0]
+}
+
+func compileMcmsLargePackagesContract(t *testing.T, packageAddress, mcmsAddress aptos.AccountAddress) ([]byte, []byte) {
+	compileResult := testutils.CompileMovePackage(t, "mcms_large_packages", map[string]aptos.AccountAddress{
+		"mcms_large_packages": packageAddress,
+		"mcms":                mcmsAddress,
 	}, nil)
 
 	require.Equal(t, 1, len(compileResult.BytecodeModules))
