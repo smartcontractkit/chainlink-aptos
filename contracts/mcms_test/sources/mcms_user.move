@@ -46,7 +46,7 @@ module mcms_test::mcms_user {
             }
         );
 
-        mcms_registry::register(
+        mcms_registry::register_entrypoint(
             publisher, string::utf8(b"mcms_user"), SampleMcmsCallback {}
         );
     }
