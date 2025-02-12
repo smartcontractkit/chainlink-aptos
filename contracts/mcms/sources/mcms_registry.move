@@ -65,6 +65,7 @@ module mcms::mcms_registry {
     const E_NOT_REGISTERED: u64 = 10;
     const E_INVALID_CODE_OBJECT: u64 = 11;
     const E_OWNER_ALREADY_REGISTERED: u64 = 12;
+    const E_NOT_CODE_OBJECT_OWNER: u64 = 13;
 
     fun init_module(publisher: &signer) {
         move_to(publisher, RegistryState { registered_addresses: smart_table::new() });
@@ -126,6 +127,40 @@ module mcms::mcms_registry {
 
         let state = borrow_state_mut();
         register_object_owner_for_existing_code_object_internal(state, object_address);
+    }
+
+    /// Transfers ownership of a code object to a new owner. Note that this does not unregister
+    /// the entrypoint or remove the previous owner from the registry.
+    public entry fun transfer_code_object(
+        caller: &signer, object_address: address, new_owner_address: address
+    ) acquires RegistryState, OwnerRegistration {
+        mcms_account::assert_is_owner(caller);
+
+        assert!(
+            object::object_exists<PackageRegistry>(object_address),
+            error::invalid_argument(E_INVALID_CODE_OBJECT)
+        );
+
+        let code_object = object::address_to_object<PackageRegistry>(object_address);
+
+        let state = borrow_state();
+        assert!(
+            smart_table::contains(&state.registered_addresses, object_address),
+            error::invalid_argument(E_NOT_REGISTERED)
+        );
+
+        let owner_address =
+            *smart_table::borrow(&state.registered_addresses, object_address);
+        assert!(
+            object::owner(code_object) == owner_address,
+            error::invalid_state(E_NOT_CODE_OBJECT_OWNER)
+        );
+
+        let owner_registration = borrow_owner_registration(owner_address);
+        let owner_signer =
+            &account::create_signer_with_capability(&owner_registration.owner_cap);
+
+        object::transfer(owner_signer, code_object, new_owner_address);
     }
 
     public(friend) fun register_object_owner_for_new_code_object(
