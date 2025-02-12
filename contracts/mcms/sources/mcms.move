@@ -12,19 +12,18 @@ module mcms::mcms {
     use std::aptos_hash::keccak256;
     use std::bcs;
     use std::chain_id;
-    use std::code;
     use std::error;
     use std::event;
     use std::option;
     use std::secp256k1;
     use std::simple_map::{SimpleMap, Self};
-    use std::signer;
     use std::string::{Self, String};
     use std::timestamp;
     use std::vector;
 
     use mcms::bcs_stream;
     use mcms::mcms_account;
+    use mcms::mcms_deployer;
     use mcms::mcms_registry;
 
     // MCM Consts
@@ -41,9 +40,6 @@ module mcms::mcms {
     const MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP: vector<u8> = x"e5a6d1256b00d7ec22512b6b60a3f4d75c559745d2dbf309f77b8b756caabe14";
 
     struct MCMSState has key, store, drop {
-        owner: address,
-        pending_owner: address,
-
         // signers is used to easily validate the existence of the signer by its address. We still
         // have signers stored in config in order to easily deactivate them when a new config is set.
         signers: SimpleMap<vector<u8>, Signer>,
@@ -124,20 +120,6 @@ module mcms::mcms {
         data: vector<u8>
     }
 
-    #[event]
-    struct OwnershipTransferRequested has store, drop {
-        from: address,
-        to: address
-    }
-
-    #[event]
-    struct OwnershipTransferred has store, drop {
-        from: address,
-        to: address
-    }
-
-    // Error Codes
-
     const E_NO_MULTISIG: u64 = 1;
     const E_ALREADY_SEEN_HASH: u64 = 2;
     const E_POST_OP_COUNT_REACHED: u64 = 3;
@@ -166,24 +148,19 @@ module mcms::mcms {
     const E_INVALID_V_SIGNATURE: u64 = 26;
     const E_FAILED_ECDSA_RECOVER: u64 = 27;
     const E_INVALID_ROOT_LEN: u64 = 28;
-    const E_UNATHORIZED: u64 = 29;
-    const E_CALLBACK_PARAMS_NOT_CONSUMED: u64 = 30;
-    const E_MODULE_NAME_TOO_LONG: u64 = 31;
-    const E_FUNCTION_NAME_TOO_LONG: u64 = 32;
-    const E_INVALID_SIGNER_ADDR_LEN: u64 = 33;
-    const E_INVALID_SIGNATURE_LEN: u64 = 34;
-    const E_UNKNOWN_MCMS_MODULE_FUNCTION: u64 = 35;
-    const E_UNKNOWN_FRAMEWORK_MODULE_FUNCTION: u64 = 36;
-    const E_UNKNOWN_FRAMEWORK_MODULE: u64 = 37;
-    const E_CANNOT_TRANSFER_TO_SELF: u64 = 38;
-    const E_MUST_BE_PROPOSED_OWNER: u64 = 39;
+    const E_CALLBACK_PARAMS_NOT_CONSUMED: u64 = 29;
+    const E_MODULE_NAME_TOO_LONG: u64 = 30;
+    const E_FUNCTION_NAME_TOO_LONG: u64 = 31;
+    const E_INVALID_SIGNER_ADDR_LEN: u64 = 32;
+    const E_INVALID_SIGNATURE_LEN: u64 = 33;
+    const E_UNKNOWN_MCMS_MODULE_FUNCTION: u64 = 34;
+    const E_UNKNOWN_FRAMEWORK_MODULE_FUNCTION: u64 = 35;
+    const E_UNKNOWN_FRAMEWORK_MODULE: u64 = 36;
 
     fun init_module(publisher: &signer) {
         move_to(
             publisher,
             MCMSState {
-                owner: @mcms_owner,
-                pending_owner: @0x0,
                 signers: simple_map::new(),
                 config: Config {
                     signers: vector[],
@@ -453,14 +430,14 @@ module mcms::mcms {
     ) {
         let module_name_bytes = *string::bytes(&module_name);
         let function_name_bytes = *string::bytes(&function_name);
-        if (receiver == @mcms && module_name_bytes == b"mcms") {
-            // dispatch to this module's functions for ownership transfers and setting config.
-            // any calls would only succeed if ownership has been transferred to this module's
-            // state address.
-            dispatch_to_self(function_name_bytes, data);
-        } else if (receiver == @0x1) {
-            // dispatch to framework functions to allow mcms upgrades.
-            dispatch_to_framework(module_name_bytes, function_name_bytes, data);
+        if (receiver == @mcms) {
+            if (module_name_bytes == b"mcms_account") {
+                // dispatch to the account module's functions for ownership transfers and setting config.
+                dispatch_to_account(function_name_bytes, data);
+            } else if (module_name_bytes == b"mcms_deployer") {
+                // dispatch to the deployer module's functions for deploying and upgrading contracts.
+                dispatch_to_deployer(function_name_bytes, data);
+            }
         } else {
             let object_meta =
                 mcms_registry::start_dispatch(receiver, module_name, function_name, data);
@@ -469,7 +446,7 @@ module mcms::mcms {
         }
     }
 
-    inline fun dispatch_to_self(
+    inline fun dispatch_to_account(
         function_name_bytes: vector<u8>, data: vector<u8>
     ) {
         let self_signer = mcms_account::get_signer();
@@ -477,51 +454,81 @@ module mcms::mcms {
         if (function_name_bytes == b"transfer_ownership") {
             let to = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            transfer_ownership(&self_signer, to);
+            mcms_account::transfer_ownership(&self_signer, to);
         } else if (function_name_bytes == b"accept_ownership") {
             bcs_stream::assert_is_consumed(&stream);
-            accept_ownership(&self_signer);
-        } else if (function_name_bytes == b"owned_object_publish") {
-            let object_seed = bcs_stream::deserialize_vector_u8(&mut stream);
-            let metadata_serialized = bcs_stream::deserialize_vector_u8(&mut stream);
-            let code =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
-                );
-            bcs_stream::assert_is_consumed(&stream);
-            owned_object_publish(
-                &self_signer,
-                object_seed,
-                metadata_serialized,
-                code
-            );
+            mcms_account::accept_ownership(&self_signer);
         } else {
             abort error::invalid_argument(E_UNKNOWN_MCMS_MODULE_FUNCTION)
         }
     }
 
-    inline fun dispatch_to_framework(
-        module_name_bytes: vector<u8>, function_name_bytes: vector<u8>, data: vector<u8>
+    inline fun dispatch_to_deployer(
+        function_name_bytes: vector<u8>, data: vector<u8>
     ) {
         let self_signer = mcms_account::get_signer();
         let stream = bcs_stream::new(data);
-        if (module_name_bytes == b"code") {
-            if (function_name_bytes == b"publish_package_txn") {
-                // TODO: invalidate that we can upgrade ourselves while executing inside the same package.
-                let metadata_serialized = bcs_stream::deserialize_vector_u8(&mut stream);
-                let code =
-                    bcs_stream::deserialize_vector(
-                        &mut stream,
-                        |stream| { bcs_stream::deserialize_vector_u8(stream) }
-                    );
-                bcs_stream::assert_is_consumed(&stream);
-                code::publish_package_txn(&self_signer, metadata_serialized, code);
-            } else {
-                abort error::invalid_argument(E_UNKNOWN_FRAMEWORK_MODULE_FUNCTION)
-            }
+
+        if (function_name_bytes == b"stage_code_chunk") {
+            let metadata_chunk = bcs_stream::deserialize_vector_u8(&mut stream);
+            let code_indices =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_u16(stream) }
+                );
+            let code_chunks =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
+                );
+            mcms_deployer::stage_code_chunk(
+                &self_signer,
+                metadata_chunk,
+                code_indices,
+                code_chunks
+            );
+        } else if (function_name_bytes == b"stage_code_chunk_and_publish_to_object") {
+            let metadata_chunk = bcs_stream::deserialize_vector_u8(&mut stream);
+            let code_indices =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_u16(stream) }
+                );
+            let code_chunks =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
+                );
+            let new_owner_seed = bcs_stream::deserialize_vector_u8(&mut stream);
+            mcms_deployer::stage_code_chunk_and_publish_to_object(
+                &self_signer,
+                metadata_chunk,
+                code_indices,
+                code_chunks,
+                new_owner_seed
+            );
+        } else if (function_name_bytes == b"stage_code_chunk_and_upgrade_object_code") {
+            let metadata_chunk = bcs_stream::deserialize_vector_u8(&mut stream);
+            let code_indices =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_u16(stream) }
+                );
+            let code_chunks =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
+                );
+            let code_object_address = bcs_stream::deserialize_address(&mut stream);
+            mcms_deployer::stage_code_chunk_and_upgrade_object_code(
+                &self_signer,
+                metadata_chunk,
+                code_indices,
+                code_chunks,
+                code_object_address
+            );
         } else {
-            abort error::invalid_argument(E_UNKNOWN_FRAMEWORK_MODULE)
+            abort error::invalid_argument(E_UNKNOWN_MCMS_MODULE_FUNCTION)
         }
     }
 
@@ -533,9 +540,9 @@ module mcms::mcms {
         group_parents: vector<u8>,
         clear_root: bool
     ) acquires MCMSState {
-        let state = borrow_state_mut();
+        mcms_account::assert_is_owner(caller);
 
-        assert_only_owner(state, caller);
+        let state = borrow_state_mut();
 
         assert!(
             vector::length(&signer_addresses) != 0
@@ -671,90 +678,6 @@ module mcms::mcms {
         };
 
         event::emit(ConfigSet { config: state.config, is_root_cleared: clear_root });
-    }
-
-    // Object publish and upgrade functions
-    #[view]
-    public fun owned_object_address(object_seed: vector<u8>): address {
-        mcms_registry::get_preregistered_address(object_seed)
-    }
-
-    // Publishes a module under a managed preregistered address. This allows
-    // the signer passed in get_callback_params() to be for the published
-    // module itself. Note that this gives the published module permission
-    // to manage object ownership, eg. transfer away from MCMS if desired.
-    //
-    // We only have a single function for both publish and upgrades.
-    // There is no real advantage to have both, because after an initial package
-    // deploy, the `upgrade` function supports both publishing new packages and
-    // upgrades anyway (even in 0x1::object_code_deployment).
-    public entry fun owned_object_publish(
-        caller: &signer,
-        object_seed: vector<u8>,
-        metadata_serialized: vector<u8>,
-        code: vector<vector<u8>>
-    ) acquires MCMSState {
-        let state = borrow_state();
-
-        assert_only_owner(state, caller);
-
-        let object_signer =
-            mcms_registry::create_or_get_preregistered_object_signer(object_seed);
-
-        code::publish_package_txn(&object_signer, metadata_serialized, code);
-    }
-
-    // Ownable functions
-    public entry fun transfer_ownership(caller: &signer, to: address) acquires MCMSState {
-        let state = borrow_state_mut();
-
-        assert_only_owner(state, caller);
-
-        assert!(
-            signer::address_of(caller) != to,
-            error::invalid_argument(E_CANNOT_TRANSFER_TO_SELF)
-        );
-
-        state.pending_owner = to;
-
-        event::emit(OwnershipTransferRequested { from: state.owner, to });
-    }
-
-    public entry fun transfer_ownership_to_self(caller: &signer) acquires MCMSState {
-        transfer_ownership(caller, @mcms);
-    }
-
-    public fun accept_ownership(caller: &signer) acquires MCMSState {
-        let state = borrow_state_mut();
-
-        let caller_address = signer::address_of(caller);
-        assert!(
-            caller_address == state.pending_owner,
-            error::permission_denied(E_MUST_BE_PROPOSED_OWNER)
-        );
-
-        let previous_owner = state.owner;
-        state.owner = caller_address;
-        state.pending_owner = @0x0;
-
-        event::emit(OwnershipTransferred { from: previous_owner, to: state.owner });
-    }
-
-    #[view]
-    public fun owner(): address acquires MCMSState {
-        borrow_state().owner
-    }
-
-    #[view]
-    public fun is_self_owned(): bool acquires MCMSState {
-        owner() == @mcms
-    }
-
-    inline fun assert_only_owner(state: &MCMSState, caller: &signer) {
-        assert!(
-            state.owner == signer::address_of(caller),
-            error::permission_denied(E_UNATHORIZED)
-        );
     }
 
     inline fun borrow_state(): &MCMSState {
