@@ -39,7 +39,7 @@ module mcms::mcms {
     // keccak256("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP_APTOS")
     const MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP: vector<u8> = x"e5a6d1256b00d7ec22512b6b60a3f4d75c559745d2dbf309f77b8b756caabe14";
 
-    struct MCMSState has key, store, drop {
+    struct MultisigState has key, store, drop {
         // signers is used to easily validate the existence of the signer by its address. We still
         // have signers stored in config in order to easily deactivate them when a new config is set.
         signers: SimpleMap<vector<u8>, Signer>,
@@ -120,47 +120,46 @@ module mcms::mcms {
         data: vector<u8>
     }
 
-    const E_NO_MULTISIG: u64 = 1;
-    const E_ALREADY_SEEN_HASH: u64 = 2;
-    const E_POST_OP_COUNT_REACHED: u64 = 3;
-    const E_WRONG_CHAIN_ID: u64 = 4;
-    const E_WRONG_MULTISIG: u64 = 5;
-    const E_ROOT_EXPIRED: u64 = 6;
-    const E_WRONG_NONCE: u64 = 7;
-    const E_VALID_UNTIL_EXPIRED: u64 = 8;
-    const E_INVALID_SIGNER: u64 = 9;
-    const E_MISSING_CONFIG: u64 = 10;
-    const E_INSUFFICIENT_SIGNERS: u64 = 11;
-    const E_PROOF_CANNOT_BE_VERIFIED: u64 = 12;
-    const E_PENDING_OPS: u64 = 13;
-    const E_WRONG_PRE_OP_COUNT: u64 = 14;
-    const E_WRONG_POST_OP_COUNT: u64 = 15;
-    const E_INVALID_NUM_SIGNERS: u64 = 16;
-    const E_SIGNER_GROUPS_LEN_MISMATCH: u64 = 17;
-    const E_INVALID_GROUP_QUORUM_LEN: u64 = 18;
-    const E_INVALID_GROUP_PARENTS_LEN: u64 = 19;
-    const E_OUT_OF_BOUNDS_GROUP: u64 = 20;
-    const E_GROUP_TREE_NOT_WELL_FORMED: u64 = 21;
-    const E_SIGNER_IN_DISABLED_GROUP: u64 = 22;
-    const E_OUT_OF_BOUNDS_GROUP_QUORUM: u64 = 23;
-    const E_SIGNER_ADDR_MUST_BE_INCREASING: u64 = 24;
-    const E_CMP_VECTORS_DIFF_LEN: u64 = 25;
-    const E_INVALID_V_SIGNATURE: u64 = 26;
-    const E_FAILED_ECDSA_RECOVER: u64 = 27;
-    const E_INVALID_ROOT_LEN: u64 = 28;
-    const E_CALLBACK_PARAMS_NOT_CONSUMED: u64 = 29;
-    const E_MODULE_NAME_TOO_LONG: u64 = 30;
-    const E_FUNCTION_NAME_TOO_LONG: u64 = 31;
-    const E_INVALID_SIGNER_ADDR_LEN: u64 = 32;
-    const E_INVALID_SIGNATURE_LEN: u64 = 33;
-    const E_UNKNOWN_MCMS_MODULE_FUNCTION: u64 = 34;
-    const E_UNKNOWN_FRAMEWORK_MODULE_FUNCTION: u64 = 35;
-    const E_UNKNOWN_FRAMEWORK_MODULE: u64 = 36;
+    const E_ALREADY_SEEN_HASH: u64 = 1;
+    const E_POST_OP_COUNT_REACHED: u64 = 2;
+    const E_WRONG_CHAIN_ID: u64 = 3;
+    const E_WRONG_MULTISIG: u64 = 4;
+    const E_ROOT_EXPIRED: u64 = 5;
+    const E_WRONG_NONCE: u64 = 6;
+    const E_VALID_UNTIL_EXPIRED: u64 = 7;
+    const E_INVALID_SIGNER: u64 = 8;
+    const E_MISSING_CONFIG: u64 = 9;
+    const E_INSUFFICIENT_SIGNERS: u64 = 10;
+    const E_PROOF_CANNOT_BE_VERIFIED: u64 = 11;
+    const E_PENDING_OPS: u64 = 12;
+    const E_WRONG_PRE_OP_COUNT: u64 = 13;
+    const E_WRONG_POST_OP_COUNT: u64 = 14;
+    const E_INVALID_NUM_SIGNERS: u64 = 15;
+    const E_SIGNER_GROUPS_LEN_MISMATCH: u64 = 16;
+    const E_INVALID_GROUP_QUORUM_LEN: u64 = 17;
+    const E_INVALID_GROUP_PARENTS_LEN: u64 = 18;
+    const E_OUT_OF_BOUNDS_GROUP: u64 = 19;
+    const E_GROUP_TREE_NOT_WELL_FORMED: u64 = 20;
+    const E_SIGNER_IN_DISABLED_GROUP: u64 = 21;
+    const E_OUT_OF_BOUNDS_GROUP_QUORUM: u64 = 22;
+    const E_SIGNER_ADDR_MUST_BE_INCREASING: u64 = 23;
+    const E_CMP_VECTORS_DIFF_LEN: u64 = 24;
+    const E_INVALID_V_SIGNATURE: u64 = 25;
+    const E_FAILED_ECDSA_RECOVER: u64 = 26;
+    const E_INVALID_ROOT_LEN: u64 = 27;
+    const E_CALLBACK_PARAMS_NOT_CONSUMED: u64 = 28;
+    const E_MODULE_NAME_TOO_LONG: u64 = 29;
+    const E_FUNCTION_NAME_TOO_LONG: u64 = 30;
+    const E_INVALID_SIGNER_ADDR_LEN: u64 = 31;
+    const E_INVALID_SIGNATURE_LEN: u64 = 32;
+    const E_UNKNOWN_MCMS_MODULE_FUNCTION: u64 = 33;
+    const E_UNKNOWN_FRAMEWORK_MODULE_FUNCTION: u64 = 34;
+    const E_UNKNOWN_FRAMEWORK_MODULE: u64 = 35;
 
     fun init_module(publisher: &signer) {
         move_to(
             publisher,
-            MCMSState {
+            MultisigState {
                 signers: simple_map::new(),
                 config: Config {
                     signers: vector[],
@@ -187,17 +186,17 @@ module mcms::mcms {
     // MCM Getters
 
     #[view]
-    public fun get_config(): Config acquires MCMSState {
+    public fun get_config(): Config acquires MultisigState {
         borrow_state().config
     }
 
     #[view]
-    public fun get_op_count(): u64 acquires MCMSState {
+    public fun get_op_count(): u64 acquires MultisigState {
         borrow_state().expiring_root_and_op_count.op_count
     }
 
     #[view]
-    public fun get_root(): (vector<u8>, u64) acquires MCMSState {
+    public fun get_root(): (vector<u8>, u64) acquires MultisigState {
         let state = borrow_state();
         (
             state.expiring_root_and_op_count.root,
@@ -206,7 +205,7 @@ module mcms::mcms {
     }
 
     #[view]
-    public fun get_root_metadata(): RootMetadata acquires MCMSState {
+    public fun get_root_metadata(): RootMetadata acquires MultisigState {
         borrow_state().root_metadata
     }
 
@@ -222,7 +221,7 @@ module mcms::mcms {
         override_previous_root: bool,
         metadata_proof: vector<vector<u8>>,
         signatures: vector<vector<u8>>
-    ) acquires MCMSState {
+    ) acquires MultisigState {
         let state = borrow_state_mut();
 
         let metadata = RootMetadata {
@@ -373,7 +372,7 @@ module mcms::mcms {
         function: String,
         data: vector<u8>,
         proof: vector<vector<u8>>
-    ) acquires MCMSState {
+    ) acquires MultisigState {
         let state = borrow_state_mut();
 
         let op = Op { chain_id, multisig, nonce, to, module_name, function, data };
@@ -539,7 +538,7 @@ module mcms::mcms {
         group_quorums: vector<u8>,
         group_parents: vector<u8>,
         clear_root: bool
-    ) acquires MCMSState {
+    ) acquires MultisigState {
         mcms_account::assert_is_owner(caller);
 
         let state = borrow_state_mut();
@@ -680,12 +679,12 @@ module mcms::mcms {
         event::emit(ConfigSet { config: state.config, is_root_cleared: clear_root });
     }
 
-    inline fun borrow_state(): &MCMSState {
-        borrow_global<MCMSState>(@mcms)
+    inline fun borrow_state(): &MultisigState {
+        borrow_global<MultisigState>(@mcms)
     }
 
-    inline fun borrow_state_mut(): &mut MCMSState {
-        borrow_global_mut<MCMSState>(@mcms)
+    inline fun borrow_state_mut(): &mut MultisigState {
+        borrow_global_mut<MultisigState>(@mcms)
     }
 
     inline fun ecdsa_recover_evm_addr(
@@ -1044,7 +1043,7 @@ module mcms::mcms {
     //     }
     //
     //     #[test_only]
-    //     fun call_execute(args: ExecuteArgs) acquires MCMSState {
+    //     fun call_execute(args: ExecuteArgs) acquires MultisigState {
     //         execute(
     //             args.chain_id,
     //             args.multisig,
@@ -1057,7 +1056,7 @@ module mcms::mcms {
     //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     //     public entry fun test_e2e(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //
     //         // set config
@@ -1137,7 +1136,7 @@ module mcms::mcms {
     //     }
     //
     //     #[test_only]
-    //     fun call_set_root(args: SetRootArgs) acquires MCMSState {
+    //     fun call_set_root(args: SetRootArgs) acquires MultisigState {
     //         set_root(
     //             args.root,
     //             args.valid_until,
@@ -1177,7 +1176,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_ALREADY_SEEN_HASH)]
     //     public entry fun test_set_root__already_seen_hash(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         set_config(
     //             owner,
@@ -1201,7 +1200,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_VALID_UNTIL_EXPIRED)]
     //     public entry fun test_set_root__valid_until_expired(
     //         deployer: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let set_root_args = default_set_root_args();
     //         set_root_args.valid_until = TIMESTAMP - 1; // set valid_until to a time in the past
@@ -1212,7 +1211,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_INVALID_ROOT_LEN)]
     //     public entry fun test_set_root__invalid_root_len(
     //         deployer: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let invalid_root =
     //             x"8ad6edb34398f637ca17e46b0b51ce50e18f56287aa0bf728ae3b5c4119c16";
@@ -1225,7 +1224,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_WRONG_CHAIN_ID)]
     //     public entry fun test_set_root__invalid_chain_id(
     //         deployer: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let set_root_args = default_set_root_args();
     //         set_root_args.chain_id = 111; // wrong chain id
@@ -1236,7 +1235,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_WRONG_MULTISIG)]
     //     public entry fun test_set_root__invalid_multisig_addr(
     //         deployer: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let set_root_args = default_set_root_args();
     //         set_root_args.multisig = @0x12345; // wrong multisig address
@@ -1247,10 +1246,10 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_PENDING_OPS)]
     //     public entry fun test_set_root__pending_ops(
     //         deployer: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         // modify state to add pending ops
-    //         let state = borrow_global_mut<MCMSState>(get_state_address());
+    //         let state = borrow_global_mut<MultisigState>(get_state_address());
     //         state.expiring_root_and_op_count = ExpiringRootAndOpCount {
     //             root: ROOT,
     //             valid_until: VALID_UNTIL,
@@ -1266,10 +1265,10 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_PROOF_CANNOT_BE_VERIFIED)]
     //     public entry fun test_set_root__override_previous_root(
     //         deployer: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         // modify state to add pending ops
-    //         let state = borrow_global_mut<MCMSState>(get_state_address());
+    //         let state = borrow_global_mut<MultisigState>(get_state_address());
     //         state.expiring_root_and_op_count = ExpiringRootAndOpCount {
     //             root: ROOT,
     //             valid_until: VALID_UNTIL,
@@ -1288,7 +1287,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_WRONG_PRE_OP_COUNT)]
     //     public entry fun test_set_root__wrong_pre_op_count(
     //         deployer: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let set_root_args = default_set_root_args();
     //         set_root_args.pre_op_count = 1; // wrong pre op count, should equal op count (0)
@@ -1299,9 +1298,9 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_WRONG_POST_OP_COUNT)]
     //     public entry fun test_set_root__wrong_post_op_count(
     //         deployer: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
-    //         let state = borrow_global_mut<MCMSState>(get_state_address());
+    //         let state = borrow_global_mut<MultisigState>(get_state_address());
     //         state.expiring_root_and_op_count = ExpiringRootAndOpCount {
     //             root: ROOT,
     //             valid_until: VALID_UNTIL,
@@ -1319,7 +1318,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_PROOF_CANNOT_BE_VERIFIED)]
     //     public entry fun test_set_root__empty_metadata_proof(
     //         deployer: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let set_root_args = default_set_root_args();
     //         set_root_args.metadata_proof = vector[]; // empty proof
@@ -1330,7 +1329,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_PROOF_CANNOT_BE_VERIFIED)]
     //     public entry fun test_set_root__metadata_not_consistent_with_proof(
     //         deployer: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let set_root_args = default_set_root_args();
     //         set_root_args.post_op_count = POST_OP_COUNT + 1; // post op count modified
@@ -1341,7 +1340,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_MISSING_CONFIG)]
     //     public entry fun test_set_root__config_not_set(
     //         deployer: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let set_root_args = default_set_root_args();
     //         set_root_args.signatures = vector[]; // no signatures
@@ -1352,7 +1351,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_SIGNER_ADDR_MUST_BE_INCREASING)]
     //     public entry fun test_set_root__out_of_order_signatures(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         set_config(
     //             owner,
@@ -1374,7 +1373,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_INVALID_SIGNER)]
     //     public entry fun test_set_root__signature_from_invalid_signer(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         set_config(
     //             owner,
@@ -1395,7 +1394,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_INSUFFICIENT_SIGNERS)]
     //     public entry fun test_set_root__signer_quorum_not_met(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         set_config(
     //             owner,
@@ -1414,7 +1413,7 @@ module mcms::mcms {
     //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     //     public entry fun test_set_root__success(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         set_config(
     //             owner,
@@ -1445,7 +1444,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_UNATHORIZED)]
     //     public entry fun test_set_config__caller_is_not_owner(
     //         deployer: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let (not_owner, _) = account::create_resource_account(deployer, b"seed123");
     //         set_config(
@@ -1462,7 +1461,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_INVALID_NUM_SIGNERS)]
     //     public entry fun test_set_config__invalid_number_of_signers(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         // empty signer addresses and groups
     //         let signer_addr = vector[];
@@ -1481,7 +1480,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_SIGNER_ADDR_MUST_BE_INCREASING)]
     //     public entry fun test_set_config__signers_must_be_distinct(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         // same signer address twice
     //         let signer_addr = vector[ADDR1, ADDR2, ADDR2];
@@ -1499,7 +1498,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_SIGNER_ADDR_MUST_BE_INCREASING)]
     //     public entry fun test_set_config__signers_must_be_increasing(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         // signer addresses out of order
     //         let signer_addr = vector[ADDR1, ADDR3, ADDR2];
@@ -1517,7 +1516,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_CMP_VECTORS_DIFF_LEN)]
     //     public entry fun test_set_config__invalid_signer_address(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         // signer address not 20 bytes
     //         let invalid_signer_addr = x"E37ca797F7fCCFbd9bb3bf8f812F19C3184df1";
@@ -1536,7 +1535,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_OUT_OF_BOUNDS_GROUP)]
     //     public entry fun test_set_config__out_of_bounds_signer_group(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
     //         // signer group out of bounds
@@ -1555,7 +1554,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_OUT_OF_BOUNDS_GROUP_QUORUM)]
     //     public entry fun test_set_config__out_of_bounds_group_quorum(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
     //         // group quorum out of bounds (greater than num signers)
@@ -1576,7 +1575,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_GROUP_TREE_NOT_WELL_FORMED)]
     //     public entry fun test_set_config__root_is_not_its_own_parent(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
     //         // group parent of root is group 1 (should be itself = group 0)
@@ -1595,7 +1594,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_GROUP_TREE_NOT_WELL_FORMED)]
     //     public entry fun test_set_config__non_root_is_its_own_parent(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
     //         // group parent of group 1 is itself (should be lower index group)
@@ -1614,7 +1613,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_GROUP_TREE_NOT_WELL_FORMED)]
     //     public entry fun test_set_config__group_parent_higher_index(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
     //         // group parent of group 1 is group 2 (should be lower index group)
@@ -1633,7 +1632,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_OUT_OF_BOUNDS_GROUP_QUORUM)]
     //     public entry fun test_set_config__quorum_cannot_be_met(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
     //         // group quorum of group 0 (root) is 4, which can never be met because there are only three child groups
@@ -1652,7 +1651,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_SIGNER_IN_DISABLED_GROUP)]
     //     public entry fun test_set_config__signer_in_disabled_group(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
     //         // group 31 is disabled (quorum = 0) but signer 3 is in group 31
@@ -1671,7 +1670,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_SIGNER_GROUPS_LEN_MISMATCH)]
     //     public entry fun test_set_config__signer_group_len_mismatch(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
     //         // len of signer groups does not match len of signers
@@ -1689,11 +1688,11 @@ module mcms::mcms {
     //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     //     public entry fun test_set_config__success(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         let mcms_addr = setup(deployer, framework);
     //
     //         // manually modify root state to check for modifications
-    //         let state = borrow_global_mut<MCMSState>(get_state_address());
+    //         let state = borrow_global_mut<MultisigState>(get_state_address());
     //         state.expiring_root_and_op_count = ExpiringRootAndOpCount {
     //             root: vector[1, 2, 3],
     //             valid_until: 9999,
@@ -1771,7 +1770,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_POST_OP_COUNT_REACHED)]
     //     public entry fun test_execute__root_not_set(
     //         deployer: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         // since root not set, post op count is 0 which is not greater than current op count (also 0)
     //         let execute_args = default_execute_args();
@@ -1782,7 +1781,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_POST_OP_COUNT_REACHED)]
     //     public entry fun test_execute__post_op_count_reached(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         set_config(
     //             owner,
@@ -1794,7 +1793,7 @@ module mcms::mcms {
     //         );
     //         call_set_root(default_set_root_args());
     //         // set current op count to post op count
-    //         let state = borrow_global_mut<MCMSState>(get_state_address());
+    //         let state = borrow_global_mut<MultisigState>(get_state_address());
     //         state.expiring_root_and_op_count.op_count = state.root_metadata.post_op_count;
     //         let execute_args = default_execute_args();
     //         call_execute(execute_args);
@@ -1804,7 +1803,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_WRONG_CHAIN_ID)]
     //     public entry fun test_execute__wrong_chain_id(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         set_config(
     //             owner,
@@ -1824,7 +1823,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_WRONG_MULTISIG)]
     //     public entry fun test_execute__wrong_multisig_addr(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         set_config(
     //             owner,
@@ -1844,7 +1843,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_ROOT_EXPIRED)]
     //     public entry fun test_execute__root_expired(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         set_config(
     //             owner,
@@ -1856,7 +1855,7 @@ module mcms::mcms {
     //         );
     //         call_set_root(default_set_root_args());
     //         // modify valid until state directly - set valid_until to a time in the past
-    //         let state = borrow_global_mut<MCMSState>(get_state_address());
+    //         let state = borrow_global_mut<MultisigState>(get_state_address());
     //         state.expiring_root_and_op_count.valid_until = TIMESTAMP - 1;
     //         let execute_args = default_execute_args();
     //         call_execute(execute_args);
@@ -1866,7 +1865,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_WRONG_NONCE)]
     //     public entry fun test_execute__wrong_nonce(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         set_config(
     //             owner,
@@ -1886,7 +1885,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_PROOF_CANNOT_BE_VERIFIED)]
     //     public entry fun test_execute__bad_op_proof(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         set_config(
     //             owner,
@@ -1906,7 +1905,7 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_PROOF_CANNOT_BE_VERIFIED)]
     //     public entry fun test_execute__empty_proof(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         set_config(
     //             owner,
@@ -1926,10 +1925,10 @@ module mcms::mcms {
     //     #[expected_failure(abort_code = E_PROOF_CANNOT_BE_VERIFIED)]
     //     public entry fun test_execute__ops_executed_in_order(
     //         deployer: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         // modify state to add pending ops
-    //         let state = borrow_global_mut<MCMSState>(get_state_address());
+    //         let state = borrow_global_mut<MultisigState>(get_state_address());
     //         state.expiring_root_and_op_count = ExpiringRootAndOpCount {
     //             root: ROOT,
     //             valid_until: VALID_UNTIL,
@@ -1947,7 +1946,7 @@ module mcms::mcms {
     //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     //     public entry fun test_ownable__transfer_ownership(
     //         deployer: &signer, owner: &signer, framework: &signer
-    //     ) acquires MCMSState {
+    //     ) acquires MultisigState {
     //         setup(deployer, framework);
     //         let new_owner = @0xdef;
     //         transfer_ownership(owner, new_owner);

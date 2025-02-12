@@ -57,17 +57,14 @@ module mcms::mcms_registry {
     const E_MISSING_CALLBACK_PARAMS: u64 = 2;
     const E_WRONG_PROOF_TYPE: u64 = 3;
     const E_CALLBACK_PARAMS_NOT_CONSUMED: u64 = 4;
-    const E_OBJECT_ALREADY_EXISTS: u64 = 5;
-    const E_PROOF_NOT_AT_ACCOUNT_ADDRESS: u64 = 6;
-    const E_PROOF_NOT_IN_MODULE: u64 = 7;
-    const E_MODULE_ALREADY_REGISTERED: u64 = 8;
-    const E_EMPTY_MODULE_NAME: u64 = 9;
-    const E_MODULE_NAME_TOO_LONG: u64 = 10;
-    const E_NOT_REGISTERED: u64 = 11;
-    const E_MISSING_REGISTRATION: u64 = 12;
-    const E_NOT_PREREGISTERED_OBJECT: u64 = 13;
-    const E_INVALID_CODE_OBJECT: u64 = 14;
-    const E_OWNER_ALREADY_REGISTERED: u64 = 15;
+    const E_PROOF_NOT_AT_ACCOUNT_ADDRESS: u64 = 5;
+    const E_PROOF_NOT_IN_MODULE: u64 = 6;
+    const E_MODULE_ALREADY_REGISTERED: u64 = 7;
+    const E_EMPTY_MODULE_NAME: u64 = 8;
+    const E_MODULE_NAME_TOO_LONG: u64 = 9;
+    const E_NOT_REGISTERED: u64 = 10;
+    const E_INVALID_CODE_OBJECT: u64 = 11;
+    const E_OWNER_ALREADY_REGISTERED: u64 = 12;
 
     fun init_module(publisher: &signer) {
         move_to(publisher, RegistryState { registered_addresses: smart_table::new() });
@@ -102,15 +99,22 @@ module mcms::mcms_registry {
         account::create_resource_address(&@mcms, owner_seed)
     }
 
-    /// This function allows importing a code object (ie. managed by 0x1::code_object_deployment)
-    /// that was not deployed using mcms_deployer, and has not registered for a callback.
-    /// If either of these conditions has already occurred, then an object owner was already created
-    /// and a mapping exists in `registered_addresses`.
-    /// The object owner can go through the following flow:
-    /// - call get_existing_code_object_owner_address() to get the MCMS object owner address
-    /// - call 0x1::object::transfer, transfering ownership to the MCMS object owner address
-    /// - call register_object_owner_for_existing_code_object() with the object address
-    /// after which MCMS will be able to deploy and upgrade the code object.
+    /// Imports a code object (ie. managed by 0x1::code_object_deployment) that was not deployed
+    /// using mcms_deployer, and has not registered for a callback, to be owned by MCMS.
+    /// If either of these conditions has already occurred, then an object owner was already
+    /// created and there is no need to call this function - however, the below flow can still
+    /// be followed to transfer ownership to MCMS, omitting the final step.
+    ///
+    /// Ownership transfer flow:
+    /// - if it was deployed using mcms_deployer, call get_new_code_object_owner_address() with
+    ///   the same new_owner_seed used when publishing to get the MCMS object owner address.
+    /// - otherwise, call get_existing_code_object_owner_address() to get the MCMS object owner
+    ///   address.
+    /// - call 0x1::object::transfer, transfering ownership to the MCMS object owner address.
+    /// - call register_object_owner_for_existing_code_object() with the object address.
+    ///
+    /// After these steps, MCMS will be the code object owner, and will be able to deploy and upgrade
+    /// the code object using proposals with mcms_deployer ops.
     public entry fun register_object_owner_for_existing_code_object(
         caller: &signer, object_address: address
     ) acquires RegistryState {
