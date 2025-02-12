@@ -13,5 +13,5 @@ mcms = "0x101"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
-ChainlinkManyChainMultisig = { local = "../mcms", addr_subst = { 'mcms_deployer' = '0x0' } }
+ChainlinkManyChainMultisig = { local = "../mcms", addr_subst = { 'mcms_owner' = '0x0' } }
 
