@@ -11,7 +11,7 @@ module mcms::mcms_account {
 
     fun init_module(publisher: &signer) {
         let signer_cap =
-            resource_account::retrieve_resource_account_cap(publisher, @mcms_deployer);
+            resource_account::retrieve_resource_account_cap(publisher, @mcms_owner);
         move_to(publisher, MCMSAccountState { signer_cap });
     }
 
