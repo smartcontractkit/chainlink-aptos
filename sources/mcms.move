@@ -430,18 +430,53 @@ module mcms::mcms {
         let module_name_bytes = *string::bytes(&module_name);
         let function_name_bytes = *string::bytes(&function_name);
         if (receiver == @mcms) {
-            if (module_name_bytes == b"mcms_account") {
-                // dispatch to the account module's functions for ownership transfers and setting config.
+            if (module_name_bytes == b"mcms") {
+                // dispatch to the mcms module's functions for setting config.
+                dispatch_to_self(function_name_bytes, data);
+            } else if (module_name_bytes == b"mcms_account") {
+                // dispatch to the account module's functions for ownership transfers.
                 dispatch_to_account(function_name_bytes, data);
             } else if (module_name_bytes == b"mcms_deployer") {
                 // dispatch to the deployer module's functions for deploying and upgrading contracts.
                 dispatch_to_deployer(function_name_bytes, data);
+            } else if (module_name_bytes == b"mcms_registry") {
+                // dispatch to the registry module's functions for code object management.
+                dispatch_to_registry(function_name_bytes, data);
             }
         } else {
             let object_meta =
                 mcms_registry::start_dispatch(receiver, module_name, function_name, data);
             aptos_framework::dispatchable_fungible_asset::derived_supply(object_meta);
             mcms_registry::finish_dispatch(receiver);
+        }
+    }
+
+    inline fun dispatch_to_self(
+        function_name_bytes: vector<u8>, data: vector<u8>
+    ) {
+        let self_signer = mcms_account::get_signer();
+        let stream = bcs_stream::new(data);
+        if (function_name_bytes == b"set_config") {
+            let signer_addresses =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
+                );
+            let signer_groups = bcs_stream::deserialize_vector_u8(&mut stream);
+            let group_quorums = bcs_stream::deserialize_vector_u8(&mut stream);
+            let group_parents = bcs_stream::deserialize_vector_u8(&mut stream);
+            let clear_root = bcs_stream::deserialize_bool(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            set_config(
+                &self_signer,
+                signer_addresses,
+                signer_groups,
+                group_quorums,
+                group_parents,
+                clear_root
+            );
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_MCMS_MODULE_FUNCTION)
         }
     }
 
@@ -525,6 +560,29 @@ module mcms::mcms {
                 code_indices,
                 code_chunks,
                 code_object_address
+            );
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_MCMS_MODULE_FUNCTION)
+        }
+    }
+
+    inline fun dispatch_to_registry(
+        function_name_bytes: vector<u8>, data: vector<u8>
+    ) {
+        let self_signer = mcms_account::get_signer();
+        let stream = bcs_stream::new(data);
+        if (function_name_bytes == b"register_object_owner_for_existing_code_object") {
+            let object_address = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            mcms_registry::register_object_owner_for_existing_code_object(
+                &self_signer, object_address
+            );
+        } else if (function_name_bytes == b"transfer_code_object") {
+            let object_address = bcs_stream::deserialize_address(&mut stream);
+            let new_owner_address = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            mcms_registry::transfer_code_object(
+                &self_signer, object_address, new_owner_address
             );
         } else {
             abort error::invalid_argument(E_UNKNOWN_MCMS_MODULE_FUNCTION)
