@@ -916,6 +916,11 @@ module mcms::mcms {
         false
     }
 
+    #[test_only]
+    public fun init_module_for_testing(publisher: &signer) {
+        init_module(publisher);
+    }
+
     // TODO: update and reenable tests for dynamic dispatch
     //     //// TESTS ////
     //
@@ -2122,5 +2127,16 @@ module mcms::mcms {
         let input3 = vector[0x01, 0x2, 0x3, 0x4, 0x5];
         left_pad_vec(&mut input3, 4);
         assert!(input3 == vector[1, 2, 3, 4, 5], 3);
+    }
+
+    #[test(publisher = @mcms)]
+    fun test_register_object_owner_for_new_code_object(
+        publisher: &signer
+    ) {
+        mcms_account::init_module_for_testing(publisher);
+        mcms_registry::init_module_for_testing(publisher);
+        init_module_for_testing(publisher);
+
+        mcms_registry::register_object_owner_for_new_code_object(vector[123, 231]);
     }
 }

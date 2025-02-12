@@ -408,4 +408,9 @@ module mcms::mcms_registry {
         );
         borrow_global_mut<OwnerRegistration>(account_address)
     }
+
+    #[test_only]
+    public fun init_module_for_testing(publisher: &signer) {
+        init_module(publisher);
+    }
 }

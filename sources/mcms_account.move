@@ -34,6 +34,12 @@ module mcms::mcms_account {
     fun init_module(publisher: &signer) {
         let signer_cap =
             resource_account::retrieve_resource_account_cap(publisher, @mcms_owner);
+        init_module_internal(publisher, signer_cap);
+    }
+
+    fun init_module_internal(
+        publisher: &signer, signer_cap: SignerCapability
+    ) {
         move_to(
             publisher,
             MCMSAccountState { signer_cap, owner: @mcms_owner, pending_owner: @0x0 }
@@ -108,5 +114,11 @@ module mcms::mcms_account {
 
     inline fun borrow_state_mut(): &mut MCMSAccountState {
         borrow_global_mut<MCMSAccountState>(@mcms)
+    }
+
+    #[test_only]
+    public fun init_module_for_testing(publisher: &signer) {
+        let test_signer_cap = account::create_test_signer_cap(@mcms);
+        init_module_internal(publisher, test_signer_cap);
     }
 }
