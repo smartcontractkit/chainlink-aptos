@@ -182,7 +182,7 @@ module mcms::mcms {
         move_to(
             publisher,
             MCMSState {
-                owner: @mcms_deployer,
+                owner: @mcms_owner,
                 pending_owner: @0x0,
                 signers: simple_map::new(),
                 config: Config {
