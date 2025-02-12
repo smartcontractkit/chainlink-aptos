@@ -49,7 +49,7 @@ func CompileMovePackage(
 		"move", "compile",
 		"--package-dir", packageDir,
 		"--named-addresses", namedAddressesArg,
-		"--included-artifacts=all",
+		"--included-artifacts=sparse",
 		"--save-metadata",
 		"--output-dir", outputDir,
 	}
