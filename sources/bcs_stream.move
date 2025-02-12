@@ -10,7 +10,6 @@
 /// Application:
 /// - This deserializer is particularly valuable for processing BCS serialized data within Move modules,
 ///   especially useful for systems requiring cross-chain message interpretation or off-chain data verification.
-
 module mcms::bcs_stream {
     use std::error;
     use std::vector;
@@ -42,7 +41,7 @@ module mcms::bcs_stream {
     public fun assert_is_consumed(stream: &BCSStream) {
         assert!(
             stream.cur == vector::length(&stream.data),
-            error::invalid_argument(E_NOT_CONSUMED)
+            error::invalid_state(E_NOT_CONSUMED)
         );
     }
 
