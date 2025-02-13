@@ -47,7 +47,7 @@ module mcms::mcms_deployer {
         let code = assemble_module_code(staging_area);
 
         let owner_signer =
-            &mcms_registry::register_object_owner_for_new_code_object(new_owner_seed);
+            &mcms_registry::create_owner_for_new_code_object(new_owner_seed);
 
         object_code_deployment::publish(
             owner_signer, staging_area.metadata_serialized, code

@@ -545,10 +545,10 @@ module mcms::mcms {
     ) {
         let self_signer = mcms_account::get_signer();
         let stream = bcs_stream::new(data);
-        if (function_name_bytes == b"register_object_owner_for_preexisting_code_object") {
+        if (function_name_bytes == b"create_owner_for_preexisting_code_object") {
             let object_address = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            mcms_registry::register_object_owner_for_preexisting_code_object(
+            mcms_registry::create_owner_for_preexisting_code_object(
                 &self_signer, object_address
             );
         } else if (function_name_bytes == b"transfer_code_object") {

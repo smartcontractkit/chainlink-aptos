@@ -5,6 +5,7 @@ module mcms::mcms_registry {
     use std::code::PackageRegistry;
     use std::dispatchable_fungible_asset;
     use std::error;
+    use std::event;
     use std::fungible_asset::{Self, Metadata};
     use std::function_info::{Self, FunctionInfo};
     use std::object::{Self, ExtendRef, Object};
@@ -52,6 +53,38 @@ module mcms::mcms_registry {
         expected_type_info: TypeInfo,
         function: String,
         data: vector<u8>
+    }
+
+    #[event]
+    struct EntrypointRegistered has store, drop {
+        owner_address: address,
+        account_address: address,
+        module_name: String
+    }
+
+    #[event]
+    struct CodeObjectTransferred has store, drop {
+        object_address: address,
+        mcms_owner_address: address,
+        new_owner_address: address
+    }
+
+    #[event]
+    struct OwnerCreatedForPreexistingObject has store, drop {
+        owner_address: address,
+        object_address: address
+    }
+
+    #[event]
+    struct OwnerCreatedForNewObject has store, drop {
+        owner_address: address,
+        expected_object_address: address
+    }
+
+    #[event]
+    struct OwnerCreatedForEntrypoint has store, drop {
+        owner_address: address,
+        account_or_object_address: address
     }
 
     const E_CALLBACK_PARAMS_ALREADY_EXISTS: u64 = 1;
@@ -145,11 +178,11 @@ module mcms::mcms_registry {
     /// - otherwise, call get_preexisting_code_object_owner_address() to get the MCMS object owner
     ///   address.
     /// - call 0x1::object::transfer, transfering ownership to the MCMS object owner address.
-    /// - call register_object_owner_for_preexisting_code_object() with the object address.
+    /// - call create_owner_for_preexisting_code_object() with the object address.
     ///
     /// After these steps, MCMS will be the code object owner, and will be able to deploy and upgrade
     /// the code object using proposals with mcms_deployer ops.
-    public entry fun register_object_owner_for_preexisting_code_object(
+    public entry fun create_owner_for_preexisting_code_object(
         caller: &signer, object_address: address
     ) acquires RegistryState {
         mcms_account::assert_is_owner(caller);
@@ -159,8 +192,14 @@ module mcms::mcms_registry {
         );
 
         let state = borrow_state_mut();
-        register_object_owner_for_preexisting_code_object_internal(
-            state, object_address
+        let owner_signer =
+            &create_owner_for_preexisting_code_object_internal(state, object_address);
+
+        event::emit(
+            OwnerCreatedForPreexistingObject {
+                owner_address: signer::address_of(owner_signer),
+                object_address
+            }
         );
     }
 
@@ -196,20 +235,38 @@ module mcms::mcms_registry {
             &account::create_signer_with_capability(&owner_registration.owner_cap);
 
         object::transfer(owner_signer, code_object, new_owner_address);
+
+        event::emit(
+            CodeObjectTransferred {
+                object_address: object_address,
+                mcms_owner_address: owner_address,
+                new_owner_address: new_owner_address
+            }
+        );
     }
 
-    public(friend) fun register_object_owner_for_new_code_object(
+    public(friend) fun create_owner_for_new_code_object(
         new_owner_seed: vector<u8>
     ): signer acquires RegistryState {
         let owner_seed = NEW_OBJECT_REGISTRATION_SEED;
         vector::append(&mut owner_seed, new_owner_seed);
         let new_code_object_address = get_new_code_object_address(new_owner_seed);
-        register_object_owner_internal(
-            borrow_state_mut(),
-            owner_seed,
-            new_code_object_address,
-            true
-        )
+        let owner_signer =
+            create_owner_internal(
+                borrow_state_mut(),
+                owner_seed,
+                new_code_object_address,
+                true
+            );
+
+        event::emit(
+            OwnerCreatedForNewObject {
+                owner_address: signer::address_of(&owner_signer),
+                expected_object_address: new_code_object_address
+            }
+        );
+
+        owner_signer
     }
 
     public(friend) fun get_signer_for_code_object_upgrade(
@@ -232,15 +289,15 @@ module mcms::mcms_registry {
         account::create_signer_with_capability(&owner_registration.owner_cap)
     }
 
-    inline fun register_object_owner_for_preexisting_code_object_internal(
+    inline fun create_owner_for_preexisting_code_object_internal(
         state: &mut RegistryState, object_address: address
     ): signer {
         let owner_seed = EXISTING_OBJECT_REGISTRATION_SEED;
         vector::append(&mut owner_seed, bcs::to_bytes(&object_address));
-        register_object_owner_internal(state, owner_seed, object_address, false)
+        create_owner_internal(state, owner_seed, object_address, false)
     }
 
-    inline fun register_object_owner_internal(
+    inline fun create_owner_internal(
         state: &mut RegistryState,
         owner_seed: vector<u8>,
         code_object_address: address,
@@ -297,10 +354,20 @@ module mcms::mcms_registry {
         let owner_address =
             if (!smart_table::contains(&state.registered_addresses, account_address)) {
                 let owner_signer =
-                    register_object_owner_for_preexisting_code_object_internal(
+                    create_owner_for_preexisting_code_object_internal(
                         state, account_address
                     );
-                signer::address_of(&owner_signer)
+
+                let owner_address = signer::address_of(&owner_signer);
+
+                event::emit(
+                    OwnerCreatedForEntrypoint {
+                        owner_address,
+                        account_or_object_address: account_address
+                    }
+                );
+
+                owner_address
             } else {
                 *smart_table::borrow(&state.registered_addresses, account_address)
             };
@@ -363,6 +430,8 @@ module mcms::mcms_registry {
         smart_table::add(
             &mut registration.callback_modules, module_name_bytes, registered_module
         );
+
+        event::emit(EntrypointRegistered { owner_address, account_address, module_name });
 
         owner_address
     }
