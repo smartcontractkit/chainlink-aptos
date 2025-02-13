@@ -5,8 +5,8 @@ module mcms::mcms_registry {
     use std::code::PackageRegistry;
     use std::dispatchable_fungible_asset;
     use std::error;
-    use std::function_info::{Self, FunctionInfo};
     use std::fungible_asset::{Self, Metadata};
+    use std::function_info::{Self, FunctionInfo};
     use std::object::{Self, ExtendRef, Object};
     use std::option;
     use std::signer;
@@ -63,7 +63,7 @@ module mcms::mcms_registry {
     const E_MODULE_ALREADY_REGISTERED: u64 = 7;
     const E_EMPTY_MODULE_NAME: u64 = 8;
     const E_MODULE_NAME_TOO_LONG: u64 = 9;
-    const E_NOT_REGISTERED: u64 = 10;
+    const E_ADDRESS_NOT_REGISTERED: u64 = 10;
     const E_INVALID_CODE_OBJECT: u64 = 11;
     const E_OWNER_ALREADY_REGISTERED: u64 = 12;
     const E_NOT_CODE_OBJECT_OWNER: u64 = 13;
@@ -102,6 +102,35 @@ module mcms::mcms_registry {
         let owner_seed = EXISTING_OBJECT_REGISTRATION_SEED;
         vector::append(&mut owner_seed, bcs::to_bytes(&object_address));
         account::create_resource_address(&@mcms, owner_seed)
+    }
+
+    #[view]
+    /// Returns the registered owner address for a given account address. The account address
+    /// can be either a code object address or a callback address.
+    /// Aborts if the address is not registered.
+    public fun get_registered_owner_address(
+        account_address: address
+    ): address acquires RegistryState {
+        let state = borrow_state();
+        assert!(
+            smart_table::contains(&state.registered_addresses, account_address),
+            error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
+        );
+        *smart_table::borrow(&state.registered_addresses, account_address)
+    }
+
+    #[view]
+    /// Returns true if the given address is a code object and is owned by MCMS.
+    /// Aborts if the address is not a valid code object.
+    public fun is_owned_code_object(object_address: address): bool acquires RegistryState {
+        assert!(
+            object::object_exists<PackageRegistry>(object_address),
+            error::invalid_argument(E_INVALID_CODE_OBJECT)
+        );
+        let code_object = object::address_to_object<PackageRegistry>(object_address);
+
+        let owner_address = get_registered_owner_address(object_address);
+        object::owner(code_object) == owner_address
     }
 
     /// Imports a code object (ie. managed by 0x1::code_object_deployment) that was not deployed
@@ -152,7 +181,7 @@ module mcms::mcms_registry {
         let state = borrow_state();
         assert!(
             smart_table::contains(&state.registered_addresses, object_address),
-            error::invalid_argument(E_NOT_REGISTERED)
+            error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
 
         let owner_address =
@@ -194,7 +223,7 @@ module mcms::mcms_registry {
         let state = borrow_state();
         assert!(
             smart_table::contains(&state.registered_addresses, object_address),
-            error::invalid_argument(E_NOT_REGISTERED)
+            error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
         let owner_address =
             *smart_table::borrow(&state.registered_addresses, object_address);
@@ -348,7 +377,7 @@ module mcms::mcms_registry {
 
         assert!(
             smart_table::contains(&state.registered_addresses, callback_address),
-            error::invalid_argument(E_NOT_REGISTERED)
+            error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
 
         let owner_address =
@@ -386,7 +415,7 @@ module mcms::mcms_registry {
 
         assert!(
             smart_table::contains(&state.registered_addresses, callback_address),
-            error::invalid_state(E_NOT_REGISTERED)
+            error::invalid_state(E_ADDRESS_NOT_REGISTERED)
         );
 
         let owner_address =
@@ -404,7 +433,7 @@ module mcms::mcms_registry {
 
         assert!(
             smart_table::contains(&state.registered_addresses, callback_address),
-            error::invalid_argument(E_NOT_REGISTERED)
+            error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
 
         let owner_address =
@@ -441,7 +470,7 @@ module mcms::mcms_registry {
     inline fun borrow_owner_registration(account_address: address): &OwnerRegistration {
         assert!(
             exists<OwnerRegistration>(account_address),
-            error::invalid_argument(E_NOT_REGISTERED)
+            error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
         borrow_global<OwnerRegistration>(account_address)
     }
@@ -449,7 +478,7 @@ module mcms::mcms_registry {
     inline fun borrow_owner_registration_mut(account_address: address): &mut OwnerRegistration {
         assert!(
             exists<OwnerRegistration>(account_address),
-            error::invalid_argument(E_NOT_REGISTERED)
+            error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
         borrow_global_mut<OwnerRegistration>(account_address)
     }
