@@ -1,3 +1,4 @@
+/// This module handles registration and management of code object owners and callbacks.
 module mcms::mcms_registry {
     use std::account::{Self, SignerCapability};
     use std::bcs;
@@ -72,6 +73,7 @@ module mcms::mcms_registry {
     }
 
     #[view]
+    /// Returns the resource address for a new code object owner using the provided seed.
     public fun get_new_code_object_owner_address(
         new_owner_seed: vector<u8>
     ): address {
@@ -81,6 +83,7 @@ module mcms::mcms_registry {
     }
 
     #[view]
+    /// Computes and returns the new code object's address using the new_owner_seed.
     public fun get_new_code_object_address(new_owner_seed: vector<u8>): address {
         let object_owner_address = get_new_code_object_owner_address(new_owner_seed);
         let object_code_deployment_seed =
@@ -92,7 +95,8 @@ module mcms::mcms_registry {
     }
 
     #[view]
-    public fun get_existing_code_object_owner_address(
+    /// Derives the resource address for an preexisting code object's owner using the given object_address.
+    public fun get_preexisting_code_object_owner_address(
         object_address: address
     ): address {
         let owner_seed = EXISTING_OBJECT_REGISTRATION_SEED;
@@ -109,14 +113,14 @@ module mcms::mcms_registry {
     /// Ownership transfer flow:
     /// - if it was deployed using mcms_deployer, call get_new_code_object_owner_address() with
     ///   the same new_owner_seed used when publishing to get the MCMS object owner address.
-    /// - otherwise, call get_existing_code_object_owner_address() to get the MCMS object owner
+    /// - otherwise, call get_preexisting_code_object_owner_address() to get the MCMS object owner
     ///   address.
     /// - call 0x1::object::transfer, transfering ownership to the MCMS object owner address.
-    /// - call register_object_owner_for_existing_code_object() with the object address.
+    /// - call register_object_owner_for_preexisting_code_object() with the object address.
     ///
     /// After these steps, MCMS will be the code object owner, and will be able to deploy and upgrade
     /// the code object using proposals with mcms_deployer ops.
-    public entry fun register_object_owner_for_existing_code_object(
+    public entry fun register_object_owner_for_preexisting_code_object(
         caller: &signer, object_address: address
     ) acquires RegistryState {
         mcms_account::assert_is_owner(caller);
@@ -126,7 +130,9 @@ module mcms::mcms_registry {
         );
 
         let state = borrow_state_mut();
-        register_object_owner_for_existing_code_object_internal(state, object_address);
+        register_object_owner_for_preexisting_code_object_internal(
+            state, object_address
+        );
     }
 
     /// Transfers ownership of a code object to a new owner. Note that this does not unregister
@@ -197,7 +203,7 @@ module mcms::mcms_registry {
         account::create_signer_with_capability(&owner_registration.owner_cap)
     }
 
-    inline fun register_object_owner_for_existing_code_object_internal(
+    inline fun register_object_owner_for_preexisting_code_object_internal(
         state: &mut RegistryState, object_address: address
     ): signer {
         let owner_seed = EXISTING_OBJECT_REGISTRATION_SEED;
@@ -262,7 +268,7 @@ module mcms::mcms_registry {
         let owner_address =
             if (!smart_table::contains(&state.registered_addresses, account_address)) {
                 let owner_signer =
-                    register_object_owner_for_existing_code_object_internal(
+                    register_object_owner_for_preexisting_code_object_internal(
                         state, account_address
                     );
                 signer::address_of(&owner_signer)

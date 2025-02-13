@@ -1,13 +1,4 @@
 /// This module is the Aptos implementation of Chainlink's MultiChainMultiSig contract.
-///
-/// Overview:
-/// - Self ownership:
-///   When ownership of the MCMS module has been transfered to its own state address, set_config can only be called
-///   using MCMS execution.
-///
-/// - Upgrading Mechanism:
-///   During initialization, the MCMS contract transfers object ownership to its own state address.
-///   All subsequent upgrades (via 0x1::code::publish_package_txn) can then only be performed using MCMS execution.
 module mcms::mcms {
     use std::aptos_hash::keccak256;
     use std::bcs;
@@ -26,7 +17,6 @@ module mcms::mcms {
     use mcms::mcms_deployer;
     use mcms::mcms_registry;
 
-    // MCM Consts
     const NUM_GROUPS: u64 = 32;
     const MAX_NUM_SIGNERS: u64 = 200;
     // equivalent to initializing empty uint8[NUM_GROUPS] in Solidity
@@ -51,7 +41,6 @@ module mcms::mcms {
         root_metadata: RootMetadata
     }
 
-    // MCM Structs
     struct RootMetadata has key, store, copy, drop {
         chain_id: u256,
         multisig: address,
@@ -183,19 +172,20 @@ module mcms::mcms {
         );
     }
 
-    // MCM Getters
-
     #[view]
+    /// Returns the current multisig configuration.
     public fun get_config(): Config acquires MultisigState {
         borrow_state().config
     }
 
     #[view]
+    /// Returns the current operation count from the active Merkle root.
     public fun get_op_count(): u64 acquires MultisigState {
         borrow_state().expiring_root_and_op_count.op_count
     }
 
     #[view]
+    /// Returns the current Merkle root along with its expiration timestamp.
     public fun get_root(): (vector<u8>, u64) acquires MultisigState {
         let state = borrow_state();
         (
@@ -205,12 +195,13 @@ module mcms::mcms {
     }
 
     #[view]
+    /// Returns the metadata associated with the current Merkle root.
     public fun get_root_metadata(): RootMetadata acquires MultisigState {
         borrow_state().root_metadata
     }
 
-    // MCM Functions
-
+    /// Sets a new Merkle root along with its associated metadata.
+    /// Validates the provided signatures and the Merkle proof.
     public entry fun set_root(
         root: vector<u8>,
         valid_until: u64,
@@ -235,37 +226,28 @@ module mcms::mcms {
         // also checks root = 32 bytes
         let signed_hash = compute_eth_message_hash(root, valid_until);
 
-        // check if hash has been seen already
         assert!(
             simple_map::contains_key(&mut state.seen_signed_hashes, &signed_hash) == false,
             error::invalid_argument(E_ALREADY_SEEN_HASH)
         );
 
-        // verify valid_until against current timestamp
         assert!(
             timestamp::now_seconds() <= valid_until,
             error::invalid_argument(E_VALID_UNTIL_EXPIRED)
         );
 
-        // verify chain id
         assert!(
             metadata.chain_id == (chain_id::get() as u256),
             error::invalid_argument(E_WRONG_CHAIN_ID)
         );
 
-        // verify mcms address
         assert!(metadata.multisig == @mcms, error::invalid_argument(E_WRONG_MULTISIG));
 
-        // verify op counts
         let op_count = state.expiring_root_and_op_count.op_count;
-        // don't allow a new root to be set if there are still outstanding ops that have not been
-        // executed, unless overridePreviousRoot is set
         assert!(
             override_previous_root || op_count == state.root_metadata.post_op_count,
             error::invalid_state(E_PENDING_OPS)
         );
-        // the signers are responsible for tracking opCount offchain and ensuring that
-        // preOpCount equals to opCount and preOpCount <= postOpCount
         assert!(
             op_count == metadata.pre_op_count,
             error::invalid_argument(E_WRONG_PRE_OP_COUNT)
@@ -275,84 +257,75 @@ module mcms::mcms {
             error::invalid_argument(E_WRONG_POST_OP_COUNT)
         );
 
-        // verify metadata proof
-        {
-            let hashed_leaf: vector<u8> = hash_metadata_leaf(metadata);
-            assert!(
-                verify_merkle_proof(metadata_proof, root, hashed_leaf),
-                error::invalid_argument(E_PROOF_CANNOT_BE_VERIFIED)
-            );
-        };
+        let hashed_leaf: vector<u8> = hash_metadata_leaf(metadata);
+        assert!(
+            verify_merkle_proof(metadata_proof, root, hashed_leaf),
+            error::invalid_argument(E_PROOF_CANNOT_BE_VERIFIED)
+        );
 
         // verify ECDSA signatures on (root, valid_until) and ensure that the root group is successful
-        {
-            // verify sigs and count number of signers in each group
-            let prev_address = vector[];
-            let group_vote_counts: vector<u8> = vector[];
-            right_pad_vec(&mut group_vote_counts, NUM_GROUPS);
-            let i = 0;
-            let signatures_len = vector::length(&signatures);
-            while (i < signatures_len) {
-                let signature = *vector::borrow(&signatures, i);
-                let signer_addr = ecdsa_recover_evm_addr(signed_hash, signature);
-                // the off-chain system is required to sort the signatures by the
-                // signer address in an increasing order
-                if (i > 0) {
-                    assert!(
-                        vector_u8_gt(&signer_addr, &prev_address),
-                        error::invalid_argument(E_SIGNER_ADDR_MUST_BE_INCREASING)
-                    );
-                };
-                prev_address = signer_addr;
-
+        let prev_address = vector[];
+        let group_vote_counts: vector<u8> = vector[];
+        right_pad_vec(&mut group_vote_counts, NUM_GROUPS);
+        let i = 0;
+        let signatures_len = vector::length(&signatures);
+        while (i < signatures_len) {
+            let signature = *vector::borrow(&signatures, i);
+            let signer_addr = ecdsa_recover_evm_addr(signed_hash, signature);
+            // the off-chain system is required to sort the signatures by the
+            // signer address in an increasing order
+            if (i > 0) {
                 assert!(
-                    simple_map::contains_key(&state.signers, &signer_addr),
-                    error::invalid_argument(E_INVALID_SIGNER)
+                    vector_u8_gt(&signer_addr, &prev_address),
+                    error::invalid_argument(E_SIGNER_ADDR_MUST_BE_INCREASING)
                 );
-                let signer = *simple_map::borrow(&state.signers, &signer_addr);
-
-                // check group quorums
-                let group: u8 = signer.group;
-                while (true) {
-                    let group_vote_count = vector::borrow_mut(
-                        &mut group_vote_counts, (group as u64)
-                    );
-                    *group_vote_count = *group_vote_count + 1;
-
-                    let quorum = vector::borrow(
-                        &state.config.group_quorums, (group as u64)
-                    );
-                    if (*group_vote_count != *quorum) {
-                        // bail out unless we just hit the quorum. we only hit each quorum once,
-                        // so we never move on to the parent of a group more than once.
-                        break
-                    };
-
-                    if (group == 0) {
-                        // root group reached
-                        break
-                    };
-
-                    // group quorum reached, restart loop and check parent group
-                    group = *vector::borrow(&state.config.group_parents, (group as u64));
-                };
-                i = i + 1;
             };
+            prev_address = signer_addr;
 
-            // the group at the root of the tree (with index 0) determines whether the vote passed,
-            // we cannot proceed if it isn't configured with a valid (non-zero) quorum
-            let root_group_quorum = vector::borrow(&state.config.group_quorums, 0);
-            assert!(*root_group_quorum != 0, error::invalid_argument(E_MISSING_CONFIG));
-
-            // check root group reached quorum
-            let root_group_vote_count = vector::borrow(&group_vote_counts, 0);
             assert!(
-                *root_group_vote_count >= *root_group_quorum,
-                error::invalid_argument(E_INSUFFICIENT_SIGNERS)
+                simple_map::contains_key(&state.signers, &signer_addr),
+                error::invalid_argument(E_INVALID_SIGNER)
             );
+            let signer = *simple_map::borrow(&state.signers, &signer_addr);
+
+            // check group quorums
+            let group: u8 = signer.group;
+            while (true) {
+                let group_vote_count = vector::borrow_mut(
+                    &mut group_vote_counts, (group as u64)
+                );
+                *group_vote_count = *group_vote_count + 1;
+
+                let quorum = vector::borrow(&state.config.group_quorums, (group as u64));
+                if (*group_vote_count != *quorum) {
+                    // bail out unless we just hit the quorum. we only hit each quorum once,
+                    // so we never move on to the parent of a group more than once.
+                    break
+                };
+
+                if (group == 0) {
+                    // root group reached
+                    break
+                };
+
+                // group quorum reached, restart loop and check parent group
+                group = *vector::borrow(&state.config.group_parents, (group as u64));
+            };
+            i = i + 1;
         };
 
-        // save details to contract state
+        // the group at the root of the tree (with index 0) determines whether the vote passed,
+        // we cannot proceed if it isn't configured with a valid (non-zero) quorum
+        let root_group_quorum = vector::borrow(&state.config.group_quorums, 0);
+        assert!(*root_group_quorum != 0, error::invalid_argument(E_MISSING_CONFIG));
+
+        // check root group reached quorum
+        let root_group_vote_count = vector::borrow(&group_vote_counts, 0);
+        assert!(
+            *root_group_vote_count >= *root_group_quorum,
+            error::invalid_argument(E_INSUFFICIENT_SIGNERS)
+        );
+
         simple_map::add(&mut state.seen_signed_hashes, signed_hash, true);
         state.expiring_root_and_op_count = ExpiringRootAndOpCount {
             root,
@@ -363,6 +336,7 @@ module mcms::mcms {
         event::emit(NewRoot { root, valid_until, metadata });
     }
 
+    /// Executes an operation from the current Merkle root.
     public entry fun execute(
         chain_id: u256,
         multisig: address,
@@ -377,7 +351,6 @@ module mcms::mcms {
 
         let op = Op { chain_id, multisig, nonce, to, module_name, function, data };
 
-        // op validations
         assert!(
             state.root_metadata.post_op_count
                 > state.expiring_root_and_op_count.op_count,
@@ -401,7 +374,6 @@ module mcms::mcms {
             error::invalid_argument(E_WRONG_NONCE)
         );
 
-        // verify op exists in merkle tree
         let hashed_leaf: vector<u8> = hash_op_leaf(op);
         assert!(
             verify_merkle_proof(
@@ -410,7 +382,6 @@ module mcms::mcms {
             error::invalid_argument(E_PROOF_CANNOT_BE_VERIFIED)
         );
 
-        // increment op_count
         state.expiring_root_and_op_count.op_count = state.expiring_root_and_op_count.op_count
             + 1;
 
@@ -574,10 +545,10 @@ module mcms::mcms {
     ) {
         let self_signer = mcms_account::get_signer();
         let stream = bcs_stream::new(data);
-        if (function_name_bytes == b"register_object_owner_for_existing_code_object") {
+        if (function_name_bytes == b"register_object_owner_for_preexisting_code_object") {
             let object_address = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            mcms_registry::register_object_owner_for_existing_code_object(
+            mcms_registry::register_object_owner_for_preexisting_code_object(
                 &self_signer, object_address
             );
         } else if (function_name_bytes == b"transfer_code_object") {
@@ -592,6 +563,7 @@ module mcms::mcms {
         }
     }
 
+    /// Updates the multisig configuration, including signer addresses and group settings.
     public entry fun set_config(
         caller: &signer,
         signer_addresses: vector<vector<u8>>,
@@ -896,7 +868,6 @@ module mcms::mcms {
         computed_hash == root
     }
 
-    // helper function to encode a numeric type to bytes.
     inline fun encode_uint<T: drop>(input: T, num_bytes: u64): vector<u8> {
         let bcs_bytes = bcs::to_bytes(&input);
 
@@ -916,8 +887,6 @@ module mcms::mcms {
         bcs_bytes
     }
 
-    // helper function to right pad a vector<u8> with zero bytes to a specified length
-    // this function returns the input if the input length is already equal to or greater than num_bytes
     inline fun right_pad_vec(v: &mut vector<u8>, num_bytes: u64) {
         let len = vector::length(v);
         if (len < num_bytes) {
@@ -930,8 +899,6 @@ module mcms::mcms {
         };
     }
 
-    // helper function to left pad a vector<u8> with zero bytes to a specified length
-    // this function returns the input if the input length is already equal to or greater than num_bytes
     inline fun left_pad_vec(v: &mut vector<u8>, num_bytes: u64) {
         let len = vector::length(v);
         if (len < num_bytes) {
@@ -946,8 +913,7 @@ module mcms::mcms {
         };
     }
 
-    // helper function to compare two vector<u8> values. expects both vectors to be of equal length.
-    // returns true if a > b, false otherwise
+    /// compares two vectors of equal length, returns true if a > b, false otherwise.
     fun vector_u8_gt(a: &vector<u8>, b: &vector<u8>): bool {
         let len = vector::length(a);
         assert!(

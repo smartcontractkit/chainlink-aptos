@@ -1,5 +1,5 @@
-/// This module is a modified version of Aptos' large_packages package, and provides functions for publishing and upgrading
-/// MCMS-owned modules via code object deployment.
+/// This module is a modified version of Aptos' large_packages package, providing functions for publishing and upgrading
+/// MCMS-owned modules of arbitrary sizes via object code deployment.
 module mcms::mcms_deployer {
     use std::code::PackageRegistry;
     use std::error;
@@ -19,6 +19,8 @@ module mcms::mcms_deployer {
         last_module_idx: u64
     }
 
+    /// Stages a chunk of code in the StagingArea.
+    /// This function allows for incremental building of a large package.
     public entry fun stage_code_chunk(
         caller: &signer,
         metadata_chunk: vector<u8>,
@@ -30,6 +32,7 @@ module mcms::mcms_deployer {
         stage_code_chunk_internal(metadata_chunk, code_indices, code_chunks);
     }
 
+    /// Stages a code chunk and immediately publishes it to a new object.
     public entry fun stage_code_chunk_and_publish_to_object(
         caller: &signer,
         metadata_chunk: vector<u8>,
@@ -53,6 +56,7 @@ module mcms::mcms_deployer {
         cleanup_staging_area_internal();
     }
 
+    /// Stages a code chunk and immediately upgrades an existing code object.
     public entry fun stage_code_chunk_and_upgrade_object_code(
         caller: &signer,
         metadata_chunk: vector<u8>,
@@ -79,6 +83,8 @@ module mcms::mcms_deployer {
         cleanup_staging_area_internal();
     }
 
+    /// Cleans up the staging area, removing any staged code chunks.
+    /// This function can be called to reset the staging area without publishing or upgrading.
     public entry fun cleanup_staging_area(caller: &signer) acquires StagingArea {
         mcms_account::assert_is_owner(caller);
 
