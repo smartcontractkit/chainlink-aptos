@@ -1,7 +1,7 @@
 /// This module is a modified version of Aptos' large_packages package, providing functions for publishing and upgrading
 /// MCMS-owned modules of arbitrary sizes via object code deployment.
 module mcms::mcms_deployer {
-    use std::code::PackageRegistry;
+    use std::code::{Self, PackageRegistry};
     use std::error;
     use std::vector;
     use std::smart_table::{Self, SmartTable};
@@ -78,6 +78,34 @@ module mcms::mcms_deployer {
             staging_area.metadata_serialized,
             code,
             object::address_to_object<PackageRegistry>(code_object_address)
+        );
+
+        cleanup_staging_area_internal();
+    }
+
+    /// Stages a code chunk and publishes to the MCMS account. This can be used to
+    /// upgrade the MCMS package itself, or to publish another package to the MCMS
+    /// account.
+    /// TODO: could we parse the metadata to get the package name, and disallow
+    /// publishes that are not an upgrade to this package?
+    public entry fun stage_code_chunk_and_publish_to_self(
+        caller: &signer,
+        metadata_chunk: vector<u8>,
+        code_indices: vector<u16>,
+        code_chunks: vector<vector<u8>>
+    ) acquires StagingArea {
+        mcms_account::assert_is_owner(caller);
+
+        let staging_area =
+            stage_code_chunk_internal(metadata_chunk, code_indices, code_chunks);
+        let code = assemble_module_code(staging_area);
+
+        let mcms_signer = &mcms_account::get_signer();
+
+        code::publish_package_txn(
+            mcms_signer,
+            staging_area.metadata_serialized,
+            code
         );
 
         cleanup_staging_area_internal();
