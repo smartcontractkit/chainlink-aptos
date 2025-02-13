@@ -293,7 +293,7 @@ module mcms::bcs_stream {
 
     public fun deserialize_vector_u8(stream: &mut BCSStream): vector<u8> {
         let len = deserialize_uleb128(stream);
-        let data = &stream.data;
+        let data = &mut stream.data;
         let cur = stream.cur;
 
         assert!(
@@ -301,8 +301,10 @@ module mcms::bcs_stream {
             error::out_of_range(E_OUT_OF_BYTES)
         );
 
-        let res = vector::slice(data, cur, cur + len);
-        stream.cur = cur + len;
+        // AIP-105 introduces vector::move_range to efficiently move a range of elements from one vector to another.
+        let res = vector::trim(data, cur);
+        stream.data = vector::trim(&mut res, len);
+        stream.cur = 0;
 
         res
     }
@@ -312,7 +314,7 @@ module mcms::bcs_stream {
     /// After determining the length, it then reads the contents of the String.
     public fun deserialize_string(stream: &mut BCSStream): String {
         let len = deserialize_uleb128(stream);
-        let data = &stream.data;
+        let data = &mut stream.data;
         let cur = stream.cur;
 
         assert!(
@@ -320,10 +322,12 @@ module mcms::bcs_stream {
             error::out_of_range(E_OUT_OF_BYTES)
         );
 
-        let res = string::utf8(vector::slice(data, cur, cur + len));
-        stream.cur = cur + len;
+        // AIP-105 introduces vector::move_range to efficiently move a range of elements from one vector to another.
+        let res = vector::trim(data, cur);
+        stream.data = vector::trim(&mut res, len);
+        stream.cur = 0;
 
-        res
+        string::utf8(res)
     }
 
     /// Deserializes `Option` from the stream.
