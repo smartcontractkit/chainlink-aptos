@@ -561,6 +561,9 @@ module mcms::mcms {
                 code_chunks,
                 code_object_address
             );
+        } else if (function_name_bytes == b"cleanup_staging_area") {
+            bcs_stream::assert_is_consumed(&stream);
+            mcms_deployer::cleanup_staging_area(&self_signer);
         } else {
             abort error::invalid_argument(E_UNKNOWN_MCMS_MODULE_FUNCTION)
         }

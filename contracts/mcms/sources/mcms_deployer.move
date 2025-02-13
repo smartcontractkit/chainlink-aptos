@@ -50,7 +50,7 @@ module mcms::mcms_deployer {
             owner_signer, staging_area.metadata_serialized, code
         );
 
-        cleanup_staging_area();
+        cleanup_staging_area_internal();
     }
 
     public entry fun stage_code_chunk_and_upgrade_object_code(
@@ -76,7 +76,13 @@ module mcms::mcms_deployer {
             object::address_to_object<PackageRegistry>(code_object_address)
         );
 
-        cleanup_staging_area();
+        cleanup_staging_area_internal();
+    }
+
+    public entry fun cleanup_staging_area(caller: &signer) acquires StagingArea {
+        mcms_account::assert_is_owner(caller);
+
+        cleanup_staging_area_internal();
     }
 
     inline fun stage_code_chunk_internal(
@@ -141,7 +147,7 @@ module mcms::mcms_deployer {
         code
     }
 
-    fun cleanup_staging_area() acquires StagingArea {
+    inline fun cleanup_staging_area_internal() {
         let StagingArea { metadata_serialized: _, code, last_module_idx: _ } =
             move_from<StagingArea>(@mcms);
         smart_table::destroy(code);
