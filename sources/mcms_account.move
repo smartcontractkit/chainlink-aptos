@@ -1,3 +1,4 @@
+/// This module manages the ownership of the MCMS package.
 module mcms::mcms_account {
     use std::account::{Self, SignerCapability};
     use std::error;
@@ -9,7 +10,7 @@ module mcms::mcms_account {
     friend mcms::mcms_deployer;
     friend mcms::mcms_registry;
 
-    struct MCMSAccountState has key, store {
+    struct AccountState has key, store {
         signer_cap: SignerCapability,
         owner: address,
         pending_owner: address
@@ -37,16 +38,17 @@ module mcms::mcms_account {
         init_module_internal(publisher, signer_cap);
     }
 
-    fun init_module_internal(
+    inline fun init_module_internal(
         publisher: &signer, signer_cap: SignerCapability
     ) {
         move_to(
             publisher,
-            MCMSAccountState { signer_cap, owner: @mcms_owner, pending_owner: @0x0 }
+            AccountState { signer_cap, owner: @mcms_owner, pending_owner: @0x0 }
         );
     }
 
-    public entry fun transfer_ownership(caller: &signer, to: address) acquires MCMSAccountState {
+    /// Transfers ownership to the specified address.
+    public entry fun transfer_ownership(caller: &signer, to: address) acquires AccountState {
         let state = borrow_state_mut();
 
         assert_is_owner_internal(state, caller);
@@ -61,11 +63,13 @@ module mcms::mcms_account {
         event::emit(OwnershipTransferRequested { from: state.owner, to });
     }
 
-    public entry fun transfer_ownership_to_self(caller: &signer) acquires MCMSAccountState {
+    /// Transfers ownership back to the `@mcms` address.
+    public entry fun transfer_ownership_to_self(caller: &signer) acquires AccountState {
         transfer_ownership(caller, @mcms);
     }
 
-    public fun accept_ownership(caller: &signer) acquires MCMSAccountState {
+    /// Accepts ownership transfer. Can only be called by the pending owner.
+    public fun accept_ownership(caller: &signer) acquires AccountState {
         let state = borrow_state_mut();
 
         let caller_address = signer::address_of(caller);
@@ -82,25 +86,27 @@ module mcms::mcms_account {
     }
 
     #[view]
-    public fun owner(): address acquires MCMSAccountState {
+    /// Returns the current owner.
+    public fun owner(): address acquires AccountState {
         borrow_state().owner
     }
 
     #[view]
-    public fun is_self_owned(): bool acquires MCMSAccountState {
+    /// Returns `true` if the module is self-owned (owned by `@mcms`).
+    public fun is_self_owned(): bool acquires AccountState {
         owner() == @mcms
     }
 
-    public(friend) fun get_signer(): signer acquires MCMSAccountState {
+    public(friend) fun get_signer(): signer acquires AccountState {
         account::create_signer_with_capability(&borrow_state().signer_cap)
     }
 
-    public(friend) fun assert_is_owner(caller: &signer) acquires MCMSAccountState {
+    public(friend) fun assert_is_owner(caller: &signer) acquires AccountState {
         assert_is_owner_internal(borrow_state(), caller);
     }
 
     inline fun assert_is_owner_internal(
-        state: &MCMSAccountState, caller: &signer
+        state: &AccountState, caller: &signer
     ) {
         assert!(
             state.owner == signer::address_of(caller),
@@ -108,12 +114,12 @@ module mcms::mcms_account {
         );
     }
 
-    inline fun borrow_state(): &MCMSAccountState {
-        borrow_global<MCMSAccountState>(@mcms)
+    inline fun borrow_state(): &AccountState {
+        borrow_global<AccountState>(@mcms)
     }
 
-    inline fun borrow_state_mut(): &mut MCMSAccountState {
-        borrow_global_mut<MCMSAccountState>(@mcms)
+    inline fun borrow_state_mut(): &mut AccountState {
+        borrow_global_mut<AccountState>(@mcms)
     }
 
     #[test_only]
