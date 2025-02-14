@@ -952,7 +952,6 @@ module mcms::mcms {
             } else if (byte_a < byte_b) {
                 return false
             };
-            if (i == 0) { break };
             i = i + 1;
         };
 
@@ -963,6 +962,35 @@ module mcms::mcms {
     #[test_only]
     public fun init_module_for_testing(publisher: &signer) {
         init_module(publisher);
+    }
+
+    #[test]
+    fun test_verify_merkle_proof() {
+        let root = x"6689275ce24e4db03f6db26ea4a127728a2838af461f681e488bd1af85a1657b";
+
+        let op = Op {
+            chain_id: 2,
+            multisig: @0x9da0aba4368ec331bf2f6a52b029a09dc16146a79ee3654f9b45a99645935ce8,
+            nonce: 1,
+            to: @0x9da0aba4368ec331bf2f6a52b029a09dc16146a79ee3654f9b45a99645935ce8,
+            module_name: string::utf8(b"mcms_deployer"),
+            function: string::utf8(b"stage_code_chunk"),
+            data: x"e8070d436861696e6c696e6b434349500100000000000000004032463033343446453846363533383138303341363639363946393746434333463838353936344544324543363430384643323239374541344539343343454446f0011f8b08000000000002ff6d4f4d6b843010bde75748ce5d8d51d75ae8a10885de7a1729f918d7e09a8424da42e97f6fc2da42a1b799f731f3de609958d80546a4d90ad96386fb99297d557ae9fb97578c76705e199d98322739c1886d6136ce476418111a98940ebc073f2221944dc2371c7109fbe91f8e7c9484dc780b5a82162ad14f3618ffec628677e39628fccc2e2a24c31c82f50f4511d779e3b9306bc192f87465dc1fa3300ef228c07799833db9aa9ad086d21678539d5b51d71d9f3ac9a01292d2f3048d28efdb8ed4d1e1372e954ba6dbb1d5ec504c3f518e0fbf3bcebe8e727f0b7c03a1c38e4b490100000f06636c69656e74f7041f8b08000000000002ffd5553d6fdb3010ddfd2b6e0aec40b081a2280ab5306aa44b87221db20b2c75b209cba4405236d224ffbd475296f5c1c841b678b1741fefdebd3b8aabd50a1e76c2c041e5758990632124d22b1ac3b6f450280d2873a80d6a035681901635e3164ec2ee60535965e0eeeed79fe56ce5b0ee7fdea7b0634721b7601db090f48fc0b9a8a0627c4fa884ce2481ed98f5f64c234771445fa461623cdc49942548c4dc55de4b75f2582ccf35f10355c00f8faba45555fb9a695513c72570258dc8517ba8836a3925404d4965a99e3319ab6b6e0d101b5696b346098794a6bc14282d3ccd807e448f82f3343d22b74a7f9b796ba1851328c4aba2d0ec5035ae800c1bf9f8c90bf53ba84afa18f2298d09e45a550931ad1e9b22eed7a89f893c8550eb7bfd759db47ea36acd31e33b266466b0f42129d45f3e77628814ea787ece2c7bc583c66656ed5166eca06a694d1bd776f1e0dc1bef5dfbc49778b79db8ab1dfb92e979b2173e81846fad5b8ae6391295714e4f4a1b1f51d57f4bc1a1a8256cd1661745e742563521de0c01165d453ad47cfcf202d0e531a8129dcb54416a6b54290a3255d40ffa9d6d85e40974b72aefc476a953c8a3557b439de8128e2b8fa05f5b9eee8e4e2e90471b13ece42fdaf51df1f1c913520492d7d063cb1232c7d0f3f0555af812124f19234ce630cf4761fe51bf36a4c4e8ec5f649970f57b4d7af6688f8310df62dfe65a1b58e2ab1706747d4c9143d1ff4666cd8ee145aac6b24e202e250daa55ee8dc72884a5e93fba4d0fcc5dd0c5bcd7e6cd804c12f506227ddf732fb3cff97930adde40bb47f5e97c61dc0ed0cef7c56d17b651be3f072f48339197d97f3fedb495080900000000076574685f616269de0a1f8b08000000000002ffdd19db4ee346f40000",
+        };
+
+        let proof = vector[
+          x"cc02fed7e779df58dfda455712139809b0cea62a7660b82b2467b9bd18ab0a92",
+          x"bed7576e629477f6e15e14006cb7133f9895ce0e10c23e27b75bbf38eabca5cb",
+          x"ec698f64f949fc42b6a9387874d36771195c52b5a0dc6c90d7a71aa9af7fbd7e",
+          x"0fab529262e18658d7216f753727fa2aab32292fc36c07cd7fd3cbbc7d3c4827",
+          x"747edd5012b67299322967e05f51620e362222cf699bb549acd41a11f51d57e1",
+          x"fa48ef938f106c38e4e88cf59b02e230a9cda8647fefcba32cb6e6157af79a6d",
+          x"e56a6e3a1b75ebe1b08445f5b55c2a0f91f7d37f91081ad50fd063e70c178903"
+        ];
+
+        let hashed_leaf = hash_op_leaf(op);
+
+        assert!(verify_merkle_proof(proof, root, hashed_leaf), 1);
     }
 
     // TODO: update and reenable tests for dynamic dispatch
@@ -2181,6 +2209,6 @@ module mcms::mcms {
         mcms_registry::init_module_for_testing(publisher);
         init_module_for_testing(publisher);
 
-        mcms_registry::register_object_owner_for_new_code_object(vector[123, 231]);
+        mcms_registry::create_owner_for_new_code_object(vector[123, 231]);
     }
 }
