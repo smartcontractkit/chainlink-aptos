@@ -108,7 +108,6 @@ module ccip::merkle_multi_proof {
             } else if (byte_a < byte_b) {
                 return false
             };
-            if (i == 0) { break };
             i = i + 1;
         };
 
