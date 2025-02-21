@@ -11,15 +11,14 @@ module ccip::rmn_remote {
     use std::smart_table::{Self, SmartTable};
     use std::option;
 
+    use ccip::auth;
     use ccip::eth_abi;
     use ccip::merkle_multi_proof;
-    use ccip::ownable;
     use ccip::state_object;
 
     const GLOBAL_CURSE_SUBJECT: vector<u8> = x"01000000000000000000000000000001";
 
     struct RMNRemoteState has key {
-        ownable_state: ownable::OwnableState,
         local_chain_selector: u64,
         config: Config,
         config_count: u32,
@@ -95,7 +94,7 @@ module ccip::rmn_remote {
     const E_INVALID_PUBLIC_KEY_LENGTH: u64 = 20;
 
     public fun initialize(caller: &signer, local_chain_selector: u64) {
-        state_object::assert_can_initialize(caller);
+        auth::assert_only_owner(signer::address_of(caller));
 
         assert!(
             local_chain_selector != 0,
@@ -104,9 +103,6 @@ module ccip::rmn_remote {
 
         let state_object_signer = state_object::object_signer();
         let state = RMNRemoteState {
-            ownable_state: ownable::new(
-                &state_object_signer, signer::address_of(caller), @0x0
-            ),
             local_chain_selector,
             config: Config {
                 rmn_home_contract_config_digest: vector[],
@@ -260,8 +256,9 @@ module ccip::rmn_remote {
         node_indexes: vector<u64>,
         f_sign: u64
     ) acquires RMNRemoteState {
+        auth::assert_only_owner(signer::address_of(caller));
+
         let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
         assert!(
             vector::length(&rmn_home_contract_config_digest) == 32,
@@ -354,8 +351,9 @@ module ccip::rmn_remote {
     public entry fun curse_multiple(
         caller: &signer, subjects: vector<vector<u8>>
     ) acquires RMNRemoteState {
+        auth::assert_only_owner(signer::address_of(caller));
+
         let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
         vector::for_each_ref(
             &subjects,
@@ -383,8 +381,9 @@ module ccip::rmn_remote {
     public entry fun uncurse_multiple(
         caller: &signer, subjects: vector<vector<u8>>
     ) acquires RMNRemoteState {
+        auth::assert_only_owner(signer::address_of(caller));
+
         let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
         vector::for_each_ref(
             &subjects,

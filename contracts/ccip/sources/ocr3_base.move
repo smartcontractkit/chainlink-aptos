@@ -10,7 +10,7 @@ module ccip::ocr3_base {
     use std::table::{Self, Table};
     use std::vector;
 
-    use ccip::ownable;
+    use ccip::auth;
 
     const MAX_NUM_ORACLES: u64 = 256;
 
@@ -105,7 +105,6 @@ module ccip::ocr3_base {
 
     public fun set_ocr3_config(
         caller: address,
-        ownable_state: &ownable::OwnableState,
         ocr3_state: &mut OCR3BaseState,
         config_digest: vector<u8>,
         ocr_plugin_type: u8,
@@ -114,7 +113,7 @@ module ccip::ocr3_base {
         signers: vector<vector<u8>>,
         transmitters: vector<address>
     ) {
-        ownable::assert_only_owner(caller, ownable_state);
+        auth::assert_only_owner(caller);
         assert!(big_f != 0, error::invalid_argument(E_BIG_F_MUST_BE_POSITIVE));
 
         let ocr_config =

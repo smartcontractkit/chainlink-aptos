@@ -14,7 +14,7 @@ module ccip::token_admin_registry {
     use std::type_info::{Self, TypeInfo};
     use std::vector;
 
-    use ccip::ownable;
+    use ccip::auth;
     use ccip::state_object;
 
     friend ccip::token_admin_dispatcher;
@@ -24,7 +24,6 @@ module ccip::token_admin_registry {
     const EXECUTION_STATE_RELEASE_OR_MINT: u8 = 3;
 
     struct TokenAdminRegistryState has key, store {
-        ownable_state: ownable::OwnableState,
         extend_ref: ExtendRef,
         transfer_ref: TransferRef,
 
@@ -134,7 +133,7 @@ module ccip::token_admin_registry {
     const E_NOT_PENDING_ADMINISTRATOR: u64 = 25;
 
     public entry fun initialize(caller: &signer) {
-        state_object::assert_can_initialize(caller);
+        auth::assert_only_owner(signer::address_of(caller));
 
         assert!(
             !exists<TokenAdminRegistryState>(state_object::object_address()),
@@ -151,9 +150,6 @@ module ccip::token_admin_registry {
         let transfer_ref = object::generate_transfer_ref(&constructor_ref);
 
         let state = TokenAdminRegistryState {
-            ownable_state: ownable::new(
-                &state_object_signer, signer::address_of(caller), @0x0
-            ),
             extend_ref,
             transfer_ref,
             token_configs: smart_table::new(),
@@ -256,7 +252,7 @@ module ccip::token_admin_registry {
         let state = borrow_state_mut();
 
         assert_can_register(
-            ownable::owner(&state.ownable_state),
+            auth::owner(),
             signer::address_of(token_pool_account),
             object::address_to_object<Metadata>(local_token)
         );
@@ -915,27 +911,5 @@ module ccip::token_admin_registry {
             error::invalid_argument(E_INVALID_TOKEN_POOL)
         );
         borrow_global_mut<TokenPoolRegistration>(token_pool_address)
-    }
-
-    //
-    // ccip::ownable functions
-    //
-
-    #[view]
-    public fun owner(): address acquires TokenAdminRegistryState {
-        let state = borrow_state();
-        ownable::owner(&state.ownable_state)
-    }
-
-    public entry fun transfer_ownership(caller: &signer, to: address) acquires TokenAdminRegistryState {
-        let state = borrow_state_mut();
-        ownable::transfer_ownership(
-            signer::address_of(caller), &mut state.ownable_state, to
-        )
-    }
-
-    public entry fun accept_ownership(caller: &signer) acquires TokenAdminRegistryState {
-        let state = borrow_state_mut();
-        ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
     }
 }

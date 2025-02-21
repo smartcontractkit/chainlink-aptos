@@ -13,14 +13,13 @@ module ccip::receiver_registry {
     use std::string;
     use std::vector;
 
+    use ccip::auth;
     use ccip::client;
-    use ccip::ownable;
     use ccip::state_object;
 
     friend ccip::receiver_dispatcher;
 
     struct ReceiverRegistryState has key, store {
-        ownable_state: ownable::OwnableState,
         extend_ref: ExtendRef,
         transfer_ref: TransferRef,
         receiver_registered_events: EventHandle<ReceiverRegistered>
@@ -49,7 +48,7 @@ module ccip::receiver_registry {
     const E_NON_EMPTY_INPUT: u64 = 6;
 
     public fun initialize(caller: &signer) {
-        state_object::assert_can_initialize(caller);
+        auth::assert_only_owner(signer::address_of(caller));
 
         assert!(
             !exists<ReceiverRegistryState>(state_object::object_address()),
@@ -63,9 +62,6 @@ module ccip::receiver_registry {
         let transfer_ref = object::generate_transfer_ref(&constructor_ref);
 
         let state = ReceiverRegistryState {
-            ownable_state: ownable::new(
-                &state_object_signer, signer::address_of(caller), @0x0
-            ),
             extend_ref,
             transfer_ref,
             receiver_registered_events: account::new_event_handle(&state_object_signer)
@@ -194,27 +190,5 @@ module ccip::receiver_registry {
             error::invalid_argument(E_UNKNOWN_RECEIVER)
         );
         borrow_global_mut<CCIPReceiverRegistration>(receiver_address)
-    }
-
-    //
-    // ccip::ownable functions
-    //
-
-    #[view]
-    public fun owner(): address acquires ReceiverRegistryState {
-        let state = borrow_state();
-        ownable::owner(&state.ownable_state)
-    }
-
-    public entry fun transfer_ownership(caller: &signer, to: address) acquires ReceiverRegistryState {
-        let state = borrow_state_mut();
-        ownable::transfer_ownership(
-            signer::address_of(caller), &mut state.ownable_state, to
-        )
-    }
-
-    public entry fun accept_ownership(caller: &signer) acquires ReceiverRegistryState {
-        let state = borrow_state_mut();
-        ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
     }
 }

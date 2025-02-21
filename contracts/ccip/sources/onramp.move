@@ -11,18 +11,17 @@ module ccip::onramp {
     use std::smart_table::{Self, SmartTable};
     use std::vector;
 
+    use ccip::auth;
     use ccip::eth_abi;
     use ccip::fee_quoter;
     use ccip::internal;
     use ccip::merkle_multi_proof;
-    use ccip::ownable;
     use ccip::rmn_remote;
     use ccip::state_object;
     use ccip::token_admin_dispatcher;
     use ccip::token_admin_registry;
 
     struct OnRampState has key, store {
-        ownable_state: ownable::OwnableState,
         chain_selector: u64,
         allowlist_admin: address,
 
@@ -144,7 +143,7 @@ module ccip::onramp {
         dest_chain_enabled: vector<bool>,
         dest_chain_allowlist_enabled: vector<bool>
     ) {
-        state_object::assert_can_initialize(caller);
+        auth::assert_only_owner(signer::address_of(caller));
 
         assert!(
             !exists<OnRampState>(state_object::object_address()),
@@ -154,9 +153,6 @@ module ccip::onramp {
         let state_object_signer = state_object::object_signer();
 
         let state = OnRampState {
-            ownable_state: ownable::new(
-                &state_object_signer, signer::address_of(caller), @0x0
-            ),
             chain_selector,
             allowlist_admin: @0x0,
             dest_chain_configs: smart_table::new(),
@@ -488,10 +484,9 @@ module ccip::onramp {
     public entry fun set_dynamic_config(
         caller: &signer, allowlist_admin: address
     ) acquires OnRampState {
-        let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+        auth::assert_only_owner(signer::address_of(caller));
 
-        set_dynamic_config_internal(state, allowlist_admin)
+        set_dynamic_config_internal(borrow_state_mut(), allowlist_admin)
     }
 
     public entry fun apply_dest_chain_config_updates(
@@ -500,11 +495,10 @@ module ccip::onramp {
         dest_chain_enabled: vector<bool>,
         dest_chain_allowlist_enabled: vector<bool>
     ) acquires OnRampState {
-        let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+        auth::assert_only_owner(signer::address_of(caller));
 
         apply_dest_chain_config_updates_internal(
-            state,
+            borrow_state_mut(),
             dest_chain_selectors,
             dest_chain_enabled,
             dest_chain_allowlist_enabled
@@ -556,7 +550,7 @@ module ccip::onramp {
     ) acquires OnRampState {
         let state = borrow_state_mut();
         assert!(
-            signer::address_of(caller) == ownable::owner(&state.ownable_state)
+            signer::address_of(caller) == auth::owner()
                 || signer::address_of(caller) == state.allowlist_admin,
             error::permission_denied(E_ONLY_CALLABLE_BY_OWNER_OR_ALLOWLIST_ADMIN)
         );
@@ -867,27 +861,5 @@ module ccip::onramp {
 
     inline fun borrow_state_mut(): &mut OnRampState {
         borrow_global_mut<OnRampState>(state_object::object_address())
-    }
-
-    //
-    // ccip::ownable functions
-    //
-
-    #[view]
-    public fun owner(): address acquires OnRampState {
-        let state = borrow_state();
-        ownable::owner(&state.ownable_state)
-    }
-
-    public entry fun transfer_ownership(caller: &signer, to: address) acquires OnRampState {
-        let state = borrow_state_mut();
-        ownable::transfer_ownership(
-            signer::address_of(caller), &mut state.ownable_state, to
-        )
-    }
-
-    public entry fun accept_ownership(caller: &signer) acquires OnRampState {
-        let state = borrow_state_mut();
-        ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
     }
 }

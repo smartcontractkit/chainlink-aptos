@@ -10,9 +10,10 @@
 ///   object is necessary.
 module ccip::state_object {
     use std::error;
-    use std::object::{Self, ExtendRef, ObjectCore, TransferRef};
+    use std::object::{Self, ExtendRef, TransferRef};
     use std::signer;
 
+    friend ccip::auth;
     friend ccip::fee_quoter;
     friend ccip::offramp;
     friend ccip::onramp;
@@ -70,16 +71,5 @@ module ccip::state_object {
     public(friend) fun object_signer(): signer acquires StateObjectRefs {
         let store = borrow_global<StateObjectRefs>(object_address());
         object::generate_signer_for_extending(&store.extend_ref)
-    }
-
-    public(friend) fun assert_can_initialize(caller: &signer) {
-        let caller_address = signer::address_of(caller);
-        let ccip_object = object::address_to_object<ObjectCore>(@ccip);
-
-        assert!(
-            caller_address == object::owner(ccip_object)
-                || caller_address == object::root_owner(ccip_object),
-            error::permission_denied(E_NOT_CCIP_OBJECT_OWNER)
-        );
     }
 }

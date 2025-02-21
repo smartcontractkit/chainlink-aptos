@@ -11,11 +11,11 @@ module ccip::offramp {
     use std::timestamp;
     use std::vector;
 
+    use ccip::auth;
     use ccip::client;
     use ccip::eth_abi;
     use ccip::fee_quoter;
     use ccip::merkle_multi_proof;
-    use ccip::ownable;
     use ccip::ocr3_base;
     use ccip::receiver_dispatcher;
     use ccip::rmn_remote;
@@ -32,7 +32,6 @@ module ccip::offramp {
     ];
 
     struct OffRampState has key, store {
-        ownable_state: ownable::OwnableState,
         ocr3_base_state: ocr3_base::OCR3BaseState,
 
         // static config
@@ -243,7 +242,7 @@ module ccip::offramp {
         source_chain_selectors: vector<u64>,
         source_chain_is_enabled: vector<bool>
     ) {
-        state_object::assert_can_initialize(caller);
+        auth::assert_only_owner(signer::address_of(caller));
 
         assert!(
             !exists<OffRampState>(state_object::object_address()),
@@ -258,9 +257,6 @@ module ccip::offramp {
         let state_object_signer = state_object::object_signer();
 
         let state = OffRampState {
-            ownable_state: ownable::new(
-                &state_object_signer, signer::address_of(caller), @0x0
-            ),
             ocr3_base_state: ocr3_base::new(&state_object_signer),
             chain_selector,
             permissionless_execution_threshold_secs: 0,
@@ -761,11 +757,10 @@ module ccip::offramp {
         source_chain_selectors: vector<u64>,
         source_chain_is_enabled: vector<bool>
     ) acquires OffRampState {
-        let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+        auth::assert_only_owner(signer::address_of(caller));
 
         apply_source_chain_config_updates_internal(
-            state, source_chain_selectors, source_chain_is_enabled
+            borrow_state_mut(), source_chain_selectors, source_chain_is_enabled
         )
     }
 
@@ -774,11 +769,10 @@ module ccip::offramp {
         permissionless_execution_threshold_secs: u32,
         is_rmn_verification_disabled: bool
     ) acquires OffRampState {
-        let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+        auth::assert_only_owner(signer::address_of(caller));
 
         set_dynamic_config_internal(
-            state,
+            borrow_state_mut(),
             permissionless_execution_threshold_secs,
             is_rmn_verification_disabled
         )
@@ -1270,7 +1264,6 @@ module ccip::offramp {
         let state = borrow_state_mut();
         ocr3_base::set_ocr3_config(
             signer::address_of(caller),
-            &state.ownable_state,
             &mut state.ocr3_base_state,
             config_digest,
             ocr_plugin_type,
@@ -1311,27 +1304,5 @@ module ccip::offramp {
     ): (vector<u8>, u8, u8, bool, vector<vector<u8>>, vector<address>) acquires OffRampState {
         let state = borrow_state();
         ocr3_base::latest_config_details(&state.ocr3_base_state, ocr_plugin_type)
-    }
-
-    //
-    // ccip::ownable functions
-    //
-
-    #[view]
-    public fun owner(): address acquires OffRampState {
-        let state = borrow_state();
-        ownable::owner(&state.ownable_state)
-    }
-
-    public entry fun transfer_ownership(caller: &signer, to: address) acquires OffRampState {
-        let state = borrow_state_mut();
-        ownable::transfer_ownership(
-            signer::address_of(caller), &mut state.ownable_state, to
-        )
-    }
-
-    public entry fun accept_ownership(caller: &signer) acquires OffRampState {
-        let state = borrow_state_mut();
-        ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
     }
 }

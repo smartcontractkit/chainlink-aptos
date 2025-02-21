@@ -25,9 +25,9 @@ module ccip::fee_quoter {
     use std::timestamp;
     use std::vector;
 
+    use ccip::auth;
     use ccip::eth_abi;
     use ccip::internal;
-    use ccip::ownable;
     use ccip::state_object;
 
     friend ccip::offramp;
@@ -59,7 +59,6 @@ module ccip::fee_quoter {
     const VAL_1E18: u256 = 1_000_000_000_000_000_000;
 
     struct FeeQuoterState has key, store {
-        ownable_state: ownable::OwnableState,
         max_fee_juels_per_msg: u64,
         link_token: address,
         token_price_staleness_threshold: u64,
@@ -218,7 +217,7 @@ module ccip::fee_quoter {
         token_price_staleness_threshold: u64,
         fee_tokens: vector<address>
     ) {
-        state_object::assert_can_initialize(caller);
+        auth::assert_only_owner(signer::address_of(caller));
 
         assert!(
             !exists<FeeQuoterState>(state_object::object_address()),
@@ -233,9 +232,6 @@ module ccip::fee_quoter {
         let state_object_signer = state_object::object_signer();
 
         let state = FeeQuoterState {
-            ownable_state: ownable::new(
-                &state_object_signer, signer::address_of(caller), @0x0
-            ),
             max_fee_juels_per_msg,
             link_token,
             token_price_staleness_threshold,
@@ -326,8 +322,9 @@ module ccip::fee_quoter {
         fee_tokens_to_remove: vector<address>,
         fee_tokens_to_add: vector<address>
     ) acquires FeeQuoterState {
+        auth::assert_only_owner(signer::address_of(caller));
+
         let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
         // Remove tokens
         vector::for_each_ref(
@@ -405,8 +402,10 @@ module ccip::fee_quoter {
         add_is_enabled: vector<bool>,
         remove_tokens: vector<address>
     ) acquires FeeQuoterState {
+        auth::assert_only_owner(signer::address_of(caller));
+
         let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+
         if (!smart_table::contains(
             &state.token_transfer_fee_configs, dest_chain_selector
         )) {
@@ -717,8 +716,10 @@ module ccip::fee_quoter {
         tokens: vector<address>,
         premium_multiplier_wei_per_eth: vector<u64>
     ) acquires FeeQuoterState {
+        auth::assert_only_owner(signer::address_of(caller));
+
         let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+
         vector::zip_ref(
             &tokens,
             &premium_multiplier_wei_per_eth,
@@ -1176,8 +1177,9 @@ module ccip::fee_quoter {
         gas_price_staleness_threshold: u32,
         network_fee_usd_cents: u32
     ) acquires FeeQuoterState {
+        auth::assert_only_owner(signer::address_of(caller));
+
         let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
         assert!(
             dest_chain_selector != 0,
@@ -1367,27 +1369,5 @@ module ccip::fee_quoter {
                 error::invalid_argument(E_INVALID_SVM_ADDRESS)
             );
         };
-    }
-
-    //
-    // ccip::ownable functions
-    //
-
-    #[view]
-    public fun owner(): address acquires FeeQuoterState {
-        let state = borrow_state();
-        ownable::owner(&state.ownable_state)
-    }
-
-    public entry fun transfer_ownership(caller: &signer, to: address) acquires FeeQuoterState {
-        let state = borrow_state_mut();
-        ownable::transfer_ownership(
-            signer::address_of(caller), &mut state.ownable_state, to
-        )
-    }
-
-    public entry fun accept_ownership(caller: &signer) acquires FeeQuoterState {
-        let state = borrow_state_mut();
-        ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
     }
 }
