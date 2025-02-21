@@ -93,7 +93,7 @@ module ccip::rmn_remote {
     const E_INVALID_SUBJECT_LENGTH: u64 = 19;
     const E_INVALID_PUBLIC_KEY_LENGTH: u64 = 20;
 
-    public fun initialize(caller: &signer, local_chain_selector: u64) {
+    public entry fun initialize(caller: &signer, local_chain_selector: u64) {
         auth::assert_only_owner(signer::address_of(caller));
 
         assert!(

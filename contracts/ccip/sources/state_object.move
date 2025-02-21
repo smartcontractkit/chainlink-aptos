@@ -9,6 +9,7 @@
 ///   retrieve a signer to store resources (see: 0x1::object_code_deployment), so a different
 ///   object is necessary.
 module ccip::state_object {
+    use std::account;
     use std::error;
     use std::object::{Self, ExtendRef, TransferRef};
     use std::signer;
@@ -40,6 +41,9 @@ module ccip::state_object {
         let extend_ref = object::generate_extend_ref(&constructor_ref);
         let transfer_ref = object::generate_transfer_ref(&constructor_ref);
         let object_signer = object::generate_signer(&constructor_ref);
+
+        // create an Account on the object for event handles.
+        account::create_account_if_does_not_exist(object::address_from_constructor_ref(&constructor_ref));
 
         move_to(&object_signer, StateObjectRefs { extend_ref, transfer_ref });
     }

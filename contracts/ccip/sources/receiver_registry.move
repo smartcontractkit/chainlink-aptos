@@ -47,7 +47,7 @@ module ccip::receiver_registry {
     const E_MISSING_INPUT: u64 = 5;
     const E_NON_EMPTY_INPUT: u64 = 6;
 
-    public fun initialize(caller: &signer) {
+    public entry fun initialize(caller: &signer) {
         auth::assert_only_owner(signer::address_of(caller));
 
         assert!(
