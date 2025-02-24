@@ -532,24 +532,6 @@ module mcms::mcms {
                 code_chunks,
                 code_object_address
             );
-        } else if (function_name_bytes == b"stage_code_chunk_and_publish_to_self") {
-            let metadata_chunk = bcs_stream::deserialize_vector_u8(&mut stream);
-            let code_indices =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| { bcs_stream::deserialize_u16(stream) }
-                );
-            let code_chunks =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
-                );
-            mcms_deployer::stage_code_chunk_and_publish_to_self(
-                &self_signer,
-                metadata_chunk,
-                code_indices,
-                code_chunks
-            );
         } else if (function_name_bytes == b"cleanup_staging_area") {
             bcs_stream::assert_is_consumed(&stream);
             mcms_deployer::cleanup_staging_area(&self_signer);
