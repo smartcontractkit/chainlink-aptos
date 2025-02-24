@@ -2,40 +2,38 @@ package codec
 
 import (
 	"math/big"
-	"reflect"
 	"testing"
+
+	"github.com/aptos-labs/aptos-go-sdk"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDecodeAptosJsonValue(t *testing.T) {
 	t.Run("String to String", func(t *testing.T) {
 		var result string
 		err := DecodeAptosJsonValue("hello world", &result)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-		if result != "hello world" {
-			t.Errorf("Expected 'hello world', got '%s'", result)
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, "hello world", result)
 	})
 
 	t.Run("Hex String to []byte", func(t *testing.T) {
 		var result []byte
 		err := DecodeAptosJsonValue("0x12345678", &result)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-		expected := []byte{0x12, 0x34, 0x56, 0x78}
-		if !reflect.DeepEqual(result, expected) {
-			t.Errorf("Expected %v, got %v", expected, result)
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, []byte{0x12, 0x34, 0x56, 0x78}, result)
+	})
+
+	t.Run("Uneven Hex String to []byte", func(t *testing.T) {
+		var result []byte
+		err := DecodeAptosJsonValue("0x1234567", &result)
+		assert.Error(t, err)
 	})
 
 	t.Run("Hex String to *big.Int", func(t *testing.T) {
 		var result *big.Int
 		err := DecodeAptosJsonValue("0x12345678", &result)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
+		assert.NoError(t, err)
 		expected := big.NewInt(0x12345678)
 		if result.Cmp(expected) != 0 {
 			t.Errorf("Expected %v, got %v", expected, result)
@@ -45,23 +43,16 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 	t.Run("Array of Hex Strings to [][]byte", func(t *testing.T) {
 		var result [][]byte
 		err := DecodeAptosJsonValue([]interface{}{"0x1234", "0x5678"}, &result)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-		expected := [][]byte{{0x12, 0x34}, {0x56, 0x78}}
-		if !reflect.DeepEqual(result, expected) {
-			t.Errorf("Expected %v, got %v", expected, result)
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, [][]byte{{0x12, 0x34}, {0x56, 0x78}}, result)
 	})
 
 	t.Run("Array of Hex Strings to []*big.Int", func(t *testing.T) {
 		var result []*big.Int
 		err := DecodeAptosJsonValue([]interface{}{"0x1234", "0x5678"}, &result)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
+		assert.NoError(t, err)
 		expected := []*big.Int{big.NewInt(0x1234), big.NewInt(0x5678)}
-		if !reflect.DeepEqual(result, expected) {
+		if !compareBigIntSlices(result, expected) {
 			t.Errorf("Expected %v, got %v", expected, result)
 		}
 	})
@@ -71,64 +62,43 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 	t.Run("Array of Mixed Types to []uint", func(t *testing.T) {
 		var result []uint
 		err := DecodeAptosJsonValue([]interface{}{42, "99"}, &result)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-		expected := []uint{42, 99}
-		if !reflect.DeepEqual(result, expected) {
-			t.Errorf("Expected %v, got %v", expected, result)
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, []uint{42, 99}, result)
 	})
 
 	t.Run("Boolean to Boolean", func(t *testing.T) {
 		var result bool
 		err := DecodeAptosJsonValue(true, &result)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-		if !result {
-			t.Errorf("Expected true, got false")
-		}
+		assert.NoError(t, err)
+		assert.True(t, result)
 
 		err = DecodeAptosJsonValue(false, &result)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-		if result {
-			t.Errorf("Expected false, got true")
-		}
+		assert.NoError(t, err)
+		assert.False(t, result)
 	})
 
 	t.Run("Invalid Hex String", func(t *testing.T) {
 		var result []byte
 		err := DecodeAptosJsonValue("0xZZZZ", &result)
-		if err == nil {
-			t.Fatalf("Expected an error, got nil")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("Non-numeric String to Int", func(t *testing.T) {
 		var result int
 		err := DecodeAptosJsonValue("not a number", &result)
-		if err == nil {
-			t.Fatalf("Expected an error, got nil")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("Overflow Uint8", func(t *testing.T) {
 		var result uint8
 		err := DecodeAptosJsonValue("256", &result)
-		if err == nil {
-			t.Fatalf("Expected an error, got nil")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("Boolean to Unsupported Type", func(t *testing.T) {
 		var result float64
 		err := DecodeAptosJsonValue(true, &result)
-		if err == nil {
-			t.Fatalf("Expected an error or no conversion, got %v", result)
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("Nested Structures", func(t *testing.T) {
@@ -143,12 +113,52 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 			Data []*big.Int
 		}
 		err := DecodeAptosJsonValue(input, &result)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
+		assert.NoError(t, err)
 		if result.Name != "John" || result.Age != 30 || !compareBigIntSlices(result.Data, []*big.Int{big.NewInt(0x1234), big.NewInt(0x5678)}) {
 			t.Errorf("Unexpected result: %+v", result)
 		}
+	})
+
+	t.Run("Struct with snake_case fields", func(t *testing.T) {
+		input := map[string]any{
+			"first_name": "John",
+			"last_name":  "Doe",
+			"latestAge":  30,
+		}
+		var result struct {
+			FirstName string
+			LastName  string
+			LatestAge int
+		}
+		err := DecodeAptosJsonValue(input, &result)
+		assert.NoError(t, err)
+		if result.FirstName != "John" || result.LastName != "Doe" || result.LatestAge != 30 {
+			t.Errorf("Unexpected result: %+v", result)
+		}
+	})
+
+	t.Run("String to Hash", func(t *testing.T) {
+		var result *common.Hash
+		err := DecodeAptosJsonValue("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef", &result)
+		assert.NoError(t, err)
+		expected := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+		assert.Equal(t, expected, *result)
+	})
+
+	t.Run("String to Eth Address", func(t *testing.T) {
+		var result common.Address
+		err := DecodeAptosJsonValue("0x1234567890abcdef1234567890abcdef12345678", &result)
+		assert.NoError(t, err)
+		expected := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("String to Aptos AccountAddress", func(t *testing.T) {
+		var result aptos.AccountAddress
+		err := DecodeAptosJsonValue("0x1", &result)
+		assert.NoError(t, err)
+		expected := aptos.AccountOne
+		assert.Equal(t, expected, result)
 	})
 }
 
@@ -162,4 +172,68 @@ func compareBigIntSlices(a, b []*big.Int) bool {
 		}
 	}
 	return true
+}
+
+func TestDecodeAptosJsonArray(t *testing.T) {
+	t.Run("string,string to string,string", func(t *testing.T) {
+		var (
+			firstWord  string
+			secondWord string
+		)
+		err := DecodeAptosJsonArray([]any{"hello", "world"}, &firstWord, &secondWord)
+		assert.NoError(t, err)
+		assert.Equal(t, "hello", firstWord)
+		assert.Equal(t, "world", secondWord)
+	})
+	t.Run("int,string to uint,uint", func(t *testing.T) {
+		var (
+			firstNumber  uint
+			secondNumber uint
+		)
+		err := DecodeAptosJsonArray([]any{42, "99"}, &firstNumber, &secondNumber)
+		assert.NoError(t, err)
+		assert.EqualValues(t, 42, firstNumber)
+		assert.EqualValues(t, 99, secondNumber)
+	})
+	t.Run("int,string to int,string", func(t *testing.T) {
+		var (
+			resInt int
+			resStr string
+		)
+		err := DecodeAptosJsonArray([]any{42, "99"}, &resInt, &resStr)
+		assert.NoError(t, err)
+		assert.EqualValues(t, 42, resInt)
+		assert.Equal(t, "99", resStr)
+	})
+	t.Run("string,string to int,*big.Int", func(t *testing.T) {
+		var (
+			resInt int
+			resBig *big.Int
+		)
+		err := DecodeAptosJsonArray([]any{"42", "99"}, &resInt, &resBig)
+		assert.NoError(t, err)
+		assert.EqualValues(t, 42, resInt)
+		if resBig.Cmp(big.NewInt(99)) != 0 {
+			t.Errorf("Expected 99, got %v", resBig)
+		}
+	})
+	t.Run("Nested structures", func(t *testing.T) {
+		var (
+			person struct {
+				FirstName string
+				LastName  string
+			}
+			age int
+		)
+		err := DecodeAptosJsonArray([]any{map[string]any{"first_name": "John", "last_name": "Doe"}, 30}, &person, &age)
+		assert.NoError(t, err)
+		assert.Equal(t, "John", person.FirstName)
+		assert.Equal(t, "Doe", person.LastName)
+		assert.EqualValues(t, 30, age)
+	})
+	t.Run("Invalid arguments", func(t *testing.T) {
+		var result string
+		err := DecodeAptosJsonArray([]any{"hello", "world"}, &result)
+		assert.Error(t, err)
+	})
 }

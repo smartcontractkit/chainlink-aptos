@@ -268,8 +268,6 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 		}
 
 		rv := reflect.ValueOf(argVal)
-		kindstring := rv.Kind().String()
-		print(kindstring)
 		if rv.Kind() != reflect.Array && rv.Kind() != reflect.Slice {
 			return errors.New("invalid vector args")
 		}

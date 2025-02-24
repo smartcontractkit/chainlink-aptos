@@ -9,8 +9,24 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/aptos-labs/aptos-go-sdk"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/mitchellh/mapstructure"
 )
+
+func DecodeAptosJsonArray(from []any, to ...any) error {
+	if len(to) != len(from) {
+		return fmt.Errorf("mismatched from/to arguments")
+	}
+
+	for i := range from {
+		if err := DecodeAptosJsonValue(from[i], to[i]); err != nil {
+			return fmt.Errorf("failed to decode value: %w", err)
+		}
+	}
+
+	return nil
+}
 
 func DecodeAptosJsonValue(from any, to any) error {
 	config := &mapstructure.DecoderConfig{
@@ -23,6 +39,13 @@ func DecodeAptosJsonValue(from any, to any) error {
 		),
 		Result:           to,
 		WeaklyTypedInput: true,
+		MatchName: func(mapKey, fieldName string) bool {
+			// Aptos uses snake_case for field names, while Go uses CamelCase,
+			// remove underscores from field names to match Aptos field names
+			fieldName = strings.ReplaceAll(fieldName, "_", "")
+			mapKey = strings.ReplaceAll(mapKey, "_", "")
+			return strings.EqualFold(mapKey, fieldName)
+		},
 	}
 
 	decoder, err := mapstructure.NewDecoder(config)
@@ -74,7 +97,7 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		val, err := strconv.ParseInt(str, 16, 64)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse hex to int: %+w", err)
+			return nil, fmt.Errorf("failed to parse hex to int: %w", err)
 		}
 		return reflect.ValueOf(val).Convert(t).Interface(), nil
 	case reflect.Ptr:
@@ -83,6 +106,41 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 			bi.SetString(str, 16)
 			return bi, nil
 		}
+		if t == reflect.TypeOf((*common.Address)(nil)) {
+			addr := common.HexToAddress(str)
+			return &addr, nil
+		}
+		if t == reflect.TypeOf((*common.Hash)(nil)) {
+			hash := common.HexToHash(str)
+			return &hash, nil
+		}
+	case reflect.Array:
+		if t == reflect.TypeOf(common.Address{}) {
+			addr := common.HexToAddress(str)
+			return addr, nil
+		}
+		if t == reflect.TypeOf(common.Hash{}) {
+			addr := common.HexToHash(str)
+			return addr, nil
+		}
+		if t == reflect.TypeOf(aptos.AccountAddress{}) {
+			addr := aptos.AccountAddress{}
+			err := addr.ParseStringRelaxed(str)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse Aptos AccountAddress from string: %w", err)
+			}
+			return addr, nil
+		}
+		if t.Elem().Kind() == reflect.Uint8 {
+			bytes, err := hex.DecodeString(str)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode hex string %q: %w", str, err)
+			}
+			out := make([]uint8, t.Len())
+			copy(out, bytes)
+			return out, nil
+		}
+		return nil, fmt.Errorf("unsupported target array element type for hex string conversion: %v", t.Elem().Kind())
 	default:
 	}
 
@@ -189,7 +247,7 @@ func arrayHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, e
 	sourceSlice := reflect.ValueOf(data)
 	targetSlice := reflect.MakeSlice(t, sourceSlice.Len(), sourceSlice.Cap())
 
-	for i := 0; i < sourceSlice.Len(); i++ {
+	for i := range sourceSlice.Len() {
 		sourceElem := sourceSlice.Index(i).Interface()
 		targetElem := reflect.New(t.Elem()).Interface()
 

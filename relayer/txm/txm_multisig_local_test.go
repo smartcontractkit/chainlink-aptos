@@ -501,9 +501,10 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 			require.NoError(t, err)
 			require.Equal(t, bBytes, arg2)
 
-			cBytes, err := hex.DecodeString(strings.TrimPrefix(result.Data.C, "0x"))
-			require.NoError(t, err)
-			require.Equal(t, cBytes, arg3)
+			// Have to use aptos.AccountAddress to parse the address as the response might be missing leading zeroes
+			addrC := aptos.AccountAddress{}
+			require.NoError(t, addrC.ParseStringRelaxed(result.Data.C))
+			require.Equal(t, arg3, addrC[:])
 
 			dInt, ok := new(big.Int).SetString(result.Data.D, 10)
 			require.True(t, ok)
@@ -677,9 +678,10 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 				require.NoError(t, err)
 				require.Equal(t, bBytes, arg2)
 
-				cBytes, err := hex.DecodeString(strings.TrimPrefix(result.Data.C, "0x"))
-				require.NoError(t, err)
-				require.Equal(t, cBytes, arg3)
+				// Have to use aptos.AccountAddress to parse the address as the response might be missing leading zeroes
+				addrC := aptos.AccountAddress{}
+				require.NoError(t, addrC.ParseStringRelaxed(result.Data.C))
+				require.Equal(t, arg3, addrC[:])
 
 				dInt, ok := new(big.Int).SetString(result.Data.D, 10)
 				require.True(t, ok)
