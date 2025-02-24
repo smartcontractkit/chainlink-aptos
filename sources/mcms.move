@@ -576,6 +576,13 @@ module mcms::mcms {
             mcms_registry::transfer_code_object(
                 &self_signer, object_address, new_owner_address
             );
+        } else if (function_name_bytes == b"execute_code_object_transfer") {
+            let object_address = bcs_stream::deserialize_address(&mut stream);
+            let new_owner_address = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            mcms_registry::execute_code_object_transfer(
+                &self_signer, object_address, new_owner_address
+            );
         } else {
             abort error::invalid_argument(E_UNKNOWN_MCMS_MODULE_FUNCTION)
         }

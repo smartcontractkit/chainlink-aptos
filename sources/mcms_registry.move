@@ -42,11 +42,21 @@ module mcms::mcms_registry {
         callback_modules: SmartTable<vector<u8>, RegisteredModule>
     }
 
+    struct OwnerTransfers has key {
+        // object address -> pending transfer
+        pending_transfers: SmartTable<address, PendingCodeObjectTransfer>
+    }
+
     struct RegisteredModule has store, drop {
         callback_function_info: FunctionInfo,
         proof_type_info: TypeInfo,
         dispatch_metadata: Object<Metadata>,
         dispatch_extend_ref: ExtendRef
+    }
+
+    struct PendingCodeObjectTransfer has store, drop {
+        to: address,
+        accepted: bool
     }
 
     struct ExecutingCallbackParams has key {
@@ -60,6 +70,20 @@ module mcms::mcms_registry {
         owner_address: address,
         account_address: address,
         module_name: String
+    }
+
+    #[event]
+    struct CodeObjectTransferRequested has store, drop {
+        object_address: address,
+        mcms_owner_address: address,
+        new_owner_address: address
+    }
+
+    #[event]
+    struct CodeObjectTransferAccepted has store, drop {
+        object_address: address,
+        mcms_owner_address: address,
+        new_owner_address: address
     }
 
     #[event]
@@ -100,6 +124,12 @@ module mcms::mcms_registry {
     const E_INVALID_CODE_OBJECT: u64 = 11;
     const E_OWNER_ALREADY_REGISTERED: u64 = 12;
     const E_NOT_CODE_OBJECT_OWNER: u64 = 13;
+    const E_UNGATED_TRANSFER_DISABLED: u64 = 14;
+    const E_NO_PENDING_TRANSFER: u64 = 15;
+    const E_TRANSFER_ALREADY_ACCEPTED: u64 = 16;
+    const E_NEW_OWNER_MISMATCH: u64 = 17;
+    const E_TRANSFER_NOT_ACCEPTED: u64 = 18;
+    const E_NOT_PROPOSED_OWNER: u64 = 19;
 
     fun init_module(publisher: &signer) {
         move_to(publisher, RegistryState { registered_addresses: smart_table::new() });
@@ -205,9 +235,139 @@ module mcms::mcms_registry {
 
     /// Transfers ownership of a code object to a new owner. Note that this does not unregister
     /// the entrypoint or remove the previous owner from the registry.
+    ///
+    /// Due to Aptos's security model requiring the original owner's signer for 0x1::object::transfer,
+    /// we use the same 3-step ownership transfer flow as our ownable.move implementation:
+    ///
+    /// 1. MCMS owner calls transfer_code_object with the new owner's address
+    /// 2. Pending owner calls accept_code_object to confirm the transfer
+    /// 3. MCMS owner calls execute_code_object_transfer to complete the transfer
     public entry fun transfer_code_object(
         caller: &signer, object_address: address, new_owner_address: address
-    ) acquires RegistryState, OwnerRegistration {
+    ) acquires RegistryState, OwnerRegistration, OwnerTransfers {
+        mcms_account::assert_is_owner(caller);
+
+        assert!(
+            object::object_exists<PackageRegistry>(object_address),
+            error::invalid_argument(E_INVALID_CODE_OBJECT)
+        );
+
+        let code_object = object::address_to_object<PackageRegistry>(object_address);
+
+        // this could occur if the code object was pre-existing and the original creator kept the TransferRef,
+        // transferred the object to MCMS by generating a LinearTransferRef.
+        assert!(
+            object::ungated_transfer_allowed(code_object),
+            error::permission_denied(E_UNGATED_TRANSFER_DISABLED)
+        );
+
+        let state = borrow_state();
+        assert!(
+            smart_table::contains(&state.registered_addresses, object_address),
+            error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
+        );
+
+        let owner_address =
+            *smart_table::borrow(&state.registered_addresses, object_address);
+        // this could occur if the code object has already been transferred away either through this process
+        // or through a TransferRef if the object was pre-existing.
+        assert!(
+            object::owner(code_object) == owner_address,
+            error::invalid_state(E_NOT_CODE_OBJECT_OWNER)
+        );
+
+        if (!exists<OwnerTransfers>(owner_address)) {
+            let owner_registration = borrow_owner_registration(owner_address);
+            let owner_signer =
+                &account::create_signer_with_capability(&owner_registration.owner_cap);
+            move_to(owner_signer, OwnerTransfers { pending_transfers: smart_table::new() });
+        };
+
+        let pending_transfers = borrow_global_mut<OwnerTransfers>(owner_address);
+
+        // override any pending transfers if a new transfer has been requested.
+        smart_table::upsert(
+            &mut pending_transfers.pending_transfers,
+            object_address,
+            PendingCodeObjectTransfer { to: new_owner_address, accepted: false }
+        );
+
+        event::emit(
+            CodeObjectTransferRequested {
+                object_address: object_address,
+                mcms_owner_address: owner_address,
+                new_owner_address: new_owner_address
+            }
+        );
+    }
+
+    public entry fun accept_code_object(
+        caller: &signer, object_address: address
+    ) acquires RegistryState, OwnerTransfers {
+        assert!(
+            object::object_exists<PackageRegistry>(object_address),
+            error::invalid_argument(E_INVALID_CODE_OBJECT)
+        );
+
+        let code_object = object::address_to_object<PackageRegistry>(object_address);
+
+        let state = borrow_state();
+        assert!(
+            smart_table::contains(&state.registered_addresses, object_address),
+            error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
+        );
+
+        let owner_address =
+            *smart_table::borrow(&state.registered_addresses, object_address);
+        // these conditions could occur if the code object was pre-existing and the owner transferred object ownership or disabled
+        // ungated transfers using the TransferRef after this transfer process was initiated.
+        assert!(
+            object::owner(code_object) == owner_address,
+            error::invalid_state(E_NOT_CODE_OBJECT_OWNER)
+        );
+        assert!(
+            object::ungated_transfer_allowed(code_object),
+            error::permission_denied(E_UNGATED_TRANSFER_DISABLED)
+        );
+
+        assert!(
+            exists<OwnerTransfers>(owner_address),
+            error::invalid_state(E_NO_PENDING_TRANSFER)
+        );
+        let pending_transfers = borrow_global_mut<OwnerTransfers>(owner_address);
+
+        assert!(
+            smart_table::contains(&pending_transfers.pending_transfers, object_address),
+            error::invalid_state(E_NO_PENDING_TRANSFER)
+        );
+
+        let pending_transfer =
+            smart_table::borrow_mut(
+                &mut pending_transfers.pending_transfers, object_address
+            );
+        assert!(
+            pending_transfer.to == signer::address_of(caller),
+            error::permission_denied(E_NOT_PROPOSED_OWNER)
+        );
+        assert!(
+            !pending_transfer.accepted,
+            error::invalid_state(E_TRANSFER_ALREADY_ACCEPTED)
+        );
+
+        pending_transfer.accepted = true;
+
+        event::emit(
+            CodeObjectTransferAccepted {
+                object_address: object_address,
+                mcms_owner_address: owner_address,
+                new_owner_address: pending_transfer.to
+            }
+        );
+    }
+
+    public entry fun execute_code_object_transfer(
+        caller: &signer, object_address: address, new_owner_address: address
+    ) acquires RegistryState, OwnerRegistration, OwnerTransfers {
         mcms_account::assert_is_owner(caller);
 
         assert!(
@@ -225,9 +385,37 @@ module mcms::mcms_registry {
 
         let owner_address =
             *smart_table::borrow(&state.registered_addresses, object_address);
+        // these conditions could occur if the code object was pre-existing and the owner transferred object ownership or disabled
+        // ungated transfers using the TransferRef after this transfer process was initiated.
         assert!(
             object::owner(code_object) == owner_address,
             error::invalid_state(E_NOT_CODE_OBJECT_OWNER)
+        );
+        assert!(
+            object::ungated_transfer_allowed(code_object),
+            error::permission_denied(E_UNGATED_TRANSFER_DISABLED)
+        );
+
+        assert!(
+            exists<OwnerTransfers>(owner_address),
+            error::invalid_state(E_NO_PENDING_TRANSFER)
+        );
+        let pending_transfers = borrow_global_mut<OwnerTransfers>(owner_address);
+
+        assert!(
+            smart_table::contains(&pending_transfers.pending_transfers, object_address),
+            error::invalid_state(E_NO_PENDING_TRANSFER)
+        );
+        let pending_transfer =
+            smart_table::borrow_mut(
+                &mut pending_transfers.pending_transfers, object_address
+            );
+        assert!(
+            pending_transfer.to == new_owner_address,
+            error::invalid_state(E_NEW_OWNER_MISMATCH)
+        );
+        assert!(
+            pending_transfer.accepted, error::invalid_state(E_TRANSFER_NOT_ACCEPTED)
         );
 
         let owner_registration = borrow_owner_registration(owner_address);
@@ -243,6 +431,13 @@ module mcms::mcms_registry {
                 new_owner_address: new_owner_address
             }
         );
+
+        smart_table::remove(&mut pending_transfers.pending_transfers, object_address);
+        if (smart_table::length(&pending_transfers.pending_transfers) == 0) {
+            let OwnerTransfers { pending_transfers } =
+                move_from<OwnerTransfers>(owner_address);
+            smart_table::destroy_empty(pending_transfers);
+        }
     }
 
     public(friend) fun create_owner_for_new_code_object(
