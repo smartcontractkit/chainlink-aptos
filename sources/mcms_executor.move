@@ -27,8 +27,12 @@ module mcms::mcms_executor {
         };
         let pending_execute =
             borrow_global_mut<PendingExecute>(signer::address_of(caller));
-        vector::append(&mut pending_execute.data, data_chunk);
-        vector::append(&mut pending_execute.proofs, partial_proofs);
+        if (!vector::is_empty(&data_chunk)) {
+            vector::append(&mut pending_execute.data, data_chunk);
+        };
+        if (!vector::is_empty(&partial_proofs)) {
+            vector::append(&mut pending_execute.proofs, partial_proofs);
+        };
     }
 
     public entry fun stage_data_and_execute(
@@ -42,10 +46,23 @@ module mcms::mcms_executor {
         data_chunk: vector<u8>,
         partial_proofs: vector<vector<u8>>
     ) acquires PendingExecute {
+        if (!exists<PendingExecute>(signer::address_of(caller))) {
+            move_to(
+                caller,
+                PendingExecute {
+                    data: vector[],
+                    proofs: vector[]
+                }
+            );
+        };
         let PendingExecute { data, proofs } =
             move_from<PendingExecute>(signer::address_of(caller));
-        vector::append(&mut data, data_chunk);
-        vector::append(&mut proofs, partial_proofs);
+        if (!vector::is_empty(&data_chunk)) {
+            vector::append(&mut data, data_chunk);
+        };
+        if (!vector::is_empty(&partial_proofs)) {
+            vector::append(&mut proofs, partial_proofs)
+        };
         mcms::execute(
             chain_id,
             multisig,
