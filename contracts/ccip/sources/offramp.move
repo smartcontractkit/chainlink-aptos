@@ -66,9 +66,11 @@ module ccip::offramp {
         skipped_report_execution_events: EventHandle<SkippedReportExecution>
     }
 
-    struct SourceChainConfig has store, drop {
+    struct SourceChainConfig has store, drop, copy {
         is_enabled: bool,
-        min_sequence_number: u64
+        min_sequence_number: u64,
+        is_rmn_verification_disabled: bool,
+        onramp: vector<u8>
     }
 
     // report structs
@@ -135,6 +137,7 @@ module ccip::offramp {
 
     struct MerkleRoot has store, drop, copy {
         source_chain_selector: u64,
+        onramp_address: vector<u8>,
         min_sequence_number: u64,
         max_sequence_number: u64,
         merkle_root: vector<u8>
@@ -163,7 +166,9 @@ module ccip::offramp {
     #[event]
     struct SourceChainConfigSet has store, drop {
         is_enabled: bool,
-        min_sequence_number: u64
+        min_sequence_number: u64,
+        is_rmn_verification_disabled: bool,
+        onramp: vector<u8>
     }
 
     #[event]
@@ -231,16 +236,17 @@ module ccip::offramp {
     const E_FUNGIBLE_ASSET_AMOUNT_MISMATCH: u64 = 25;
     const E_SIGNATURE_VERIFICATION_REQUIRED_IN_COMMIT_PLUGIN: u64 = 26;
     const E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN: u64 = 27;
+    const E_COMMIT_ONRAMP_MISMATCH: u64 = 28;
 
     public entry fun initialize(
         caller: &signer,
         chain_selector: u64,
         permissionless_execution_threshold_secs: u32,
         is_rmn_verification_disabled: bool,
-
-        // pairs of (source chain selector, is enabled)
-        source_chain_selectors: vector<u64>,
-        source_chain_is_enabled: vector<bool>
+        source_chains_selector: vector<u64>,
+        source_chains_is_enabled: vector<bool>,
+        source_chains_is_rmn_verification_disabled: vector<bool>,
+        source_chains_onramp: vector<vector<u8>>
     ) {
         auth::assert_only_owner(signer::address_of(caller));
 
@@ -249,8 +255,8 @@ module ccip::offramp {
             error::invalid_argument(E_ALREADY_INITIALIZED)
         );
         assert!(
-            vector::length(&source_chain_selectors)
-                == vector::length(&source_chain_is_enabled),
+            vector::length(&source_chains_selector)
+                == vector::length(&source_chains_is_enabled),
             error::invalid_argument(E_SOURCE_CHAIN_SELECTORS_MISMATCH)
         );
 
@@ -292,7 +298,11 @@ module ccip::offramp {
             is_rmn_verification_disabled
         );
         apply_source_chain_config_updates_internal(
-            &mut state, source_chain_selectors, source_chain_is_enabled
+            &mut state,
+            source_chains_selector,
+            source_chains_is_enabled,
+            source_chains_is_rmn_verification_disabled,
+            source_chains_onramp
         );
 
         move_to(&state_object_signer, state);
@@ -408,8 +418,7 @@ module ccip::offramp {
         let source_chain_execution_states =
             smart_table::borrow_mut(&mut state.execution_states, source_chain_selector);
 
-        let i = 0;
-        while (i < messages_len) {
+        for (i in 0..messages_len) {
             // needed for repeated use while looping
             let state = state;
             let source_chain_selector = source_chain_selector;
@@ -501,8 +510,6 @@ module ccip::offramp {
                     return_data
                 }
             );
-
-            i = i + 1;
         };
     }
 
@@ -522,7 +529,7 @@ module ccip::offramp {
 
         if (!state.is_rmn_verification_disabled
             && !vector::is_empty(&commit_report.merkle_roots)) {
-            let merkle_root_source_chain_selectors = vector[];
+            let merkle_root_source_chains_selector = vector[];
             let merkle_root_min_sequence_numbers = vector[];
             let merkle_root_max_sequence_numbers = vector[];
             let merkle_root_values = vector[];
@@ -531,7 +538,7 @@ module ccip::offramp {
                 |merkle_root| {
                     let merkle_root: &MerkleRoot = merkle_root;
                     vector::push_back(
-                        &mut merkle_root_source_chain_selectors,
+                        &mut merkle_root_source_chains_selector,
                         merkle_root.source_chain_selector
                     );
                     vector::push_back(
@@ -547,7 +554,7 @@ module ccip::offramp {
             );
 
             rmn_remote::verify(
-                merkle_root_source_chain_selectors,
+                merkle_root_source_chains_selector,
                 merkle_root_min_sequence_numbers,
                 merkle_root_max_sequence_numbers,
                 merkle_root_values,
@@ -635,6 +642,10 @@ module ccip::offramp {
                 assert!(
                     source_chain_config.is_enabled,
                     error::permission_denied(E_SOURCE_CHAIN_NOT_ENABLED)
+                );
+                assert!(
+                    source_chain_config.onramp == root.onramp_address,
+                    error::invalid_argument(E_COMMIT_ONRAMP_MISMATCH)
                 );
                 assert!(
                     source_chain_config.min_sequence_number == root.min_sequence_number
@@ -726,7 +737,9 @@ module ccip::offramp {
     }
 
     #[view]
-    public fun get_source_chain_config(source_chain_selector: u64): (bool, u64) acquires OffRampState {
+    public fun get_source_chain_config(
+        source_chain_selector: u64
+    ): SourceChainConfig acquires OffRampState {
         let state = borrow_state();
         assert!(
             smart_table::contains(&state.source_chain_configs, source_chain_selector),
@@ -735,7 +748,8 @@ module ccip::offramp {
 
         let source_chain_config =
             smart_table::borrow(&state.source_chain_configs, source_chain_selector);
-        (source_chain_config.is_enabled, source_chain_config.min_sequence_number)
+
+        *source_chain_config
     }
 
     #[view]
@@ -754,13 +768,19 @@ module ccip::offramp {
 
     public entry fun apply_source_chain_config_updates(
         caller: &signer,
-        source_chain_selectors: vector<u64>,
-        source_chain_is_enabled: vector<bool>
+        source_chains_selector: vector<u64>,
+        source_chains_is_enabled: vector<bool>,
+        source_chains_is_rmn_verification_disabled: vector<bool>,
+        source_chains_onramp: vector<vector<u8>>
     ) acquires OffRampState {
         auth::assert_only_owner(signer::address_of(caller));
 
         apply_source_chain_config_updates_internal(
-            borrow_state_mut(), source_chain_selectors, source_chain_is_enabled
+            borrow_state_mut(),
+            source_chains_selector,
+            source_chains_is_enabled,
+            source_chains_is_rmn_verification_disabled,
+            source_chains_onramp
         )
     }
 
@@ -930,66 +950,91 @@ module ccip::offramp {
     inline fun apply_source_chain_config_updates_internal(
         state: &mut OffRampState,
         // pairs of (source chain selector, is enabled)
-        source_chain_selectors: vector<u64>,
-        source_chain_is_enabled: vector<bool>
+        source_chains_selector: vector<u64>,
+        source_chains_is_enabled: vector<bool>,
+        source_chains_is_rmn_verification_disabled: vector<bool>,
+        source_chains_onramp: vector<vector<u8>>
     ) {
-        vector::zip_ref(
-            &source_chain_selectors,
-            &source_chain_is_enabled,
-            |source_chain_selector, is_enabled| {
-                let source_chain_selector: u64 = *source_chain_selector;
-                let is_enabled: bool = *is_enabled;
-
-                assert!(
-                    source_chain_selector != 0,
-                    error::invalid_argument(E_ZERO_CHAIN_SELECTOR)
-                );
-
-                if (!smart_table::contains(
-                    &state.source_chain_configs, source_chain_selector
-                )) {
-                    smart_table::add(
-                        &mut state.source_chain_configs,
-                        source_chain_selector,
-                        SourceChainConfig { is_enabled: false, min_sequence_number: 1 }
-                    );
-                    smart_table::add(
-                        &mut state.execution_states,
-                        source_chain_selector,
-                        smart_table::new()
-                    );
-                    smart_table::add(
-                        &mut state.roots, source_chain_selector, smart_table::new()
-                    );
-                    smart_table::add(
-                        &mut state.inbound_nonces,
-                        source_chain_selector,
-                        smart_table::new()
-                    );
-                };
-
-                let config =
-                    smart_table::borrow_mut(
-                        &mut state.source_chain_configs, source_chain_selector
-                    );
-                config.is_enabled = is_enabled;
-
-                event::emit(
-                    SourceChainConfigSet {
-                        is_enabled: config.is_enabled,
-                        min_sequence_number: config.min_sequence_number
-                    }
-                );
-                event::emit_event(
-                    &mut state.source_chain_config_set_events,
-                    SourceChainConfigSet {
-                        is_enabled: config.is_enabled,
-                        min_sequence_number: config.min_sequence_number
-                    }
-                );
-
-            }
+        let source_chains_len = vector::length(&source_chains_selector);
+        assert!(
+            source_chains_len == vector::length(&source_chains_is_enabled),
+            error::invalid_argument(E_SOURCE_CHAIN_SELECTORS_MISMATCH)
         );
+        assert!(
+            source_chains_len
+                == vector::length(&source_chains_is_rmn_verification_disabled),
+            error::invalid_argument(E_SOURCE_CHAIN_SELECTORS_MISMATCH)
+        );
+        assert!(
+            source_chains_len == vector::length(&source_chains_onramp),
+            error::invalid_argument(E_SOURCE_CHAIN_SELECTORS_MISMATCH)
+        );
+        for (i in 0..source_chains_len) {
+            let source_chain_selector = *vector::borrow(&source_chains_selector, i);
+            let is_enabled = *vector::borrow(&source_chains_is_enabled, i);
+            let is_rmn_verification_disabled =
+                *vector::borrow(&source_chains_is_rmn_verification_disabled, i);
+            let onramp = *vector::borrow(&source_chains_onramp, i);
+
+            assert!(
+                source_chain_selector != 0,
+                error::invalid_argument(E_ZERO_CHAIN_SELECTOR)
+            );
+
+            if (!smart_table::contains(
+                &state.source_chain_configs, source_chain_selector
+            )) {
+                smart_table::add(
+                    &mut state.source_chain_configs,
+                    source_chain_selector,
+                    SourceChainConfig {
+                        is_enabled: false,
+                        min_sequence_number: 1,
+                        is_rmn_verification_disabled: false,
+                        onramp: vector[]
+                    }
+                );
+                smart_table::add(
+                    &mut state.execution_states,
+                    source_chain_selector,
+                    smart_table::new()
+                );
+                smart_table::add(
+                    &mut state.roots, source_chain_selector, smart_table::new()
+                );
+                smart_table::add(
+                    &mut state.inbound_nonces,
+                    source_chain_selector,
+                    smart_table::new()
+                );
+            };
+
+            let config =
+                smart_table::borrow_mut(
+                    &mut state.source_chain_configs, source_chain_selector
+                );
+            config.is_enabled = is_enabled;
+            config.onramp = onramp;
+            config.is_rmn_verification_disabled = is_rmn_verification_disabled;
+
+            event::emit(
+                SourceChainConfigSet {
+                    is_enabled: config.is_enabled,
+                    min_sequence_number: config.min_sequence_number,
+                    is_rmn_verification_disabled: config.is_rmn_verification_disabled,
+                    onramp: config.onramp
+                }
+            );
+            event::emit_event(
+                &mut state.source_chain_config_set_events,
+                SourceChainConfigSet {
+                    is_enabled: config.is_enabled,
+                    min_sequence_number: config.min_sequence_number,
+                    is_rmn_verification_disabled: config.is_rmn_verification_disabled,
+                    onramp: config.onramp
+                }
+            );
+        }
     }
 
     inline fun calculate_metadata_hash(
@@ -1078,12 +1123,14 @@ module ccip::offramp {
                 &mut stream,
                 |stream| {
                     let source_chain_selector = eth_abi::decode_u64(stream);
+                    let onramp_address = eth_abi::decode_bytes(stream);
                     let min_sequence_number = eth_abi::decode_u64(stream);
                     let max_sequence_number = eth_abi::decode_u64(stream);
                     let merkle_root = eth_abi::decode_bytes32(stream);
 
                     MerkleRoot {
                         source_chain_selector,
+                        onramp_address,
                         min_sequence_number,
                         max_sequence_number,
                         merkle_root
