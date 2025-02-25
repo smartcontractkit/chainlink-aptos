@@ -53,24 +53,24 @@ module ccip::token_admin_registry {
         dispatch_transfer_ref: TransferRef,
         dispatch_fa_transfer_ref: fungible_asset::TransferRef,
         execution_state: u8,
-        executing_lock_or_burn_input: Option<LockOrBurnInput>,
-        executing_release_or_mint_input: Option<ReleaseOrMintInput>,
-        executing_lock_or_burn_output: Option<LockOrBurnOutput>,
-        executing_release_or_mint_output: Option<ReleaseOrMintOutput>
+        executing_lock_or_burn_input_v1: Option<LockOrBurnInputV1>,
+        executing_release_or_mint_input_v1: Option<ReleaseOrMintInputV1>,
+        executing_lock_or_burn_output_v1: Option<LockOrBurnOutputV1>,
+        executing_release_or_mint_output_v1: Option<ReleaseOrMintOutputV1>
     }
 
-    struct LockOrBurnInput has store, drop {
+    struct LockOrBurnInputV1 has store, drop {
         sender: address,
         remote_chain_selector: u64,
         receiver: vector<u8>
     }
 
-    struct LockOrBurnOutput has store, drop {
+    struct LockOrBurnOutputV1 has store, drop {
         dest_token_address: vector<u8>,
         dest_pool_data: vector<u8>
     }
 
-    struct ReleaseOrMintInput has store, drop {
+    struct ReleaseOrMintInputV1 has store, drop {
         sender: vector<u8>,
         receiver: address,
         source_amount: u256,
@@ -82,7 +82,7 @@ module ccip::token_admin_registry {
     }
 
     // TODO: consider removing ReleaseOrMintOutput, it exists only for a consistent UX across lock and release.
-    struct ReleaseOrMintOutput has store, drop {
+    struct ReleaseOrMintOutputV1 has store, drop {
         destination_amount: u64
     }
 
@@ -188,6 +188,7 @@ module ccip::token_admin_registry {
     }
 
     #[view]
+    // returns the token pool address for the given local token, or @0x0 if the token is not registered.
     public fun get_pool(local_token: address): address acquires TokenAdminRegistryState {
         let state = borrow_state();
         if (smart_table::contains(&state.token_configs, local_token)) {
@@ -200,6 +201,7 @@ module ccip::token_admin_registry {
     }
 
     #[view]
+    // returns (token_pool_address, administrator, pending_administrator)
     public fun get_token_config(
         local_token: address
     ): (address, address, address) acquires TokenAdminRegistryState {
@@ -231,6 +233,10 @@ module ccip::token_admin_registry {
             max_count
         )
     }
+
+    // ================================================================
+    // |                       Register Pool                          |
+    // ================================================================
 
     public fun register_pool<ProofType: drop>(
         token_pool_account: &signer,
@@ -346,12 +352,42 @@ module ccip::token_admin_registry {
                 dispatch_transfer_ref,
                 dispatch_fa_transfer_ref,
                 execution_state: EXECUTION_STATE_IDLE,
-                executing_lock_or_burn_input: option::none(),
-                executing_release_or_mint_input: option::none(),
-                executing_lock_or_burn_output: option::none(),
-                executing_release_or_mint_output: option::none()
+                executing_lock_or_burn_input_v1: option::none(),
+                executing_release_or_mint_input_v1: option::none(),
+                executing_lock_or_burn_output_v1: option::none(),
+                executing_release_or_mint_output_v1: option::none()
             }
         );
+    }
+
+    fun assert_can_register(
+        registry_owner_address: address,
+        token_pool_address: address,
+        fungible_asset_metadata: Object<Metadata>
+    ) {
+        assert!(
+            object::is_object(token_pool_address),
+            error::invalid_argument(E_TOKEN_POOL_NOT_OBJECT)
+        );
+        let token_pool_object = object::address_to_object<ObjectCore>(token_pool_address);
+
+        let fungible_asset_object_owner_address = object::owner(fungible_asset_metadata);
+        let fungible_asset_object_root_owner_address =
+            object::root_owner(fungible_asset_metadata);
+
+        let token_pool_object_owner_address = object::owner(token_pool_object);
+        if (token_pool_object_owner_address == registry_owner_address) { return };
+        if (token_pool_object_owner_address == fungible_asset_object_owner_address
+            || token_pool_object_owner_address
+                == fungible_asset_object_root_owner_address) { return };
+
+        let token_pool_object_root_owner_address = object::root_owner(token_pool_object);
+        if (token_pool_object_root_owner_address == registry_owner_address) { return };
+        if (token_pool_object_root_owner_address == fungible_asset_object_owner_address
+            || token_pool_object_root_owner_address
+                == fungible_asset_object_root_owner_address) { return };
+
+        abort error::permission_denied(E_NOT_FUNGIBLE_ASSET_OWNER)
     }
 
     public entry fun set_pool(
@@ -478,9 +514,13 @@ module ccip::token_admin_registry {
         token_config.administrator == administrator
     }
 
-    public fun get_lock_or_burn_input<ProofType: drop>(
+    // ================================================================
+    // |                         Pool I/O V1                          |
+    // ================================================================
+
+    public fun get_lock_or_burn_input_v1<ProofType: drop>(
         token_pool_address: address, _proof: ProofType
-    ): LockOrBurnInput acquires TokenPoolRegistration {
+    ): LockOrBurnInputV1 acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
 
         assert!(
@@ -493,26 +533,26 @@ module ccip::token_admin_registry {
             error::invalid_state(E_NOT_IN_LOCK_OR_BURN_STATE)
         );
         assert!(
-            option::is_some(&registration.executing_lock_or_burn_input),
+            option::is_some(&registration.executing_lock_or_burn_input_v1),
             error::invalid_state(E_MISSING_LOCK_OR_BURN_INPUT)
         );
         assert!(
-            option::is_none(&registration.executing_lock_or_burn_output),
+            option::is_none(&registration.executing_lock_or_burn_output_v1),
             error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_OUTPUT)
         );
         assert!(
-            option::is_none(&registration.executing_release_or_mint_input),
+            option::is_none(&registration.executing_release_or_mint_input_v1),
             error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_INPUT)
         );
         assert!(
-            option::is_none(&registration.executing_release_or_mint_output),
+            option::is_none(&registration.executing_release_or_mint_output_v1),
             error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT)
         );
 
-        option::extract(&mut registration.executing_lock_or_burn_input)
+        option::extract(&mut registration.executing_lock_or_burn_input_v1)
     }
 
-    public fun set_lock_or_burn_output<ProofType: drop>(
+    public fun set_lock_or_burn_output_v1<ProofType: drop>(
         token_pool_address: address,
         _proof: ProofType,
         dest_token_address: vector<u8>,
@@ -530,31 +570,31 @@ module ccip::token_admin_registry {
             error::invalid_state(E_NOT_IN_LOCK_OR_BURN_STATE)
         );
         assert!(
-            option::is_none(&registration.executing_lock_or_burn_input),
+            option::is_none(&registration.executing_lock_or_burn_input_v1),
             error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_INPUT)
         );
         assert!(
-            option::is_none(&registration.executing_lock_or_burn_output),
+            option::is_none(&registration.executing_lock_or_burn_output_v1),
             error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_OUTPUT)
         );
         assert!(
-            option::is_none(&registration.executing_release_or_mint_input),
+            option::is_none(&registration.executing_release_or_mint_input_v1),
             error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_INPUT)
         );
         assert!(
-            option::is_none(&registration.executing_release_or_mint_output),
+            option::is_none(&registration.executing_release_or_mint_output_v1),
             error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT)
         );
 
         option::fill(
-            &mut registration.executing_lock_or_burn_output,
-            LockOrBurnOutput { dest_token_address, dest_pool_data }
+            &mut registration.executing_lock_or_burn_output_v1,
+            LockOrBurnOutputV1 { dest_token_address, dest_pool_data }
         )
     }
 
-    public fun get_release_or_mint_input<ProofType: drop>(
+    public fun get_release_or_mint_input_v1<ProofType: drop>(
         token_pool_address: address, _proof: ProofType
-    ): ReleaseOrMintInput acquires TokenPoolRegistration {
+    ): ReleaseOrMintInputV1 acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
 
         assert!(
@@ -567,26 +607,26 @@ module ccip::token_admin_registry {
             error::invalid_state(E_NOT_IN_RELEASE_OR_MINT_STATE)
         );
         assert!(
-            option::is_some(&registration.executing_release_or_mint_input),
+            option::is_some(&registration.executing_release_or_mint_input_v1),
             error::invalid_state(E_MISSING_RELEASE_OR_MINT_INPUT)
         );
         assert!(
-            option::is_none(&registration.executing_release_or_mint_output),
+            option::is_none(&registration.executing_release_or_mint_output_v1),
             error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT)
         );
         assert!(
-            option::is_none(&registration.executing_lock_or_burn_input),
+            option::is_none(&registration.executing_lock_or_burn_input_v1),
             error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_INPUT)
         );
         assert!(
-            option::is_none(&registration.executing_lock_or_burn_output),
+            option::is_none(&registration.executing_lock_or_burn_output_v1),
             error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_OUTPUT)
         );
 
-        option::extract(&mut registration.executing_release_or_mint_input)
+        option::extract(&mut registration.executing_release_or_mint_input_v1)
     }
 
-    public fun set_release_or_mint_output<ProofType: drop>(
+    public fun set_release_or_mint_output_v1<ProofType: drop>(
         token_pool_address: address, _proof: ProofType, destination_amount: u64
     ) acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
@@ -601,87 +641,91 @@ module ccip::token_admin_registry {
             error::invalid_state(E_NOT_IN_RELEASE_OR_MINT_STATE)
         );
         assert!(
-            option::is_none(&registration.executing_release_or_mint_input),
+            option::is_none(&registration.executing_release_or_mint_input_v1),
             error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_INPUT)
         );
         assert!(
-            option::is_none(&registration.executing_release_or_mint_output),
+            option::is_none(&registration.executing_release_or_mint_output_v1),
             error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT)
         );
         assert!(
-            option::is_none(&registration.executing_lock_or_burn_input),
+            option::is_none(&registration.executing_lock_or_burn_input_v1),
             error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_INPUT)
         );
         assert!(
-            option::is_none(&registration.executing_lock_or_burn_output),
+            option::is_none(&registration.executing_lock_or_burn_output_v1),
             error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_OUTPUT)
         );
 
         option::fill(
-            &mut registration.executing_release_or_mint_output,
-            ReleaseOrMintOutput { destination_amount }
+            &mut registration.executing_release_or_mint_output_v1,
+            ReleaseOrMintOutputV1 { destination_amount }
         )
     }
 
     // LockOrBurnInput accessors
-    public fun get_lock_or_burn_sender(input: &LockOrBurnInput): address {
+    public fun get_lock_or_burn_sender(input: &LockOrBurnInputV1): address {
         input.sender
     }
 
     public fun get_lock_or_burn_remote_chain_selector(
-        input: &LockOrBurnInput
+        input: &LockOrBurnInputV1
     ): u64 {
         input.remote_chain_selector
     }
 
-    public fun get_lock_or_burn_receiver(input: &LockOrBurnInput): vector<u8> {
+    public fun get_lock_or_burn_receiver(input: &LockOrBurnInputV1): vector<u8> {
         input.receiver
     }
 
     // ReleaseOrMintInput accessors
-    public fun get_release_or_mint_sender(input: &ReleaseOrMintInput): vector<u8> {
+    public fun get_release_or_mint_sender(input: &ReleaseOrMintInputV1): vector<u8> {
         input.sender
     }
 
-    public fun get_release_or_mint_receiver(input: &ReleaseOrMintInput): address {
+    public fun get_release_or_mint_receiver(input: &ReleaseOrMintInputV1): address {
         input.receiver
     }
 
     public fun get_release_or_mint_source_amount(
-        input: &ReleaseOrMintInput
+        input: &ReleaseOrMintInputV1
     ): u256 {
         input.source_amount
     }
 
     public fun get_release_or_mint_local_token(
-        input: &ReleaseOrMintInput
+        input: &ReleaseOrMintInputV1
     ): address {
         input.local_token
     }
 
     public fun get_release_or_mint_remote_chain_selector(
-        input: &ReleaseOrMintInput
+        input: &ReleaseOrMintInputV1
     ): u64 {
         input.remote_chain_selector
     }
 
     public fun get_release_or_mint_source_pool_address(
-        input: &ReleaseOrMintInput
+        input: &ReleaseOrMintInputV1
     ): vector<u8> {
         input.source_pool_address
     }
 
     public fun get_release_or_mint_source_pool_data(
-        input: &ReleaseOrMintInput
+        input: &ReleaseOrMintInputV1
     ): vector<u8> {
         input.source_pool_data
     }
 
     public fun get_release_or_mint_offchain_token_data(
-        input: &ReleaseOrMintInput
+        input: &ReleaseOrMintInputV1
     ): vector<u8> {
         input.offchain_token_data
     }
+
+    // ================================================================
+    // |                        Lock or Burn                          |
+    // ================================================================
 
     public(friend) fun start_lock_or_burn(
         token_pool_address: address,
@@ -696,26 +740,26 @@ module ccip::token_admin_registry {
             error::invalid_state(E_NOT_IN_IDLE_STATE)
         );
         assert!(
-            option::is_none(&registration.executing_lock_or_burn_input),
+            option::is_none(&registration.executing_lock_or_burn_input_v1),
             error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_INPUT)
         );
         assert!(
-            option::is_none(&registration.executing_lock_or_burn_output),
+            option::is_none(&registration.executing_lock_or_burn_output_v1),
             error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_OUTPUT)
         );
         assert!(
-            option::is_none(&registration.executing_release_or_mint_input),
+            option::is_none(&registration.executing_release_or_mint_input_v1),
             error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_INPUT)
         );
         assert!(
-            option::is_none(&registration.executing_release_or_mint_output),
+            option::is_none(&registration.executing_release_or_mint_output_v1),
             error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT)
         );
 
         registration.execution_state = EXECUTION_STATE_LOCK_OR_BURN;
         option::fill(
-            &mut registration.executing_lock_or_burn_input,
-            LockOrBurnInput { sender, remote_chain_selector, receiver }
+            &mut registration.executing_lock_or_burn_input_v1,
+            LockOrBurnInputV1 { sender, remote_chain_selector, receiver }
         );
 
         registration.dispatch_deposit_fungible_store
@@ -731,19 +775,19 @@ module ccip::token_admin_registry {
             error::invalid_state(E_NOT_IN_LOCK_OR_BURN_STATE)
         );
         assert!(
-            option::is_none(&registration.executing_lock_or_burn_input),
+            option::is_none(&registration.executing_lock_or_burn_input_v1),
             error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_INPUT)
         );
         assert!(
-            option::is_some(&registration.executing_lock_or_burn_output),
+            option::is_some(&registration.executing_lock_or_burn_output_v1),
             error::invalid_state(E_MISSING_LOCK_OR_BURN_OUTPUT)
         );
         assert!(
-            option::is_none(&registration.executing_release_or_mint_input),
+            option::is_none(&registration.executing_release_or_mint_input_v1),
             error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_INPUT)
         );
         assert!(
-            option::is_none(&registration.executing_release_or_mint_output),
+            option::is_none(&registration.executing_release_or_mint_output_v1),
             error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT)
         );
 
@@ -761,9 +805,15 @@ module ccip::token_admin_registry {
             );
         };
 
-        let output = option::extract(&mut registration.executing_lock_or_burn_output);
+        let output = option::extract(
+            &mut registration.executing_lock_or_burn_output_v1
+        );
         (output.dest_token_address, output.dest_pool_data)
     }
+
+    // ================================================================
+    // |                       Release or Mint                        |
+    // ================================================================
 
     public(friend) fun start_release_or_mint(
         token_pool_address: address,
@@ -783,26 +833,26 @@ module ccip::token_admin_registry {
             error::invalid_state(E_NOT_IN_IDLE_STATE)
         );
         assert!(
-            option::is_none(&registration.executing_release_or_mint_input),
+            option::is_none(&registration.executing_release_or_mint_input_v1),
             error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_INPUT)
         );
         assert!(
-            option::is_none(&registration.executing_release_or_mint_output),
+            option::is_none(&registration.executing_release_or_mint_output_v1),
             error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT)
         );
         assert!(
-            option::is_none(&registration.executing_lock_or_burn_input),
+            option::is_none(&registration.executing_lock_or_burn_input_v1),
             error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_INPUT)
         );
         assert!(
-            option::is_none(&registration.executing_lock_or_burn_output),
+            option::is_none(&registration.executing_lock_or_burn_output_v1),
             error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_OUTPUT)
         );
 
         registration.execution_state = EXECUTION_STATE_RELEASE_OR_MINT;
         option::fill(
-            &mut registration.executing_release_or_mint_input,
-            ReleaseOrMintInput {
+            &mut registration.executing_release_or_mint_input_v1,
+            ReleaseOrMintInputV1 {
                 sender,
                 receiver,
                 source_amount,
@@ -830,19 +880,19 @@ module ccip::token_admin_registry {
             error::invalid_state(E_NOT_IN_RELEASE_OR_MINT_STATE)
         );
         assert!(
-            option::is_none(&registration.executing_release_or_mint_input),
+            option::is_none(&registration.executing_release_or_mint_input_v1),
             error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_INPUT)
         );
         assert!(
-            option::is_some(&registration.executing_release_or_mint_output),
+            option::is_some(&registration.executing_release_or_mint_output_v1),
             error::invalid_state(E_MISSING_RELEASE_OR_MINT_OUTPUT)
         );
         assert!(
-            option::is_none(&registration.executing_lock_or_burn_input),
+            option::is_none(&registration.executing_lock_or_burn_input_v1),
             error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_INPUT)
         );
         assert!(
-            option::is_none(&registration.executing_lock_or_burn_output),
+            option::is_none(&registration.executing_lock_or_burn_output_v1),
             error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_OUTPUT)
         );
 
@@ -860,41 +910,10 @@ module ccip::token_admin_registry {
             );
         };
 
-        let output = option::extract(
-            &mut registration.executing_release_or_mint_output
-        );
+        let output =
+            option::extract(&mut registration.executing_release_or_mint_output_v1);
 
         output.destination_amount
-    }
-
-    fun assert_can_register(
-        registry_owner_address: address,
-        token_pool_address: address,
-        fungible_asset_metadata: Object<Metadata>
-    ) {
-        assert!(
-            object::is_object(token_pool_address),
-            error::invalid_argument(E_TOKEN_POOL_NOT_OBJECT)
-        );
-        let token_pool_object = object::address_to_object<ObjectCore>(token_pool_address);
-
-        let fungible_asset_object_owner_address = object::owner(fungible_asset_metadata);
-        let fungible_asset_object_root_owner_address =
-            object::root_owner(fungible_asset_metadata);
-
-        let token_pool_object_owner_address = object::owner(token_pool_object);
-        if (token_pool_object_owner_address == registry_owner_address) { return };
-        if (token_pool_object_owner_address == fungible_asset_object_owner_address
-            || token_pool_object_owner_address
-                == fungible_asset_object_root_owner_address) { return };
-
-        let token_pool_object_root_owner_address = object::root_owner(token_pool_object);
-        if (token_pool_object_root_owner_address == registry_owner_address) { return };
-        if (token_pool_object_root_owner_address == fungible_asset_object_owner_address
-            || token_pool_object_root_owner_address
-                == fungible_asset_object_root_owner_address) { return };
-
-        abort error::permission_denied(E_NOT_FUNGIBLE_ASSET_OWNER)
     }
 
     inline fun borrow_state(): &TokenAdminRegistryState {

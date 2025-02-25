@@ -1,0 +1,372 @@
+module ccip_lock_release_pool::lock_release_token_pool {
+    use std::account::{Self, SignerCapability};
+    use std::error;
+    use std::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef};
+    use std::primary_fungible_store;
+    use std::object::{Self, Object, ObjectCore};
+    use std::signer;
+
+    use ccip::ownable;
+    use ccip::token_admin_registry;
+    use ccip_token_pool::token_pool;
+
+    const STORE_OBJECT_SEED: vector<u8> = b"CcipLockReleaseTokenPool";
+
+    struct LockReleaseTokenPoolDeployment has key {
+        store_signer_cap: SignerCapability
+    }
+
+    struct LockReleaseTokenPool has key, store {
+        ownable_state: ownable::OwnableState,
+        token_pool_state: token_pool::TokenPoolState,
+        store_signer_address: address,
+        store_signer_cap: SignerCapability
+    }
+
+    struct RemoteChainConfig has store, drop, copy {
+        remote_token_address: vector<u8>,
+        remote_pools: vector<vector<u8>>
+    }
+
+    const E_NOT_PUBLISHER: u64 = 1;
+    const E_ALREADY_INITIALIZED: u64 = 2;
+    const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
+    const E_UNKNOWN_FUNGIBLE_ASSET: u64 = 4;
+    const E_LOCAL_TOKEN_MISMATCH: u64 = 5;
+    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 6;
+    const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 7;
+    const E_INVALID_ENCODED_AMOUNT: u64 = 8;
+
+    // ================================================================
+    // |                             Init                             |
+    // ================================================================
+
+    fun init_module(publisher: &signer) {
+        // register the pool on deployment, because in the case of object code deployment,
+        // this is the only time we have a signer ref to @ccip_lock_release_pool.
+        assert!(
+            !object::object_exists<Metadata>(@local_token),
+            error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
+        );
+        let metadata = object::address_to_object<Metadata>(@local_token);
+
+        // the name of this module. if incorrect, callbacks will fail to be registered and
+        // register_pool will revert.
+        let token_pool_module_name = b"lock_release_token_pool";
+
+        token_admin_registry::register_pool(
+            publisher,
+            token_pool_module_name,
+            @local_token,
+            CallbackProof {}
+        );
+
+        // create a resource account to be the owner of the primary FungibleStore we will use.
+        let (store_signer, store_signer_cap) =
+            account::create_resource_account(publisher, STORE_OBJECT_SEED);
+
+        // make sure this is a valid fungible asset that is primary fungible store enabled,
+        // ie. created with primary_fungible_store::create_primary_store_enabled_fungible_asset
+        primary_fungible_store::ensure_primary_store_exists(
+            signer::address_of(&store_signer), metadata
+        );
+
+        move_to(
+            publisher,
+            LockReleaseTokenPoolDeployment { store_signer_cap }
+        );
+    }
+
+    public fun initialize(
+        caller: &signer, local_token: address, allowlist: vector<address>
+    ) acquires LockReleaseTokenPoolDeployment {
+        assert_can_initialize(signer::address_of(caller));
+
+        assert!(
+            exists<LockReleaseTokenPoolDeployment>(@ccip_lock_release_pool),
+            error::invalid_argument(E_ALREADY_INITIALIZED)
+        );
+
+        assert!(
+            @local_token == local_token,
+            error::invalid_argument(E_LOCAL_TOKEN_MISMATCH)
+        );
+
+        let LockReleaseTokenPoolDeployment { store_signer_cap } =
+            move_from<LockReleaseTokenPoolDeployment>(@ccip_lock_release_pool);
+
+        let store_signer = account::create_signer_with_capability(&store_signer_cap);
+
+        let token_pool_state = token_pool::initialize(caller, local_token, allowlist);
+
+        let pool = LockReleaseTokenPool {
+            ownable_state: ownable::new(caller, signer::address_of(caller), @0x0),
+            store_signer_address: signer::address_of(&store_signer),
+            store_signer_cap,
+            token_pool_state
+        };
+
+        move_to(&store_signer, pool);
+    }
+
+    // ================================================================
+    // |                 Exposing token_pool functions                |
+    // ================================================================
+
+    #[view]
+    public fun get_token(): address acquires LockReleaseTokenPool {
+        token_pool::get_token(&borrow_pool().token_pool_state)
+    }
+
+    #[view]
+    public fun get_router(): address {
+        token_pool::get_router()
+    }
+
+    #[view]
+    public fun get_token_decimals(): u8 acquires LockReleaseTokenPool {
+        token_pool::get_token_decimals(&borrow_pool().token_pool_state)
+    }
+
+    #[view]
+    public fun get_remote_pools(
+        remote_chain_selector: u64
+    ): vector<vector<u8>> acquires LockReleaseTokenPool {
+        token_pool::get_remote_pools(
+            &borrow_pool().token_pool_state, remote_chain_selector
+        )
+    }
+
+    #[view]
+    public fun is_remote_pool(
+        remote_chain_selector: u64, remote_pool_address: vector<u8>
+    ): bool acquires LockReleaseTokenPool {
+        token_pool::is_remote_pool(
+            &borrow_pool().token_pool_state,
+            remote_chain_selector,
+            remote_pool_address
+        )
+    }
+
+    #[view]
+    public fun get_remote_token(
+        remote_chain_selector: u64
+    ): vector<u8> acquires LockReleaseTokenPool {
+        let pool = borrow_pool();
+        token_pool::get_remote_token(&pool.token_pool_state, remote_chain_selector)
+    }
+
+    public entry fun add_remote_pool(
+        caller: &signer, remote_chain_selector: u64, remote_pool_address: vector<u8>
+    ) acquires LockReleaseTokenPool {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+
+        token_pool::add_remote_pool(
+            &mut pool.token_pool_state, remote_chain_selector, remote_pool_address
+        );
+    }
+
+    public entry fun remove_remote_pool(
+        caller: &signer, remote_chain_selector: u64, remote_pool_address: vector<u8>
+    ) acquires LockReleaseTokenPool {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+
+        token_pool::remove_remote_pool(
+            &mut pool.token_pool_state, remote_chain_selector, remote_pool_address
+        );
+    }
+
+    #[view]
+    public fun is_supported_chain(remote_chain_selector: u64): bool acquires LockReleaseTokenPool {
+        let pool = borrow_pool();
+        token_pool::is_supported_chain(&pool.token_pool_state, remote_chain_selector)
+    }
+
+    #[view]
+    public fun get_supported_chains(): vector<u64> acquires LockReleaseTokenPool {
+        let pool = borrow_pool();
+        token_pool::get_supported_chains(&pool.token_pool_state)
+    }
+
+    public entry fun apply_chain_updates(
+        caller: &signer,
+        remote_chain_selectors_to_remove: vector<u64>,
+        remote_chain_selectors_to_add: vector<u64>,
+        remote_pool_addresses_to_add: vector<vector<vector<u8>>>,
+        remote_token_addresses_to_add: vector<vector<u8>>
+    ) acquires LockReleaseTokenPool {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+
+        token_pool::apply_chain_updates(
+            &mut pool.token_pool_state,
+            remote_chain_selectors_to_remove,
+            remote_chain_selectors_to_add,
+            remote_pool_addresses_to_add,
+            remote_token_addresses_to_add
+        );
+    }
+
+    #[view]
+    public fun get_allowlist_enabled(): bool acquires LockReleaseTokenPool {
+        let pool = borrow_pool();
+        token_pool::get_allowlist_enabled(&pool.token_pool_state)
+    }
+
+    #[view]
+    public fun get_allowlist(): vector<address> acquires LockReleaseTokenPool {
+        let pool = borrow_pool();
+        token_pool::get_allowlist(&pool.token_pool_state)
+    }
+
+    public entry fun apply_allowlist_updates(
+        caller: &signer, removes: vector<address>, adds: vector<address>
+    ) acquires LockReleaseTokenPool {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+        token_pool::apply_allowlist_updates(&mut pool.token_pool_state, removes, adds);
+    }
+
+    // ================================================================
+    // |                       Lock/Release                           |
+    // ================================================================
+
+    // the callback proof type used as authentication to retrieve and set input and output arguments.
+    struct CallbackProof has drop {}
+
+    public fun lock_or_burn<T: key>(
+        _store: Object<T>, fa: FungibleAsset, _transfer_ref: &TransferRef
+    ) acquires LockReleaseTokenPool {
+        // retrieve the input for this lock or burn operation. if this function is invoked
+        // outside of ccip::token_admin_registry, the transaction will abort.
+        let input =
+            token_admin_registry::get_lock_or_burn_input_v1(
+                @ccip_lock_release_pool, CallbackProof {}
+            );
+
+        let pool = borrow_pool_mut();
+
+        // This metod validates various aspects of the lock or burn operation. If any of the
+        // validations fail, the transaction will abort.
+        let dest_token_address =
+            token_pool::validate_lock_or_burn(&pool.token_pool_state, &fa, &input);
+
+        // Construct lock_or_burn output before we lose access to fa
+        let dest_pool_data = token_pool::encode_local_decimals(&fa);
+        let fa_amount = fungible_asset::amount(&fa);
+
+        // Lock the funds in the pool
+        primary_fungible_store::deposit(pool.store_signer_address, fa);
+
+        // set the output for this lock or burn operation.
+        token_admin_registry::set_lock_or_burn_output_v1(
+            @ccip_lock_release_pool,
+            CallbackProof {},
+            dest_token_address,
+            dest_pool_data
+        );
+
+        token_pool::emit_locked_or_burned(&mut pool.token_pool_state, fa_amount);
+    }
+
+    public fun release_or_mint<T: key>(
+        _store: Object<T>, _amount: u64, _transfer_ref: &TransferRef
+    ): FungibleAsset acquires LockReleaseTokenPool {
+        // retrieve the input for this release or mint operation. if this function is invoked
+        // outside of ccip::token_admin_registry, the transaction will abort.
+        let input =
+            token_admin_registry::get_release_or_mint_input_v1(
+                @ccip_lock_release_pool, CallbackProof {}
+            );
+        let pool = borrow_pool_mut();
+
+        token_pool::validate_release_or_mint(&pool.token_pool_state, &input);
+
+        let local_amount =
+            token_pool::calculate_release_or_mint_amount(&pool.token_pool_state, &input);
+
+        let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
+        let fa_metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
+        // Withdraw the amount from the store for release. this will revert if the store has insufficient balance.
+        let fa = primary_fungible_store::withdraw(
+            &store_signer, fa_metadata, local_amount
+        );
+
+        // set the output for this release or mint operation.
+        token_admin_registry::set_release_or_mint_output_v1(
+            @ccip_lock_release_pool, CallbackProof {}, local_amount
+        );
+
+        let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
+
+        token_pool::emit_released_or_minted(
+            &mut pool.token_pool_state,
+            recipient,
+            local_amount
+        );
+
+        // return the withdrawn fungible asset.
+        fa
+    }
+
+    // ================================================================
+    // |                      Storage helpers                         |
+    // ================================================================
+
+    // TODO: separate functions due to deploy error, see ccip::state_object
+    #[view]
+    public fun get_store_address(): address {
+        store_address()
+    }
+
+    inline fun store_address(): address {
+        account::create_resource_address(&@ccip_lock_release_pool, STORE_OBJECT_SEED)
+    }
+
+    fun assert_can_initialize(caller_address: address) {
+        if (caller_address == @ccip_lock_release_pool) { return };
+
+        if (object::is_object(@ccip_lock_release_pool)) {
+            let ccip_lock_release_pool_object =
+                object::address_to_object<ObjectCore>(@ccip_lock_release_pool);
+            if (caller_address == object::owner(ccip_lock_release_pool_object)
+                || caller_address == object::root_owner(ccip_lock_release_pool_object)) {
+                return
+            };
+        };
+
+        abort error::permission_denied(E_NOT_PUBLISHER)
+    }
+
+    inline fun borrow_pool(): &LockReleaseTokenPool {
+        borrow_global<LockReleaseTokenPool>(store_address())
+    }
+
+    inline fun borrow_pool_mut(): &mut LockReleaseTokenPool {
+        borrow_global_mut<LockReleaseTokenPool>(store_address())
+    }
+
+    // ================================================================
+    // |                       Expose ownable                         |
+    // ================================================================
+
+    #[view]
+    public fun owner(): address acquires LockReleaseTokenPool {
+        let pool = borrow_pool();
+        ownable::owner(&pool.ownable_state)
+    }
+
+    public entry fun transfer_ownership(caller: &signer, to: address) acquires LockReleaseTokenPool {
+        let pool = borrow_pool_mut();
+        ownable::transfer_ownership(
+            signer::address_of(caller), &mut pool.ownable_state, to
+        )
+    }
+
+    public entry fun accept_ownership(caller: &signer) acquires LockReleaseTokenPool {
+        let pool = borrow_pool_mut();
+        ownable::accept_ownership(signer::address_of(caller), &mut pool.ownable_state)
+    }
+}

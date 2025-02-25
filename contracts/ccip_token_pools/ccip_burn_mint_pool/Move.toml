@@ -1,0 +1,26 @@
+[package]
+name = "CCIPBurnMintTokenPool"
+version = "1.0.0"
+authors = []
+
+[addresses]
+ccip = "_"
+chainlink_common = "_"
+local_token = "_"
+ccip_token_pool = "_"
+ccip_burn_mint_token_pool = "_"
+
+[dev-addresses]
+ccip = "0x100"
+chainlink_common = "0xc10000001"
+local_token = "0x102"
+ccip_token_pool = "0x8000"
+ccip_burn_mint_token_pool = "0x8001"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
+ChainlinkCCIP = { local = "../../ccip" }
+ChainlinkCommon = { local = "../../chainlink-common" }
+CCIPTokenPool = { local = "../token_pool" }
+
+[dev-dependencies]

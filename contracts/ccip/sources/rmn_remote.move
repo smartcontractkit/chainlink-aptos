@@ -341,7 +341,7 @@ module ccip::rmn_remote {
 
     #[view]
     public fun get_report_digest_header(): vector<u8> {
-        aptos_hash::keccak256(b"RMN_V1_6_ANY2EVM_REPORT")
+        aptos_hash::keccak256(b"RMN_V1_6_ANY2APTOS_REPORT")
     }
 
     public entry fun curse(caller: &signer, subject: vector<u8>) acquires RMNRemoteState {
@@ -405,20 +405,12 @@ module ccip::rmn_remote {
     }
 
     public fun is_cursed_global(): bool acquires RMNRemoteState {
-        let state = borrow_state();
-        if (smart_table::length(&state.cursed_subjects) == 0) {
-            return false
-        };
-        smart_table::contains(&state.cursed_subjects, GLOBAL_CURSE_SUBJECT)
+        smart_table::contains(&borrow_state().cursed_subjects, GLOBAL_CURSE_SUBJECT)
     }
 
     public fun is_cursed(subject: vector<u8>): bool acquires RMNRemoteState {
-        let state = borrow_state();
-        if (smart_table::length(&state.cursed_subjects) == 0) {
-            return false
-        };
-        smart_table::contains(&state.cursed_subjects, subject)
-            || smart_table::contains(&state.cursed_subjects, GLOBAL_CURSE_SUBJECT)
+        smart_table::contains(&borrow_state().cursed_subjects, subject)
+            || is_cursed_global()
     }
 
     public fun is_cursed_u128(subject_value: u128): bool acquires RMNRemoteState {
