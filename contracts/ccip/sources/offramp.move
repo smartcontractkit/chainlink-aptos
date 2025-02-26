@@ -378,7 +378,11 @@ module ccip::offramp {
         );
 
         let metadata_hash =
-            calculate_metadata_hash(source_chain_selector, state.chain_selector);
+            calculate_metadata_hash(
+                source_chain_selector,
+                state.chain_selector,
+                source_chain_config.onramp
+            );
 
         let hashed_leaves = vector::map_ref(
             &execution_report.messages,
@@ -1038,7 +1042,7 @@ module ccip::offramp {
     }
 
     inline fun calculate_metadata_hash(
-        source_chain_selector: u64, dest_chain_selector: u64
+        source_chain_selector: u64, dest_chain_selector: u64, onramp: vector<u8>
     ): vector<u8> {
         let packed = vector[];
         eth_abi::encode_bytes32(
@@ -1046,7 +1050,7 @@ module ccip::offramp {
         );
         eth_abi::encode_u64(&mut packed, source_chain_selector);
         eth_abi::encode_u64(&mut packed, dest_chain_selector);
-        eth_abi::encode_address(&mut packed, @ccip);
+        eth_abi::encode_bytes32(&mut packed, aptos_hash::keccak256(onramp));
         aptos_hash::keccak256(packed)
     }
 
@@ -1351,5 +1355,72 @@ module ccip::offramp {
     ): (vector<u8>, u8, u8, bool, vector<vector<u8>>, vector<address>) acquires OffRampState {
         let state = borrow_state();
         ocr3_base::latest_config_details(&state.ocr3_base_state, ocr_plugin_type)
+    }
+
+    #[test]
+    fun test_calculate_message_hash() {
+        let expected_hash =
+            x"c8d6cf666864a60dd6ecd89e5c294734c53b3218d3f83d2d19a3c3f9e200e00d";
+
+        let message_id =
+            x"1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+
+        let message = Any2AptosRampMessage {
+            header: RampMessageHeader {
+                message_id,
+                source_chain_selector: 1,
+                dest_chain_selector: 2,
+                sequence_number: 42,
+                nonce: 123
+            },
+            sender: x"8765432109fedcba8765432109fedcba87654321",
+            data: b"sample message data",
+            receiver: @0x1234,
+            gas_limit: 500000,
+            token_amounts: vector[
+                Any2AptosTokenTransfer {
+                    source_pool_address: x"abcdef1234567890abcdef1234567890abcdef12",
+                    dest_token_address: @0x5678,
+                    dest_gas_amount: 10000,
+                    extra_data: x"00112233",
+                    amount: 1000000
+                },
+                Any2AptosTokenTransfer {
+                    source_pool_address: x"123456789abcdef123456789abcdef123456789a",
+                    dest_token_address: @0x9abc,
+                    dest_gas_amount: 20000,
+                    extra_data: x"ffeeddcc",
+                    amount: 5000000
+                }
+            ]
+        };
+        let metadata_hash =
+            x"aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899";
+
+        let message_hash = calculate_message_hash(&message, metadata_hash);
+        assert!(message_hash == expected_hash, 1);
+    }
+
+    #[test]
+    fun test_calculate_metadata_hash() {
+        let expected_hash =
+            x"812acb01df318f85be452cf6664891cf5481a69dac01e0df67102a295218dd17";
+        let expected_hash_alternate =
+            x"6caf8756ae02ee4f12b83b38e0f21b5e43e90d203bd06729486fd4a0fc8bcc5e";
+
+        let source_chain_selector = 123456789;
+        let dest_chain_selector = 987654321;
+        let onramp = b"source-onramp-address";
+
+        let metadata_hash =
+            calculate_metadata_hash(source_chain_selector, dest_chain_selector, onramp);
+        let metadata_hash_alternate =
+            calculate_metadata_hash(
+                source_chain_selector + 1, dest_chain_selector, onramp
+            );
+
+        assert!(metadata_hash == expected_hash, 1);
+        assert!(metadata_hash_alternate == expected_hash_alternate, 2);
+
     }
 }
