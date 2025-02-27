@@ -43,7 +43,9 @@ module ccip::state_object {
         let object_signer = object::generate_signer(&constructor_ref);
 
         // create an Account on the object for event handles.
-        account::create_account_if_does_not_exist(object::address_from_constructor_ref(&constructor_ref));
+        account::create_account_if_does_not_exist(
+            object::address_from_constructor_ref(&constructor_ref)
+        );
 
         move_to(&object_signer, StateObjectRefs { extend_ref, transfer_ref });
     }

@@ -23,7 +23,8 @@ module ccip::offramp {
     use ccip::token_admin_dispatcher;
     use ccip::token_admin_registry;
 
-    const EXECUTION_STATE_UNTOUCHED: u8 = 1;
+    const EXECUTION_STATE_UNTOUCHED: u8 = 0;
+    const EXECUTION_STATE_IN_PROGRESS: u8 = 1;
     const EXECUTION_STATE_SUCCESS: u8 = 2;
 
     const ZERO_MERKLE_ROOT: vector<u8> = vector[
@@ -59,7 +60,6 @@ module ccip::offramp {
         dynamic_config_set_events: EventHandle<DynamicConfigSet>,
         source_chain_config_set_events: EventHandle<SourceChainConfigSet>,
         skipped_already_executed_events: EventHandle<SkippedAlreadyExecuted>,
-        already_attempted_events: EventHandle<AlreadyAttempted>,
         execution_state_changed_events: EventHandle<ExecutionStateChanged>,
         commit_report_accepted_events: EventHandle<CommitReportAccepted>,
         skipped_incorrect_nonce_events: EventHandle<SkippedIncorrectNonce>,
@@ -125,8 +125,7 @@ module ccip::offramp {
     }
 
     struct TokenPriceUpdate has store, drop, copy {
-        // TODO: this is address on EVM, double check that this should be a local address.
-        source_token: address,
+        source_token: address, // This is the local token
         usd_per_token: u256
     }
 
@@ -278,7 +277,6 @@ module ccip::offramp {
             skipped_already_executed_events: account::new_event_handle(
                 &state_object_signer
             ),
-            already_attempted_events: account::new_event_handle(&state_object_signer),
             execution_state_changed_events: account::new_event_handle(&state_object_signer),
             commit_report_accepted_events: account::new_event_handle(&state_object_signer),
             skipped_incorrect_nonce_events: account::new_event_handle(&state_object_signer),
@@ -306,6 +304,41 @@ module ccip::offramp {
         );
 
         move_to(&state_object_signer, state);
+    }
+
+    public fun assert_source_chain_enabled(
+        state: &mut OffRampState, source_chain_selector: u64
+    ) {
+        // assert that the source chain is enabled.
+        assert!(
+            smart_table::contains(&state.source_chain_configs, source_chain_selector),
+            error::invalid_argument(E_UNKNOWN_SOURCE_CHAIN_SELECTOR)
+        );
+        let source_chain_config =
+            smart_table::borrow(&state.source_chain_configs, source_chain_selector);
+        assert!(
+            source_chain_config.is_enabled,
+            error::permission_denied(E_SOURCE_CHAIN_NOT_ENABLED)
+        );
+    }
+
+    // Throws an error if the root is not committed.
+    // Returns true if the root is eligable for manual execution.
+    inline fun is_committed_root(
+        state: &mut OffRampState, source_chain_selector: u64, root: vector<u8>
+    ): bool {
+        let source_chain_roots = smart_table::borrow(
+            &state.roots, source_chain_selector
+        );
+
+        assert!(
+            smart_table::contains(source_chain_roots, root),
+            error::invalid_argument(E_ROOT_NOT_COMMITTED)
+        );
+        let timestamp_committed_secs = *smart_table::borrow(source_chain_roots, root);
+
+        (timestamp::now_seconds() - timestamp_committed_secs)
+            > (state.permissionless_execution_threshold_secs as u64)
     }
 
     #[view]
@@ -358,17 +391,7 @@ module ccip::offramp {
             return
         };
 
-        // assert that the source chain is enabled.
-        assert!(
-            smart_table::contains(&state.source_chain_configs, source_chain_selector),
-            error::invalid_argument(E_UNKNOWN_SOURCE_CHAIN_SELECTOR)
-        );
-        let source_chain_config =
-            smart_table::borrow(&state.source_chain_configs, source_chain_selector);
-        assert!(
-            source_chain_config.is_enabled,
-            error::permission_denied(E_SOURCE_CHAIN_NOT_ENABLED)
-        );
+        assert_source_chain_enabled(state, source_chain_selector);
 
         let messages_len = vector::length(&execution_report.messages);
         assert!(messages_len > 0, error::invalid_argument(E_EMPTY_REPORT));
@@ -377,6 +400,8 @@ module ccip::offramp {
             error::invalid_argument(E_UNEXPECTED_TOKEN_DATA)
         );
 
+        let source_chain_config =
+            smart_table::borrow(&state.source_chain_configs, source_chain_selector);
         let metadata_hash =
             calculate_metadata_hash(
                 source_chain_selector,
@@ -408,16 +433,8 @@ module ccip::offramp {
                 execution_report.proof_flag_bits
             );
 
-        // this should always exist because source_chain_selector exists in source_chain_configs
-        let source_chain_roots = smart_table::borrow(
-            &state.roots, source_chain_selector
-        );
-
-        assert!(
-            smart_table::contains(source_chain_roots, root),
-            error::invalid_argument(E_ROOT_NOT_COMMITTED)
-        );
-        let timestamp_committed_secs = *smart_table::borrow(source_chain_roots, root);
+        // Reverts when the root is not committed
+        let is_old_commit_report = is_committed_root(state, source_chain_selector, root);
 
         let source_chain_execution_states =
             smart_table::borrow_mut(&mut state.execution_states, source_chain_selector);
@@ -428,7 +445,6 @@ module ccip::offramp {
             let source_chain_selector = source_chain_selector;
 
             let message = vector::borrow(&execution_report.messages, i);
-            let message_hash = vector::borrow(&hashed_leaves, i);
             let sequence_number = message.header.sequence_number;
             let execution_state_ref =
                 smart_table::borrow_mut(source_chain_execution_states, sequence_number);
@@ -446,54 +462,41 @@ module ccip::offramp {
             };
 
             if (manual_execution) {
-                let is_old_commit_report =
-                    (timestamp::now_seconds() - timestamp_committed_secs)
-                        > (state.permissionless_execution_threshold_secs as u64);
                 assert!(
                     is_old_commit_report,
                     error::permission_denied(E_MANUAL_EXECUTION_NOT_YET_ENABLED)
                 );
-            } else {
-                event::emit(AlreadyAttempted { source_chain_selector, sequence_number });
-                event::emit_event(
-                    &mut state.already_attempted_events,
-                    AlreadyAttempted { source_chain_selector, sequence_number }
-                );
-                continue
             };
 
+            // A zero nonce indicates out of order execution and does not require a nonce bump.
             if (message.header.nonce != 0) {
-                if (original_state != EXECUTION_STATE_UNTOUCHED) {
-                    if (!increment_inbound_nonce(
-                        state,
-                        source_chain_selector,
-                        message.header.nonce,
-                        message.sender
-                    )) {
-                        continue
-                    };
-                }
+                if (!increment_inbound_nonce(
+                    state,
+                    source_chain_selector,
+                    message.header.nonce,
+                    message.sender
+                )) {
+                    continue
+                };
             };
-
-            assert!(
-                vector::length(&message.token_amounts)
-                    == vector::length(&execution_report.offchain_token_data),
-                error::invalid_argument(E_TOKEN_DATA_MISMATCH)
-            );
 
             let message_offchain_token_data = vector::borrow(
                 &execution_report.offchain_token_data, i
             );
+
+            let number_of_tokens_in_msg = vector::length(&message.token_amounts);
             assert!(
-                vector::length(&message.token_amounts)
-                    == vector::length(message_offchain_token_data),
+                number_of_tokens_in_msg == vector::length(message_offchain_token_data),
                 error::invalid_argument(E_TOKEN_DATA_MISMATCH)
             );
+
+            *execution_state_ref = EXECUTION_STATE_IN_PROGRESS;
             let return_data = execute_single_message(
                 message, message_offchain_token_data
             );
-
             *execution_state_ref = EXECUTION_STATE_SUCCESS;
+
+            let message_hash = vector::borrow(&hashed_leaves, i);
 
             event::emit(
                 ExecutionStateChanged {
@@ -633,20 +636,12 @@ module ccip::offramp {
                     error::permission_denied(E_CURSED_BY_RMN)
                 );
 
-                assert!(
-                    smart_table::contains(
-                        &state.source_chain_configs, source_chain_selector
-                    ),
-                    error::invalid_argument(E_UNKNOWN_SOURCE_CHAIN_SELECTOR)
-                );
+                assert_source_chain_enabled(state, source_chain_selector);
+
                 let source_chain_config =
                     smart_table::borrow_mut(
                         &mut state.source_chain_configs, source_chain_selector
                     );
-                assert!(
-                    source_chain_config.is_enabled,
-                    error::permission_denied(E_SOURCE_CHAIN_NOT_ENABLED)
-                );
                 assert!(
                     source_chain_config.onramp == root.onramp_address,
                     error::invalid_argument(E_COMMIT_ONRAMP_MISMATCH)
