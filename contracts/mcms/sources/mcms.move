@@ -1,0 +1,2203 @@
+/// This module is the Aptos implementation of Chainlink's MultiChainMultiSig contract.
+module mcms::mcms {
+    use std::aptos_hash::keccak256;
+    use std::bcs;
+    use std::chain_id;
+    use std::error;
+    use std::event;
+    use std::option;
+    use std::secp256k1;
+    use std::simple_map::{SimpleMap, Self};
+    use std::string::{Self, String};
+    use std::timestamp;
+    use std::vector;
+
+    use mcms::bcs_stream;
+    use mcms::mcms_account;
+    use mcms::mcms_deployer;
+    use mcms::mcms_registry;
+
+    const NUM_GROUPS: u64 = 32;
+    const MAX_NUM_SIGNERS: u64 = 200;
+    // equivalent to initializing empty uint8[NUM_GROUPS] in Solidity
+    const VEC_NUM_GROUPS: vector<u8> = vector[
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0
+    ];
+    // keccak256("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA_APTOS")
+    const MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA: vector<u8> = x"a71d47b6c00b64ee21af96a1d424cb2dcbbed12becdcd3b4e6c7fc4c2f80a697";
+    // keccak256("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP_APTOS")
+    const MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP: vector<u8> = x"e5a6d1256b00d7ec22512b6b60a3f4d75c559745d2dbf309f77b8b756caabe14";
+
+    struct MultisigState has key, store, drop {
+        // signers is used to easily validate the existence of the signer by its address. We still
+        // have signers stored in config in order to easily deactivate them when a new config is set.
+        signers: SimpleMap<vector<u8>, Signer>,
+        config: Config,
+
+        // Remember signedHashes that this contract has seen. Each signedHash can only be set once.
+        seen_signed_hashes: SimpleMap<vector<u8>, bool>,
+        expiring_root_and_op_count: ExpiringRootAndOpCount,
+        root_metadata: RootMetadata
+    }
+
+    struct RootMetadata has key, store, copy, drop {
+        chain_id: u256,
+        multisig: address,
+        pre_op_count: u64,
+        post_op_count: u64,
+        override_previous_root: bool
+    }
+
+    struct Op has copy, drop {
+        chain_id: u256,
+        multisig: address,
+        nonce: u64,
+        to: address,
+        module_name: String,
+        function: String,
+        data: vector<u8>
+    }
+
+    struct Signer has store, copy, drop {
+        addr: vector<u8>,
+        index: u8, // index of signer in config.signers
+        group: u8 // 0 <= group < NUM_GROUPS. Each signer can only be in one group.
+    }
+
+    struct Config has store, copy, drop {
+        signers: vector<Signer>,
+
+        // group_quorums[i] stores the quorum for the i-th signer group. Any group with
+        // group_quorums[i] = 0 is considered disabled. The i-th group is successful if
+        // it is enabled and at least group_quorums[i] of its children are successful.
+        group_quorums: vector<u8>,
+
+        // group_parents[i] stores the parent group of the i-th signer group. We ensure that the
+        // groups form a tree structure (where the root/0-th signer group points to itself as
+        // parent) by enforcing
+        // - (i != 0) implies (group_parents[i] < i)
+        // - group_parents[0] == 0
+        group_parents: vector<u8>
+    }
+
+    struct ExpiringRootAndOpCount has store, drop {
+        root: vector<u8>,
+        valid_until: u64,
+        op_count: u64
+    }
+
+    #[event]
+    struct ConfigSet has drop, store {
+        config: Config,
+        is_root_cleared: bool
+    }
+
+    #[event]
+    struct NewRoot has drop, store {
+        root: vector<u8>,
+        valid_until: u64,
+        metadata: RootMetadata
+    }
+
+    #[event]
+    struct OpExecuted has drop, store {
+        nonce: u64,
+        to: address,
+        module_name: String,
+        function: String,
+        data: vector<u8>
+    }
+
+    const E_ALREADY_SEEN_HASH: u64 = 1;
+    const E_POST_OP_COUNT_REACHED: u64 = 2;
+    const E_WRONG_CHAIN_ID: u64 = 3;
+    const E_WRONG_MULTISIG: u64 = 4;
+    const E_ROOT_EXPIRED: u64 = 5;
+    const E_WRONG_NONCE: u64 = 6;
+    const E_VALID_UNTIL_EXPIRED: u64 = 7;
+    const E_INVALID_SIGNER: u64 = 8;
+    const E_MISSING_CONFIG: u64 = 9;
+    const E_INSUFFICIENT_SIGNERS: u64 = 10;
+    const E_PROOF_CANNOT_BE_VERIFIED: u64 = 11;
+    const E_PENDING_OPS: u64 = 12;
+    const E_WRONG_PRE_OP_COUNT: u64 = 13;
+    const E_WRONG_POST_OP_COUNT: u64 = 14;
+    const E_INVALID_NUM_SIGNERS: u64 = 15;
+    const E_SIGNER_GROUPS_LEN_MISMATCH: u64 = 16;
+    const E_INVALID_GROUP_QUORUM_LEN: u64 = 17;
+    const E_INVALID_GROUP_PARENTS_LEN: u64 = 18;
+    const E_OUT_OF_BOUNDS_GROUP: u64 = 19;
+    const E_GROUP_TREE_NOT_WELL_FORMED: u64 = 20;
+    const E_SIGNER_IN_DISABLED_GROUP: u64 = 21;
+    const E_OUT_OF_BOUNDS_GROUP_QUORUM: u64 = 22;
+    const E_SIGNER_ADDR_MUST_BE_INCREASING: u64 = 23;
+    const E_CMP_VECTORS_DIFF_LEN: u64 = 24;
+    const E_INVALID_V_SIGNATURE: u64 = 25;
+    const E_FAILED_ECDSA_RECOVER: u64 = 26;
+    const E_INVALID_ROOT_LEN: u64 = 27;
+    const E_CALLBACK_PARAMS_NOT_CONSUMED: u64 = 28;
+    const E_MODULE_NAME_TOO_LONG: u64 = 29;
+    const E_FUNCTION_NAME_TOO_LONG: u64 = 30;
+    const E_INVALID_SIGNER_ADDR_LEN: u64 = 31;
+    const E_INVALID_SIGNATURE_LEN: u64 = 32;
+    const E_UNKNOWN_MCMS_MODULE_FUNCTION: u64 = 33;
+    const E_UNKNOWN_FRAMEWORK_MODULE_FUNCTION: u64 = 34;
+    const E_UNKNOWN_FRAMEWORK_MODULE: u64 = 35;
+
+    fun init_module(publisher: &signer) {
+        move_to(
+            publisher,
+            MultisigState {
+                signers: simple_map::new(),
+                config: Config {
+                    signers: vector[],
+                    group_quorums: VEC_NUM_GROUPS,
+                    group_parents: VEC_NUM_GROUPS
+                },
+                seen_signed_hashes: simple_map::new(),
+                expiring_root_and_op_count: ExpiringRootAndOpCount {
+                    root: vector[],
+                    valid_until: 0,
+                    op_count: 0
+                },
+                root_metadata: RootMetadata {
+                    chain_id: 0,
+                    multisig: @mcms,
+                    pre_op_count: 0,
+                    post_op_count: 0,
+                    override_previous_root: false
+                }
+            }
+        );
+    }
+
+    #[view]
+    /// Returns the current multisig configuration.
+    public fun get_config(): Config acquires MultisigState {
+        borrow_state().config
+    }
+
+    #[view]
+    /// Returns the current operation count from the active Merkle root.
+    public fun get_op_count(): u64 acquires MultisigState {
+        borrow_state().expiring_root_and_op_count.op_count
+    }
+
+    #[view]
+    /// Returns the current Merkle root along with its expiration timestamp.
+    public fun get_root(): (vector<u8>, u64) acquires MultisigState {
+        let state = borrow_state();
+        (
+            state.expiring_root_and_op_count.root,
+            state.expiring_root_and_op_count.valid_until
+        )
+    }
+
+    #[view]
+    /// Returns the metadata associated with the current Merkle root.
+    public fun get_root_metadata(): RootMetadata acquires MultisigState {
+        borrow_state().root_metadata
+    }
+
+    /// Sets a new Merkle root along with its associated metadata.
+    /// Validates the provided signatures and the Merkle proof.
+    public entry fun set_root(
+        root: vector<u8>,
+        valid_until: u64,
+        chain_id: u256,
+        multisig: address,
+        pre_op_count: u64,
+        post_op_count: u64,
+        override_previous_root: bool,
+        metadata_proof: vector<vector<u8>>,
+        signatures: vector<vector<u8>>
+    ) acquires MultisigState {
+        let state = borrow_state_mut();
+
+        let metadata = RootMetadata {
+            chain_id,
+            multisig,
+            pre_op_count,
+            post_op_count,
+            override_previous_root
+        };
+
+        // also checks root = 32 bytes
+        let signed_hash = compute_eth_message_hash(root, valid_until);
+
+        assert!(
+            simple_map::contains_key(&mut state.seen_signed_hashes, &signed_hash) == false,
+            error::invalid_argument(E_ALREADY_SEEN_HASH)
+        );
+
+        assert!(
+            timestamp::now_seconds() <= valid_until,
+            error::invalid_argument(E_VALID_UNTIL_EXPIRED)
+        );
+
+        assert!(
+            metadata.chain_id == (chain_id::get() as u256),
+            error::invalid_argument(E_WRONG_CHAIN_ID)
+        );
+
+        assert!(metadata.multisig == @mcms, error::invalid_argument(E_WRONG_MULTISIG));
+
+        let op_count = state.expiring_root_and_op_count.op_count;
+        assert!(
+            override_previous_root || op_count == state.root_metadata.post_op_count,
+            error::invalid_state(E_PENDING_OPS)
+        );
+        assert!(
+            op_count == metadata.pre_op_count,
+            error::invalid_argument(E_WRONG_PRE_OP_COUNT)
+        );
+        assert!(
+            metadata.pre_op_count <= metadata.post_op_count,
+            error::invalid_argument(E_WRONG_POST_OP_COUNT)
+        );
+
+        let hashed_leaf: vector<u8> = hash_metadata_leaf(metadata);
+        assert!(
+            verify_merkle_proof(metadata_proof, root, hashed_leaf),
+            error::invalid_argument(E_PROOF_CANNOT_BE_VERIFIED)
+        );
+
+        // verify ECDSA signatures on (root, valid_until) and ensure that the root group is successful
+        let prev_address = vector[];
+        let group_vote_counts: vector<u8> = vector[];
+        right_pad_vec(&mut group_vote_counts, NUM_GROUPS);
+        let i = 0;
+        let signatures_len = vector::length(&signatures);
+        while (i < signatures_len) {
+            let signature = *vector::borrow(&signatures, i);
+            let signer_addr = ecdsa_recover_evm_addr(signed_hash, signature);
+            // the off-chain system is required to sort the signatures by the
+            // signer address in an increasing order
+            if (i > 0) {
+                assert!(
+                    vector_u8_gt(&signer_addr, &prev_address),
+                    error::invalid_argument(E_SIGNER_ADDR_MUST_BE_INCREASING)
+                );
+            };
+            prev_address = signer_addr;
+
+            assert!(
+                simple_map::contains_key(&state.signers, &signer_addr),
+                error::invalid_argument(E_INVALID_SIGNER)
+            );
+            let signer = *simple_map::borrow(&state.signers, &signer_addr);
+
+            // check group quorums
+            let group: u8 = signer.group;
+            while (true) {
+                let group_vote_count = vector::borrow_mut(
+                    &mut group_vote_counts, (group as u64)
+                );
+                *group_vote_count = *group_vote_count + 1;
+
+                let quorum = vector::borrow(&state.config.group_quorums, (group as u64));
+                if (*group_vote_count != *quorum) {
+                    // bail out unless we just hit the quorum. we only hit each quorum once,
+                    // so we never move on to the parent of a group more than once.
+                    break
+                };
+
+                if (group == 0) {
+                    // root group reached
+                    break
+                };
+
+                // group quorum reached, restart loop and check parent group
+                group = *vector::borrow(&state.config.group_parents, (group as u64));
+            };
+            i = i + 1;
+        };
+
+        // the group at the root of the tree (with index 0) determines whether the vote passed,
+        // we cannot proceed if it isn't configured with a valid (non-zero) quorum
+        let root_group_quorum = vector::borrow(&state.config.group_quorums, 0);
+        assert!(*root_group_quorum != 0, error::invalid_argument(E_MISSING_CONFIG));
+
+        // check root group reached quorum
+        let root_group_vote_count = vector::borrow(&group_vote_counts, 0);
+        assert!(
+            *root_group_vote_count >= *root_group_quorum,
+            error::invalid_argument(E_INSUFFICIENT_SIGNERS)
+        );
+
+        simple_map::add(&mut state.seen_signed_hashes, signed_hash, true);
+        state.expiring_root_and_op_count = ExpiringRootAndOpCount {
+            root,
+            valid_until,
+            op_count: metadata.pre_op_count
+        };
+        state.root_metadata = metadata;
+        event::emit(NewRoot { root, valid_until, metadata });
+    }
+
+    /// Executes an operation from the current Merkle root.
+    public entry fun execute(
+        chain_id: u256,
+        multisig: address,
+        nonce: u64,
+        to: address,
+        module_name: String,
+        function: String,
+        data: vector<u8>,
+        proof: vector<vector<u8>>
+    ) acquires MultisigState {
+        let state = borrow_state_mut();
+
+        let op = Op { chain_id, multisig, nonce, to, module_name, function, data };
+
+        assert!(
+            state.root_metadata.post_op_count
+                > state.expiring_root_and_op_count.op_count,
+            error::invalid_state(E_POST_OP_COUNT_REACHED)
+        );
+
+        assert!(
+            op.chain_id == (chain_id::get() as u256),
+            error::invalid_argument(E_WRONG_CHAIN_ID)
+        );
+
+        assert!(op.multisig == @mcms, error::invalid_argument(E_WRONG_MULTISIG));
+
+        assert!(
+            timestamp::now_seconds() <= state.expiring_root_and_op_count.valid_until,
+            error::invalid_state(E_ROOT_EXPIRED)
+        );
+
+        assert!(
+            op.nonce == state.expiring_root_and_op_count.op_count,
+            error::invalid_argument(E_WRONG_NONCE)
+        );
+
+        let hashed_leaf: vector<u8> = hash_op_leaf(op);
+        assert!(
+            verify_merkle_proof(
+                proof, state.expiring_root_and_op_count.root, hashed_leaf
+            ),
+            error::invalid_argument(E_PROOF_CANNOT_BE_VERIFIED)
+        );
+
+        state.expiring_root_and_op_count.op_count = state.expiring_root_and_op_count.op_count
+            + 1;
+
+        dispatch(to, module_name, function, data);
+
+        event::emit(
+            OpExecuted { nonce, to, module_name, function, data }
+        );
+    }
+
+    inline fun dispatch(
+        receiver: address,
+        module_name: String,
+        function_name: String,
+        data: vector<u8>
+    ) {
+        let module_name_bytes = *string::bytes(&module_name);
+        let function_name_bytes = *string::bytes(&function_name);
+        if (receiver == @mcms) {
+            if (module_name_bytes == b"mcms") {
+                // dispatch to the mcms module's functions for setting config.
+                dispatch_to_self(function_name_bytes, data);
+            } else if (module_name_bytes == b"mcms_account") {
+                // dispatch to the account module's functions for ownership transfers.
+                dispatch_to_account(function_name_bytes, data);
+            } else if (module_name_bytes == b"mcms_deployer") {
+                // dispatch to the deployer module's functions for deploying and upgrading contracts.
+                dispatch_to_deployer(function_name_bytes, data);
+            } else if (module_name_bytes == b"mcms_registry") {
+                // dispatch to the registry module's functions for code object management.
+                dispatch_to_registry(function_name_bytes, data);
+            }
+        } else {
+            let object_meta =
+                mcms_registry::start_dispatch(receiver, module_name, function_name, data);
+            aptos_framework::dispatchable_fungible_asset::derived_supply(object_meta);
+            mcms_registry::finish_dispatch(receiver);
+        }
+    }
+
+    inline fun dispatch_to_self(
+        function_name_bytes: vector<u8>, data: vector<u8>
+    ) {
+        let self_signer = mcms_account::get_signer();
+        let stream = bcs_stream::new(data);
+        if (function_name_bytes == b"set_config") {
+            let signer_addresses =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
+                );
+            let signer_groups = bcs_stream::deserialize_vector_u8(&mut stream);
+            let group_quorums = bcs_stream::deserialize_vector_u8(&mut stream);
+            let group_parents = bcs_stream::deserialize_vector_u8(&mut stream);
+            let clear_root = bcs_stream::deserialize_bool(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            set_config(
+                &self_signer,
+                signer_addresses,
+                signer_groups,
+                group_quorums,
+                group_parents,
+                clear_root
+            );
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_MCMS_MODULE_FUNCTION)
+        }
+    }
+
+    inline fun dispatch_to_account(
+        function_name_bytes: vector<u8>, data: vector<u8>
+    ) {
+        let self_signer = mcms_account::get_signer();
+        let stream = bcs_stream::new(data);
+        if (function_name_bytes == b"transfer_ownership") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            mcms_account::transfer_ownership(&self_signer, to);
+        } else if (function_name_bytes == b"accept_ownership") {
+            bcs_stream::assert_is_consumed(&stream);
+            mcms_account::accept_ownership(&self_signer);
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_MCMS_MODULE_FUNCTION)
+        }
+    }
+
+    inline fun dispatch_to_deployer(
+        function_name_bytes: vector<u8>, data: vector<u8>
+    ) {
+        let self_signer = mcms_account::get_signer();
+        let stream = bcs_stream::new(data);
+
+        if (function_name_bytes == b"stage_code_chunk") {
+            let metadata_chunk = bcs_stream::deserialize_vector_u8(&mut stream);
+            let code_indices =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_u16(stream) }
+                );
+            let code_chunks =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
+                );
+            mcms_deployer::stage_code_chunk(
+                &self_signer,
+                metadata_chunk,
+                code_indices,
+                code_chunks
+            );
+        } else if (function_name_bytes == b"stage_code_chunk_and_publish_to_object") {
+            let metadata_chunk = bcs_stream::deserialize_vector_u8(&mut stream);
+            let code_indices =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_u16(stream) }
+                );
+            let code_chunks =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
+                );
+            let new_owner_seed = bcs_stream::deserialize_vector_u8(&mut stream);
+            mcms_deployer::stage_code_chunk_and_publish_to_object(
+                &self_signer,
+                metadata_chunk,
+                code_indices,
+                code_chunks,
+                new_owner_seed
+            );
+        } else if (function_name_bytes == b"stage_code_chunk_and_upgrade_object_code") {
+            let metadata_chunk = bcs_stream::deserialize_vector_u8(&mut stream);
+            let code_indices =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_u16(stream) }
+                );
+            let code_chunks =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
+                );
+            let code_object_address = bcs_stream::deserialize_address(&mut stream);
+            mcms_deployer::stage_code_chunk_and_upgrade_object_code(
+                &self_signer,
+                metadata_chunk,
+                code_indices,
+                code_chunks,
+                code_object_address
+            );
+        } else if (function_name_bytes == b"cleanup_staging_area") {
+            bcs_stream::assert_is_consumed(&stream);
+            mcms_deployer::cleanup_staging_area(&self_signer);
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_MCMS_MODULE_FUNCTION)
+        }
+    }
+
+    inline fun dispatch_to_registry(
+        function_name_bytes: vector<u8>, data: vector<u8>
+    ) {
+        let self_signer = mcms_account::get_signer();
+        let stream = bcs_stream::new(data);
+        if (function_name_bytes == b"create_owner_for_preexisting_code_object") {
+            let object_address = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            mcms_registry::create_owner_for_preexisting_code_object(
+                &self_signer, object_address
+            );
+        } else if (function_name_bytes == b"transfer_code_object") {
+            let object_address = bcs_stream::deserialize_address(&mut stream);
+            let new_owner_address = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            mcms_registry::transfer_code_object(
+                &self_signer, object_address, new_owner_address
+            );
+        } else if (function_name_bytes == b"execute_code_object_transfer") {
+            let object_address = bcs_stream::deserialize_address(&mut stream);
+            let new_owner_address = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            mcms_registry::execute_code_object_transfer(
+                &self_signer, object_address, new_owner_address
+            );
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_MCMS_MODULE_FUNCTION)
+        }
+    }
+
+    /// Updates the multisig configuration, including signer addresses and group settings.
+    public entry fun set_config(
+        caller: &signer,
+        signer_addresses: vector<vector<u8>>,
+        signer_groups: vector<u8>,
+        group_quorums: vector<u8>,
+        group_parents: vector<u8>,
+        clear_root: bool
+    ) acquires MultisigState {
+        mcms_account::assert_is_owner(caller);
+
+        let state = borrow_state_mut();
+
+        assert!(
+            vector::length(&signer_addresses) != 0
+                && vector::length(&signer_addresses) <= MAX_NUM_SIGNERS,
+            error::invalid_argument(E_INVALID_NUM_SIGNERS)
+        );
+        assert!(
+            vector::length(&signer_addresses) == vector::length(&signer_groups),
+            error::invalid_argument(E_SIGNER_GROUPS_LEN_MISMATCH)
+        );
+        assert!(
+            vector::length(&group_quorums) == NUM_GROUPS,
+            error::invalid_argument(E_INVALID_GROUP_QUORUM_LEN)
+        );
+        assert!(
+            vector::length(&group_parents) == NUM_GROUPS,
+            error::invalid_argument(E_INVALID_GROUP_PARENTS_LEN)
+        );
+
+        // validate group structure
+        // counts number of children of each group
+        let group_children_counts = vector[];
+        right_pad_vec(&mut group_children_counts, NUM_GROUPS);
+        // first, we count the signers as children
+        vector::for_each_ref(
+            &signer_groups,
+            |group| {
+                let group: u64 = *group as u64;
+                assert!(
+                    group < NUM_GROUPS, error::invalid_argument(E_OUT_OF_BOUNDS_GROUP)
+                );
+                let count = vector::borrow_mut(&mut group_children_counts, group);
+                *count = *count + 1;
+            }
+        );
+
+        // second, we iterate backwards so as to check each group and propagate counts from
+        // child group to parent groups up the tree to the root
+        let j = 0;
+        while (j < NUM_GROUPS) {
+            let i = NUM_GROUPS - j - 1;
+            // ensure we have a well-formed group tree:
+            // - the root should have itself as parent
+            // - all other groups should have a parent group with a lower index
+            let group_parent = vector::borrow(&group_parents, i);
+            assert!(
+                i == 0 || (*group_parent as u64) < i,
+                error::invalid_argument(E_GROUP_TREE_NOT_WELL_FORMED)
+            );
+            assert!(
+                i != 0 || (*group_parent as u64) == 0,
+                error::invalid_argument(E_GROUP_TREE_NOT_WELL_FORMED)
+            );
+
+            let group_quorum = vector::borrow(&group_quorums, i);
+            let disabled = *group_quorum == 0;
+            let group_children_count = vector::borrow(&group_children_counts, i);
+            if (disabled) {
+                // if group is disabled, ensure it has no children
+                assert!(
+                    *group_children_count == 0,
+                    error::invalid_argument(E_SIGNER_IN_DISABLED_GROUP)
+                );
+            } else {
+                // if group is enabled, ensure group quorum can be met
+                let group_quorum = vector::borrow(&group_quorums, i);
+                assert!(
+                    *group_children_count >= *group_quorum,
+                    error::invalid_argument(E_OUT_OF_BOUNDS_GROUP_QUORUM)
+                );
+
+                // propagate children counts to parent group
+                let count = vector::borrow_mut(
+                    &mut group_children_counts, (*group_parent as u64)
+                );
+                *count = *count + 1;
+            };
+
+            j = j + 1;
+        };
+
+        // remove old signer addresses
+        state.signers = simple_map::new();
+        state.config.signers = vector[];
+
+        // save group quorums and parents to state
+        state.config.group_quorums = group_quorums;
+        state.config.group_parents = group_parents;
+
+        // check signer addresses are in increasing order and save signers to state
+        // evm zero address (20 bytes of 0) is the smallest address possible
+        let prev_signer_addr = vector[];
+        let i = 0;
+        while (i < vector::length(&signer_addresses)) {
+            let signer_addr = vector::borrow(&signer_addresses, i);
+            assert!(
+                vector::length(signer_addr) == 20,
+                error::invalid_argument(E_INVALID_SIGNER_ADDR_LEN)
+            );
+            if (i > 0) {
+                assert!(
+                    vector_u8_gt(signer_addr, &prev_signer_addr),
+                    error::invalid_argument(E_SIGNER_ADDR_MUST_BE_INCREASING)
+                );
+            };
+
+            let signer = Signer {
+                addr: *signer_addr,
+                index: (i as u8),
+                group: *vector::borrow(&signer_groups, i)
+            };
+            simple_map::add(&mut state.signers, *signer_addr, signer);
+            vector::push_back(&mut state.config.signers, signer);
+            prev_signer_addr = *signer_addr;
+            i = i + 1;
+        };
+
+        if (clear_root) {
+            // clearRoot is equivalent to overriding with a completely empty root
+            let op_count = state.expiring_root_and_op_count.op_count;
+            state.expiring_root_and_op_count = ExpiringRootAndOpCount {
+                root: vector[],
+                valid_until: 0,
+                op_count
+            };
+            state.root_metadata = RootMetadata {
+                chain_id: (chain_id::get() as u256),
+                multisig: @mcms,
+                pre_op_count: op_count,
+                post_op_count: op_count,
+                override_previous_root: true
+            };
+        };
+
+        event::emit(ConfigSet { config: state.config, is_root_cleared: clear_root });
+    }
+
+    inline fun borrow_state(): &MultisigState {
+        borrow_global<MultisigState>(@mcms)
+    }
+
+    inline fun borrow_state_mut(): &mut MultisigState {
+        borrow_global_mut<MultisigState>(@mcms)
+    }
+
+    inline fun ecdsa_recover_evm_addr(
+        eth_signed_message_hash: vector<u8>, signature: vector<u8>
+    ): vector<u8> {
+        // ensure signature has correct length - (r,s,v) concatenated = 65 bytes
+        assert!(
+            vector::length(&signature) == 65,
+            error::invalid_argument(E_INVALID_SIGNATURE_LEN)
+        );
+        // extract v from signature
+        let v = vector::pop_back(&mut signature);
+        // convert 64 byte signature into ECDSASignature struct
+        let sig = secp256k1::ecdsa_signature_from_bytes(signature);
+        // Aptos uses the rust libsecp256k1 parse() under the hood which has a different numbering scheme
+        // see: https://docs.rs/libsecp256k1/latest/libsecp256k1/struct.RecoveryId.html#method.parse_rpc
+        assert!(
+            v >= 27 && v < 27 + 4,
+            error::invalid_argument(E_INVALID_V_SIGNATURE)
+        );
+        let v = v - 27;
+
+        // retrieve signer public key
+        let public_key =
+            aptos_std::secp256k1::ecdsa_recover(eth_signed_message_hash, v, &sig);
+        assert!(
+            option::is_some(&public_key),
+            error::invalid_argument(E_FAILED_ECDSA_RECOVER)
+        );
+
+        // return last 20 bytes of hashed public key as the recovered ethereum address
+        let public_key_bytes =
+            secp256k1::ecdsa_raw_public_key_to_bytes(&option::extract(&mut public_key));
+        std::vector::trim((&mut keccak256(public_key_bytes)), 12) // trims publicKeyBytes to 12 bytes, returns trimmed last 20 bytes
+    }
+
+    inline fun compute_eth_message_hash(
+        root: vector<u8>, valid_until: u64
+    ): vector<u8> {
+        // abi.encode(root (bytes32), valid_until)
+        let valid_until_bytes = encode_uint(valid_until, 32);
+        assert!(vector::length(&root) == 32, error::invalid_argument(E_INVALID_ROOT_LEN)); // root should be 32 bytes
+        let abi_encoded_params = &mut root;
+        vector::append(abi_encoded_params, valid_until_bytes);
+
+        // keccak256(abi_encoded_params)
+        let hashed_encoded_params = keccak256(*abi_encoded_params);
+
+        // ECDSA.toEthSignedMessageHash()
+        let eth_msg_prefix = b"\x19Ethereum Signed Message:\n32";
+        let hash = &mut eth_msg_prefix;
+        vector::append(hash, hashed_encoded_params);
+        keccak256(*hash)
+    }
+
+    // computes keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA, metadata))
+    inline fun hash_metadata_leaf(metadata: RootMetadata): vector<u8> {
+        let chain_id = encode_uint(metadata.chain_id, 32);
+        let multisig = bcs::to_bytes(&metadata.multisig);
+        let pre_op_count = encode_uint(metadata.pre_op_count, 32);
+        let post_op_count = encode_uint(metadata.post_op_count, 32);
+        let override_previous_root =
+            if (metadata.override_previous_root) {
+                vector[1]
+            } else {
+                vector[0]
+            };
+        left_pad_vec(&mut override_previous_root, 32);
+
+        let hash_preimage: vector<u8> = vector[];
+        vector::append(
+            &mut hash_preimage, MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA
+        );
+        vector::append(&mut hash_preimage, chain_id);
+        vector::append(&mut hash_preimage, multisig);
+        vector::append(&mut hash_preimage, pre_op_count);
+        vector::append(&mut hash_preimage, post_op_count);
+        vector::append(&mut hash_preimage, override_previous_root);
+        // since we are using this in a merkle tree/proof, hash_preimage should be greater than 64 bytes
+        // to prevent collisions with internal nodes. the above operations already guarantee this so no need to check.
+        keccak256(hash_preimage)
+    }
+
+    // computes keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP, op))
+    inline fun hash_op_leaf(op: Op): vector<u8> {
+        let chain_id = encode_uint(op.chain_id, 32);
+        let multisig = bcs::to_bytes(&op.multisig);
+        let nonce = encode_uint(op.nonce, 32);
+        let to = bcs::to_bytes(&op.to);
+
+        assert!(
+            string::length(&op.module_name) <= 64,
+            error::invalid_argument(E_MODULE_NAME_TOO_LONG)
+        );
+        let module_name = *string::bytes(&op.module_name);
+        left_pad_vec(&mut module_name, 64);
+
+        assert!(
+            string::length(&op.function) <= 64,
+            error::invalid_argument(E_FUNCTION_NAME_TOO_LONG)
+        );
+        let function = *string::bytes(&op.function);
+        left_pad_vec(&mut function, 64);
+
+        let hash_preimage: vector<u8> = vector[];
+        vector::append(&mut hash_preimage, MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP);
+        vector::append(&mut hash_preimage, chain_id);
+        vector::append(&mut hash_preimage, multisig);
+        vector::append(&mut hash_preimage, nonce);
+        vector::append(&mut hash_preimage, to);
+        vector::append(&mut hash_preimage, module_name);
+        vector::append(&mut hash_preimage, function);
+        vector::append(&mut hash_preimage, op.data);
+
+        // right pad op.data to multiple of 32 bytes
+        let pad_amount = 32 - (vector::length(&op.data) % 32);
+        right_pad_vec(&mut hash_preimage, pad_amount);
+        while (pad_amount > 0) {
+            vector::push_back(&mut hash_preimage, 0);
+            pad_amount = pad_amount - 1;
+        };
+
+        // since we are using this in a merkle tree/proof, hash_preimage should be greater than 64 bytes
+        // to prevent collisions with internal nodes. the above operations already guarantee this so no need to check.
+        keccak256(hash_preimage)
+    }
+
+    inline fun verify_merkle_proof(
+        proof: vector<vector<u8>>,
+        root: vector<u8>,
+        leaf: vector<u8>
+    ): bool {
+        let computed_hash = leaf;
+        vector::for_each_ref(
+            &proof,
+            |proof_element| {
+                let (left, right) =
+                    if (vector_u8_gt(&computed_hash, proof_element)) {
+                        (*proof_element, computed_hash)
+                    } else {
+                        (computed_hash, *proof_element)
+                    };
+                let hash_input: vector<u8> = left;
+                vector::append(&mut hash_input, right);
+                computed_hash = keccak256(hash_input);
+            }
+        );
+        computed_hash == root
+    }
+
+    inline fun encode_uint<T: drop>(input: T, num_bytes: u64): vector<u8> {
+        let bcs_bytes = bcs::to_bytes(&input);
+
+        let len = vector::length(&bcs_bytes);
+        if (len < num_bytes) {
+            let bytes_to_pad = num_bytes - len;
+            let i = 0;
+            while (i < bytes_to_pad) {
+                vector::push_back(&mut bcs_bytes, 0);
+                i = i + 1;
+            };
+        };
+
+        // little endian to big endian
+        vector::reverse(&mut bcs_bytes);
+
+        bcs_bytes
+    }
+
+    inline fun right_pad_vec(v: &mut vector<u8>, num_bytes: u64) {
+        let len = vector::length(v);
+        if (len < num_bytes) {
+            let bytes_to_pad = num_bytes - len;
+            let i = 0;
+            while (i < bytes_to_pad) {
+                vector::push_back(v, 0);
+                i = i + 1;
+            };
+        };
+    }
+
+    inline fun left_pad_vec(v: &mut vector<u8>, num_bytes: u64) {
+        let len = vector::length(v);
+        if (len < num_bytes) {
+            let bytes_to_pad = num_bytes - len;
+            let i = 0;
+            vector::reverse(v);
+            while (i < bytes_to_pad) {
+                vector::push_back(v, 0);
+                i = i + 1;
+            };
+            vector::reverse(v);
+        };
+    }
+
+    /// compares two vectors of equal length, returns true if a > b, false otherwise.
+    fun vector_u8_gt(a: &vector<u8>, b: &vector<u8>): bool {
+        let len = vector::length(a);
+        assert!(
+            len == vector::length(b), error::invalid_argument(E_CMP_VECTORS_DIFF_LEN)
+        );
+
+        if (len == 0) {
+            return false
+        };
+
+        let i = 0;
+        // compare each byte until not equal
+        while (i < len) {
+            let byte_a = *vector::borrow(a, i);
+            let byte_b = *vector::borrow(b, i);
+            if (byte_a > byte_b) {
+                return true
+            } else if (byte_a < byte_b) {
+                return false
+            };
+            i = i + 1;
+        };
+
+        // vectors are equal, a == b
+        false
+    }
+
+    #[test_only]
+    public fun init_module_for_testing(publisher: &signer) {
+        init_module(publisher);
+    }
+
+    // TODO: update and reenable tests for dynamic dispatch
+    //     //// TESTS ////
+    //
+    //     #[test_only]
+    //     use aptos_framework::coin;
+    //     #[test_only]
+    //     use aptos_framework::aptos_coin;
+    //
+    //     #[test_only]
+    //     const CHAIN_ID: u8 = 1;
+    //     #[test_only]
+    //     const TIMESTAMP: u64 = 1724800000;
+    //
+    //     // EVM addresses 1 - 3 in ascending order
+    //     #[test_only]
+    //     const ADDR1: vector<u8> = x"2069635ab34ee4d99f6ef34407537be69aa99bc3";
+    //     #[test_only]
+    //     const ADDR2: vector<u8> = x"adfd44bce6cf8e7fe34e5db1b8d2e8ff1dc14312";
+    //     #[test_only]
+    //     const ADDR3: vector<u8> = x"b95de8d1bea412311e64a25e1fdfd84f08c02cca";
+    //
+    //     // test config: 2-of-3 multisig
+    //     #[test_only]
+    //     const SIGNER_GROUPS: vector<u8> = vector[1, 2, 3];
+    //     #[test_only]
+    //     const GROUP_QUORUMS: vector<u8> = vector[
+    //         2, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    //         0, 0, 0, 0
+    //     ];
+    //     #[test_only]
+    //     const GROUP_PARENTS: vector<u8> = vector[
+    //         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    //         0, 0, 0, 0
+    //     ];
+    //
+    //     // test set root params
+    //     #[test_only]
+    //     const ROOT: vector<u8> = x"1a96ff82e6d0a7cea26e12f2c6d19ec784e11cb14f19da5e45061e9e254c1c52";
+    //
+    //     #[test_only]
+    //     const VALID_UNTIL: u64 = 1724809164;
+    //
+    //     #[test_only]
+    //     const PRE_OP_COUNT: u64 = 0;
+    //     #[test_only]
+    //     const POST_OP_COUNT: u64 = 3;
+    //
+    //     #[test_only]
+    //     const METADATA_PROOF: vector<vector<u8>> = vector[
+    //         x"876ca709f922f97afc2e7722782923bfe9da9c15c236870494e4a21ee385b94b",
+    //         x"3482dfbe0856d5c5399fe5afae0ba8cf127f4a54b8da6571f061fc933436ec38"
+    //     ];
+    //
+    //     // cannot generate secp256k1 signatures in Move for testing so need to hard code
+    //     #[test_only]
+    //     const SIGNATURES: vector<vector<u8>> = vector[
+    //         x"4cea287be319937950431b32e6b36d358ff62dcc47ee735f1481a7275f8d3d8a7ad5827005270d83f2ba7e45a14c599353213d1c6f2c298365a5d9ba20e00b971b",
+    //         x"de12f77acccc12615541a8b69b26a6351cd2e225e8177c447bcc6734dd7b736b679f46d6e51d3f3db930f6ff98fb6430d8c50e6deedb28bc7895ba89528fc75c1b",
+    //         x"8e01e215ec8d7f391884ebf7a4aec05d8c1e40abd3183b6d39202f391f53e0370263c47793c348b0e86c0646d47b256f563fff91029af3eb3fa07c857f0d04901c"
+    //     ];
+    //
+    //     #[test_only]
+    //     // test execute params
+    //     const LEAVES: vector<vector<u8>> = vector[
+    //         x"75a7dc4ac036b3e4478b62d3a4fb446b298c9d429c94c10cc8758a052b055bdc", // index 0
+    //         x"876ca709f922f97afc2e7722782923bfe9da9c15c236870494e4a21ee385b94b", // index 1
+    //         x"171ec02e28e71b310c020ed2d1d3eb6927c6ade0b52b37f8599390edddc8e6c6", // index 2
+    //         x"10dfeb49c9a869d351db29caca5f2d31b072d0b3fec3c98f82a70626b1d71875" // index 3
+    //     ];
+    //
+    //     #[test_only]
+    //     const OP1_PROOF: vector<vector<u8>> = vector[
+    //         x"75a7dc4ac036b3e4478b62d3a4fb446b298c9d429c94c10cc8758a052b055bdc",
+    //         x"3482dfbe0856d5c5399fe5afae0ba8cf127f4a54b8da6571f061fc933436ec38"
+    //     ];
+    //     #[test_only]
+    //     const OP1_NONCE: u64 = 0;
+    //     #[test_only]
+    //     const OP1_DATA: vector<u8> = b"This is exactly 32 bytes long...";
+    //
+    //     #[test_only]
+    //     fun setup(deployer: &signer, framework: &signer): address {
+    //         // setup aptos coin for test
+    //         let (burn, mint) = aptos_coin::initialize_for_test(framework);
+    //         coin::destroy_mint_cap(mint);
+    //         coin::destroy_burn_cap(burn);
+    //         // setup deployer account for test
+    //         let deployer_addr = signer::address_of(deployer);
+    //         aptos_framework::account::create_account_for_test(deployer_addr);
+    //
+    //         // setup test components
+    //         timestamp::set_time_has_started_for_testing(framework);
+    //         timestamp::update_global_time_for_test_secs(TIMESTAMP);
+    //         chain_id::initialize_for_test(framework, CHAIN_ID);
+    //
+    //         // init multisig using internal fn as we cant use retrieve_resource_account_cap in a test (error: ECONTAINER_NOT_PUBLISHED)
+    //         init_module(deployer);
+    //
+    //         get_state_address()
+    //     }
+    //
+    //     // helper struct for execute args in tests
+    //     #[test_only]
+    //     struct ExecuteArgs has drop {
+    //         chain_id: u256,
+    //         multisig: address,
+    //         nonce: u64,
+    //         data: vector<u8>,
+    //         proof: vector<vector<u8>>
+    //     }
+    //
+    //     #[test_only]
+    //     fun default_execute_args(): ExecuteArgs {
+    //         ExecuteArgs {
+    //             chain_id: (CHAIN_ID as u256),
+    //             multisig: @mcms,
+    //             nonce: OP1_NONCE,
+    //             data: OP1_DATA,
+    //             proof: OP1_PROOF
+    //         }
+    //     }
+    //
+    //     #[test_only]
+    //     fun call_execute(args: ExecuteArgs) acquires MultisigState {
+    //         execute(
+    //             args.chain_id,
+    //             args.multisig,
+    //             args.nonce,
+    //             args.data,
+    //             args.proof
+    //         );
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     public entry fun test_e2e(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //
+    //         // set config
+    //         set_config(
+    //             owner,
+    //             vector[ADDR1, ADDR2, ADDR3],
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //
+    //         // set root
+    //         let set_root_args = default_set_root_args();
+    //         call_set_root(set_root_args);
+    //
+    //         // check pending txs on the wrapped multisig
+    //         let pending_txs = get_pending_transactions();
+    //         assert!(vector::length(&pending_txs) == 0, 0);
+    //
+    //         // check op count
+    //         let op_count = get_op_count();
+    //         assert!(op_count == 0, 1);
+    //
+    //         // execute op (creates transaction on multisig)
+    //         let execute_args = default_execute_args();
+    //         call_execute(execute_args);
+    //
+    //         // check pending txs on the wrapped multisig
+    //         let pending_txs = get_pending_transactions();
+    //         assert!(vector::length(&pending_txs) == 1, 2);
+    //
+    //         // check op count incremented
+    //         let op_count = get_op_count();
+    //         assert!(op_count == 1, 3);
+    //
+    //         // check tx can be executed by provided multisig owner. can_be_executed() is expected
+    //         // to return false since @mcms_owner (the EOA) gives its vote when broadcasting the
+    //         // transaction.
+    //         let multisig_address = get_multisig_addr();
+    //         assert!(!multisig_account::can_be_executed(multisig_address, 1), 4);
+    //         assert!(
+    //             multisig_account::can_execute(@mcms_owner, multisig_address, 1),
+    //             5
+    //         );
+    //     }
+    //
+    //     //// set_root tests ////
+    //
+    //     // helper struct for set_root args in tests
+    //     #[test_only]
+    //     struct SetRootArgs has drop {
+    //         root: vector<u8>,
+    //         valid_until: u64,
+    //         chain_id: u256,
+    //         multisig: address,
+    //         pre_op_count: u64,
+    //         post_op_count: u64,
+    //         override_previous_root: bool,
+    //         metadata_proof: vector<vector<u8>>,
+    //         signatures: vector<vector<u8>>
+    //     }
+    //
+    //     #[test_only]
+    //     fun default_set_root_args(): SetRootArgs {
+    //         SetRootArgs {
+    //             root: ROOT,
+    //             valid_until: VALID_UNTIL,
+    //             chain_id: (CHAIN_ID as u256),
+    //             multisig: @mcms,
+    //             pre_op_count: PRE_OP_COUNT,
+    //             post_op_count: POST_OP_COUNT,
+    //             override_previous_root: false,
+    //             metadata_proof: METADATA_PROOF,
+    //             signatures: SIGNATURES
+    //         }
+    //     }
+    //
+    //     #[test_only]
+    //     fun call_set_root(args: SetRootArgs) acquires MultisigState {
+    //         set_root(
+    //             args.root,
+    //             args.valid_until,
+    //             args.chain_id,
+    //             args.multisig,
+    //             args.pre_op_count,
+    //             args.post_op_count,
+    //             args.override_previous_root,
+    //             args.metadata_proof,
+    //             args.signatures
+    //         );
+    //     }
+    //
+    //     // test helper function to generate the merkle root for given metadata
+    //     #[test_only]
+    //     fun compute_root(metadata: RootMetadata): vector<u8> {
+    //         let leaf = hash_metadata_leaf(metadata);
+    //         let computed_hash = leaf;
+    //         vector::for_each(
+    //             METADATA_PROOF,
+    //             |proof_element| {
+    //                 let left = computed_hash;
+    //                 let right = proof_element;
+    //                 if (vector_u8_gt(computed_hash, proof_element)) {
+    //                     left = proof_element;
+    //                     right = computed_hash;
+    //                 };
+    //                 let hash_input: vector<u8> = left;
+    //                 vector::append(&mut hash_input, right);
+    //                 computed_hash = keccak256(hash_input);
+    //             }
+    //         );
+    //         computed_hash
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_ALREADY_SEEN_HASH)]
+    //     public entry fun test_set_root__already_seen_hash(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         set_config(
+    //             owner,
+    //             vector[ADDR1, ADDR2, ADDR3],
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //
+    //         // first call success
+    //         let set_root_args = default_set_root_args();
+    //         call_set_root(set_root_args);
+    //
+    //         // second call should fail as the hash has already been seen
+    //         let set_root_args2 = default_set_root_args();
+    //         call_set_root(set_root_args2);
+    //     }
+    //
+    //     #[test(deployer = @mcms, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_VALID_UNTIL_EXPIRED)]
+    //     public entry fun test_set_root__valid_until_expired(
+    //         deployer: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let set_root_args = default_set_root_args();
+    //         set_root_args.valid_until = TIMESTAMP - 1; // set valid_until to a time in the past
+    //         call_set_root(set_root_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_INVALID_ROOT_LEN)]
+    //     public entry fun test_set_root__invalid_root_len(
+    //         deployer: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let invalid_root =
+    //             x"8ad6edb34398f637ca17e46b0b51ce50e18f56287aa0bf728ae3b5c4119c16";
+    //         let set_root_args = default_set_root_args();
+    //         set_root_args.root = invalid_root;
+    //         call_set_root(set_root_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_WRONG_CHAIN_ID)]
+    //     public entry fun test_set_root__invalid_chain_id(
+    //         deployer: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let set_root_args = default_set_root_args();
+    //         set_root_args.chain_id = 111; // wrong chain id
+    //         call_set_root(set_root_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_WRONG_MULTISIG)]
+    //     public entry fun test_set_root__invalid_multisig_addr(
+    //         deployer: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let set_root_args = default_set_root_args();
+    //         set_root_args.multisig = @0x12345; // wrong multisig address
+    //         call_set_root(set_root_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_PENDING_OPS)]
+    //     public entry fun test_set_root__pending_ops(
+    //         deployer: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         // modify state to add pending ops
+    //         let state = borrow_global_mut<MultisigState>(get_state_address());
+    //         state.expiring_root_and_op_count = ExpiringRootAndOpCount {
+    //             root: ROOT,
+    //             valid_until: VALID_UNTIL,
+    //             op_count: 1
+    //         };
+    //         state.root_metadata.post_op_count = 2;
+    //
+    //         let set_root_args = default_set_root_args();
+    //         call_set_root(set_root_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_PROOF_CANNOT_BE_VERIFIED)]
+    //     public entry fun test_set_root__override_previous_root(
+    //         deployer: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         // modify state to add pending ops
+    //         let state = borrow_global_mut<MultisigState>(get_state_address());
+    //         state.expiring_root_and_op_count = ExpiringRootAndOpCount {
+    //             root: ROOT,
+    //             valid_until: VALID_UNTIL,
+    //             op_count: 0
+    //         };
+    //         state.root_metadata.post_op_count = 2;
+    //
+    //         let set_root_args = default_set_root_args();
+    //         set_root_args.override_previous_root = true;
+    //         call_set_root(set_root_args);
+    //         // since we only have one set of hardcoded signatures to work with, we dont bother generating a new root
+    //         // and just expect this test to fail at proof validation, which happens after the pending ops check
+    //     }
+    //
+    //     #[test(deployer = @mcms, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_WRONG_PRE_OP_COUNT)]
+    //     public entry fun test_set_root__wrong_pre_op_count(
+    //         deployer: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let set_root_args = default_set_root_args();
+    //         set_root_args.pre_op_count = 1; // wrong pre op count, should equal op count (0)
+    //         call_set_root(set_root_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_WRONG_POST_OP_COUNT)]
+    //     public entry fun test_set_root__wrong_post_op_count(
+    //         deployer: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let state = borrow_global_mut<MultisigState>(get_state_address());
+    //         state.expiring_root_and_op_count = ExpiringRootAndOpCount {
+    //             root: ROOT,
+    //             valid_until: VALID_UNTIL,
+    //             op_count: 1
+    //         };
+    //         state.root_metadata.post_op_count = 1;
+    //
+    //         let set_root_args = default_set_root_args();
+    //         set_root_args.pre_op_count = PRE_OP_COUNT + 1; // correct pre op count after state updates
+    //         set_root_args.post_op_count = PRE_OP_COUNT; // post op count should be >= pre op count
+    //         call_set_root(set_root_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_PROOF_CANNOT_BE_VERIFIED)]
+    //     public entry fun test_set_root__empty_metadata_proof(
+    //         deployer: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let set_root_args = default_set_root_args();
+    //         set_root_args.metadata_proof = vector[]; // empty proof
+    //         call_set_root(set_root_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_PROOF_CANNOT_BE_VERIFIED)]
+    //     public entry fun test_set_root__metadata_not_consistent_with_proof(
+    //         deployer: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let set_root_args = default_set_root_args();
+    //         set_root_args.post_op_count = POST_OP_COUNT + 1; // post op count modified
+    //         call_set_root(set_root_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_MISSING_CONFIG)]
+    //     public entry fun test_set_root__config_not_set(
+    //         deployer: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let set_root_args = default_set_root_args();
+    //         set_root_args.signatures = vector[]; // no signatures
+    //         call_set_root(set_root_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_SIGNER_ADDR_MUST_BE_INCREASING)]
+    //     public entry fun test_set_root__out_of_order_signatures(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         set_config(
+    //             owner,
+    //             vector[ADDR1, ADDR2, ADDR3],
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //         let set_root_args = default_set_root_args();
+    //         let sig0 = vector::borrow(&set_root_args.signatures, 0);
+    //         let sig1 = vector::borrow(&set_root_args.signatures, 1);
+    //         let sig2 = vector::borrow(&set_root_args.signatures, 2);
+    //         set_root_args.signatures = vector[*sig0, *sig2, *sig1]; // shuffle signature order
+    //         call_set_root(set_root_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_INVALID_SIGNER)]
+    //     public entry fun test_set_root__signature_from_invalid_signer(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         set_config(
+    //             owner,
+    //             vector[ADDR1, ADDR2, ADDR3],
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //         let set_root_args = default_set_root_args();
+    //         let invalid_signer_sig =
+    //             x"bb7f7e44b8d9c8f978c255c7efd6abb64e8fa9a33dcb6db2e2203d8aacd51dd471113ca6c8d1ed56bb0395f0bef0daf2fae6ef2cb5c86c57d148c7de473383461B";
+    //         set_root_args.signatures = vector[invalid_signer_sig]; // add signature from invalid signer
+    //         call_set_root(set_root_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_INSUFFICIENT_SIGNERS)]
+    //     public entry fun test_set_root__signer_quorum_not_met(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         set_config(
+    //             owner,
+    //             vector[ADDR1, ADDR2, ADDR3],
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //         let set_root_args = default_set_root_args();
+    //         let signer1 = vector::borrow(&set_root_args.signatures, 0);
+    //         set_root_args.signatures = vector[*signer1]; // only 1 signature, quorum is 2
+    //         call_set_root(set_root_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     public entry fun test_set_root__success(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         set_config(
+    //             owner,
+    //             vector[ADDR1, ADDR2, ADDR3],
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //         let set_root_args = default_set_root_args();
+    //
+    //         call_set_root(set_root_args);
+    //
+    //         let (root, valid_until) = get_root();
+    //         assert!(root == ROOT, 0);
+    //         assert!(valid_until == VALID_UNTIL, 1);
+    //         let root_metadata = get_root_metadata();
+    //         assert!(root_metadata.chain_id == (CHAIN_ID as u256), 2);
+    //         assert!(root_metadata.multisig == @mcms, 3);
+    //         assert!(root_metadata.pre_op_count == PRE_OP_COUNT, 4);
+    //         assert!(root_metadata.post_op_count == POST_OP_COUNT, 5);
+    //         assert!(root_metadata.override_previous_root == false, 6);
+    //     }
+    //
+    //     //// set_config tests ////
+    //
+    //     #[test(deployer = @mcms, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_UNATHORIZED)]
+    //     public entry fun test_set_config__caller_is_not_owner(
+    //         deployer: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let (not_owner, _) = account::create_resource_account(deployer, b"seed123");
+    //         set_config(
+    //             &not_owner,
+    //             vector[ADDR1, ADDR2, ADDR3],
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_INVALID_NUM_SIGNERS)]
+    //     public entry fun test_set_config__invalid_number_of_signers(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         // empty signer addresses and groups
+    //         let signer_addr = vector[];
+    //         let signer_group = vector[];
+    //         set_config(
+    //             owner,
+    //             signer_addr,
+    //             signer_group,
+    //             vector[],
+    //             vector[],
+    //             false
+    //         );
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_SIGNER_ADDR_MUST_BE_INCREASING)]
+    //     public entry fun test_set_config__signers_must_be_distinct(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         // same signer address twice
+    //         let signer_addr = vector[ADDR1, ADDR2, ADDR2];
+    //         set_config(
+    //             owner,
+    //             signer_addr,
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_SIGNER_ADDR_MUST_BE_INCREASING)]
+    //     public entry fun test_set_config__signers_must_be_increasing(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         // signer addresses out of order
+    //         let signer_addr = vector[ADDR1, ADDR3, ADDR2];
+    //         set_config(
+    //             owner,
+    //             signer_addr,
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_CMP_VECTORS_DIFF_LEN)]
+    //     public entry fun test_set_config__invalid_signer_address(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         // signer address not 20 bytes
+    //         let invalid_signer_addr = x"E37ca797F7fCCFbd9bb3bf8f812F19C3184df1";
+    //         let signer_addr = vector[ADDR1, ADDR2, invalid_signer_addr];
+    //         set_config(
+    //             owner,
+    //             signer_addr,
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_OUT_OF_BOUNDS_GROUP)]
+    //     public entry fun test_set_config__out_of_bounds_signer_group(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
+    //         // signer group out of bounds
+    //         let signer_groups = vector[1, 2, NUM_GROUPS];
+    //         set_config(
+    //             owner,
+    //             signer_addr,
+    //             signer_groups,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_OUT_OF_BOUNDS_GROUP_QUORUM)]
+    //     public entry fun test_set_config__out_of_bounds_group_quorum(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
+    //         // group quorum out of bounds (greater than num signers)
+    //         let group_quorums = right_pad_vec(
+    //             vector[2, 1, 1, MAX_NUM_SIGNERS + 1], NUM_GROUPS
+    //         );
+    //         set_config(
+    //             owner,
+    //             signer_addr,
+    //             SIGNER_GROUPS,
+    //             group_quorums,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_GROUP_TREE_NOT_WELL_FORMED)]
+    //     public entry fun test_set_config__root_is_not_its_own_parent(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
+    //         // group parent of root is group 1 (should be itself = group 0)
+    //         let group_parents = right_pad_vec(vector[1], NUM_GROUPS);
+    //         set_config(
+    //             owner,
+    //             signer_addr,
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             group_parents,
+    //             false
+    //         );
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_GROUP_TREE_NOT_WELL_FORMED)]
+    //     public entry fun test_set_config__non_root_is_its_own_parent(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
+    //         // group parent of group 1 is itself (should be lower index group)
+    //         let group_parents = right_pad_vec(vector[0, 1], NUM_GROUPS);
+    //         set_config(
+    //             owner,
+    //             signer_addr,
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             group_parents,
+    //             false
+    //         );
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_GROUP_TREE_NOT_WELL_FORMED)]
+    //     public entry fun test_set_config__group_parent_higher_index(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
+    //         // group parent of group 1 is group 2 (should be lower index group)
+    //         let group_parents = right_pad_vec(vector[0, 2], NUM_GROUPS);
+    //         set_config(
+    //             owner,
+    //             signer_addr,
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             group_parents,
+    //             false
+    //         );
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_OUT_OF_BOUNDS_GROUP_QUORUM)]
+    //     public entry fun test_set_config__quorum_cannot_be_met(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
+    //         // group quorum of group 0 (root) is 4, which can never be met because there are only three child groups
+    //         let group_quorum = right_pad_vec(vector[4, 1, 1, 1], NUM_GROUPS);
+    //         set_config(
+    //             owner,
+    //             signer_addr,
+    //             SIGNER_GROUPS,
+    //             group_quorum,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_SIGNER_IN_DISABLED_GROUP)]
+    //     public entry fun test_set_config__signer_in_disabled_group(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
+    //         // group 31 is disabled (quorum = 0) but signer 3 is in group 31
+    //         let signer_groups = vector[1, 2, 31];
+    //         set_config(
+    //             owner,
+    //             signer_addr,
+    //             signer_groups,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_SIGNER_GROUPS_LEN_MISMATCH)]
+    //     public entry fun test_set_config__signer_group_len_mismatch(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
+    //         // len of signer groups does not match len of signers
+    //         let signer_groups = vector[1, 2, 3, 3];
+    //         set_config(
+    //             owner,
+    //             signer_addr,
+    //             signer_groups,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     public entry fun test_set_config__success(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         let mcms_addr = setup(deployer, framework);
+    //
+    //         // manually modify root state to check for modifications
+    //         let state = borrow_global_mut<MultisigState>(get_state_address());
+    //         state.expiring_root_and_op_count = ExpiringRootAndOpCount {
+    //             root: vector[1, 2, 3],
+    //             valid_until: 9999,
+    //             op_count: 5
+    //         };
+    //         state.root_metadata = RootMetadata {
+    //             chain_id: 1,
+    //             multisig: @0xabc,
+    //             pre_op_count: 5,
+    //             post_op_count: 5,
+    //             override_previous_root: false
+    //         };
+    //
+    //         // test set config with clear_root=false
+    //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
+    //         set_config(
+    //             owner,
+    //             signer_addr,
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //         let config = get_config();
+    //         assert!(vector::length(&config.signers) == 3, 1);
+    //         assert!(vector::borrow(&config.signers, 0).addr == ADDR1, 2);
+    //         assert!(vector::borrow(&config.signers, 1).addr == ADDR2, 3);
+    //         assert!(vector::borrow(&config.signers, 2).addr == ADDR3, 4);
+    //         assert!(config.group_quorums == GROUP_QUORUMS, 5);
+    //         assert!(config.group_parents == GROUP_PARENTS, 6);
+    //         let (root, valid_until) = get_root();
+    //         assert!(root == vector[1, 2, 3], 7);
+    //         assert!(valid_until == 9999, 8);
+    //         let metadata = get_root_metadata();
+    //         assert!(metadata.chain_id == 1, 9);
+    //         assert!(metadata.multisig == @0xabc, 10);
+    //         assert!(metadata.pre_op_count == 5, 11);
+    //         assert!(metadata.post_op_count == 5, 12);
+    //         assert!(!metadata.override_previous_root, 13);
+    //
+    //         // test set config with clear_root=true, change to 1-of-2 multisig with a nested 2-of-2 multisig
+    //         let signer_addr = vector[ADDR1, ADDR2, ADDR3];
+    //         let signer_groups = vector[1, 3, 4];
+    //         let group_quorums = right_pad_vec(vector[1, 1, 2, 1, 1], NUM_GROUPS);
+    //         let group_parents = right_pad_vec(vector[0, 0, 0, 2, 2], NUM_GROUPS);
+    //         set_config(
+    //             owner,
+    //             signer_addr,
+    //             signer_groups,
+    //             group_quorums,
+    //             group_parents,
+    //             true
+    //         );
+    //         let config = get_config();
+    //         assert!(vector::length(&config.signers) == 3, 14);
+    //         assert!(vector::borrow(&config.signers, 0).addr == ADDR1, 15);
+    //         assert!(vector::borrow(&config.signers, 1).addr == ADDR2, 16);
+    //         assert!(vector::borrow(&config.signers, 2).addr == ADDR3, 17);
+    //         assert!(config.group_quorums == group_quorums, 18);
+    //         assert!(config.group_parents == group_parents, 19);
+    //         let (root, valid_until) = get_root();
+    //         assert!(root == vector[], 20);
+    //         assert!(valid_until == 0, 21);
+    //         let metadata = get_root_metadata();
+    //         assert!(metadata.chain_id == (CHAIN_ID as u256), 22);
+    //         assert!(metadata.multisig == mcms_addr, 23);
+    //         assert!(metadata.pre_op_count == 5, 24);
+    //         assert!(metadata.post_op_count == 5, 25);
+    //         assert!(metadata.override_previous_root, 26);
+    //     }
+    //
+    //     //// execute tests ////
+    //
+    //     #[test(deployer = @mcms, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_POST_OP_COUNT_REACHED)]
+    //     public entry fun test_execute__root_not_set(
+    //         deployer: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         // since root not set, post op count is 0 which is not greater than current op count (also 0)
+    //         let execute_args = default_execute_args();
+    //         call_execute(execute_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_POST_OP_COUNT_REACHED)]
+    //     public entry fun test_execute__post_op_count_reached(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         set_config(
+    //             owner,
+    //             vector[ADDR1, ADDR2, ADDR3],
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //         call_set_root(default_set_root_args());
+    //         // set current op count to post op count
+    //         let state = borrow_global_mut<MultisigState>(get_state_address());
+    //         state.expiring_root_and_op_count.op_count = state.root_metadata.post_op_count;
+    //         let execute_args = default_execute_args();
+    //         call_execute(execute_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_WRONG_CHAIN_ID)]
+    //     public entry fun test_execute__wrong_chain_id(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         set_config(
+    //             owner,
+    //             vector[ADDR1, ADDR2, ADDR3],
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //         call_set_root(default_set_root_args());
+    //         let execute_args = default_execute_args();
+    //         execute_args.chain_id = 111; // wrong chain id
+    //         call_execute(execute_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_WRONG_MULTISIG)]
+    //     public entry fun test_execute__wrong_multisig_addr(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         set_config(
+    //             owner,
+    //             vector[ADDR1, ADDR2, ADDR3],
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //         call_set_root(default_set_root_args());
+    //         let execute_args = default_execute_args();
+    //         execute_args.multisig = @0x12345; // wrong multisig address
+    //         call_execute(execute_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_ROOT_EXPIRED)]
+    //     public entry fun test_execute__root_expired(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         set_config(
+    //             owner,
+    //             vector[ADDR1, ADDR2, ADDR3],
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //         call_set_root(default_set_root_args());
+    //         // modify valid until state directly - set valid_until to a time in the past
+    //         let state = borrow_global_mut<MultisigState>(get_state_address());
+    //         state.expiring_root_and_op_count.valid_until = TIMESTAMP - 1;
+    //         let execute_args = default_execute_args();
+    //         call_execute(execute_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_WRONG_NONCE)]
+    //     public entry fun test_execute__wrong_nonce(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         set_config(
+    //             owner,
+    //             vector[ADDR1, ADDR2, ADDR3],
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //         call_set_root(default_set_root_args());
+    //         let execute_args = default_execute_args();
+    //         execute_args.nonce = execute_args.nonce + 1; // wrong nonce
+    //         call_execute(execute_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_PROOF_CANNOT_BE_VERIFIED)]
+    //     public entry fun test_execute__bad_op_proof(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         set_config(
+    //             owner,
+    //             vector[ADDR1, ADDR2, ADDR3],
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //         call_set_root(default_set_root_args());
+    //         let execute_args = default_execute_args();
+    //         execute_args.data = b"different data"; // modify op so proof verification should fail
+    //         call_execute(execute_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_PROOF_CANNOT_BE_VERIFIED)]
+    //     public entry fun test_execute__empty_proof(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         set_config(
+    //             owner,
+    //             vector[ADDR1, ADDR2, ADDR3],
+    //             SIGNER_GROUPS,
+    //             GROUP_QUORUMS,
+    //             GROUP_PARENTS,
+    //             false
+    //         );
+    //         call_set_root(default_set_root_args());
+    //         let execute_args = default_execute_args();
+    //         execute_args.proof = vector[]; // empty proof
+    //         call_execute(execute_args);
+    //     }
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     #[expected_failure(abort_code = E_PROOF_CANNOT_BE_VERIFIED)]
+    //     public entry fun test_execute__ops_executed_in_order(
+    //         deployer: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         // modify state to add pending ops
+    //         let state = borrow_global_mut<MultisigState>(get_state_address());
+    //         state.expiring_root_and_op_count = ExpiringRootAndOpCount {
+    //             root: ROOT,
+    //             valid_until: VALID_UNTIL,
+    //             op_count: 1
+    //         };
+    //         state.root_metadata.post_op_count = 2;
+    //
+    //         let execute_args = default_execute_args();
+    //         execute_args.nonce = OP1_NONCE + 1; // wrong nonce
+    //         call_execute(execute_args);
+    //     }
+    //
+    //     // todo: test send values
+    //
+    //     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    //     public entry fun test_ownable__transfer_ownership(
+    //         deployer: &signer, owner: &signer, framework: &signer
+    //     ) acquires MultisigState {
+    //         setup(deployer, framework);
+    //         let new_owner = @0xdef;
+    //         transfer_ownership(owner, new_owner);
+    //         let updated_owner = owner();
+    //         assert!(updated_owner == new_owner, 1);
+    //     }
+    //
+    //     //// utility function tests ////
+    //
+    //     #[test]
+    //     public entry fun test_utils__ecdsa_recover_evm_addr() {
+    //         let eth_signed_message_hash =
+    //             x"910cd291f5281f5bf25d8a83962f282b6c2bdf831f079dfcb84480f922abd2e1";
+    //         let signature =
+    //             x"45283a6239b1b559a910e97f79a52bab1605e8bd952c4b4e0720ed9b1e9e96712acab6f5f946bfa3dfa61f47705aff6e2f17f6ad83d484857bb119a06ba1f0e71C";
+    //         let recovered_addr = ecdsa_recover_evm_addr(eth_signed_message_hash, signature);
+    //         assert!(recovered_addr == x"16c9fACed8a1e3C6aEA2B654EEca5617eb900EFf", 1);
+    //     }
+    //
+    #[test]
+    public entry fun test_encode_uint() {
+        let large_u64: u64 = 1748317727; // hex = 0x6835361F
+        let bytes = encode_uint(large_u64, 8);
+        assert!(bytes == x"000000006835361f", 1);
+
+        let u32_with_zero_bytes: u32 = 256; // hex = 0x0100
+        let bytes_with_zero = encode_uint(u32_with_zero_bytes, 4);
+        assert!(bytes_with_zero == x"00000100", 2);
+
+        let u128_with_zero_bytes_2: u128 = 262144; // hex = 0x040000
+        let bytes_with_zero_2 = encode_uint(u128_with_zero_bytes_2, 16);
+        assert!(bytes_with_zero_2 == x"00000000000000000000000000040000", 3);
+
+        let u128_with_padding: u128 = 262144;
+        let bytes_padded = encode_uint(u128_with_padding, 32);
+        assert!(
+            bytes_padded
+                == x"0000000000000000000000000000000000000000000000000000000000040000",
+            4
+        );
+
+        let u256_num: u256 = 262144;
+        let bytes_256 = encode_uint(u256_num, 32);
+        assert!(
+            bytes_256
+                == x"0000000000000000000000000000000000000000000000000000000000040000",
+            5
+        );
+
+        let max_u64: u64 = 18446744073709551615; // hex = 0xFFFFFFFFFFFFFFFF
+        let bytes_max = encode_uint(max_u64, 8);
+        assert!(bytes_max == x"ffffffffffffffff", 6);
+    }
+
+    //
+    //     #[test]
+    //     public entry fun test_utils__compute_eth_message_hash() {
+    //         let root = x"d5ef592d1ad183db43b4980d7ab7ee43a6f6a284988c3e3a23d38c07beb520c7";
+    //         let valid_until = 1748317727;
+    //         let hash = compute_eth_message_hash(root, valid_until);
+    //         // test output computed from equivalent solidity function: ECDSA.toEthSignedMessageHash(keccak256(abi.encode(root, validUntil)));
+    //         assert!(
+    //             hash == x"032705bd71839baef725154f00f87ddcc1d95c4b5189c9fb5983f26ad6c95102",
+    //             1
+    //         );
+    //     }
+    //
+    //     #[test]
+    //     public entry fun test_utils__hash_metadata_leaf() {
+    //         let metadata = RootMetadata {
+    //             chain_id: 1,
+    //             multisig: @0xabc,
+    //             pre_op_count: 5,
+    //             post_op_count: 5,
+    //             override_previous_root: false
+    //         };
+    //         let hash = hash_metadata_leaf(metadata);
+    //         // test output computed from equivalent solidity function: keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA, metadata))
+    //         assert!(
+    //             hash == x"ea6938e5cfa9b72197343db029e3146dec767d24f830eb750252076e439ccffa",
+    //             1
+    //         );
+    //     }
+    //
+    //     #[test(deployer = @mcms, framework = @aptos_framework)]
+    //     public entry fun test_utils__hash_op_leaf(
+    //         deployer: &signer, framework: &signer
+    //     ) {
+    //         setup(deployer, framework);
+    //         let op = Op {
+    //             chain_id: (CHAIN_ID as u256),
+    //             multisig: @mcms,
+    //             nonce: OP1_NONCE,
+    //             data: OP1_DATA
+    //         };
+    //         let hash = hash_op_leaf(op);
+    //         // test output computed from equivalent solidity function: keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP, op))
+    //         let expected_hash = vector::borrow(&LEAVES, 1);
+    //         assert!(hash == *expected_hash, 0);
+    //     }
+    //
+    #[test]
+    fun test_verify_merkle_proof() {
+        let root = x"8ad6edb34398f637ca17e46b0b51ce50e18f56287aa0bf728ae3b5c4119c1600";
+        let leaf_hash =
+            x"03783fac2efed8fbc9ad443e592ee30e61d65f471140c10ca155e937b435b760";
+        let proof = vector[
+            x"044852b2a670ade5407e78fb2863c51de9fcb96542a07186fe3aeda6bb8a116d",
+            x"156d92046fd42325cec0997498d663ce343243a1ff530521e60d08407dbb0580",
+            x"01b56d4f1b38f85ac9e8a826fb4d5210446e67a09594146d405f6f09f1a657f2",
+            x"44164eac6b478d58bcff0081e764768c68e20c031ded38f87e823ceff0f76854",
+            x"5b095d44d40824ca630f833c439211a0d8e63a0c2bb646b63b76de7cba9a35be",
+            x"5a97fb1f239d0789fbd9ab71901b0c7c0c0ad8c1530df72ec0a21e72647e5e46"
+        ];
+        assert!(verify_merkle_proof(proof, root, leaf_hash), 1);
+    }
+
+    #[test]
+    fun test_verify_merkle_proof_with_hash_op() {
+        let root = x"6689275ce24e4db03f6db26ea4a127728a2838af461f681e488bd1af85a1657b";
+
+        let op = Op {
+            chain_id: 2,
+            multisig: @0x9da0aba4368ec331bf2f6a52b029a09dc16146a79ee3654f9b45a99645935ce8,
+            nonce: 1,
+            to: @0x9da0aba4368ec331bf2f6a52b029a09dc16146a79ee3654f9b45a99645935ce8,
+            module_name: string::utf8(b"mcms_deployer"),
+            function: string::utf8(b"stage_code_chunk"),
+            data: x"e8070d436861696e6c696e6b434349500100000000000000004032463033343446453846363533383138303341363639363946393746434333463838353936344544324543363430384643323239374541344539343343454446f0011f8b08000000000002ff6d4f4d6b843010bde75748ce5d8d51d75ae8a10885de7a1729f918d7e09a8424da42e97f6fc2da42a1b799f731f3de609958d80546a4d90ad96386fb99297d557ae9fb97578c76705e199d98322739c1886d6136ce476418111a98940ebc073f2221944dc2371c7109fbe91f8e7c9484dc780b5a82162ad14f3618ffec628677e39628fccc2e2a24c31c82f50f4511d779e3b9306bc192f87465dc1fa3300ef228c07799833db9aa9ad086d21678539d5b51d71d9f3ac9a01292d2f3048d28efdb8ed4d1e1372e954ba6dbb1d5ec504c3f518e0fbf3bcebe8e727f0b7c03a1c38e4b490100000f06636c69656e74f7041f8b08000000000002ffd5553d6fdb3010ddfd2b6e0aec40b081a2280ab5306aa44b87221db20b2c75b209cba4405236d224ffbd475296f5c1c841b678b1741fefdebd3b8aabd50a1e76c2c041e5758990632124d22b1ac3b6f450280d2873a80d6a035681901635e3164ec2ee60535965e0eeeed79fe56ce5b0ee7fdea7b0634721b7601db090f48fc0b9a8a0627c4fa884ce2481ed98f5f64c234771445fa461623cdc49942548c4dc55de4b75f2582ccf35f10355c00f8faba45555fb9a695513c72570258dc8517ba8836a3925404d4965a99e3319ab6b6e0d101b5696b346098794a6bc14282d3ccd807e448f82f3343d22b74a7f9b796ba1851328c4aba2d0ec5035ae800c1bf9f8c90bf53ba84afa18f2298d09e45a550931ad1e9b22eed7a89f893c8550eb7bfd759db47ea36acd31e33b266466b0f42129d45f3e77628814ea787ece2c7bc583c66656ed5166eca06a694d1bd776f1e0dc1bef5dfbc49778b79db8ab1dfb92e979b2173e81846fad5b8ae6391295714e4f4a1b1f51d57f4bc1a1a8256cd1661745e742563521de0c01165d453ad47cfcf202d0e531a8129dcb54416a6b54290a3255d40ffa9d6d85e40974b72aefc476a953c8a3557b439de8128e2b8fa05f5b9eee8e4e2e90471b13ece42fdaf51df1f1c913520492d7d063cb1232c7d0f3f0555af812124f19234ce630cf4761fe51bf36a4c4e8ec5f649970f57b4d7af6688f8310df62dfe65a1b58e2ab1706747d4c9143d1ff4666cd8ee145aac6b24e202e250daa55ee8dc72884a5e93fba4d0fcc5dd0c5bcd7e6cd804c12f506227ddf732fb3cff97930adde40bb47f5e97c61dc0ed0cef7c56d17b651be3f072f48339197d97f3fedb495080900000000076574685f616269de0a1f8b08000000000002ffdd19db4ee346f40000",
+        };
+
+        let proof = vector[
+          x"cc02fed7e779df58dfda455712139809b0cea62a7660b82b2467b9bd18ab0a92",
+          x"bed7576e629477f6e15e14006cb7133f9895ce0e10c23e27b75bbf38eabca5cb",
+          x"ec698f64f949fc42b6a9387874d36771195c52b5a0dc6c90d7a71aa9af7fbd7e",
+          x"0fab529262e18658d7216f753727fa2aab32292fc36c07cd7fd3cbbc7d3c4827",
+          x"747edd5012b67299322967e05f51620e362222cf699bb549acd41a11f51d57e1",
+          x"fa48ef938f106c38e4e88cf59b02e230a9cda8647fefcba32cb6e6157af79a6d",
+          x"e56a6e3a1b75ebe1b08445f5b55c2a0f91f7d37f91081ad50fd063e70c178903"
+        ];
+
+        let hashed_leaf = hash_op_leaf(op);
+
+        assert!(verify_merkle_proof(proof, root, hashed_leaf), 1);
+    }
+
+    #[test]
+    fun test_vector_u8_gt() {
+        // a > b
+        let a = vector[0x08, 0x0, 0x0, 0x0, 0x0];
+        let b = vector[0x07, 0x4, 0x4, 0x3, 0x1];
+        assert!(vector_u8_gt(&a, &b), 1);
+
+        // c = d
+        let c = vector[0x08, 0x0, 0x0, 0x0, 0x0];
+        let d = vector[0x08, 0x0, 0x0, 0x0, 0x0];
+        assert!(!vector_u8_gt(&c, &d), 2);
+
+        // e < f
+        let e = vector[0x08, 0x0, 0x0, 0x0, 0x0];
+        let f = vector[0x08, 0x0, 0x0, 0x0, 0x1];
+        assert!(!vector_u8_gt(&e, &f), 3);
+
+        let sorted_addresses = vector[
+            x"1D607AAD8aDd843bD3f87602b4D40DDaD477e748",
+            x"2A704Fd168bf117eba7Da3E66aae0E932cc9221e",
+            x"87191E05969b311242a7fF0a93d66Ac8B7B0bbB1",
+            x"C211d666f61afCC311821c5f17E769F6e1515795",
+            x"e0F4758dbD92E2499C95cb2c57bF605be032AF42"
+        ];
+        let prev_address = x"0000000000000000000000000000000000000001";
+        vector::for_each_ref(
+            &sorted_addresses,
+            |addr| {
+                assert!(vector_u8_gt(addr, &prev_address), 7);
+                prev_address = *addr;
+            }
+        );
+    }
+
+    #[test]
+    public entry fun test_right_pad_vec() {
+        let input = vector[0x08, 0x0, 0x0, 0x0, 0x0];
+        right_pad_vec(&mut input, 10);
+        assert!(input == vector[8, 0, 0, 0, 0, 0, 0, 0, 0, 0], 1);
+
+        let input2 = vector[];
+        right_pad_vec(&mut input2, 5);
+        assert!(input2 == vector[0, 0, 0, 0, 0], 2);
+
+        let input3 = vector[0x01, 0x2, 0x3, 0x4, 0x5];
+        right_pad_vec(&mut input3, 4);
+        assert!(input3 == vector[1, 2, 3, 4, 5], 3);
+    }
+
+    #[test]
+    public entry fun test_left_pad_vec() {
+        let input = vector[0x08, 0x0, 0x0, 0x0, 0x0];
+        left_pad_vec(&mut input, 10);
+        assert!(input == vector[0, 0, 0, 0, 0, 8, 0, 0, 0, 0], 1);
+
+        let input2 = vector[];
+        left_pad_vec(&mut input2, 5);
+        assert!(input2 == vector[0, 0, 0, 0, 0], 2);
+
+        let input3 = vector[0x01, 0x2, 0x3, 0x4, 0x5];
+        left_pad_vec(&mut input3, 4);
+        assert!(input3 == vector[1, 2, 3, 4, 5], 3);
+    }
+
+    #[test(publisher = @mcms)]
+    fun test_register_object_owner_for_new_code_object(
+        publisher: &signer
+    ) {
+        mcms_account::init_module_for_testing(publisher);
+        mcms_registry::init_module_for_testing(publisher);
+        init_module_for_testing(publisher);
+
+        mcms_registry::create_owner_for_new_code_object(vector[123, 231]);
+    }
+}

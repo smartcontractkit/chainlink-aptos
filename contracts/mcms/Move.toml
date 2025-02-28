@@ -1,0 +1,18 @@
+[package]
+name = "ChainlinkManyChainMultisig"
+version = "1.0.0"
+authors = []
+upgrade_policy = "immutable"
+
+[addresses]
+mcms = "_"
+mcms_owner = "_"
+
+[dev-addresses]
+mcms = "0x100"
+mcms_owner = "0x101"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
+
+[dev-dependencies]
