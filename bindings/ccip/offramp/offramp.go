@@ -19,7 +19,7 @@ type OfframpInterface interface {
 	GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, error)
 	LatestConfigDetails(opts *bind.CallOpts, ocrPluginType uint8) (common.Hash, uint8, uint8, bool, []common.Address, []aptos.AccountAddress, error)
 
-	Initialize(opts *bind.TransactOpts, chainSelector uint64, permissionlessExecutionThresholdSecs uint32, isRmnVerificationDisabled bool, sourceChainSelectors []uint64, sourceChainIsEnabled []bool) (*api.PendingTransaction, error)
+	Initialize(opts *bind.TransactOpts, chainSelector uint64, permissionlessExecutionThresholdSecs uint32, isRmnVerificationDisabled bool, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnramp [][]byte) (*api.PendingTransaction, error)
 	ManuallyExecute(opts *bind.TransactOpts, reportsBytes []byte) (*api.PendingTransaction, error)
 	Commit(opts *bind.TransactOpts, reportContext [][]byte, report []byte, signatures []common.Hash) (*api.PendingTransaction, error)
 	Execute(opts *bind.TransactOpts, reportContext [][]byte, report []byte) (*api.PendingTransaction, error)
@@ -237,12 +237,12 @@ type OfframpTransactor struct {
 	*bind.BoundContract
 }
 
-func (o OfframpTransactor) EncodeInitialize(chainSelector uint64, permissionlessExecutionThresholdSecs uint32, isRmnVerificationDisabled bool, sourceChainSelectors []uint64, sourceChainIsEnabled []bool) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("initialize", nil, []string{"u64", "u32", "bool", "vector<u64>", "vector<bool>"}, []any{chainSelector, permissionlessExecutionThresholdSecs, isRmnVerificationDisabled, sourceChainSelectors, sourceChainIsEnabled})
+func (o OfframpTransactor) EncodeInitialize(chainSelector uint64, permissionlessExecutionThresholdSecs uint32, isRmnVerificationDisabled bool, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnramp [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return o.Encode("initialize", nil, []string{"u64", "u32", "bool", "vector<u64>", "vector<bool>", "vector<bool>", "vector<vector<u8>>"}, []any{chainSelector, permissionlessExecutionThresholdSecs, isRmnVerificationDisabled, sourceChainsSelector, sourceChainsIsEnabled, sourceChainsIsRMNVerificationDisabled, sourceChainsOnramp})
 }
 
-func (o OfframpTransactor) Initialize(opts *bind.TransactOpts, chainSelector uint64, permissionlessExecutionThresholdSecs uint32, isRmnVerificationDisabled bool, sourceChainSelectors []uint64, sourceChainIsEnabled []bool) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := o.EncodeInitialize(chainSelector, permissionlessExecutionThresholdSecs, isRmnVerificationDisabled, sourceChainSelectors, sourceChainIsEnabled)
+func (o OfframpTransactor) Initialize(opts *bind.TransactOpts, chainSelector uint64, permissionlessExecutionThresholdSecs uint32, isRmnVerificationDisabled bool, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnramp [][]byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := o.EncodeInitialize(chainSelector, permissionlessExecutionThresholdSecs, isRmnVerificationDisabled, sourceChainsSelector, sourceChainsIsEnabled, sourceChainsIsRMNVerificationDisabled, sourceChainsOnramp)
 	if err != nil {
 		return nil, err
 	}

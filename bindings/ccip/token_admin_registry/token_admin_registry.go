@@ -145,12 +145,12 @@ type TokenAdminRegistryTransactor struct {
 	*bind.BoundContract
 }
 
-func (t TokenAdminRegistryTransactor) EncodeInitialize(opts *bind.TransactOpts) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (t TokenAdminRegistryTransactor) EncodeInitialize() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
 	return t.Encode("initialize", nil, nil, nil)
 }
 
 func (t TokenAdminRegistryTransactor) Initialize(opts *bind.TransactOpts) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := t.EncodeInitialize(opts)
+	module, function, typeTags, args, err := t.EncodeInitialize()
 	if err != nil {
 		return nil, err
 	}

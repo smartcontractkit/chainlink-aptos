@@ -421,7 +421,54 @@ func (f FeeQuoterTransactor) ApplyPremiumMultiplierWeiPerEthUpdates(opts *bind.T
 	return f.Transact(opts, module, function, typeTags, args)
 }
 func (f FeeQuoterTransactor) EncodeApplyDestChainConfigUpdates(destChainSelector uint64, config DestChainConfig) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return f.Encode("apply_dest_chain_config_updates", nil, []string{"u64", "DestChainConfig"}, []any{destChainSelector, config})
+	return f.Encode(
+		"apply_dest_chain_config_updates",
+		nil,
+		[]string{
+			"u64",
+			"bool",
+			"u16",
+			"u32",
+			"u32",
+			"u32",
+			"u8",
+			"u8",
+			"u16",
+			"u32",
+			"u16",
+			"u16",
+			"vector<u8>",
+			"bool",
+			"u16",
+			"u32",
+			"u32",
+			"u64",
+			"u32",
+			"u32",
+		},
+		[]any{
+			destChainSelector,
+			config.IsEnabled,
+			config.MaxNumberOfTokensPerMsg,
+			config.MaxDataBytes,
+			config.MaxPerMsgGasLimit,
+			config.DestGasOverhead,
+			config.DestGasPerPayloadByteBase,
+			config.DestGasPerPayloadByteHigh,
+			config.DestGasPerPayloadByteThreshold,
+			config.DestDataAvailabilityOverheadGas,
+			config.DestGasPerDataAvailabilityByte,
+			config.DestDataAvailabilityMultiplierBps,
+			config.ChainFamilySelector,
+			config.EnforceOutOfOrder,
+			config.DefaultTokenFeeUsdCents,
+			config.DefaultTokenDestGasOverhead,
+			config.DefaultTxGasLimit,
+			config.GasMultiplierWeiPerEth,
+			config.GasPriceStalenessThreshold,
+			config.NetworkFeeUsdCents,
+		},
+	)
 }
 
 func (f FeeQuoterTransactor) ApplyDestChainConfigUpdates(opts *bind.TransactOpts, destChainSelector uint64, config DestChainConfig) (*api.PendingTransaction, error) {
