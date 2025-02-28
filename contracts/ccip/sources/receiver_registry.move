@@ -211,7 +211,7 @@ module ccip::receiver_registry {
     struct McmsCallback has drop {}
 
     public fun mcms_entrypoint<T: key>(_metadata: Object<T>): option::Option<u128> {
-        let (signer, function, data) =
+        let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip, McmsCallback {});
 
         let function_bytes = *string::bytes(&function);
@@ -219,7 +219,7 @@ module ccip::receiver_registry {
 
         if (function_bytes == b"initialize") {
             bcs_stream::assert_is_consumed(&stream);
-            initialize(&signer);
+            initialize(&caller);
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };

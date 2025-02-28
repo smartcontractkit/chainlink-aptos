@@ -953,7 +953,7 @@ module ccip::token_admin_registry {
     public fun mcms_entrypoint<T: key>(
         _metadata: Object<T>
     ): option::Option<u128> acquires TokenAdminRegistryState {
-        let (signer, function, data) =
+        let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip, McmsCallback {});
 
         let function_bytes = *string::bytes(&function);
@@ -961,21 +961,21 @@ module ccip::token_admin_registry {
 
         if (function_bytes == b"initialize") {
             bcs_stream::assert_is_consumed(&stream);
-            initialize(&signer);
+            initialize(&caller);
         } else if (function_bytes == b"set_pool") {
             let local_token = bcs_stream::deserialize_address(&mut stream);
             let token_pool_address = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            set_pool(&signer, local_token, token_pool_address)
+            set_pool(&caller, local_token, token_pool_address)
         } else if (function_bytes == b"transfer_admin_role") {
             let local_token = bcs_stream::deserialize_address(&mut stream);
             let new_admin = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            transfer_admin_role(&signer, local_token, new_admin)
+            transfer_admin_role(&caller, local_token, new_admin)
         } else if (function_bytes == b"accept_admin_role") {
             let local_token = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            accept_admin_role(&signer, local_token)
+            accept_admin_role(&caller, local_token)
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };

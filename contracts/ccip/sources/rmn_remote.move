@@ -450,7 +450,7 @@ module ccip::rmn_remote {
     public fun mcms_entrypoint<T: key>(
         _metadata: object::Object<T>
     ): option::Option<u128> acquires RMNRemoteState {
-        let (signer, function, data) =
+        let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip, McmsCallback {});
 
         let function_bytes = *string::bytes(&function);
@@ -459,7 +459,7 @@ module ccip::rmn_remote {
         if (function_bytes == b"initialize") {
             let local_chain_selector = bcs_stream::deserialize_u64(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            initialize(&signer, local_chain_selector);
+            initialize(&caller, local_chain_selector);
         } else if (function_bytes == b"set_config") {
             let rmn_home_contract_config_digest =
                 bcs_stream::deserialize_vector_u8(&mut stream);
@@ -476,7 +476,7 @@ module ccip::rmn_remote {
             let f_sign = bcs_stream::deserialize_u64(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
             set_config(
-                &signer,
+                &caller,
                 rmn_home_contract_config_digest,
                 signer_onchain_public_keys,
                 node_indexes,
@@ -485,7 +485,7 @@ module ccip::rmn_remote {
         } else if (function_bytes == b"curse") {
             let subject = bcs_stream::deserialize_vector_u8(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            curse(&signer, subject)
+            curse(&caller, subject)
         } else if (function_bytes == b"curse_multiple") {
             let subjects =
                 bcs_stream::deserialize_vector(
@@ -493,11 +493,11 @@ module ccip::rmn_remote {
                     |stream| bcs_stream::deserialize_vector_u8(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
-            curse_multiple(&signer, subjects)
+            curse_multiple(&caller, subjects)
         } else if (function_bytes == b"uncurse") {
             let subject = bcs_stream::deserialize_vector_u8(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            uncurse(&signer, subject)
+            uncurse(&caller, subject)
         } else if (function_bytes == b"uncurse_multiple") {
             let subjects =
                 bcs_stream::deserialize_vector(
@@ -505,7 +505,7 @@ module ccip::rmn_remote {
                     |stream| bcs_stream::deserialize_vector_u8(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
-            uncurse_multiple(&signer, subjects)
+            uncurse_multiple(&caller, subjects)
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };

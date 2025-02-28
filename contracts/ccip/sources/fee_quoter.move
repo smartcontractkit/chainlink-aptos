@@ -1394,7 +1394,7 @@ module ccip::fee_quoter {
     public fun mcms_entrypoint<T: key>(
         _metadata: object::Object<T>
     ): option::Option<u128> acquires FeeQuoterState {
-        let (signer, function, data) =
+        let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip, McmsCallback {});
 
         let function_bytes = *string::bytes(&function);
@@ -1412,7 +1412,7 @@ module ccip::fee_quoter {
                 );
             bcs_stream::assert_is_consumed(&stream);
             initialize(
-                &signer,
+                &caller,
                 max_fee_juels_per_msg,
                 link_token,
                 token_price_staleness_threshold,
@@ -1428,7 +1428,7 @@ module ccip::fee_quoter {
                     &mut stream, |stream| bcs_stream::deserialize_address(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
-            apply_fee_token_updates(&signer, fee_tokens_to_remove, fee_tokens_to_add)
+            apply_fee_token_updates(&caller, fee_tokens_to_remove, fee_tokens_to_add)
         } else if (function_bytes == b"apply_token_transfer_fee_config_updates") {
             let dest_chain_selector = bcs_stream::deserialize_u64(&mut stream);
             let add_tokens =
@@ -1471,7 +1471,7 @@ module ccip::fee_quoter {
                 );
             bcs_stream::assert_is_consumed(&stream);
             apply_token_transfer_fee_config_updates(
-                &signer,
+                &caller,
                 dest_chain_selector,
                 add_tokens,
                 add_min_fee_usd_cents,
@@ -1494,7 +1494,7 @@ module ccip::fee_quoter {
                 );
             bcs_stream::assert_is_consumed(&stream);
             apply_premium_multiplier_wei_per_eth_updates(
-                &signer, tokens, premium_multiplier_wei_per_eth
+                &caller, tokens, premium_multiplier_wei_per_eth
             )
         } else if (function_bytes == b"apply_dest_chain_config_updates") {
             let dest_chain_selector = bcs_stream::deserialize_u64(&mut stream);
@@ -1528,7 +1528,7 @@ module ccip::fee_quoter {
             let network_fee_usd_cents = bcs_stream::deserialize_u32(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
             apply_dest_chain_config_updates(
-                &signer,
+                &caller,
                 dest_chain_selector,
                 is_enabled,
                 max_number_of_tokens_per_msg,

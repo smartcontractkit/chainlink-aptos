@@ -1375,7 +1375,7 @@ module ccip::offramp {
     public fun mcms_entrypoint<T: key>(
         _metadata: object::Object<T>
     ): Option<u128> acquires OffRampState {
-        let (signer, function, data) =
+        let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip, McmsCallback {});
 
         let function_bytes = *string::bytes(&function);
@@ -1404,7 +1404,7 @@ module ccip::offramp {
                 );
             bcs_stream::assert_is_consumed(&stream);
             initialize(
-                &signer,
+                &caller,
                 chain_selector,
                 permissionless_execution_threshold_secs,
                 is_rmn_verification_disabled,
@@ -1428,7 +1428,7 @@ module ccip::offramp {
                     &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
-            commit(&signer, report_context, report, signatures)
+            commit(&caller, report_context, report, signatures)
         } else if (function_bytes == b"execute") {
             let report_context =
                 bcs_stream::deserialize_vector(
@@ -1436,7 +1436,7 @@ module ccip::offramp {
                 );
             let report = bcs_stream::deserialize_vector_u8(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            execute(&signer, report_context, report)
+            execute(&caller, report_context, report)
         } else if (function_bytes == b"apply_source_chain_config_updates") {
             let source_chains_selector =
                 bcs_stream::deserialize_vector(
@@ -1456,7 +1456,7 @@ module ccip::offramp {
                 );
             bcs_stream::assert_is_consumed(&stream);
             apply_source_chain_config_updates(
-                &signer,
+                &caller,
                 source_chains_selector,
                 source_chains_is_enabled,
                 source_chains_is_rmn_verification_disabled,
@@ -1468,7 +1468,7 @@ module ccip::offramp {
             let is_rmn_verification_disabled = bcs_stream::deserialize_bool(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
             set_dynamic_config(
-                &signer,
+                &caller,
                 permissionless_execution_threshold_secs,
                 is_rmn_verification_disabled
             )
@@ -1488,7 +1488,7 @@ module ccip::offramp {
                 );
             bcs_stream::assert_is_consumed(&stream);
             set_ocr3_config(
-                &signer,
+                &caller,
                 config_digest,
                 ocr_plugin_type,
                 big_f,

@@ -886,7 +886,7 @@ module ccip::onramp {
     public fun mcms_entrypoint<T: key>(
         _metadata: Object<T>
     ): option::Option<u128> acquires OnRampState {
-        let (signer, function, data) =
+        let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip, McmsCallback {});
 
         let function_bytes = *string::bytes(&function);
@@ -912,7 +912,7 @@ module ccip::onramp {
                 );
             bcs_stream::assert_is_consumed(&stream);
             initialize(
-                &signer,
+                &caller,
                 chain_selector,
                 allowlist_admin,
                 dest_chain_selectors,
@@ -943,7 +943,7 @@ module ccip::onramp {
             let extra_args = bcs_stream::deserialize_vector_u8(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
             ccip_send(
-                &signer,
+                &caller,
                 dest_chain_selector,
                 receiver,
                 data,
@@ -957,7 +957,7 @@ module ccip::onramp {
         } else if (function_bytes == b"set_dynamic_config") {
             let allowlist_admin = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            set_dynamic_config(&signer, allowlist_admin);
+            set_dynamic_config(&caller, allowlist_admin);
         } else if (function_bytes == b"apply_dest_chain_config_updates") {
             let dest_chain_selectors =
                 bcs_stream::deserialize_vector(
@@ -976,7 +976,7 @@ module ccip::onramp {
                 );
             bcs_stream::assert_is_consumed(&stream);
             apply_dest_chain_config_updates(
-                &signer,
+                &caller,
                 dest_chain_selectors,
                 dest_chain_enabled,
                 dest_chain_allowlist_enabled
@@ -1010,7 +1010,7 @@ module ccip::onramp {
                 );
             bcs_stream::assert_is_consumed(&stream);
             apply_allowlist_updates(
-                &signer,
+                &caller,
                 dest_chain_selectors,
                 dest_chain_allowlist_enabled,
                 dest_chain_add_allowed_senders,

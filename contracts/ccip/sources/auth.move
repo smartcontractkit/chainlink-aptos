@@ -83,7 +83,7 @@ module ccip::auth {
     public fun mcms_entrypoint<T: key>(
         _metadata: object::Object<T>
     ): option::Option<u128> acquires AuthState {
-        let (signer, function, data) =
+        let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip, McmsCallback {});
 
         let function_bytes = *string::bytes(&function);
@@ -92,14 +92,14 @@ module ccip::auth {
         if (function_bytes == b"transfer_ownership") {
             let to = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            transfer_ownership(&signer, to)
+            transfer_ownership(&caller, to)
         } else if (function_bytes == b"accept_ownership") {
             bcs_stream::assert_is_consumed(&stream);
-            accept_ownership(&signer)
+            accept_ownership(&caller)
         } else if (function_bytes == b"execute_ownership_transfer") {
             let to = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            execute_ownership_transfer(&signer, to)
+            execute_ownership_transfer(&caller, to)
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };
