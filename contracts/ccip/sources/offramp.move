@@ -4,9 +4,11 @@ module ccip::offramp {
     use std::error;
     use std::event::{Self, EventHandle};
     use std::fungible_asset;
-    use std::option::Option;
+    use std::object;
+    use std::option::{Self, Option};
     use std::primary_fungible_store;
     use std::signer;
+    use std::string;
     use std::smart_table::{Self, SmartTable};
     use std::timestamp;
     use std::vector;
@@ -22,6 +24,9 @@ module ccip::offramp {
     use ccip::state_object;
     use ccip::token_admin_dispatcher;
     use ccip::token_admin_registry;
+
+    use mcms::bcs_stream;
+    use mcms::mcms_registry;
 
     const EXECUTION_STATE_UNTOUCHED: u8 = 0;
     const EXECUTION_STATE_IN_PROGRESS: u8 = 1;
@@ -236,6 +241,15 @@ module ccip::offramp {
     const E_SIGNATURE_VERIFICATION_REQUIRED_IN_COMMIT_PLUGIN: u64 = 26;
     const E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN: u64 = 27;
     const E_COMMIT_ONRAMP_MISMATCH: u64 = 28;
+    const E_UNKNOWN_FUNCTION: u64 = 29;
+
+    fun init_module(publisher: &signer) {
+        if (@mcms_register_entrypoints != @0x0) {
+            mcms_registry::register_entrypoint(
+                publisher, string::utf8(b"offramp"), McmsCallback {}
+            );
+        };
+    }
 
     public entry fun initialize(
         caller: &signer,
@@ -1350,6 +1364,143 @@ module ccip::offramp {
     ): (vector<u8>, u8, u8, bool, vector<vector<u8>>, vector<address>) acquires OffRampState {
         let state = borrow_state();
         ocr3_base::latest_config_details(&state.ocr3_base_state, ocr_plugin_type)
+    }
+
+    //
+    // MCMS entrypoint
+    //
+
+    struct McmsCallback has drop {}
+
+    public fun mcms_entrypoint<T: key>(
+        _metadata: object::Object<T>
+    ): Option<u128> acquires OffRampState {
+        let (signer, function, data) =
+            mcms_registry::get_callback_params(@ccip, McmsCallback {});
+
+        let function_bytes = *string::bytes(&function);
+        let stream = bcs_stream::new(data);
+
+        if (function_bytes == b"initialize") {
+            let chain_selector = bcs_stream::deserialize_u64(&mut stream);
+            let permissionless_execution_threshold_secs =
+                bcs_stream::deserialize_u32(&mut stream);
+            let is_rmn_verification_disabled = bcs_stream::deserialize_bool(&mut stream);
+            let source_chains_selector =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let source_chains_is_enabled =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_bool(stream)
+                );
+            let source_chains_is_rmn_verification_disabled =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_bool(stream)
+                );
+            let source_chains_onramp =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            initialize(
+                &signer,
+                chain_selector,
+                permissionless_execution_threshold_secs,
+                is_rmn_verification_disabled,
+                source_chains_selector,
+                source_chains_is_enabled,
+                source_chains_is_rmn_verification_disabled,
+                source_chains_onramp
+            )
+        } else if (function_bytes == b"manually_execute") {
+            let report_bytes = bcs_stream::deserialize_vector_u8(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            manually_execute(report_bytes)
+        } else if (function_bytes == b"commit") {
+            let report_context =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
+                );
+            let report = bcs_stream::deserialize_vector_u8(&mut stream);
+            let signatures =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            commit(&signer, report_context, report, signatures)
+        } else if (function_bytes == b"execute") {
+            let report_context =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
+                );
+            let report = bcs_stream::deserialize_vector_u8(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            execute(&signer, report_context, report)
+        } else if (function_bytes == b"apply_source_chain_config_updates") {
+            let source_chains_selector =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let source_chains_is_enabled =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_bool(stream)
+                );
+            let source_chains_is_rmn_verification_disabled =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_bool(stream)
+                );
+            let source_chains_onramp =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            apply_source_chain_config_updates(
+                &signer,
+                source_chains_selector,
+                source_chains_is_enabled,
+                source_chains_is_rmn_verification_disabled,
+                source_chains_onramp
+            )
+        } else if (function_bytes == b"set_dynamic_config") {
+            let permissionless_execution_threshold_secs =
+                bcs_stream::deserialize_u32(&mut stream);
+            let is_rmn_verification_disabled = bcs_stream::deserialize_bool(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            set_dynamic_config(
+                &signer,
+                permissionless_execution_threshold_secs,
+                is_rmn_verification_disabled
+            )
+        } else if (function_bytes == b"set_ocr3_config") {
+            let config_digest = bcs_stream::deserialize_vector_u8(&mut stream);
+            let ocr_plugin_type = bcs_stream::deserialize_u8(&mut stream);
+            let big_f = bcs_stream::deserialize_u8(&mut stream);
+            let is_signature_verification_enabled =
+                bcs_stream::deserialize_bool(&mut stream);
+            let signers =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
+                );
+            let transmitters =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            set_ocr3_config(
+                &signer,
+                config_digest,
+                ocr_plugin_type,
+                big_f,
+                is_signature_verification_enabled,
+                signers,
+                transmitters
+            )
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_FUNCTION)
+        };
+
+        option::none()
     }
 
     #[test]

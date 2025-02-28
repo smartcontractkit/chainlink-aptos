@@ -17,6 +17,9 @@ module ccip::token_admin_registry {
     use ccip::auth;
     use ccip::state_object;
 
+    use mcms::bcs_stream;
+    use mcms::mcms_registry;
+
     friend ccip::token_admin_dispatcher;
 
     const EXECUTION_STATE_IDLE: u8 = 1;
@@ -131,6 +134,15 @@ module ccip::token_admin_registry {
     const E_FUNGIBLE_ASSET_NOT_REGISTERED: u64 = 23;
     const E_NOT_ADMINISTRATOR: u64 = 24;
     const E_NOT_PENDING_ADMINISTRATOR: u64 = 25;
+    const E_UNKNOWN_FUNCTION: u64 = 26;
+
+    fun init_module(publisher: &signer) {
+        if (@mcms_register_entrypoints != @0x0) {
+            mcms_registry::register_entrypoint(
+                publisher, string::utf8(b"token_admin_registry"), McmsCallback {}
+            );
+        };
+    }
 
     public entry fun initialize(caller: &signer) {
         auth::assert_only_owner(signer::address_of(caller));
@@ -930,5 +942,44 @@ module ccip::token_admin_registry {
             error::invalid_argument(E_INVALID_TOKEN_POOL)
         );
         borrow_global_mut<TokenPoolRegistration>(token_pool_address)
+    }
+
+    //
+    // MCMS entrypoint
+    //
+
+    struct McmsCallback has drop {}
+
+    public fun mcms_entrypoint<T: key>(
+        _metadata: Object<T>
+    ): option::Option<u128> acquires TokenAdminRegistryState {
+        let (signer, function, data) =
+            mcms_registry::get_callback_params(@ccip, McmsCallback {});
+
+        let function_bytes = *string::bytes(&function);
+        let stream = bcs_stream::new(data);
+
+        if (function_bytes == b"initialize") {
+            bcs_stream::assert_is_consumed(&stream);
+            initialize(&signer);
+        } else if (function_bytes == b"set_pool") {
+            let local_token = bcs_stream::deserialize_address(&mut stream);
+            let token_pool_address = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            set_pool(&signer, local_token, token_pool_address)
+        } else if (function_bytes == b"transfer_admin_role") {
+            let local_token = bcs_stream::deserialize_address(&mut stream);
+            let new_admin = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            transfer_admin_role(&signer, local_token, new_admin)
+        } else if (function_bytes == b"accept_admin_role") {
+            let local_token = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            accept_admin_role(&signer, local_token)
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_FUNCTION)
+        };
+
+        option::none()
     }
 }

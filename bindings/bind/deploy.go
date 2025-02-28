@@ -67,7 +67,7 @@ func DeployPackageToObject(
 
 	// Deploy (or bind, depending on the network) the LargePackages contract
 	// TODO this should only be done once
-	_, tx, lp, err := DeployOrBindLargePackages(auth, client)
+	lpAddress, tx, lp, err := DeployOrBindLargePackages(auth, client)
 	if err != nil {
 		return aptos.AccountAddress{}, nil, err
 	}
@@ -75,7 +75,20 @@ func DeployPackageToObject(
 		// tx will be nil if the contract has already been deployed
 		_, _ = client.WaitForTransaction(tx.Hash)
 	}
-	// TODO check if staging area is empty before proceeding and clear if needed
+
+	transactOpts := &TransactOpts{
+		Signer: auth,
+	}
+
+	// Check if staging area is empty and clear if it isn't
+	if _, err := client.AccountResource(auth.AccountAddress(), fmt.Sprintf("%s::large_packages::StagingArea", lpAddress.String())); err == nil {
+		// if there is no error that means the staging area is not empty
+		tx, err = lp.CleanupStagingArea(transactOpts)
+		if err != nil {
+			return aptos.AccountAddress{}, nil, fmt.Errorf("failed to clean up staging area: %w", err)
+		}
+		_, _ = client.WaitForTransaction(tx.Hash)
+	}
 
 	// As this will result in multiple transactions, which will in turn change the sequence number of the deployer account
 	// re-calculate the address and recompile with the new address
@@ -99,9 +112,6 @@ func DeployPackageToObject(
 		return aptos.AccountAddress{}, nil, fmt.Errorf("failed to create chunks: %w", err)
 	}
 
-	transactOpts := &TransactOpts{
-		Signer: auth,
-	}
 	for i := range len(chunks) - 1 {
 		tx, err = lp.StageCodeChunk(transactOpts, chunks[i].Metadata, chunks[i].CodeIndices, chunks[i].Chunks)
 		if err != nil {

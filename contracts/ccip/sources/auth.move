@@ -1,21 +1,36 @@
 module ccip::auth {
+    use std::error;
+    use std::object;
+    use std::option;
     use std::signer;
+    use std::string;
 
     use ccip::ownable;
     use ccip::state_object;
+
+    use mcms::bcs_stream;
+    use mcms::mcms_registry;
 
     struct AuthState has key {
         ownable_state: ownable::OwnableState
         // TODO: add allowlists here
     }
 
-    fun init_module(_publisher: &signer) {
+    const E_UNKNOWN_FUNCTION: u64 = 1;
+
+    fun init_module(publisher: &signer) {
         let state_object_signer = &state_object::object_signer();
 
         move_to(
             state_object_signer,
             AuthState { ownable_state: ownable::new(state_object_signer, @ccip) }
         );
+
+        if (@mcms_register_entrypoints != @0x0) {
+            mcms_registry::register_entrypoint(
+                publisher, string::utf8(b"auth"), McmsCallback {}
+            );
+        };
     }
 
     inline fun borrow_state(): &AuthState {
@@ -56,5 +71,39 @@ module ccip::auth {
     ) acquires AuthState {
         let state = borrow_state_mut();
         ownable::execute_ownership_transfer(caller, &mut state.ownable_state, to)
+    }
+
+    //
+    // MCMS entrypoint
+    //
+
+    struct McmsCallback {}
+    has drop;
+
+    public fun mcms_entrypoint<T: key>(
+        _metadata: object::Object<T>
+    ): option::Option<u128> acquires AuthState {
+        let (signer, function, data) =
+            mcms_registry::get_callback_params(@ccip, McmsCallback {});
+
+        let function_bytes = *string::bytes(&function);
+        let stream = bcs_stream::new(data);
+
+        if (function_bytes == b"transfer_ownership") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            transfer_ownership(&signer, to)
+        } else if (function_bytes == b"accept_ownership") {
+            bcs_stream::assert_is_consumed(&stream);
+            accept_ownership(&signer)
+        } else if (function_bytes == b"execute_ownership_transfer") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            execute_ownership_transfer(&signer, to)
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_FUNCTION)
+        };
+
+        option::none()
     }
 }

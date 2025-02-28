@@ -17,6 +17,9 @@ module ccip::receiver_registry {
     use ccip::client;
     use ccip::state_object;
 
+    use mcms::bcs_stream;
+    use mcms::mcms_registry;
+
     friend ccip::receiver_dispatcher;
 
     struct ReceiverRegistryState has key, store {
@@ -46,6 +49,15 @@ module ccip::receiver_registry {
     const E_UNKNOWN_PROOF_TYPE: u64 = 4;
     const E_MISSING_INPUT: u64 = 5;
     const E_NON_EMPTY_INPUT: u64 = 6;
+    const E_UNKNOWN_FUNCTION: u64 = 7;
+
+    fun init_module(publisher: &signer) {
+        if (@mcms_register_entrypoints != @0x0) {
+            mcms_registry::register_entrypoint(
+                publisher, string::utf8(b"receiver_registry"), McmsCallback {}
+            );
+        };
+    }
 
     public entry fun initialize(caller: &signer) {
         auth::assert_only_owner(signer::address_of(caller));
@@ -190,5 +202,28 @@ module ccip::receiver_registry {
             error::invalid_argument(E_UNKNOWN_RECEIVER)
         );
         borrow_global_mut<CCIPReceiverRegistration>(receiver_address)
+    }
+
+    //
+    // MCMS entrypoint
+    //
+
+    struct McmsCallback has drop {}
+
+    public fun mcms_entrypoint<T: key>(_metadata: Object<T>): option::Option<u128> {
+        let (signer, function, data) =
+            mcms_registry::get_callback_params(@ccip, McmsCallback {});
+
+        let function_bytes = *string::bytes(&function);
+        let stream = bcs_stream::new(data);
+
+        if (function_bytes == b"initialize") {
+            bcs_stream::assert_is_consumed(&stream);
+            initialize(&signer);
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_FUNCTION)
+        };
+
+        option::none()
     }
 }

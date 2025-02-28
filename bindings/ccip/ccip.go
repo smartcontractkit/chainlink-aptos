@@ -31,9 +31,14 @@ const (
 	DefaultSeed = "chainlink_ccip"
 )
 
-func Compile(address aptos.AccountAddress) (compile.CompiledPackage, error) {
+func Compile(address aptos.AccountAddress, mcmsAddress aptos.AccountAddress, registerMCMSEntrypoints bool) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
-		"ccip": address,
+		"ccip":                      address,
+		"mcms":                      mcmsAddress,
+		"mcms_register_entrypoints": aptos.AccountZero,
+	}
+	if registerMCMSEntrypoints {
+		namedAddresses["mcms_register_entrypoints"] = address
 	}
 	// Compile using CLI
 	return compile.CompilePackage("ccip", namedAddresses)
@@ -86,8 +91,17 @@ func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIP {
 func DeployToObject(
 	auth aptos.TransactionSigner,
 	client *aptos.NodeClient,
+	mcmsAddress aptos.AccountAddress,
+	registerMCMSEntrypoints bool,
 ) (aptos.AccountAddress, *api.PendingTransaction, CCIP, error) {
-	address, tx, err := bind.DeployPackageToObject(auth, client, "ccip", nil)
+	namedAddresses := map[string]aptos.AccountAddress{
+		"mcms":                      mcmsAddress,
+		"mcms_register_entrypoints": aptos.AccountZero,
+	}
+	if registerMCMSEntrypoints {
+		namedAddresses["mcms_register_entrypoints"] = mcmsAddress
+	}
+	address, tx, err := bind.DeployPackageToObject(auth, client, "ccip", namedAddresses)
 	if err != nil {
 		return aptos.AccountAddress{}, nil, CCIP{}, err
 	}

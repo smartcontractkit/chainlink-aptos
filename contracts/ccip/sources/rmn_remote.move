@@ -5,16 +5,21 @@ module ccip::rmn_remote {
     use std::chain_id;
     use std::error;
     use std::event::{Self, EventHandle};
-    use std::vector;
+    use std::object;
+    use std::option;
     use std::secp256k1;
     use std::signer;
+    use std::string;
     use std::smart_table::{Self, SmartTable};
-    use std::option;
+    use std::vector;
 
     use ccip::auth;
     use ccip::eth_abi;
     use ccip::merkle_multi_proof;
     use ccip::state_object;
+
+    use mcms::bcs_stream;
+    use mcms::mcms_registry;
 
     const GLOBAL_CURSE_SUBJECT: vector<u8> = x"01000000000000000000000000000001";
 
@@ -92,6 +97,15 @@ module ccip::rmn_remote {
     const E_COULD_NOT_VALIDATE_SIGNER_KEY: u64 = 18;
     const E_INVALID_SUBJECT_LENGTH: u64 = 19;
     const E_INVALID_PUBLIC_KEY_LENGTH: u64 = 20;
+    const E_UNKNOWN_FUNCTION: u64 = 21;
+
+    fun init_module(publisher: &signer) {
+        if (@mcms_register_entrypoints != @0x0) {
+            mcms_registry::register_entrypoint(
+                publisher, string::utf8(b"rmn_remote"), McmsCallback {}
+            );
+        };
+    }
 
     public entry fun initialize(caller: &signer, local_chain_selector: u64) {
         auth::assert_only_owner(signer::address_of(caller));
@@ -425,5 +439,77 @@ module ccip::rmn_remote {
 
     inline fun borrow_state_mut(): &mut RMNRemoteState {
         borrow_global_mut<RMNRemoteState>(state_object::object_address())
+    }
+
+    //
+    // MCMS entrypoint
+    //
+
+    struct McmsCallback has drop {}
+
+    public fun mcms_entrypoint<T: key>(
+        _metadata: object::Object<T>
+    ): option::Option<u128> acquires RMNRemoteState {
+        let (signer, function, data) =
+            mcms_registry::get_callback_params(@ccip, McmsCallback {});
+
+        let function_bytes = *string::bytes(&function);
+        let stream = bcs_stream::new(data);
+
+        if (function_bytes == b"initialize") {
+            let local_chain_selector = bcs_stream::deserialize_u64(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            initialize(&signer, local_chain_selector);
+        } else if (function_bytes == b"set_config") {
+            let rmn_home_contract_config_digest =
+                bcs_stream::deserialize_vector_u8(&mut stream);
+            let signer_onchain_public_keys =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_vector_u8(stream)
+                );
+            let node_indexes =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let f_sign = bcs_stream::deserialize_u64(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            set_config(
+                &signer,
+                rmn_home_contract_config_digest,
+                signer_onchain_public_keys,
+                node_indexes,
+                f_sign
+            )
+        } else if (function_bytes == b"curse") {
+            let subject = bcs_stream::deserialize_vector_u8(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            curse(&signer, subject)
+        } else if (function_bytes == b"curse_multiple") {
+            let subjects =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_vector_u8(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            curse_multiple(&signer, subjects)
+        } else if (function_bytes == b"uncurse") {
+            let subject = bcs_stream::deserialize_vector_u8(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            uncurse(&signer, subject)
+        } else if (function_bytes == b"uncurse_multiple") {
+            let subjects =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_vector_u8(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            uncurse_multiple(&signer, subjects)
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_FUNCTION)
+        };
+
+        option::none()
     }
 }

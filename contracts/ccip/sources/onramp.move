@@ -6,8 +6,10 @@ module ccip::onramp {
     use std::dispatchable_fungible_asset;
     use std::fungible_asset::{Self, Metadata, FungibleStore};
     use std::object::{Self, Object};
+    use std::option;
     use std::primary_fungible_store;
     use std::signer;
+    use std::string;
     use std::smart_table::{Self, SmartTable};
     use std::vector;
 
@@ -20,6 +22,9 @@ module ccip::onramp {
     use ccip::state_object;
     use ccip::token_admin_dispatcher;
     use ccip::token_admin_registry;
+
+    use mcms::bcs_stream;
+    use mcms::mcms_registry;
 
     struct OnRampState has key, store {
         chain_selector: u64,
@@ -134,6 +139,15 @@ module ccip::onramp {
     const E_INVALID_TOKEN_STORE: u64 = 15;
     const E_UNEXPECTED_WITHDRAW_AMOUNT: u64 = 16;
     const E_UNEXPECTED_FUNGIBLE_ASSET: u64 = 17;
+    const E_UNKNOWN_FUNCTION: u64 = 18;
+
+    fun init_module(publisher: &signer) {
+        if (@mcms_register_entrypoints != @0x0) {
+            mcms_registry::register_entrypoint(
+                publisher, string::utf8(b"onramp"), McmsCallback {}
+            );
+        };
+    }
 
     public entry fun initialize(
         caller: &signer,
@@ -861,5 +875,151 @@ module ccip::onramp {
 
     inline fun borrow_state_mut(): &mut OnRampState {
         borrow_global_mut<OnRampState>(state_object::object_address())
+    }
+
+    //
+    // MCMS entrypoint
+    //
+
+    struct McmsCallback has drop {}
+
+    public fun mcms_entrypoint<T: key>(
+        _metadata: Object<T>
+    ): option::Option<u128> acquires OnRampState {
+        let (signer, function, data) =
+            mcms_registry::get_callback_params(@ccip, McmsCallback {});
+
+        let function_bytes = *string::bytes(&function);
+        let stream = bcs_stream::new(data);
+
+        if (function_bytes == b"initialize") {
+            let chain_selector = bcs_stream::deserialize_u64(&mut stream);
+            let allowlist_admin = bcs_stream::deserialize_address(&mut stream);
+            let dest_chain_selectors =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let dest_chain_enabled =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_bool(stream)
+                );
+            let dest_chain_allowlist_enabled =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_bool(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            initialize(
+                &signer,
+                chain_selector,
+                allowlist_admin,
+                dest_chain_selectors,
+                dest_chain_enabled,
+                dest_chain_allowlist_enabled
+            );
+        } else if (function_bytes == b"ccip_send") {
+            let dest_chain_selector = bcs_stream::deserialize_u64(&mut stream);
+            let receiver = bcs_stream::deserialize_vector_u8(&mut stream);
+            let data = bcs_stream::deserialize_vector_u8(&mut stream);
+            let token_addresses =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_address(stream)
+                );
+            let token_amounts =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let token_store_addresses =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_address(stream)
+                );
+            let fee_token = bcs_stream::deserialize_address(&mut stream);
+            let fee_token_store = bcs_stream::deserialize_address(&mut stream);
+            let extra_args = bcs_stream::deserialize_vector_u8(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            ccip_send(
+                &signer,
+                dest_chain_selector,
+                receiver,
+                data,
+                token_addresses,
+                token_amounts,
+                token_store_addresses,
+                fee_token,
+                fee_token_store,
+                extra_args
+            );
+        } else if (function_bytes == b"set_dynamic_config") {
+            let allowlist_admin = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            set_dynamic_config(&signer, allowlist_admin);
+        } else if (function_bytes == b"apply_dest_chain_config_updates") {
+            let dest_chain_selectors =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let dest_chain_enabled =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_bool(stream)
+                );
+            let dest_chain_allowlist_enabled =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_bool(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            apply_dest_chain_config_updates(
+                &signer,
+                dest_chain_selectors,
+                dest_chain_enabled,
+                dest_chain_allowlist_enabled
+            );
+        } else if (function_bytes == b"apply_allowlist_updates") {
+            let dest_chain_selectors =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let dest_chain_allowlist_enabled =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_bool(stream)
+                );
+            let dest_chain_add_allowed_senders =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_vector(
+                        stream,
+                        |stream| bcs_stream::deserialize_address(stream)
+                    )
+                );
+            let dest_chain_remove_allowed_senders =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_vector(
+                        stream,
+                        |stream| bcs_stream::deserialize_address(stream)
+                    )
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            apply_allowlist_updates(
+                &signer,
+                dest_chain_selectors,
+                dest_chain_allowlist_enabled,
+                dest_chain_add_allowed_senders,
+                dest_chain_remove_allowed_senders
+            );
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_FUNCTION)
+        };
+
+        option::none()
     }
 }

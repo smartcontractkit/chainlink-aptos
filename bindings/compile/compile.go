@@ -54,6 +54,7 @@ func CompilePackage(packageName string, namedAddresses map[string]aptos.AccountA
 		"--assume-yes",
 		"--override-size-check",
 		"--skip-fetch-latest-git-deps",
+		"--move-1",
 	}
 	if len(namedAddr) > 0 {
 		args = append(args, "--named-addresses", strings.Join(namedAddr, ","))

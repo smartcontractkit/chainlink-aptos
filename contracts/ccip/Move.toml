@@ -5,11 +5,18 @@ authors = []
 
 [addresses]
 ccip = "_"
+mcms = "_"
+# If set to 0x0, will not register mcms entrypoints
+mcms_register_entrypoints = "_"
+
 
 [dev-addresses]
 ccip = "0x100"
+mcms = "0x101"
+mcms_register_entrypoints = "0x0"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
+ChainlinkManyChainMultisig = { local = "../mcms", addr_subst = { 'mcms_owner' = '0x0' } }
 
 [dev-dependencies]
