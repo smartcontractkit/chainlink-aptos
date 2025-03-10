@@ -2,8 +2,9 @@ package chainreader
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/aptos-labs/aptos-go-sdk"
@@ -15,6 +16,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
+	rlclient "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/client"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
 )
@@ -27,10 +29,10 @@ type aptosChainReader struct {
 	starter         utils.StartStopOnce
 	moduleAddresses map[string]aptos.AccountAddress
 
-	client *aptos.NodeClient
+	client rlclient.RateLimitedClient
 }
 
-func NewChainReader(lgr logger.Logger, client *aptos.NodeClient, config ChainReaderConfig) types.ContractReader {
+func NewChainReader(lgr logger.Logger, client rlclient.RateLimitedClient, config ChainReaderConfig) types.ContractReader {
 	return &aptosChainReader{
 		logger:          logger.Named(lgr, "AptosChainReader"),
 		client:          client,
@@ -158,7 +160,125 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 }
 
 func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request types.BatchGetLatestValuesRequest) (types.BatchGetLatestValuesResult, error) {
-	return nil, errors.New("not implemented")
+	result := make(types.BatchGetLatestValuesResult)
+
+	for contract, batch := range request {
+		batchResults := make(types.ContractBatchResults, len(batch))
+		resultChan := make(chan struct {
+			index  int
+			result types.BatchReadResult
+		}, len(batch))
+
+		for i, read := range batch {
+			go func(index int, read types.BatchRead) {
+				readResult := types.BatchReadResult{ReadName: read.ReadName}
+
+				err := a.GetLatestValue(ctx, contract.ReadIdentifier(read.ReadName), primitives.Finalized, read.Params, read.ReturnVal)
+				readResult.SetResult(read.ReturnVal, err)
+
+				select {
+				case resultChan <- struct {
+					index  int
+					result types.BatchReadResult
+				}{index, readResult}:
+				case <-ctx.Done():
+					return
+				}
+			}(i, read)
+		}
+
+		for range batch {
+			select {
+			case res := <-resultChan:
+				batchResults[res.index] = res.result
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+
+		result[contract] = batchResults
+	}
+
+	return result, nil
+}
+
+func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]types.Sequence, error) {
+	address, ok := a.moduleAddresses[contract.Name]
+	if !ok {
+		return nil, fmt.Errorf("no bound address for module %s", contract.Name)
+	}
+
+	if address.String() != contract.Address {
+		return nil, fmt.Errorf("bound address %s for module %s does not match provided address %s", address, contract.Name, contract.Address)
+	}
+
+	eventFieldName := filter.Key
+	// temp: parsing offset from queryFilter because limitAndSort doesn't support offset-based pagination
+	var eventOffset uint64 = 0
+	for _, expr := range filter.Expressions {
+		if expr.IsPrimitive() {
+			if comparator, ok := expr.Primitive.(*primitives.Comparator); ok && comparator.Name == "offset" {
+				for _, valueComparator := range comparator.ValueComparators {
+					if valueComparator.Operator == primitives.Eq {
+						if value, ok := valueComparator.Value.(uint64); ok {
+							eventOffset = value
+						} else {
+							return nil, fmt.Errorf("offset value is not an integer: %v", valueComparator.Value)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	limit := limitAndSort.Limit.Count
+
+	moduleConfig, ok := a.config.Modules[contract.Name]
+	if !ok {
+		return nil, fmt.Errorf("no such contract: %s", contract.Name)
+	}
+
+	eventConfig, ok := moduleConfig.Events[eventFieldName]
+	if !ok {
+		return nil, fmt.Errorf("no such event: %s", eventFieldName)
+	}
+
+	events, err := a.client.EventsByHandle(address, eventConfig.EventHandle, eventFieldName, &eventOffset, &limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get events: %+w", err)
+	}
+
+	for _, sortBy := range limitAndSort.SortBy {
+		if seqSort, ok := sortBy.(query.SortBySequence); ok {
+			sort.Slice(events, func(i, j int) bool {
+				if seqSort.GetDirection() == query.Desc {
+					return events[i].SequenceNumber > events[j].SequenceNumber
+				}
+				return events[i].SequenceNumber < events[j].SequenceNumber
+			})
+		}
+	}
+
+	var sequences []types.Sequence
+	for _, event := range events {
+		// create new instance of eventData for each event
+		eventData := reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
+
+		err := codec.DecodeAptosJsonValue(event.Data, &eventData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode event data: %+w", err)
+		}
+
+		sequence := types.Sequence{
+			Cursor: fmt.Sprintf("%d", event.SequenceNumber),
+			// todo: enrich with block data?
+			Head: types.Head{},
+			Data: eventData,
+		}
+		sequences = append(sequences, sequence)
+	}
+
+	return sequences, nil
 }
 
 func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContract) error {
@@ -189,8 +309,4 @@ func (a *aptosChainReader) Unbind(ctx context.Context, bindings []types.BoundCon
 		}
 	}
 	return nil
-}
-
-func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]types.Sequence, error) {
-	return nil, errors.ErrUnsupported
 }

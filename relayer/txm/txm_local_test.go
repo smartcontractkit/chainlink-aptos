@@ -20,6 +20,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 
+	rlclient "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/client"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/testutils"
 )
 
@@ -62,7 +63,12 @@ func TestTxmLocal(t *testing.T) {
 func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string, keystore loop.Keystore, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, iterations int) {
 	client, err := aptos.NewNodeClient(rpcURL, 0) // TODO: chainId
 	require.NoError(t, err)
-	getClient := func() (*aptos.NodeClient, error) { return client, nil }
+
+	rlClient := rlclient.NewRateLimitedClient(client, 100, 30*time.Second)
+	getClient := func() (rlclient.RateLimitedClient, error) {
+		return rlClient, nil
+	}
+
 	txm, err := New(logger, keystore, config, getClient)
 	require.NoError(t, err)
 	err = txm.Start(context.Background())

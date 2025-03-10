@@ -7,7 +7,9 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"math/big"
+	"strconv"
 	"testing"
 	"time"
 
@@ -18,8 +20,10 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
+	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
+	rlclient "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/client"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/testutils"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
@@ -28,19 +32,8 @@ import (
 func TestChainReaderLocal(t *testing.T) {
 	logger := logger.Test(t)
 
-	privateKey, publicKey, accountAddress := testutils.LoadAccountFromEnv(t, logger)
-	if privateKey == nil {
-		newPublicKey, newPrivateKey, err := ed25519.GenerateKey(rand.Reader)
-		require.NoError(t, err)
-		privateKey = newPrivateKey
-		publicKey = newPublicKey
-
-		authKey := sha3.Sum256(append([]byte(publicKey), 0x00))
-		accountAddress = aptos.AccountAddress(authKey)
-
-		logger.Debugw("Created account", "publicKey", hex.EncodeToString([]byte(publicKey)), "accountAddress", accountAddress.String())
-	}
-
+	// Setup test environment
+	privateKey, publicKey, accountAddress := setupTestAccount(t, logger)
 	err := testutils.StartAptosNode()
 	require.NoError(t, err)
 	logger.Debugw("Started Aptos node")
@@ -53,16 +46,41 @@ func TestChainReaderLocal(t *testing.T) {
 	err = testutils.FundWithFaucet(logger, client, accountAddress, faucetUrl)
 	require.NoError(t, err)
 
-	runChainReaderTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
+	t.Run("GetLatestValue", func(t *testing.T) {
+		runGetLatestValueTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
+	})
+
+	t.Run("QueryKey", func(t *testing.T) {
+		runQueryKeyTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
+	})
 }
 
-func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
+func setupTestAccount(t *testing.T, logger logger.Logger) (ed25519.PrivateKey, ed25519.PublicKey, aptos.AccountAddress) {
+	privateKey, publicKey, accountAddress := testutils.LoadAccountFromEnv(t, logger)
+	if privateKey == nil {
+		newPublicKey, newPrivateKey, err := ed25519.GenerateKey(rand.Reader)
+		require.NoError(t, err)
+		privateKey = newPrivateKey
+		publicKey = newPublicKey
+
+		authKey := sha3.Sum256(append([]byte(publicKey), 0x00))
+		accountAddress = aptos.AccountAddress(authKey)
+
+		logger.Debugw("Created account", "publicKey", hex.EncodeToString([]byte(publicKey)), "accountAddress", accountAddress.String())
+	}
+	return privateKey, publicKey, accountAddress
+}
+
+func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
 	keystore := testutils.NewTestKeystore(t)
 	keystore.AddKey(privateKey)
 
 	client, err := aptos.NewNodeClient(rpcUrl, 0)
 	require.NoError(t, err)
-	getClient := func() (*aptos.NodeClient, error) { return client, nil }
+
+	rateLimitedClient := rlclient.NewRateLimitedClient(client, 100, 30*time.Second)
+
+	getClient := func() (rlclient.RateLimitedClient, error) { return rateLimitedClient, nil }
 
 	txmConfig := txm.DefaultConfigSet
 	txmgr, err := txm.New(logger, keystore, txmConfig, getClient)
@@ -106,8 +124,7 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 			"testContract": {
 				Name: "echo",
 				Functions: map[string]*ChainReaderFunction{
-					"replacementNameEchoU64": {
-						Name: "echo_u64",
+					"echo_u64": {
 						Params: []codec.AptosFunctionParam{
 							{
 								Name: "Value1",
@@ -169,67 +186,407 @@ func runChainReaderTest(t *testing.T, logger logger.Logger, rpcUrl string, accou
 		Address: accountAddress.String(),
 	}
 
-	chainReader := NewChainReader(logger, client, config)
+	chainReader := NewChainReader(logger, rateLimitedClient, config)
 	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{binding})
 	require.NoError(t, err)
 
 	confidenceLevel := primitives.Finalized
+	u256Val, _ := new(big.Int).SetString("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffee", 16)
+	testString := "hello world"
+	testBytes := []byte{42, 11, 22, 59}
+	testBytesSlice := [][]byte{{42, 11}, {22, 59}}
 
-	expectedUint64 := uint64(42)
-	var retUint64 uint64
-	err = chainReader.GetLatestValue(context.Background(), binding.ReadIdentifier("replacementNameEchoU64"), confidenceLevel, struct {
-		Value1 uint64
-	}{Value1: expectedUint64}, &retUint64)
-	require.NoError(t, err)
-	require.Equal(t, expectedUint64, retUint64)
+	t.Run("Individual reads", func(t *testing.T) {
+		var retUint64 uint64
+		err = chainReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-echo_u64", accountAddress.String()),
+			confidenceLevel,
+			struct{ Value1 uint64 }{Value1: 42},
+			&retUint64,
+		)
+		require.NoError(t, err)
+		require.Equal(t, uint64(42), retUint64)
 
-	expectedTuple := []uint64{11, 22}
-	var retTuple []uint64
-	err = chainReader.GetLatestValue(context.Background(), binding.ReadIdentifier("echo_u32_u64_tuple"), confidenceLevel, struct {
-		Value1 uint32
-		Value2 uint64
-	}{Value1: uint32(expectedTuple[0]), Value2: expectedTuple[1]}, &retTuple)
-	require.NoError(t, err)
-	require.Equal(t, expectedTuple, retTuple)
+		var retU256 *big.Int
+		err = chainReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-echo_u256", accountAddress.String()),
+			confidenceLevel,
+			struct{ Value1 *big.Int }{Value1: u256Val},
+			&retU256,
+		)
+		require.NoError(t, err)
+		require.Equal(t, u256Val, retU256)
 
-	expectedString := "hello world"
-	var retString string
-	err = chainReader.GetLatestValue(context.Background(), binding.ReadIdentifier("echo_string"), confidenceLevel, struct {
-		Value1 string
-	}{Value1: expectedString}, &retString)
-	require.NoError(t, err)
-	require.Equal(t, expectedString, retString)
+		var retTuple []uint64
+		err = chainReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-echo_u32_u64_tuple", accountAddress.String()),
+			confidenceLevel,
+			struct {
+				Value1 uint32
+				Value2 uint64
+			}{Value1: 11, Value2: 22},
+			&retTuple,
+		)
+		require.NoError(t, err)
+		require.Equal(t, []uint64{11, 22}, retTuple)
 
-	expectedSlice := []byte{42, 11, 22, 59}
-	var retSlice []byte
-	err = chainReader.GetLatestValue(context.Background(), binding.ReadIdentifier("echo_byte_vector"), confidenceLevel, struct {
-		Value1 []byte
-	}{Value1: expectedSlice}, &retSlice)
-	require.NoError(t, err)
-	require.Equal(t, expectedSlice, retSlice)
+		var retString string
+		err = chainReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-echo_string", accountAddress.String()),
+			confidenceLevel,
+			struct{ Value1 string }{Value1: testString},
+			&retString,
+		)
+		require.NoError(t, err)
+		require.Equal(t, testString, retString)
 
-	expectedSliceSlice := [][]byte{{42, 11}, {22, 59}}
-	var retSliceSlice [][]byte
-	err = chainReader.GetLatestValue(context.Background(), binding.ReadIdentifier("echo_byte_vector_vector"), confidenceLevel, struct {
-		Value1 [][]byte
-	}{Value1: expectedSliceSlice}, &retSliceSlice)
-	require.NoError(t, err)
-	require.Equal(t, expectedSliceSlice, retSliceSlice)
+		var retBytes []byte
+		err = chainReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-echo_byte_vector", accountAddress.String()),
+			confidenceLevel,
+			struct{ Value1 []byte }{Value1: testBytes},
+			&retBytes,
+		)
+		require.NoError(t, err)
+		require.Equal(t, testBytes, retBytes)
 
-	expectedU256, ok := new(big.Int).SetString("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffee", 16)
-	require.True(t, ok)
-	var retU256 *big.Int
-	err = chainReader.GetLatestValue(context.Background(), binding.ReadIdentifier("echo_u256"), confidenceLevel, struct {
-		Value1 *big.Int
-	}{Value1: expectedU256}, &retU256)
-	require.NoError(t, err)
-	require.Equal(t, expectedU256, retU256)
+		var retBytesSlice [][]byte
+		err = chainReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-echo_byte_vector_vector", accountAddress.String()),
+			confidenceLevel,
+			struct{ Value1 [][]byte }{Value1: testBytesSlice},
+			&retBytesSlice,
+		)
+		require.NoError(t, err)
+		require.Equal(t, testBytesSlice, retBytesSlice)
+	})
+
+	t.Run("Batch reads", func(t *testing.T) {
+		var retUint64 uint64
+		var retU256 *big.Int
+		var retTuple []uint64
+		var retString string
+		var retBytes []byte
+		var retBytesSlice [][]byte
+
+		request := commontypes.BatchGetLatestValuesRequest{
+			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()}: {
+				{
+					ReadName:  "echo_u64",
+					Params:    struct{ Value1 uint64 }{Value1: 42},
+					ReturnVal: &retUint64,
+				},
+				{
+					ReadName:  "echo_u256",
+					Params:    struct{ Value1 *big.Int }{Value1: u256Val},
+					ReturnVal: &retU256,
+				},
+				{
+					ReadName: "echo_u32_u64_tuple",
+					Params: struct {
+						Value1 uint32
+						Value2 uint64
+					}{Value1: 11, Value2: 22},
+					ReturnVal: &retTuple,
+				},
+				{
+					ReadName:  "echo_string",
+					Params:    struct{ Value1 string }{Value1: testString},
+					ReturnVal: &retString,
+				},
+				{
+					ReadName:  "echo_byte_vector",
+					Params:    struct{ Value1 []byte }{Value1: testBytes},
+					ReturnVal: &retBytes,
+				},
+				{
+					ReadName:  "echo_byte_vector_vector",
+					Params:    struct{ Value1 [][]byte }{Value1: testBytesSlice},
+					ReturnVal: &retBytesSlice,
+				},
+			},
+		}
+
+		result, err := chainReader.BatchGetLatestValues(context.Background(), request)
+		require.NoError(t, err)
+
+		batchResults := result[commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()}]
+		require.Len(t, batchResults, 6)
+
+		require.Equal(t, uint64(42), retUint64)
+		require.Equal(t, u256Val, retU256)
+		require.Equal(t, []uint64{11, 22}, retTuple)
+		require.Equal(t, testString, retString)
+		require.Equal(t, testBytes, retBytes)
+		require.Equal(t, testBytesSlice, retBytesSlice)
+	})
 }
 
+func emitManyEvents(t *testing.T, txmgr *txm.AptosTxm, address, publicKeyHex string, count int) {
+	for i := 0; i < count; i++ {
+		txId := uuid.New().String()
+		err := txmgr.Enqueue(
+			txId,
+			getSampleTxMetadata(),
+			address,
+			publicKeyHex,
+			fmt.Sprintf("%s::echo::echo_with_events", address),
+			[]string{},
+			[]string{"u64", "0x1::string::String", "vector<u8>"},
+			[]any{uint64(i), fmt.Sprintf("test%d", i), []byte{byte(i)}},
+			true,
+		)
+		require.NoError(t, err)
+		waitForTx(t, txmgr, txId)
+	}
+}
+
+func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
+	keystore := testutils.NewTestKeystore(t)
+	keystore.AddKey(privateKey)
+
+	client, err := aptos.NewNodeClient(rpcUrl, 0)
+	require.NoError(t, err)
+
+	rateLimitedClient := rlclient.NewRateLimitedClient(client, 100, 30*time.Second)
+
+	compilationResult := testutils.CompileTestModule(t, accountAddress)
+	publicKeyHex := hex.EncodeToString([]byte(publicKey))
+
+	txmgr := initTxManager(t, logger, keystore, rateLimitedClient)
+
+	txId := deployContract(t, txmgr, accountAddress.String(), publicKeyHex, compilationResult)
+	waitForTx(t, txmgr, txId)
+
+	// Emit 20 events initially
+	emitManyEvents(t, txmgr, accountAddress.String(), publicKeyHex, 20)
+
+	config := ChainReaderConfig{
+		Modules: map[string]*ChainReaderModule{
+			"testContract": {
+				Name: "echo",
+				Events: map[string]*ChainReaderEvent{
+					"single_value_events": {
+						EventHandle: fmt.Sprintf("%s::echo::EventStore", accountAddress.String()),
+					},
+					"double_value_events": {
+						EventHandle: fmt.Sprintf("%s::echo::EventStore", accountAddress.String()),
+					},
+					"triple_value_events": {
+						EventHandle: fmt.Sprintf("%s::echo::EventStore", accountAddress.String()),
+					},
+				},
+			},
+		},
+	}
+
+	chainReader := NewChainReader(logger, rateLimitedClient, config)
+	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{
+		{Name: "testContract", Address: accountAddress.String()},
+	})
+	require.NoError(t, err)
+
+	t.Run("Get all events paginated", func(t *testing.T) {
+		pageSize := uint64(5)
+		var allEvents []*SingleValueEvent
+
+		for offset := uint64(0); ; offset += pageSize {
+			sequences, err := chainReader.QueryKey(
+				context.Background(),
+				commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
+				query.KeyFilter{
+					Key: "single_value_events",
+					Expressions: []query.Expression{{
+						Primitive: &primitives.Comparator{
+							Name: "offset",
+							ValueComparators: []primitives.ValueComparator{{
+								Operator: primitives.Eq,
+								Value:    offset,
+							}},
+						},
+					}},
+				},
+				query.LimitAndSort{Limit: query.CountLimit(pageSize)},
+				&SingleValueEvent{},
+			)
+			require.NoError(t, err)
+			if len(sequences) == 0 {
+				break
+			}
+			for _, seq := range sequences {
+				allEvents = append(allEvents, seq.Data.(*SingleValueEvent))
+			}
+		}
+		require.Len(t, allEvents, 20)
+		for i := 0; i < len(allEvents)-1; i++ {
+			require.Less(t, allEvents[i].Value, allEvents[i+1].Value)
+		}
+	})
+
+	t.Run("Get newest event with offset", func(t *testing.T) {
+		sequences, err := chainReader.QueryKey(
+			context.Background(),
+			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
+			query.KeyFilter{
+				Key: "single_value_events",
+				Expressions: []query.Expression{{
+					Primitive: &primitives.Comparator{
+						Name: "offset",
+						ValueComparators: []primitives.ValueComparator{{
+							Operator: primitives.Eq,
+							Value:    uint64(1),
+						}},
+					},
+				}},
+			},
+			query.LimitAndSort{Limit: query.CountLimit(1)},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.Len(t, sequences, 1)
+		event := sequences[0].Data.(*SingleValueEvent)
+		require.Equal(t, uint64(1), event.Value)
+	})
+
+	t.Run("Get events sorted in desc", func(t *testing.T) {
+		sequences, err := chainReader.QueryKey(
+			context.Background(),
+			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
+			query.KeyFilter{Key: "single_value_events"},
+			query.LimitAndSort{
+				Limit: query.CountLimit(10),
+				SortBy: []query.SortBy{
+					query.NewSortBySequence(query.Desc),
+				},
+			},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.Len(t, sequences, 10)
+		for i := 0; i < len(sequences)-1; i++ {
+			require.Greater(t, sequences[i].Data.(*SingleValueEvent).Value,
+				sequences[i+1].Data.(*SingleValueEvent).Value)
+		}
+	})
+
+	t.Run("Handle concurrent event emission", func(t *testing.T) {
+		initialCount := 20
+		concurrentCount := 15
+
+		// Start concurrent emission in background
+		done := make(chan bool)
+		go func() {
+			emitManyEvents(t, txmgr, accountAddress.String(), publicKeyHex, concurrentCount)
+			done <- true
+		}()
+
+		seenSequences := make(map[uint64]bool)
+		maxAttempts := 10
+		success := false
+		var lastSeq uint64
+
+		for attempt := 0; attempt < maxAttempts && !success; attempt++ {
+			sequences, err := chainReader.QueryKey(
+				context.Background(),
+				commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
+				query.KeyFilter{Key: "single_value_events"},
+				query.LimitAndSort{
+					Limit: query.CountLimit(50),
+					SortBy: []query.SortBy{
+						query.NewSortBySequence(query.Asc),
+					},
+				},
+				&SingleValueEvent{},
+			)
+			require.NoError(t, err)
+
+			for _, seq := range sequences {
+				seqNum, err := strconv.ParseUint(seq.Cursor, 10, 64)
+				require.NoError(t, err)
+				seenSequences[seqNum] = true
+				if seqNum > lastSeq {
+					lastSeq = seqNum
+				}
+			}
+
+			if len(seenSequences) > initialCount {
+				success = true
+			} else {
+				time.Sleep(2 * time.Second)
+			}
+		}
+
+		<-done
+
+		t.Logf("Seen %d events (initial: %d, concurrent: %d)", len(seenSequences), initialCount, concurrentCount)
+		require.True(t, success, "Failed to see concurrent events after multiple attempts")
+		require.Greater(t, len(seenSequences), initialCount, "Should see more than initial events")
+		require.LessOrEqual(t, len(seenSequences), initialCount+concurrentCount, "Should not see more events than emitted")
+	})
+}
+
+func initTxManager(t *testing.T, logger logger.Logger, keystore *testutils.TestKeystore, client rlclient.RateLimitedClient) *txm.AptosTxm {
+	getClient := func() (rlclient.RateLimitedClient, error) { return client, nil }
+	txmgr, err := txm.New(logger, keystore, txm.DefaultConfigSet, getClient)
+	require.NoError(t, err)
+	err = txmgr.Start(context.Background())
+	require.NoError(t, err)
+	return txmgr
+}
+
+func deployContract(t *testing.T, txmgr *txm.AptosTxm, address, publicKeyHex string, compilationResult testutils.CompilationResult) string {
+	txId := uuid.New().String()
+	err := txmgr.Enqueue(
+		txId,
+		getSampleTxMetadata(),
+		address,
+		publicKeyHex,
+		"0x1::code::publish_package_txn",
+		[]string{},
+		[]string{"vector<u8>", "vector<vector<u8>>"},
+		[]any{compilationResult.PackageMetadata, compilationResult.BytecodeModules},
+		true,
+	)
+	require.NoError(t, err)
+	return txId
+}
+
+func waitForTx(t *testing.T, txmgr *txm.AptosTxm, txId string) {
+	confirmed := false
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
+		status, err := txmgr.GetStatus(txId)
+		require.NoError(t, err)
+		if status != commontypes.Unconfirmed {
+			confirmed = true
+			break
+		}
+	}
+	require.True(t, confirmed)
+}
 func getSampleTxMetadata() *commontypes.TxMeta {
 	workflowID := "sample-workflow-id"
 	return &commontypes.TxMeta{
 		WorkflowExecutionID: &workflowID,
 		GasLimit:            big.NewInt(21000),
 	}
+}
+
+type SingleValueEvent struct {
+	Value uint64 `json:"value"`
+}
+
+type DoubleValueEvent struct {
+	Number uint64 `json:"number"`
+	Text   string `json:"text"`
+}
+
+type TripleValueEvent struct {
+	Values [][]byte `json:"values"`
 }

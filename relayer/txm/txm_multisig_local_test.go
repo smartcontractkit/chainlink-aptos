@@ -32,6 +32,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 
+	rlclient "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/client"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/testutils"
 )
 
@@ -129,12 +130,16 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	client, err := aptos.NewNodeClient(rpcURL, 0)
 	require.NoError(t, err)
 
+	rlClient := rlclient.NewRateLimitedClient(client, 20, 30*time.Second)
+	getClient := func() (rlclient.RateLimitedClient, error) {
+		return rlClient, nil
+	}
+	
 	chainId, err := client.GetChainId()
 	require.NoError(t, err)
 	chainIdBig := new(big.Int).SetUint64(uint64(chainId))
 
 	config := DefaultConfigSet
-	getClient := func() (*aptos.NodeClient, error) { return client, nil }
 	txm, err := New(logger, keystore, config, getClient)
 	require.NoError(t, err)
 	err = txm.Start(context.Background())

@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/pelletier/go-toml/v2"
@@ -20,6 +21,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
+	rlclient "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/client"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
@@ -34,7 +36,7 @@ type Chain interface {
 	Config() *config.TOMLConfig
 
 	TxManager() *txm.AptosTxm
-	GetClient() (*aptos.NodeClient, error)
+	GetClient() (rlclient.RateLimitedClient, error)
 }
 
 type ChainOpts struct {
@@ -106,7 +108,7 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger) 
 		lggr: logger.Named(lggr, "Chain"),
 	}
 
-	getClient := func() (*aptos.NodeClient, error) {
+	getClient := func() (rlclient.RateLimitedClient, error) {
 		return ch.GetClient()
 	}
 
@@ -156,7 +158,7 @@ func (c *chain) ChainID() string {
 }
 
 // GetClient returns a client, randomly selecting one from available and valid nodes
-func (c *chain) GetClient() (*aptos.NodeClient, error) {
+func (c *chain) GetClient() (rlclient.RateLimitedClient, error) {
 	var node *config.Node
 	var err error
 	var client *aptos.NodeClient
@@ -192,8 +194,15 @@ func (c *chain) GetClient() (*aptos.NodeClient, error) {
 	if client == nil {
 		return nil, errors.New("no node valid nodes available")
 	}
+
 	c.lggr.Debugw("Created client", "name", node.Name, "url", node.URL)
-	return client, nil
+
+	rateLimitedClient := rlclient.NewRateLimitedClient(client,
+		100,            // max requests in-flight
+		30*time.Second, // timeout
+	)
+
+	return rateLimitedClient, nil
 }
 
 func (c *chain) Start(ctx context.Context) error {

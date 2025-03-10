@@ -10,6 +10,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 
+	rlclient "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/client"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
 )
 
@@ -20,7 +21,7 @@ type BalanceMonitorOpts struct {
 	Config    monitor.Config
 	Logger    logger.Logger
 	Keystore  core.Keystore
-	NewClient func() (*aptos.NodeClient, error)
+	NewClient func() (rlclient.RateLimitedClient, error)
 }
 
 // NewBalanceMonitor returns a balance monitoring services.Service which reports balance of all Keystore accounts.
@@ -48,7 +49,7 @@ func NewBalanceMonitor(opts BalanceMonitorOpts) (services.Service, error) {
 
 // Aptos balance reader client implementation
 type balanceClient struct {
-	client *aptos.NodeClient
+	client rlclient.RateLimitedClient
 }
 
 // GetAccountBalance returns the account balance in APT.

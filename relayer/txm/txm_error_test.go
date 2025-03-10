@@ -18,6 +18,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 
+	rlclient "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/client"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/testutils"
 )
 
@@ -61,7 +62,12 @@ func TestTxmBroadcastErrors(t *testing.T) {
 func runErrorsTest(t *testing.T, logger logger.Logger, config Config, rpcURL string, keystore loop.Keystore, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey) {
 	client, err := aptos.NewNodeClient(rpcURL, 0)
 	require.NoError(t, err)
-	getClient := func() (*aptos.NodeClient, error) { return client, nil }
+
+	rlClient := rlclient.NewRateLimitedClient(client, 20, 30*time.Second)
+	getClient := func() (rlclient.RateLimitedClient, error) {
+		return rlClient, nil
+	}
+
 	txm, err := New(logger, keystore, config, getClient)
 	require.NoError(t, err)
 	err = txm.Start(context.Background())
@@ -118,14 +124,14 @@ func runErrorsTest(t *testing.T, logger logger.Logger, config Config, rpcURL str
 	}
 	require.NotNil(t, selectedTx)
 
-	sequenceNumber, err := txm.getSequenceNumber(client, accountAddress)
+	sequenceNumber, err := txm.getSequenceNumber(rlClient, accountAddress)
 	require.NoError(t, err)
 
-	rawTx, err := txm.createRawTx(client, selectedTx, sequenceNumber)
+	rawTx, err := txm.createRawTx(rlClient, selectedTx, sequenceNumber)
 	require.NoError(t, err)
 
 	rawTx.SequenceNumber = sequenceNumber - 1
-	signedTx, err := txm.createSignedTx(client, rawTx, selectedTx.PublicKey, selectedTx.FromAddress)
+	signedTx, err := txm.createSignedTx(rlClient, rawTx, selectedTx.PublicKey, selectedTx.FromAddress)
 	require.NoError(t, err)
 
 	_, err = client.SubmitTransaction(signedTx)
@@ -135,7 +141,7 @@ func runErrorsTest(t *testing.T, logger logger.Logger, config Config, rpcURL str
 	// Test with expired transaction
 	rawTx.SequenceNumber = sequenceNumber
 	rawTx.ExpirationTimestampSeconds = rawTx.ExpirationTimestampSeconds - txm.config.TxExpirationSecs - 3600 // 1 hour ago
-	signedTx, err = txm.createSignedTx(client, rawTx, selectedTx.PublicKey, selectedTx.FromAddress)
+	signedTx, err = txm.createSignedTx(rlClient, rawTx, selectedTx.PublicKey, selectedTx.FromAddress)
 	require.NoError(t, err)
 
 	_, err = client.SubmitTransaction(signedTx)

@@ -1,7 +1,7 @@
 ARG BASE_IMAGE=chainlink:aptos
 
 # Build image: Plugins
-FROM golang:1.22-bullseye as buildplugins
+FROM golang:1.23-bullseye as buildplugins
 RUN go version
 
 WORKDIR /build

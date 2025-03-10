@@ -13,6 +13,7 @@ type ChainReaderModule struct {
 	// is stored is used.
 	Name      string
 	Functions map[string]*ChainReaderFunction
+	Events    map[string]*ChainReaderEvent
 }
 
 type ChainReaderFunction struct {
@@ -20,4 +21,12 @@ type ChainReaderFunction struct {
 	// is stored is used.
 	Name   string
 	Params []codec.AptosFunctionParam
+}
+
+type ChainReaderEvent struct {
+	// The event name (optional). When not provided, the key in the map under which this event
+	// is stored is used.
+	Name string
+	// <account_address>::<module_name>::<event_struct>
+	EventHandle string
 }
