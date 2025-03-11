@@ -15,7 +15,7 @@ module ccip::offramp {
 
     use ccip::auth;
     use ccip::client;
-    use ccip::eth_abi;
+    use ccip::eth_abi::{Self, AbiStream};
     use ccip::fee_quoter;
     use ccip::merkle_multi_proof;
     use ccip::ocr3_base;
@@ -28,8 +28,8 @@ module ccip::offramp {
     use mcms::bcs_stream;
     use mcms::mcms_registry;
 
+    // These have to match the EVM states
     const EXECUTION_STATE_UNTOUCHED: u8 = 0;
-    const EXECUTION_STATE_IN_PROGRESS: u8 = 1;
     const EXECUTION_STATE_SUCCESS: u8 = 2;
 
     const ZERO_MERKLE_ROOT: vector<u8> = vector[
@@ -45,22 +45,20 @@ module ccip::offramp {
 
         // dynamic config
         permissionless_execution_threshold_secs: u32,
-        is_rmn_verification_disabled: bool,
 
-        // TODO: consider a single smart table of source chain selector -> all data,
-        // ie config + execution state + roots + inbound nonces.
+        // State
         // source chain selector -> config
         source_chain_configs: SmartTable<u64, SourceChainConfig>,
-
         // source chain selector -> seq num -> execution state
         execution_states: SmartTable<u64, SmartTable<u64, u8>>,
-
-        // source chain selector -> merkle root -> timestamp,
-        roots: SmartTable<u64, SmartTable<vector<u8>, u64>>,
-
         // source chain selector -> sender -> nonce
         inbound_nonces: SmartTable<u64, SmartTable<vector<u8>, u64>>,
+
+        // merkle root -> timestamp,
+        roots: SmartTable<vector<u8>, u64>,
         latest_price_sequence_number: u64,
+
+        // Events
         static_config_set_events: EventHandle<StaticConfigSet>,
         dynamic_config_set_events: EventHandle<DynamicConfigSet>,
         source_chain_config_set_events: EventHandle<SourceChainConfigSet>,
@@ -114,14 +112,12 @@ module ccip::offramp {
         proof_flag_bits: u256
     }
 
+    // Matches the EVM struct
     struct CommitReport has store, drop, copy {
         price_updates: PriceUpdates,
-        merkle_roots: vector<MerkleRoot>,
-        rmn_signatures: vector<vector<u8>>,
-
-        // TODO: this was added so that the hashed/verified report contains the target address,
-        // since we don't have onramp address fields. check if we need this.
-        offramp_address: address
+        blessed_merkle_roots: vector<MerkleRoot>,
+        unblessed_merkle_roots: vector<MerkleRoot>,
+        rmn_signatures: vector<vector<u8>>
     }
 
     struct PriceUpdates has store, drop, copy {
@@ -152,8 +148,7 @@ module ccip::offramp {
     }
 
     struct DynamicConfig has store, drop {
-        permissionless_execution_threshold_secs: u32,
-        is_rmn_verification_disabled: bool
+        permissionless_execution_threshold_secs: u32
     }
 
     #[event]
@@ -224,7 +219,7 @@ module ccip::offramp {
     const E_ROOT_NOT_COMMITTED: u64 = 9;
     const E_MANUAL_EXECUTION_NOT_YET_ENABLED: u64 = 10;
     const E_SOURCE_CHAIN_NOT_ENABLED: u64 = 11;
-    const E_INVALID_OFFRAMP_ADDRESS: u64 = 12;
+    const E_COMMIT_ONRAMP_MISMATCH: u64 = 12;
     const E_INVALID_INTERVAL: u64 = 13;
     const E_INVALID_ROOT: u64 = 14;
     const E_ROOT_ALREADY_COMMITTED: u64 = 15;
@@ -240,8 +235,7 @@ module ccip::offramp {
     const E_FUNGIBLE_ASSET_AMOUNT_MISMATCH: u64 = 25;
     const E_SIGNATURE_VERIFICATION_REQUIRED_IN_COMMIT_PLUGIN: u64 = 26;
     const E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN: u64 = 27;
-    const E_COMMIT_ONRAMP_MISMATCH: u64 = 28;
-    const E_UNKNOWN_FUNCTION: u64 = 29;
+    const E_UNKNOWN_FUNCTION: u64 = 28;
 
     fun init_module(publisher: &signer) {
         if (@mcms_register_entrypoints != @0x0) {
@@ -279,7 +273,6 @@ module ccip::offramp {
             ocr3_base_state: ocr3_base::new(&state_object_signer),
             chain_selector,
             permissionless_execution_threshold_secs: 0,
-            is_rmn_verification_disabled: false,
             source_chain_configs: smart_table::new(),
             execution_states: smart_table::new(),
             roots: smart_table::new(),
@@ -336,23 +329,31 @@ module ccip::offramp {
         );
     }
 
-    // Throws an error if the root is not committed.
-    // Returns true if the root is eligable for manual execution.
-    inline fun is_committed_root(
-        state: &mut OffRampState, source_chain_selector: u64, root: vector<u8>
-    ): bool {
-        let source_chain_roots = smart_table::borrow(
-            &state.roots, source_chain_selector
-        );
+    // ================================================================
+    // |                          Execution                           |
+    // ================================================================
 
-        assert!(
-            smart_table::contains(source_chain_roots, root),
-            error::invalid_argument(E_ROOT_NOT_COMMITTED)
-        );
-        let timestamp_committed_secs = *smart_table::borrow(source_chain_roots, root);
+    public entry fun execute(
+        caller: &signer, report_context: vector<vector<u8>>, report: vector<u8>
+    ) acquires OffRampState {
+        let state = borrow_state_mut();
+        let reports = deserialize_execution_reports(report);
+        batch_execute(state, reports, false);
+        ocr3_base::transmit(
+            &mut state.ocr3_base_state,
+            signer::address_of(caller),
+            ocr3_base::ocr_plugin_type_execution(),
+            report_context,
+            report,
+            vector::empty()
+        )
+    }
 
-        (timestamp::now_seconds() - timestamp_committed_secs)
-            > (state.permissionless_execution_threshold_secs as u64)
+    public entry fun manually_execute(reports_bytes: vector<u8>) acquires OffRampState {
+        let state = borrow_state_mut();
+        ocr3_base::assert_chain_not_forked(&state.ocr3_base_state);
+        let reports = deserialize_execution_reports(reports_bytes);
+        batch_execute(state, reports, true);
     }
 
     #[view]
@@ -370,13 +371,6 @@ module ccip::offramp {
         let execution_state =
             smart_table::borrow(source_chain_execution_states, sequence_number);
         *execution_state
-    }
-
-    public entry fun manually_execute(reports_bytes: vector<u8>) acquires OffRampState {
-        let state = borrow_state_mut();
-        ocr3_base::assert_chain_not_forked(&state.ocr3_base_state);
-        let reports = deserialize_execution_reports(reports_bytes);
-        batch_execute(state, reports, true);
     }
 
     inline fun batch_execute(
@@ -448,7 +442,7 @@ module ccip::offramp {
             );
 
         // Reverts when the root is not committed
-        let is_old_commit_report = is_committed_root(state, source_chain_selector, root);
+        let is_old_commit_report = is_committed_root(state, root);
 
         let source_chain_execution_states =
             smart_table::borrow_mut(&mut state.execution_states, source_chain_selector);
@@ -461,7 +455,11 @@ module ccip::offramp {
             let message = vector::borrow(&execution_report.messages, i);
             let sequence_number = message.header.sequence_number;
             let execution_state_ref =
-                smart_table::borrow_mut(source_chain_execution_states, sequence_number);
+                smart_table::borrow_mut_with_default(
+                    source_chain_execution_states,
+                    sequence_number,
+                    EXECUTION_STATE_UNTOUCHED
+                );
             let original_state = *execution_state_ref;
 
             if (original_state != EXECUTION_STATE_UNTOUCHED) {
@@ -504,7 +502,6 @@ module ccip::offramp {
                 error::invalid_argument(E_TOKEN_DATA_MISMATCH)
             );
 
-            *execution_state_ref = EXECUTION_STATE_IN_PROGRESS;
             let return_data = execute_single_message(
                 message, message_offchain_token_data
             );
@@ -534,6 +531,25 @@ module ccip::offramp {
         };
     }
 
+    /// Throws an error if the root is not committed.
+    /// Returns true if the root is eligable for manual execution.
+    inline fun is_committed_root(
+        state: &mut OffRampState, root: vector<u8>
+    ): bool {
+        assert!(
+            smart_table::contains(&state.roots, root),
+            error::invalid_argument(E_ROOT_NOT_COMMITTED)
+        );
+        let timestamp_committed_secs = *smart_table::borrow(&state.roots, root);
+
+        (timestamp::now_seconds() - timestamp_committed_secs)
+            > (state.permissionless_execution_threshold_secs as u64)
+    }
+
+    // ================================================================
+    // |                            Commit                            |
+    // ================================================================
+
     public entry fun commit(
         caller: &signer,
         report_context: vector<vector<u8>>,
@@ -541,47 +557,9 @@ module ccip::offramp {
         signatures: vector<vector<u8>>
     ) acquires OffRampState {
         let state = borrow_state_mut();
-
         let commit_report = deserialize_commit_report(report);
-        assert!(
-            commit_report.offramp_address == @ccip,
-            error::invalid_argument(E_INVALID_OFFRAMP_ADDRESS)
-        );
 
-        if (!state.is_rmn_verification_disabled
-            && !vector::is_empty(&commit_report.merkle_roots)) {
-            let merkle_root_source_chains_selector = vector[];
-            let merkle_root_min_sequence_numbers = vector[];
-            let merkle_root_max_sequence_numbers = vector[];
-            let merkle_root_values = vector[];
-            vector::for_each_ref(
-                &commit_report.merkle_roots,
-                |merkle_root| {
-                    let merkle_root: &MerkleRoot = merkle_root;
-                    vector::push_back(
-                        &mut merkle_root_source_chains_selector,
-                        merkle_root.source_chain_selector
-                    );
-                    vector::push_back(
-                        &mut merkle_root_min_sequence_numbers,
-                        merkle_root.min_sequence_number
-                    );
-                    vector::push_back(
-                        &mut merkle_root_max_sequence_numbers,
-                        merkle_root.max_sequence_number
-                    );
-                    vector::push_back(&mut merkle_root_values, merkle_root.merkle_root);
-                }
-            );
-
-            rmn_remote::verify(
-                merkle_root_source_chains_selector,
-                merkle_root_min_sequence_numbers,
-                merkle_root_max_sequence_numbers,
-                merkle_root_values,
-                commit_report.rmn_signatures
-            );
-        };
+        verify_blessed_roots(&commit_report.blessed_merkle_roots, signatures);
 
         if (vector::length(&commit_report.price_updates.token_price_updates) > 0
             || vector::length(&commit_report.price_updates.gas_price_updates) > 0) {
@@ -633,63 +611,14 @@ module ccip::offramp {
                 );
             } else {
                 assert!(
-                    vector::length(&commit_report.merkle_roots) > 0,
+                    vector::length(&commit_report.blessed_merkle_roots) > 0,
                     error::invalid_argument(E_STALE_COMMIT_REPORT)
                 );
             }
         };
 
-        vector::for_each_ref(
-            &commit_report.merkle_roots,
-            |root| {
-                let root: &MerkleRoot = root;
-                let source_chain_selector = root.source_chain_selector;
-
-                assert!(
-                    !rmn_remote::is_cursed_u128(source_chain_selector as u128),
-                    error::permission_denied(E_CURSED_BY_RMN)
-                );
-
-                assert_source_chain_enabled(state, source_chain_selector);
-
-                let source_chain_config =
-                    smart_table::borrow_mut(
-                        &mut state.source_chain_configs, source_chain_selector
-                    );
-                assert!(
-                    source_chain_config.onramp == root.onramp_address,
-                    error::invalid_argument(E_COMMIT_ONRAMP_MISMATCH)
-                );
-                assert!(
-                    source_chain_config.min_sequence_number == root.min_sequence_number
-                        && root.min_sequence_number <= root.max_sequence_number,
-                    error::invalid_argument(E_INVALID_INTERVAL)
-                );
-
-                let merkle_root = root.merkle_root;
-                assert!(
-                    vector::length(&merkle_root) == 32,
-                    error::invalid_argument(E_INVALID_ROOT)
-                );
-                assert!(
-                    merkle_root != ZERO_MERKLE_ROOT,
-                    error::invalid_argument(E_INVALID_ROOT)
-                );
-
-                let source_chain_roots =
-                    smart_table::borrow_mut(&mut state.roots, source_chain_selector);
-                assert!(
-                    !smart_table::contains(source_chain_roots, merkle_root),
-                    error::invalid_argument(E_ROOT_ALREADY_COMMITTED)
-                );
-
-                source_chain_config.min_sequence_number = source_chain_config.min_sequence_number
-                    + 1;
-                smart_table::add(
-                    source_chain_roots, merkle_root, timestamp::now_seconds()
-                );
-            }
-        );
+        commit_merkle_roots(state, commit_report.blessed_merkle_roots, true);
+        commit_merkle_roots(state, commit_report.unblessed_merkle_roots, false);
 
         event::emit(CommitReportAccepted { commit_report });
         event::emit_event(
@@ -707,20 +636,95 @@ module ccip::offramp {
         )
     }
 
-    public entry fun execute(
-        caller: &signer, report_context: vector<vector<u8>>, report: vector<u8>
-    ) acquires OffRampState {
-        let state = borrow_state_mut();
-        let reports = deserialize_execution_reports(report);
-        batch_execute(state, reports, true);
-        ocr3_base::transmit(
-            &mut state.ocr3_base_state,
-            signer::address_of(caller),
-            ocr3_base::ocr_plugin_type_execution(),
-            report_context,
-            report,
-            vector::empty()
-        )
+    inline fun verify_blessed_roots(
+        blessed_merkle_roots: &vector<MerkleRoot>, rmn_signatures: vector<vector<u8>>
+    ) {
+        let merkle_root_source_chains_selector = vector[];
+        let merkle_root_min_sequence_numbers = vector[];
+        let merkle_root_max_sequence_numbers = vector[];
+        let merkle_root_values = vector[];
+        vector::for_each_ref(
+            blessed_merkle_roots,
+            |merkle_root| {
+                let merkle_root: &MerkleRoot = merkle_root;
+                vector::push_back(
+                    &mut merkle_root_source_chains_selector,
+                    merkle_root.source_chain_selector
+                );
+                vector::push_back(
+                    &mut merkle_root_min_sequence_numbers,
+                    merkle_root.min_sequence_number
+                );
+                vector::push_back(
+                    &mut merkle_root_max_sequence_numbers,
+                    merkle_root.max_sequence_number
+                );
+                vector::push_back(&mut merkle_root_values, merkle_root.merkle_root);
+            }
+        );
+
+        rmn_remote::verify(
+            merkle_root_source_chains_selector,
+            merkle_root_min_sequence_numbers,
+            merkle_root_max_sequence_numbers,
+            merkle_root_values,
+            rmn_signatures
+        );
+    }
+
+    inline fun commit_merkle_roots(
+        state: &mut OffRampState, merkle_roots: vector<MerkleRoot>, is_blessed: bool
+    ) {
+        vector::for_each_ref(
+            &merkle_roots,
+            |root| {
+                let root: &MerkleRoot = root;
+                let source_chain_selector = root.source_chain_selector;
+
+                assert!(
+                    !rmn_remote::is_cursed_u128(source_chain_selector as u128),
+                    error::permission_denied(E_CURSED_BY_RMN)
+                );
+
+                assert_source_chain_enabled(state, source_chain_selector);
+
+                let source_chain_config =
+                    smart_table::borrow_mut(
+                        &mut state.source_chain_configs, source_chain_selector
+                    );
+
+                // If the root is blessed but RMN blessing is disabled for the source chain, or if the root is not
+                // blessed but RMN blessing is enabled, we revert.
+                assert!(
+                    is_blessed != source_chain_config.is_rmn_verification_disabled, 0
+                );
+
+                assert!(
+                    source_chain_config.onramp == root.onramp_address,
+                    error::invalid_argument(E_COMMIT_ONRAMP_MISMATCH)
+                );
+                assert!(
+                    source_chain_config.min_sequence_number == root.min_sequence_number
+                        && root.min_sequence_number <= root.max_sequence_number,
+                    error::invalid_argument(E_INVALID_INTERVAL)
+                );
+
+                let merkle_root = root.merkle_root;
+                assert!(
+                    vector::length(&merkle_root) == 32
+                        && merkle_root != ZERO_MERKLE_ROOT,
+                    error::invalid_argument(E_INVALID_ROOT)
+                );
+
+                assert!(
+                    !smart_table::contains(&state.roots, merkle_root),
+                    error::invalid_argument(E_ROOT_ALREADY_COMMITTED)
+                );
+
+                source_chain_config.min_sequence_number = root.max_sequence_number + 1;
+                smart_table::add(&mut state.roots, merkle_root, timestamp::now_seconds());
+            }
+        );
     }
 
     #[view]
@@ -729,24 +733,14 @@ module ccip::offramp {
     }
 
     #[view]
-    public fun get_merkle_root(
-        source_chain_selector: u64, root: vector<u8>
-    ): u64 acquires OffRampState {
+    public fun get_merkle_root(root: vector<u8>): u64 acquires OffRampState {
         let state = borrow_state();
         assert!(
-            smart_table::contains(&state.roots, source_chain_selector),
-            error::invalid_argument(E_UNKNOWN_SOURCE_CHAIN_SELECTOR)
-        );
-
-        let source_chain_roots = smart_table::borrow(
-            &state.roots, source_chain_selector
-        );
-        assert!(
-            smart_table::contains(source_chain_roots, root),
+            smart_table::contains(&state.roots, root),
             error::invalid_argument(E_INVALID_ROOT)
         );
 
-        *smart_table::borrow(source_chain_roots, root)
+        *smart_table::borrow(&state.roots, root)
     }
 
     #[view]
@@ -779,22 +773,22 @@ module ccip::offramp {
         *smart_table::borrow_with_default(source_chain_nonces, sender, &0)
     }
 
-    public entry fun apply_source_chain_config_updates(
-        caller: &signer,
-        source_chains_selector: vector<u64>,
-        source_chains_is_enabled: vector<bool>,
-        source_chains_is_rmn_verification_disabled: vector<bool>,
-        source_chains_onramp: vector<vector<u8>>
-    ) acquires OffRampState {
-        auth::assert_only_owner(signer::address_of(caller));
+    // ================================================================
+    // |                           Config                             |
+    // ================================================================
 
-        apply_source_chain_config_updates_internal(
-            borrow_state_mut(),
-            source_chains_selector,
-            source_chains_is_enabled,
-            source_chains_is_rmn_verification_disabled,
-            source_chains_onramp
-        )
+    #[view]
+    public fun get_static_config(): StaticConfig acquires OffRampState {
+        let state = borrow_state();
+        StaticConfig { chain_selector: state.chain_selector }
+    }
+
+    #[view]
+    public fun get_dynamic_config(): DynamicConfig acquires OffRampState {
+        let state = borrow_state();
+        DynamicConfig {
+            permissionless_execution_threshold_secs: state.permissionless_execution_threshold_secs
+        }
     }
 
     public entry fun set_dynamic_config(
@@ -811,19 +805,22 @@ module ccip::offramp {
         )
     }
 
-    #[view]
-    public fun get_static_config(): StaticConfig acquires OffRampState {
-        let state = borrow_state();
-        StaticConfig { chain_selector: state.chain_selector }
-    }
+    public entry fun apply_source_chain_config_updates(
+        caller: &signer,
+        source_chains_selector: vector<u64>,
+        source_chains_is_enabled: vector<bool>,
+        source_chains_is_rmn_verification_disabled: vector<bool>,
+        source_chains_onramp: vector<vector<u8>>
+    ) acquires OffRampState {
+        auth::assert_only_owner(signer::address_of(caller));
 
-    #[view]
-    public fun get_dynamic_config(): DynamicConfig acquires OffRampState {
-        let state = borrow_state();
-        DynamicConfig {
-            permissionless_execution_threshold_secs: state.permissionless_execution_threshold_secs,
-            is_rmn_verification_disabled: state.is_rmn_verification_disabled
-        }
+        apply_source_chain_config_updates_internal(
+            borrow_state_mut(),
+            source_chains_selector,
+            source_chains_is_enabled,
+            source_chains_is_rmn_verification_disabled,
+            source_chains_onramp
+        )
     }
 
     inline fun borrow_state(): &OffRampState {
@@ -865,6 +862,10 @@ module ccip::offramp {
 
         receiver_dispatcher::dispatch_receive(message.receiver, any2aptos_message)
     }
+
+    // ================================================================
+    // |                       Token Handling                         |
+    // ================================================================
 
     inline fun release_or_mint_tokens(
         token_amounts: &vector<Any2AptosTokenTransfer>,
@@ -944,7 +945,6 @@ module ccip::offramp {
         is_rmn_verification_disabled: bool
     ) {
         state.permissionless_execution_threshold_secs = permissionless_execution_threshold_secs;
-        state.is_rmn_verification_disabled = is_rmn_verification_disabled;
         event::emit(
             DynamicConfigSet {
                 permissionless_execution_threshold_secs,
@@ -1013,9 +1013,6 @@ module ccip::offramp {
                     smart_table::new()
                 );
                 smart_table::add(
-                    &mut state.roots, source_chain_selector, smart_table::new()
-                );
-                smart_table::add(
                     &mut state.inbound_nonces,
                     source_chain_selector,
                     smart_table::new()
@@ -1049,6 +1046,10 @@ module ccip::offramp {
             );
         }
     }
+
+    // ================================================================
+    // |                        Metadata hash                         |
+    // ================================================================
 
     inline fun calculate_metadata_hash(
         source_chain_selector: u64, dest_chain_selector: u64, onramp: vector<u8>
@@ -1107,15 +1108,20 @@ module ccip::offramp {
         aptos_hash::keccak256(outer_hash)
     }
 
+    // ================================================================
+    // |                       Deserialization                        |
+    // ================================================================
+
     inline fun deserialize_commit_report(report_bytes: vector<u8>): CommitReport {
         let stream = eth_abi::new_stream(report_bytes);
         let token_price_updates =
             eth_abi::decode_vector(
                 &mut stream,
                 |stream| {
-                    let source_token = eth_abi::decode_address(stream);
-                    let usd_per_token = eth_abi::decode_u256(stream);
-                    TokenPriceUpdate { source_token, usd_per_token }
+                    TokenPriceUpdate {
+                        source_token: eth_abi::decode_address(stream),
+                        usd_per_token: eth_abi::decode_u256(stream)
+                    }
                 }
             );
 
@@ -1123,33 +1129,15 @@ module ccip::offramp {
             eth_abi::decode_vector(
                 &mut stream,
                 |stream| {
-                    let dest_chain_selector = eth_abi::decode_u64(stream);
-                    let usd_per_unit_gas = eth_abi::decode_u256(stream);
-                    GasPriceUpdate { dest_chain_selector, usd_per_unit_gas }
-                }
-            );
-
-        let price_updates = PriceUpdates { token_price_updates, gas_price_updates };
-
-        let merkle_roots =
-            eth_abi::decode_vector(
-                &mut stream,
-                |stream| {
-                    let source_chain_selector = eth_abi::decode_u64(stream);
-                    let onramp_address = eth_abi::decode_bytes(stream);
-                    let min_sequence_number = eth_abi::decode_u64(stream);
-                    let max_sequence_number = eth_abi::decode_u64(stream);
-                    let merkle_root = eth_abi::decode_bytes32(stream);
-
-                    MerkleRoot {
-                        source_chain_selector,
-                        onramp_address,
-                        min_sequence_number,
-                        max_sequence_number,
-                        merkle_root
+                    GasPriceUpdate {
+                        dest_chain_selector: eth_abi::decode_u64(stream),
+                        usd_per_unit_gas: eth_abi::decode_u256(stream)
                     }
                 }
             );
+
+        let blessed_merkle_roots = parse_merkle_root(&mut stream);
+        let unblessed_merkle_roots = parse_merkle_root(&mut stream);
 
         let rmn_signatures =
             eth_abi::decode_vector(
@@ -1162,9 +1150,27 @@ module ccip::offramp {
                 }
             );
 
-        let offramp_address = eth_abi::decode_address(&mut stream);
+        CommitReport {
+            price_updates: PriceUpdates { token_price_updates, gas_price_updates },
+            blessed_merkle_roots,
+            unblessed_merkle_roots,
+            rmn_signatures
+        }
+    }
 
-        CommitReport { price_updates, merkle_roots, rmn_signatures, offramp_address }
+    inline fun parse_merkle_root(stream: &mut ABIStream): vector<MerkleRoot> {
+        eth_abi::decode_vector(
+            stream,
+            |stream| {
+                MerkleRoot {
+                    source_chain_selector: eth_abi::decode_u64(stream),
+                    onramp_address: eth_abi::decode_bytes(stream),
+                    min_sequence_number: eth_abi::decode_u64(stream),
+                    max_sequence_number: eth_abi::decode_u64(stream),
+                    merkle_root: eth_abi::decode_bytes32(stream)
+                }
+            }
+        )
     }
 
     inline fun deserialize_execution_reports(reports_bytes: vector<u8>):
@@ -1270,6 +1276,10 @@ module ccip::offramp {
         }
     }
 
+    // ================================================================
+    // |                            Nonces                            |
+    // ================================================================
+
     inline fun increment_inbound_nonce(
         state: &mut OffRampState,
         source_chain_selector: u64,
@@ -1308,9 +1318,9 @@ module ccip::offramp {
         }
     }
 
-    //
-    // ccip::ocr3_base functions
-    //
+    // ================================================================
+    // |                             OCR                              |
+    // ================================================================
 
     public entry fun set_ocr3_config(
         caller: &signer,

@@ -187,9 +187,9 @@ module ccip::rmn_remote {
             error::invalid_argument(E_MERKLE_ROOT_LENGTH_MISMATCH)
         );
 
+        // Since we cannot pass structs, we need to reconstruct it from the individual components.
         let merkle_roots = vector[];
-        let i = 0;
-        while (i < merkle_root_len) {
+        for (i in 0..merkle_root_len) {
             let source_chain_selector =
                 *vector::borrow(&merkle_root_source_chain_selectors, i);
             let min_sequence_number =
@@ -206,7 +206,6 @@ module ccip::rmn_remote {
                     merkle_root
                 }
             );
-            i = i + 1;
         };
 
         let report = Report {
@@ -220,9 +219,8 @@ module ccip::rmn_remote {
 
         let digest = calculate_digest(&report);
 
-        let i = 0;
         let previous_eth_address = vector[];
-        while (i < signatures_len) {
+        for (i in 0..signatures_len) {
             let signature_bytes = *vector::borrow(&signatures, i);
             let signature = secp256k1::ecdsa_signature_from_bytes(signature_bytes);
 
@@ -256,8 +254,6 @@ module ccip::rmn_remote {
                 );
             };
             previous_eth_address = eth_address;
-
-            i = i + 1;
         };
 
         true
