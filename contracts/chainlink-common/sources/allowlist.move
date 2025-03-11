@@ -46,12 +46,12 @@ module chainlink_common::allowlist {
         state.allowlist
     }
 
-    public fun is_allowed(state: &AllowlistState, sender: &address): bool {
+    public fun is_allowed(state: &AllowlistState, sender: address): bool {
         if (!state.allowlist_enabled) {
             return true
         };
 
-        vector::contains(&state.allowlist, sender)
+        vector::contains(&state.allowlist, &sender)
     }
 
     public fun apply_allowlist_updates(

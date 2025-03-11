@@ -193,6 +193,12 @@ module ccip::onramp {
     }
 
     #[view]
+    public fun is_chain_supported(dest_chain_selector: u64): bool acquires OnRampState {
+        let state = borrow_state();
+        smart_table::contains(&state.dest_chain_configs, dest_chain_selector)
+    }
+
+    #[view]
     public fun get_expected_next_sequence_number(dest_chain_selector: u64): u64 acquires OnRampState {
         let state = borrow_state();
         assert!(
@@ -264,33 +270,8 @@ module ccip::onramp {
         object::address_to_object<FungibleStore>(resolved_address)
     }
 
-    public entry fun ccip_send(
-        caller: &signer,
-        dest_chain_selector: u64,
-        receiver: vector<u8>,
-        data: vector<u8>,
-        token_addresses: vector<address>,
-        token_amounts: vector<u64>,
-        token_store_addresses: vector<address>,
-        fee_token: address,
-        fee_token_store: address,
-        extra_args: vector<u8>
-    ) acquires OnRampState {
-        ccip_send_with_message_id(
-            caller,
-            dest_chain_selector,
-            receiver,
-            data,
-            token_addresses,
-            token_amounts,
-            token_store_addresses,
-            fee_token,
-            fee_token_store,
-            extra_args
-        );
-    }
-
-    public fun ccip_send_with_message_id(
+    public fun ccip_send(
+        router: &signer,
         caller: &signer,
         dest_chain_selector: u64,
         receiver: vector<u8>,
@@ -302,6 +283,8 @@ module ccip::onramp {
         fee_token_store: address,
         extra_args: vector<u8>
     ): vector<u8> acquires OnRampState {
+        auth::assert_is_router(signer::address_of(router));
+
         assert!(
             !rmn_remote::is_cursed_global(),
             error::permission_denied(E_BAD_RMN_SIGNAL)

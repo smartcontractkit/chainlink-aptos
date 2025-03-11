@@ -1,4 +1,5 @@
 module ccip::auth {
+    use std::account::{Self, SignerCapability};
     use std::error;
     use std::object;
     use std::option;
@@ -12,25 +13,57 @@ module ccip::auth {
     use mcms::mcms_registry;
 
     struct AuthState has key {
-        ownable_state: ownable::OwnableState
-        // TODO: add allowlists here
+        ownable_state: ownable::OwnableState,
+        router_address: address
+    }
+
+    struct PendingRouterSignerCapability has key {
+        signer_capability: SignerCapability
     }
 
     const E_UNKNOWN_FUNCTION: u64 = 1;
+    const E_NOT_CCIP: u64 = 2;
+    const E_SIGNER_CAP_NOT_FOUND: u64 = 3;
+    const E_NOT_CCIP_ROUTER: u64 = 4;
 
     fun init_module(publisher: &signer) {
         let state_object_signer = &state_object::object_signer();
-
         move_to(
             state_object_signer,
-            AuthState { ownable_state: ownable::new(state_object_signer, @ccip) }
+            AuthState {
+                ownable_state: ownable::new(state_object_signer, @ccip),
+                router_address: signer::address_of(&router_signer)
+            }
         );
+
+        let (router_signer, signer_capability) =
+            account::create_resource_account(
+                state_object_signer, b"CHAINLINK_CCIP_ROUTER"
+            );
+
+        move_to(publisher, PendingRouterSignerCapability { signer_capability });
 
         if (@mcms_register_entrypoints != @0x0) {
             mcms_registry::register_entrypoint(
                 publisher, string::utf8(b"auth"), McmsCallback {}
             );
         };
+    }
+
+    public fun retrieve_router_signer_cap(
+        caller: &signer
+    ): SignerCapability acquires PendingRouterSignerCapability {
+        assert!(
+            signer::address_of(caller) == @ccip, error::permission_denied(E_NOT_CCIP)
+        );
+        assert!(
+            exists<PendingRouterSignerCapability>(@ccip),
+            error::not_found(E_SIGNER_CAP_NOT_FOUND)
+        );
+
+        let PendingRouterSignerCapability { signer_capability } =
+            move_from<PendingRouterSignerCapability>(@ccip);
+        signer_capability
     }
 
     inline fun borrow_state(): &AuthState {
@@ -72,6 +105,12 @@ module ccip::auth {
         let state = borrow_state_mut();
         ownable::execute_ownership_transfer(caller, &mut state.ownable_state, to)
     }
+
+    public entry fun assert_is_router(caller: address) acquires AuthState {
+        assert!(
+            caller == borrow_state().router_address,
+            error::permission_denied(E_NOT_CCIP_ROUTER)
+        );
 
     //
     // MCMS entrypoint

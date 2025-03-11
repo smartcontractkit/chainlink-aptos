@@ -1,0 +1,16 @@
+[package]
+name = "ChainlinkCCIPRouter"
+version = "1.0.0"
+authors = []
+
+[addresses]
+ccip = "_"
+
+[dev-addresses]
+ccip = "0x100"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
+ChainlinkCCIP = { local = "../ccip" }
+
+[dev-dependencies]
