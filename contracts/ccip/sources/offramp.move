@@ -15,7 +15,7 @@ module ccip::offramp {
 
     use ccip::auth;
     use ccip::client;
-    use ccip::eth_abi::{Self, AbiStream};
+    use ccip::eth_abi::{Self, ABIStream};
     use ccip::fee_quoter;
     use ccip::merkle_multi_proof;
     use ccip::ocr3_base;

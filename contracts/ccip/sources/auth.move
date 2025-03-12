@@ -28,6 +28,12 @@ module ccip::auth {
 
     fun init_module(publisher: &signer) {
         let state_object_signer = &state_object::object_signer();
+
+        let (router_signer, signer_capability) =
+            account::create_resource_account(
+                state_object_signer, b"CHAINLINK_CCIP_ROUTER"
+            );
+
         move_to(
             state_object_signer,
             AuthState {
@@ -35,11 +41,6 @@ module ccip::auth {
                 router_address: signer::address_of(&router_signer)
             }
         );
-
-        let (router_signer, signer_capability) =
-            account::create_resource_account(
-                state_object_signer, b"CHAINLINK_CCIP_ROUTER"
-            );
 
         move_to(publisher, PendingRouterSignerCapability { signer_capability });
 
@@ -111,6 +112,7 @@ module ccip::auth {
             caller == borrow_state().router_address,
             error::permission_denied(E_NOT_CCIP_ROUTER)
         );
+    }
 
     //
     // MCMS entrypoint

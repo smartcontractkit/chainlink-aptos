@@ -902,41 +902,6 @@ module ccip::onramp {
                 dest_chain_enabled,
                 dest_chain_allowlist_enabled
             );
-        } else if (function_bytes == b"ccip_send") {
-            let dest_chain_selector = bcs_stream::deserialize_u64(&mut stream);
-            let receiver = bcs_stream::deserialize_vector_u8(&mut stream);
-            let data = bcs_stream::deserialize_vector_u8(&mut stream);
-            let token_addresses =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_address(stream)
-                );
-            let token_amounts =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_u64(stream)
-                );
-            let token_store_addresses =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_address(stream)
-                );
-            let fee_token = bcs_stream::deserialize_address(&mut stream);
-            let fee_token_store = bcs_stream::deserialize_address(&mut stream);
-            let extra_args = bcs_stream::deserialize_vector_u8(&mut stream);
-            bcs_stream::assert_is_consumed(&stream);
-            ccip_send(
-                &caller,
-                dest_chain_selector,
-                receiver,
-                data,
-                token_addresses,
-                token_amounts,
-                token_store_addresses,
-                fee_token,
-                fee_token_store,
-                extra_args
-            );
         } else if (function_bytes == b"set_dynamic_config") {
             let allowlist_admin = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
