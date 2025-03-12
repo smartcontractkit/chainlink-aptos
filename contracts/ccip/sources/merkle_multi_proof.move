@@ -38,9 +38,8 @@ module ccip::merkle_multi_proof {
         let leaf_pos = 0u64;
         let hash_pos = 0u64;
         let proof_pos = 0u64;
-        let i = 0u64;
 
-        while (i < total_hashes) {
+        for (i in 0..total_hashes) {
             let a;
             // total_hashes <= MAX_NUM_HASHES so i < MAX_NUM_HASHES and fit inside a u8.
             let current_bit = 1 << (i as u8);
@@ -79,7 +78,6 @@ module ccip::merkle_multi_proof {
 
             let hash = hash_pair(a, b);
             vector::push_back(&mut hashes, hash);
-            i = i + 1;
         };
 
         assert!(
@@ -98,9 +96,8 @@ module ccip::merkle_multi_proof {
             len == vector::length(b), error::invalid_argument(E_VECTOR_LENGTH_MISMATCH)
         );
 
-        let i = 0;
         // compare each byte until not equal
-        while (i < len) {
+        for (i in 0..len) {
             let byte_a = *vector::borrow(a, i);
             let byte_b = *vector::borrow(b, i);
             if (byte_a > byte_b) {
@@ -108,7 +105,6 @@ module ccip::merkle_multi_proof {
             } else if (byte_a < byte_b) {
                 return false
             };
-            i = i + 1;
         };
 
         // vectors are equal, a == b

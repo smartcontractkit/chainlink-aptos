@@ -267,9 +267,8 @@ module mcms::mcms {
         let prev_address = vector[];
         let group_vote_counts: vector<u8> = vector[];
         right_pad_vec(&mut group_vote_counts, NUM_GROUPS);
-        let i = 0;
         let signatures_len = vector::length(&signatures);
-        while (i < signatures_len) {
+        for (i in 0..signatures_len) {
             let signature = *vector::borrow(&signatures, i);
             let signer_addr = ecdsa_recover_evm_addr(signed_hash, signature);
             // the off-chain system is required to sort the signatures by the
@@ -311,7 +310,6 @@ module mcms::mcms {
                 // group quorum reached, restart loop and check parent group
                 group = *vector::borrow(&state.config.group_parents, (group as u64));
             };
-            i = i + 1;
         };
 
         // the group at the root of the tree (with index 0) determines whether the vote passed,
@@ -620,8 +618,7 @@ module mcms::mcms {
 
         // second, we iterate backwards so as to check each group and propagate counts from
         // child group to parent groups up the tree to the root
-        let j = 0;
-        while (j < NUM_GROUPS) {
+        for (j in 0..NUM_GROUPS) {
             let i = NUM_GROUPS - j - 1;
             // ensure we have a well-formed group tree:
             // - the root should have itself as parent
@@ -659,8 +656,6 @@ module mcms::mcms {
                 );
                 *count = *count + 1;
             };
-
-            j = j + 1;
         };
 
         // remove old signer addresses
@@ -674,8 +669,7 @@ module mcms::mcms {
         // check signer addresses are in increasing order and save signers to state
         // evm zero address (20 bytes of 0) is the smallest address possible
         let prev_signer_addr = vector[];
-        let i = 0;
-        while (i < vector::length(&signer_addresses)) {
+        for (i in 0..vector::length(&signer_addresses)) {
             let signer_addr = vector::borrow(&signer_addresses, i);
             assert!(
                 vector::length(signer_addr) == 20,
@@ -696,7 +690,6 @@ module mcms::mcms {
             simple_map::add(&mut state.signers, *signer_addr, signer);
             vector::push_back(&mut state.config.signers, signer);
             prev_signer_addr = *signer_addr;
-            i = i + 1;
         };
 
         if (clear_root) {
@@ -881,10 +874,8 @@ module mcms::mcms {
         let len = vector::length(&bcs_bytes);
         if (len < num_bytes) {
             let bytes_to_pad = num_bytes - len;
-            let i = 0;
-            while (i < bytes_to_pad) {
+            for (i in 0..bytes_to_pad) {
                 vector::push_back(&mut bcs_bytes, 0);
-                i = i + 1;
             };
         };
 
@@ -898,10 +889,8 @@ module mcms::mcms {
         let len = vector::length(v);
         if (len < num_bytes) {
             let bytes_to_pad = num_bytes - len;
-            let i = 0;
-            while (i < bytes_to_pad) {
+            for (i in 0..bytes_to_pad) {
                 vector::push_back(v, 0);
-                i = i + 1;
             };
         };
     }
@@ -910,11 +899,9 @@ module mcms::mcms {
         let len = vector::length(v);
         if (len < num_bytes) {
             let bytes_to_pad = num_bytes - len;
-            let i = 0;
             vector::reverse(v);
-            while (i < bytes_to_pad) {
+            for (i in 0..bytes_to_pad) {
                 vector::push_back(v, 0);
-                i = i + 1;
             };
             vector::reverse(v);
         };
@@ -931,9 +918,8 @@ module mcms::mcms {
             return false
         };
 
-        let i = 0;
         // compare each byte until not equal
-        while (i < len) {
+        for (i in 0..len) {
             let byte_a = *vector::borrow(a, i);
             let byte_b = *vector::borrow(b, i);
             if (byte_a > byte_b) {
@@ -941,7 +927,6 @@ module mcms::mcms {
             } else if (byte_a < byte_b) {
                 return false
             };
-            i = i + 1;
         };
 
         // vectors are equal, a == b

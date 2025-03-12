@@ -41,9 +41,8 @@ module ccip::internal {
             tokens_len == vector::length(&token_store_addresses),
             error::invalid_argument(E_TOKEN_ARGUMENTS_MISMATCH)
         );
-        let i = 0;
         let converted_token_amounts = vector[];
-        while (i < tokens_len) {
+        for (i in 0..tokens_len) {
             let token = *vector::borrow(&token_addresses, i);
             let amount = *vector::borrow(&token_amounts, i);
             let token_store = *vector::borrow(&token_store_addresses, i);
@@ -51,7 +50,6 @@ module ccip::internal {
                 &mut converted_token_amounts,
                 Aptos2AnyTokenAmount { token, amount, token_store }
             );
-            i = i + 1;
         };
         Aptos2AnyMessage {
             receiver,

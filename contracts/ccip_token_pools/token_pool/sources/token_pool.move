@@ -200,8 +200,7 @@ module ccip_token_pool::token_pool {
             error::invalid_argument(E_REMOTE_CHAIN_TO_ADD_MISMATCH)
         );
 
-        let i = 0;
-        while (i < add_len) {
+        for (i in 0..add_len) {
             let remote_chain_selector = *vector::borrow(
                 &remote_chain_selectors_to_add, i
             );
@@ -261,8 +260,6 @@ module ccip_token_pool::token_pool {
                 &mut state.chain_added_events,
                 ChainAdded { remote_chain_selector, remote_token_address }
             );
-
-            i = i + 1;
         };
     }
 
@@ -522,20 +519,16 @@ module ccip_token_pool::token_pool {
             return remote_amount
         } else if (remote_decimals > local_decimals) {
             let decimals_diff = remote_decimals - local_decimals;
-            let i = 0;
             let current_amount = remote_amount;
-            while (i < decimals_diff) {
+            for (i in 0..decimals_diff) {
                 current_amount = current_amount / 10;
-                i = i + 1;
             };
             return current_amount
         } else {
             let decimals_diff = local_decimals - remote_decimals;
-            let i = 0;
             let current_amount = remote_amount;
-            while (i < decimals_diff) {
+            for (i in 0..decimals_diff) {
                 current_amount = current_amount * 10;
-                i = i + 1;
             };
             return current_amount
         }

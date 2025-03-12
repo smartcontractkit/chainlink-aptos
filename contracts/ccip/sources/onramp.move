@@ -355,10 +355,9 @@ module ccip::onramp {
         let dest_token_addresses = vector[];
         let dest_pool_datas = vector[];
 
-        let i = 0;
         let tokens_len = vector::length(&token_addresses);
         let token_transfers = vector[];
-        while (i < tokens_len) {
+        for (i in 0..tokens_len) {
             let token = *vector::borrow(&token_addresses, i);
             let amount = *vector::borrow(&token_amounts, i);
             let token_store = *vector::borrow(&token_store_addresses, i);
@@ -408,7 +407,6 @@ module ccip::onramp {
                     dest_exec_data: vector[]
                 }
             );
-            i = i + 1;
         };
 
         dest_chain_config.sequence_number = dest_chain_config.sequence_number + 1;
@@ -566,8 +564,7 @@ module ccip::onramp {
             error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
         );
 
-        let i = 0;
-        while (i < dest_chains_len) {
+        for (i in 0..dest_chains_len) {
             let dest_chain_selector = *vector::borrow(&dest_chain_selectors, i);
             assert!(
                 smart_table::contains(&state.dest_chain_configs, dest_chain_selector),
@@ -656,8 +653,6 @@ module ccip::onramp {
                     }
                 );
             };
-
-            i = i + 1;
         };
     }
 
@@ -778,8 +773,7 @@ module ccip::onramp {
             error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
         );
 
-        let i = 0;
-        while (i < dest_chains_len) {
+        for (i in 0..dest_chains_len) {
             let dest_chain_selector = *vector::borrow(&dest_chain_selectors, i);
             assert!(
                 dest_chain_selector != 0,
@@ -830,8 +824,6 @@ module ccip::onramp {
                     allowlist_enabled: dest_chain_config.allowlist_enabled
                 }
             );
-
-            i = i + 1;
         };
     }
 

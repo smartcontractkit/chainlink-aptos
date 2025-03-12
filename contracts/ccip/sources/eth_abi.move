@@ -54,10 +54,8 @@ module ccip::eth_abi {
     ) {
         assert!(vector::length(&value) <= 32, 600001);
         let padding_len = 32 - vector::length(&value);
-        let i = 0;
-        while (i < padding_len) {
+        for (i in 0..padding_len) {
             vector::push_back(out, 0);
-            i = i + 1;
         };
         vector::append(out, value)
     }
@@ -67,10 +65,8 @@ module ccip::eth_abi {
 
         vector::append(out, value);
         let padding_len = 32 - (vector::length(&value) % 32);
-        let i = 0;
-        while (i < padding_len) {
+        for (i in 0..padding_len) {
             vector::push_back(out, 0);
-            i = i + 1;
         }
     }
 
@@ -142,13 +138,11 @@ module ccip::eth_abi {
         );
 
         // Verify first 12 bytes are zero
-        let i = 0;
-        while (i < 12) {
+        for (i in 0..12) {
             assert!(
                 *vector::borrow(data, cur + i) == 0,
                 error::invalid_argument(E_INVALID_ADDRESS)
             );
-            i = i + 1;
         };
 
         // Extract last 20 bytes for address
@@ -250,10 +244,8 @@ module ccip::eth_abi {
         let len = decode_u256(stream);
         let v = vector::empty();
 
-        let i = 0;
-        while (i < len) {
+        for (i in 0..len) {
             vector::push_back(&mut v, elem_decoder(stream));
-            i = i + 1;
         };
 
         v

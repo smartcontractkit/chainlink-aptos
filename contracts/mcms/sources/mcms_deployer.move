@@ -118,8 +118,7 @@ module mcms::mcms_deployer {
             vector::append(&mut staging_area.metadata_serialized, metadata_chunk);
         };
 
-        let i = 0;
-        while (i < vector::length(&code_chunks)) {
+        for (i in 0..vector::length(&code_chunks)) {
             let inner_code = *vector::borrow(&code_chunks, i);
             let idx = (*vector::borrow(&code_indices, i) as u64);
 
@@ -133,7 +132,6 @@ module mcms::mcms_deployer {
                     staging_area.last_module_idx = idx;
                 }
             };
-            i = i + 1;
         };
 
         staging_area
@@ -142,13 +140,11 @@ module mcms::mcms_deployer {
     inline fun assemble_module_code(staging_area: &mut StagingArea): vector<vector<u8>> {
         let last_module_idx = staging_area.last_module_idx;
         let code = vector[];
-        let i = 0;
-        while (i <= last_module_idx) {
+        for (i in 0..(last_module_idx + 1)) {
             vector::push_back(
                 &mut code,
                 *smart_table::borrow(&staging_area.code, i)
             );
-            i = i + 1;
         };
         code
     }

@@ -282,10 +282,8 @@ module mcms::bcs_stream {
         let len = deserialize_uleb128(stream);
         let v = vector::empty();
 
-        let i = 0;
-        while (i < len) {
+        for (i in 0..len) {
             vector::push_back(&mut v, elem_deserializer(stream));
-            i = i + 1;
         };
 
         v

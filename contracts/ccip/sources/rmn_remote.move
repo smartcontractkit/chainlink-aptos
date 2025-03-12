@@ -286,15 +286,13 @@ module ccip::rmn_remote {
             error::invalid_argument(E_SIGNERS_MISMATCH)
         );
 
-        let i = 1;
-        while (i < signers_len) {
+        for (i in 1..signers_len) {
             let previous_node_index = *vector::borrow(&node_indexes, i - 1);
             let current_node_index = *vector::borrow(&node_indexes, i);
             assert!(
                 previous_node_index < current_node_index,
                 error::invalid_argument(E_INVALID_SIGNER_ORDER)
             );
-            i = i + 1;
         };
 
         assert!(

@@ -327,10 +327,8 @@ module ccip::ocr3_base {
     ): u64 {
         let len = vector::length(&sequence_bytes);
         let result: u64 = 0;
-        let i = len - 8;
-        while (i < len) {
+        for (i in (len - 8)..len) {
             result = (result << 8) + (*vector::borrow(&sequence_bytes, i) as u64);
-            i = i + 1;
         };
         result
     }

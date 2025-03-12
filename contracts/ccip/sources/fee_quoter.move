@@ -460,8 +460,7 @@ module ccip::fee_quoter {
             error::invalid_argument(E_TOKEN_TRANSFER_FEE_CONFIG_MISMATCH)
         );
 
-        let i = 0;
-        while (i < add_tokens_len) {
+        for (i in 0..add_tokens_len) {
             let token = *vector::borrow(&add_tokens, i);
             let min_fee_usd_cents = *vector::borrow(&add_min_fee_usd_cents, i);
             let max_fee_usd_cents = *vector::borrow(&add_max_fee_usd_cents, i);
@@ -498,8 +497,6 @@ module ccip::fee_quoter {
                     token_transfer_fee_config
                 }
             );
-
-            i = i + 1;
         };
 
         vector::for_each_ref(
@@ -1114,9 +1111,8 @@ module ccip::fee_quoter {
 
         let tokens_len = vector::length(&dest_token_addresses);
 
-        let i = 0;
         let dest_exec_data_per_token = vector[];
-        while (i < tokens_len) {
+        for (i in 0..tokens_len) {
             let dest_token_address = *vector::borrow(&dest_token_addresses, i);
             let dest_pool_data = vector::borrow(&dest_pool_datas, i);
             let dest_pool_data_len = vector::length(dest_pool_data);
@@ -1144,8 +1140,6 @@ module ccip::fee_quoter {
             let dest_exec_data = vector[];
             eth_abi::encode_u32(&mut dest_exec_data, dest_gas_amount);
             vector::push_back(&mut dest_exec_data_per_token, dest_exec_data);
-
-            i = i + 1;
         };
 
         dest_exec_data_per_token
