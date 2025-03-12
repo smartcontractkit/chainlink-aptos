@@ -51,8 +51,6 @@ module ccip::offramp {
         source_chain_configs: SmartTable<u64, SourceChainConfig>,
         // source chain selector -> seq num -> execution state
         execution_states: SmartTable<u64, SmartTable<u64, u8>>,
-        // source chain selector -> sender -> nonce
-        inbound_nonces: SmartTable<u64, SmartTable<vector<u8>, u64>>,
 
         // merkle root -> timestamp,
         roots: SmartTable<vector<u8>, u64>,
@@ -65,7 +63,6 @@ module ccip::offramp {
         skipped_already_executed_events: EventHandle<SkippedAlreadyExecuted>,
         execution_state_changed_events: EventHandle<ExecutionStateChanged>,
         commit_report_accepted_events: EventHandle<CommitReportAccepted>,
-        skipped_incorrect_nonce_events: EventHandle<SkippedIncorrectNonce>,
         skipped_report_execution_events: EventHandle<SkippedReportExecution>
     }
 
@@ -197,13 +194,6 @@ module ccip::offramp {
     }
 
     #[event]
-    struct SkippedIncorrectNonce has store, drop {
-        source_chain_selector: u64,
-        nonce: u64,
-        sender: vector<u8>
-    }
-
-    #[event]
     struct SkippedReportExecution has store, drop {
         source_chain_selector: u64
     }
@@ -236,6 +226,7 @@ module ccip::offramp {
     const E_SIGNATURE_VERIFICATION_REQUIRED_IN_COMMIT_PLUGIN: u64 = 26;
     const E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN: u64 = 27;
     const E_UNKNOWN_FUNCTION: u64 = 28;
+    const E_MUST_BE_OUT_OF_ORDER_EXEC: u64 = 29;
 
     fun init_module(publisher: &signer) {
         if (@mcms_register_entrypoints != @0x0) {
@@ -276,7 +267,6 @@ module ccip::offramp {
             source_chain_configs: smart_table::new(),
             execution_states: smart_table::new(),
             roots: smart_table::new(),
-            inbound_nonces: smart_table::new(),
             latest_price_sequence_number: 0,
             static_config_set_events: account::new_event_handle(&state_object_signer),
             dynamic_config_set_events: account::new_event_handle(&state_object_signer),
@@ -286,7 +276,6 @@ module ccip::offramp {
             ),
             execution_state_changed_events: account::new_event_handle(&state_object_signer),
             commit_report_accepted_events: account::new_event_handle(&state_object_signer),
-            skipped_incorrect_nonce_events: account::new_event_handle(&state_object_signer),
             skipped_report_execution_events: account::new_event_handle(
                 &state_object_signer
             )
@@ -480,17 +469,11 @@ module ccip::offramp {
                 );
             };
 
-            // A zero nonce indicates out of order execution and does not require a nonce bump.
-            if (message.header.nonce != 0) {
-                if (!increment_inbound_nonce(
-                    state,
-                    source_chain_selector,
-                    message.header.nonce,
-                    message.sender
-                )) {
-                    continue
-                };
-            };
+            // A zero nonce indicates out of order execution which is the only allowed case.
+            assert!(
+                message.header.nonce == 0,
+                error::invalid_argument(E_MUST_BE_OUT_OF_ORDER_EXEC)
+            );
 
             let message_offchain_token_data = vector::borrow(
                 &execution_report.offchain_token_data, i
@@ -759,20 +742,6 @@ module ccip::offramp {
         *source_chain_config
     }
 
-    #[view]
-    public fun get_inbound_nonce(
-        source_chain_selector: u64, sender: vector<u8>
-    ): u64 acquires OffRampState {
-        let state = borrow_state();
-        assert!(
-            smart_table::contains(&state.inbound_nonces, source_chain_selector),
-            error::invalid_argument(E_UNKNOWN_SOURCE_CHAIN_SELECTOR)
-        );
-        let source_chain_nonces =
-            smart_table::borrow(&state.inbound_nonces, source_chain_selector);
-        *smart_table::borrow_with_default(source_chain_nonces, sender, &0)
-    }
-
     // ================================================================
     // |                           Config                             |
     // ================================================================
@@ -1009,11 +978,6 @@ module ccip::offramp {
                 );
                 smart_table::add(
                     &mut state.execution_states,
-                    source_chain_selector,
-                    smart_table::new()
-                );
-                smart_table::add(
-                    &mut state.inbound_nonces,
                     source_chain_selector,
                     smart_table::new()
                 );
@@ -1273,48 +1237,6 @@ module ccip::offramp {
             offchain_token_data,
             proofs,
             proof_flag_bits
-        }
-    }
-
-    // ================================================================
-    // |                            Nonces                            |
-    // ================================================================
-
-    inline fun increment_inbound_nonce(
-        state: &mut OffRampState,
-        source_chain_selector: u64,
-        expected_nonce: u64,
-        sender: vector<u8>
-    ): bool {
-        assert!(
-            smart_table::contains(&state.inbound_nonces, source_chain_selector),
-            error::invalid_argument(E_UNKNOWN_SOURCE_CHAIN_SELECTOR)
-        );
-        let source_chain_nonces =
-            smart_table::borrow_mut(&mut state.inbound_nonces, source_chain_selector);
-        let nonce_ref =
-            smart_table::borrow_mut_with_default(source_chain_nonces, sender, 0);
-        let incremented_nonce = *nonce_ref + 1;
-        if (incremented_nonce != expected_nonce) {
-            event::emit(
-                SkippedIncorrectNonce {
-                    source_chain_selector,
-                    nonce: expected_nonce,
-                    sender
-                }
-            );
-            event::emit_event(
-                &mut state.skipped_incorrect_nonce_events,
-                SkippedIncorrectNonce {
-                    source_chain_selector,
-                    nonce: expected_nonce,
-                    sender
-                }
-            );
-            false
-        } else {
-            *nonce_ref = incremented_nonce;
-            true
         }
     }
 
