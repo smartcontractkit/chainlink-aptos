@@ -24,11 +24,14 @@ module test::echo {
     }
 
     fun init_module(account: &signer) {
-        move_to(account, EventStore {
-            single_value_events: account::new_event_handle<SingleValueEvent>(account),
-            double_value_events: account::new_event_handle<DoubleValueEvent>(account),
-            triple_value_events: account::new_event_handle<TripleValueEvent>(account)
-        });
+        move_to(
+            account,
+            EventStore {
+                single_value_events: account::new_event_handle<SingleValueEvent>(account),
+                double_value_events: account::new_event_handle<DoubleValueEvent>(account),
+                triple_value_events: account::new_event_handle<TripleValueEvent>(account)
+            }
+        );
     }
 
     public entry fun echo_with_events(
@@ -38,10 +41,14 @@ module test::echo {
         bytes: vector<u8>
     ) acquires EventStore {
         let store = borrow_global_mut<EventStore>(@test);
-        
-        event::emit_event(&mut store.single_value_events, SingleValueEvent { value: number });
-        event::emit_event(&mut store.double_value_events, DoubleValueEvent { number, text });
-        
+
+        event::emit_event(
+            &mut store.single_value_events, SingleValueEvent { value: number }
+        );
+        event::emit_event(
+            &mut store.double_value_events, DoubleValueEvent { number, text }
+        );
+
         let values = vector::empty<vector<u8>>();
         vector::push_back(&mut values, bytes);
         event::emit_event(&mut store.triple_value_events, TripleValueEvent { values });

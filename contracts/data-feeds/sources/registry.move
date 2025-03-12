@@ -650,32 +650,44 @@ module data_feeds::registry {
     }
 
     #[test_only]
-    fun set_feed_for_test(feed_id: vector<u8>, description: String, config_id: vector<u8>) acquires Registry {
-      let registry = borrow_global_mut<Registry>(get_state_addr());
-      set_feeds_internal(registry, vector[feed_id], vector[description], config_id);
+    fun set_feed_for_test(
+        feed_id: vector<u8>, description: String, config_id: vector<u8>
+    ) acquires Registry {
+        let registry = borrow_global_mut<Registry>(get_state_addr());
+        set_feeds_internal(
+            registry,
+            vector[feed_id],
+            vector[description],
+            config_id
+        );
     }
 
     #[test_only]
-    fun perform_update_for_test(feed_id: vector<u8>, observation_timestamp: u256, benchmark_price: u256, report_data: vector<u8>) acquires Registry {
-      let registry = borrow_global_mut<Registry>(get_state_addr());
-      assert!(
-          simple_map::contains_key(&registry.feeds, &feed_id),
-          error::invalid_argument(EFEED_NOT_CONFIGURED)
-      );
-      let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
+    fun perform_update_for_test(
+        feed_id: vector<u8>,
+        observation_timestamp: u256,
+        benchmark_price: u256,
+        report_data: vector<u8>
+    ) acquires Registry {
+        let registry = borrow_global_mut<Registry>(get_state_addr());
+        assert!(
+            simple_map::contains_key(&registry.feeds, &feed_id),
+            error::invalid_argument(EFEED_NOT_CONFIGURED)
+        );
+        let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
 
-      feed.observation_timestamp = observation_timestamp;
-      feed.benchmark = benchmark_price;
-      feed.report = report_data;
+        feed.observation_timestamp = observation_timestamp;
+        feed.benchmark = benchmark_price;
+        feed.report = report_data;
 
-      event::emit(
-          FeedUpdated {
-              feed_id,
-              timestamp: observation_timestamp,
-              benchmark: benchmark_price,
-              report: report_data
-          }
-      );
+        event::emit(
+            FeedUpdated {
+                feed_id,
+                timestamp: observation_timestamp,
+                benchmark: benchmark_price,
+                report: report_data
+            }
+        );
     }
 
     #[test]
@@ -735,7 +747,6 @@ module data_feeds::registry {
         ];
         assert!(reports == expected_reports, 1);
     }
-
 
     #[test(owner = @owner, publisher = @data_feeds, platform = @platform)]
     fun test_perform_update_v3(
@@ -844,13 +855,22 @@ module data_feeds::registry {
     fun test_retrieve_benchmark(publisher: &signer, platform: &signer) acquires Registry {
         set_up_test(publisher, platform);
 
-        let feed_id = vector[1,2,3,4,5];
-        set_feed_for_test(feed_id, string::utf8(b"test feed"), vector[6,7,8]);
+        let feed_id = vector[1, 2, 3, 4, 5];
+        set_feed_for_test(
+            feed_id,
+            string::utf8(b"test feed"),
+            vector[6, 7, 8]
+        );
 
         let observation_timestamp = 123u256;
         let benchmark_price = 456u256;
         let report_data = vector[9, 0, 1];
-        perform_update_for_test(feed_id, observation_timestamp, benchmark_price, report_data);
+        perform_update_for_test(
+            feed_id,
+            observation_timestamp,
+            benchmark_price,
+            report_data
+        );
 
         let benchmarks = get_benchmarks_unchecked(vector[feed_id]);
         assert!(vector::length(&benchmarks) == 1, 1);

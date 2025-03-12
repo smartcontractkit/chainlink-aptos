@@ -637,13 +637,27 @@ module ccip_token_pool::token_pool_test {
         let state = set_up_test(owner);
         let new_remote_pool = b"new_pool";
 
-        assert!(!token_pool::is_remote_pool(&state, DefaultRemoteChain, new_remote_pool), 1);
-        assert!(vector::length(&token_pool::get_remote_pools(&state, DefaultRemoteChain)) == 1, 1);
+        assert!(
+            !token_pool::is_remote_pool(&state, DefaultRemoteChain, new_remote_pool),
+            1
+        );
+        assert!(
+            vector::length(&token_pool::get_remote_pools(&state, DefaultRemoteChain))
+                == 1,
+            1
+        );
 
         token_pool::add_remote_pool(&mut state, DefaultRemoteChain, new_remote_pool);
 
-        assert!(token_pool::is_remote_pool(&state, DefaultRemoteChain, new_remote_pool), 1);
-        assert!(vector::length(&token_pool::get_remote_pools(&state, DefaultRemoteChain)) == 2, 1);
+        assert!(
+            token_pool::is_remote_pool(&state, DefaultRemoteChain, new_remote_pool),
+            1
+        );
+        assert!(
+            vector::length(&token_pool::get_remote_pools(&state, DefaultRemoteChain))
+                == 2,
+            1
+        );
 
         token_pool::destroy_token_pool(state);
     }
