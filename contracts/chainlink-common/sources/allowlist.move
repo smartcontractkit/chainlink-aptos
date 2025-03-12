@@ -136,7 +136,7 @@ module chainlink_common::allowlist_test {
         assert!(vector::is_empty(&allowlist::get_allowlist(&state)), 1);
 
         // Any address is allowed when the allowlist is disabled
-        assert!(allowlist::is_allowed(&state, &@0x1111111111111), 1);
+        assert!(allowlist::is_allowed(&state, @0x1111111111111), 1);
 
         allowlist::destroy_allowlist(state);
     }
@@ -152,16 +152,16 @@ module chainlink_common::allowlist_test {
 
         // The given addresses are allowed
         assert!(
-            allowlist::is_allowed(&state, vector::borrow(&init_allowlist, 0)),
+            allowlist::is_allowed(&state, *vector::borrow(&init_allowlist, 0)),
             1
         );
         assert!(
-            allowlist::is_allowed(&state, vector::borrow(&init_allowlist, 1)),
+            allowlist::is_allowed(&state, *vector::borrow(&init_allowlist, 1)),
             1
         );
 
         // Other addresses are not allowed
-        assert!(!allowlist::is_allowed(&state, &@0x3), 1);
+        assert!(!allowlist::is_allowed(&state, @0x3), 1);
 
         allowlist::destroy_allowlist(state);
     }
@@ -202,8 +202,8 @@ module chainlink_common::allowlist_test {
         assert_remove_events_emitted(removes);
 
         assert!(vector::length(&allowlist::get_allowlist(&state)) == 1, 1);
-        assert!(allowlist::is_allowed(&state, &@0x2), 1);
-        assert!(!allowlist::is_allowed(&state, &@0x1), 1);
+        assert!(allowlist::is_allowed(&state, @0x2), 1);
+        assert!(!allowlist::is_allowed(&state, @0x1), 1);
 
         allowlist::destroy_allowlist(state);
     }
@@ -219,12 +219,12 @@ module chainlink_common::allowlist_test {
         allowlist::apply_allowlist_updates(&mut state, vector::empty(), adds_and_removes);
 
         assert!(vector::length(&allowlist::get_allowlist(&state)) == 1, 1);
-        assert!(allowlist::is_allowed(&state, &account_to_allow), 1);
+        assert!(allowlist::is_allowed(&state, account_to_allow), 1);
 
         allowlist::apply_allowlist_updates(&mut state, adds_and_removes, adds_and_removes);
 
         // Since removes happen before adds, the account should still be allowed
-        assert!(allowlist::is_allowed(&state, &account_to_allow), 1);
+        assert!(allowlist::is_allowed(&state, account_to_allow), 1);
 
         assert_remove_events_emitted(adds_and_removes);
         // Events don't get purged after calling event::emitted_events so we'll have

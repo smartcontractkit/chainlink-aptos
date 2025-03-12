@@ -1,4 +1,4 @@
-module ccip_burn_mint_token_pool::burn_mint_token_pool {
+module burn_mint_token_pool::burn_mint_token_pool {
     use std::account::{Self, SignerCapability};
     use std::error;
     use std::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef};
@@ -55,7 +55,7 @@ module ccip_burn_mint_token_pool::burn_mint_token_pool {
 
         // the name of this module. if incorrect, callbacks will fail to be registered and
         // register_pool will revert.
-        let token_pool_module_name = b"ccip_burn_mint_token_pool";
+        let token_pool_module_name = b"burn_mint_token_pool";
 
         token_admin_registry::register_pool(
             publisher,
@@ -90,7 +90,7 @@ module ccip_burn_mint_token_pool::burn_mint_token_pool {
         assert_can_initialize(signer::address_of(caller));
 
         assert!(
-            exists<BurnMintTokenPoolDeployment>(@ccip_burn_mint_token_pool),
+            exists<BurnMintTokenPoolDeployment>(@burn_mint_token_pool),
             error::invalid_argument(E_ALREADY_INITIALIZED)
         );
 
@@ -100,14 +100,14 @@ module ccip_burn_mint_token_pool::burn_mint_token_pool {
         );
 
         let BurnMintTokenPoolDeployment { store_signer_cap } =
-            move_from<BurnMintTokenPoolDeployment>(@ccip_burn_mint_token_pool);
+            move_from<BurnMintTokenPoolDeployment>(@burn_mint_token_pool);
 
         let store_signer = account::create_signer_with_capability(&store_signer_cap);
 
         let token_pool_state = token_pool::initialize(caller, local_token, allowlist);
 
         let pool = BurnMintTokenPool {
-            ownable_state: ownable::new(caller, signer::address_of(caller), @0x0),
+            ownable_state: ownable::new(caller, signer::address_of(caller)),
             store_signer_address: signer::address_of(&store_signer),
             store_signer_cap,
             token_pool_state,
@@ -250,7 +250,7 @@ module ccip_burn_mint_token_pool::burn_mint_token_pool {
         // outside of ccip::token_admin_registry, the transaction will abort.
         let input =
             token_admin_registry::get_lock_or_burn_input_v1(
-                @ccip_burn_mint_token_pool, CallbackProof {}
+                @burn_mint_token_pool, CallbackProof {}
             );
 
         let pool = borrow_pool_mut();
@@ -272,7 +272,7 @@ module ccip_burn_mint_token_pool::burn_mint_token_pool {
 
         // set the output for this lock or burn operation.
         token_admin_registry::set_lock_or_burn_output_v1(
-            @ccip_burn_mint_token_pool,
+            @burn_mint_token_pool,
             CallbackProof {},
             dest_token_address,
             dest_pool_data
@@ -288,7 +288,7 @@ module ccip_burn_mint_token_pool::burn_mint_token_pool {
         // outside of ccip::token_admin_registry, the transaction will abort.
         let input =
             token_admin_registry::get_release_or_mint_input_v1(
-                @ccip_burn_mint_token_pool, CallbackProof {}
+                @burn_mint_token_pool, CallbackProof {}
             );
         let pool = borrow_pool_mut();
 
@@ -309,7 +309,7 @@ module ccip_burn_mint_token_pool::burn_mint_token_pool {
 
         // set the output for this release or mint operation.
         token_admin_registry::set_release_or_mint_output_v1(
-            @ccip_burn_mint_token_pool, CallbackProof {}, local_amount
+            @burn_mint_token_pool, CallbackProof {}, local_amount
         );
 
         let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
@@ -336,19 +336,19 @@ module ccip_burn_mint_token_pool::burn_mint_token_pool {
 
     inline fun store_address(): address {
         account::create_resource_address(
-            &@ccip_burn_mint_token_pool, STORE_OBJECT_SEED
+            &@burn_mint_token_pool, STORE_OBJECT_SEED
         )
     }
 
     fun assert_can_initialize(caller_address: address) {
-        if (caller_address == @ccip_burn_mint_token_pool) { return };
+        if (caller_address == @burn_mint_token_pool) { return };
 
-        if (object::is_object(@ccip_burn_mint_token_pool)) {
-            let ccip_burn_mint_token_pool_object =
-                object::address_to_object<ObjectCore>(@ccip_burn_mint_token_pool);
-            if (caller_address == object::owner(ccip_burn_mint_token_pool_object)
+        if (object::is_object(@burn_mint_token_pool)) {
+            let burn_mint_token_pool_object =
+                object::address_to_object<ObjectCore>(@burn_mint_token_pool);
+            if (caller_address == object::owner(burn_mint_token_pool_object)
                 || caller_address
-                    == object::root_owner(ccip_burn_mint_token_pool_object)) { return };
+                    == object::root_owner(burn_mint_token_pool_object)) { return };
         };
 
         abort error::permission_denied(E_NOT_PUBLISHER)

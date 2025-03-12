@@ -5,9 +5,13 @@ authors = []
 
 [addresses]
 ccip = "_"
+mcms = "_"
+mcms_register_entrypoints = "_"
 
 [dev-addresses]
-ccip = "0x100"
+ccip = "0x1000"
+mcms = "0x4000"
+mcms_register_entrypoints = "0x4001"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }

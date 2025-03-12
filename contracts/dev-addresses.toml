@@ -1,0 +1,22 @@
+## CCIP Core: 1xxx
+ccip = "0x1000"
+
+## Token pools: 2xxx
+ccip_token_pool = "0x2000"
+burn_mint_token_pool = "0x2001"
+lock_release_token_pool = "0x2002"
+
+## Applications: 3xxx
+ccip_ping_pong_demo = "0x3010"
+
+# MCMS: 4xxx
+mcms = "0x4000"
+mcms_register_entrypoints = "0x4001"
+mcms_owner = "0x4010"
+mcms_test = "0x4900"
+
+# Chainlink Common: 8xxx
+chainlink_common = "0x8001"
+
+# External: 9xxx
+local_token = "0x9000"

@@ -7,7 +7,7 @@ authors = []
 chainlink_common = "_"
 
 [dev-addresses]
-chainlink_common = "0xc10000001"
+chainlink_common = "0x8001"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }

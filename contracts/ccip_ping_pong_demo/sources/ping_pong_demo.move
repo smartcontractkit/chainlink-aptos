@@ -89,7 +89,7 @@ module ccip_ping_pong_demo::ping_pong_demo {
             &store_signer,
             PingPongDemo {
                 ownable_state: ownable::new(
-                    &store_signer, signer::address_of(caller), @0x0
+                    &store_signer, signer::address_of(caller)
                 ),
                 store_signer_cap,
                 fee_token,
@@ -164,6 +164,7 @@ module ccip_ping_pong_demo::ping_pong_demo {
             );
 
         onramp::ccip_send(
+            &caller,
             &caller,
             state.counterpart_chain_selector,
             state.counterpart_address,

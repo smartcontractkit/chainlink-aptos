@@ -390,7 +390,7 @@ module ccip_token_pool::token_pool {
         let _sender = token_admin_registry::get_lock_or_burn_sender(input);
         if (allowlist::get_allowlist_enabled(&state.allowlist_state)) {
             assert!(
-                allowlist::is_allowed(&state.allowlist_state, &_sender),
+                allowlist::is_allowed(&state.allowlist_state, _sender),
                 error::permission_denied(E_NOT_PUBLISHER)
             );
         };
