@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -134,7 +135,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	getClient := func() (rlclient.RateLimitedClient, error) {
 		return rlClient, nil
 	}
-	
+
 	chainId, err := client.GetChainId()
 	require.NoError(t, err)
 	chainIdBig := new(big.Int).SetUint64(uint64(chainId))
@@ -697,7 +698,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 }
 
 func compileMcmsContract(t *testing.T, packageAddress aptos.AccountAddress, ownerAddress aptos.AccountAddress) ([]byte, [][]byte) {
-	compileResult := testutils.CompileMovePackage(t, "mcms", map[string]aptos.AccountAddress{
+	compileResult := testutils.CompileMovePackage(t, filepath.Join("mcms", "mcms"), map[string]aptos.AccountAddress{
 		"mcms":       packageAddress,
 		"mcms_owner": ownerAddress,
 	}, []string{
@@ -713,19 +714,9 @@ func compileMcmsContract(t *testing.T, packageAddress aptos.AccountAddress, owne
 }
 
 func compileMcmsUserContract(t *testing.T, packageAddress, mcmsAddress aptos.AccountAddress) ([]byte, []byte) {
-	compileResult := testutils.CompileMovePackage(t, "mcms_test", map[string]aptos.AccountAddress{
+	compileResult := testutils.CompileMovePackage(t, filepath.Join("mcms", "mcms_test"), map[string]aptos.AccountAddress{
 		"mcms_test": packageAddress,
 		"mcms":      mcmsAddress,
-	}, nil)
-
-	require.Equal(t, 1, len(compileResult.BytecodeModules))
-	return compileResult.PackageMetadata, compileResult.BytecodeModules[0]
-}
-
-func compileMcmsLargePackagesContract(t *testing.T, packageAddress, mcmsAddress aptos.AccountAddress) ([]byte, []byte) {
-	compileResult := testutils.CompileMovePackage(t, "mcms_large_packages", map[string]aptos.AccountAddress{
-		"mcms_large_packages": packageAddress,
-		"mcms":                mcmsAddress,
 	}, nil)
 
 	require.Equal(t, 1, len(compileResult.BytecodeModules))

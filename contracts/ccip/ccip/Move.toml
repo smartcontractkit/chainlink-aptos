@@ -1,25 +1,24 @@
 [package]
-name = "CCIPTokenPool"
+name = "ChainlinkCCIP"
 version = "1.0.0"
 authors = []
 
 [addresses]
 ccip = "_"
-ccip_token_pool = "_"
 mcms = "_"
+# If set to 0x0, will not register mcms entrypoints
 mcms_register_entrypoints = "_"
-chainlink_common = "_"
 
 [dev-addresses]
+## CCIP Core: 1xxx
 ccip = "0x1000"
-ccip_token_pool = "0x2000"
+
+# MCMS: 4xxx
 mcms = "0x4000"
 mcms_register_entrypoints = "0x4001"
-chainlink_common = "0x8001"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
-ChainlinkCCIP = { local = "../../ccip" }
-ChainlinkCommon = { local = "../../chainlink-common" }
+ChainlinkManyChainMultisig = { local = "../../mcms/mcms", addr_subst = { 'mcms_owner' = '0x0' } }
 
 [dev-dependencies]

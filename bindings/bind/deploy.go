@@ -8,6 +8,7 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk/bcs"
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/compile"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/contracts"
 )
 
 const (
@@ -27,7 +28,7 @@ func DeployPackageToObject(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
 	// The name of the package to deploy
-	packageName string,
+	packageName contracts.Package,
 	// Additional named addresses, doesn't have to include the objectAddress
 	namedAddresses map[string]aptos.AccountAddress,
 ) (aptos.AccountAddress, *api.PendingTransaction, error) {
@@ -41,7 +42,7 @@ func DeployPackageToObject(
 	if namedAddresses == nil {
 		namedAddresses = make(map[string]aptos.AccountAddress)
 	}
-	namedAddresses[packageName] = address
+	namedAddresses[string(packageName)] = address
 
 	// Compile using CLI
 	output, err := compile.CompilePackage(packageName, namedAddresses)
@@ -102,7 +103,7 @@ func DeployPackageToObject(
 	}
 
 	address = calculateNextObjectCodeDeploymentAddress(auth.AccountAddress(), sn-1+uint64(len(chunks)))
-	namedAddresses[packageName] = address
+	namedAddresses[string(packageName)] = address
 	output, err = compile.CompilePackage(packageName, namedAddresses)
 	if err != nil {
 		return aptos.AccountAddress{}, nil, err
@@ -137,7 +138,7 @@ func DeployPackageToResourceAccount(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
 	// The name of the package to deploy
-	packageName string,
+	packageName contracts.Package,
 	// The seed for the created resource account
 	seed string,
 	// Additional named addresses, doesn't have to include the address of the resource account
@@ -149,7 +150,7 @@ func DeployPackageToResourceAccount(
 	if namedAddresses == nil {
 		namedAddresses = make(map[string]aptos.AccountAddress)
 	}
-	namedAddresses[packageName] = resourceAccount
+	namedAddresses[string(packageName)] = resourceAccount
 
 	// Compile using CLI
 	output, err := compile.CompilePackage(packageName, namedAddresses)

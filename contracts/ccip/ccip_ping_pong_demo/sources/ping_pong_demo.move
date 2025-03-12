@@ -88,9 +88,7 @@ module ccip_ping_pong_demo::ping_pong_demo {
         move_to(
             &store_signer,
             PingPongDemo {
-                ownable_state: ownable::new(
-                    &store_signer, signer::address_of(caller)
-                ),
+                ownable_state: ownable::new(&store_signer, signer::address_of(caller)),
                 store_signer_cap,
                 fee_token,
                 counterpart_chain_selector,

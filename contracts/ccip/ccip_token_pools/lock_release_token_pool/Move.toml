@@ -24,7 +24,7 @@ local_token = "0x9000"
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
 ChainlinkCCIP = { local = "../../ccip" }
-ChainlinkCommon = { local = "../../chainlink-common" }
+ChainlinkCommon = { local = "../../../chainlink-common" }
 CCIPTokenPool = { local = "../token_pool" }
 
 [dev-dependencies]

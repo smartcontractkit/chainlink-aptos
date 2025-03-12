@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
+
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/bind"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/ccip"
 	mcmsbind "github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/mcms"
@@ -130,7 +131,7 @@ func (cs *CsDeployAptosChainImp) createDeployOperations(mcmsContract mcmsbind.MC
 	}
 
 	// Compile CCIP
-	ccipPayload, err := ccip.Compile(ccipObjectAddress)
+	ccipPayload, err := ccip.Compile(ccipObjectAddress, mcmsContract.Address, true)
 	if err != nil {
 		return ccipObjectAddress, operations, fmt.Errorf("failed to compile CCIP: %w", err)
 	}

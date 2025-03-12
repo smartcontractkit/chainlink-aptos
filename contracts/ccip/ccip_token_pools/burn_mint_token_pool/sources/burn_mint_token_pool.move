@@ -335,9 +335,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
     }
 
     inline fun store_address(): address {
-        account::create_resource_address(
-            &@burn_mint_token_pool, STORE_OBJECT_SEED
-        )
+        account::create_resource_address(&@burn_mint_token_pool, STORE_OBJECT_SEED)
     }
 
     fun assert_can_initialize(caller_address: address) {
@@ -347,8 +345,9 @@ module burn_mint_token_pool::burn_mint_token_pool {
             let burn_mint_token_pool_object =
                 object::address_to_object<ObjectCore>(@burn_mint_token_pool);
             if (caller_address == object::owner(burn_mint_token_pool_object)
-                || caller_address
-                    == object::root_owner(burn_mint_token_pool_object)) { return };
+                || caller_address == object::root_owner(burn_mint_token_pool_object)) {
+                return
+            };
         };
 
         abort error::permission_denied(E_NOT_PUBLISHER)

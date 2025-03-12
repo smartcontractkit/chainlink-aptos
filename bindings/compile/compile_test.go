@@ -7,10 +7,12 @@ import (
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/stretchr/testify/require"
+
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/contracts"
 )
 
 func TestCompileMCMS(t *testing.T) {
-	output, err := CompilePackage("mcms", map[string]aptos.AccountAddress{
+	output, err := CompilePackage(contracts.MCMS, map[string]aptos.AccountAddress{
 		"mcms":       aptos.AccountThree,
 		"mcms_owner": aptos.AccountFour,
 	})
@@ -21,7 +23,7 @@ func TestCompileMCMS(t *testing.T) {
 }
 
 func TestCompileLargePackages(t *testing.T) {
-	output, err := CompilePackage("large_packages", map[string]aptos.AccountAddress{
+	output, err := CompilePackage(contracts.LargePackages, map[string]aptos.AccountAddress{
 		"large_packages": aptos.AccountThree,
 	})
 	require.NoError(t, err)
@@ -31,8 +33,10 @@ func TestCompileLargePackages(t *testing.T) {
 }
 
 func TestCompileCCIP(t *testing.T) {
-	output, err := CompilePackage("ccip", map[string]aptos.AccountAddress{
-		"ccip": aptos.AccountThree,
+	output, err := CompilePackage(contracts.CCIP, map[string]aptos.AccountAddress{
+		"ccip":                      aptos.AccountThree,
+		"mcms":                      aptos.AccountFour,
+		"mcms_register_entrypoints": aptos.AccountZero,
 	})
 	require.NoError(t, err)
 

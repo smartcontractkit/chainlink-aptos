@@ -9,7 +9,7 @@ replace (
 )
 
 require (
-	github.com/aptos-labs/aptos-go-sdk v1.5.0
+	github.com/aptos-labs/aptos-go-sdk v1.5.1-0.20250303230301-affcbec1c549
 	github.com/ethereum/go-ethereum v1.15.0
 	github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer v0.0.0-20250228101746-668edf745e97
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20250228165933-79ce88cc5ab0
@@ -217,7 +217,7 @@ require (
 	golang.org/x/crypto v0.33.0 // indirect
 	golang.org/x/exp v0.0.0-20250218142911-aa4b98e5adaa // indirect
 	golang.org/x/net v0.35.0 // indirect
-	golang.org/x/sync v0.11.0 // indirect
+	golang.org/x/sync v0.12.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/term v0.29.0 // indirect
 	golang.org/x/text v0.22.0 // indirect

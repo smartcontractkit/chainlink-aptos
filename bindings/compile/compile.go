@@ -25,7 +25,12 @@ type CompiledPackage struct {
 // CompilePackage compiles a package with the given name and named addresses.
 // It uses the Aptos CLI for compilation, passing the named addresses as arguments.
 // The packageName must be one of the packages in the contracts directory that are embedded in the binary.
-func CompilePackage(packageName string, namedAddresses map[string]aptos.AccountAddress) (CompiledPackage, error) {
+func CompilePackage(packageName contracts.Package, namedAddresses map[string]aptos.AccountAddress) (CompiledPackage, error) {
+	packageDir, ok := contracts.Contracts[packageName]
+	if !ok {
+		return CompiledPackage{}, fmt.Errorf("package %s not found", packageName)
+	}
+
 	// Create a random temporary directory path
 	dstDir, err := os.MkdirTemp("", "aptos-*")
 	if err != nil {
@@ -35,10 +40,11 @@ func CompilePackage(packageName string, namedAddresses map[string]aptos.AccountA
 
 	srcDir := filepath.Join(".")
 	dstRoot := filepath.Join(dstDir, "contracts")
-	packageRoot := filepath.Join(dstRoot, packageName)
+	packageRoot := filepath.Join(dstRoot, packageDir)
 
-	// Copy the (embedded) source directories into the temporary directory root
-	err = writeEFS(contracts.Contracts, srcDir, dstRoot)
+	// Copy the (embedded) source directories into the temporary directory root.
+	// We need to copy all contracts (not just the specified package) as different packages might depend on each other.
+	err = writeEFS(contracts.Embed, srcDir, dstRoot)
 	if err != nil {
 		return CompiledPackage{}, fmt.Errorf("failed to copy embedded files to %q: %w", dstRoot, err)
 	}
