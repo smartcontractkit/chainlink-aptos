@@ -10,7 +10,7 @@ module ccip::token_admin_registry {
     use std::option::{Self, Option};
     use std::signer;
     use std::smart_table::{Self, SmartTable};
-    use std::string;
+    use std::string::{Self, String};
     use std::type_info::{Self, TypeInfo};
     use std::vector;
 
@@ -135,6 +135,11 @@ module ccip::token_admin_registry {
     const E_NOT_ADMINISTRATOR: u64 = 24;
     const E_NOT_PENDING_ADMINISTRATOR: u64 = 25;
     const E_UNKNOWN_FUNCTION: u64 = 26;
+
+    #[view]
+    public fun type_and_version(): String {
+        string::utf8(b"TokenAdminRegistry 1.6.0")
+    }
 
     fun init_module(publisher: &signer) {
         if (@mcms_register_entrypoints != @0x0) {

@@ -22,7 +22,7 @@ module ccip::fee_quoter {
     use std::object;
     use std::option;
     use std::signer;
-    use std::string;
+    use std::string::{Self, String};
     use std::smart_table::{Self, SmartTable};
     use std::timestamp;
     use std::vector;
@@ -215,6 +215,11 @@ module ccip::fee_quoter {
     const E_INVALID_CHAIN_FAMILY_SELECTOR: u64 = 28;
     const E_TO_TOKEN_AMOUNT_TOO_LARGE: u64 = 29;
     const E_UNKNOWN_FUNCTION: u64 = 30;
+
+    #[view]
+    public fun type_and_version(): String {
+        string::utf8(b"FeeQuoter 1.6.0")
+    }
 
     fun init_module(publisher: &signer) {
         if (@mcms_register_entrypoints != @0x0) {

@@ -5,6 +5,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
     use std::primary_fungible_store;
     use std::object::{Self, Object, ObjectCore};
     use std::signer;
+    use std::string::{Self, String};
     use aptos_framework::fungible_asset::{BurnRef, MintRef};
 
     use ccip::ownable;
@@ -43,6 +44,11 @@ module burn_mint_token_pool::burn_mint_token_pool {
     // ================================================================
     // |                             Init                             |
     // ================================================================
+
+    #[view]
+    public fun type_and_version(): String {
+        string::utf8(b"BurnMintTokenPool 1.6.0")
+    }
 
     fun init_module(publisher: &signer) {
         // register the pool on deployment, because in the case of object code deployment,

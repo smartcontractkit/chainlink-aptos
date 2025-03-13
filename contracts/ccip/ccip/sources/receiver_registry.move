@@ -10,7 +10,7 @@ module ccip::receiver_registry {
     use std::object::{Self, ExtendRef, Object, TransferRef};
     use std::option::{Self, Option};
     use std::signer;
-    use std::string;
+    use std::string::{Self, String};
     use std::vector;
 
     use ccip::auth;
@@ -50,6 +50,11 @@ module ccip::receiver_registry {
     const E_MISSING_INPUT: u64 = 5;
     const E_NON_EMPTY_INPUT: u64 = 6;
     const E_UNKNOWN_FUNCTION: u64 = 7;
+
+    #[view]
+    public fun type_and_version(): String {
+        string::utf8(b"ReceiverRegistry 1.6.0")
+    }
 
     fun init_module(publisher: &signer) {
         if (@mcms_register_entrypoints != @0x0) {

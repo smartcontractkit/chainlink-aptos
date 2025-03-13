@@ -5,6 +5,7 @@ module lock_release_token_pool::lock_release_token_pool {
     use std::primary_fungible_store;
     use std::object::{Self, Object, ObjectCore};
     use std::signer;
+    use std::string::{Self, String};
 
     use ccip::ownable;
     use ccip::token_admin_registry;
@@ -40,6 +41,11 @@ module lock_release_token_pool::lock_release_token_pool {
     // ================================================================
     // |                             Init                             |
     // ================================================================
+
+    #[view]
+    public fun type_and_version(): String {
+        string::utf8(b"LockReleaseTokenPool 1.6.0")
+    }
 
     fun init_module(publisher: &signer) {
         // register the pool on deployment, because in the case of object code deployment,

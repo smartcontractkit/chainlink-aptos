@@ -8,7 +8,7 @@ module ccip::offramp {
     use std::option::{Self, Option};
     use std::primary_fungible_store;
     use std::signer;
-    use std::string;
+    use std::string::{Self, String};
     use std::smart_table::{Self, SmartTable};
     use std::timestamp;
     use std::vector;
@@ -228,6 +228,11 @@ module ccip::offramp {
     const E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN: u64 = 27;
     const E_UNKNOWN_FUNCTION: u64 = 28;
     const E_MUST_BE_OUT_OF_ORDER_EXEC: u64 = 29;
+
+    #[view]
+    public fun type_and_version(): String {
+        string::utf8(b"OffRamp 1.6.0")
+    }
 
     fun init_module(publisher: &signer) {
         if (@mcms_register_entrypoints != @0x0) {

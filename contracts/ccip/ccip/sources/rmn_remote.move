@@ -9,7 +9,7 @@ module ccip::rmn_remote {
     use std::option;
     use std::secp256k1;
     use std::signer;
-    use std::string;
+    use std::string::{Self, String};
     use std::smart_table::{Self, SmartTable};
     use std::vector;
 
@@ -98,6 +98,11 @@ module ccip::rmn_remote {
     const E_INVALID_SUBJECT_LENGTH: u64 = 19;
     const E_INVALID_PUBLIC_KEY_LENGTH: u64 = 20;
     const E_UNKNOWN_FUNCTION: u64 = 21;
+
+    #[view]
+    public fun type_and_version(): String {
+        string::utf8(b"RMNRemote 1.6.0")
+    }
 
     fun init_module(publisher: &signer) {
         if (@mcms_register_entrypoints != @0x0) {

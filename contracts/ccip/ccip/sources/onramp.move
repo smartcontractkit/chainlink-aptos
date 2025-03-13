@@ -9,7 +9,7 @@ module ccip::onramp {
     use std::option;
     use std::primary_fungible_store;
     use std::signer;
-    use std::string;
+    use std::string::{Self, String};
     use std::smart_table::{Self, SmartTable};
     use std::vector;
 
@@ -140,6 +140,11 @@ module ccip::onramp {
     const E_UNEXPECTED_WITHDRAW_AMOUNT: u64 = 16;
     const E_UNEXPECTED_FUNGIBLE_ASSET: u64 = 17;
     const E_UNKNOWN_FUNCTION: u64 = 18;
+
+    #[view]
+    public fun type_and_version(): String {
+        string::utf8(b"OnRamp 1.6.0")
+    }
 
     fun init_module(publisher: &signer) {
         if (@mcms_register_entrypoints != @0x0) {

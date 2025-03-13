@@ -1,12 +1,18 @@
 module ccip::router {
     use std::account::{Self, SignerCapability};
     use std::signer;
+    use std::string::{Self, String};
 
     use ccip::auth;
     use ccip::onramp;
 
     struct RouterState has key {
         signer_capability: SignerCapability
+    }
+
+    #[view]
+    public fun type_and_version(): String {
+        string::utf8(b"Router 1.6.0")
     }
 
     fun init_module(publisher: &signer) {

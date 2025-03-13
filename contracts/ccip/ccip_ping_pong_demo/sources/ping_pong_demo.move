@@ -7,6 +7,7 @@ module ccip_ping_pong_demo::ping_pong_demo {
     use std::option::{Self, Option};
     use std::primary_fungible_store;
     use std::signer;
+    use std::string::{Self, String};
 
     use ccip::client;
     use ccip::eth_abi;
@@ -47,6 +48,11 @@ module ccip_ping_pong_demo::ping_pong_demo {
 
     const E_NOT_PUBLISHER: u64 = 1;
     const E_INVALID_FEE_TOKEN: u64 = 2;
+
+    #[view]
+    public fun type_and_version(): String {
+        string::utf8(b"PingPongDemo 1.6.0")
+    }
 
     fun init_module(publisher: &signer) {
         receiver_registry::register_receiver(
