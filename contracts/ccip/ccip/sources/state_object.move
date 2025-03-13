@@ -16,6 +16,7 @@ module ccip::state_object {
 
     friend ccip::auth;
     friend ccip::fee_quoter;
+    friend ccip::nonce_manager;
     friend ccip::offramp;
     friend ccip::onramp;
     friend ccip::receiver_registry;
