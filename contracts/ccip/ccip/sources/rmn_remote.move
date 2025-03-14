@@ -49,7 +49,7 @@ module ccip::rmn_remote {
         dest_chain_id: u64,
         dest_chain_selector: u64,
         rmn_remote_contract_address: address,
-        offramp_address: address,
+        off_ramp_address: address,
         rmn_home_contract_config_digest: vector<u8>,
         merkle_roots: vector<MerkleRoot>
     }
@@ -145,7 +145,7 @@ module ccip::rmn_remote {
         eth_abi::encode_u64(&mut digest, report.dest_chain_id);
         eth_abi::encode_u64(&mut digest, report.dest_chain_selector);
         eth_abi::encode_address(&mut digest, report.rmn_remote_contract_address);
-        eth_abi::encode_address(&mut digest, report.offramp_address);
+        eth_abi::encode_address(&mut digest, report.off_ramp_address);
         eth_abi::encode_bytes32(&mut digest, report.rmn_home_contract_config_digest);
         vector::for_each_ref(
             &report.merkle_roots,
@@ -217,7 +217,7 @@ module ccip::rmn_remote {
             dest_chain_id: (chain_id::get() as u64),
             dest_chain_selector: state.local_chain_selector,
             rmn_remote_contract_address: @ccip,
-            offramp_address: @ccip,
+            off_ramp_address: @ccip,
             rmn_home_contract_config_digest: state.config.rmn_home_contract_config_digest,
             merkle_roots
         };

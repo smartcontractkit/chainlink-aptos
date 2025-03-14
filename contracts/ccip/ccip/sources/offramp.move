@@ -70,7 +70,7 @@ module ccip::offramp {
         is_enabled: bool,
         min_sequence_number: u64,
         is_rmn_verification_disabled: bool,
-        onramp: vector<u8>
+        on_ramp: vector<u8>
     }
 
     // report structs
@@ -134,7 +134,7 @@ module ccip::offramp {
 
     struct MerkleRoot has store, drop, copy {
         source_chain_selector: u64,
-        onramp_address: vector<u8>,
+        on_ramp_address: vector<u8>,
         min_sequence_number: u64,
         max_sequence_number: u64,
         merkle_root: vector<u8>
@@ -165,7 +165,7 @@ module ccip::offramp {
         is_enabled: bool,
         min_sequence_number: u64,
         is_rmn_verification_disabled: bool,
-        onramp: vector<u8>
+        on_ramp: vector<u8>
     }
 
     #[event]
@@ -210,7 +210,7 @@ module ccip::offramp {
     const E_ROOT_NOT_COMMITTED: u64 = 9;
     const E_MANUAL_EXECUTION_NOT_YET_ENABLED: u64 = 10;
     const E_SOURCE_CHAIN_NOT_ENABLED: u64 = 11;
-    const E_COMMIT_ONRAMP_MISMATCH: u64 = 12;
+    const E_COMMIT_ON_RAMP_MISMATCH: u64 = 12;
     const E_INVALID_INTERVAL: u64 = 13;
     const E_INVALID_ROOT: u64 = 14;
     const E_ROOT_ALREADY_COMMITTED: u64 = 15;
@@ -250,7 +250,7 @@ module ccip::offramp {
         source_chains_selector: vector<u64>,
         source_chains_is_enabled: vector<bool>,
         source_chains_is_rmn_verification_disabled: vector<bool>,
-        source_chains_onramp: vector<vector<u8>>
+        source_chains_on_ramp: vector<vector<u8>>
     ) {
         auth::assert_only_owner(signer::address_of(caller));
 
@@ -302,7 +302,7 @@ module ccip::offramp {
             source_chains_selector,
             source_chains_is_enabled,
             source_chains_is_rmn_verification_disabled,
-            source_chains_onramp
+            source_chains_on_ramp
         );
 
         move_to(&state_object_signer, state);
@@ -409,7 +409,7 @@ module ccip::offramp {
             calculate_metadata_hash(
                 source_chain_selector,
                 state.chain_selector,
-                source_chain_config.onramp
+                source_chain_config.on_ramp
             );
 
         let hashed_leaves = vector::map_ref(
@@ -689,8 +689,8 @@ module ccip::offramp {
                 );
 
                 assert!(
-                    source_chain_config.onramp == root.onramp_address,
-                    error::invalid_argument(E_COMMIT_ONRAMP_MISMATCH)
+                    source_chain_config.on_ramp == root.on_ramp_address,
+                    error::invalid_argument(E_COMMIT_ON_RAMP_MISMATCH)
                 );
                 assert!(
                     source_chain_config.min_sequence_number == root.min_sequence_number
@@ -785,7 +785,7 @@ module ccip::offramp {
         source_chains_selector: vector<u64>,
         source_chains_is_enabled: vector<bool>,
         source_chains_is_rmn_verification_disabled: vector<bool>,
-        source_chains_onramp: vector<vector<u8>>
+        source_chains_on_ramp: vector<vector<u8>>
     ) acquires OffRampState {
         auth::assert_only_owner(signer::address_of(caller));
 
@@ -794,7 +794,7 @@ module ccip::offramp {
             source_chains_selector,
             source_chains_is_enabled,
             source_chains_is_rmn_verification_disabled,
-            source_chains_onramp
+            source_chains_on_ramp
         )
     }
 
@@ -941,7 +941,7 @@ module ccip::offramp {
         source_chains_selector: vector<u64>,
         source_chains_is_enabled: vector<bool>,
         source_chains_is_rmn_verification_disabled: vector<bool>,
-        source_chains_onramp: vector<vector<u8>>
+        source_chains_on_ramp: vector<vector<u8>>
     ) {
         let source_chains_len = vector::length(&source_chains_selector);
         assert!(
@@ -954,7 +954,7 @@ module ccip::offramp {
             error::invalid_argument(E_SOURCE_CHAIN_SELECTORS_MISMATCH)
         );
         assert!(
-            source_chains_len == vector::length(&source_chains_onramp),
+            source_chains_len == vector::length(&source_chains_on_ramp),
             error::invalid_argument(E_SOURCE_CHAIN_SELECTORS_MISMATCH)
         );
         for (i in 0..source_chains_len) {
@@ -962,7 +962,7 @@ module ccip::offramp {
             let is_enabled = *vector::borrow(&source_chains_is_enabled, i);
             let is_rmn_verification_disabled =
                 *vector::borrow(&source_chains_is_rmn_verification_disabled, i);
-            let onramp = *vector::borrow(&source_chains_onramp, i);
+            let on_ramp = *vector::borrow(&source_chains_on_ramp, i);
 
             assert!(
                 source_chain_selector != 0,
@@ -979,7 +979,7 @@ module ccip::offramp {
                         is_enabled: false,
                         min_sequence_number: 1,
                         is_rmn_verification_disabled: false,
-                        onramp: vector[]
+                        on_ramp: vector[]
                     }
                 );
                 smart_table::add(
@@ -994,7 +994,7 @@ module ccip::offramp {
                     &mut state.source_chain_configs, source_chain_selector
                 );
             config.is_enabled = is_enabled;
-            config.onramp = onramp;
+            config.on_ramp = on_ramp;
             config.is_rmn_verification_disabled = is_rmn_verification_disabled;
 
             event::emit(
@@ -1003,7 +1003,7 @@ module ccip::offramp {
                     is_enabled: config.is_enabled,
                     min_sequence_number: config.min_sequence_number,
                     is_rmn_verification_disabled: config.is_rmn_verification_disabled,
-                    onramp: config.onramp
+                    on_ramp: config.on_ramp
                 }
             );
             event::emit_event(
@@ -1013,7 +1013,7 @@ module ccip::offramp {
                     is_enabled: config.is_enabled,
                     min_sequence_number: config.min_sequence_number,
                     is_rmn_verification_disabled: config.is_rmn_verification_disabled,
-                    onramp: config.onramp
+                    on_ramp: config.on_ramp
                 }
             );
         }
@@ -1024,7 +1024,7 @@ module ccip::offramp {
     // ================================================================
 
     inline fun calculate_metadata_hash(
-        source_chain_selector: u64, dest_chain_selector: u64, onramp: vector<u8>
+        source_chain_selector: u64, dest_chain_selector: u64, on_ramp: vector<u8>
     ): vector<u8> {
         let packed = vector[];
         eth_abi::encode_bytes32(
@@ -1032,7 +1032,7 @@ module ccip::offramp {
         );
         eth_abi::encode_u64(&mut packed, source_chain_selector);
         eth_abi::encode_u64(&mut packed, dest_chain_selector);
-        eth_abi::encode_bytes32(&mut packed, aptos_hash::keccak256(onramp));
+        eth_abi::encode_bytes32(&mut packed, aptos_hash::keccak256(on_ramp));
         aptos_hash::keccak256(packed)
     }
 
@@ -1136,7 +1136,7 @@ module ccip::offramp {
             |stream| {
                 MerkleRoot {
                     source_chain_selector: eth_abi::decode_u64(stream),
-                    onramp_address: eth_abi::decode_bytes(stream),
+                    on_ramp_address: eth_abi::decode_bytes(stream),
                     min_sequence_number: eth_abi::decode_u64(stream),
                     max_sequence_number: eth_abi::decode_u64(stream),
                     merkle_root: eth_abi::decode_bytes32(stream)
@@ -1338,7 +1338,7 @@ module ccip::offramp {
                 bcs_stream::deserialize_vector(
                     &mut stream, |stream| bcs_stream::deserialize_bool(stream)
                 );
-            let source_chains_onramp =
+            let source_chains_on_ramp =
                 bcs_stream::deserialize_vector(
                     &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
                 );
@@ -1351,7 +1351,7 @@ module ccip::offramp {
                 source_chains_selector,
                 source_chains_is_enabled,
                 source_chains_is_rmn_verification_disabled,
-                source_chains_onramp
+                source_chains_on_ramp
             )
         } else if (function_bytes == b"manually_execute") {
             let report_bytes = bcs_stream::deserialize_vector_u8(&mut stream);
@@ -1390,7 +1390,7 @@ module ccip::offramp {
                 bcs_stream::deserialize_vector(
                     &mut stream, |stream| bcs_stream::deserialize_bool(stream)
                 );
-            let source_chains_onramp =
+            let source_chains_on_ramp =
                 bcs_stream::deserialize_vector(
                     &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
                 );
@@ -1400,7 +1400,7 @@ module ccip::offramp {
                 source_chains_selector,
                 source_chains_is_enabled,
                 source_chains_is_rmn_verification_disabled,
-                source_chains_onramp
+                source_chains_on_ramp
             )
         } else if (function_bytes == b"set_dynamic_config") {
             let permissionless_execution_threshold_secs =
@@ -1496,13 +1496,13 @@ module ccip::offramp {
 
         let source_chain_selector = 123456789;
         let dest_chain_selector = 987654321;
-        let onramp = b"source-onramp-address";
+        let on_ramp = b"source-onramp-address";
 
         let metadata_hash =
-            calculate_metadata_hash(source_chain_selector, dest_chain_selector, onramp);
+            calculate_metadata_hash(source_chain_selector, dest_chain_selector, on_ramp);
         let metadata_hash_alternate =
             calculate_metadata_hash(
-                source_chain_selector + 1, dest_chain_selector, onramp
+                source_chain_selector + 1, dest_chain_selector, on_ramp
             );
 
         assert!(metadata_hash == expected_hash, 1);
