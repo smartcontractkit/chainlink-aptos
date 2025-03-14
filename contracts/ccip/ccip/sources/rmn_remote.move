@@ -15,7 +15,7 @@ module ccip::rmn_remote {
 
     use ccip::auth;
     use ccip::eth_abi;
-    use ccip::merkle_multi_proof;
+    use ccip::merkle_proof;
     use ccip::state_object;
 
     use mcms::bcs_stream;
@@ -252,9 +252,7 @@ module ccip::rmn_remote {
             );
             if (i > 0) {
                 assert!(
-                    merkle_multi_proof::vector_u8_gt(
-                        &eth_address, &previous_eth_address
-                    ),
+                    merkle_proof::vector_u8_gt(&eth_address, &previous_eth_address),
                     error::invalid_argument(E_OUT_OF_ORDER_SIGNATURES)
                 );
             };

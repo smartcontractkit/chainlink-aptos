@@ -17,7 +17,7 @@ module ccip::offramp {
     use ccip::client;
     use ccip::eth_abi::{Self, ABIStream};
     use ccip::fee_quoter;
-    use ccip::merkle_multi_proof;
+    use ccip::merkle_proof;
     use ccip::ocr3_base;
     use ccip::receiver_dispatcher;
     use ccip::rmn_remote;
@@ -103,10 +103,9 @@ module ccip::offramp {
 
     struct ExecutionReport has drop {
         source_chain_selector: u64,
-        messages: vector<Any2AptosRampMessage>,
-        offchain_token_data: vector<vector<vector<u8>>>,
-        proofs: vector<vector<u8>>,
-        proof_flag_bits: u256
+        message: Any2AptosRampMessage,
+        offchain_token_data: vector<vector<u8>>,
+        proofs: vector<vector<u8>>
     }
 
     // Matches the EVM struct
@@ -185,8 +184,7 @@ module ccip::offramp {
         source_chain_selector: u64,
         sequence_number: u64,
         message_id: vector<u8>,
-        message_hash: vector<u8>,
-        return_data: Option<u128>
+        message_hash: vector<u8>
     }
 
     #[event]
@@ -203,7 +201,7 @@ module ccip::offramp {
     const E_SOURCE_CHAIN_SELECTORS_MISMATCH: u64 = 2;
     const E_ZERO_CHAIN_SELECTOR: u64 = 3;
     const E_UNKNOWN_SOURCE_CHAIN_SELECTOR: u64 = 4;
-    const E_TOKEN_TRANSFER_DATA_MISMATCH: u64 = 5;
+    const E_MUST_BE_OUT_OF_ORDER_EXEC: u64 = 5;
     const E_SOURCE_CHAIN_SELECTOR_MISMATCH: u64 = 6;
     const E_DEST_CHAIN_SELECTOR_MISMATCH: u64 = 7;
     const E_TOKEN_DATA_MISMATCH: u64 = 8;
@@ -218,16 +216,11 @@ module ccip::offramp {
     const E_UNSUPPORTED_TOKEN: u64 = 17;
     const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 18;
     const E_INVALID_ENCODED_AMOUNT: u64 = 19;
-    const E_EMPTY_BATCH: u64 = 20;
-    const E_EMPTY_REPORT: u64 = 21;
-    const E_UNEXPECTED_TOKEN_DATA: u64 = 22;
-    const E_CURSED_BY_RMN: u64 = 23;
-    const E_BAD_RMN_SIGNAL: u64 = 24;
-    const E_FUNGIBLE_ASSET_AMOUNT_MISMATCH: u64 = 25;
-    const E_SIGNATURE_VERIFICATION_REQUIRED_IN_COMMIT_PLUGIN: u64 = 26;
-    const E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN: u64 = 27;
-    const E_UNKNOWN_FUNCTION: u64 = 28;
-    const E_MUST_BE_OUT_OF_ORDER_EXEC: u64 = 29;
+    const E_CURSED_BY_RMN: u64 = 20;
+    const E_FUNGIBLE_ASSET_AMOUNT_MISMATCH: u64 = 21;
+    const E_SIGNATURE_VERIFICATION_REQUIRED_IN_COMMIT_PLUGIN: u64 = 22;
+    const E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN: u64 = 23;
+    const E_UNKNOWN_FUNCTION: u64 = 24;
 
     #[view]
     public fun type_and_version(): String {
@@ -332,8 +325,8 @@ module ccip::offramp {
         caller: &signer, report_context: vector<vector<u8>>, report: vector<u8>
     ) acquires OffRampState {
         let state = borrow_state_mut();
-        let reports = deserialize_execution_reports(report);
-        batch_execute(state, reports, false);
+        let reports = deserialize_execution_report(report);
+        execute_single_report(state, reports, false);
         ocr3_base::transmit(
             &mut state.ocr3_base_state,
             signer::address_of(caller),
@@ -344,11 +337,12 @@ module ccip::offramp {
         )
     }
 
-    public entry fun manually_execute(reports_bytes: vector<u8>) acquires OffRampState {
+    public entry fun manually_execute(report_bytes: vector<u8>) acquires OffRampState {
         let state = borrow_state_mut();
         ocr3_base::assert_chain_not_forked(&state.ocr3_base_state);
-        let reports = deserialize_execution_reports(reports_bytes);
-        batch_execute(state, reports, true);
+
+        let report = deserialize_execution_report(report_bytes);
+        execute_single_report(state, report, true);
     }
 
     #[view]
@@ -366,16 +360,6 @@ module ccip::offramp {
         let execution_state =
             smart_table::borrow(source_chain_execution_states, sequence_number);
         *execution_state
-    }
-
-    inline fun batch_execute(
-        state: &mut OffRampState, reports: vector<ExecutionReport>, manual_execution: bool
-    ) {
-        assert!(!vector::is_empty(&reports), error::invalid_argument(E_EMPTY_BATCH));
-        vector::for_each(
-            reports,
-            |report| execute_single_report(state, report, manual_execution)
-        );
     }
 
     fun execute_single_report(
@@ -396,11 +380,14 @@ module ccip::offramp {
 
         assert_source_chain_enabled(state, source_chain_selector);
 
-        let messages_len = vector::length(&execution_report.messages);
-        assert!(messages_len > 0, error::invalid_argument(E_EMPTY_REPORT));
         assert!(
-            messages_len == vector::length(&execution_report.offchain_token_data),
-            error::invalid_argument(E_UNEXPECTED_TOKEN_DATA)
+            execution_report.message.header.source_chain_selector
+                == source_chain_selector,
+            error::invalid_argument(E_SOURCE_CHAIN_SELECTOR_MISMATCH)
+        );
+        assert!(
+            execution_report.message.header.dest_chain_selector == state.chain_selector,
+            error::invalid_argument(E_DEST_CHAIN_SELECTOR_MISMATCH)
         );
 
         let source_chain_config =
@@ -412,112 +399,80 @@ module ccip::offramp {
                 source_chain_config.on_ramp
             );
 
-        let hashed_leaves = vector::map_ref(
-            &execution_report.messages,
-            |message| {
-                let message: &Any2AptosRampMessage = message;
-                assert!(
-                    message.header.source_chain_selector == source_chain_selector,
-                    error::invalid_argument(E_SOURCE_CHAIN_SELECTOR_MISMATCH)
-                );
-                assert!(
-                    message.header.dest_chain_selector == state.chain_selector,
-                    error::invalid_argument(E_DEST_CHAIN_SELECTOR_MISMATCH)
-                );
-
-                calculate_message_hash(message, metadata_hash)
-            }
+        let hashed_leaf = calculate_message_hash(
+            &execution_report.message, metadata_hash
         );
 
-        let root =
-            merkle_multi_proof::merkle_root(
-                &hashed_leaves,
-                &execution_report.proofs,
-                execution_report.proof_flag_bits
-            );
+        let root = merkle_proof::merkle_root(hashed_leaf, execution_report.proofs);
 
         // Reverts when the root is not committed
+        // Essential security check
         let is_old_commit_report = is_committed_root(state, root);
+
+        if (manual_execution) {
+            assert!(
+                is_old_commit_report,
+                error::permission_denied(E_MANUAL_EXECUTION_NOT_YET_ENABLED)
+            );
+        };
 
         let source_chain_execution_states =
             smart_table::borrow_mut(&mut state.execution_states, source_chain_selector);
 
-        for (i in 0..messages_len) {
-            // needed for repeated use while looping
-            let state = state;
-            let source_chain_selector = source_chain_selector;
-
-            let message = vector::borrow(&execution_report.messages, i);
-            let sequence_number = message.header.sequence_number;
-            let execution_state_ref =
-                smart_table::borrow_mut_with_default(
-                    source_chain_execution_states,
-                    sequence_number,
-                    EXECUTION_STATE_UNTOUCHED
-                );
-            let original_state = *execution_state_ref;
-
-            if (original_state != EXECUTION_STATE_UNTOUCHED) {
-                event::emit(
-                    SkippedAlreadyExecuted { source_chain_selector, sequence_number }
-                );
-                event::emit_event(
-                    &mut state.skipped_already_executed_events,
-                    SkippedAlreadyExecuted { source_chain_selector, sequence_number }
-                );
-                continue
-            };
-
-            if (manual_execution) {
-                assert!(
-                    is_old_commit_report,
-                    error::permission_denied(E_MANUAL_EXECUTION_NOT_YET_ENABLED)
-                );
-            };
-
-            // A zero nonce indicates out of order execution which is the only allowed case.
-            assert!(
-                message.header.nonce == 0,
-                error::invalid_argument(E_MUST_BE_OUT_OF_ORDER_EXEC)
+        let message = &execution_report.message;
+        let sequence_number = message.header.sequence_number;
+        let execution_state_ref =
+            smart_table::borrow_mut_with_default(
+                source_chain_execution_states,
+                sequence_number,
+                EXECUTION_STATE_UNTOUCHED
             );
 
-            let message_offchain_token_data = vector::borrow(
-                &execution_report.offchain_token_data, i
-            );
-
-            let number_of_tokens_in_msg = vector::length(&message.token_amounts);
-            assert!(
-                number_of_tokens_in_msg == vector::length(message_offchain_token_data),
-                error::invalid_argument(E_TOKEN_DATA_MISMATCH)
-            );
-
-            let return_data = execute_single_message(
-                message, message_offchain_token_data
-            );
-            *execution_state_ref = EXECUTION_STATE_SUCCESS;
-
-            let message_hash = vector::borrow(&hashed_leaves, i);
-
-            event::emit(
-                ExecutionStateChanged {
-                    source_chain_selector,
-                    sequence_number,
-                    message_id: message.header.message_id,
-                    message_hash: *message_hash,
-                    return_data
-                }
-            );
+        if (*execution_state_ref != EXECUTION_STATE_UNTOUCHED) {
+            event::emit(SkippedAlreadyExecuted { source_chain_selector, sequence_number });
             event::emit_event(
-                &mut state.execution_state_changed_events,
-                ExecutionStateChanged {
-                    source_chain_selector,
-                    sequence_number,
-                    message_id: message.header.message_id,
-                    message_hash: *message_hash,
-                    return_data
-                }
+                &mut state.skipped_already_executed_events,
+                SkippedAlreadyExecuted { source_chain_selector, sequence_number }
             );
+            return
         };
+
+        // A zero nonce indicates out of order execution which is the only allowed case.
+        assert!(
+            message.header.nonce == 0,
+            error::invalid_argument(E_MUST_BE_OUT_OF_ORDER_EXEC)
+        );
+
+        let number_of_tokens_in_msg = vector::length(&message.token_amounts);
+        assert!(
+            number_of_tokens_in_msg
+                == vector::length(&execution_report.offchain_token_data),
+            error::invalid_argument(E_TOKEN_DATA_MISMATCH)
+        );
+
+        // Execute the message
+        execute_single_message(message, &execution_report.offchain_token_data);
+
+        // Since Aptos only supports success of reverts, when it reaches this it has succeeded.
+        *execution_state_ref = EXECUTION_STATE_SUCCESS;
+
+        event::emit(
+            ExecutionStateChanged {
+                source_chain_selector,
+                sequence_number,
+                message_id: message.header.message_id,
+                message_hash: hashed_leaf
+            }
+        );
+        event::emit_event(
+            &mut state.execution_state_changed_events,
+            ExecutionStateChanged {
+                source_chain_selector,
+                sequence_number,
+                message_id: message.header.message_id,
+                message_hash: hashed_leaf
+            }
+        );
     }
 
     /// Throws an error if the root is not committed.
@@ -808,12 +763,7 @@ module ccip::offramp {
 
     inline fun execute_single_message(
         message: &Any2AptosRampMessage, message_offchain_token_data: &vector<vector<u8>>
-    ): Option<u128> {
-        assert!(
-            !rmn_remote::is_cursed_global(),
-            error::permission_denied(E_BAD_RMN_SIGNAL)
-        );
-
+    ) {
         let (local_token_addresses, local_token_amounts) =
             release_or_mint_tokens(
                 &message.token_amounts,
@@ -1040,9 +990,7 @@ module ccip::offramp {
         message: &Any2AptosRampMessage, metadata_hash: vector<u8>
     ): vector<u8> {
         let outer_hash = vector[];
-        eth_abi::encode_bytes32(
-            &mut outer_hash, merkle_multi_proof::leaf_domain_separator()
-        );
+        eth_abi::encode_bytes32(&mut outer_hash, merkle_proof::leaf_domain_separator());
         eth_abi::encode_bytes32(&mut outer_hash, metadata_hash);
 
         let inner_hash = vector[];
@@ -1162,74 +1110,61 @@ module ccip::offramp {
 
         let source_chain_selector = eth_abi::decode_u64(&mut stream);
 
-        let messages =
+        let message_id = eth_abi::decode_bytes32(&mut stream);
+        let header_source_chain_selector = eth_abi::decode_u64(&mut stream);
+        let dest_chain_selector = eth_abi::decode_u64(&mut stream);
+        let sequence_number = eth_abi::decode_u64(&mut stream);
+        let nonce = eth_abi::decode_u64(&mut stream);
+
+        let header = RampMessageHeader {
+            message_id,
+            source_chain_selector: header_source_chain_selector,
+            dest_chain_selector,
+            sequence_number,
+            nonce
+        };
+
+        assert!(
+            source_chain_selector == header_source_chain_selector,
+            error::invalid_argument(E_SOURCE_CHAIN_SELECTOR_MISMATCH)
+        );
+
+        let sender = eth_abi::decode_bytes(&mut stream);
+        let data = eth_abi::decode_bytes(&mut stream);
+        let receiver = eth_abi::decode_address(&mut stream);
+        let gas_limit = eth_abi::decode_u256(&mut stream);
+
+        let token_amounts =
             eth_abi::decode_vector(
                 &mut stream,
                 |stream| {
-                    let message_id = eth_abi::decode_bytes32(stream);
-                    let header_source_chain_selector = eth_abi::decode_u64(stream);
-                    let dest_chain_selector = eth_abi::decode_u64(stream);
-                    let sequence_number = eth_abi::decode_u64(stream);
-                    let nonce = eth_abi::decode_u64(stream);
+                    let source_pool_address = eth_abi::decode_bytes(stream);
+                    let dest_token_address = eth_abi::decode_address(stream);
+                    let dest_gas_amount = eth_abi::decode_u32(stream);
+                    let extra_data = eth_abi::decode_bytes(stream);
+                    let amount = eth_abi::decode_u256(stream);
 
-                    let header = RampMessageHeader {
-                        message_id,
-                        source_chain_selector: header_source_chain_selector,
-                        dest_chain_selector,
-                        sequence_number,
-                        nonce
-                    };
-
-                    assert!(
-                        source_chain_selector == header_source_chain_selector,
-                        error::invalid_argument(E_SOURCE_CHAIN_SELECTOR_MISMATCH)
-                    );
-
-                    let sender = eth_abi::decode_bytes(stream);
-                    let data = eth_abi::decode_bytes(stream);
-                    let receiver = eth_abi::decode_address(stream);
-                    let gas_limit = eth_abi::decode_u256(stream);
-
-                    let token_amounts =
-                        eth_abi::decode_vector(
-                            stream,
-                            |stream| {
-                                let source_pool_address = eth_abi::decode_bytes(stream);
-                                let dest_token_address = eth_abi::decode_address(stream);
-                                let dest_gas_amount = eth_abi::decode_u32(stream);
-                                let extra_data = eth_abi::decode_bytes(stream);
-                                let amount = eth_abi::decode_u256(stream);
-
-                                Any2AptosTokenTransfer {
-                                    source_pool_address,
-                                    dest_token_address,
-                                    dest_gas_amount,
-                                    extra_data,
-                                    amount
-                                }
-                            }
-                        );
-
-                    Any2AptosRampMessage {
-                        header,
-                        sender,
-                        data,
-                        receiver,
-                        gas_limit,
-                        token_amounts
+                    Any2AptosTokenTransfer {
+                        source_pool_address,
+                        dest_token_address,
+                        dest_gas_amount,
+                        extra_data,
+                        amount
                     }
                 }
             );
 
+        let message = Any2AptosRampMessage {
+            header,
+            sender,
+            data,
+            receiver,
+            gas_limit,
+            token_amounts
+        };
+
         let offchain_token_data =
-            eth_abi::decode_vector(
-                &mut stream,
-                |stream| {
-                    eth_abi::decode_vector(
-                        stream, |stream| eth_abi::decode_bytes(stream)
-                    )
-                }
-            );
+            eth_abi::decode_vector(&mut stream, |stream| eth_abi::decode_bytes(stream));
 
         let proofs =
             eth_abi::decode_vector(
@@ -1237,15 +1172,7 @@ module ccip::offramp {
                 |stream| eth_abi::decode_bytes32(stream)
             );
 
-        let proof_flag_bits = eth_abi::decode_u256(&mut stream);
-
-        ExecutionReport {
-            source_chain_selector,
-            messages,
-            offchain_token_data,
-            proofs,
-            proof_flag_bits
-        }
+        ExecutionReport { source_chain_selector, message, offchain_token_data, proofs }
     }
 
     // ================================================================
@@ -1353,30 +1280,6 @@ module ccip::offramp {
                 source_chains_is_rmn_verification_disabled,
                 source_chains_on_ramp
             )
-        } else if (function_bytes == b"manually_execute") {
-            let report_bytes = bcs_stream::deserialize_vector_u8(&mut stream);
-            bcs_stream::assert_is_consumed(&stream);
-            manually_execute(report_bytes)
-        } else if (function_bytes == b"commit") {
-            let report_context =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
-                );
-            let report = bcs_stream::deserialize_vector_u8(&mut stream);
-            let signatures =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
-                );
-            bcs_stream::assert_is_consumed(&stream);
-            commit(&caller, report_context, report, signatures)
-        } else if (function_bytes == b"execute") {
-            let report_context =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
-                );
-            let report = bcs_stream::deserialize_vector_u8(&mut stream);
-            bcs_stream::assert_is_consumed(&stream);
-            execute(&caller, report_context, report)
         } else if (function_bytes == b"apply_source_chain_config_updates") {
             let source_chains_selector =
                 bcs_stream::deserialize_vector(
@@ -1507,6 +1410,5 @@ module ccip::offramp {
 
         assert!(metadata_hash == expected_hash, 1);
         assert!(metadata_hash_alternate == expected_hash_alternate, 2);
-
     }
 }

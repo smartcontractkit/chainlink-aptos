@@ -17,7 +17,7 @@ module ccip::onramp {
     use ccip::eth_abi;
     use ccip::fee_quoter;
     use ccip::internal;
-    use ccip::merkle_multi_proof;
+    use ccip::merkle_proof;
     use ccip::rmn_remote;
     use ccip::state_object;
     use ccip::token_admin_dispatcher;
@@ -716,9 +716,7 @@ module ccip::onramp {
         message: &Aptos2AnyRampMessage, metadata_hash: vector<u8>
     ): vector<u8> {
         let outer_hash = vector[];
-        eth_abi::encode_bytes32(
-            &mut outer_hash, merkle_multi_proof::leaf_domain_separator()
-        );
+        eth_abi::encode_bytes32(&mut outer_hash, merkle_proof::leaf_domain_separator());
         eth_abi::encode_bytes32(&mut outer_hash, metadata_hash);
 
         let inner_hash = vector[];
