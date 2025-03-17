@@ -27,13 +27,13 @@ const (
 
 var CsDeployAptosMCMS deployment.ChangeSetV2[DeployAptosMCMSConfig] = CsDeployAptosMCMSImpl{}
 
-type DeployAptosMCMSParams struct {
+type deployAptosMCMSParams struct {
 	env               deployment.Environment
 	ab                *deployment.AddressBookMap
 	chainSelector     uint64
 	mcmsConfigs       mcmstypes.Config
 	aptosOnChainState map[uint64]AptosCCIPChainState
-	proposals         []mcms.Proposal
+	proposals         *[]mcms.Proposal
 }
 
 type CsDeployAptosMCMSImpl struct{}
@@ -53,13 +53,13 @@ func (cs CsDeployAptosMCMSImpl) Apply(env deployment.Environment, c DeployAptosM
 	newAddresses := deployment.NewMemoryAddressBook()
 	proposals := []mcms.Proposal{}
 	for chainSel, mcmsConfigs := range c.MCMSConfigPerChain {
-		deployParams := DeployAptosMCMSParams{
+		deployParams := deployAptosMCMSParams{
 			env:               env,
 			ab:                newAddresses,
 			chainSelector:     chainSel,
 			mcmsConfigs:       mcmsConfigs,
 			aptosOnChainState: state,
-			proposals:         proposals,
+			proposals:         &proposals,
 		}
 		err := deployMCMSContractsForAptosChain(&deployParams)
 		if err != nil {
@@ -75,7 +75,7 @@ func (cs CsDeployAptosMCMSImpl) Apply(env deployment.Environment, c DeployAptosM
 	}, nil
 }
 
-func deployMCMSContractsForAptosChain(p *DeployAptosMCMSParams) error {
+func deployMCMSContractsForAptosChain(p *deployAptosMCMSParams) error {
 	chainState, ok := p.aptosOnChainState[p.chainSelector]
 	if !ok {
 		return fmt.Errorf("chain %d not found on state", p.chainSelector)
@@ -92,7 +92,8 @@ func deployMCMSContractsForAptosChain(p *DeployAptosMCMSParams) error {
 	}
 
 	// Deploy MCMS
-	addressMCMS, mcmsDeployTx, contractMCMS, err := mcmsbind.DeployToResourceAccount(aptosChain.DeployerSigner, aptosChain.Client)
+	mcmsSeed := mcmsbind.DefaultSeed + time.Now().String()
+	addressMCMS, mcmsDeployTx, contractMCMS, err := mcmsbind.DeployToResourceAccount(aptosChain.DeployerSigner, aptosChain.Client, mcmsSeed)
 	if err != nil {
 		return fmt.Errorf("failed to deploy MCMS contract: %v", err)
 	}
@@ -118,7 +119,7 @@ func deployMCMSContractsForAptosChain(p *DeployAptosMCMSParams) error {
 	if err != nil {
 		return fmt.Errorf("failed to build proposal: %v", err)
 	}
-	p.proposals = append(p.proposals, *proposal)
+	*p.proposals = append(*p.proposals, *proposal)
 
 	return nil
 }

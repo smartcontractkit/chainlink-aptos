@@ -21,7 +21,7 @@ import (
 const AptosCCIPType deployment.ContractType = "AptosCCIP"
 
 // CsDeployAptosChain deploys CCIP Package for Aptos chains
-var CsDeployAptosChain deployment.ChangeSetV2[DeployAptosMCMSConfig] = CsDeployAptosMCMSImpl{}
+var CsDeployAptosChain deployment.ChangeSetV2[DeployAptosChainConfig] = CsDeployAptosChainImp{}
 
 type CsDeployAptosChainImp struct {
 	onChainState map[uint64]AptosCCIPChainState
@@ -30,7 +30,7 @@ type CsDeployAptosChainImp struct {
 	proposals    []mcms.Proposal
 }
 
-func (cs *CsDeployAptosChainImp) VerifyPreconditions(env deployment.Environment, config DeployAptosChainConfig) error {
+func (cs CsDeployAptosChainImp) VerifyPreconditions(env deployment.Environment, config DeployAptosChainConfig) error {
 	// Validate configs
 	if err := config.Validate(); err != nil {
 		return fmt.Errorf("invalid DeployAptosChainConfig: %w", err)
@@ -65,7 +65,7 @@ func (cs *CsDeployAptosChainImp) VerifyPreconditions(env deployment.Environment,
 	return nil
 }
 
-func (cs *CsDeployAptosChainImp) Apply(env deployment.Environment, config DeployAptosChainConfig) (deployment.ChangesetOutput, error) {
+func (cs CsDeployAptosChainImp) Apply(env deployment.Environment, config DeployAptosChainConfig) (deployment.ChangesetOutput, error) {
 	cs.ab = deployment.NewMemoryAddressBook()
 
 	// For each aptos chain in the config, deploy the CCIP package
