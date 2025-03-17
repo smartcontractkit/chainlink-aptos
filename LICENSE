@@ -1,4 +1,4 @@
-Copyright (c) 2018 SmartContract ChainLink Limited SEZC
+Copyright (c) 2024 SmartContract ChainLink Limited SEZC
 
 Portions of this software are licensed as follows:
 
@@ -24,8 +24,8 @@ THE SOFTWARE.
 
 
 *All content residing under (1) “/contracts/ccip”; (2) “/contracts/mcms”
-are licensed under “Business Source License 1.1” with a Change Date of May 23, 2027
-and Change License to “MIT License”
+are licensed under “Business Source License 1.1” with a Change Date of
+March 12, 2029 and Change License to “MIT License”
 
 * Content outside of the above mentioned directories or restrictions
 above is available under the "MIT" license as defined above.
