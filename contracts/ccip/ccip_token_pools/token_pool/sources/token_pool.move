@@ -11,7 +11,7 @@ module ccip_token_pool::token_pool {
     use ccip::eth_abi;
     use ccip::token_admin_registry;
     use ccip::rmn_remote;
-    use chainlink_common::allowlist;
+    use ccip::allowlist;
 
     const STORE_OBJECT_SEED: vector<u8> = b"CCIPTokenPool";
 

@@ -15,8 +15,5 @@ mcms_register_entrypoints = "0x4001"
 mcms_owner = "0x4010"
 mcms_test = "0x4900"
 
-# Chainlink Common: 8xxx
-chainlink_common = "0x8001"
-
 # External: 9xxx
 local_token = "0x9000"
