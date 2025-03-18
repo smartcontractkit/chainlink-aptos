@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/smartcontractkit/chainlink/deployment"
-	"github.com/smartcontractkit/chainlink/v2/core/logger"
+	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -21,7 +21,7 @@ func TestCsDeployAptosChainImp_VerifyPreconditions(t *testing.T) {
 			name: "success - valid config and state",
 			env: deployment.Environment{
 				Name:   "test",
-				Logger: logger.TestLogger(t),
+				Logger: logger.Test(t),
 				AptosChains: map[uint64]deployment.AptosChain{
 					743186221051783445:  {},
 					4457093679053095497: {},
@@ -57,7 +57,7 @@ func TestCsDeployAptosChainImp_VerifyPreconditions(t *testing.T) {
 			name: "error - chain has no env",
 			env: deployment.Environment{
 				Name:   "test",
-				Logger: logger.TestLogger(t),
+				Logger: logger.Test(t),
 				AptosChains: map[uint64]deployment.AptosChain{
 					4457093679053095497: {},
 				},
@@ -85,7 +85,7 @@ func TestCsDeployAptosChainImp_VerifyPreconditions(t *testing.T) {
 			name: "error - invalid config - chainSelector",
 			env: deployment.Environment{
 				Name:              "test",
-				Logger:            logger.TestLogger(t),
+				Logger:            logger.Test(t),
 				ExistingAddresses: deployment.NewMemoryAddressBook(),
 				AptosChains:       map[uint64]deployment.AptosChain{},
 			},
@@ -101,7 +101,7 @@ func TestCsDeployAptosChainImp_VerifyPreconditions(t *testing.T) {
 			name: "error - missing MCMS contract for 2 chains",
 			env: deployment.Environment{
 				Name:   "test",
-				Logger: logger.TestLogger(t),
+				Logger: logger.Test(t),
 				AptosChains: map[uint64]deployment.AptosChain{
 					743186221051783445:  {},
 					4457093679053095497: {},
