@@ -124,7 +124,7 @@ func (cs TOMLConfigs) validateKeys() (err error) {
 
 type TOMLConfig struct {
 	// Do not access directly. Use [IsEnabled]
-	Enabled bool
+	Enabled *bool
 
 	// Chain configuration
 	ChainID         string
@@ -160,7 +160,7 @@ func NewDecodedTOMLConfig(rawConfig string) (*TOMLConfig, error) {
 }
 
 func (c *TOMLConfig) IsEnabled() bool {
-	return c.Enabled
+	return c.Enabled == nil || *c.Enabled
 }
 
 func (c *TOMLConfig) SetFrom(f *TOMLConfig) {
