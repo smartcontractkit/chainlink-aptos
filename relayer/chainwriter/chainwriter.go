@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"sync"
 
 	"github.com/mitchellh/mapstructure"
 
@@ -23,7 +22,6 @@ type aptosChainWriter struct {
 	config ChainWriterConfig
 
 	starter utils.StartStopOnce
-	done    sync.WaitGroup
 	stop    chan struct{}
 }
 
@@ -57,7 +55,6 @@ func (a *aptosChainWriter) Start(ctx context.Context) error {
 func (a *aptosChainWriter) Close() error {
 	return a.starter.StopOnce("aptosChainWriter", func() error {
 		close(a.stop)
-		a.done.Wait()
 		return nil
 	})
 }
