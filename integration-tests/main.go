@@ -211,7 +211,7 @@ func deployServices() {
 
 func DeployContracts(cacheFolder string, gethHttpRpc string, chainId string, gethPrivKey string) {
 	kc := deploy.Keystone{
-		NodesList:     fmt.Sprintf("%s/NodesList.txt", cacheFolder),
+		NodesList:    fmt.Sprintf("%s/NodesList.txt", cacheFolder),
 		ArtefactsDir: cacheFolder,
 		GethHttpRPC:  gethHttpRpc,
 		ChainId:      chainId,
@@ -222,7 +222,7 @@ func DeployContracts(cacheFolder string, gethHttpRpc string, chainId string, get
 
 func DeployJobSpecs(cacheFolder string, gethHttpRpc string, chainId string, gethPrivKey string) {
 	kc := deploy.Keystone{
-		NodesList:     fmt.Sprintf("%s/NodesList.txt", cacheFolder),
+		NodesList:    fmt.Sprintf("%s/NodesList.txt", cacheFolder),
 		ArtefactsDir: cacheFolder,
 		GethHttpRPC:  gethHttpRpc,
 		ChainId:      chainId,
@@ -234,7 +234,7 @@ func DeployJobSpecs(cacheFolder string, gethHttpRpc string, chainId string, geth
 
 func DeployWorkflows(workflowFile string, cacheFolder string, gethHttpRpc string, chainId string) {
 	kc := deploy.Keystone{
-		NodesList:     fmt.Sprintf("%s/NodesList.txt", cacheFolder),
+		NodesList:    fmt.Sprintf("%s/NodesList.txt", cacheFolder),
 		ArtefactsDir: cacheFolder,
 		GethHttpRPC:  gethHttpRpc,
 		ChainId:      chainId,

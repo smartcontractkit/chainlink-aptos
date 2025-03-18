@@ -266,6 +266,12 @@ func ValidateCore() (*CoreConfig, error) {
 		errs = append(errs, "CORE_VERSION is required")
 	}
 
+	imageArg := fmt.Sprintf("%s:%s", coreImage, coreVersion)
+
+	if coreVersion == "" || coreVersion == "none" {
+		imageArg = coreImage
+	}
+
 	coreHttpPort, ok := os.LookupEnv("CORE_HTTP_PORT")
 	if !ok {
 		errs = append(errs, "CORE_HTTP_PORT is required")
@@ -292,17 +298,18 @@ func ValidateCore() (*CoreConfig, error) {
 		errs = append(errs, "CORE_NODE_COUNT must be an integer")
 	}
 
-	if len(errs) == 0 {
-		return &CoreConfig{
-			Image:         fmt.Sprintf("%s:%s", coreImage, coreVersion),
-			Ports:         []string{coreHttpPort},
-			Name:          name,
-			Email:         "notreal@fakeemail.ch",
-			Password:      "fj293fbBnlQ!f9vNs",
-			CoreNodeCount: coreNodeCountParsed,
-			CoreP2PPort:   coreP2PPortParsed,
-		}, nil
+	if len(errs) != 0 {
+		return nil, errors.New(strings.Join(errs, "; "))
 	}
 
-	return nil, errors.New(strings.Join(errs, "; "))
+	return &CoreConfig{
+		Image:         imageArg,
+		Ports:         []string{coreHttpPort},
+		Name:          name,
+		Email:         "notreal@fakeemail.ch",
+		Password:      "fj293fbBnlQ!f9vNs",
+		CoreNodeCount: coreNodeCountParsed,
+		CoreP2PPort:   coreP2PPortParsed,
+	}, nil
+
 }
