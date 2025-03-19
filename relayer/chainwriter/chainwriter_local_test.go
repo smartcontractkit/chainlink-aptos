@@ -22,6 +22,7 @@ import (
 
 	rlclient "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/client"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/fees"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/testutils"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
 )
@@ -141,7 +142,8 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 		},
 	}
 
-	chainWriter := NewChainWriter(logger, txmgr, config)
+	fe := fees.NewFeeEstimator(rlClient)
+	chainWriter := NewChainWriter(logger, fe, txmgr, config)
 
 	compilationResult := testutils.CompileTestModule(t, accountAddress)
 

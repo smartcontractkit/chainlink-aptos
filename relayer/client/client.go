@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+//go:generate mockery --name=RateLimitedClient --output=mock --outpkg=mock
 type RateLimitedClient interface {
 	View(payload *aptos.ViewPayload) ([]any, error)
 	EventsByHandle(address aptos.AccountAddress, eventHandle, fieldName string, start, limit *uint64) ([]*api.Event, error)
