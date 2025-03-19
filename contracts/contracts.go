@@ -16,6 +16,7 @@ const (
 	CCIPBurnMintPool    = Package("ccip_burn_mint_pool")
 	CCIPLockReleasePool = Package("ccip_lock_release_pool")
 	CCIPTokenPool       = Package("ccip_token_pool")
+	CCIPRouter       	= Package("ccip_router")
 
 	MCMS     = Package("mcms")
 	MCMSTest = Package("mcms_test")
@@ -30,6 +31,7 @@ var Contracts map[Package]string = map[Package]string{
 	CCIPBurnMintPool:    filepath.Join("ccip", "token_pools", "ccip_burn_mint_pool"),
 	CCIPLockReleasePool: filepath.Join("ccip", "token_pools", "ccip_lock_release_pool"),
 	CCIPTokenPool:       filepath.Join("ccip", "token_pools", "token_pool"),
+	CCIPRouter:       	 filepath.Join("ccip", "ccip_router"),
 
 	MCMS:     filepath.Join("mcms", "mcms"),
 	MCMSTest: filepath.Join("mcms", "mcms_test"),
