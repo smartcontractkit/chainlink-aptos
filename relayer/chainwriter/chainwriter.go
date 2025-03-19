@@ -13,22 +13,26 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
+	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/fees"
 	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
 )
 
 type aptosChainWriter struct {
 	logger logger.Logger
 	txm    *txm.AptosTxm
+	fe     *fees.FeeEstimator
 	config ChainWriterConfig
 
 	starter utils.StartStopOnce
 	stop    chan struct{}
 }
 
-func NewChainWriter(lgr logger.Logger, txm *txm.AptosTxm, config ChainWriterConfig) commontypes.ChainWriter {
+func NewChainWriter(lgr logger.Logger, fe *fees.FeeEstimator, txm *txm.AptosTxm, config ChainWriterConfig) commontypes.ChainWriter {
 	return &aptosChainWriter{
 		logger: logger.Named(lgr, "AptosChainWriter"),
 		txm:    txm,
+		fe:     fe,
+
 		// TODO: validate config
 		config: config,
 	}
@@ -128,5 +132,27 @@ func (a *aptosChainWriter) GetTransactionStatus(ctx context.Context, transaction
 }
 
 func (a *aptosChainWriter) GetFeeComponents(ctx context.Context) (*commontypes.ChainFeeComponents, error) {
-	return nil, errors.New("not implemented")
+	if a.fe == nil {
+		return nil, errors.New("fee estimator not available")
+	}
+
+	estimation, err := a.fe.EstimateGasPrice()
+	if err != nil {
+		return nil, fmt.Errorf("failed to estimate gas price: %+w", err)
+	}
+
+	var fee uint64
+	switch a.config.FeeStrategy {
+	case fees.Deprioritized:
+		fee = estimation.DeprioritizedGasEstimate
+	case fees.Prioritized:
+		fee = estimation.PrioritizedGasEstimate
+	default:
+		fee = estimation.GasEstimate
+	}
+
+	return &commontypes.ChainFeeComponents{
+		ExecutionFee:        new(big.Int).SetUint64(fee),
+		DataAvailabilityFee: big.NewInt(0),
+	}, nil
 }

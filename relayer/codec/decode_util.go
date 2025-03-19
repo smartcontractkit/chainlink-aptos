@@ -14,6 +14,26 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
+func DecodeAptosAPIResponse(from any, to any) error {
+	arr, ok := from.([]any)
+	if !ok {
+		return fmt.Errorf("expected array response from Aptos API, got %T", from)
+	}
+
+	// we need this because all values are returned in a []any, but
+	// vector or tuple return types are not necessary wrapped in an additional
+	// slice, eg:
+	// u32 return type -> [1]
+	// (u32, u64) tuple return type -> [1, 2]
+	// vector<u8> return type -> ["0x12345678"]
+	// vector<vector<u8>> return type -> ["0x1234", "0x5678"]
+	if len(arr) == 1 {
+		return DecodeAptosJsonValue(arr[0], to)
+	}
+
+	return DecodeAptosJsonValue(arr, to)
+}
+
 func DecodeAptosJsonArray(from []any, to ...any) error {
 	if len(to) != len(from) {
 		return fmt.Errorf("mismatched from/to arguments")
@@ -24,7 +44,6 @@ func DecodeAptosJsonArray(from []any, to ...any) error {
 			return fmt.Errorf("failed to decode value: %w", err)
 		}
 	}
-
 	return nil
 }
 
@@ -51,22 +70,6 @@ func DecodeAptosJsonValue(from any, to any) error {
 	decoder, err := mapstructure.NewDecoder(config)
 	if err != nil {
 		return fmt.Errorf("failed to create decoder: %+w", err)
-	}
-
-	// we need this because all values are returned in a []any, but
-	// vector or tuple return types are not necessary wrapped in an additional
-	// slice, eg:
-	// u32 return type -> [1]
-	// (u32, u64) tuple return type -> [1, 2]
-	// vector<u8> return type -> ["0x12345678"]
-	// vector<vector<u8>> return type -> ["0x1234", "0x5678"]
-
-	v := reflect.ValueOf(from)
-	if v.Kind() == reflect.Slice && v.Len() == 1 {
-		err := decoder.Decode(v.Index(0).Interface())
-		if err == nil {
-			return nil
-		}
 	}
 
 	return decoder.Decode(from)
