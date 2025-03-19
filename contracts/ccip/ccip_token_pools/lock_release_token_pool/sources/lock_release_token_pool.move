@@ -331,6 +331,7 @@ module lock_release_token_pool::lock_release_token_pool {
         account::create_resource_address(&@lock_release_token_pool, STORE_OBJECT_SEED)
     }
 
+    // TODO: only the owner of the token
     fun assert_can_initialize(caller_address: address) {
         if (caller_address == @lock_release_token_pool) { return };
 
