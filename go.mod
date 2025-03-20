@@ -11,9 +11,7 @@ require (
 	github.com/aptos-labs/aptos-go-sdk v1.5.1-0.20250303230301-affcbec1c549
 	github.com/ethereum/go-ethereum v1.15.5
 	github.com/smartcontractkit/chainlink-aptos/relayer v0.0.0-20250320162700-de7f1c0fd741
-	github.com/smartcontractkit/chainlink-common v0.4.2-0.20250227203031-2537a8c226bb
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20250228165933-79ce88cc5ab0
-	github.com/smartcontractkit/mcms v0.15.1-0.20250320175928-ce42ca61a8ad
 	github.com/stretchr/testify v1.10.0
 	github.com/valyala/fastjson v1.6.4
 )
@@ -118,10 +116,12 @@ require (
 	github.com/smartcontractkit/ccip-owner-contracts v0.1.0 // indirect
 	github.com/smartcontractkit/chain-selectors v1.0.40 // indirect
 	github.com/smartcontractkit/chainlink-ccip/chains/solana v0.0.0-20250226104101-11778f2ead98 // indirect
+	github.com/smartcontractkit/chainlink-common v0.4.2-0.20250227203031-2537a8c226bb // indirect
 	github.com/smartcontractkit/chainlink-protos/job-distributor v0.9.0 // indirect
 	github.com/smartcontractkit/chainlink/v2 v2.0.0-20250228165933-79ce88cc5ab0 // indirect
 	github.com/smartcontractkit/grpc-proxy v0.0.0-20240830132753-a7e17fec5ab7 // indirect
 	github.com/smartcontractkit/libocr v0.0.0-20250220133800-f3b940c4f298 // indirect
+	github.com/smartcontractkit/mcms v0.15.1-0.20250320175928-ce42ca61a8ad // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/streamingfast/logging v0.0.0-20230608130331-f22c91403091 // indirect
 	github.com/supranational/blst v0.3.14 // indirect
