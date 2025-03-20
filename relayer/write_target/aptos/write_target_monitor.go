@@ -3,20 +3,21 @@ package write_target
 import (
 	"context"
 	"fmt"
+
 	"google.golang.org/protobuf/proto"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/data-feeds/on-chain/registry"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/on-chain/forwarder"
-	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/write-target"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/data-feeds/on-chain/registry"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/platform/on-chain/forwarder"
+	wt "github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/platform/write-target"
 )
 
 const (
-	repoCLLInternalIntegrations = "https://raw.githubusercontent.com/smartcontractkit/chainlink-internal-integrations"
+	repoCLLInternalIntegrations = "https://raw.githubusercontent.com/smartcontractkit/chainlink-aptos"
 	versionRefsDevelop          = "refs/heads/develop"
 	schemaBasePath              = repoCLLInternalIntegrations + "/" + versionRefsDevelop + "/aptos/relayer/monitoring/pb"
 )

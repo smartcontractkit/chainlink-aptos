@@ -1,4 +1,4 @@
-module github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer
+module github.com/smartcontractkit/chainlink-aptos/relayer
 
 go 1.23.0
 

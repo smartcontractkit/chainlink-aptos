@@ -7,7 +7,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/testutils"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 )
 
 func TestChainWriterDevnet(t *testing.T) {

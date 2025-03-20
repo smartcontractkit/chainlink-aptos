@@ -3,9 +3,9 @@ package forwarder
 import (
 	"fmt"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/platform"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/report/platform"
 
-	wt_msg "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/write-target"
+	wt_msg "github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/platform/write-target"
 )
 
 // DecodeAsReportProcessed decodes a 'platform.write-target.WriteConfirmed' message

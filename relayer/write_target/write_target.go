@@ -20,13 +20,13 @@ import (
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/platform"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/utils"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/report/platform"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 
-	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/write-target"
+	wt "github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/platform/write-target"
 
-	aptosacc "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/account"
+	aptosacc "github.com/smartcontractkit/chainlink-aptos/relayer/account"
 )
 
 var (

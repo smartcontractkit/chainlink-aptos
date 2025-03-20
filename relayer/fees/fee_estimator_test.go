@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	rlclient "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/client/mock"
+	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client/mock"
 )
 
 func TestEstimateGasPrice(t *testing.T) {

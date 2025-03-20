@@ -6,9 +6,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/data-feeds/on-chain/registry"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/on-chain/forwarder"
-	wt "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/write-target"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/data-feeds/on-chain/registry"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/platform/on-chain/forwarder"
+	wt "github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/platform/write-target"
 )
 
 func TestToSchemaPath(t *testing.T) {

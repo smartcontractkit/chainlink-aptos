@@ -6,7 +6,7 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/api"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/compile"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/compile"
 )
 
 const (

@@ -23,10 +23,10 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
-	rlclient "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/client"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/testutils"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
+	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
 
 func TestChainReaderLocal(t *testing.T) {

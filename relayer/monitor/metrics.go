@@ -9,7 +9,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/metric/utils"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/metric/utils"
 )
 
 // Define a new gauge metric for account balance

@@ -33,8 +33,8 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 
-	rlclient "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/client"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/testutils"
+	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 )
 
 type Account struct {

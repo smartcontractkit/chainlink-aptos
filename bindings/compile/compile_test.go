@@ -8,7 +8,7 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/contracts"
+	"github.com/smartcontractkit/chainlink-aptos/contracts"
 )
 
 func TestCompileMCMS(t *testing.T) {

@@ -21,8 +21,8 @@ import (
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
-	aptosacc "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/account"
-	rlclient "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/client"
+	aptosacc "github.com/smartcontractkit/chainlink-aptos/relayer/account"
+	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client"
 )
 
 var _ services.Service = &AptosTxm{}

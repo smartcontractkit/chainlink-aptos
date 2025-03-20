@@ -14,7 +14,7 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/valyala/fastjson"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/contracts"
+	"github.com/smartcontractkit/chainlink-aptos/contracts"
 )
 
 type CompiledPackage struct {

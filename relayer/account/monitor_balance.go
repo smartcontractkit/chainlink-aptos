@@ -10,8 +10,8 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 
-	rlclient "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/client"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
+	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 )
 
 // BalanceMonitorOpts contains the options for creating a new Aptos account balance monitor.

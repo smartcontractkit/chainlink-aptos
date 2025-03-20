@@ -4,15 +4,15 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/api"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/bind"
-	module_auth "github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/ccip/auth"
-	module_fee_quoter "github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/ccip/fee_quoter"
-	module_offramp "github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/ccip/offramp"
-	module_onramp "github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/ccip/onramp"
-	module_receiver_registry "github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/ccip/receiver_registry"
-	module_rmn_remote "github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/ccip/rmn_remote"
-	module_token_admin_registry "github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/ccip/token_admin_registry"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/compile"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
+	module_auth "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/auth"
+	module_fee_quoter "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/fee_quoter"
+	module_offramp "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/offramp"
+	module_onramp "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/onramp"
+	module_receiver_registry "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/receiver_registry"
+	module_rmn_remote "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/rmn_remote"
+	module_token_admin_registry "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/token_admin_registry"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/compile"
 )
 
 type CCIP struct {

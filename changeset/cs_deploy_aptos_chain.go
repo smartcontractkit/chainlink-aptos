@@ -8,10 +8,10 @@ import (
 
 	"github.com/aptos-labs/aptos-go-sdk"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/bind"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/ccip"
-	mcmsbind "github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/mcms"
-	module_mcms "github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/mcms/mcms"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip"
+	mcmsbind "github.com/smartcontractkit/chainlink-aptos/bindings/mcms"
+	module_mcms "github.com/smartcontractkit/chainlink-aptos/bindings/mcms/mcms"
 	"github.com/smartcontractkit/chainlink/deployment"
 	"github.com/smartcontractkit/mcms"
 	aptosmcms "github.com/smartcontractkit/mcms/sdk/aptos"
