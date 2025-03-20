@@ -11,7 +11,7 @@ replace (
 require (
 	github.com/aptos-labs/aptos-go-sdk v1.5.1-0.20250303230301-affcbec1c549
 	github.com/ethereum/go-ethereum v1.15.0
-	github.com/smartcontractkit/chainlink-aptos/relayer v0.0.0-20250228101746-668edf745e97
+	github.com/smartcontractkit/chainlink-aptos/relayer v0.0.0-20250320162700-de7f1c0fd741
 	github.com/smartcontractkit/chainlink-common v0.4.2-0.20250227203031-2537a8c226bb
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20250228165933-79ce88cc5ab0
 	github.com/smartcontractkit/mcms v0.12.2
@@ -117,6 +117,8 @@ require (
 	github.com/smartcontractkit/ccip-owner-contracts v0.1.0 // indirect
 	github.com/smartcontractkit/chain-selectors v1.0.40 // indirect
 	github.com/smartcontractkit/chainlink-ccip/chains/solana v0.0.0-20250220215921-f69bcbaa0051 // indirect
+	github.com/smartcontractkit/chainlink-internal-integrations/aptos v0.0.0-20250320132323-f1249685944c // indirect
+	github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer v0.0.0-20250228101746-668edf745e97 // indirect
 	github.com/smartcontractkit/chainlink-protos/job-distributor v0.9.0 // indirect
 	github.com/smartcontractkit/chainlink/v2 v2.0.0-20250228165933-79ce88cc5ab0 // indirect
 	github.com/smartcontractkit/grpc-proxy v0.0.0-20240830132753-a7e17fec5ab7 // indirect

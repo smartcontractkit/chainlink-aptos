@@ -673,6 +673,10 @@ github.com/smartcontractkit/chainlink-framework/multinode v0.0.0-20250211162441-
 github.com/smartcontractkit/chainlink-framework/multinode v0.0.0-20250211162441-3d6cea220efb/go.mod h1:4JqpgFy01LaqG1yM2iFTzwX3ZgcAvW9WdstBZQgPHzU=
 github.com/smartcontractkit/chainlink-integrations/evm v0.0.0-20250227174346-ab609729dc5d h1:nBypaSqqU+lTyIqOBMUeKOv49sw3ImafMALeEUrKCJU=
 github.com/smartcontractkit/chainlink-integrations/evm v0.0.0-20250227174346-ab609729dc5d/go.mod h1:SnIqxMeK33uC2og+sgMftKauW5dCioMBG5XzxA8tx6o=
+github.com/smartcontractkit/chainlink-internal-integrations/aptos v0.0.0-20250320132323-f1249685944c h1:ZDBTnybtJqv7u0hn4+dt/FhZes38Ctja5TL0HyZeyKQ=
+github.com/smartcontractkit/chainlink-internal-integrations/aptos v0.0.0-20250320132323-f1249685944c/go.mod h1:nlPgsuNc9dw3A1OvtowLu6KmjTGH8SkupW6qZqAPvzU=
+github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer v0.0.0-20250228101746-668edf745e97 h1:gO8Au+rb/EbAxwWcRfUF/dxeHqmoxlm4FI5n+rY672U=
+github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer v0.0.0-20250228101746-668edf745e97/go.mod h1:5FgC9UcIo5QTW/waSTduLGoBy2z+n5CZ/yF06yXWSKs=
 github.com/smartcontractkit/chainlink-protos/job-distributor v0.9.0 h1:hfMRj2ny6oNHd8w1rhJHdoX3YkoWJtCkBK6wTlCE4+c=
 github.com/smartcontractkit/chainlink-protos/job-distributor v0.9.0/go.mod h1:/dVVLXrsp+V0AbcYGJo3XMzKg3CkELsweA/TTopCsKE=
 github.com/smartcontractkit/chainlink-protos/orchestrator v0.5.0 h1:xRgu/kMkxcY4LeDKMBhaXU4khgya7v2wyb4Sa5Nzb+Y=
