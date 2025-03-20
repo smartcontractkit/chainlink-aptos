@@ -1,18 +1,18 @@
-module github.com/smartcontractkit/chainlink-internal-integrations/aptos
+module github.com/smartcontractkit/chainlink-aptos
 
 go 1.24.0
 
 replace (
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
-	github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer => ./relayer
+	github.com/smartcontractkit/chainlink-aptos/relayer => ./relayer
 	github.com/smartcontractkit/mcms => github.com/smartcontractkit/mcms v0.0.0-20250221194121-b78e08aef016
 )
 
 require (
 	github.com/aptos-labs/aptos-go-sdk v1.5.1-0.20250303230301-affcbec1c549
 	github.com/ethereum/go-ethereum v1.15.0
+	github.com/smartcontractkit/chainlink-aptos/relayer v0.0.0-20250228101746-668edf745e97
 	github.com/smartcontractkit/chainlink-common v0.4.2-0.20250227203031-2537a8c226bb
-	github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer v0.0.0-20250228101746-668edf745e97
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20250228165933-79ce88cc5ab0
 	github.com/smartcontractkit/mcms v0.12.2
 	github.com/stretchr/testify v1.10.0
@@ -59,7 +59,6 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.25.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
-	github.com/gofrs/uuid v4.4.0+incompatible // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -94,7 +93,6 @@ require (
 	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-sqlite3 v2.0.3+incompatible // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.1-0.20220423185008-bf980b35cac4 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect

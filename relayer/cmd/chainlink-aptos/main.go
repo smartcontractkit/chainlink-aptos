@@ -9,9 +9,9 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer"
-	chain "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chain"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/config"
+	"github.com/smartcontractkit/chainlink-aptos/relayer"
+	chain "github.com/smartcontractkit/chainlink-aptos/relayer/chain"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/config"
 )
 
 const (
@@ -53,7 +53,7 @@ type pluginRelayer struct {
 // NewRelayer implements the Loopp factory method used by the Loopp server to instantiate a aptos relayer
 // [github.com/smartcontractkit/chainlink-common/pkg/loop.PluginRelayer]
 // loopKs must be an implementation that can construct a aptos keystore adapter
-// [github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm.NewKeystoreAdapter]
+// [github.com/smartcontractkit/chainlink-aptos/relayer/txm.NewKeystoreAdapter]
 func (p *pluginRelayer) NewRelayer(ctx context.Context, rawConfig string, loopKs loop.Keystore, capRegistry core.CapabilitiesRegistry) (loop.Relayer, error) {
 	// Initialize the chain service
 	cfg, err := config.NewDecodedTOMLConfig(rawConfig)

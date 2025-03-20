@@ -5,8 +5,8 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk/api"
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/bind"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/mcms/mcms"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/mcms/mcms"
 )
 
 type MCMSExecutorInterface interface {

@@ -6,7 +6,7 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/api"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
 
 // Event is an interface that all events must implement.

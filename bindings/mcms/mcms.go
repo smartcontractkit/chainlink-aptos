@@ -4,12 +4,12 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/api"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/bind"
-	module_mcms "github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/mcms/mcms"
-	module_mcms_account "github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/mcms/mcms_account"
-	module_mcms_deployer "github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/mcms/mcms_deployer"
-	module_mcms_executor "github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/mcms/mcms_executor"
-	module_mcms_registry "github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/mcms/mcms_registry"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
+	module_mcms "github.com/smartcontractkit/chainlink-aptos/bindings/mcms/mcms"
+	module_mcms_account "github.com/smartcontractkit/chainlink-aptos/bindings/mcms/mcms_account"
+	module_mcms_deployer "github.com/smartcontractkit/chainlink-aptos/bindings/mcms/mcms_deployer"
+	module_mcms_executor "github.com/smartcontractkit/chainlink-aptos/bindings/mcms/mcms_executor"
+	module_mcms_registry "github.com/smartcontractkit/chainlink-aptos/bindings/mcms/mcms_registry"
 )
 
 type MCMS struct {

@@ -3,9 +3,9 @@ package cciprouter
 import (
 	"github.com/aptos-labs/aptos-go-sdk"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/bind"
-	module_router "github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/ccip_router/ccip_router"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/compile"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
+	module_router "github.com/smartcontractkit/chainlink-aptos/bindings/ccip_router/ccip_router"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/compile"
 )
 
 type CCIPRouter struct {
@@ -36,7 +36,7 @@ func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIPRouter 
 	return CCIPRouter{
 		Address: address,
 		Router: module_router.Router{
-			RouterCaller:    module_router.RouterCaller{BoundContract: router},
+			RouterCaller:     module_router.RouterCaller{BoundContract: router},
 			RouterTransactor: module_router.RouterTransactor{BoundContract: router},
 		},
 	}

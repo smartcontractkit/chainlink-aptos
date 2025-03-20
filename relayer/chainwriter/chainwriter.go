@@ -12,9 +12,9 @@ import (
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/fees"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/fees"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
 
 type aptosChainWriter struct {

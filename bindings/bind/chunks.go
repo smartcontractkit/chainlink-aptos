@@ -1,7 +1,7 @@
 package bind
 
 import (
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/bindings/compile"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/compile"
 )
 
 type ChunkedPayload struct {

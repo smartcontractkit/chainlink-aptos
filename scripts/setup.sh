@@ -56,7 +56,7 @@ go run main.go toolkit deploy-ocr3-jobspecs \
   --p2pport=6691
 
 go run main.go toolkit deploy-workflows \
-  --workflow=../../../../chainlink-internal-integrations/aptos/scripts/workflow.toml
+  --workflow=../../../../chainlink-aptos/scripts/workflow.toml
 popd
 
 # docker logs -f chainlink.core.2 | rg -F '"Hash"'

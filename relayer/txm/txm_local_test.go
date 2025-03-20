@@ -20,8 +20,8 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 
-	rlclient "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/client"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/testutils"
+	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 )
 
 func TestTxmLocal(t *testing.T) {

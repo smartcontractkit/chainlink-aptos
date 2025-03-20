@@ -1,7 +1,7 @@
 package chainreader
 
 import (
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 )
 
 type ChainReaderConfig struct {

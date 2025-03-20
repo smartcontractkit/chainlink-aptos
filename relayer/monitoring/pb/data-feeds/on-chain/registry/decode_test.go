@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	wt_msg "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitoring/pb/platform/write-target"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/report/data_feeds"
+	wt_msg "github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/platform/write-target"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/report/data_feeds"
 )
 
 func TestDecodeAsReportProcessed(t *testing.T) {

@@ -18,8 +18,8 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 
-	rlclient "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/client"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/testutils"
+	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 )
 
 // This test ensures that the node returns errors as expected by the txm.

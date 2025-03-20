@@ -8,14 +8,14 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
 
-	aptosacc "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/account"
-	chain "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chain"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chainreader"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/chainwriter"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
-	aptosconfig "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/config"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/fees"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/write_target"
+	aptosacc "github.com/smartcontractkit/chainlink-aptos/relayer/account"
+	chain "github.com/smartcontractkit/chainlink-aptos/relayer/chain"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainwriter"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
+	aptosconfig "github.com/smartcontractkit/chainlink-aptos/relayer/config"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/fees"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"

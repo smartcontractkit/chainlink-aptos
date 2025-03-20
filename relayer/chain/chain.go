@@ -21,12 +21,12 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
-	rlclient "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/client"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/config"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
+	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/config"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 
-	aptosacc "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/account"
+	aptosacc "github.com/smartcontractkit/chainlink-aptos/relayer/account"
 )
 
 type Chain interface {

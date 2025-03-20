@@ -12,9 +12,9 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/config"
 
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/monitor"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/txm"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/write_target"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target"
 )
 
 // Name of the chain family (e.g., "ethereum", "solana", "aptos")

@@ -3,7 +3,7 @@ package fees
 import (
 	"github.com/aptos-labs/aptos-go-sdk"
 
-	rlclient "github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/client"
+	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client"
 )
 
 type FeeStrategy int

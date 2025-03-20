@@ -1,8 +1,8 @@
 package chainwriter
 
 import (
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/codec"
-	"github.com/smartcontractkit/chainlink-internal-integrations/aptos/relayer/fees"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/fees"
 )
 
 type ChainWriterConfig struct {
