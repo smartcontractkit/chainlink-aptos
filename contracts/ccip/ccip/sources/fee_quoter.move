@@ -41,7 +41,6 @@ module ccip::fee_quoter {
     const CHAIN_FAMILY_SELECTOR_EVM: vector<u8> = x"2812d52c";
     const CHAIN_FAMILY_SELECTOR_SVM: vector<u8> = x"1e10bdc4";
 
-    const EVM_EXTRA_ARGS_V1_TAG: vector<u8> = x"97a657c9";
     const EVM_EXTRA_ARGS_V2_TAG: vector<u8> = x"181dcf10";
     const EVM_PRECOMPILE_SPACE: u256 = 1024;
 
@@ -846,9 +845,6 @@ module ccip::fee_quoter {
 
         if (args_tag == EVM_EXTRA_ARGS_V2_TAG) {
             decode_evm_extra_args_v2(args_data)
-        } else if (args_tag == EVM_EXTRA_ARGS_V1_TAG) {
-            let gas_limit = eth_abi::decode_u256_value(args_data);
-            (gas_limit, false)
         } else {
             abort error::invalid_argument(E_INVALID_EXTRA_ARGS_TAG)
         }
