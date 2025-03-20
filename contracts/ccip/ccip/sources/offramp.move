@@ -154,8 +154,7 @@ module ccip::offramp {
 
     #[event]
     struct DynamicConfigSet has store, drop {
-        permissionless_execution_threshold_secs: u32,
-        is_rmn_verification_disabled: bool
+        permissionless_execution_threshold_secs: u32
     }
 
     #[event]
@@ -184,7 +183,8 @@ module ccip::offramp {
         source_chain_selector: u64,
         sequence_number: u64,
         message_id: vector<u8>,
-        message_hash: vector<u8>
+        message_hash: vector<u8>,
+        state: u8
     }
 
     #[event]
@@ -239,7 +239,6 @@ module ccip::offramp {
         caller: &signer,
         chain_selector: u64,
         permissionless_execution_threshold_secs: u32,
-        is_rmn_verification_disabled: bool,
         source_chains_selector: vector<u64>,
         source_chains_is_enabled: vector<bool>,
         source_chains_is_rmn_verification_disabled: vector<bool>,
@@ -287,8 +286,7 @@ module ccip::offramp {
 
         set_dynamic_config_internal(
             &mut state,
-            permissionless_execution_threshold_secs,
-            is_rmn_verification_disabled
+            permissionless_execution_threshold_secs
         );
         apply_source_chain_config_updates_internal(
             &mut state,
@@ -461,7 +459,8 @@ module ccip::offramp {
                 source_chain_selector,
                 sequence_number,
                 message_id: message.header.message_id,
-                message_hash: hashed_leaf
+                message_hash: hashed_leaf,
+                state: EXECUTION_STATE_SUCCESS
             }
         );
         event::emit_event(
@@ -470,7 +469,8 @@ module ccip::offramp {
                 source_chain_selector,
                 sequence_number,
                 message_id: message.header.message_id,
-                message_hash: hashed_leaf
+                message_hash: hashed_leaf,
+                state: EXECUTION_STATE_SUCCESS
             }
         );
     }
@@ -722,16 +722,13 @@ module ccip::offramp {
     }
 
     public entry fun set_dynamic_config(
-        caller: &signer,
-        permissionless_execution_threshold_secs: u32,
-        is_rmn_verification_disabled: bool
+        caller: &signer, permissionless_execution_threshold_secs: u32
     ) acquires OffRampState {
         auth::assert_only_owner(signer::address_of(caller));
 
         set_dynamic_config_internal(
             borrow_state_mut(),
-            permissionless_execution_threshold_secs,
-            is_rmn_verification_disabled
+            permissionless_execution_threshold_secs
         )
     }
 
@@ -865,23 +862,13 @@ module ccip::offramp {
     }
 
     inline fun set_dynamic_config_internal(
-        state: &mut OffRampState,
-        permissionless_execution_threshold_secs: u32,
-        is_rmn_verification_disabled: bool
+        state: &mut OffRampState, permissionless_execution_threshold_secs: u32
     ) {
         state.permissionless_execution_threshold_secs = permissionless_execution_threshold_secs;
-        event::emit(
-            DynamicConfigSet {
-                permissionless_execution_threshold_secs,
-                is_rmn_verification_disabled
-            }
-        );
+        event::emit(DynamicConfigSet { permissionless_execution_threshold_secs });
         event::emit_event(
             &mut state.dynamic_config_set_events,
-            DynamicConfigSet {
-                permissionless_execution_threshold_secs,
-                is_rmn_verification_disabled
-            }
+            DynamicConfigSet { permissionless_execution_threshold_secs }
         );
     }
 
@@ -1252,7 +1239,6 @@ module ccip::offramp {
             let chain_selector = bcs_stream::deserialize_u64(&mut stream);
             let permissionless_execution_threshold_secs =
                 bcs_stream::deserialize_u32(&mut stream);
-            let is_rmn_verification_disabled = bcs_stream::deserialize_bool(&mut stream);
             let source_chains_selector =
                 bcs_stream::deserialize_vector(
                     &mut stream, |stream| bcs_stream::deserialize_u64(stream)
@@ -1274,7 +1260,6 @@ module ccip::offramp {
                 &caller,
                 chain_selector,
                 permissionless_execution_threshold_secs,
-                is_rmn_verification_disabled,
                 source_chains_selector,
                 source_chains_is_enabled,
                 source_chains_is_rmn_verification_disabled,
@@ -1308,12 +1293,10 @@ module ccip::offramp {
         } else if (function_bytes == b"set_dynamic_config") {
             let permissionless_execution_threshold_secs =
                 bcs_stream::deserialize_u32(&mut stream);
-            let is_rmn_verification_disabled = bcs_stream::deserialize_bool(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
             set_dynamic_config(
                 &caller,
-                permissionless_execution_threshold_secs,
-                is_rmn_verification_disabled
+                permissionless_execution_threshold_secs
             )
         } else if (function_bytes == b"set_ocr3_config") {
             let config_digest = bcs_stream::deserialize_vector_u8(&mut stream);
