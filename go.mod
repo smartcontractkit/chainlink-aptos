@@ -4,6 +4,7 @@ go 1.24.0
 
 replace (
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
+	github.com/smartcontractkit/chainlink-aptos/relayer => ./relayer
 	github.com/smartcontractkit/mcms => github.com/smartcontractkit/mcms v0.0.0-20250221194121-b78e08aef016
 )
 
