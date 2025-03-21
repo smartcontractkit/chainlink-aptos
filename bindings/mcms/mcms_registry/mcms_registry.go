@@ -1,6 +1,11 @@
+// Code generated - DO NOT EDIT.
+// This file is a generated binding and any manual changes will be lost.
+
 package module_mcms_registry
 
 import (
+	"math/big"
+
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/api"
 
@@ -8,220 +13,334 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 )
 
+var (
+	_ = aptos.AccountAddress{}
+	_ = api.PendingTransaction{}
+	_ = big.NewInt
+	_ = bind.NewBoundContract
+	_ = codec.DecodeAptosJsonValue
+)
+
 type MCMSRegistryInterface interface {
-	GetNewCodeObjectOwnerAddress(opts *bind.CallOpts, newOwnerSeed string) (aptos.AccountAddress, error)
-	GetNewCodeObjectAddress(opts *bind.CallOpts, newOwnerSeed string) (aptos.AccountAddress, error)
+	GetNewCodeObjectOwnerAddress(opts *bind.CallOpts, newOwnerSeed []byte) (aptos.AccountAddress, error)
+	GetNewCodeObjectAddress(opts *bind.CallOpts, newOwnerSeed []byte) (aptos.AccountAddress, error)
 	GetPreexistingCodeObjectOwnerAddress(opts *bind.CallOpts, objectAddress aptos.AccountAddress) (aptos.AccountAddress, error)
 	GetRegisteredOwnerAddress(opts *bind.CallOpts, accountAddress aptos.AccountAddress) (aptos.AccountAddress, error)
 	IsOwnedCodeObject(opts *bind.CallOpts, objectAddress aptos.AccountAddress) (bool, error)
 
 	CreateOwnerForPreexistingCodeObject(opts *bind.TransactOpts, objectAddress aptos.AccountAddress) (*api.PendingTransaction, error)
 	TransferCodeObject(opts *bind.TransactOpts, objectAddress aptos.AccountAddress, newOwnerAddress aptos.AccountAddress) (*api.PendingTransaction, error)
+	AcceptCodeObject(opts *bind.TransactOpts, objectAddress aptos.AccountAddress) (*api.PendingTransaction, error)
+	ExecuteCodeObjectTransfer(opts *bind.TransactOpts, objectAddress aptos.AccountAddress, newOwnerAddress aptos.AccountAddress) (*api.PendingTransaction, error)
 }
 
-var _ MCMSRegistryInterface = MCMSRegistry{}
+const FunctionInfo = `[{"package":"mcms","module":"mcms_registry","name":"accept_code_object","parameters":[{"name":"object_address","type":"address"}]},{"package":"mcms","module":"mcms_registry","name":"create_owner_for_preexisting_code_object","parameters":[{"name":"object_address","type":"address"}]},{"package":"mcms","module":"mcms_registry","name":"execute_code_object_transfer","parameters":[{"name":"object_address","type":"address"},{"name":"new_owner_address","type":"address"}]},{"package":"mcms","module":"mcms_registry","name":"finish_dispatch","parameters":[{"name":"callback_address","type":"address"}]},{"package":"mcms","module":"mcms_registry","name":"transfer_code_object","parameters":[{"name":"object_address","type":"address"},{"name":"new_owner_address","type":"address"}]}]`
+
+// Structs
+
+type RegistryState struct {
+}
+
+type OwnerRegistration struct {
+	OwnerSeed       []byte `move:"vector<u8>"`
+	IsPreregistered bool   `move:"bool"`
+}
+
+type OwnerTransfers struct {
+}
+
+type RegisteredModule struct {
+}
+
+type PendingCodeObjectTransfer struct {
+	To       aptos.AccountAddress `move:"address"`
+	Accepted bool                 `move:"bool"`
+}
+
+type ExecutingCallbackParams struct {
+	Function string `move:"0x1::string::String"`
+	Data     []byte `move:"vector<u8>"`
+}
+
+type EntrypointRegistered struct {
+	OwnerAddress   aptos.AccountAddress `move:"address"`
+	AccountAddress aptos.AccountAddress `move:"address"`
+	ModuleName     string               `move:"0x1::string::String"`
+}
+
+type CodeObjectTransferRequested struct {
+	ObjectAddress    aptos.AccountAddress `move:"address"`
+	MCMSOwnerAddress aptos.AccountAddress `move:"address"`
+	NewOwnerAddress  aptos.AccountAddress `move:"address"`
+}
+
+type CodeObjectTransferAccepted struct {
+	ObjectAddress    aptos.AccountAddress `move:"address"`
+	MCMSOwnerAddress aptos.AccountAddress `move:"address"`
+	NewOwnerAddress  aptos.AccountAddress `move:"address"`
+}
+
+type CodeObjectTransferred struct {
+	ObjectAddress    aptos.AccountAddress `move:"address"`
+	MCMSOwnerAddress aptos.AccountAddress `move:"address"`
+	NewOwnerAddress  aptos.AccountAddress `move:"address"`
+}
+
+type OwnerCreatedForPreexistingObject struct {
+	OwnerAddress  aptos.AccountAddress `move:"address"`
+	ObjectAddress aptos.AccountAddress `move:"address"`
+}
+
+type OwnerCreatedForNewObject struct {
+	OwnerAddress          aptos.AccountAddress `move:"address"`
+	ExpectedObjectAddress aptos.AccountAddress `move:"address"`
+}
+
+type OwnerCreatedForEntrypoint struct {
+	OwnerAddress           aptos.AccountAddress `move:"address"`
+	AccountOrObjectAddress aptos.AccountAddress `move:"address"`
+}
 
 type MCMSRegistry struct {
 	MCMSRegistryCaller
 	MCMSRegistryTransactor
 }
 
+// View Functions
+
 type MCMSRegistryCaller struct {
 	*bind.BoundContract
 }
 
-func (m MCMSRegistryCaller) EncodeGetNewCodeObjectOwnerAddress(newOwnerSeed string) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return m.Encode(
-		"get_new_code_object_owner_address",
-		nil,
-		[]string{
-			"vector<u8>",
-		},
-		[]any{
-			newOwnerSeed,
-		})
+func (c MCMSRegistryCaller) EncodeGetNewCodeObjectOwnerAddress(newOwnerSeed []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_new_code_object_owner_address", nil, []string{
+		"vector<u8>",
+	}, []any{
+		newOwnerSeed,
+	})
 }
 
-func (m MCMSRegistryCaller) GetNewCodeObjectOwnerAddress(opts *bind.CallOpts, newOwnerSeed string) (aptos.AccountAddress, error) {
-	module, function, typeTags, args, err := m.EncodeGetNewCodeObjectOwnerAddress(newOwnerSeed)
+func (c MCMSRegistryCaller) GetNewCodeObjectOwnerAddress(opts *bind.CallOpts, newOwnerSeed []byte) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.EncodeGetNewCodeObjectOwnerAddress(newOwnerSeed)
 	if err != nil {
-		return aptos.AccountAddress{}, err
+		return *new(aptos.AccountAddress), err
 	}
-	data, err := m.Call(opts, module, function, typeTags, args)
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return aptos.AccountAddress{}, err
+		return *new(aptos.AccountAddress), err
 	}
+
 	var (
-		newOwnerAddress aptos.AccountAddress
+		r0 aptos.AccountAddress
 	)
-	if err := codec.DecodeAptosJsonArray(data, &newOwnerAddress); err != nil {
-		return aptos.AccountAddress{}, err
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(aptos.AccountAddress), err
 	}
-	return newOwnerAddress, nil
+	return r0, nil
 }
 
-func (m MCMSRegistryCaller) EncodeGetNewCodeObjectAddress(newOwnerSeed string) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return m.Encode(
-		"get_new_code_object_address",
-		nil,
-		[]string{
-			"vector<u8>",
-		},
-		[]any{
-			newOwnerSeed,
-		})
+func (c MCMSRegistryCaller) EncodeGetNewCodeObjectAddress(newOwnerSeed []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_new_code_object_address", nil, []string{
+		"vector<u8>",
+	}, []any{
+		newOwnerSeed,
+	})
 }
 
-func (m MCMSRegistryCaller) GetNewCodeObjectAddress(opts *bind.CallOpts, newOwnerSeed string) (aptos.AccountAddress, error) {
-	module, function, typeTags, args, err := m.EncodeGetNewCodeObjectAddress(newOwnerSeed)
+func (c MCMSRegistryCaller) GetNewCodeObjectAddress(opts *bind.CallOpts, newOwnerSeed []byte) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.EncodeGetNewCodeObjectAddress(newOwnerSeed)
 	if err != nil {
-		return aptos.AccountAddress{}, err
+		return *new(aptos.AccountAddress), err
 	}
-	data, err := m.Call(opts, module, function, typeTags, args)
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return aptos.AccountAddress{}, err
+		return *new(aptos.AccountAddress), err
 	}
+
 	var (
-		newCodeObjectAddress aptos.AccountAddress
+		r0 aptos.AccountAddress
 	)
-	if err := codec.DecodeAptosJsonArray(data, &newCodeObjectAddress); err != nil {
-		return aptos.AccountAddress{}, err
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(aptos.AccountAddress), err
 	}
-	return newCodeObjectAddress, nil
+	return r0, nil
 }
 
-func (m MCMSRegistryCaller) EncodeGetPreexistingCodeObjectOwnerAddress(objectAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return m.Encode(
-		"get_preexisting_code_object_owner_address",
-		nil,
-		[]string{
-			"address",
-		},
-		[]any{
-			objectAddress,
-		})
+func (c MCMSRegistryCaller) EncodeGetPreexistingCodeObjectOwnerAddress(objectAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_preexisting_code_object_owner_address", nil, []string{
+		"address",
+	}, []any{
+		objectAddress,
+	})
 }
 
-func (m MCMSRegistryCaller) GetPreexistingCodeObjectOwnerAddress(opts *bind.CallOpts, objectAddress aptos.AccountAddress) (aptos.AccountAddress, error) {
-	module, function, typeTags, args, err := m.EncodeGetPreexistingCodeObjectOwnerAddress(objectAddress)
+func (c MCMSRegistryCaller) GetPreexistingCodeObjectOwnerAddress(opts *bind.CallOpts, objectAddress aptos.AccountAddress) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.EncodeGetPreexistingCodeObjectOwnerAddress(objectAddress)
 	if err != nil {
-		return aptos.AccountAddress{}, err
+		return *new(aptos.AccountAddress), err
 	}
-	data, err := m.Call(opts, module, function, typeTags, args)
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return aptos.AccountAddress{}, err
+		return *new(aptos.AccountAddress), err
 	}
+
 	var (
-		ownerAddress aptos.AccountAddress
+		r0 aptos.AccountAddress
 	)
-	if err := codec.DecodeAptosJsonArray(data, &ownerAddress); err != nil {
-		return aptos.AccountAddress{}, err
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(aptos.AccountAddress), err
 	}
-	return ownerAddress, nil
+	return r0, nil
 }
 
-func (m MCMSRegistryCaller) EncodeGetRegisteredOwnerAddress(accountAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return m.Encode(
-		"get_registered_owner_address",
-		nil,
-		[]string{
-			"address",
-		},
-		[]any{
-			accountAddress,
-		})
+func (c MCMSRegistryCaller) EncodeGetRegisteredOwnerAddress(accountAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_registered_owner_address", nil, []string{
+		"address",
+	}, []any{
+		accountAddress,
+	})
 }
 
-func (m MCMSRegistryCaller) GetRegisteredOwnerAddress(opts *bind.CallOpts, accountAddress aptos.AccountAddress) (aptos.AccountAddress, error) {
-	module, function, typeTags, args, err := m.EncodeGetRegisteredOwnerAddress(accountAddress)
+func (c MCMSRegistryCaller) GetRegisteredOwnerAddress(opts *bind.CallOpts, accountAddress aptos.AccountAddress) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.EncodeGetRegisteredOwnerAddress(accountAddress)
 	if err != nil {
-		return aptos.AccountAddress{}, err
+		return *new(aptos.AccountAddress), err
 	}
-	data, err := m.Call(opts, module, function, typeTags, args)
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return aptos.AccountAddress{}, err
+		return *new(aptos.AccountAddress), err
 	}
+
 	var (
-		ownerAddress aptos.AccountAddress
+		r0 aptos.AccountAddress
 	)
-	if err := codec.DecodeAptosJsonArray(data, &ownerAddress); err != nil {
-		return aptos.AccountAddress{}, err
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(aptos.AccountAddress), err
 	}
-	return ownerAddress, nil
+	return r0, nil
 }
 
-func (m MCMSRegistryCaller) EncodeIsOwnedCodeObject(objectAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return m.Encode(
-		"is_owned_code_object",
-		nil,
-		[]string{
-			"address",
-		},
-		[]any{
-			objectAddress,
-		})
+func (c MCMSRegistryCaller) EncodeIsOwnedCodeObject(objectAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("is_owned_code_object", nil, []string{
+		"address",
+	}, []any{
+		objectAddress,
+	})
 }
 
-func (m MCMSRegistryCaller) IsOwnedCodeObject(opts *bind.CallOpts, objectAddress aptos.AccountAddress) (bool, error) {
-	module, function, typeTags, args, err := m.EncodeIsOwnedCodeObject(objectAddress)
+func (c MCMSRegistryCaller) IsOwnedCodeObject(opts *bind.CallOpts, objectAddress aptos.AccountAddress) (bool, error) {
+	module, function, typeTags, args, err := c.EncodeIsOwnedCodeObject(objectAddress)
 	if err != nil {
-		return false, err
+		return *new(bool), err
 	}
-	data, err := m.Call(opts, module, function, typeTags, args)
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return false, err
+		return *new(bool), err
 	}
+
 	var (
-		isOwned bool
+		r0 bool
 	)
-	if err := codec.DecodeAptosJsonArray(data, &isOwned); err != nil {
-		return false, err
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(bool), err
 	}
-	return isOwned, nil
+	return r0, nil
 }
+
+// Entry Functions
 
 type MCMSRegistryTransactor struct {
 	*bind.BoundContract
 }
 
-func (m MCMSRegistryTransactor) EncodeCreateOwnerForPreexistingCodeObject(objectAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return m.Encode(
-		"create_owner_for_preexisting_code_object",
-		nil,
-		[]string{
-			"address",
-		},
-		[]any{
-			objectAddress,
-		})
+func (c MCMSRegistryTransactor) EncodeCreateOwnerForPreexistingCodeObject(objectAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("create_owner_for_preexisting_code_object", nil, []string{
+		"address",
+	}, []any{
+		objectAddress,
+	})
 }
 
-func (m MCMSRegistryTransactor) CreateOwnerForPreexistingCodeObject(opts *bind.TransactOpts, objectAddress aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := m.EncodeCreateOwnerForPreexistingCodeObject(objectAddress)
+func (c MCMSRegistryTransactor) CreateOwnerForPreexistingCodeObject(opts *bind.TransactOpts, objectAddress aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeCreateOwnerForPreexistingCodeObject(objectAddress)
 	if err != nil {
 		return nil, err
 	}
-	return m.Transact(opts, module, function, typeTags, args)
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (m MCMSRegistryTransactor) EncodeTransferCodeObject(objectAddress aptos.AccountAddress, newOwnerAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return m.Encode(
-		"transfer_code_object",
-		nil,
-		[]string{
-			"address",
-			"address",
-		},
-		[]any{
-			objectAddress,
-			newOwnerAddress,
-		})
+func (c MCMSRegistryTransactor) EncodeTransferCodeObject(objectAddress aptos.AccountAddress, newOwnerAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("transfer_code_object", nil, []string{
+		"address",
+		"address",
+	}, []any{
+		objectAddress,
+		newOwnerAddress,
+	})
 }
 
-func (m MCMSRegistryTransactor) TransferCodeObject(opts *bind.TransactOpts, objectAddress aptos.AccountAddress, newOwnerAddress aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := m.EncodeTransferCodeObject(objectAddress, newOwnerAddress)
+func (c MCMSRegistryTransactor) TransferCodeObject(opts *bind.TransactOpts, objectAddress aptos.AccountAddress, newOwnerAddress aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeTransferCodeObject(objectAddress, newOwnerAddress)
 	if err != nil {
 		return nil, err
 	}
-	return m.Transact(opts, module, function, typeTags, args)
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c MCMSRegistryTransactor) EncodeAcceptCodeObject(objectAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("accept_code_object", nil, []string{
+		"address",
+	}, []any{
+		objectAddress,
+	})
+}
+
+func (c MCMSRegistryTransactor) AcceptCodeObject(opts *bind.TransactOpts, objectAddress aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeAcceptCodeObject(objectAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c MCMSRegistryTransactor) EncodeExecuteCodeObjectTransfer(objectAddress aptos.AccountAddress, newOwnerAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("execute_code_object_transfer", nil, []string{
+		"address",
+		"address",
+	}, []any{
+		objectAddress,
+		newOwnerAddress,
+	})
+}
+
+func (c MCMSRegistryTransactor) ExecuteCodeObjectTransfer(opts *bind.TransactOpts, objectAddress aptos.AccountAddress, newOwnerAddress aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeExecuteCodeObjectTransfer(objectAddress, newOwnerAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+// Other Functions
+
+func (c MCMSRegistryCaller) EncodeFinishDispatch(callbackAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("finish_dispatch", nil, []string{
+		"address",
+	}, []any{
+		callbackAddress,
+	})
 }

@@ -9,7 +9,9 @@ replace (
 
 require (
 	github.com/aptos-labs/aptos-go-sdk v1.5.1-0.20250303230301-affcbec1c549
+	github.com/aptos-labs/tree-sitter-move-on-aptos v0.0.0-20250321090037-c820eb4716e1
 	github.com/ethereum/go-ethereum v1.15.5
+	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	github.com/smartcontractkit/chainlink-aptos/relayer v0.0.0-20250320162700-de7f1c0fd741
 	github.com/stretchr/testify v1.10.0
 	github.com/valyala/fastjson v1.6.4

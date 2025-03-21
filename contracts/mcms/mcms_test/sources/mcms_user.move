@@ -18,14 +18,14 @@ module mcms_test::mcms_user {
         d: u128
     }
 
-    fun function_one(arg1: String, arg2: vector<u8>) acquires UserData {
+    public fun function_one(arg1: String, arg2: vector<u8>) acquires UserData {
         let user_data = borrow_global_mut<UserData>(@mcms_test);
         user_data.invocations = user_data.invocations + 1;
         user_data.a = arg1;
         user_data.b = arg2;
     }
 
-    fun function_two(arg1: address, arg2: u128) acquires UserData {
+    public fun function_two(arg1: address, arg2: u128) acquires UserData {
         let user_data = borrow_global_mut<UserData>(@mcms_test);
         user_data.invocations = user_data.invocations + 1;
         user_data.c = arg1;

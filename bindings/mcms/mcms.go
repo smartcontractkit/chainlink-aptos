@@ -26,6 +26,14 @@ const (
 	DefaultSeed = "chainlink_mcms"
 )
 
+var FunctionInfo = bind.MustParseFunctionInfo(
+	module_mcms.FunctionInfo,
+	module_mcms_account.FunctionInfo,
+	module_mcms_deployer.FunctionInfo,
+	module_mcms_executor.FunctionInfo,
+	module_mcms_registry.FunctionInfo,
+)
+
 func Bind(
 	address aptos.AccountAddress,
 	client aptos.AptosRpcClient,
