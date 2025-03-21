@@ -90,7 +90,7 @@ func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIP {
 // This should not be used in production, where CCIP is deployed via MCMS.
 func DeployToObject(
 	auth aptos.TransactionSigner,
-	client *aptos.NodeClient,
+	client aptos.AptosRpcClient,
 	mcmsAddress aptos.AccountAddress,
 	registerMCMSEntrypoints bool,
 ) (aptos.AccountAddress, *api.PendingTransaction, CCIP, error) {
