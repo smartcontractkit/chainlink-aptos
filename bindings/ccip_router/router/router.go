@@ -1,4 +1,5 @@
-// Code generated - DO NOT EDIT
+// Code generated - DO NOT EDIT.
+// This file is a generated binding and any manual changes will be lost.
 
 package module_router
 
@@ -26,8 +27,10 @@ type RouterInterface interface {
 	IsChainSupported(opts *bind.CallOpts, destChainSelector uint64) (bool, error)
 	GetFee(opts *bind.CallOpts, destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (uint64, error)
 
-	CcipSend(opts *bind.TransactOpts, destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (*api.PendingTransaction, error)
+	CCIPSend(opts *bind.TransactOpts, destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (*api.PendingTransaction, error)
 }
+
+const FunctionInfo = `[{"package":"ccip","module":"router","name":"ccip_send","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"router","name":"ccip_send_with_message_id","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]}]`
 
 // Structs
 
@@ -46,7 +49,7 @@ type RouterCaller struct {
 }
 
 func (c RouterCaller) EncodeTypeAndVersion() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.Encode("type_and_version", nil, []string{}, []any{})
+	return c.BoundContract.Encode("type_and_version", nil, []string{}, []any{})
 }
 
 func (c RouterCaller) TypeAndVersion(opts *bind.CallOpts) (string, error) {
@@ -71,7 +74,7 @@ func (c RouterCaller) TypeAndVersion(opts *bind.CallOpts) (string, error) {
 }
 
 func (c RouterCaller) EncodeGetStateAddress() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.Encode("get_state_address", nil, []string{}, []any{})
+	return c.BoundContract.Encode("get_state_address", nil, []string{}, []any{})
 }
 
 func (c RouterCaller) GetStateAddress(opts *bind.CallOpts) (aptos.AccountAddress, error) {
@@ -96,7 +99,7 @@ func (c RouterCaller) GetStateAddress(opts *bind.CallOpts) (aptos.AccountAddress
 }
 
 func (c RouterCaller) EncodeIsChainSupported(destChainSelector uint64) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.Encode("is_chain_supported", nil, []string{
+	return c.BoundContract.Encode("is_chain_supported", nil, []string{
 		"u64",
 	}, []any{
 		destChainSelector,
@@ -125,7 +128,7 @@ func (c RouterCaller) IsChainSupported(opts *bind.CallOpts, destChainSelector ui
 }
 
 func (c RouterCaller) EncodeGetFee(destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.Encode("get_fee", nil, []string{
+	return c.BoundContract.Encode("get_fee", nil, []string{
 		"u64",
 		"vector<u8>",
 		"vector<u8>",
@@ -175,8 +178,8 @@ type RouterTransactor struct {
 	*bind.BoundContract
 }
 
-func (c RouterTransactor) EncodeCcipSend(destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.Encode("ccip_send", nil, []string{
+func (c RouterTransactor) EncodeCCIPSend(destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("ccip_send", nil, []string{
 		"u64",
 		"vector<u8>",
 		"vector<u8>",
@@ -199,11 +202,37 @@ func (c RouterTransactor) EncodeCcipSend(destChainSelector uint64, receiver []by
 	})
 }
 
-func (c RouterTransactor) CcipSend(opts *bind.TransactOpts, destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeCcipSend(destChainSelector, receiver, data, tokenAddresses, tokenAmounts, tokenStoreAddresses, feeToken, feeTokenStore, extraArgs)
+func (c RouterTransactor) CCIPSend(opts *bind.TransactOpts, destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeCCIPSend(destChainSelector, receiver, data, tokenAddresses, tokenAmounts, tokenStoreAddresses, feeToken, feeTokenStore, extraArgs)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.Transact(opts, module, function, typeTags, args)
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+// Other Functions
+
+func (c RouterCaller) EncodeCCIPSendWithMessageId(destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("ccip_send_with_message_id", nil, []string{
+		"u64",
+		"vector<u8>",
+		"vector<u8>",
+		"vector<address>",
+		"vector<u64>",
+		"vector<address>",
+		"address",
+		"address",
+		"vector<u8>",
+	}, []any{
+		destChainSelector,
+		receiver,
+		data,
+		tokenAddresses,
+		tokenAmounts,
+		tokenStoreAddresses,
+		feeToken,
+		feeTokenStore,
+		extraArgs,
+	})
 }

@@ -1,0 +1,19 @@
+package aptos
+
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/auth.move --output ./bindings/ccip/auth
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/fee_quoter.move --output ./bindings/ccip/fee_quoter
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/offramp.move --output ./bindings/ccip/offramp
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/onramp.move --output ./bindings/ccip/onramp
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/receiver_registry.move --output ./bindings/ccip/receiver_registry
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/rmn_remote.move --output ./bindings/ccip/rmn_remote
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/token_admin_registry.move --output ./bindings/ccip/token_admin_registry
+
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/ccip/ccip_router/sources/router.move --output ./bindings/ccip_router/router
+
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/mcms/mcms/sources/mcms.move --output ./bindings/mcms/mcms
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/mcms/mcms/sources/mcms_account.move --output ./bindings/mcms/mcms_account
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/mcms/mcms/sources/mcms_deployer.move --output ./bindings/mcms/mcms_deployer
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/mcms/mcms/sources/mcms_executor.move --output ./bindings/mcms/mcms_executor
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/mcms/mcms/sources/mcms_registry.move --output ./bindings/mcms/mcms_registry
+
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/mcms/mcms_test/sources/mcms_user.move --output ./bindings/mcms_test/mcms_user

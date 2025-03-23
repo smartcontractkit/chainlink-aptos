@@ -1,346 +1,564 @@
+// Code generated - DO NOT EDIT.
+// This file is a generated binding and any manual changes will be lost.
+
 package module_offramp
 
 import (
+	"math/big"
+
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/api"
-	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 )
 
+var (
+	_ = aptos.AccountAddress{}
+	_ = api.PendingTransaction{}
+	_ = big.NewInt
+	_ = bind.NewBoundContract
+	_ = codec.DecodeAptosJsonValue
+)
+
 type OfframpInterface interface {
-	GetExecutionState(opts *bind.CallOpts, sourceChainSelector uint64, sequenceNumber uint64) (uint8, error)
+	TypeAndVersion(opts *bind.CallOpts) (string, error)
+	GetExecutionState(opts *bind.CallOpts, sourceChainSelector uint64, sequenceNumber uint64) (byte, error)
 	GetLatestPriceSequenceNumber(opts *bind.CallOpts) (uint64, error)
-	GetMerkleRoot(opts *bind.CallOpts, sourceChainSelector uint64, root common.Hash) (uint64, error)
-	GetSourceChainConfig(opts *bind.CallOpts, sourceChainSelector uint64) (bool, uint64, error)
-	GetInboundNonce(opts *bind.CallOpts, sourceChainSelector uint64, sender common.Address) (uint64, error)
+	GetMerkleRoot(opts *bind.CallOpts, root []byte) (uint64, error)
+	GetSourceChainConfig(opts *bind.CallOpts, sourceChainSelector uint64) (SourceChainConfig, error)
 	GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error)
 	GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, error)
-	LatestConfigDetails(opts *bind.CallOpts, ocrPluginType uint8) (common.Hash, uint8, uint8, bool, []common.Address, []aptos.AccountAddress, error)
+	LatestConfigDetails(opts *bind.CallOpts, ocrPluginType byte) ([]byte, byte, byte, bool, [][]byte, []aptos.AccountAddress, error)
 
-	Initialize(opts *bind.TransactOpts, chainSelector uint64, permissionlessExecutionThresholdSecs uint32, isRmnVerificationDisabled bool, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnramp [][]byte) (*api.PendingTransaction, error)
-	ManuallyExecute(opts *bind.TransactOpts, reportsBytes []byte) (*api.PendingTransaction, error)
-	Commit(opts *bind.TransactOpts, reportContext [][]byte, report []byte, signatures []common.Hash) (*api.PendingTransaction, error)
+	Initialize(opts *bind.TransactOpts, chainSelector uint64, permissionlessExecutionThresholdSecs uint32, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (*api.PendingTransaction, error)
 	Execute(opts *bind.TransactOpts, reportContext [][]byte, report []byte) (*api.PendingTransaction, error)
-	ApplySourceChainConfigUpdates(opts *bind.TransactOpts, sourceChainSelectors []uint64, sourceChainIsEnabled []bool) (*api.PendingTransaction, error)
-	SetDynamicConfig(opts *bind.TransactOpts, permissionlessExecutionThresholdSecs uint32, isRmnVerificationDisabled bool) (*api.PendingTransaction, error)
-	SetOCR3Config(opts *bind.TransactOpts, configDigest common.Hash, ocrPluginType uint8, bigF uint8, isSignatureVerificationEnabled bool, signers []common.Address, transmitters []aptos.AccountAddress) (*api.PendingTransaction, error)
-	TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
-	AcceptOwnership(opts *bind.TransactOpts) (*api.PendingTransaction, error)
+	ManuallyExecute(opts *bind.TransactOpts, reportBytes []byte) (*api.PendingTransaction, error)
+	Commit(opts *bind.TransactOpts, reportContext [][]byte, report []byte, signatures [][]byte) (*api.PendingTransaction, error)
+	SetDynamicConfig(opts *bind.TransactOpts, permissionlessExecutionThresholdSecs uint32) (*api.PendingTransaction, error)
+	ApplySourceChainConfigUpdates(opts *bind.TransactOpts, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (*api.PendingTransaction, error)
+	SetOcr3Config(opts *bind.TransactOpts, configDigest []byte, ocrPluginType byte, bigF byte, isSignatureVerificationEnabled bool, signers [][]byte, transmitters []aptos.AccountAddress) (*api.PendingTransaction, error)
+}
+
+const FunctionInfo = `[{"package":"ccip","module":"offramp","name":"apply_source_chain_config_updates","parameters":[{"name":"source_chains_selector","type":"vector\u003cu64\u003e"},{"name":"source_chains_is_enabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_is_rmn_verification_disabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_on_ramp","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"offramp","name":"commit","parameters":[{"name":"report_context","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"report","type":"vector\u003cu8\u003e"},{"name":"signatures","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"offramp","name":"execute","parameters":[{"name":"report_context","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"report","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"initialize","parameters":[{"name":"chain_selector","type":"u64"},{"name":"permissionless_execution_threshold_secs","type":"u32"},{"name":"source_chains_selector","type":"vector\u003cu64\u003e"},{"name":"source_chains_is_enabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_is_rmn_verification_disabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_on_ramp","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"offramp","name":"manually_execute","parameters":[{"name":"report_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"set_dynamic_config","parameters":[{"name":"permissionless_execution_threshold_secs","type":"u32"}]},{"package":"ccip","module":"offramp","name":"set_ocr3_config","parameters":[{"name":"config_digest","type":"vector\u003cu8\u003e"},{"name":"ocr_plugin_type","type":"u8"},{"name":"big_f","type":"u8"},{"name":"is_signature_verification_enabled","type":"bool"},{"name":"signers","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"transmitters","type":"vector\u003caddress\u003e"}]}]`
+
+// Structs
+
+type OffRampState struct {
+	ChainSelector                        uint64 `move:"u64"`
+	PermissionlessExecutionThresholdSecs uint32 `move:"u32"`
+	LatestPriceSequenceNumber            uint64 `move:"u64"`
+}
+
+type SourceChainConfig struct {
+	IsEnabled                 bool   `move:"bool"`
+	MinSequenceNumber         uint64 `move:"u64"`
+	IsRMNVerificationDisabled bool   `move:"bool"`
+	OnRamp                    []byte `move:"vector<u8>"`
+}
+
+type RampMessageHeader struct {
+	MessageId           []byte `move:"vector<u8>"`
+	SourceChainSelector uint64 `move:"u64"`
+	DestChainSelector   uint64 `move:"u64"`
+	SequenceNumber      uint64 `move:"u64"`
+	Nonce               uint64 `move:"u64"`
+}
+
+type Any2AptosRampMessage struct {
+	Header       RampMessageHeader        `move:"RampMessageHeader"`
+	Sender       []byte                   `move:"vector<u8>"`
+	Data         []byte                   `move:"vector<u8>"`
+	Receiver     aptos.AccountAddress     `move:"address"`
+	GasLimit     *big.Int                 `move:"u256"`
+	TokenAmounts []Any2AptosTokenTransfer `move:"vector<Any2AptosTokenTransfer>"`
+}
+
+type Any2AptosTokenTransfer struct {
+	SourcePoolAddress []byte               `move:"vector<u8>"`
+	DestTokenAddress  aptos.AccountAddress `move:"address"`
+	DestGasAmount     uint32               `move:"u32"`
+	ExtraData         []byte               `move:"vector<u8>"`
+	Amount            *big.Int             `move:"u256"`
+}
+
+type ExecutionReport struct {
+	SourceChainSelector uint64               `move:"u64"`
+	Message             Any2AptosRampMessage `move:"Any2AptosRampMessage"`
+	OffchainTokenData   [][]byte             `move:"vector<vector<u8>>"`
+	Proofs              [][]byte             `move:"vector<vector<u8>>"`
+}
+
+type CommitReport struct {
+	PriceUpdates         PriceUpdates `move:"PriceUpdates"`
+	BlessedMerkleRoots   []MerkleRoot `move:"vector<MerkleRoot>"`
+	UnblessedMerkleRoots []MerkleRoot `move:"vector<MerkleRoot>"`
+	RMNSignatures        [][]byte     `move:"vector<vector<u8>>"`
+}
+
+type PriceUpdates struct {
+	TokenPriceUpdates []TokenPriceUpdate `move:"vector<TokenPriceUpdate>"`
+	GasPriceUpdates   []GasPriceUpdate   `move:"vector<GasPriceUpdate>"`
+}
+
+type TokenPriceUpdate struct {
+	SourceToken aptos.AccountAddress `move:"address"`
+	UsdPerToken *big.Int             `move:"u256"`
+}
+
+type GasPriceUpdate struct {
+	DestChainSelector uint64   `move:"u64"`
+	UsdPerUnitGas     *big.Int `move:"u256"`
+}
+
+type MerkleRoot struct {
+	SourceChainSelector uint64 `move:"u64"`
+	OnRampAddress       []byte `move:"vector<u8>"`
+	MinSequenceNumber   uint64 `move:"u64"`
+	MaxSequenceNumber   uint64 `move:"u64"`
+	MerkleRoot          []byte `move:"vector<u8>"`
 }
 
 type StaticConfig struct {
-	ChainSelector uint64
+	ChainSelector uint64 `move:"u64"`
 }
 
 type DynamicConfig struct {
-	PermissionlessExecutionThresholdSecs uint32
-	IsRMNVerificationDisabled            bool
+	PermissionlessExecutionThresholdSecs uint32 `move:"u32"`
 }
 
-var _ OfframpInterface = Offramp{}
+type StaticConfigSet struct {
+	ChainSelector uint64 `move:"u64"`
+}
+
+type DynamicConfigSet struct {
+	PermissionlessExecutionThresholdSecs uint32 `move:"u32"`
+}
+
+type SourceChainConfigSet struct {
+	SourceChainSelector       uint64 `move:"u64"`
+	IsEnabled                 bool   `move:"bool"`
+	MinSequenceNumber         uint64 `move:"u64"`
+	IsRMNVerificationDisabled bool   `move:"bool"`
+	OnRamp                    []byte `move:"vector<u8>"`
+}
+
+type SkippedAlreadyExecuted struct {
+	SourceChainSelector uint64 `move:"u64"`
+	SequenceNumber      uint64 `move:"u64"`
+}
+
+type AlreadyAttempted struct {
+	SourceChainSelector uint64 `move:"u64"`
+	SequenceNumber      uint64 `move:"u64"`
+}
+
+type ExecutionStateChanged struct {
+	SourceChainSelector uint64 `move:"u64"`
+	SequenceNumber      uint64 `move:"u64"`
+	MessageId           []byte `move:"vector<u8>"`
+	MessageHash         []byte `move:"vector<u8>"`
+	State               byte   `move:"u8"`
+}
+
+type CommitReportAccepted struct {
+	CommitReport CommitReport `move:"CommitReport"`
+}
+
+type SkippedReportExecution struct {
+	SourceChainSelector uint64 `move:"u64"`
+}
+
+type McmsCallback struct {
+}
 
 type Offramp struct {
 	OfframpCaller
 	OfframpTransactor
 }
 
+// View Functions
+
 type OfframpCaller struct {
 	*bind.BoundContract
 }
 
-func (o OfframpCaller) EncodeGetExecutionState(sourceChainSelector uint64, sequenceNumber uint64) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("get_execution_state", nil, []string{"u64", "u64"}, []any{sourceChainSelector, sequenceNumber})
+func (c OfframpCaller) EncodeTypeAndVersion() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("type_and_version", nil, []string{}, []any{})
 }
 
-func (o OfframpCaller) GetExecutionState(opts *bind.CallOpts, sourceChainSelector uint64, sequenceNumber uint64) (uint8, error) {
-	module, function, typeTags, args, err := o.EncodeGetExecutionState(sourceChainSelector, sequenceNumber)
+func (c OfframpCaller) TypeAndVersion(opts *bind.CallOpts) (string, error) {
+	module, function, typeTags, args, err := c.EncodeTypeAndVersion()
 	if err != nil {
-		return 0, err
+		return *new(string), err
 	}
 
-	data, err := o.Call(opts, module, function, typeTags, args)
+	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return 0, err
+		return *new(string), err
 	}
 
-	var state uint8
-	if err := codec.DecodeAptosJsonArray(data, &state); err != nil {
-		return 0, err
+	var (
+		r0 string
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(string), err
 	}
-	return state, nil
+	return r0, nil
 }
 
-func (o OfframpCaller) EncodeGetLatestPriceSequenceNumber() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("get_latest_price_sequence_number", nil, nil, nil)
+func (c OfframpCaller) EncodeGetExecutionState(sourceChainSelector uint64, sequenceNumber uint64) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_execution_state", nil, []string{
+		"u64",
+		"u64",
+	}, []any{
+		sourceChainSelector,
+		sequenceNumber,
+	})
 }
 
-func (o OfframpCaller) GetLatestPriceSequenceNumber(opts *bind.CallOpts) (uint64, error) {
-	module, function, typeTags, args, err := o.EncodeGetLatestPriceSequenceNumber()
+func (c OfframpCaller) GetExecutionState(opts *bind.CallOpts, sourceChainSelector uint64, sequenceNumber uint64) (byte, error) {
+	module, function, typeTags, args, err := c.EncodeGetExecutionState(sourceChainSelector, sequenceNumber)
 	if err != nil {
-		return 0, err
+		return *new(byte), err
 	}
 
-	data, err := o.Call(opts, module, function, typeTags, args)
+	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return 0, err
+		return *new(byte), err
 	}
 
-	var sequence uint64
-	if err := codec.DecodeAptosJsonArray(data, &sequence); err != nil {
-		return 0, err
+	var (
+		r0 byte
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(byte), err
 	}
-	return sequence, nil
+	return r0, nil
 }
 
-func (o OfframpCaller) EncodeGetMerkleRoot(sourceChainSelector uint64, root common.Hash) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("get_merkle_root", nil, []string{"u64", "vector<u8>"}, []any{sourceChainSelector, root[:]})
+func (c OfframpCaller) EncodeGetLatestPriceSequenceNumber() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_latest_price_sequence_number", nil, []string{}, []any{})
 }
 
-func (o OfframpCaller) GetMerkleRoot(opts *bind.CallOpts, sourceChainSelector uint64, root common.Hash) (uint64, error) {
-	module, function, typeTags, args, err := o.EncodeGetMerkleRoot(sourceChainSelector, root)
+func (c OfframpCaller) GetLatestPriceSequenceNumber(opts *bind.CallOpts) (uint64, error) {
+	module, function, typeTags, args, err := c.EncodeGetLatestPriceSequenceNumber()
 	if err != nil {
-		return 0, err
+		return *new(uint64), err
 	}
 
-	data, err := o.Call(opts, module, function, typeTags, args)
+	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return 0, err
+		return *new(uint64), err
 	}
 
-	var sequence uint64
-	if err := codec.DecodeAptosJsonArray(data, &sequence); err != nil {
-		return 0, err
+	var (
+		r0 uint64
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(uint64), err
 	}
-	return sequence, nil
+	return r0, nil
 }
 
-func (o OfframpCaller) EncodeGetSourceChainConfig(sourceChainSelector uint64) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("get_source_chain_config", nil, []string{"u64"}, []any{sourceChainSelector})
+func (c OfframpCaller) EncodeGetMerkleRoot(root []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_merkle_root", nil, []string{
+		"vector<u8>",
+	}, []any{
+		root,
+	})
 }
 
-func (o OfframpCaller) GetSourceChainConfig(opts *bind.CallOpts, sourceChainSelector uint64) (bool, uint64, error) {
-	module, function, typeTags, args, err := o.EncodeGetSourceChainConfig(sourceChainSelector)
+func (c OfframpCaller) GetMerkleRoot(opts *bind.CallOpts, root []byte) (uint64, error) {
+	module, function, typeTags, args, err := c.EncodeGetMerkleRoot(root)
 	if err != nil {
-		return false, 0, err
+		return *new(uint64), err
 	}
 
-	data, err := o.Call(opts, module, function, typeTags, args)
+	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return false, 0, err
+		return *new(uint64), err
 	}
 
-	var isEnabled bool
-	var latestNonce uint64
-	if err := codec.DecodeAptosJsonArray(data, &isEnabled, &latestNonce); err != nil {
-		return false, 0, err
+	var (
+		r0 uint64
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(uint64), err
 	}
-	return isEnabled, latestNonce, nil
+	return r0, nil
 }
 
-func (o OfframpCaller) EncodeGetInboundNonce(sourceChainSelector uint64, sender common.Address) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("get_inbound_nonce", nil, []string{"u64", "address"}, []any{sourceChainSelector, sender})
+func (c OfframpCaller) EncodeGetSourceChainConfig(sourceChainSelector uint64) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_source_chain_config", nil, []string{
+		"u64",
+	}, []any{
+		sourceChainSelector,
+	})
 }
 
-func (o OfframpCaller) GetInboundNonce(opts *bind.CallOpts, sourceChainSelector uint64, sender common.Address) (uint64, error) {
-	module, function, typeTags, args, err := o.EncodeGetInboundNonce(sourceChainSelector, sender)
+func (c OfframpCaller) GetSourceChainConfig(opts *bind.CallOpts, sourceChainSelector uint64) (SourceChainConfig, error) {
+	module, function, typeTags, args, err := c.EncodeGetSourceChainConfig(sourceChainSelector)
 	if err != nil {
-		return 0, err
+		return *new(SourceChainConfig), err
 	}
 
-	data, err := o.Call(opts, module, function, typeTags, args)
+	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return 0, err
+		return *new(SourceChainConfig), err
 	}
 
-	var nonce uint64
-	if err := codec.DecodeAptosJsonArray(data, &nonce); err != nil {
-		return 0, err
+	var (
+		r0 SourceChainConfig
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(SourceChainConfig), err
 	}
-	return nonce, nil
+	return r0, nil
 }
 
-func (o OfframpCaller) EncodeGetStaticConfig() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("get_static_config", nil, nil, nil)
+func (c OfframpCaller) EncodeGetStaticConfig() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_static_config", nil, []string{}, []any{})
 }
 
-func (o OfframpCaller) GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error) {
-	module, function, typeTags, args, err := o.EncodeGetStaticConfig()
+func (c OfframpCaller) GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error) {
+	module, function, typeTags, args, err := c.EncodeGetStaticConfig()
 	if err != nil {
-		return StaticConfig{}, err
+		return *new(StaticConfig), err
 	}
 
-	data, err := o.Call(opts, module, function, typeTags, args)
+	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return StaticConfig{}, err
+		return *new(StaticConfig), err
 	}
 
-	var config StaticConfig
-	if err := codec.DecodeAptosJsonArray(data, &config); err != nil {
-		return StaticConfig{}, err
+	var (
+		r0 StaticConfig
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(StaticConfig), err
 	}
-	return config, nil
+	return r0, nil
 }
 
-func (o OfframpCaller) EncodeGetDynamicConfig() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("get_dynamic_config", nil, nil, nil)
+func (c OfframpCaller) EncodeGetDynamicConfig() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_dynamic_config", nil, []string{}, []any{})
 }
 
-func (o OfframpCaller) GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, error) {
-	module, function, typeTags, args, err := o.EncodeGetDynamicConfig()
+func (c OfframpCaller) GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, error) {
+	module, function, typeTags, args, err := c.EncodeGetDynamicConfig()
 	if err != nil {
-		return DynamicConfig{}, err
+		return *new(DynamicConfig), err
 	}
 
-	data, err := o.Call(opts, module, function, typeTags, args)
+	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return DynamicConfig{}, err
+		return *new(DynamicConfig), err
 	}
 
-	var config DynamicConfig
-	if err := codec.DecodeAptosJsonArray(data, &config); err != nil {
-		return DynamicConfig{}, err
+	var (
+		r0 DynamicConfig
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(DynamicConfig), err
 	}
-	return config, nil
+	return r0, nil
 }
 
-func (o OfframpCaller) EncodeLatestConfigDetails(ocrPluginType uint8) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("latest_config_details", nil, []string{"u8"}, []any{ocrPluginType})
+func (c OfframpCaller) EncodeLatestConfigDetails(ocrPluginType byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("latest_config_details", nil, []string{
+		"u8",
+	}, []any{
+		ocrPluginType,
+	})
 }
 
-func (o OfframpCaller) LatestConfigDetails(opts *bind.CallOpts, ocrPluginType uint8) (common.Hash, uint8, uint8, bool, []common.Address, []aptos.AccountAddress, error) {
-	module, function, typeTags, args, err := o.EncodeLatestConfigDetails(ocrPluginType)
+func (c OfframpCaller) LatestConfigDetails(opts *bind.CallOpts, ocrPluginType byte) ([]byte, byte, byte, bool, [][]byte, []aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.EncodeLatestConfigDetails(ocrPluginType)
 	if err != nil {
-		return common.Hash{}, 0, 0, false, nil, nil, err
+		return *new([]byte), *new(byte), *new(byte), *new(bool), *new([][]byte), *new([]aptos.AccountAddress), err
 	}
 
-	data, err := o.Call(opts, module, function, typeTags, args)
+	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return common.Hash{}, 0, 0, false, nil, nil, err
+		return *new([]byte), *new(byte), *new(byte), *new(bool), *new([][]byte), *new([]aptos.AccountAddress), err
 	}
 
-	var configDigest []byte
-	var bigF uint8
-	var n uint8
-	var isSignatureVerificationEnabled bool
-	var signers []common.Address
-	var transmitters []aptos.AccountAddress
+	var (
+		r0 []byte
+		r1 byte
+		r2 byte
+		r3 bool
+		r4 [][]byte
+		r5 []aptos.AccountAddress
+	)
 
-	if err := codec.DecodeAptosJsonArray(data, &configDigest, &bigF, &n, &isSignatureVerificationEnabled, &signers, &transmitters); err != nil {
-		return common.Hash{}, 0, 0, false, nil, nil, err
+	if err := codec.DecodeAptosJsonArray(callData, &r0, &r1, &r2, &r3, &r4, &r5); err != nil {
+		return *new([]byte), *new(byte), *new(byte), *new(bool), *new([][]byte), *new([]aptos.AccountAddress), err
 	}
-	return common.BytesToHash(configDigest), bigF, n, isSignatureVerificationEnabled, signers, transmitters, nil
+	return r0, r1, r2, r3, r4, r5, nil
 }
+
+// Entry Functions
 
 type OfframpTransactor struct {
 	*bind.BoundContract
 }
 
-func (o OfframpTransactor) EncodeInitialize(chainSelector uint64, permissionlessExecutionThresholdSecs uint32, isRmnVerificationDisabled bool, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnramp [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("initialize", nil, []string{"u64", "u32", "bool", "vector<u64>", "vector<bool>", "vector<bool>", "vector<vector<u8>>"}, []any{chainSelector, permissionlessExecutionThresholdSecs, isRmnVerificationDisabled, sourceChainsSelector, sourceChainsIsEnabled, sourceChainsIsRMNVerificationDisabled, sourceChainsOnramp})
+func (c OfframpTransactor) EncodeInitialize(chainSelector uint64, permissionlessExecutionThresholdSecs uint32, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("initialize", nil, []string{
+		"u64",
+		"u32",
+		"vector<u64>",
+		"vector<bool>",
+		"vector<bool>",
+		"vector<vector<u8>>",
+	}, []any{
+		chainSelector,
+		permissionlessExecutionThresholdSecs,
+		sourceChainsSelector,
+		sourceChainsIsEnabled,
+		sourceChainsIsRMNVerificationDisabled,
+		sourceChainsOnRamp,
+	})
 }
 
-func (o OfframpTransactor) Initialize(opts *bind.TransactOpts, chainSelector uint64, permissionlessExecutionThresholdSecs uint32, isRmnVerificationDisabled bool, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnramp [][]byte) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := o.EncodeInitialize(chainSelector, permissionlessExecutionThresholdSecs, isRmnVerificationDisabled, sourceChainsSelector, sourceChainsIsEnabled, sourceChainsIsRMNVerificationDisabled, sourceChainsOnramp)
+func (c OfframpTransactor) Initialize(opts *bind.TransactOpts, chainSelector uint64, permissionlessExecutionThresholdSecs uint32, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeInitialize(chainSelector, permissionlessExecutionThresholdSecs, sourceChainsSelector, sourceChainsIsEnabled, sourceChainsIsRMNVerificationDisabled, sourceChainsOnRamp)
 	if err != nil {
 		return nil, err
 	}
-	return o.Transact(opts, module, function, typeTags, args)
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (o OfframpTransactor) EncodeManuallyExecute(reportsBytes []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("manually_execute", nil, []string{"vector<u8>"}, []any{reportsBytes})
+func (c OfframpTransactor) EncodeExecute(reportContext [][]byte, report []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("execute", nil, []string{
+		"vector<vector<u8>>",
+		"vector<u8>",
+	}, []any{
+		reportContext,
+		report,
+	})
 }
 
-func (o OfframpTransactor) ManuallyExecute(opts *bind.TransactOpts, reportsBytes []byte) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := o.EncodeManuallyExecute(reportsBytes)
+func (c OfframpTransactor) Execute(opts *bind.TransactOpts, reportContext [][]byte, report []byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeExecute(reportContext, report)
 	if err != nil {
 		return nil, err
 	}
-	return o.Transact(opts, module, function, typeTags, args)
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (o OfframpTransactor) EncodeCommit(reportContext [][]byte, report []byte, signatures []common.Hash) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("commit", nil, []string{"vector<vector<u8>>", "vector<u8>", "vector<vector<u8>>"}, []any{reportContext, report, signatures})
+func (c OfframpTransactor) EncodeManuallyExecute(reportBytes []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("manually_execute", nil, []string{
+		"vector<u8>",
+	}, []any{
+		reportBytes,
+	})
 }
 
-func (o OfframpTransactor) Commit(opts *bind.TransactOpts, reportContext [][]byte, report []byte, signatures []common.Hash) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := o.EncodeCommit(reportContext, report, signatures)
+func (c OfframpTransactor) ManuallyExecute(opts *bind.TransactOpts, reportBytes []byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeManuallyExecute(reportBytes)
 	if err != nil {
 		return nil, err
 	}
-	return o.Transact(opts, module, function, typeTags, args)
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (o OfframpTransactor) EncodeExecute(reportContext [][]byte, report []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("execute", nil, []string{"vector<vector<u8>>", "vector<u8>"}, []any{reportContext, report})
+func (c OfframpTransactor) EncodeCommit(reportContext [][]byte, report []byte, signatures [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("commit", nil, []string{
+		"vector<vector<u8>>",
+		"vector<u8>",
+		"vector<vector<u8>>",
+	}, []any{
+		reportContext,
+		report,
+		signatures,
+	})
 }
 
-func (o OfframpTransactor) Execute(opts *bind.TransactOpts, reportContext [][]byte, report []byte) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := o.EncodeExecute(reportContext, report)
+func (c OfframpTransactor) Commit(opts *bind.TransactOpts, reportContext [][]byte, report []byte, signatures [][]byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeCommit(reportContext, report, signatures)
 	if err != nil {
 		return nil, err
 	}
-	return o.Transact(opts, module, function, typeTags, args)
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (o OfframpTransactor) EncodeApplySourceChainConfigUpdates(sourceChainSelectors []uint64, sourceChainIsEnabled []bool) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("apply_source_chain_config_updates", nil, []string{"vector<u64>", "vector<bool>"}, []any{sourceChainSelectors, sourceChainIsEnabled})
+func (c OfframpTransactor) EncodeSetDynamicConfig(permissionlessExecutionThresholdSecs uint32) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("set_dynamic_config", nil, []string{
+		"u32",
+	}, []any{
+		permissionlessExecutionThresholdSecs,
+	})
 }
 
-func (o OfframpTransactor) ApplySourceChainConfigUpdates(opts *bind.TransactOpts, sourceChainSelectors []uint64, sourceChainIsEnabled []bool) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := o.EncodeApplySourceChainConfigUpdates(sourceChainSelectors, sourceChainIsEnabled)
+func (c OfframpTransactor) SetDynamicConfig(opts *bind.TransactOpts, permissionlessExecutionThresholdSecs uint32) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeSetDynamicConfig(permissionlessExecutionThresholdSecs)
 	if err != nil {
 		return nil, err
 	}
-	return o.Transact(opts, module, function, typeTags, args)
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (o OfframpTransactor) EncodeSetDynamicConfig(permissionlessExecutionThresholdSecs uint32, isRmnVerificationDisabled bool) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("set_dynamic_config", nil, []string{"u32", "bool"}, []any{permissionlessExecutionThresholdSecs, isRmnVerificationDisabled})
+func (c OfframpTransactor) EncodeApplySourceChainConfigUpdates(sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("apply_source_chain_config_updates", nil, []string{
+		"vector<u64>",
+		"vector<bool>",
+		"vector<bool>",
+		"vector<vector<u8>>",
+	}, []any{
+		sourceChainsSelector,
+		sourceChainsIsEnabled,
+		sourceChainsIsRMNVerificationDisabled,
+		sourceChainsOnRamp,
+	})
 }
 
-func (o OfframpTransactor) SetDynamicConfig(opts *bind.TransactOpts, permissionlessExecutionThresholdSecs uint32, isRmnVerificationDisabled bool) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := o.EncodeSetDynamicConfig(permissionlessExecutionThresholdSecs, isRmnVerificationDisabled)
+func (c OfframpTransactor) ApplySourceChainConfigUpdates(opts *bind.TransactOpts, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeApplySourceChainConfigUpdates(sourceChainsSelector, sourceChainsIsEnabled, sourceChainsIsRMNVerificationDisabled, sourceChainsOnRamp)
 	if err != nil {
 		return nil, err
 	}
-	return o.Transact(opts, module, function, typeTags, args)
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (o OfframpTransactor) EncodeSetOCR3Config(configDigest common.Hash, ocrPluginType uint8, bigF uint8, isSignatureVerificationEnabled bool, signers []common.Address, transmitters []aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("set_ocr3_config", nil, []string{"vector<u8>", "u8", "u8", "bool", "vector<address>", "vector<address>"}, []any{configDigest[:], ocrPluginType, bigF, isSignatureVerificationEnabled, signers, transmitters})
+func (c OfframpTransactor) EncodeSetOcr3Config(configDigest []byte, ocrPluginType byte, bigF byte, isSignatureVerificationEnabled bool, signers [][]byte, transmitters []aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("set_ocr3_config", nil, []string{
+		"vector<u8>",
+		"u8",
+		"u8",
+		"bool",
+		"vector<vector<u8>>",
+		"vector<address>",
+	}, []any{
+		configDigest,
+		ocrPluginType,
+		bigF,
+		isSignatureVerificationEnabled,
+		signers,
+		transmitters,
+	})
 }
 
-func (o OfframpTransactor) SetOCR3Config(opts *bind.TransactOpts, configDigest common.Hash, ocrPluginType uint8, bigF uint8, isSignatureVerificationEnabled bool, signers []common.Address, transmitters []aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := o.EncodeSetOCR3Config(configDigest, ocrPluginType, bigF, isSignatureVerificationEnabled, signers, transmitters)
+func (c OfframpTransactor) SetOcr3Config(opts *bind.TransactOpts, configDigest []byte, ocrPluginType byte, bigF byte, isSignatureVerificationEnabled bool, signers [][]byte, transmitters []aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeSetOcr3Config(configDigest, ocrPluginType, bigF, isSignatureVerificationEnabled, signers, transmitters)
 	if err != nil {
 		return nil, err
 	}
-	return o.Transact(opts, module, function, typeTags, args)
-}
 
-func (o OfframpTransactor) EncodeTransferOwnership(to aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("transfer_ownership", nil, []string{"address"}, []any{to})
-}
-
-func (o OfframpTransactor) TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := o.EncodeTransferOwnership(to)
-	if err != nil {
-		return nil, err
-	}
-	return o.Transact(opts, module, function, typeTags, args)
-}
-
-func (o OfframpTransactor) EncodeAcceptOwnership() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return o.Encode("accept_ownership", nil, nil, nil)
-}
-
-func (o OfframpTransactor) AcceptOwnership(opts *bind.TransactOpts) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := o.EncodeAcceptOwnership()
-	if err != nil {
-		return nil, err
-	}
-	return o.Transact(opts, module, function, typeTags, args)
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }

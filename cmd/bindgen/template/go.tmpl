@@ -1,0 +1,136 @@
+{{- /*gotype: github.com/smartcontractkit/chainlink-aptos/cmd/bindgen/template.tmplData*/ -}}
+// Code generated - DO NOT EDIT.
+// This file is a generated binding and any manual changes will be lost.
+
+package module_{{.Module}}
+
+import (
+  "math/big"
+
+  "github.com/aptos-labs/aptos-go-sdk"
+  "github.com/aptos-labs/aptos-go-sdk/api"
+
+  "github.com/smartcontractkit/chainlink-aptos/bindings/bind"
+  "github.com/smartcontractkit/chainlink-aptos/relayer/codec"
+)
+
+var (
+  _ = aptos.AccountAddress{}
+  _ = api.PendingTransaction{}
+  _ = big.NewInt
+  _ = bind.NewBoundContract
+  _ = codec.DecodeAptosJsonValue
+)
+
+type {{toUpperCamel .Module}}Interface interface {
+  {{- range .ViewFuncs}}
+    {{.Name}}(opts *bind.CallOpts, {{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) ({{range .Returns}}{{.GoType}},{{end}} error)
+  {{- end}}
+
+  {{ range .EntryFuncs}}
+    {{.Name}}(opts *bind.TransactOpts, {{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (*api.PendingTransaction, error)
+  {{- end}}
+}
+
+const FunctionInfo = `{{.FunctionInfo}}`
+
+// Structs
+
+{{$structs := .Structs}}
+{{range $structs}}
+  type {{.Name}} struct { {{range $field := .Fields}}
+    {{$field.Name}} {{$field.Type.GoType}} `move:"{{$field.Type.MoveType}}"` {{end}}
+  }
+{{end}}
+
+type {{toUpperCamel .Module}} struct {
+  {{toUpperCamel .Module}}Caller
+  {{toUpperCamel .Module}}Transactor
+}
+
+// View Functions
+
+type {{toUpperCamel .Module}}Caller struct {
+  *bind.BoundContract
+}
+
+{{range .ViewFuncs}}
+  func (c {{toUpperCamel $.Module}}Caller) Encode{{.Name}}({{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+    return c.BoundContract.Encode("{{.MoveName}}", nil, []string{
+      {{- range .Params}}
+        "{{.Type.MoveType}}",
+      {{- end}}
+      }, []any{
+      {{- range .Params}}
+        {{.Name}},
+      {{- end}}
+      })
+  }
+
+  func (c {{toUpperCamel $.Module}}Caller) {{.Name}}(opts *bind.CallOpts, {{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) ({{range .Returns}}{{.GoType}},{{end}} error) {
+    module, function, typeTags, args, err := c.Encode{{.Name}}({{range .Params}}{{.Name}}, {{end}})
+    if err != nil {
+      return {{range .Returns}}*new({{.GoType}}),{{end}} err
+    }
+
+    callData, err := c.Call(opts, module, function, typeTags, args)
+    if err != nil {
+      return {{range .Returns}}*new({{.GoType}}),{{end}} err
+    }
+
+    var (
+    {{- range $index, $element := .Returns}}
+      r{{$index}} {{if not $element.Option }} {{$element.GoType}} {{else}} bind.StdOption[{{$element.Option.UnderlyingGoType}}] {{end}}
+    {{- end}}
+    )
+
+    if err := codec.DecodeAptosJsonArray(callData, {{range $index, $element := .Returns}}&r{{$index}}, {{end}}); err != nil {
+      return {{range .Returns}}*new({{.GoType}}),{{end}} err
+    }
+    return {{range $index, $element := .Returns}}r{{$index}}{{if $element.Option}}.Value(){{end}}, {{end}} nil
+  }
+{{end}}
+
+// Entry Functions
+
+type {{toUpperCamel .Module}}Transactor struct {
+  *bind.BoundContract
+}
+
+{{range .EntryFuncs}}
+  func (c {{toUpperCamel $.Module}}Transactor) Encode{{.Name}}({{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+    return c.BoundContract.Encode("{{.MoveName}}", nil, []string{
+      {{- range .Params}}
+        "{{.Type.MoveType}}",
+      {{- end}}
+      }, []any{
+      {{- range .Params}}
+        {{.Name}},
+      {{- end}}
+      })
+  }
+
+  func (c {{toUpperCamel $.Module}}Transactor) {{.Name}}(opts *bind.TransactOpts, {{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (*api.PendingTransaction, error) {
+    module, function, typeTags, args, err := c.Encode{{.Name}}({{range .Params}}{{.Name}}, {{end}})
+    if err != nil {
+      return nil, err
+    }
+
+    return c.BoundContract.Transact(opts, module, function, typeTags, args)
+  }
+{{end}}
+
+{{if .OtherFuncs}}// Other Functions{{end}}
+{{range .OtherFuncs}}
+  func (c {{toUpperCamel $.Module}}Caller) Encode{{.Name}}({{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+    return c.BoundContract.Encode("{{.MoveName}}", nil, []string{
+    {{- range .Params}}
+      "{{.Type.MoveType}}",
+    {{- end}}
+    }, []any{
+    {{- range .Params}}
+        {{.Name}},
+    {{- end}}
+    })
+  }
+{{end}}

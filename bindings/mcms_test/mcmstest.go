@@ -16,6 +16,10 @@ type MCMSTest struct {
 	MCMSUser module_mcms_user.MCMSUser
 }
 
+var FunctionInfo = bind.MustParseFunctionInfo(
+	module_mcms_user.FunctionInfo,
+)
+
 func Compile(MCMSAddress aptos.AccountAddress) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"mcms": MCMSAddress,

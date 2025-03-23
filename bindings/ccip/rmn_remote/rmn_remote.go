@@ -1,20 +1,32 @@
+// Code generated - DO NOT EDIT.
+// This file is a generated binding and any manual changes will be lost.
+
 package module_rmn_remote
 
 import (
+	"math/big"
+
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/api"
-	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 )
 
-// RMNRemoteInterface defines the interface for interacting with the RMNRemote contract
+var (
+	_ = aptos.AccountAddress{}
+	_ = api.PendingTransaction{}
+	_ = big.NewInt
+	_ = bind.NewBoundContract
+	_ = codec.DecodeAptosJsonValue
+)
+
 type RMNRemoteInterface interface {
+	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootMinSequenceNumbers []uint64, merkleRootMaxSequenceNumbers []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error)
 	GetVersionedConfig(opts *bind.CallOpts) (uint32, Config, error)
 	GetLocalChainSelector(opts *bind.CallOpts) (uint64, error)
-	GetReportDigestHeader(opts *bind.CallOpts) (common.Hash, error)
+	GetReportDigestHeader(opts *bind.CallOpts) ([]byte, error)
 
 	Initialize(opts *bind.TransactOpts, localChainSelector uint64) (*api.PendingTransaction, error)
 	SetConfig(opts *bind.TransactOpts, rmnHomeContractConfigDigest []byte, signerOnchainPublicKeys [][]byte, nodeIndexes []uint64, fSign uint64) (*api.PendingTransaction, error)
@@ -24,32 +36,97 @@ type RMNRemoteInterface interface {
 	UncurseMultiple(opts *bind.TransactOpts, subjects [][]byte) (*api.PendingTransaction, error)
 }
 
-// Signer represents a signer in the RMN config
-type Signer struct {
-	OnchainPublicKey []byte
-	NodeIndex        uint64
+const FunctionInfo = `[{"package":"ccip","module":"rmn_remote","name":"curse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"curse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"get_cursed_subjects","parameters":null},{"package":"ccip","module":"rmn_remote","name":"initialize","parameters":[{"name":"local_chain_selector","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"is_cursed","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"is_cursed_global","parameters":null},{"package":"ccip","module":"rmn_remote","name":"is_cursed_u128","parameters":[{"name":"subject_value","type":"u128"}]},{"package":"ccip","module":"rmn_remote","name":"set_config","parameters":[{"name":"rmn_home_contract_config_digest","type":"vector\u003cu8\u003e"},{"name":"signer_onchain_public_keys","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"node_indexes","type":"vector\u003cu64\u003e"},{"name":"f_sign","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]}]`
+
+// Structs
+
+type RMNRemoteState struct {
+	LocalChainSelector uint64 `move:"u64"`
+	Config             Config `move:"Config"`
+	ConfigCount        uint32 `move:"u32"`
 }
 
-// Config represents the RMN configuration struct
 type Config struct {
-	RMNHomeContractConfigDigest []byte
-	Signers                     []Signer
-	FSign                       uint64
+	RMNHomeContractConfigDigest []byte   `move:"vector<u8>"`
+	Signers                     []Signer `move:"vector<Signer>"`
+	FSign                       uint64   `move:"u64"`
 }
 
-var _ RMNRemoteInterface = RMNRemote{}
+type Signer struct {
+	OnchainPublicKey []byte `move:"vector<u8>"`
+	NodeIndex        uint64 `move:"u64"`
+}
+
+type Report struct {
+	DestChainId                 uint64               `move:"u64"`
+	DestChainSelector           uint64               `move:"u64"`
+	RMNRemoteContractAddress    aptos.AccountAddress `move:"address"`
+	OffRampAddress              aptos.AccountAddress `move:"address"`
+	RMNHomeContractConfigDigest []byte               `move:"vector<u8>"`
+	MerkleRoots                 []MerkleRoot         `move:"vector<MerkleRoot>"`
+}
+
+type MerkleRoot struct {
+	SourceChainSelector uint64 `move:"u64"`
+	MinSequenceNumber   uint64 `move:"u64"`
+	MaxSequenceNumber   uint64 `move:"u64"`
+	MerkleRoot          []byte `move:"vector<u8>"`
+}
+
+type ConfigSet struct {
+	Version uint32 `move:"u32"`
+	Config  Config `move:"Config"`
+}
+
+type Cursed struct {
+	Subjects [][]byte `move:"vector<vector<u8>>"`
+}
+
+type Uncursed struct {
+	Subjects [][]byte `move:"vector<vector<u8>>"`
+}
+
+type McmsCallback struct {
+}
 
 type RMNRemote struct {
 	RMNRemoteCaller
 	RMNRemoteTransactor
 }
 
+// View Functions
+
 type RMNRemoteCaller struct {
 	*bind.BoundContract
 }
 
-func (r RMNRemoteCaller) EncodeVerify(merkleRootSourceChainSelectors []uint64, merkleRootMinSequenceNumbers []uint64, merkleRootMaxSequenceNumbers []uint64, merkleRootValues [][]byte, signatures [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return r.Encode("verify", nil, []string{
+func (c RMNRemoteCaller) EncodeTypeAndVersion() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("type_and_version", nil, []string{}, []any{})
+}
+
+func (c RMNRemoteCaller) TypeAndVersion(opts *bind.CallOpts) (string, error) {
+	module, function, typeTags, args, err := c.EncodeTypeAndVersion()
+	if err != nil {
+		return *new(string), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(string), err
+	}
+
+	var (
+		r0 string
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(string), err
+	}
+	return r0, nil
+}
+
+func (c RMNRemoteCaller) EncodeVerify(merkleRootSourceChainSelectors []uint64, merkleRootMinSequenceNumbers []uint64, merkleRootMaxSequenceNumbers []uint64, merkleRootValues [][]byte, signatures [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("verify", nil, []string{
 		"vector<u64>",
 		"vector<u64>",
 		"vector<u64>",
@@ -64,109 +141,128 @@ func (r RMNRemoteCaller) EncodeVerify(merkleRootSourceChainSelectors []uint64, m
 	})
 }
 
-func (r RMNRemoteCaller) Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootMinSequenceNumbers []uint64, merkleRootMaxSequenceNumbers []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error) {
-	module, function, typeTags, args, err := r.EncodeVerify(merkleRootSourceChainSelectors, merkleRootMinSequenceNumbers, merkleRootMaxSequenceNumbers, merkleRootValues, signatures)
+func (c RMNRemoteCaller) Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootMinSequenceNumbers []uint64, merkleRootMaxSequenceNumbers []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error) {
+	module, function, typeTags, args, err := c.EncodeVerify(merkleRootSourceChainSelectors, merkleRootMinSequenceNumbers, merkleRootMaxSequenceNumbers, merkleRootValues, signatures)
 	if err != nil {
-		return false, err
+		return *new(bool), err
 	}
 
-	data, err := r.Call(opts, module, function, typeTags, args)
+	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return false, err
+		return *new(bool), err
 	}
 
-	var result bool
-	if err := codec.DecodeAptosJsonArray(data, &result); err != nil {
-		return false, err
+	var (
+		r0 bool
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(bool), err
 	}
-	return result, nil
+	return r0, nil
 }
 
-func (r RMNRemoteCaller) EncodeGetVersionedConfig() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return r.Encode("get_versioned_config", nil, nil, nil)
+func (c RMNRemoteCaller) EncodeGetVersionedConfig() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_versioned_config", nil, []string{}, []any{})
 }
 
-func (r RMNRemoteCaller) GetVersionedConfig(opts *bind.CallOpts) (uint32, Config, error) {
-	module, function, typeTags, args, err := r.EncodeGetVersionedConfig()
+func (c RMNRemoteCaller) GetVersionedConfig(opts *bind.CallOpts) (uint32, Config, error) {
+	module, function, typeTags, args, err := c.EncodeGetVersionedConfig()
 	if err != nil {
-		return 0, Config{}, err
+		return *new(uint32), *new(Config), err
 	}
 
-	data, err := r.Call(opts, module, function, typeTags, args)
+	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return 0, Config{}, err
+		return *new(uint32), *new(Config), err
 	}
 
-	var version uint32
-	var config Config
-	if err := codec.DecodeAptosJsonArray(data, &version, &config); err != nil {
-		return 0, Config{}, err
+	var (
+		r0 uint32
+		r1 Config
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0, &r1); err != nil {
+		return *new(uint32), *new(Config), err
 	}
-	return version, config, nil
+	return r0, r1, nil
 }
 
-func (r RMNRemoteCaller) EncodeGetLocalChainSelector() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return r.Encode("get_local_chain_selector", nil, nil, nil)
+func (c RMNRemoteCaller) EncodeGetLocalChainSelector() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_local_chain_selector", nil, []string{}, []any{})
 }
 
-func (r RMNRemoteCaller) GetLocalChainSelector(opts *bind.CallOpts) (uint64, error) {
-	module, function, typeTags, args, err := r.EncodeGetLocalChainSelector()
+func (c RMNRemoteCaller) GetLocalChainSelector(opts *bind.CallOpts) (uint64, error) {
+	module, function, typeTags, args, err := c.EncodeGetLocalChainSelector()
 	if err != nil {
-		return 0, err
+		return *new(uint64), err
 	}
 
-	data, err := r.Call(opts, module, function, typeTags, args)
+	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return 0, err
+		return *new(uint64), err
 	}
 
-	var selector uint64
-	if err := codec.DecodeAptosJsonArray(data, &selector); err != nil {
-		return 0, err
+	var (
+		r0 uint64
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(uint64), err
 	}
-	return selector, nil
+	return r0, nil
 }
 
-func (r RMNRemoteCaller) EncodeGetReportDigestHeader() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return r.Encode("get_report_digest_header", nil, nil, nil)
+func (c RMNRemoteCaller) EncodeGetReportDigestHeader() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_report_digest_header", nil, []string{}, []any{})
 }
 
-func (r RMNRemoteCaller) GetReportDigestHeader(opts *bind.CallOpts) (common.Hash, error) {
-	module, function, typeTags, args, err := r.EncodeGetReportDigestHeader()
+func (c RMNRemoteCaller) GetReportDigestHeader(opts *bind.CallOpts) ([]byte, error) {
+	module, function, typeTags, args, err := c.EncodeGetReportDigestHeader()
 	if err != nil {
-		return common.Hash{}, err
+		return *new([]byte), err
 	}
 
-	data, err := r.Call(opts, module, function, typeTags, args)
+	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return common.Hash{}, err
+		return *new([]byte), err
 	}
 
-	var header common.Hash
-	if err := codec.DecodeAptosJsonArray(data, &header); err != nil {
-		return common.Hash{}, err
+	var (
+		r0 []byte
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new([]byte), err
 	}
-	return header, nil
+	return r0, nil
 }
+
+// Entry Functions
 
 type RMNRemoteTransactor struct {
 	*bind.BoundContract
 }
 
-func (r RMNRemoteTransactor) EncodeInitialize(localChainSelector uint64) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return r.Encode("initialize", nil, []string{"u64"}, []any{localChainSelector})
+func (c RMNRemoteTransactor) EncodeInitialize(localChainSelector uint64) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("initialize", nil, []string{
+		"u64",
+	}, []any{
+		localChainSelector,
+	})
 }
 
-func (r RMNRemoteTransactor) Initialize(opts *bind.TransactOpts, localChainSelector uint64) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := r.EncodeInitialize(localChainSelector)
+func (c RMNRemoteTransactor) Initialize(opts *bind.TransactOpts, localChainSelector uint64) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeInitialize(localChainSelector)
 	if err != nil {
 		return nil, err
 	}
-	return r.Transact(opts, module, function, typeTags, args)
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (r RMNRemoteTransactor) EncodeSetConfig(rmnHomeContractConfigDigest []byte, signerOnchainPublicKeys [][]byte, nodeIndexes []uint64, fSign uint64) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return r.Encode("set_config", nil, []string{
+func (c RMNRemoteTransactor) EncodeSetConfig(rmnHomeContractConfigDigest []byte, signerOnchainPublicKeys [][]byte, nodeIndexes []uint64, fSign uint64) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("set_config", nil, []string{
 		"vector<u8>",
 		"vector<vector<u8>>",
 		"vector<u64>",
@@ -179,58 +275,105 @@ func (r RMNRemoteTransactor) EncodeSetConfig(rmnHomeContractConfigDigest []byte,
 	})
 }
 
-func (r RMNRemoteTransactor) SetConfig(opts *bind.TransactOpts, rmnHomeContractConfigDigest []byte, signerOnchainPublicKeys [][]byte, nodeIndexes []uint64, fSign uint64) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := r.EncodeSetConfig(rmnHomeContractConfigDigest, signerOnchainPublicKeys, nodeIndexes, fSign)
+func (c RMNRemoteTransactor) SetConfig(opts *bind.TransactOpts, rmnHomeContractConfigDigest []byte, signerOnchainPublicKeys [][]byte, nodeIndexes []uint64, fSign uint64) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeSetConfig(rmnHomeContractConfigDigest, signerOnchainPublicKeys, nodeIndexes, fSign)
 	if err != nil {
 		return nil, err
 	}
-	return r.Transact(opts, module, function, typeTags, args)
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (r RMNRemoteTransactor) EncodeCurse(subject []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return r.Encode("curse", nil, []string{"vector<u8>"}, []any{subject})
+func (c RMNRemoteTransactor) EncodeCurse(subject []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("curse", nil, []string{
+		"vector<u8>",
+	}, []any{
+		subject,
+	})
 }
 
-func (r RMNRemoteTransactor) Curse(opts *bind.TransactOpts, subject []byte) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := r.EncodeCurse(subject)
+func (c RMNRemoteTransactor) Curse(opts *bind.TransactOpts, subject []byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeCurse(subject)
 	if err != nil {
 		return nil, err
 	}
-	return r.Transact(opts, module, function, typeTags, args)
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (r RMNRemoteTransactor) EncodeCurseMultiple(subjects [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return r.Encode("curse_multiple", nil, []string{"vector<vector<u8>>"}, []any{subjects})
+func (c RMNRemoteTransactor) EncodeCurseMultiple(subjects [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("curse_multiple", nil, []string{
+		"vector<vector<u8>>",
+	}, []any{
+		subjects,
+	})
 }
 
-func (r RMNRemoteTransactor) CurseMultiple(opts *bind.TransactOpts, subjects [][]byte) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := r.EncodeCurseMultiple(subjects)
+func (c RMNRemoteTransactor) CurseMultiple(opts *bind.TransactOpts, subjects [][]byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeCurseMultiple(subjects)
 	if err != nil {
 		return nil, err
 	}
-	return r.Transact(opts, module, function, typeTags, args)
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (r RMNRemoteTransactor) EncodeUncurse(subject []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return r.Encode("uncurse", nil, []string{"vector<u8>"}, []any{subject})
+func (c RMNRemoteTransactor) EncodeUncurse(subject []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("uncurse", nil, []string{
+		"vector<u8>",
+	}, []any{
+		subject,
+	})
 }
 
-func (r RMNRemoteTransactor) Uncurse(opts *bind.TransactOpts, subject []byte) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := r.EncodeUncurse(subject)
+func (c RMNRemoteTransactor) Uncurse(opts *bind.TransactOpts, subject []byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeUncurse(subject)
 	if err != nil {
 		return nil, err
 	}
-	return r.Transact(opts, module, function, typeTags, args)
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (r RMNRemoteTransactor) EncodeUncurseMultiple(subjects [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return r.Encode("uncurse_multiple", nil, []string{"vector<vector<u8>>"}, []any{subjects})
+func (c RMNRemoteTransactor) EncodeUncurseMultiple(subjects [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("uncurse_multiple", nil, []string{
+		"vector<vector<u8>>",
+	}, []any{
+		subjects,
+	})
 }
 
-func (r RMNRemoteTransactor) UncurseMultiple(opts *bind.TransactOpts, subjects [][]byte) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := r.EncodeUncurseMultiple(subjects)
+func (c RMNRemoteTransactor) UncurseMultiple(opts *bind.TransactOpts, subjects [][]byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeUncurseMultiple(subjects)
 	if err != nil {
 		return nil, err
 	}
-	return r.Transact(opts, module, function, typeTags, args)
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+// Other Functions
+
+func (c RMNRemoteCaller) EncodeGetCursedSubjects() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_cursed_subjects", nil, []string{}, []any{})
+}
+
+func (c RMNRemoteCaller) EncodeIsCursedGlobal() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("is_cursed_global", nil, []string{}, []any{})
+}
+
+func (c RMNRemoteCaller) EncodeIsCursed(subject []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("is_cursed", nil, []string{
+		"vector<u8>",
+	}, []any{
+		subject,
+	})
+}
+
+func (c RMNRemoteCaller) EncodeIsCursedU128(subjectValue *big.Int) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("is_cursed_u128", nil, []string{
+		"u128",
+	}, []any{
+		subjectValue,
+	})
 }

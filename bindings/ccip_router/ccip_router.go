@@ -4,7 +4,7 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
-	module_router "github.com/smartcontractkit/chainlink-aptos/bindings/ccip_router/ccip_router"
+	module_router "github.com/smartcontractkit/chainlink-aptos/bindings/ccip_router/router"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/compile"
 )
 
@@ -16,6 +16,10 @@ type CCIPRouter struct {
 
 const (
 	DefaultSeed = "chainlink_router"
+)
+
+var FunctionInfo = bind.MustParseFunctionInfo(
+	module_router.FunctionInfo,
 )
 
 func Compile(CCIPAddress aptos.AccountAddress, mcmsAddress aptos.AccountAddress, registerMCMSEntrypoints bool) (compile.CompiledPackage, error) {
