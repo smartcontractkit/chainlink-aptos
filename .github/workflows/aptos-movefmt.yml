@@ -23,7 +23,7 @@ jobs:
       - name: Update movefmt
         run: aptos update movefmt --target-version 1.0.6 # Fix version to prevent accidentally breaking the CI
       - name: Format each module that contains a movefmt.toml file
-        working-directory: aptos/contracts
+        working-directory: contracts
         run: movefmt
       - name: Check if any field have been changed
         run: |

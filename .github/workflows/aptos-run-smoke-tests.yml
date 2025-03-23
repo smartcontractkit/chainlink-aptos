@@ -62,7 +62,6 @@ jobs:
 
     - name: Build chainlink-aptos image
       run: |
-        cd aptos
         docker buildx build --build-arg BASE_IMAGE=local_chainlink -t chainlink-aptos -f ./Dockerfile .
 
     - name: Extract Go version
@@ -75,7 +74,7 @@ jobs:
         go-version: ${{ env.go_version }}
 
     - name: Create env file
-      working-directory: ./aptos
+      working-directory: ./
       run: |
           cat <<EOT >> .env
           # Postgres config
@@ -111,7 +110,7 @@ jobs:
       env:
         TEST_LOG_LEVEL: debug
       run: |
-        cd aptos/integration-tests
+        cd integration-tests
         TEST_LOG_LEVEL=${{env.TEST_LOG_LEVEL}} go test -timeout 24h -count=1 -run TestOCR3Keystone ./smoke
 
     - name: Setup GitHub Token
@@ -150,4 +149,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: smoke-test-logs
-        path: ./aptos/integration-tests/logs/
+        path: ./integration-tests/logs/

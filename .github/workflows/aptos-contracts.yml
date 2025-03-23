@@ -11,7 +11,7 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      found: ${{ steps.c.outputs.found }} 
+      found: ${{ steps.c.outputs.found }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/changes
@@ -31,4 +31,4 @@ jobs:
       uses: aptos-labs/actions/install-aptos-cli@ce57287eb852b9819c1d74fecc3be187677559fd # v0.1
 
     - name: Run tests
-      run: aptos/contracts/scripts/test.sh
+      run: contracts/scripts/test.sh
