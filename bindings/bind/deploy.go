@@ -21,7 +21,8 @@ const (
 
 // DeployPackageToObject deploys a package to a new named object address
 // The package will be compiled using the CLI and then deployed using 0x1::object_code_deployment::publish
-// If the package is too large to be deployed in one go, it will be chunked and deployed using the LargePackages contract
+// If the package is too large to be deployed in a single transaction or if the force large packages flag
+// is set, it will be chunked and deployed using the LargePackages contract
 // The resulting address will be calculated using the deployer's account address and the next sequence number,
 // following the Aptos NamedObjectScheme
 func DeployPackageToObject(
@@ -31,37 +32,41 @@ func DeployPackageToObject(
 	packageName contracts.Package,
 	// Additional named addresses, doesn't have to include the objectAddress
 	namedAddresses map[string]aptos.AccountAddress,
+	forceLargePackages bool,
 ) (aptos.AccountAddress, *api.PendingTransaction, error) {
-	// Well start by assuming that the package is small enough to be deployed in one go
-
-	// Calculate next named addresses
-	address, err := nextObjectCodeDeploymentAddressForAccount(client, auth.AccountAddress())
-	if err != nil {
-		return aptos.AccountAddress{}, nil, err
-	}
 	if namedAddresses == nil {
 		namedAddresses = make(map[string]aptos.AccountAddress)
 	}
-	namedAddresses[string(packageName)] = address
 
-	// Compile using CLI
-	output, err := compile.CompilePackage(packageName, namedAddresses)
-	if err != nil {
-		return aptos.AccountAddress{}, nil, err
-	}
-
-	chunks, err := CreateChunks(output, ChunkSizeInBytes)
-	if err != nil {
-		return aptos.AccountAddress{}, nil, fmt.Errorf("failed to create chunks: %w", err)
-	}
-
-	if len(chunks) == 1 {
-		// No need to chunk, deploy in one go and return
-		tx, err := objectCodeDeploymentPublish(auth, client, output)
+	// Start by assuming that the package is small enough to be deployed in a single transaction if
+	// forceLargePackages is not set.
+	if !forceLargePackages {
+		// Calculate next named addresses
+		address, err := nextObjectCodeDeploymentAddressForAccount(client, auth.AccountAddress())
 		if err != nil {
 			return aptos.AccountAddress{}, nil, err
 		}
-		return address, tx, nil
+		namedAddresses[string(packageName)] = address
+
+		// Compile using CLI
+		output, err := compile.CompilePackage(packageName, namedAddresses)
+		if err != nil {
+			return aptos.AccountAddress{}, nil, err
+		}
+
+		chunks, err := CreateChunks(output, ChunkSizeInBytes)
+		if err != nil {
+			return aptos.AccountAddress{}, nil, fmt.Errorf("failed to create chunks: %w", err)
+		}
+
+		if len(chunks) == 1 {
+			// No need to chunk, deploy in one go and return
+			tx, err := objectCodeDeploymentPublish(auth, client, output)
+			if err != nil {
+				return aptos.AccountAddress{}, nil, err
+			}
+			return address, tx, nil
+		}
 	}
 
 	// Chunking is needed

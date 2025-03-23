@@ -111,7 +111,8 @@ func DeployToObject(
 	if registerMCMSEntrypoints {
 		namedAddresses["mcms_register_entrypoints"] = mcmsAddress
 	}
-	address, tx, err := bind.DeployPackageToObject(auth, client, "ccip", namedAddresses)
+	// forceLargePackages as we know this package requires chunking.
+	address, tx, err := bind.DeployPackageToObject(auth, client, "ccip", namedAddresses, true)
 	if err != nil {
 		return aptos.AccountAddress{}, nil, CCIP{}, err
 	}
