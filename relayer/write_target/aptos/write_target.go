@@ -14,7 +14,6 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainwriter"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	aptosconfig "github.com/smartcontractkit/chainlink-aptos/relayer/config"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/fees"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
@@ -134,11 +133,10 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 				},
 			},
 		},
-		FeeStrategy: fees.Default,
+		FeeStrategy: chainwriter.DefaultFeeStrategy,
 	}
 
-	fe := fees.NewFeeEstimator(client)
-	cw := chainwriter.NewChainWriter(lggr, fe, chain.TxManager(), cwConfig)
+	cw := chainwriter.NewChainWriter(lggr, client, chain.TxManager(), cwConfig)
 
 	validate := func(config write_target.ReqConfig) error {
 		address := aptos.AccountAddress{}

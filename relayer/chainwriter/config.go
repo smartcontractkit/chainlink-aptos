@@ -2,12 +2,19 @@ package chainwriter
 
 import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/fees"
+)
+
+type FeeStrategy int
+
+const (
+	DeprioritizedFeeStrategy FeeStrategy = -1
+	DefaultFeeStrategy       FeeStrategy = 0
+	PrioritizedFeeStrategy   FeeStrategy = 1
 )
 
 type ChainWriterConfig struct {
 	Modules     map[string]*ChainWriterModule
-	FeeStrategy fees.FeeStrategy
+	FeeStrategy FeeStrategy
 }
 
 type ChainWriterModule struct {
