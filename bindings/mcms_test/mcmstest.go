@@ -46,7 +46,7 @@ func DeployToObject(
 	namedAddresses := map[string]aptos.AccountAddress{
 		"mcms": mcmsAddress,
 	}
-	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.MCMSTest, namedAddresses)
+	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.MCMSTest, namedAddresses, false)
 	if err != nil {
 		return aptos.AccountAddress{}, nil, MCMSTest{}, err
 	}
