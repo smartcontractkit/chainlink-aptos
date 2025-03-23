@@ -65,7 +65,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 	require.NoError(t, err)
 
 	rlClient := rlclient.NewRateLimitedClient(client, 100, 30*time.Second)
-	getClient := func() (rlclient.RateLimitedClient, error) {
+	getClient := func() (aptos.AptosRpcClient, error) {
 		return rlClient, nil
 	}
 

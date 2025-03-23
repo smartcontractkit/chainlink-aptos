@@ -36,7 +36,7 @@ type Chain interface {
 	Config() *config.TOMLConfig
 
 	TxManager() *txm.AptosTxm
-	GetClient() (rlclient.RateLimitedClient, error)
+	GetClient() (aptos.AptosRpcClient, error)
 }
 
 type ChainOpts struct {
@@ -108,7 +108,7 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger) 
 		lggr: logger.Named(lggr, "Chain"),
 	}
 
-	getClient := func() (rlclient.RateLimitedClient, error) {
+	getClient := func() (aptos.AptosRpcClient, error) {
 		return ch.GetClient()
 	}
 
@@ -158,7 +158,7 @@ func (c *chain) ChainID() string {
 }
 
 // GetClient returns a client, randomly selecting one from available and valid nodes
-func (c *chain) GetClient() (rlclient.RateLimitedClient, error) {
+func (c *chain) GetClient() (aptos.AptosRpcClient, error) {
 	var node *config.Node
 	var err error
 	var client *aptos.NodeClient

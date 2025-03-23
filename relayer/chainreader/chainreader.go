@@ -16,7 +16,6 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
-	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
@@ -29,10 +28,10 @@ type aptosChainReader struct {
 	starter         utils.StartStopOnce
 	moduleAddresses map[string]aptos.AccountAddress
 
-	client rlclient.RateLimitedClient
+	client aptos.AptosRpcClient
 }
 
-func NewChainReader(lgr logger.Logger, client rlclient.RateLimitedClient, config ChainReaderConfig) types.ContractReader {
+func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config ChainReaderConfig) types.ContractReader {
 	return &aptosChainReader{
 		logger:          logger.Named(lgr, "AptosChainReader"),
 		client:          client,

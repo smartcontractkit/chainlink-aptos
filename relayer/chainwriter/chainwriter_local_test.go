@@ -20,7 +20,6 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 
-	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/fees"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
@@ -66,7 +65,7 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 	require.NoError(t, err)
 
 	rlClient := rlclient.NewRateLimitedClient(client, 100, 30*time.Second)
-	getClient := func() (rlclient.RateLimitedClient, error) { return rlClient, nil }
+	getClient := func() (aptos.AptosRpcClient, error) { return rlClient, nil }
 
 	txmConfig := txm.DefaultConfigSet
 

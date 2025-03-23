@@ -6,12 +6,10 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 
 	"github.com/stretchr/testify/assert"
-
-	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client/mock"
 )
 
 func TestEstimateGasPrice(t *testing.T) {
-	mockClient := new(rlclient.RateLimitedClient)
+	mockClient := new(aptos.AptosRpcClient)
 	mockClient.On("EstimateGasPrice").Return(aptos.EstimateGasInfo{
 		GasEstimate:              100,
 		DeprioritizedGasEstimate: 50,

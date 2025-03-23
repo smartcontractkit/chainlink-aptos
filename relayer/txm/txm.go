@@ -22,7 +22,6 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
 	aptosacc "github.com/smartcontractkit/chainlink-aptos/relayer/account"
-	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client"
 )
 
 var _ services.Service = &AptosTxm{}
@@ -42,11 +41,11 @@ type AptosTxm struct {
 	done          sync.WaitGroup
 	stop          chan struct{}
 
-	client rlclient.RateLimitedClient
+	client aptos.AptosRpcClient
 }
 
 // TODO: Config input is not validated for sanity
-func New(lgr logger.Logger, keystore loop.Keystore, config Config, getClient func() (rlclient.RateLimitedClient, error)) (*AptosTxm, error) {
+func New(lgr logger.Logger, keystore loop.Keystore, config Config, getClient func() (aptos.AptosRpcClient, error)) (*AptosTxm, error) {
 	client, err := getClient()
 	if err != nil {
 		return nil, err
@@ -281,7 +280,7 @@ func (a *AptosTxm) broadcastLoop() {
 	}
 }
 
-func (a *AptosTxm) createRawTx(client rlclient.RateLimitedClient, tx *AptosTx, nonce uint64) (*aptos.RawTransaction, error) {
+func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, nonce uint64) (*aptos.RawTransaction, error) {
 	// this is cached within NodeClient after the first successful invocation.
 	chainId, err := client.GetChainId()
 	if err != nil {
@@ -360,7 +359,7 @@ func (a *AptosTxm) createRawTx(client rlclient.RateLimitedClient, tx *AptosTx, n
 	return rawTx, nil
 }
 
-func (a *AptosTxm) createSignedTx(client rlclient.RateLimitedClient, rawTx *aptos.RawTransaction, publicKey ed25519.PublicKey, fromAddress aptos.AccountAddress) (*aptos.SignedTransaction, error) {
+func (a *AptosTxm) createSignedTx(client aptos.AptosRpcClient, rawTx *aptos.RawTransaction, publicKey ed25519.PublicKey, fromAddress aptos.AccountAddress) (*aptos.SignedTransaction, error) {
 	signingMessage, err := rawTx.SigningMessage()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create signing message: %w", err)
@@ -634,7 +633,7 @@ func (a *AptosTxm) InflightCount() (int, int) {
 	return len(a.broadcastChan), a.accountStore.GetTotalInflightCount()
 }
 
-func (a *AptosTxm) getSequenceNumber(client rlclient.RateLimitedClient, address aptos.AccountAddress) (uint64, error) {
+func (a *AptosTxm) getSequenceNumber(client aptos.AptosRpcClient, address aptos.AccountAddress) (uint64, error) {
 	accountInfo, err := client.Account(address)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch account data for address %s: %w", address, err)
@@ -646,7 +645,7 @@ func (a *AptosTxm) getSequenceNumber(client rlclient.RateLimitedClient, address 
 	return sequenceNumber, nil
 }
 
-func (a *AptosTxm) resyncNonce(client rlclient.RateLimitedClient, address aptos.AccountAddress) error {
+func (a *AptosTxm) resyncNonce(client aptos.AptosRpcClient, address aptos.AccountAddress) error {
 	sequenceNumber, err := a.getSequenceNumber(client, address)
 	if err != nil {
 		return fmt.Errorf("failed to resync nonce for address %s: %w", address.String(), err)
@@ -664,7 +663,7 @@ func (a *AptosTxm) resyncNonce(client rlclient.RateLimitedClient, address aptos.
 	return nil
 }
 
-func (a *AptosTxm) getLedgerTimestampSecs(client rlclient.RateLimitedClient) (uint64, error) {
+func (a *AptosTxm) getLedgerTimestampSecs(client aptos.AptosRpcClient) (uint64, error) {
 	nodeInfo, err := client.Info()
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch node info: %+w", err)
@@ -700,7 +699,7 @@ func (key *mockSimulationSigner) SimulationAuthenticator() *aptoscrypto.AccountA
 	}
 }
 
-func (a *AptosTxm) simulateTransaction(client rlclient.RateLimitedClient, rawTx aptos.RawTransaction, fromAddress aptos.AccountAddress, publicKey ed25519.PublicKey) (*aptosapi.UserTransaction, error) {
+func (a *AptosTxm) simulateTransaction(client aptos.AptosRpcClient, rawTx aptos.RawTransaction, fromAddress aptos.AccountAddress, publicKey ed25519.PublicKey) (*aptosapi.UserTransaction, error) {
 	// build mock signer for simulation
 	signerForSimulation := &aptos.Account{Signer: &mockSimulationSigner{pubKey: aptoscrypto.Ed25519PublicKey{Inner: publicKey}}}
 
