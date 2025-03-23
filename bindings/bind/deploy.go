@@ -42,7 +42,7 @@ func DeployPackageToObject(
 	// forceLargePackages is not set.
 	if !forceLargePackages {
 		// Calculate next named addresses
-		address, err := nextObjectCodeDeploymentAddressForAccount(client, auth.AccountAddress())
+		address, err := nextObjectCodeDeploymentAddressForAccount(client, auth.AccountAddress(), 0)
 		if err != nil {
 			return aptos.AccountAddress{}, nil, err
 		}
@@ -98,16 +98,10 @@ func DeployPackageToObject(
 
 	// As this will result in multiple transactions, which will in turn change the sequence number of the deployer account
 	// re-calculate the address and recompile with the new address
-	accountInto, err := client.Account(auth.AccountAddress())
+	address, err = nextObjectCodeDeploymentAddressForAccount(client, auth.AccountAddress(), uint64(len(chunks))-1)
 	if err != nil {
 		return aptos.AccountAddress{}, nil, err
 	}
-	sn, err := accountInto.SequenceNumber()
-	if err != nil {
-		return aptos.AccountAddress{}, nil, err
-	}
-
-	address = calculateNextObjectCodeDeploymentAddress(auth.AccountAddress(), sn-1+uint64(len(chunks)))
 	namedAddresses[string(packageName)] = address
 	output, err = compile.CompilePackage(packageName, namedAddresses)
 	if err != nil {
@@ -181,7 +175,7 @@ func calculateNextObjectCodeDeploymentAddress(address aptos.AccountAddress, curr
 	return address.NamedObjectAddress(seedBytes)
 }
 
-func nextObjectCodeDeploymentAddressForAccount(client aptos.AptosRpcClient, account aptos.AccountAddress) (aptos.AccountAddress, error) {
+func nextObjectCodeDeploymentAddressForAccount(client aptos.AptosRpcClient, account aptos.AccountAddress, offset uint64) (aptos.AccountAddress, error) {
 	accountInfo, err := client.Account(account)
 	if err != nil {
 		return aptos.AccountAddress{}, fmt.Errorf("failed to get account info: %w", err)
@@ -191,7 +185,7 @@ func nextObjectCodeDeploymentAddressForAccount(client aptos.AptosRpcClient, acco
 		return aptos.AccountAddress{}, fmt.Errorf("failed to get sequence number: %w", err)
 	}
 
-	return calculateNextObjectCodeDeploymentAddress(account, sequence), nil
+	return calculateNextObjectCodeDeploymentAddress(account, sequence+offset), nil
 }
 
 // objectCodeDeploymentPublish calls 0x1::object_code_deployment::publish
