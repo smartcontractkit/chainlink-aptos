@@ -67,7 +67,7 @@ func (a *aptosChainReader) Close() error {
 
 func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier string, confidenceLevel primitives.ConfidenceLevel, params, returnVal any) error {
 	// Decode the readIdentifier - a combination of address, contract, and readName as a concatenated string
-	// TODO: check /chainlink-internal-integrations/solana/pkg/solana/chainreader/lookup.go, see if we can use the same approach
+	// TODO: check chainlink-solana/pkg/solana/chainreader/lookup.go, see if we can use the same approach
 	readComponents := strings.Split(readIdentifier, "-")
 	if len(readComponents) != 3 {
 		return fmt.Errorf("invalid read identifier: %s", readIdentifier)
