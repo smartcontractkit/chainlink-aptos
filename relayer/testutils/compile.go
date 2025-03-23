@@ -36,7 +36,7 @@ func CompileMovePackage(
 		t.Fatalf("Failed to find git root: %v", err)
 	}
 
-	packageDir := filepath.Join(gitRoot, "aptos", "contracts", contractsDir)
+	packageDir := filepath.Join(gitRoot, "contracts", contractsDir)
 
 	if _, err := os.Stat(packageDir); err != nil {
 		t.Fatalf("Could not find contract directory: %v", err)
