@@ -2,8 +2,6 @@ package fees
 
 import (
 	"github.com/aptos-labs/aptos-go-sdk"
-
-	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client"
 )
 
 type FeeStrategy int
@@ -15,10 +13,10 @@ const (
 )
 
 type FeeEstimator struct {
-	client rlclient.RateLimitedClient
+	client aptos.AptosRpcClient
 }
 
-func NewFeeEstimator(cl rlclient.RateLimitedClient) *FeeEstimator {
+func NewFeeEstimator(cl aptos.AptosRpcClient) *FeeEstimator {
 	return &FeeEstimator{
 		client: cl,
 	}

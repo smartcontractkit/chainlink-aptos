@@ -80,7 +80,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 
 	rateLimitedClient := rlclient.NewRateLimitedClient(client, 100, 30*time.Second)
 
-	getClient := func() (rlclient.RateLimitedClient, error) { return rateLimitedClient, nil }
+	getClient := func() (aptos.AptosRpcClient, error) { return rateLimitedClient, nil }
 
 	txmConfig := txm.DefaultConfigSet
 	txmgr, err := txm.New(logger, keystore, txmConfig, getClient)
@@ -531,8 +531,8 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 	})
 }
 
-func initTxManager(t *testing.T, logger logger.Logger, keystore *testutils.TestKeystore, client rlclient.RateLimitedClient) *txm.AptosTxm {
-	getClient := func() (rlclient.RateLimitedClient, error) { return client, nil }
+func initTxManager(t *testing.T, logger logger.Logger, keystore *testutils.TestKeystore, client aptos.AptosRpcClient) *txm.AptosTxm {
+	getClient := func() (aptos.AptosRpcClient, error) { return client, nil }
 	txmgr, err := txm.New(logger, keystore, txm.DefaultConfigSet, getClient)
 	require.NoError(t, err)
 	err = txmgr.Start(context.Background())

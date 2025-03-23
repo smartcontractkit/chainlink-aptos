@@ -64,7 +64,7 @@ func runErrorsTest(t *testing.T, logger logger.Logger, config Config, rpcURL str
 	require.NoError(t, err)
 
 	rlClient := rlclient.NewRateLimitedClient(client, 20, 30*time.Second)
-	getClient := func() (rlclient.RateLimitedClient, error) {
+	getClient := func() (aptos.AptosRpcClient, error) {
 		return rlClient, nil
 	}
 
