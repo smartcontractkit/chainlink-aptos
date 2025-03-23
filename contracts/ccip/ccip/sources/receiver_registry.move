@@ -13,12 +13,8 @@ module ccip::receiver_registry {
     use std::string::{Self, String};
     use std::vector;
 
-    use ccip::auth;
     use ccip::client;
     use ccip::state_object;
-
-    use mcms::bcs_stream;
-    use mcms::mcms_registry;
 
     friend ccip::receiver_dispatcher;
 
@@ -43,35 +39,19 @@ module ccip::receiver_registry {
         receiver_module_name: vector<u8>
     }
 
-    const E_ALREADY_INITIALIZED: u64 = 1;
-    const E_ALREADY_REGISTERED: u64 = 2;
-    const E_UNKNOWN_RECEIVER: u64 = 3;
-    const E_UNKNOWN_PROOF_TYPE: u64 = 4;
-    const E_MISSING_INPUT: u64 = 5;
-    const E_NON_EMPTY_INPUT: u64 = 6;
-    const E_UNKNOWN_FUNCTION: u64 = 7;
+    const E_ALREADY_REGISTERED: u64 = 1;
+    const E_UNKNOWN_RECEIVER: u64 = 2;
+    const E_UNKNOWN_PROOF_TYPE: u64 = 3;
+    const E_MISSING_INPUT: u64 = 4;
+    const E_NON_EMPTY_INPUT: u64 = 5;
+    const E_UNKNOWN_FUNCTION: u64 = 6;
 
     #[view]
     public fun type_and_version(): String {
         string::utf8(b"ReceiverRegistry 1.6.0")
     }
 
-    fun init_module(publisher: &signer) {
-        if (@mcms_register_entrypoints != @0x0) {
-            mcms_registry::register_entrypoint(
-                publisher, string::utf8(b"receiver_registry"), McmsCallback {}
-            );
-        };
-    }
-
-    public entry fun initialize(caller: &signer) {
-        auth::assert_only_owner(signer::address_of(caller));
-
-        assert!(
-            !exists<ReceiverRegistryState>(state_object::object_address()),
-            error::invalid_argument(E_ALREADY_INITIALIZED)
-        );
-
+    fun init_module(_publisher: &signer) {
         let state_object_signer = state_object::object_signer();
         let constructor_ref =
             object::create_named_object(&state_object_signer, b"CCIPReceiverRegistry");
@@ -207,28 +187,5 @@ module ccip::receiver_registry {
             error::invalid_argument(E_UNKNOWN_RECEIVER)
         );
         borrow_global_mut<CCIPReceiverRegistration>(receiver_address)
-    }
-
-    //
-    // MCMS entrypoint
-    //
-
-    struct McmsCallback has drop {}
-
-    public fun mcms_entrypoint<T: key>(_metadata: Object<T>): option::Option<u128> {
-        let (caller, function, data) =
-            mcms_registry::get_callback_params(@ccip, McmsCallback {});
-
-        let function_bytes = *string::bytes(&function);
-        let stream = bcs_stream::new(data);
-
-        if (function_bytes == b"initialize") {
-            bcs_stream::assert_is_consumed(&stream);
-            initialize(&caller);
-        } else {
-            abort error::invalid_argument(E_UNKNOWN_FUNCTION)
-        };
-
-        option::none()
     }
 }
