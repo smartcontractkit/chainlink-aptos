@@ -21,7 +21,7 @@ import (
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/fees"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
@@ -141,8 +141,7 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 		},
 	}
 
-	fe := fees.NewFeeEstimator(rlClient)
-	chainWriter := NewChainWriter(logger, fe, txmgr, config)
+	chainWriter := NewChainWriter(logger, rlClient, txmgr, config)
 
 	compilationResult := testutils.CompileTestModule(t, accountAddress)
 
