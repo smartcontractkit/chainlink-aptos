@@ -21,7 +21,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
-	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
@@ -197,7 +197,7 @@ func (c *chain) GetClient() (aptos.AptosRpcClient, error) {
 
 	c.lggr.Debugw("Created client", "name", node.Name, "url", node.URL)
 
-	rateLimitedClient := rlclient.NewRateLimitedClient(client,
+	rateLimitedClient := ratelimit.NewRateLimitedClient(client,
 		100,            // max requests in-flight
 		30*time.Second, // timeout
 	)

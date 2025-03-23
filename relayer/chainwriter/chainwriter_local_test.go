@@ -64,7 +64,7 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 	client, err := aptos.NewNodeClient(rpcURL, 0)
 	require.NoError(t, err)
 
-	rlClient := rlclient.NewRateLimitedClient(client, 100, 30*time.Second)
+	rlClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
 	getClient := func() (aptos.AptosRpcClient, error) { return rlClient, nil }
 
 	txmConfig := txm.DefaultConfigSet

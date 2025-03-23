@@ -23,7 +23,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
-	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
@@ -78,7 +78,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 	client, err := aptos.NewNodeClient(rpcUrl, 0)
 	require.NoError(t, err)
 
-	rateLimitedClient := rlclient.NewRateLimitedClient(client, 100, 30*time.Second)
+	rateLimitedClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
 
 	getClient := func() (aptos.AptosRpcClient, error) { return rateLimitedClient, nil }
 
@@ -354,7 +354,7 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 	client, err := aptos.NewNodeClient(rpcUrl, 0)
 	require.NoError(t, err)
 
-	rateLimitedClient := rlclient.NewRateLimitedClient(client, 100, 30*time.Second)
+	rateLimitedClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
 
 	compilationResult := testutils.CompileTestModule(t, accountAddress)
 	publicKeyHex := hex.EncodeToString([]byte(publicKey))

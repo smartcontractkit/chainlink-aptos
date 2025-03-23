@@ -20,7 +20,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 
-	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 )
 
@@ -64,7 +64,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 	client, err := aptos.NewNodeClient(rpcURL, 0) // TODO: chainId
 	require.NoError(t, err)
 
-	rlClient := rlclient.NewRateLimitedClient(client, 100, 30*time.Second)
+	rlClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
 	getClient := func() (aptos.AptosRpcClient, error) {
 		return rlClient, nil
 	}
