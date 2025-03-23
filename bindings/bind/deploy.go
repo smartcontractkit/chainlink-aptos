@@ -126,7 +126,87 @@ func DeployPackageToObject(
 		return aptos.AccountAddress{}, nil, err
 	}
 	return address, tx, nil
+}
 
+// UpgradePackageToObject upgrades a package or deploys a new package onto an existing code object.
+// The package will be compiled using the CLI and then deployed using 0x1::object_code_deployment::upgrade.
+// If the package is too large to be deployed in a single transaction or if the force large packages flag
+// is set, it will be chunked and deployed using the LargePackages contract.
+func UpgradePackageToObject(
+	auth aptos.TransactionSigner,
+	client aptos.AptosRpcClient,
+	// The name of the package to deploy
+	packageName contracts.Package,
+	// Additional named addresses, doesn't have to include the objectAddress
+	namedAddresses map[string]aptos.AccountAddress,
+	objectAddress aptos.AccountAddress,
+) (*api.PendingTransaction, error) {
+	if namedAddresses == nil {
+		namedAddresses = make(map[string]aptos.AccountAddress)
+	}
+	namedAddresses[string(packageName)] = objectAddress
+
+	// Compile using CLI
+	output, err := compile.CompilePackage(packageName, namedAddresses)
+	if err != nil {
+		return nil, err
+	}
+
+	chunks, err := CreateChunks(output, ChunkSizeInBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create chunks: %w", err)
+	}
+
+	if len(chunks) == 1 {
+		// No need to chunk, deploy in one go and return
+		tx, err := objectCodeDeploymentUpgrade(auth, client, output, objectAddress)
+		if err != nil {
+			return nil, err
+		}
+		return address, tx, nil
+	}
+
+	// Chunking is needed
+
+	// Deploy (or bind, depending on the network) the LargePackages contract
+	// TODO this should only be done once
+	lpAddress, tx, lp, err := DeployOrBindLargePackages(auth, client)
+	if err != nil {
+		return nil, err
+	}
+	if tx != nil {
+		// tx will be nil if the contract has already been deployed
+		_, _ = client.WaitForTransaction(tx.Hash)
+	}
+
+	transactOpts := &TransactOpts{
+		Signer: auth,
+	}
+
+	// Check if staging area is empty and clear if it isn't
+	if _, err := client.AccountResource(auth.AccountAddress(), fmt.Sprintf("%s::large_packages::StagingArea", lpAddress.String())); err == nil {
+		// if there is no error that means the staging area is not empty
+		tx, err = lp.CleanupStagingArea(transactOpts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to clean up staging area: %w", err)
+		}
+		_, _ = client.WaitForTransaction(tx.Hash)
+	}
+
+	for i := range len(chunks) - 1 {
+		tx, err = lp.StageCodeChunk(transactOpts, chunks[i].Metadata, chunks[i].CodeIndices, chunks[i].Chunks)
+		if err != nil {
+			return nil, err
+		}
+		_, _ = client.WaitForTransaction(tx.Hash)
+	}
+
+	// The last chunk will actually publish the object code
+	tx, err = lp.StageCodeChunkAndUpgradeObjectCode(transactOpts, chunks[len(chunks)-1].Metadata, chunks[len(chunks)-1].CodeIndices, chunks[len(chunks)-1].Chunks, objectAddress)
+	if err != nil {
+		return nil, err
+	}
+	return tx, nil
 }
 
 // DeployPackageToResourceAccount deploys a package to a new resource account
@@ -202,6 +282,27 @@ func objectCodeDeploymentPublish(auth aptos.TransactionSigner, client aptos.Apto
 			Name:    "object_code_deployment",
 		},
 		Function: "publish",
+		ArgTypes: typeArgs,
+		Args:     args,
+	}}
+
+	return client.BuildSignAndSubmitTransaction(auth, payload)
+}
+
+// objectCodeDeploymentUpgrade calls 0x1::object_code_deployment::upgrade
+// https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/doc/object_code_deployment.md#function-upgrade
+func objectCodeDeploymentUpgrade(auth aptos.TransactionSigner, client aptos.AptosRpcClient, packageOutput compile.CompiledPackage, objectAddress aptos.AccountAddress) (*api.PendingTransaction, error) {
+	typeArgs, args, err := serializeArgs(nil, []string{"vector<u8>", "vector<vector<u8>>", "address"}, []any{packageOutput.Metadata, packageOutput.Bytecode, objectAddress})
+	if err != nil {
+		return nil, err
+	}
+
+	payload := aptos.TransactionPayload{Payload: &aptos.EntryFunction{
+		Module: aptos.ModuleId{
+			Address: aptos.AccountOne,
+			Name:    "object_code_deployment",
+		},
+		Function: "upgrade",
 		ArgTypes: typeArgs,
 		Args:     args,
 	}}
