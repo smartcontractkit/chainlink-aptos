@@ -24,6 +24,8 @@ var (
 type MCMSUserInterface interface {
 }
 
+const FunctionInfo = `[{"package":"mcms_test","module":"mcms_user","name":"function_one","parameters":[{"name":"arg1","type":"0x1::string::String"},{"name":"arg2","type":"vector\u003cu8\u003e"}]},{"package":"mcms_test","module":"mcms_user","name":"function_two","parameters":[{"name":"arg1","type":"address"},{"name":"arg2","type":"u128"}]}]`
+
 // Structs
 
 type UserData struct {
@@ -52,4 +54,26 @@ type MCMSUserCaller struct {
 
 type MCMSUserTransactor struct {
 	*bind.BoundContract
+}
+
+// Other Functions
+
+func (c MCMSUserCaller) EncodeFunctionOne(arg1 string, arg2 []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("function_one", nil, []string{
+		"0x1::string::String",
+		"vector<u8>",
+	}, []any{
+		arg1,
+		arg2,
+	})
+}
+
+func (c MCMSUserCaller) EncodeFunctionTwo(arg1 aptos.AccountAddress, arg2 *big.Int) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("function_two", nil, []string{
+		"address",
+		"u128",
+	}, []any{
+		arg1,
+		arg2,
+	})
 }

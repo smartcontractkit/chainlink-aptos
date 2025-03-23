@@ -293,3 +293,89 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 	}
 	return fmt.Errorf("invalid argument: %v", argVal)
 }
+
+func GetBcsValues(data []byte, typeTags ...aptos.TypeTag) ([]any, error) {
+	deserializer := bcs.NewDeserializer(data)
+	returns := make([]any, len(typeTags))
+	var err error
+	for i, tag := range typeTags {
+		returns[i], err = deserializeArg(tag, deserializer)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return returns, nil
+}
+
+func deserializeArg(argType aptos.TypeTag, deserializer *bcs.Deserializer) (any, error) {
+	switch argType.Value.GetType() {
+	case aptos.TypeTagBool:
+		return deserializer.Bool(), nil
+	case aptos.TypeTagU8:
+		return deserializer.U8(), nil
+	case aptos.TypeTagU16:
+		return deserializer.U16(), nil
+	case aptos.TypeTagU32:
+		return deserializer.U32(), nil
+	case aptos.TypeTagU64:
+		return deserializer.U64(), nil
+	case aptos.TypeTagU128:
+		b := deserializer.U128()
+		return &b, nil
+	case aptos.TypeTagU256:
+		b := deserializer.U256()
+		return &b, nil
+	case aptos.TypeTagAddress:
+		address := aptos.AccountAddress{}
+		deserializer.Struct(&address)
+		return address, nil
+	case aptos.TypeTagVector:
+		length := deserializer.Uleb128()
+		elementType := getType(argType.Value.(*aptos.VectorTag).TypeParam)
+		returns := reflect.MakeSlice(reflect.SliceOf(elementType), 0, int(length))
+		for range length {
+			elem, err := deserializeArg(argType.Value.(*aptos.VectorTag).TypeParam, deserializer)
+			if err != nil {
+				return nil, err
+			}
+			returns = reflect.Append(returns, reflect.ValueOf(elem))
+		}
+		return returns.Interface(), nil
+	case aptos.TypeTagStruct:
+		tag := argType.Value.(*aptos.StructTag)
+		if tag.String() == "0x1::string::String" {
+			return deserializer.ReadString(), nil
+		}
+		return nil, errors.New("The only supported struct arg is of type 0x1::string::String")
+	default:
+		return nil, errors.New("unsupported arg type")
+	}
+}
+
+func getType(typeTag aptos.TypeTag) reflect.Type {
+	switch typeTag.Value.GetType() {
+	case aptos.TypeTagBool:
+		return reflect.TypeOf(false)
+	case aptos.TypeTagU8:
+		return reflect.TypeOf(uint8(0))
+	case aptos.TypeTagU16:
+		return reflect.TypeOf(uint16(0))
+	case aptos.TypeTagU32:
+		return reflect.TypeOf(uint32(0))
+	case aptos.TypeTagU64:
+		return reflect.TypeOf(uint64(0))
+	case aptos.TypeTagU128:
+		return reflect.TypeOf(big.NewInt(0))
+	case aptos.TypeTagU256:
+		return reflect.TypeOf(big.NewInt(0))
+	case aptos.TypeTagAddress:
+		return reflect.TypeOf(aptos.AccountAddress{})
+	case aptos.TypeTagStruct:
+		return reflect.TypeOf(string(""))
+	case aptos.TypeTagVector:
+		elementType := getType(typeTag.Value.(*aptos.VectorTag).TypeParam)
+		return reflect.SliceOf(elementType)
+	default:
+		return nil
+	}
+}

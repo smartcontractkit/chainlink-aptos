@@ -31,6 +31,16 @@ const (
 	DefaultSeed = "chainlink_ccip"
 )
 
+var FunctionInfo = bind.MustParseFunctionInfo(
+	module_auth.FunctionInfo,
+	module_fee_quoter.FunctionInfo,
+	module_offramp.FunctionInfo,
+	module_onramp.FunctionInfo,
+	module_receiver_registry.FunctionInfo,
+	module_rmn_remote.FunctionInfo,
+	module_token_admin_registry.FunctionInfo,
+)
+
 func Compile(address aptos.AccountAddress, mcmsAddress aptos.AccountAddress, registerMCMSEntrypoints bool) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      address,
