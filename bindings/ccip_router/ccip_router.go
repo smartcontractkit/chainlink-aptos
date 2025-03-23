@@ -1,4 +1,4 @@
-package cciprouter
+package ccip_router
 
 import (
 	"github.com/aptos-labs/aptos-go-sdk"
