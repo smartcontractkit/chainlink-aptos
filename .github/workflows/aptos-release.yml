@@ -1,0 +1,163 @@
+name: Aptos Release Workflow
+
+on:
+  workflow_dispatch: # workflow_dispatch will be removed eventually. Keeping it for testing purposes.
+    inputs:
+      version:
+        description: "Semantic version for the Docker image (e.g., 1.0.0). The workflow will then append '-aptos' to the version."
+      core_ref:
+        description: "Core ref for the Docker build" # As default is will use APTOS_CORE_REF
+      prerelease:
+        description: "Set to true for prerelease, false for production release." # As default is will use PRERELEASE
+
+  push:
+    paths:
+      - aptos/**
+    branches:
+      - main
+      - develop
+      - integration/*
+
+concurrency:
+  group: aptos-release-${{ github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  CL_ECR: ${{ secrets.QA_AWS_ACCOUNT_NUMBER }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/chainlink
+  APTOS_ECR: ${{ secrets.AWS_ACCOUNT_ID_PROD }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/chainlink-internal-integrations-aptos
+  APTOS_CORE_REF: "6daecb61fc7867bb65e42927a9d4f15158964885-plugins"  # release/v2.19.0-aptos https://github.com/smartcontractkit/chainlink/commit/6daecb61fc7867bb65e42927a9d4f15158964885
+  NEXT_VERSION: v2.19.0-0.0.8 # We will need to bump this version each time we merge to the develop branch. We should consider following a pattern of 1.x.0, incrementing the minor component with each release. We need to store the latest minor version or compute it on demand.
+  PRERELEASE: true
+
+jobs:
+  build-push:
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    environment: integration
+    permissions:
+      id-token: write
+      contents: write
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Setup GitHub Token
+      id: setup-github-token
+      uses: smartcontractkit/.github/actions/setup-github-token@ef78fa97bf3c77de6563db1175422703e9e6674f # setup-github-token@0.2.1
+      with:
+        aws-role-arn: ${{ secrets.AWS_ROLE_ARN_CII_RELEASE }}
+        aws-lambda-url: ${{ secrets.GATI_LAMBDA_FOUNDATIONS_URL }}
+        aws-region: ${{ secrets.QA_AWS_REGION }}
+
+    - name: Checkout this repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Compute Docker Tag
+      id: compute-docker-tag
+      run: |
+        BRANCH_NAME=${{ github.ref_name }}
+        SHORT_HASH=$(git rev-parse --short HEAD)
+        INPUT_VERSION="${{ github.event.inputs.version }}"
+
+        if [[ -n "$INPUT_VERSION" ]]; then
+          IMAGE_TAG="${INPUT_VERSION}-aptos"
+        elif [[ "$BRANCH_NAME" == "main" ]]; then
+          IMAGE_TAG="${{ env.NEXT_VERSION }}-aptos"
+        elif [[ "$BRANCH_NAME" == "develop" ]]; then
+          IMAGE_TAG="${{ env.NEXT_VERSION }}-develop-${SHORT_HASH}-aptos"
+        elif [[ "$BRANCH_NAME" == integration/* ]]; then
+          INTEGRATION_NAME=${BRANCH_NAME#integration/}
+          IMAGE_TAG="${{ env.NEXT_VERSION }}-${INTEGRATION_NAME}-${SHORT_HASH}-aptos"
+        else
+          echo "Branch '$BRANCH_NAME' does not match expected patterns"
+          exit 0
+        fi
+
+        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+        echo "Determined image tag: $IMAGE_TAG"
+
+    - name: Determine Chainlink CORE_REF
+      id: determine-chainlink-core-ref
+      run: |
+        if [ -n "${{ github.event.inputs.core_ref }}" ]; then
+          echo "CORE_REF provided as input: ${{ github.event.inputs.core_ref }}"
+          echo "CORE_REF=${{ github.event.inputs.core_ref }}" >> $GITHUB_ENV
+        else
+          echo "No core_ref provided as input. Using default: ${{ env.APTOS_CORE_REF }}"
+          echo "CORE_REF=${{ env.APTOS_CORE_REF }}" >> $GITHUB_ENV
+        fi
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+      with:
+        aws-region: ${{ vars.AWS_REGION }}
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN_PROD_PUBLISH_ECR }}
+        role-duration-seconds: 3600
+        mask-aws-account-id: true
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
+      with:
+        mask-password: "true"
+        registries: "${{ secrets.AWS_ACCOUNT_ID_PROD}},${{ secrets.QA_AWS_ACCOUNT_NUMBER }}"
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@0d103c3126aa41d772a8362f6aa67afac040f80c # v3.1.0
+
+    # This is not the most efficient way to check if the image exist or not. I was having trouble using aws CLI due to missing permission. We could improve this in a next iteration.
+    - name: Check if Aptos image already exists
+      id: check-ecr-tag
+      run: |
+        IMAGE_URI="${{ secrets.AWS_ACCOUNT_ID_PROD }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/chainlink-internal-integrations-aptos:${{ env.IMAGE_TAG }}"
+
+        # Try to pull the image
+        if docker pull $IMAGE_URI; then
+          echo "Image $IMAGE_URI already exists. Skipping image build and push."
+          SKIP_IMAGE_BUILD=true
+        else
+          echo "Image does not exist, proceeding with build and push."
+          SKIP_IMAGE_BUILD=false
+        fi
+
+        echo "SKIP_IMAGE_BUILD=$SKIP_IMAGE_BUILD" >> $GITHUB_OUTPUT
+
+    - name: Build and Push
+      if: steps.check-ecr-tag.outputs.SKIP_IMAGE_BUILD == 'false'
+      uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56 # v5.1.0
+      id: build-image
+      with:
+        context: ${{ github.workspace }}/aptos
+        file: ${{ github.workspace }}/aptos/Dockerfile
+        build-args: |
+          BASE_IMAGE=${{ env.CL_ECR }}:${{ env.CORE_REF }}
+        tags:  ${{ env.APTOS_ECR }}:${{ env.IMAGE_TAG }}
+        push: true
+
+    - name: Determine if Prerelease
+      if: steps.check-ecr-tag.outputs.SKIP_IMAGE_BUILD == 'false'  
+      id: determine-prerelease
+      run: |
+        if [[ -n "${{ github.event.inputs.prerelease }}" ]]; then
+          PRERELEASE=${{ github.event.inputs.prerelease }}
+          echo "Using provided prerelease value: $PRERELEASE"
+        elif [[ "${{ github.ref_name }}" == "main" ]]; then
+          PRERELEASE=false
+          echo "Branch 'main' detected. Setting prerelease=false"
+        else
+          PRERELEASE=true
+          echo "Defaulting to prerelease=true"
+        fi
+
+        echo "PRERELEASE=$PRERELEASE" >> $GITHUB_ENV
+
+    - name: Create a Release
+      if: steps.check-ecr-tag.outputs.SKIP_IMAGE_BUILD == 'false'
+      uses: elgohr/Github-Release-Action@c5ea99036abb741a89f8bf1f2cd7fba845e3313a # v5 https://github.com/elgohr/Github-Release-Action/releases/tag/v5
+      env:
+          GH_ENTERPRISE_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
+      with:
+        title: Aptos Release ${{ env.IMAGE_TAG }}
+        tag: ${{ env.IMAGE_TAG }}
+        prerelease:  ${{ env.PRERELEASE }} # Determine by the version that is used: develop -> true; integration: false

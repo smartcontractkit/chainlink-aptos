@@ -1,0 +1,36 @@
+name: Aptos - Lint Move formatting
+# This workflow checks that all move packages are correctly formatting using movefmt
+on: [pull_request]
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      found: ${{ steps.c.outputs.found }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/changes
+        id: c
+        with:
+          folder: aptos
+  movefmt:
+    runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.found == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Aptos CLI
+        uses: aptos-labs/actions/install-aptos-cli@ce57287eb852b9819c1d74fecc3be187677559fd # v0.1
+      - name: Update movefmt
+        run: aptos update movefmt --target-version 1.0.6 # Fix version to prevent accidentally breaking the CI
+      - name: Format each module that contains a movefmt.toml file
+        working-directory: aptos/contracts
+        run: movefmt
+      - name: Check if any field have been changed
+        run: |
+          if ! git diff --quiet HEAD; then
+          	echo "The following files don't have the required formatting applied, run \`movefmt\` to apply:" >> $GITHUB_STEP_SUMMARY
+          	git diff --name-only | while read -r n ; do
+          		echo "- $n" >> $GITHUB_STEP_SUMMARY
+          	done
+          	exit 1
+          fi

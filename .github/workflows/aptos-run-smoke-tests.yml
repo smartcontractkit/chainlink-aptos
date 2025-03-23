@@ -1,0 +1,153 @@
+name: Aptos - Smoke tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: aptos-smoke-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MOD_CACHE_VERSION: 2
+  CL_ECR: ${{ secrets.QA_AWS_ACCOUNT_NUMBER }}.dkr.ecr.${{ secrets.QA_AWS_REGION }}.amazonaws.com/chainlink
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      found: ${{ steps.c.outputs.found }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/changes
+        id: c
+        with:
+          folder: aptos
+
+  run-tests:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.found == 'true'
+    environment: integration
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DEFAULT_CORE_REF: aptos-init
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Get core ref from PR body
+      if: github.event_name == 'pull_request'
+      run: |
+        comment=$(echo "${{ github.event.pull_request.body }}")
+        core_ref=$(echo $comment | grep -oP 'core ref: \K\S+' || true)
+        if [ ! -z "$core_ref" ]; then
+          echo "CUSTOM_CORE_REF=${core_ref}" >> "${GITHUB_ENV}"
+        fi
+
+    - name: Checkout chainlink repo
+      uses: actions/checkout@v4
+      with:
+        repository: smartcontractkit/chainlink
+        ref: ${{ env.CUSTOM_CORE_REF || env.DEFAULT_CORE_REF }}
+        path: temp/chainlink
+
+    - name: Build chainlink image
+      run: |
+        cd temp/chainlink
+        docker buildx build --build-arg COMMIT_SHA=$(git rev-parse HEAD) -t local_chainlink -f plugins/chainlink.Dockerfile .
+
+    - name: Build chainlink-aptos image
+      run: |
+        cd aptos
+        docker buildx build --build-arg BASE_IMAGE=local_chainlink -t chainlink-aptos -f ./Dockerfile .
+
+    - name: Extract Go version
+      uses: ./.github/actions/check-go-version
+      id: go-version
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.go_version }}
+
+    - name: Create env file
+      working-directory: ./aptos
+      run: |
+          cat <<EOT >> .env
+          # Postgres config
+          POSTGRES_IMAGE=postgres:15.2-alpine
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=postgres
+          POSTGRES_DB=chainlink_test
+          POSTGRES_PORT=5432
+
+          # Geth config
+          GETH_IMAGE=ethereum/client-go:stable
+          GETH_WS_PORT=8546
+          GETH_HTTP_PORT=8544
+          GETH_CHAIN_ID=1337
+
+          # Devnet config
+          DEVNET_IMAGE=aptoslabs/tools:aptos-node-v1.18.0
+          DEVNET_WS_PORT=8081
+          DEVNET_HTTP_PORT=8080
+          DEVNET_FAUCET_PORT=8081
+          DEVNET_CHAIN_ID=4
+
+          # Core config
+          CORE_NODE_COUNT=5
+          CORE_IMAGE=chainlink-aptos
+          CORE_VERSION=latest
+          CORE_REPO="https://github.com/smartcontractkit/chainlink.git"
+          CORE_HTTP_PORT=6688
+          CORE_P2P_PORT=6690
+          EOT
+
+    - name: Run Smoke Integration Test
+      env:
+        TEST_LOG_LEVEL: debug
+      run: |
+        cd aptos/integration-tests
+        TEST_LOG_LEVEL=${{env.TEST_LOG_LEVEL}} go test -timeout 24h -count=1 -run TestOCR3Keystone ./smoke
+
+    - name: Setup GitHub Token
+      if: success()
+      id: setup-github-token
+      uses: smartcontractkit/.github/actions/setup-github-token@ef78fa97bf3c77de6563db1175422703e9e6674f # setup-github-token@0.2.1
+      with:
+        aws-role-arn: ${{ secrets.AWS_ROLE_ARN_GLOBAL_READ_ONLY }}
+        aws-lambda-url: ${{ secrets.GATI_LAMBDA_RELENG_URL }}
+        aws-region: ${{ secrets.QA_AWS_REGION }}
+
+    - name: Configure AWS Credentials
+      if: success()
+      uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a # v4.0.1
+      with:
+        aws-region: ${{ secrets.QA_AWS_REGION }}
+        role-to-assume: ${{ secrets.QA_AWS_ROLE_TO_ASSUME }}
+        role-duration-seconds: 3600
+        mask-aws-account-id: true
+
+    - name: Login to Amazon ECR
+      if: success()
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
+      with:
+        mask-password: "true"
+
+    - name: Push Image to ECR
+      if: success()
+      run: |
+        docker tag chainlink-aptos ${{ env.CL_ECR }}:aptos.${{ github.sha }}
+        docker push ${{ env.CL_ECR }}:aptos.${{ github.sha }}
+
+    - name: Upload Test Artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: smoke-test-logs
+        path: ./aptos/integration-tests/logs/
