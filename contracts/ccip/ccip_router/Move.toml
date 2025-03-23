@@ -4,11 +4,13 @@ version = "1.0.0"
 authors = []
 
 [addresses]
+ccip_router = "_"
 ccip = "_"
 mcms = "_"
 mcms_register_entrypoints = "_"
 
 [dev-addresses]
+ccip_router = "0x1001"
 ccip = "0x1000"
 mcms = "0x4000"
 mcms_register_entrypoints = "0x4001"
