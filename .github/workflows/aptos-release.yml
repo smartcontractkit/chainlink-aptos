@@ -12,7 +12,7 @@ on:
 
   push:
     paths:
-      - aptos/**
+      - /**
     branches:
       - main
       - develop
@@ -128,15 +128,15 @@ jobs:
       uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56 # v5.1.0
       id: build-image
       with:
-        context: ${{ github.workspace }}/aptos
-        file: ${{ github.workspace }}/aptos/Dockerfile
+        context: ${{ github.workspace }}
+        file: ${{ github.workspace }}/Dockerfile
         build-args: |
           BASE_IMAGE=${{ env.CL_ECR }}:${{ env.CORE_REF }}
         tags:  ${{ env.APTOS_ECR }}:${{ env.IMAGE_TAG }}
         push: true
 
     - name: Determine if Prerelease
-      if: steps.check-ecr-tag.outputs.SKIP_IMAGE_BUILD == 'false'  
+      if: steps.check-ecr-tag.outputs.SKIP_IMAGE_BUILD == 'false'
       id: determine-prerelease
       run: |
         if [[ -n "${{ github.event.inputs.prerelease }}" ]]; then

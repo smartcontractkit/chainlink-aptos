@@ -11,7 +11,7 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      found: ${{ steps.c.outputs.found }} 
+      found: ${{ steps.c.outputs.found }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/changes
@@ -34,4 +34,4 @@ jobs:
         nix_path: nixpkgs=channel:nixos-unstable
 
     - name: Run tests
-      run: cd aptos/relayer && nix develop -c go test -v -count=1 -p=1 -tags=integration ./...
+      run: cd relayer && nix develop -c go test -v -count=1 -p=1 -tags=integration ./...
