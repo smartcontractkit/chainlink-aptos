@@ -109,32 +109,31 @@ module ccip::token_admin_registry {
         new_admin: address
     }
 
-    const E_ALREADY_INITIALIZED: u64 = 1;
-    const E_INVALID_FUNGIBLE_ASSET: u64 = 2;
-    const E_NOT_FUNGIBLE_ASSET_OWNER: u64 = 3;
-    const E_INVALID_TOKEN_POOL: u64 = 4;
-    const E_ALREADY_REGISTERED: u64 = 5;
-    const E_DUPLICATE_PROOF_TYPES: u64 = 6;
-    const E_PROOF_NOT_IN_TOKEN_POOL_MODULE: u64 = 7;
-    const E_PROOF_NOT_AT_TOKEN_POOL_ADDRESS: u64 = 8;
-    const E_UNKNOWN_PROOF_TYPE: u64 = 9;
-    const E_NOT_IN_IDLE_STATE: u64 = 10;
-    const E_NOT_IN_LOCK_OR_BURN_STATE: u64 = 11;
-    const E_NOT_IN_RELEASE_OR_MINT_STATE: u64 = 12;
-    const E_NON_EMPTY_LOCK_OR_BURN_INPUT: u64 = 13;
-    const E_NON_EMPTY_LOCK_OR_BURN_OUTPUT: u64 = 14;
-    const E_NON_EMPTY_RELEASE_OR_MINT_INPUT: u64 = 15;
-    const E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT: u64 = 16;
-    const E_MISSING_LOCK_OR_BURN_INPUT: u64 = 17;
-    const E_MISSING_LOCK_OR_BURN_OUTPUT: u64 = 18;
-    const E_MISSING_RELEASE_OR_MINT_INPUT: u64 = 19;
-    const E_MISSING_RELEASE_OR_MINT_OUTPUT: u64 = 20;
-    const E_TOKEN_POOL_NOT_OBJECT: u64 = 21;
-    const E_FUNGIBLE_ASSET_ALREADY_REGISTERED: u64 = 22;
-    const E_FUNGIBLE_ASSET_NOT_REGISTERED: u64 = 23;
-    const E_NOT_ADMINISTRATOR: u64 = 24;
-    const E_NOT_PENDING_ADMINISTRATOR: u64 = 25;
-    const E_UNKNOWN_FUNCTION: u64 = 26;
+    const E_INVALID_FUNGIBLE_ASSET: u64 = 1;
+    const E_NOT_FUNGIBLE_ASSET_OWNER: u64 = 2;
+    const E_INVALID_TOKEN_POOL: u64 = 3;
+    const E_ALREADY_REGISTERED: u64 = 4;
+    const E_DUPLICATE_PROOF_TYPES: u64 = 5;
+    const E_PROOF_NOT_IN_TOKEN_POOL_MODULE: u64 = 6;
+    const E_PROOF_NOT_AT_TOKEN_POOL_ADDRESS: u64 = 7;
+    const E_UNKNOWN_PROOF_TYPE: u64 = 8;
+    const E_NOT_IN_IDLE_STATE: u64 = 9;
+    const E_NOT_IN_LOCK_OR_BURN_STATE: u64 = 10;
+    const E_NOT_IN_RELEASE_OR_MINT_STATE: u64 = 11;
+    const E_NON_EMPTY_LOCK_OR_BURN_INPUT: u64 = 12;
+    const E_NON_EMPTY_LOCK_OR_BURN_OUTPUT: u64 = 13;
+    const E_NON_EMPTY_RELEASE_OR_MINT_INPUT: u64 = 14;
+    const E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT: u64 = 15;
+    const E_MISSING_LOCK_OR_BURN_INPUT: u64 = 16;
+    const E_MISSING_LOCK_OR_BURN_OUTPUT: u64 = 17;
+    const E_MISSING_RELEASE_OR_MINT_INPUT: u64 = 18;
+    const E_MISSING_RELEASE_OR_MINT_OUTPUT: u64 = 19;
+    const E_TOKEN_POOL_NOT_OBJECT: u64 = 20;
+    const E_FUNGIBLE_ASSET_ALREADY_REGISTERED: u64 = 21;
+    const E_FUNGIBLE_ASSET_NOT_REGISTERED: u64 = 22;
+    const E_NOT_ADMINISTRATOR: u64 = 23;
+    const E_NOT_PENDING_ADMINISTRATOR: u64 = 24;
+    const E_UNKNOWN_FUNCTION: u64 = 25;
 
     #[view]
     public fun type_and_version(): String {
@@ -147,15 +146,6 @@ module ccip::token_admin_registry {
                 publisher, string::utf8(b"token_admin_registry"), McmsCallback {}
             );
         };
-    }
-
-    public entry fun initialize(caller: &signer) {
-        auth::assert_only_owner(signer::address_of(caller));
-
-        assert!(
-            !exists<TokenAdminRegistryState>(state_object::object_address()),
-            error::invalid_argument(E_ALREADY_INITIALIZED)
-        );
 
         let state_object_signer = state_object::object_signer();
 
@@ -964,10 +954,7 @@ module ccip::token_admin_registry {
         let function_bytes = *string::bytes(&function);
         let stream = bcs_stream::new(data);
 
-        if (function_bytes == b"initialize") {
-            bcs_stream::assert_is_consumed(&stream);
-            initialize(&caller);
-        } else if (function_bytes == b"set_pool") {
+        if (function_bytes == b"set_pool") {
             let local_token = bcs_stream::deserialize_address(&mut stream);
             let token_pool_address = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
