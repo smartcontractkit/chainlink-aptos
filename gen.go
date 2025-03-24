@@ -9,6 +9,7 @@ package aptos
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/token_admin_registry.move --output ./bindings/ccip/token_admin_registry
 
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/ccip/ccip_router/sources/router.move --output ./bindings/ccip_router/router
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/ccip/ccip_dummy_receiver/sources/dummy_receiver.move --output ./bindings/ccip_dummy_receiver/dummy_receiver
 
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/mcms/mcms/sources/mcms.move --output ./bindings/mcms/mcms
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/mcms/mcms/sources/mcms_account.move --output ./bindings/mcms/mcms_account
