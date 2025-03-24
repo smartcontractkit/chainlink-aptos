@@ -23,11 +23,9 @@ var (
 
 type ReceiverRegistryInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
-
-	Initialize(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"receiver_registry","name":"finish_receive","parameters":[{"name":"receiver_address","type":"address"}]},{"package":"ccip","module":"receiver_registry","name":"initialize","parameters":null}]`
+const FunctionInfo = `[{"package":"ccip","module":"receiver_registry","name":"finish_receive","parameters":[{"name":"receiver_address","type":"address"}]}]`
 
 // Structs
 
@@ -40,9 +38,6 @@ type CCIPReceiverRegistration struct {
 type ReceiverRegistered struct {
 	ReceiverAddress    aptos.AccountAddress `move:"address"`
 	ReceiverModuleName []byte               `move:"vector<u8>"`
-}
-
-type McmsCallback struct {
 }
 
 type ReceiverRegistry struct {
@@ -85,19 +80,6 @@ func (c ReceiverRegistryCaller) TypeAndVersion(opts *bind.CallOpts) (string, err
 
 type ReceiverRegistryTransactor struct {
 	*bind.BoundContract
-}
-
-func (c ReceiverRegistryTransactor) EncodeInitialize() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("initialize", nil, []string{}, []any{})
-}
-
-func (c ReceiverRegistryTransactor) Initialize(opts *bind.TransactOpts) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeInitialize()
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
 // Other Functions
