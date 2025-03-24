@@ -35,7 +35,7 @@ func DeployPackageToObject(
 	// Well start by assuming that the package is small enough to be deployed in one go
 
 	// Calculate next named addresses
-	address, err := nextObjectCodeDeploymentAddressForAccount(client, auth.AccountAddress())
+	address, err := nextObjectCodeDeploymentAddressForAccount(client, auth.AccountAddress(), 0)
 	if err != nil {
 		return aptos.AccountAddress{}, nil, err
 	}
@@ -93,16 +93,10 @@ func DeployPackageToObject(
 
 	// As this will result in multiple transactions, which will in turn change the sequence number of the deployer account
 	// re-calculate the address and recompile with the new address
-	accountInto, err := client.Account(auth.AccountAddress())
+	address, err = nextObjectCodeDeploymentAddressForAccount(client, auth.AccountAddress(), uint64(len(chunks))-1)
 	if err != nil {
 		return aptos.AccountAddress{}, nil, err
 	}
-	sn, err := accountInto.SequenceNumber()
-	if err != nil {
-		return aptos.AccountAddress{}, nil, err
-	}
-
-	address = calculateNextObjectCodeDeploymentAddress(auth.AccountAddress(), sn-1+uint64(len(chunks)))
 	namedAddresses[string(packageName)] = address
 	output, err = compile.CompilePackage(packageName, namedAddresses)
 	if err != nil {
@@ -127,7 +121,87 @@ func DeployPackageToObject(
 		return aptos.AccountAddress{}, nil, err
 	}
 	return address, tx, nil
+}
 
+// UpgradePackageToObject upgrades a package or deploys a new package onto an existing code object.
+// The package will be compiled using the CLI and then deployed using 0x1::object_code_deployment::upgrade.
+// If the package is too large to be deployed in a single transaction or if the force large packages flag
+// is set, it will be chunked and deployed using the LargePackages contract.
+func UpgradePackageToObject(
+	auth aptos.TransactionSigner,
+	client aptos.AptosRpcClient,
+	// The name of the package to deploy
+	packageName contracts.Package,
+	// Additional named addresses, doesn't have to include the objectAddress
+	namedAddresses map[string]aptos.AccountAddress,
+	objectAddress aptos.AccountAddress,
+) (*api.PendingTransaction, error) {
+	if namedAddresses == nil {
+		namedAddresses = make(map[string]aptos.AccountAddress)
+	}
+	namedAddresses[string(packageName)] = objectAddress
+
+	// Compile using CLI
+	output, err := compile.CompilePackage(packageName, namedAddresses)
+	if err != nil {
+		return nil, err
+	}
+
+	chunks, err := CreateChunks(output, ChunkSizeInBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create chunks: %w", err)
+	}
+
+	if len(chunks) == 1 {
+		// No need to chunk, deploy in one go and return
+		tx, err := objectCodeDeploymentUpgrade(auth, client, output, objectAddress)
+		if err != nil {
+			return nil, err
+		}
+		return tx, nil
+	}
+
+	// Chunking is needed
+
+	// Deploy (or bind, depending on the network) the LargePackages contract
+	// TODO this should only be done once
+	lpAddress, tx, lp, err := DeployOrBindLargePackages(auth, client)
+	if err != nil {
+		return nil, err
+	}
+	if tx != nil {
+		// tx will be nil if the contract has already been deployed
+		_, _ = client.WaitForTransaction(tx.Hash)
+	}
+
+	transactOpts := &TransactOpts{
+		Signer: auth,
+	}
+
+	// Check if staging area is empty and clear if it isn't
+	if _, err := client.AccountResource(auth.AccountAddress(), fmt.Sprintf("%s::large_packages::StagingArea", lpAddress.String())); err == nil {
+		// if there is no error that means the staging area is not empty
+		tx, err = lp.CleanupStagingArea(transactOpts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to clean up staging area: %w", err)
+		}
+		_, _ = client.WaitForTransaction(tx.Hash)
+	}
+
+	for i := range len(chunks) - 1 {
+		tx, err = lp.StageCodeChunk(transactOpts, chunks[i].Metadata, chunks[i].CodeIndices, chunks[i].Chunks)
+		if err != nil {
+			return nil, err
+		}
+		_, _ = client.WaitForTransaction(tx.Hash)
+	}
+
+	// The last chunk will actually publish the object code
+	tx, err = lp.StageCodeChunkAndUpgradeObjectCode(transactOpts, chunks[len(chunks)-1].Metadata, chunks[len(chunks)-1].CodeIndices, chunks[len(chunks)-1].Chunks, objectAddress)
+	if err != nil {
+		return nil, err
+	}
+	return tx, nil
 }
 
 // DeployPackageToResourceAccount deploys a package to a new resource account
@@ -176,7 +250,7 @@ func calculateNextObjectCodeDeploymentAddress(address aptos.AccountAddress, curr
 	return address.NamedObjectAddress(seedBytes)
 }
 
-func nextObjectCodeDeploymentAddressForAccount(client aptos.AptosRpcClient, account aptos.AccountAddress) (aptos.AccountAddress, error) {
+func nextObjectCodeDeploymentAddressForAccount(client aptos.AptosRpcClient, account aptos.AccountAddress, offset uint64) (aptos.AccountAddress, error) {
 	accountInfo, err := client.Account(account)
 	if err != nil {
 		return aptos.AccountAddress{}, fmt.Errorf("failed to get account info: %w", err)
@@ -186,7 +260,7 @@ func nextObjectCodeDeploymentAddressForAccount(client aptos.AptosRpcClient, acco
 		return aptos.AccountAddress{}, fmt.Errorf("failed to get sequence number: %w", err)
 	}
 
-	return calculateNextObjectCodeDeploymentAddress(account, sequence), nil
+	return calculateNextObjectCodeDeploymentAddress(account, sequence+offset), nil
 }
 
 // objectCodeDeploymentPublish calls 0x1::object_code_deployment::publish
@@ -203,6 +277,27 @@ func objectCodeDeploymentPublish(auth aptos.TransactionSigner, client aptos.Apto
 			Name:    "object_code_deployment",
 		},
 		Function: "publish",
+		ArgTypes: typeArgs,
+		Args:     args,
+	}}
+
+	return client.BuildSignAndSubmitTransaction(auth, payload)
+}
+
+// objectCodeDeploymentUpgrade calls 0x1::object_code_deployment::upgrade
+// https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/doc/object_code_deployment.md#function-upgrade
+func objectCodeDeploymentUpgrade(auth aptos.TransactionSigner, client aptos.AptosRpcClient, packageOutput compile.CompiledPackage, objectAddress aptos.AccountAddress) (*api.PendingTransaction, error) {
+	typeArgs, args, err := serializeArgs(nil, []string{"vector<u8>", "vector<vector<u8>>", "address"}, []any{packageOutput.Metadata, packageOutput.Bytecode, objectAddress})
+	if err != nil {
+		return nil, err
+	}
+
+	payload := aptos.TransactionPayload{Payload: &aptos.EntryFunction{
+		Module: aptos.ModuleId{
+			Address: aptos.AccountOne,
+			Name:    "object_code_deployment",
+		},
+		Function: "upgrade",
 		ArgTypes: typeArgs,
 		Args:     args,
 	}}

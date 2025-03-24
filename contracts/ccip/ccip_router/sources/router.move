@@ -1,4 +1,4 @@
-module ccip::router {
+module ccip_router::router {
     use std::account::{Self, SignerCapability};
     use std::signer;
     use std::string::{Self, String};
@@ -114,6 +114,6 @@ module ccip::router {
     }
 
     inline fun borrow_state(): &RouterState {
-        borrow_global<RouterState>(@ccip)
+        borrow_global<RouterState>(@ccip_router)
     }
 }

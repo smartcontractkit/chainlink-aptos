@@ -55,7 +55,7 @@ func DeployLargePackages(
 	client aptos.AptosRpcClient,
 ) (aptos.AccountAddress, *api.PendingTransaction, LargePackages, error) {
 	// Calculate named addresses
-	address, err := nextObjectCodeDeploymentAddressForAccount(client, auth.AccountAddress())
+	address, err := nextObjectCodeDeploymentAddressForAccount(client, auth.AccountAddress(), 0)
 	if err != nil {
 		return aptos.AccountAddress{}, nil, LargePackages{}, err
 	}
