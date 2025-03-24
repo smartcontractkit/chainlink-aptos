@@ -1,4 +1,4 @@
-module chainlink_common::allowlist {
+module ccip::allowlist {
     use std::account;
     use std::event::{Self, EventHandle};
     use std::error;
@@ -120,13 +120,13 @@ module chainlink_common::allowlist {
 }
 
 #[test_only]
-module chainlink_common::allowlist_test {
+module ccip::allowlist_test {
     use std::account;
     use std::event;
     use std::signer;
     use std::vector;
 
-    use chainlink_common::allowlist;
+    use ccip::allowlist;
 
     #[test(owner = @0x0)]
     fun init_empty_is_empty_and_disabled(owner: &signer) {

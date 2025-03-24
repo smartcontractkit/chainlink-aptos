@@ -8,18 +8,15 @@ ccip = "_"
 ccip_token_pool = "_"
 mcms = "_"
 mcms_register_entrypoints = "_"
-chainlink_common = "_"
 
 [dev-addresses]
 ccip = "0x1000"
 ccip_token_pool = "0x2000"
 mcms = "0x4000"
 mcms_register_entrypoints = "0x4001"
-chainlink_common = "0x8001"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
 ChainlinkCCIP = { local = "../../ccip" }
-ChainlinkCommon = { local = "../../../chainlink-common" }
 
 [dev-dependencies]
