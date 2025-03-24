@@ -17,3 +17,5 @@ integration-tests/logs/
 .run.id
 go.work
 go.work.sum
+
+build
