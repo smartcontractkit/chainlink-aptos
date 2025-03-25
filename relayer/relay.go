@@ -87,7 +87,7 @@ func (r *relayer) HealthReport() map[string]error {
 	return map[string]error{r.Name(): r.Healthy()}
 }
 
-func (r *relayer) NewChainWriter(ctx context.Context, configBytes []byte) (types.ChainWriter, error) {
+func (r *relayer) NewContractWriter(ctx context.Context, configBytes []byte) (types.ContractWriter, error) {
 	cfg := chainwriter.ChainWriterConfig{}
 	if err := json.Unmarshal(configBytes, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshall chain writer config err: %s", err)

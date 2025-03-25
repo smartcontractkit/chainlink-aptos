@@ -27,7 +27,7 @@ type aptosChainWriter struct {
 	stop    chan struct{}
 }
 
-func NewChainWriter(lgr logger.Logger, feeClient aptos.AptosRpcClient, txm *txm.AptosTxm, config ChainWriterConfig) commontypes.ChainWriter {
+func NewChainWriter(lgr logger.Logger, feeClient aptos.AptosRpcClient, txm *txm.AptosTxm, config ChainWriterConfig) commontypes.ContractWriter {
 	return &aptosChainWriter{
 		logger:    logger.Named(lgr, "AptosChainWriter"),
 		txm:       txm,

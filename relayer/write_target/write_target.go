@@ -59,7 +59,7 @@ type writeTarget struct {
 
 	cs               commontypes.ChainService
 	cr               commontypes.ContractReader
-	cw               commontypes.ChainWriter
+	cw               commontypes.ContractWriter
 	configValidateFn func(config ReqConfig) error
 
 	nodeAddress      string
@@ -80,7 +80,7 @@ type WriteTargetOpts struct {
 
 	ChainService     commontypes.ChainService
 	ContractReader   commontypes.ContractReader
-	ChainWriter      commontypes.ChainWriter
+	ChainWriter      commontypes.ContractWriter
 	ConfigValidateFn func(config ReqConfig) error
 
 	NodeAddress      string
