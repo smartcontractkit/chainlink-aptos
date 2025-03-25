@@ -31,7 +31,8 @@ type MCMS interface {
 	Execute(opts *bind.TransactOpts, chainId *big.Int, multisig aptos.AccountAddress, nonce uint64, to aptos.AccountAddress, moduleName string, function string, data []byte, proof [][]byte) (*api.PendingTransaction, error)
 	SetConfig(opts *bind.TransactOpts, signerAddresses [][]byte, signerGroups []byte, groupQuorums []byte, groupParents []byte, clearRoot bool) (*api.PendingTransaction, error)
 
-	Encode_() MCMSEncoder
+	// Encode returns the encoder implementation of this module.
+	Encoder() MCMSEncoder
 }
 
 type MCMSEncoder interface {
@@ -124,7 +125,7 @@ type MCMSContract struct {
 
 var _ MCMS = MCMSContract{}
 
-func (c MCMSContract) Encode_() MCMSEncoder {
+func (c MCMSContract) Encoder() MCMSEncoder {
 	return c.mcmsEncoder
 }
 

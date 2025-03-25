@@ -24,7 +24,8 @@ var (
 type DummyReceiver interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 
-	Encode_() DummyReceiverEncoder
+	// Encode returns the encoder implementation of this module.
+	Encoder() DummyReceiverEncoder
 }
 
 type DummyReceiverEncoder interface {
@@ -57,7 +58,7 @@ type DummyReceiverContract struct {
 
 var _ DummyReceiver = DummyReceiverContract{}
 
-func (c DummyReceiverContract) Encode_() DummyReceiverEncoder {
+func (c DummyReceiverContract) Encoder() DummyReceiverEncoder {
 	return c.dummyReceiverEncoder
 }
 

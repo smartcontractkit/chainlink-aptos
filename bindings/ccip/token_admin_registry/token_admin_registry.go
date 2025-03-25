@@ -33,7 +33,8 @@ type TokenAdminRegistry interface {
 	TransferAdminRole(opts *bind.TransactOpts, localToken aptos.AccountAddress, newAdmin aptos.AccountAddress) (*api.PendingTransaction, error)
 	AcceptAdminRole(opts *bind.TransactOpts, localToken aptos.AccountAddress) (*api.PendingTransaction, error)
 
-	Encode_() TokenAdminRegistryEncoder
+	// Encode returns the encoder implementation of this module.
+	Encoder() TokenAdminRegistryEncoder
 }
 
 type TokenAdminRegistryEncoder interface {
@@ -132,7 +133,7 @@ type TokenAdminRegistryContract struct {
 
 var _ TokenAdminRegistry = TokenAdminRegistryContract{}
 
-func (c TokenAdminRegistryContract) Encode_() TokenAdminRegistryEncoder {
+func (c TokenAdminRegistryContract) Encoder() TokenAdminRegistryEncoder {
 	return c.tokenAdminRegistryEncoder
 }
 

@@ -24,7 +24,8 @@ var (
 type ReceiverRegistry interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 
-	Encode_() ReceiverRegistryEncoder
+	// Encode returns the encoder implementation of this module.
+	Encoder() ReceiverRegistryEncoder
 }
 
 type ReceiverRegistryEncoder interface {
@@ -62,7 +63,7 @@ type ReceiverRegistryContract struct {
 
 var _ ReceiverRegistry = ReceiverRegistryContract{}
 
-func (c ReceiverRegistryContract) Encode_() ReceiverRegistryEncoder {
+func (c ReceiverRegistryContract) Encoder() ReceiverRegistryEncoder {
 	return c.receiverRegistryEncoder
 }
 
