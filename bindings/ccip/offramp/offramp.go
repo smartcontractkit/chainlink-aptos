@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type OfframpInterface interface {
+type Offramp interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	GetExecutionState(opts *bind.CallOpts, sourceChainSelector uint64, sequenceNumber uint64) (byte, error)
 	GetLatestPriceSequenceNumber(opts *bind.CallOpts) (uint64, error)
@@ -172,7 +172,7 @@ type SkippedReportExecution struct {
 type McmsCallback struct {
 }
 
-type Offramp struct {
+type OfframpContract struct {
 	OfframpCaller
 	OfframpTransactor
 }

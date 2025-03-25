@@ -9,10 +9,26 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/bindings/compile"
 )
 
-type CCIPDummyReceiver struct {
-	Address aptos.AccountAddress
+type CCIPDummyReceiver interface {
+	Address() aptos.AccountAddress
 
-	DummyReceiver module_dummy_receiver.DummyReceiver
+	DummyReceiver() module_dummy_receiver.DummyReceiver
+}
+
+var _ CCIPDummyReceiver = CCIPDummyReceiverContract{}
+
+type CCIPDummyReceiverContract struct {
+	address aptos.AccountAddress
+
+	dummyReceiver module_dummy_receiver.DummyReceiver
+}
+
+func (C CCIPDummyReceiverContract) Address() aptos.AccountAddress {
+	return C.address
+}
+
+func (C CCIPDummyReceiverContract) DummyReceiver() module_dummy_receiver.DummyReceiver {
+	return C.dummyReceiver
 }
 
 var FunctionInfo = bind.MustParseFunctionInfo(
@@ -21,9 +37,9 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 
 func Compile(address aptos.AccountAddress, ccipAddress aptos.AccountAddress) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
-		"ccip_dummy_receiver":                      address,
-		"ccip": ccipAddress,
-		"mcms": aptos.AccountZero,
+		"ccip_dummy_receiver":       address,
+		"ccip":                      ccipAddress,
+		"mcms":                      aptos.AccountZero,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
 	// Compile using CLI
@@ -32,10 +48,10 @@ func Compile(address aptos.AccountAddress, ccipAddress aptos.AccountAddress) (co
 
 func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIPDummyReceiver {
 	dummyReceiverContract := bind.NewBoundContract(address, "dummy_receiver", client)
-	return CCIPDummyReceiver{
-		Address: address,
-		DummyReceiver: module_dummy_receiver.DummyReceiver{
-			DummyReceiverCaller: module_dummy_receiver.DummyReceiverCaller{BoundContract: dummyReceiverContract},
+	return CCIPDummyReceiverContract{
+		address: address,
+		dummyReceiver: module_dummy_receiver.DummyReceiverContract{
+			DummyReceiverCaller:     module_dummy_receiver.DummyReceiverCaller{BoundContract: dummyReceiverContract},
 			DummyReceiverTransactor: module_dummy_receiver.DummyReceiverTransactor{BoundContract: dummyReceiverContract},
 		},
 	}
@@ -49,13 +65,13 @@ func DeployToObject(
 	ccipAddress aptos.AccountAddress,
 ) (aptos.AccountAddress, *api.PendingTransaction, CCIPDummyReceiver, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
-		"ccip": ccipAddress,
-		"mcms": aptos.AccountZero,
+		"ccip":                      ccipAddress,
+		"mcms":                      aptos.AccountZero,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
 	address, tx, err := bind.DeployPackageToObject(auth, client, "ccip_dummy_receiver", namedAddresses)
 	if err != nil {
-		return aptos.AccountAddress{}, nil, CCIPDummyReceiver{}, err
+		return aptos.AccountAddress{}, nil, CCIPDummyReceiverContract{}, err
 	}
 	return address, tx, Bind(address, client), nil
 }

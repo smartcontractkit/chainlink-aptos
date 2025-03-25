@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type OnrampInterface interface {
+type Onramp interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	IsChainSupported(opts *bind.CallOpts, destChainSelector uint64) (bool, error)
 	GetExpectedNextSequenceNumber(opts *bind.CallOpts, destChainSelector uint64) (uint64, error)
@@ -121,7 +121,7 @@ type AllowlistSendersRemoved struct {
 type McmsCallback struct {
 }
 
-type Onramp struct {
+type OnrampContract struct {
 	OnrampCaller
 	OnrampTransactor
 }

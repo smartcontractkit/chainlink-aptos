@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type MCMSExecutorInterface interface {
+type MCMSExecutor interface {
 	StageData(opts *bind.TransactOpts, dataChunk []byte, partialProofs [][]byte) (*api.PendingTransaction, error)
 	StageDataAndExecute(opts *bind.TransactOpts, chainId *big.Int, multisig aptos.AccountAddress, nonce uint64, to aptos.AccountAddress, moduleName string, function string, dataChunk []byte, partialProofs [][]byte) (*api.PendingTransaction, error)
 	ClearStagedData(opts *bind.TransactOpts) (*api.PendingTransaction, error)
@@ -36,7 +36,7 @@ type PendingExecute struct {
 	Proofs [][]byte `move:"vector<vector<u8>>"`
 }
 
-type MCMSExecutor struct {
+type MCMSExecutorContract struct {
 	MCMSExecutorCaller
 	MCMSExecutorTransactor
 }

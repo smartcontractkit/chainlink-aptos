@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type FeeQuoterInterface interface {
+type FeeQuoter interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	GetTokenPrice(opts *bind.CallOpts, token aptos.AccountAddress) (TimestampedPrice, error)
 	GetTokenPrices(opts *bind.CallOpts, tokens []aptos.AccountAddress) ([]TimestampedPrice, error)
@@ -143,7 +143,7 @@ type PremiumMultiplierWeiPerEthUpdated struct {
 type McmsCallback struct {
 }
 
-type FeeQuoter struct {
+type FeeQuoterContract struct {
 	FeeQuoterCaller
 	FeeQuoterTransactor
 }

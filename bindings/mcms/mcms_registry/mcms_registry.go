@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type MCMSRegistryInterface interface {
+type MCMSRegistry interface {
 	GetNewCodeObjectOwnerAddress(opts *bind.CallOpts, newOwnerSeed []byte) (aptos.AccountAddress, error)
 	GetNewCodeObjectAddress(opts *bind.CallOpts, newOwnerSeed []byte) (aptos.AccountAddress, error)
 	GetPreexistingCodeObjectOwnerAddress(opts *bind.CallOpts, objectAddress aptos.AccountAddress) (aptos.AccountAddress, error)
@@ -101,7 +101,7 @@ type OwnerCreatedForEntrypoint struct {
 	AccountOrObjectAddress aptos.AccountAddress `move:"address"`
 }
 
-type MCMSRegistry struct {
+type MCMSRegistryContract struct {
 	MCMSRegistryCaller
 	MCMSRegistryTransactor
 }

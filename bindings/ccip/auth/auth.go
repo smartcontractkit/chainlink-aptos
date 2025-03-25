@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type AuthInterface interface {
+type Auth interface {
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
 
 	TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
@@ -41,7 +41,7 @@ type AuthState struct {
 type PendingRouterSignerCapability struct {
 }
 
-type Auth struct {
+type AuthContract struct {
 	AuthCaller
 	AuthTransactor
 }

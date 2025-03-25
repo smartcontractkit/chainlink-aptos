@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type DummyReceiverInterface interface {
+type DummyReceiver interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 }
 
@@ -36,7 +36,7 @@ type ReceivedMessage struct {
 type DummyReceiverProof struct {
 }
 
-type DummyReceiver struct {
+type DummyReceiverContract struct {
 	DummyReceiverCaller
 	DummyReceiverTransactor
 }

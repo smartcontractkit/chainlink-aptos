@@ -15,16 +15,62 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/bindings/compile"
 )
 
-type CCIP struct {
-	Address aptos.AccountAddress
+type CCIP interface {
+	Address() aptos.AccountAddress
 
-	Auth               module_auth.Auth
-	FeeQuoter          module_fee_quoter.FeeQuoter
-	Offramp            module_offramp.Offramp
-	Onramp             module_onramp.Onramp
-	ReceiverRegistry   module_receiver_registry.ReceiverRegistry
-	RMNRemote          module_rmn_remote.RMNRemote
-	TokenAdminRegistry module_token_admin_registry.TokenAdminRegistry
+	Auth() module_auth.Auth
+	FeeQuoter() module_fee_quoter.FeeQuoter
+	Offramp() module_offramp.Offramp
+	Onramp() module_onramp.Onramp
+	ReceiverRegistry() module_receiver_registry.ReceiverRegistry
+	RMNRemote() module_rmn_remote.RMNRemote
+	TokenAdminRegistry() module_token_admin_registry.TokenAdminRegistry
+}
+
+var _ CCIP = CCIPContract{}
+
+type CCIPContract struct {
+	address aptos.AccountAddress
+
+	auth               module_auth.Auth
+	feeQuoter          module_fee_quoter.FeeQuoter
+	offramp            module_offramp.Offramp
+	onramp             module_onramp.Onramp
+	receiverRegistry   module_receiver_registry.ReceiverRegistry
+	rmnRemote          module_rmn_remote.RMNRemote
+	tokenAdminRegistry module_token_admin_registry.TokenAdminRegistry
+}
+
+func (C CCIPContract) Address() aptos.AccountAddress {
+	return C.address
+}
+
+func (C CCIPContract) Auth() module_auth.Auth {
+	return C.auth
+}
+
+func (C CCIPContract) FeeQuoter() module_fee_quoter.FeeQuoter {
+	return C.feeQuoter
+}
+
+func (C CCIPContract) Offramp() module_offramp.Offramp {
+	return C.offramp
+}
+
+func (C CCIPContract) Onramp() module_onramp.Onramp {
+	return C.onramp
+}
+
+func (C CCIPContract) ReceiverRegistry() module_receiver_registry.ReceiverRegistry {
+	return C.receiverRegistry
+}
+
+func (C CCIPContract) RMNRemote() module_rmn_remote.RMNRemote {
+	return C.rmnRemote
+}
+
+func (C CCIPContract) TokenAdminRegistry() module_token_admin_registry.TokenAdminRegistry {
+	return C.tokenAdminRegistry
 }
 
 const (
@@ -62,33 +108,33 @@ func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIP {
 	receiverRegistryContract := bind.NewBoundContract(address, "receiver_registry", client)
 	rmnRemoteContract := bind.NewBoundContract(address, "rmn_remote", client)
 	tokenAdminRegistryContract := bind.NewBoundContract(address, "token_admin_registry", client)
-	return CCIP{
-		Address: address,
-		Auth: module_auth.Auth{
+	return CCIPContract{
+		address: address,
+		auth: module_auth.AuthContract{
 			AuthCaller:     module_auth.AuthCaller{BoundContract: authContract},
 			AuthTransactor: module_auth.AuthTransactor{BoundContract: authContract},
 		},
-		FeeQuoter: module_fee_quoter.FeeQuoter{
+		feeQuoter: module_fee_quoter.FeeQuoterContract{
 			FeeQuoterCaller:     module_fee_quoter.FeeQuoterCaller{BoundContract: feeQuoterContract},
 			FeeQuoterTransactor: module_fee_quoter.FeeQuoterTransactor{BoundContract: feeQuoterContract},
 		},
-		Offramp: module_offramp.Offramp{
+		offramp: module_offramp.OfframpContract{
 			OfframpCaller:     module_offramp.OfframpCaller{BoundContract: offrampContract},
 			OfframpTransactor: module_offramp.OfframpTransactor{BoundContract: offrampContract},
 		},
-		Onramp: module_onramp.Onramp{
+		onramp: module_onramp.OnrampContract{
 			OnrampCaller:     module_onramp.OnrampCaller{BoundContract: onrampContract},
 			OnrampTransactor: module_onramp.OnrampTransactor{BoundContract: onrampContract},
 		},
-		ReceiverRegistry: module_receiver_registry.ReceiverRegistry{
+		receiverRegistry: module_receiver_registry.ReceiverRegistryContract{
 			ReceiverRegistryCaller:     module_receiver_registry.ReceiverRegistryCaller{BoundContract: receiverRegistryContract},
 			ReceiverRegistryTransactor: module_receiver_registry.ReceiverRegistryTransactor{BoundContract: receiverRegistryContract},
 		},
-		RMNRemote: module_rmn_remote.RMNRemote{
+		rmnRemote: module_rmn_remote.RMNRemoteContract{
 			RMNRemoteCaller:     module_rmn_remote.RMNRemoteCaller{BoundContract: rmnRemoteContract},
 			RMNRemoteTransactor: module_rmn_remote.RMNRemoteTransactor{BoundContract: rmnRemoteContract},
 		},
-		TokenAdminRegistry: module_token_admin_registry.TokenAdminRegistry{
+		tokenAdminRegistry: module_token_admin_registry.TokenAdminRegistryContract{
 			TokenAdminRegistryCaller:     module_token_admin_registry.TokenAdminRegistryCaller{BoundContract: tokenAdminRegistryContract},
 			TokenAdminRegistryTransactor: module_token_admin_registry.TokenAdminRegistryTransactor{BoundContract: tokenAdminRegistryContract},
 		},
@@ -113,7 +159,7 @@ func DeployToObject(
 	}
 	address, tx, err := bind.DeployPackageToObject(auth, client, "ccip", namedAddresses)
 	if err != nil {
-		return aptos.AccountAddress{}, nil, CCIP{}, err
+		return aptos.AccountAddress{}, nil, CCIPContract{}, err
 	}
 	return address, tx, Bind(address, client), nil
 }

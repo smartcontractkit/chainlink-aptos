@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type RouterInterface interface {
+type Router interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	GetStateAddress(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	IsChainSupported(opts *bind.CallOpts, destChainSelector uint64) (bool, error)
@@ -37,7 +37,7 @@ const FunctionInfo = `[{"package":"ccip_router","module":"router","name":"ccip_s
 type RouterState struct {
 }
 
-type Router struct {
+type RouterContract struct {
 	RouterCaller
 	RouterTransactor
 }

@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type MCMSAccountInterface interface {
+type MCMSAccount interface {
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	IsSelfOwned(opts *bind.CallOpts) (bool, error)
 
@@ -48,7 +48,7 @@ type OwnershipTransferred struct {
 	To   aptos.AccountAddress `move:"address"`
 }
 
-type MCMSAccount struct {
+type MCMSAccountContract struct {
 	MCMSAccountCaller
 	MCMSAccountTransactor
 }

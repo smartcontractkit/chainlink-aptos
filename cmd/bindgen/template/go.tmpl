@@ -22,7 +22,7 @@ var (
   _ = codec.DecodeAptosJsonValue
 )
 
-type {{toUpperCamel .Module}}Interface interface {
+type {{toUpperCamel .Module}} interface {
   {{- range .ViewFuncs}}
     {{.Name}}(opts *bind.CallOpts, {{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) ({{range .Returns}}{{.GoType}},{{end}} error)
   {{- end}}
@@ -43,7 +43,7 @@ const FunctionInfo = `{{.FunctionInfo}}`
   }
 {{end}}
 
-type {{toUpperCamel .Module}} struct {
+type {{toUpperCamel .Module}}Contract struct {
   {{toUpperCamel .Module}}Caller
   {{toUpperCamel .Module}}Transactor
 }

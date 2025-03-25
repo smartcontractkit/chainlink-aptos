@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type RMNRemoteInterface interface {
+type RMNRemote interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootMinSequenceNumbers []uint64, merkleRootMaxSequenceNumbers []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error)
 	GetVersionedConfig(opts *bind.CallOpts) (uint32, Config, error)
@@ -89,7 +89,7 @@ type Uncursed struct {
 type McmsCallback struct {
 }
 
-type RMNRemote struct {
+type RMNRemoteContract struct {
 	RMNRemoteCaller
 	RMNRemoteTransactor
 }

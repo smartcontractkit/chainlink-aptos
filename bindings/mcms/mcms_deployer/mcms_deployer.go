@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type MCMSDeployerInterface interface {
+type MCMSDeployer interface {
 	StageCodeChunk(opts *bind.TransactOpts, metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte) (*api.PendingTransaction, error)
 	StageCodeChunkAndPublishToObject(opts *bind.TransactOpts, metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, newOwnerSeed []byte) (*api.PendingTransaction, error)
 	StageCodeChunkAndUpgradeObjectCode(opts *bind.TransactOpts, metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, codeObjectAddress aptos.AccountAddress) (*api.PendingTransaction, error)
@@ -37,7 +37,7 @@ type StagingArea struct {
 	LastModuleIdx      uint64 `move:"u64"`
 }
 
-type MCMSDeployer struct {
+type MCMSDeployerContract struct {
 	MCMSDeployerCaller
 	MCMSDeployerTransactor
 }

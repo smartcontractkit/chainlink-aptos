@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type ReceiverRegistryInterface interface {
+type ReceiverRegistry interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 }
 
@@ -40,7 +40,7 @@ type ReceiverRegistered struct {
 	ReceiverModuleName []byte               `move:"vector<u8>"`
 }
 
-type ReceiverRegistry struct {
+type ReceiverRegistryContract struct {
 	ReceiverRegistryCaller
 	ReceiverRegistryTransactor
 }

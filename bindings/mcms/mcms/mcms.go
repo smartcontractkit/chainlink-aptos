@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type MCMSInterface interface {
+type MCMS interface {
 	GetConfig(opts *bind.CallOpts) (Config, error)
 	GetOpCount(opts *bind.CallOpts) (uint64, error)
 	GetRoot(opts *bind.CallOpts) ([]byte, uint64, error)
@@ -97,7 +97,7 @@ type OpExecuted struct {
 	Data       []byte               `move:"vector<u8>"`
 }
 
-type MCMS struct {
+type MCMSContract struct {
 	MCMSCaller
 	MCMSTransactor
 }

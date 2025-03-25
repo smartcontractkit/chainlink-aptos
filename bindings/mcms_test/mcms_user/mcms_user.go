@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type MCMSUserInterface interface {
+type MCMSUser interface {
 }
 
 const FunctionInfo = `[{"package":"mcms_test","module":"mcms_user","name":"function_one","parameters":[{"name":"arg1","type":"0x1::string::String"},{"name":"arg2","type":"vector\u003cu8\u003e"}]},{"package":"mcms_test","module":"mcms_user","name":"function_two","parameters":[{"name":"arg1","type":"address"},{"name":"arg2","type":"u128"}]}]`
@@ -39,7 +39,7 @@ type UserData struct {
 type SampleMcmsCallback struct {
 }
 
-type MCMSUser struct {
+type MCMSUserContract struct {
 	MCMSUserCaller
 	MCMSUserTransactor
 }

@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type TokenAdminRegistryInterface interface {
+type TokenAdminRegistry interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	GetPools(opts *bind.CallOpts, localTokens []aptos.AccountAddress) ([]aptos.AccountAddress, error)
 	GetPool(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, error)
@@ -101,7 +101,7 @@ type AdministratorTransferred struct {
 type McmsCallback struct {
 }
 
-type TokenAdminRegistry struct {
+type TokenAdminRegistryContract struct {
 	TokenAdminRegistryCaller
 	TokenAdminRegistryTransactor
 }
