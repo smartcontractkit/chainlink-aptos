@@ -371,14 +371,28 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 			"testContract": {
 				Name: "echo",
 				Events: map[string]*ChainReaderEvent{
-					"single_value_events": {
-						EventHandle: fmt.Sprintf("%s::echo::EventStore", accountAddress.String()),
+					"SingleValueEvent": {
+						EventHandleStructName: "EventStore",
+						EventHandleFieldName:  "single_value_events",
+						// retrieve using 2 address components
+						EventAccountAddress: accountAddress.String() + "::echo::get_event_address",
+						EventFieldRenames: map[string]RenamedEventField{
+							"value": {
+								NewName: "SingleUintValue",
+							},
+						},
 					},
-					"double_value_events": {
-						EventHandle: fmt.Sprintf("%s::echo::EventStore", accountAddress.String()),
+					"DoubleValueEvent": {
+						// don't specify event handle address to let it be filled out
+						EventHandleStructName: "EventStore",
+						EventHandleFieldName:  "double_value_events",
+						EventAccountAddress:   accountAddress.String(),
 					},
-					"triple_value_events": {
-						EventHandle: fmt.Sprintf("%s::echo::EventStore", accountAddress.String()),
+					"VectorVectorEvent": {
+						EventHandleStructName: "EventStore",
+						EventHandleFieldName:  "vector_vector_events",
+						// retrieve using 3 address components
+						EventAccountAddress: "echo::get_event_address",
 					},
 				},
 			},
@@ -400,7 +414,7 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 				context.Background(),
 				commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
 				query.KeyFilter{
-					Key: "single_value_events",
+					Key: "SingleValueEvent",
 					Expressions: []query.Expression{{
 						Primitive: &primitives.Comparator{
 							Name: "offset",
@@ -424,7 +438,7 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 		}
 		require.Len(t, allEvents, 20)
 		for i := 0; i < len(allEvents)-1; i++ {
-			require.Less(t, allEvents[i].Value, allEvents[i+1].Value)
+			require.Less(t, allEvents[i].SingleUintValue, allEvents[i+1].SingleUintValue)
 		}
 	})
 
@@ -433,7 +447,7 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 			context.Background(),
 			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
 			query.KeyFilter{
-				Key: "single_value_events",
+				Key: "SingleValueEvent",
 				Expressions: []query.Expression{{
 					Primitive: &primitives.Comparator{
 						Name: "offset",
@@ -450,14 +464,14 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 		require.NoError(t, err)
 		require.Len(t, sequences, 1)
 		event := sequences[0].Data.(*SingleValueEvent)
-		require.Equal(t, uint64(1), event.Value)
+		require.Equal(t, uint64(1), event.SingleUintValue)
 	})
 
 	t.Run("Get events sorted in desc", func(t *testing.T) {
 		sequences, err := chainReader.QueryKey(
 			context.Background(),
 			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
-			query.KeyFilter{Key: "single_value_events"},
+			query.KeyFilter{Key: "SingleValueEvent"},
 			query.LimitAndSort{
 				Limit: query.CountLimit(10),
 				SortBy: []query.SortBy{
@@ -469,8 +483,8 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 		require.NoError(t, err)
 		require.Len(t, sequences, 10)
 		for i := 0; i < len(sequences)-1; i++ {
-			require.Greater(t, sequences[i].Data.(*SingleValueEvent).Value,
-				sequences[i+1].Data.(*SingleValueEvent).Value)
+			require.Greater(t, sequences[i].Data.(*SingleValueEvent).SingleUintValue,
+				sequences[i+1].Data.(*SingleValueEvent).SingleUintValue)
 		}
 	})
 
@@ -494,7 +508,7 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 			sequences, err := chainReader.QueryKey(
 				context.Background(),
 				commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
-				query.KeyFilter{Key: "single_value_events"},
+				query.KeyFilter{Key: "SingleValueEvent"},
 				query.LimitAndSort{
 					Limit: query.CountLimit(50),
 					SortBy: []query.SortBy{
@@ -578,7 +592,7 @@ func getSampleTxMetadata() *commontypes.TxMeta {
 }
 
 type SingleValueEvent struct {
-	Value uint64 `json:"value"`
+	SingleUintValue uint64
 }
 
 type DoubleValueEvent struct {
@@ -586,6 +600,6 @@ type DoubleValueEvent struct {
 	Text   string `json:"text"`
 }
 
-type TripleValueEvent struct {
+type VectorVectorEvent struct {
 	Values [][]byte `json:"values"`
 }
