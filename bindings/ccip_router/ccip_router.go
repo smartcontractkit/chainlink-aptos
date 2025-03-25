@@ -26,6 +26,7 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 func Compile(ccipAddress aptos.AccountAddress) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
+		"ccip_router":               ccipAddress,
 		"mcms":                      aptos.AccountZero,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
