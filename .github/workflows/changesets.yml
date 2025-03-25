@@ -1,0 +1,32 @@
+name: Changesets
+
+on:
+  push:
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  changesets:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      changesets_published: ${{ steps.changesets.outputs.published }}
+      changesets_publishedPackages: ${{ steps.changesets.outputs.publishedPackages }}
+    steps:
+      - name: changesets
+        id: changesets
+        uses: smartcontractkit/.github/actions/cicd-changesets@cicd-changesets/0.3.9
+        with:
+          git-user: app-token-issuer-integrations[bot]
+          git-email: app-token-issuer-integrations[bot]@users.noreply.github.com
+          # Tags created like: <pkg>/v<version>
+          changesets-tag-separator: "/v"
+          pnpm-use-cache: false
+          aws-region: ${{ secrets.AWS_REGION }}
+          # TODO: will add these secrets once I have write access.
+          aws-role-arn: ${{ secrets.AWS_ROLE_ARN_GATI_CHANGESETS }}
+          aws-lambda-url: ${{ secrets.AWS_LAMBDA_URL_GATI }}

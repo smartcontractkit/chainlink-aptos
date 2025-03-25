@@ -1,0 +1,23 @@
+{
+  "name": "chainlink-aptos",
+  "engines": {
+    "pnpm": "10"
+  },
+  "private": true,
+  "version": "0.1.0",
+  "description": "",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/smartcontractkit/chainlink-aptos.git"
+  },
+  "author": "",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/smartcontractkit/chainlink-aptos/issues"
+  },
+  "homepage": "https://github.com/smartcontractkit/chainlink-aptos#readme",
+  "devDependencies": {
+    "@changesets/changelog-github": "^0.5.1",
+    "@changesets/cli": "~2.28.1"
+  }
+}
