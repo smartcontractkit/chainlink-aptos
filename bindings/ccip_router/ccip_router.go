@@ -39,11 +39,11 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 	module_router.FunctionInfo,
 )
 
-func Compile(ccipAddress aptos.AccountAddress) (compile.CompiledPackage, error) {
+func Compile(ccipAddress, mcmsAddress aptos.AccountAddress) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
 		"ccip_router":               ccipAddress,
-		"mcms":                      aptos.AccountZero,
+		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
 	// Compile using CLI
@@ -66,13 +66,12 @@ func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIPRouter 
 func DeployToExistingObject(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
-	objectAddress aptos.AccountAddress,
-	ccipAddress aptos.AccountAddress,
+	objectAddress, ccipAddress, mcmsAddress aptos.AccountAddress,
 ) (*api.PendingTransaction, CCIPRouter, error) {
 	// no need for mcms addresses since the router does not interact with mcms directly.
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
-		"mcms":                      aptos.AccountZero,
+		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
 	tx, err := bind.UpgradePackageToObject(auth, client, "ccip_router", namedAddresses, objectAddress)
