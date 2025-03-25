@@ -233,6 +233,11 @@ module ccip::eth_abi {
         else {
             32 - (length % 32)
         };
+
+        assert!(
+            cur + length + padding_len <= vector::length(data),
+            error::out_of_range(E_OUT_OF_BYTES)
+        );
         stream.cur = cur + length + padding_len;
 
         bytes
