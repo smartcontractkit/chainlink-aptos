@@ -33,7 +33,7 @@ type TokenAdminRegistry interface {
 	TransferAdminRole(opts *bind.TransactOpts, localToken aptos.AccountAddress, newAdmin aptos.AccountAddress) (*api.PendingTransaction, error)
 	AcceptAdminRole(opts *bind.TransactOpts, localToken aptos.AccountAddress) (*api.PendingTransaction, error)
 
-	// Encode returns the encoder implementation of this module.
+	// Encoder returns the encoder implementation of this module.
 	Encoder() TokenAdminRegistryEncoder
 }
 

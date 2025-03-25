@@ -29,7 +29,7 @@ type Auth interface {
 	ExecuteOwnershipTransfer(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
 	AssertIsRouter(opts *bind.TransactOpts, caller aptos.AccountAddress) (*api.PendingTransaction, error)
 
-	// Encode returns the encoder implementation of this module.
+	// Encoder returns the encoder implementation of this module.
 	Encoder() AuthEncoder
 }
 

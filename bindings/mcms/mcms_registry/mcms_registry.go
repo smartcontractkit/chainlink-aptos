@@ -33,7 +33,7 @@ type MCMSRegistry interface {
 	AcceptCodeObject(opts *bind.TransactOpts, objectAddress aptos.AccountAddress) (*api.PendingTransaction, error)
 	ExecuteCodeObjectTransfer(opts *bind.TransactOpts, objectAddress aptos.AccountAddress, newOwnerAddress aptos.AccountAddress) (*api.PendingTransaction, error)
 
-	// Encode returns the encoder implementation of this module.
+	// Encoder returns the encoder implementation of this module.
 	Encoder() MCMSRegistryEncoder
 }
 

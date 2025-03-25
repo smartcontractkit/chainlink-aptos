@@ -35,7 +35,7 @@ type RMNRemote interface {
 	Uncurse(opts *bind.TransactOpts, subject []byte) (*api.PendingTransaction, error)
 	UncurseMultiple(opts *bind.TransactOpts, subjects [][]byte) (*api.PendingTransaction, error)
 
-	// Encode returns the encoder implementation of this module.
+	// Encoder returns the encoder implementation of this module.
 	Encoder() RMNRemoteEncoder
 }
 

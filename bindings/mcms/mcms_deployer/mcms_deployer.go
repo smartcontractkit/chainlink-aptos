@@ -27,7 +27,7 @@ type MCMSDeployer interface {
 	StageCodeChunkAndUpgradeObjectCode(opts *bind.TransactOpts, metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, codeObjectAddress aptos.AccountAddress) (*api.PendingTransaction, error)
 	CleanupStagingArea(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 
-	// Encode returns the encoder implementation of this module.
+	// Encoder returns the encoder implementation of this module.
 	Encoder() MCMSDeployerEncoder
 }
 

@@ -31,7 +31,7 @@ type {{toUpperCamel .Module}} interface {
     {{.Name}}(opts *bind.TransactOpts, {{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (*api.PendingTransaction, error)
   {{- end}}
 
-  // Encode returns the encoder implementation of this module.
+  // Encoder returns the encoder implementation of this module.
   Encoder() {{toUpperCamel .Module}}Encoder
 }
 

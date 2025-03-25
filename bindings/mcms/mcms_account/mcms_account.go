@@ -28,7 +28,7 @@ type MCMSAccount interface {
 	TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
 	TransferOwnershipToSelf(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 
-	// Encode returns the encoder implementation of this module.
+	// Encoder returns the encoder implementation of this module.
 	Encoder() MCMSAccountEncoder
 }
 

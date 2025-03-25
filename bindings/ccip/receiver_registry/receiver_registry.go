@@ -24,7 +24,7 @@ var (
 type ReceiverRegistry interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 
-	// Encode returns the encoder implementation of this module.
+	// Encoder returns the encoder implementation of this module.
 	Encoder() ReceiverRegistryEncoder
 }
 
