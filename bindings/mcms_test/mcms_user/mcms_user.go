@@ -23,7 +23,7 @@ var (
 
 type MCMSUser interface {
 
-	// Encode returns the encoder implementation of this module.
+	// Encoder returns the encoder implementation of this module.
 	Encoder() MCMSUserEncoder
 }
 

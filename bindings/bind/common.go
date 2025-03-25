@@ -61,7 +61,7 @@ func (c *BoundContract) Encode(function string, typeArgs, paramTypes []string, p
 	}
 
 	return ModuleInformation{
-		PackageName: c.moduleName,
+		PackageName: c.packageName,
 		ModuleName:  c.moduleName,
 		Address:     c.address,
 	}, function, typeTags, args, nil
