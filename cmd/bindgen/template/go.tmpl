@@ -31,7 +31,7 @@ type {{toUpperCamel .Module}} interface {
     {{.Name}}(opts *bind.TransactOpts, {{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (*api.PendingTransaction, error)
   {{- end}}
 
-  _Encode() {{toUpperCamel .Module}}Encoder
+  Encode_() {{toUpperCamel .Module}}Encoder
 }
 
 type {{toUpperCamel .Module}}Encoder interface {
@@ -72,7 +72,7 @@ type {{toUpperCamel .Module}}Contract struct {
 
 var _ {{toUpperCamel .Module}} = {{toUpperCamel .Module}}Contract{}
 
-func (c {{toUpperCamel .Module}}Contract) _Encode() {{toUpperCamel .Module}}Encoder {
+func (c {{toUpperCamel .Module}}Contract) Encode_() {{toUpperCamel .Module}}Encoder {
   return c.{{toLowerCamel .Module}}Encoder
 }
 

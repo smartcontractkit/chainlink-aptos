@@ -29,7 +29,7 @@ type Router interface {
 
 	CCIPSend(opts *bind.TransactOpts, destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (*api.PendingTransaction, error)
 
-	_Encode() RouterEncoder
+	Encode_() RouterEncoder
 }
 
 type RouterEncoder interface {
@@ -63,7 +63,7 @@ type RouterContract struct {
 
 var _ Router = RouterContract{}
 
-func (c RouterContract) _Encode() RouterEncoder {
+func (c RouterContract) Encode_() RouterEncoder {
 	return c.routerEncoder
 }
 

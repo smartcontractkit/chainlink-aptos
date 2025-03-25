@@ -37,7 +37,7 @@ type Onramp interface {
 	ApplyDestChainConfigUpdates(opts *bind.TransactOpts, destChainSelectors []uint64, destChainEnabled []bool, destChainAllowlistEnabled []bool) (*api.PendingTransaction, error)
 	ApplyAllowlistUpdates(opts *bind.TransactOpts, destChainSelectors []uint64, destChainAllowlistEnabled []bool, destChainAddAllowedSenders [][]aptos.AccountAddress, destChainRemoveAllowedSenders [][]aptos.AccountAddress) (*api.PendingTransaction, error)
 
-	_Encode() OnrampEncoder
+	Encode_() OnrampEncoder
 }
 
 type OnrampEncoder interface {
@@ -155,7 +155,7 @@ type OnrampContract struct {
 
 var _ Onramp = OnrampContract{}
 
-func (c OnrampContract) _Encode() OnrampEncoder {
+func (c OnrampContract) Encode_() OnrampEncoder {
 	return c.onrampEncoder
 }
 

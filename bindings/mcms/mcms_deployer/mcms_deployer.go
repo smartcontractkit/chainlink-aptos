@@ -27,7 +27,7 @@ type MCMSDeployer interface {
 	StageCodeChunkAndUpgradeObjectCode(opts *bind.TransactOpts, metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, codeObjectAddress aptos.AccountAddress) (*api.PendingTransaction, error)
 	CleanupStagingArea(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 
-	_Encode() MCMSDeployerEncoder
+	Encode_() MCMSDeployerEncoder
 }
 
 type MCMSDeployerEncoder interface {
@@ -61,7 +61,7 @@ type MCMSDeployerContract struct {
 
 var _ MCMSDeployer = MCMSDeployerContract{}
 
-func (c MCMSDeployerContract) _Encode() MCMSDeployerEncoder {
+func (c MCMSDeployerContract) Encode_() MCMSDeployerEncoder {
 	return c.mcmsDeployerEncoder
 }
 

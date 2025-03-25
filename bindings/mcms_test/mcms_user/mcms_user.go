@@ -22,7 +22,7 @@ var (
 )
 
 type MCMSUser interface {
-	EncodeCall() MCMSUserEncoder
+	Encode_() MCMSUserEncoder
 }
 
 type MCMSUserEncoder interface {
@@ -60,7 +60,7 @@ type MCMSUserContract struct {
 
 var _ MCMSUser = MCMSUserContract{}
 
-func (c MCMSUserContract) EncodeCall() MCMSUserEncoder {
+func (c MCMSUserContract) Encode_() MCMSUserEncoder {
 	return c.mcmsUserEncoder
 }
 

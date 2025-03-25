@@ -26,7 +26,7 @@ type MCMSExecutor interface {
 	StageDataAndExecute(opts *bind.TransactOpts, chainId *big.Int, multisig aptos.AccountAddress, nonce uint64, to aptos.AccountAddress, moduleName string, function string, dataChunk []byte, partialProofs [][]byte) (*api.PendingTransaction, error)
 	ClearStagedData(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 
-	_Encode() MCMSExecutorEncoder
+	Encode_() MCMSExecutorEncoder
 }
 
 type MCMSExecutorEncoder interface {
@@ -59,7 +59,7 @@ type MCMSExecutorContract struct {
 
 var _ MCMSExecutor = MCMSExecutorContract{}
 
-func (c MCMSExecutorContract) _Encode() MCMSExecutorEncoder {
+func (c MCMSExecutorContract) Encode_() MCMSExecutorEncoder {
 	return c.mcmsExecutorEncoder
 }
 

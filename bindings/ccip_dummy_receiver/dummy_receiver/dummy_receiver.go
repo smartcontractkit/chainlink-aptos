@@ -24,7 +24,7 @@ var (
 type DummyReceiver interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 
-	_Encode() DummyReceiverEncoder
+	Encode_() DummyReceiverEncoder
 }
 
 type DummyReceiverEncoder interface {
@@ -57,7 +57,7 @@ type DummyReceiverContract struct {
 
 var _ DummyReceiver = DummyReceiverContract{}
 
-func (c DummyReceiverContract) _Encode() DummyReceiverEncoder {
+func (c DummyReceiverContract) Encode_() DummyReceiverEncoder {
 	return c.dummyReceiverEncoder
 }
 
