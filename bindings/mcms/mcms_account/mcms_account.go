@@ -28,7 +28,7 @@ type MCMSAccount interface {
 	TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
 	TransferOwnershipToSelf(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 
-	EncodeCall() MCMSAccountEncoder
+	_Encode() MCMSAccountEncoder
 }
 
 type MCMSAccountEncoder interface {
@@ -74,7 +74,7 @@ type MCMSAccountContract struct {
 
 var _ MCMSAccount = MCMSAccountContract{}
 
-func (c MCMSAccountContract) EncodeCall() MCMSAccountEncoder {
+func (c MCMSAccountContract) _Encode() MCMSAccountEncoder {
 	return c.mcmsAccountEncoder
 }
 

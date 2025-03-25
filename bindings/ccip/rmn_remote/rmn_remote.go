@@ -35,7 +35,7 @@ type RMNRemote interface {
 	Uncurse(opts *bind.TransactOpts, subject []byte) (*api.PendingTransaction, error)
 	UncurseMultiple(opts *bind.TransactOpts, subjects [][]byte) (*api.PendingTransaction, error)
 
-	EncodeCall() RMNRemoteEncoder
+	_Encode() RMNRemoteEncoder
 }
 
 type RMNRemoteEncoder interface {
@@ -124,7 +124,7 @@ type RMNRemoteContract struct {
 
 var _ RMNRemote = RMNRemoteContract{}
 
-func (c RMNRemoteContract) EncodeCall() RMNRemoteEncoder {
+func (c RMNRemoteContract) _Encode() RMNRemoteEncoder {
 	return c.rmnRemoteEncoder
 }
 

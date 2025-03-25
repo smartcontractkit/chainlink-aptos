@@ -29,7 +29,7 @@ type Auth interface {
 	ExecuteOwnershipTransfer(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
 	AssertIsRouter(opts *bind.TransactOpts, caller aptos.AccountAddress) (*api.PendingTransaction, error)
 
-	EncodeCall() AuthEncoder
+	_Encode() AuthEncoder
 }
 
 type AuthEncoder interface {
@@ -67,7 +67,7 @@ type AuthContract struct {
 
 var _ Auth = AuthContract{}
 
-func (c AuthContract) EncodeCall() AuthEncoder {
+func (c AuthContract) _Encode() AuthEncoder {
 	return c.authEncoder
 }
 

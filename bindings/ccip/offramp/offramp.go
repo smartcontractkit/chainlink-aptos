@@ -39,7 +39,7 @@ type Offramp interface {
 	ApplySourceChainConfigUpdates(opts *bind.TransactOpts, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (*api.PendingTransaction, error)
 	SetOcr3Config(opts *bind.TransactOpts, configDigest []byte, ocrPluginType byte, bigF byte, isSignatureVerificationEnabled bool, signers [][]byte, transmitters []aptos.AccountAddress) (*api.PendingTransaction, error)
 
-	EncodeCall() OfframpEncoder
+	_Encode() OfframpEncoder
 }
 
 type OfframpEncoder interface {
@@ -207,7 +207,7 @@ type OfframpContract struct {
 
 var _ Offramp = OfframpContract{}
 
-func (c OfframpContract) EncodeCall() OfframpEncoder {
+func (c OfframpContract) _Encode() OfframpEncoder {
 	return c.offrampEncoder
 }
 

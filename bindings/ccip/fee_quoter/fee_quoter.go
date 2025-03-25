@@ -40,7 +40,7 @@ type FeeQuoter interface {
 	ApplyPremiumMultiplierWeiPerEthUpdates(opts *bind.TransactOpts, tokens []aptos.AccountAddress, premiumMultiplierWeiPerEth []uint64) (*api.PendingTransaction, error)
 	ApplyDestChainConfigUpdates(opts *bind.TransactOpts, destChainSelector uint64, isEnabled bool, maxNumberOfTokensPerMsg uint16, maxDataBytes uint32, maxPerMsgGasLimit uint32, destGasOverhead uint32, destGasPerPayloadByteBase byte, destGasPerPayloadByteHigh byte, destGasPerPayloadByteThreshold uint16, destDataAvailabilityOverheadGas uint32, destGasPerDataAvailabilityByte uint16, destDataAvailabilityMultiplierBps uint16, chainFamilySelector []byte, enforceOutOfOrder bool, defaultTokenFeeUsdCents uint16, defaultTokenDestGasOverhead uint32, defaultTxGasLimit uint32, gasMultiplierWeiPerEth uint64, gasPriceStalenessThreshold uint32, networkFeeUsdCents uint32) (*api.PendingTransaction, error)
 
-	EncodeCall() FeeQuoterEncoder
+	_Encode() FeeQuoterEncoder
 }
 
 type FeeQuoterEncoder interface {
@@ -181,7 +181,7 @@ type FeeQuoterContract struct {
 
 var _ FeeQuoter = FeeQuoterContract{}
 
-func (c FeeQuoterContract) EncodeCall() FeeQuoterEncoder {
+func (c FeeQuoterContract) _Encode() FeeQuoterEncoder {
 	return c.feeQuoterEncoder
 }
 

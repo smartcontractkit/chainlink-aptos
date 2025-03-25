@@ -33,7 +33,7 @@ type MCMSRegistry interface {
 	AcceptCodeObject(opts *bind.TransactOpts, objectAddress aptos.AccountAddress) (*api.PendingTransaction, error)
 	ExecuteCodeObjectTransfer(opts *bind.TransactOpts, objectAddress aptos.AccountAddress, newOwnerAddress aptos.AccountAddress) (*api.PendingTransaction, error)
 
-	EncodeCall() MCMSRegistryEncoder
+	_Encode() MCMSRegistryEncoder
 }
 
 type MCMSRegistryEncoder interface {
@@ -131,7 +131,7 @@ type MCMSRegistryContract struct {
 
 var _ MCMSRegistry = MCMSRegistryContract{}
 
-func (c MCMSRegistryContract) EncodeCall() MCMSRegistryEncoder {
+func (c MCMSRegistryContract) _Encode() MCMSRegistryEncoder {
 	return c.mcmsRegistryEncoder
 }
 
