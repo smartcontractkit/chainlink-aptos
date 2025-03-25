@@ -19,14 +19,6 @@ type ChainReaderFunction struct {
 	Params []AptosFunctionParam
 }
 
-type ChainReaderEvent struct {
-	// The event name (optional). When not provided, the key in the map under which this event
-	// is stored is used.
-	Name string
-	// <account_address>::<module_name>::<event_struct>
-	EventHandle string
-}
-
 type AptosFunctionParam struct {
 	// The function parameter name.
 	Name string
@@ -36,4 +28,34 @@ type AptosFunctionParam struct {
 	Required bool
 	// If this is not a required parameter and it is not provided, this default value will be used.
 	DefaultValue any
+}
+
+type ChainReaderEvent struct {
+	// The struct where the event handle is defined.
+	EventHandleStructName string
+
+	// The name of the event handle field.
+	EventHandleFieldName string
+
+	// The event account address.
+	// This field can be defined in several ways:
+	// - Empty string, which means the event account address is the address of the bound contract.
+	// - An exact address hex string (eg. 0x1234 or 1234) containing the events.
+	// - A fully qualified function name (eg. 0x1234::my_contract::get_event_address) which
+	//   takes no parameters and returns the actual event account address.
+	// - A name containing the module name and function name components
+	//   (eg. my_first_contract::get_event_address) stored at the address of the bound contract,
+	//   which takes no parameters and returns the actual event account address.
+	EventAccountAddress string
+
+	// Renames of event field names (optional). When not provided, the field names are used as-is.
+	EventFieldRenames map[string]RenamedEventField
+}
+
+type RenamedEventField struct {
+	// The new field name.
+	NewName string
+
+	// Rename sub-fields. This assumes that the event field value is a struct or a map with string keys.
+	SubFieldRenames map[string]RenamedEventField
 }
