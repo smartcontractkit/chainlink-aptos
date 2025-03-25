@@ -20,7 +20,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 
-	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
@@ -82,7 +82,7 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 				Functions: map[string]*ChainWriterFunction{
 					"publish_package_txn": {
 						PublicKey: publicKeyHex,
-						Params: []codec.AptosFunctionParam{
+						Params: []chainreader.AptosFunctionParam{
 							{
 								Name:     "PackageMetadata",
 								Type:     "vector<u8>",
@@ -107,7 +107,7 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 					"counterIncrement": {
 						Name:      "increment",
 						PublicKey: publicKeyHex,
-						Params: []codec.AptosFunctionParam{
+						Params: []chainreader.AptosFunctionParam{
 							{
 								Name:         "ResourceAddress",
 								Type:         "address",
@@ -118,7 +118,7 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 					"counterIncrementMult": {
 						Name:      "increment_mult",
 						PublicKey: publicKeyHex,
-						Params: []codec.AptosFunctionParam{
+						Params: []chainreader.AptosFunctionParam{
 							{
 								Name:         "ResourceAddress",
 								Type:         "address",
