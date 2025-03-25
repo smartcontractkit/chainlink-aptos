@@ -8,23 +8,30 @@ on:
   pull_request:
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      found: ${{ steps.c.outputs.found }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/changes
+        id: c
+        with:
+          folder: aptos
+
   test:
     name: Integration Tests
     runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.found == 'true'
     steps:
     - name: Check out code
       uses: actions/checkout@v4
 
-    - name: Extract Go version
-      uses: ./.github/actions/check-go-version
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
+    - name: Install Nix
+      uses: cachix/install-nix-action@8887e596b4ee1134dae06b98d573bd674693f47c # v26
       with:
-        go-version: ${{ env.go_version }}
-
-    - name: Install Aptos CLI
-      uses: aptos-labs/actions/install-aptos-cli@ce57287eb852b9819c1d74fecc3be187677559fd # v0.1
+        nix_path: nixpkgs=channel:nixos-unstable
 
     - name: Run tests
-      run: cd relayer && go test -v -count=1 -p=1 -tags=integration ./...
+      run: cd relayer && nix develop -c go test -v -count=1 -p=1 -tags=integration ./...

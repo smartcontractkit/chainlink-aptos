@@ -2,8 +2,20 @@ name: Aptos - Lint Move formatting
 # This workflow checks that all move packages are correctly formatting using movefmt
 on: [pull_request]
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      found: ${{ steps.c.outputs.found }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/changes
+        id: c
+        with:
+          folder: aptos
   movefmt:
     runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.found == 'true'
     steps:
       - uses: actions/checkout@v4
       - name: Install Aptos CLI
