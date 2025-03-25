@@ -12,7 +12,7 @@ require (
 	github.com/jpillora/backoff v1.0.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/pelletier/go-toml/v2 v2.2.0
-	github.com/smartcontractkit/chainlink-common v0.3.1-0.20241210195010-36d99fa35f9f
+	github.com/smartcontractkit/chainlink-common v0.5.1-0.20250314131019-e227d4e2dc2f
 	github.com/stretchr/testify v1.10.0
 	go.opentelemetry.io/otel v1.30.0
 	go.opentelemetry.io/otel/metric v1.30.0
