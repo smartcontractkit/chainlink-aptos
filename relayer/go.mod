@@ -5,7 +5,7 @@ go 1.23.0
 toolchain go1.23.4
 
 require (
-	github.com/aptos-labs/aptos-go-sdk v1.5.1-0.20250303230301-affcbec1c549
+	github.com/aptos-labs/aptos-go-sdk v1.5.1-0.20250322153135-0c35be181ce8
 	github.com/ethereum/go-ethereum v1.14.5
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-plugin v1.6.2
@@ -21,8 +21,6 @@ require (
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0
 	google.golang.org/protobuf v1.34.2
 )
-
-require github.com/stretchr/objx v0.5.2 // indirect
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect

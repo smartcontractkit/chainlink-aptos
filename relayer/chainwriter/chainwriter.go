@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
@@ -13,25 +14,24 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/fees"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
 
 type aptosChainWriter struct {
-	logger logger.Logger
-	txm    *txm.AptosTxm
-	fe     *fees.FeeEstimator
-	config ChainWriterConfig
+	logger    logger.Logger
+	txm       *txm.AptosTxm
+	feeClient aptos.AptosRpcClient
+	config    ChainWriterConfig
 
 	starter utils.StartStopOnce
 	stop    chan struct{}
 }
 
-func NewChainWriter(lgr logger.Logger, fe *fees.FeeEstimator, txm *txm.AptosTxm, config ChainWriterConfig) commontypes.ChainWriter {
+func NewChainWriter(lgr logger.Logger, feeClient aptos.AptosRpcClient, txm *txm.AptosTxm, config ChainWriterConfig) commontypes.ChainWriter {
 	return &aptosChainWriter{
-		logger: logger.Named(lgr, "AptosChainWriter"),
-		txm:    txm,
-		fe:     fe,
+		logger:    logger.Named(lgr, "AptosChainWriter"),
+		txm:       txm,
+		feeClient: feeClient,
 
 		// TODO: validate config
 		config: config,
@@ -132,23 +132,25 @@ func (a *aptosChainWriter) GetTransactionStatus(ctx context.Context, transaction
 }
 
 func (a *aptosChainWriter) GetFeeComponents(ctx context.Context) (*commontypes.ChainFeeComponents, error) {
-	if a.fe == nil {
-		return nil, errors.New("fee estimator not available")
+	if a.feeClient == nil {
+		return nil, errors.New("fee estimation not available")
 	}
 
-	estimation, err := a.fe.EstimateGasPrice()
+	estimation, err := a.feeClient.EstimateGasPrice()
 	if err != nil {
 		return nil, fmt.Errorf("failed to estimate gas price: %+w", err)
 	}
 
 	var fee uint64
 	switch a.config.FeeStrategy {
-	case fees.Deprioritized:
+	case DeprioritizedFeeStrategy:
 		fee = estimation.DeprioritizedGasEstimate
-	case fees.Prioritized:
+	case PrioritizedFeeStrategy:
 		fee = estimation.PrioritizedGasEstimate
-	default:
+	case DefaultFeeStrategy:
 		fee = estimation.GasEstimate
+	default:
+		return nil, fmt.Errorf("invalid fee strategy: %d", a.config.FeeStrategy)
 	}
 
 	return &commontypes.ChainFeeComponents{

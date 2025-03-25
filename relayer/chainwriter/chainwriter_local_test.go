@@ -20,9 +20,8 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 
-	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/fees"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
@@ -65,8 +64,8 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 	client, err := aptos.NewNodeClient(rpcURL, 0)
 	require.NoError(t, err)
 
-	rlClient := rlclient.NewRateLimitedClient(client, 100, 30*time.Second)
-	getClient := func() (rlclient.RateLimitedClient, error) { return rlClient, nil }
+	rlClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
+	getClient := func() (aptos.AptosRpcClient, error) { return rlClient, nil }
 
 	txmConfig := txm.DefaultConfigSet
 
@@ -142,8 +141,7 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 		},
 	}
 
-	fe := fees.NewFeeEstimator(rlClient)
-	chainWriter := NewChainWriter(logger, fe, txmgr, config)
+	chainWriter := NewChainWriter(logger, rlClient, txmgr, config)
 
 	compilationResult := testutils.CompileTestModule(t, accountAddress)
 
