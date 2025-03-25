@@ -522,7 +522,23 @@ module ccip::fee_quoter {
         );
     }
 
-    public(friend) fun update_prices(
+    public entry fun update_prices(
+        caller: &signer,
+        source_tokens: vector<address>,
+        source_usd_per_token: vector<u256>,
+        gas_dest_chain_selectors: vector<u64>,
+        gas_usd_per_unit_gas: vector<u256>
+    ) acquires FeeQuoterState {
+        auth::assert_only_owner(signer::address_of(caller));
+        update_prices_internal(
+            source_tokens,
+            source_usd_per_token,
+            gas_dest_chain_selectors,
+            gas_usd_per_unit_gas
+        );
+    }
+
+    public(friend) fun update_prices_internal(
         source_tokens: vector<address>,
         source_usd_per_token: vector<u256>,
         gas_dest_chain_selectors: vector<u64>,
@@ -700,9 +716,9 @@ module ccip::fee_quoter {
                 dest_chain_config.dest_gas_per_payload_byte_base as u256
             ) * (dest_chain_config.dest_gas_per_payload_byte_threshold as u256)
                 + (
-                    call_data_length
-                        - (dest_chain_config.dest_gas_per_payload_byte_threshold as u256)
-                ) * (dest_chain_config.dest_gas_per_payload_byte_high as u256);
+                call_data_length
+                    - (dest_chain_config.dest_gas_per_payload_byte_threshold as u256)
+            ) * (dest_chain_config.dest_gas_per_payload_byte_high as u256);
         };
 
         let total_dest_chain_gas =
@@ -955,7 +971,7 @@ module ccip::fee_quoter {
                 if (!transfer_fee_config.is_enabled) {
                     token_transfer_fee_wei = token_transfer_fee_wei
                         + ((dest_chain_config.default_token_fee_usd_cents as u256)
-                            * VAL_1E16);
+                        * VAL_1E16);
                     token_transfer_gas = token_transfer_gas
                         + dest_chain_config.default_token_dest_gas_overhead;
                     token_transfer_bytes_overhead = token_transfer_bytes_overhead
@@ -1544,6 +1560,30 @@ module ccip::fee_quoter {
                 gas_multiplier_wei_per_eth,
                 gas_price_staleness_threshold,
                 network_fee_usd_cents
+            )
+        } else if (function_bytes == b"update_prices") {
+            let source_tokens =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
+                );
+            let source_usd_per_token =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u256(stream)
+                );
+            let gas_dest_chain_selectors =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let gas_usd_per_unit_gas =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u256(stream)
+                );
+            update_prices(
+                &caller,
+                source_tokens,
+                source_usd_per_token,
+                gas_dest_chain_selectors,
+                gas_usd_per_unit_gas
             )
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)

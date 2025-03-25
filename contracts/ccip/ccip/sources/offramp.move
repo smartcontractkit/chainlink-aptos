@@ -547,7 +547,7 @@ module ccip::offramp {
                     }
                 );
 
-                fee_quoter::update_prices(
+                fee_quoter::update_prices_internal(
                     source_tokens,
                     source_usd_per_token,
                     gas_dest_chain_selectors,

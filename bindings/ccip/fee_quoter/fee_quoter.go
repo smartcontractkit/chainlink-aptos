@@ -37,11 +37,12 @@ type FeeQuoterInterface interface {
 	Initialize(opts *bind.TransactOpts, maxFeeJuelsPerMsg uint64, linkToken aptos.AccountAddress, tokenPriceStalenessThreshold uint64, feeTokens []aptos.AccountAddress) (*api.PendingTransaction, error)
 	ApplyFeeTokenUpdates(opts *bind.TransactOpts, feeTokensToRemove []aptos.AccountAddress, feeTokensToAdd []aptos.AccountAddress) (*api.PendingTransaction, error)
 	ApplyTokenTransferFeeConfigUpdates(opts *bind.TransactOpts, destChainSelector uint64, addTokens []aptos.AccountAddress, addMinFeeUsdCents []uint32, addMaxFeeUsdCents []uint32, addDeciBps []uint16, addDestGasOverhead []uint32, addDestBytesOverhead []uint32, addIsEnabled []bool, removeTokens []aptos.AccountAddress) (*api.PendingTransaction, error)
+	UpdatePrices(opts *bind.TransactOpts, sourceTokens []aptos.AccountAddress, sourceUsdPerToken []*big.Int, gasDestChainSelectors []uint64, gasUsdPerUnitGas []*big.Int) (*api.PendingTransaction, error)
 	ApplyPremiumMultiplierWeiPerEthUpdates(opts *bind.TransactOpts, tokens []aptos.AccountAddress, premiumMultiplierWeiPerEth []uint64) (*api.PendingTransaction, error)
 	ApplyDestChainConfigUpdates(opts *bind.TransactOpts, destChainSelector uint64, isEnabled bool, maxNumberOfTokensPerMsg uint16, maxDataBytes uint32, maxPerMsgGasLimit uint32, destGasOverhead uint32, destGasPerPayloadByteBase byte, destGasPerPayloadByteHigh byte, destGasPerPayloadByteThreshold uint16, destDataAvailabilityOverheadGas uint32, destGasPerDataAvailabilityByte uint16, destDataAvailabilityMultiplierBps uint16, chainFamilySelector []byte, enforceOutOfOrder bool, defaultTokenFeeUsdCents uint16, defaultTokenDestGasOverhead uint32, defaultTxGasLimit uint32, gasMultiplierWeiPerEth uint64, gasPriceStalenessThreshold uint32, networkFeeUsdCents uint32) (*api.PendingTransaction, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"fee_quoter","name":"apply_dest_chain_config_updates","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"is_enabled","type":"bool"},{"name":"max_number_of_tokens_per_msg","type":"u16"},{"name":"max_data_bytes","type":"u32"},{"name":"max_per_msg_gas_limit","type":"u32"},{"name":"dest_gas_overhead","type":"u32"},{"name":"dest_gas_per_payload_byte_base","type":"u8"},{"name":"dest_gas_per_payload_byte_high","type":"u8"},{"name":"dest_gas_per_payload_byte_threshold","type":"u16"},{"name":"dest_data_availability_overhead_gas","type":"u32"},{"name":"dest_gas_per_data_availability_byte","type":"u16"},{"name":"dest_data_availability_multiplier_bps","type":"u16"},{"name":"chain_family_selector","type":"vector\u003cu8\u003e"},{"name":"enforce_out_of_order","type":"bool"},{"name":"default_token_fee_usd_cents","type":"u16"},{"name":"default_token_dest_gas_overhead","type":"u32"},{"name":"default_tx_gas_limit","type":"u32"},{"name":"gas_multiplier_wei_per_eth","type":"u64"},{"name":"gas_price_staleness_threshold","type":"u32"},{"name":"network_fee_usd_cents","type":"u32"}]},{"package":"ccip","module":"fee_quoter","name":"apply_fee_token_updates","parameters":[{"name":"fee_tokens_to_remove","type":"vector\u003caddress\u003e"},{"name":"fee_tokens_to_add","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"apply_premium_multiplier_wei_per_eth_updates","parameters":[{"name":"tokens","type":"vector\u003caddress\u003e"},{"name":"premium_multiplier_wei_per_eth","type":"vector\u003cu64\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"apply_token_transfer_fee_config_updates","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"add_tokens","type":"vector\u003caddress\u003e"},{"name":"add_min_fee_usd_cents","type":"vector\u003cu32\u003e"},{"name":"add_max_fee_usd_cents","type":"vector\u003cu32\u003e"},{"name":"add_deci_bps","type":"vector\u003cu16\u003e"},{"name":"add_dest_gas_overhead","type":"vector\u003cu32\u003e"},{"name":"add_dest_bytes_overhead","type":"vector\u003cu32\u003e"},{"name":"add_is_enabled","type":"vector\u003cbool\u003e"},{"name":"remove_tokens","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"initialize","parameters":[{"name":"max_fee_juels_per_msg","type":"u64"},{"name":"link_token","type":"address"},{"name":"token_price_staleness_threshold","type":"u64"},{"name":"fee_tokens","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"process_message_args","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"fee_token","type":"address"},{"name":"fee_token_amount","type":"u64"},{"name":"extra_args","type":"vector\u003cu8\u003e"},{"name":"dest_token_addresses","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"dest_pool_datas","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"update_prices","parameters":[{"name":"source_tokens","type":"vector\u003caddress\u003e"},{"name":"source_usd_per_token","type":"vector\u003cu256\u003e"},{"name":"gas_dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"gas_usd_per_unit_gas","type":"vector\u003cu256\u003e"}]}]`
+const FunctionInfo = `[{"package":"ccip","module":"fee_quoter","name":"apply_dest_chain_config_updates","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"is_enabled","type":"bool"},{"name":"max_number_of_tokens_per_msg","type":"u16"},{"name":"max_data_bytes","type":"u32"},{"name":"max_per_msg_gas_limit","type":"u32"},{"name":"dest_gas_overhead","type":"u32"},{"name":"dest_gas_per_payload_byte_base","type":"u8"},{"name":"dest_gas_per_payload_byte_high","type":"u8"},{"name":"dest_gas_per_payload_byte_threshold","type":"u16"},{"name":"dest_data_availability_overhead_gas","type":"u32"},{"name":"dest_gas_per_data_availability_byte","type":"u16"},{"name":"dest_data_availability_multiplier_bps","type":"u16"},{"name":"chain_family_selector","type":"vector\u003cu8\u003e"},{"name":"enforce_out_of_order","type":"bool"},{"name":"default_token_fee_usd_cents","type":"u16"},{"name":"default_token_dest_gas_overhead","type":"u32"},{"name":"default_tx_gas_limit","type":"u32"},{"name":"gas_multiplier_wei_per_eth","type":"u64"},{"name":"gas_price_staleness_threshold","type":"u32"},{"name":"network_fee_usd_cents","type":"u32"}]},{"package":"ccip","module":"fee_quoter","name":"apply_fee_token_updates","parameters":[{"name":"fee_tokens_to_remove","type":"vector\u003caddress\u003e"},{"name":"fee_tokens_to_add","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"apply_premium_multiplier_wei_per_eth_updates","parameters":[{"name":"tokens","type":"vector\u003caddress\u003e"},{"name":"premium_multiplier_wei_per_eth","type":"vector\u003cu64\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"apply_token_transfer_fee_config_updates","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"add_tokens","type":"vector\u003caddress\u003e"},{"name":"add_min_fee_usd_cents","type":"vector\u003cu32\u003e"},{"name":"add_max_fee_usd_cents","type":"vector\u003cu32\u003e"},{"name":"add_deci_bps","type":"vector\u003cu16\u003e"},{"name":"add_dest_gas_overhead","type":"vector\u003cu32\u003e"},{"name":"add_dest_bytes_overhead","type":"vector\u003cu32\u003e"},{"name":"add_is_enabled","type":"vector\u003cbool\u003e"},{"name":"remove_tokens","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"initialize","parameters":[{"name":"max_fee_juels_per_msg","type":"u64"},{"name":"link_token","type":"address"},{"name":"token_price_staleness_threshold","type":"u64"},{"name":"fee_tokens","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"process_message_args","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"fee_token","type":"address"},{"name":"fee_token_amount","type":"u64"},{"name":"extra_args","type":"vector\u003cu8\u003e"},{"name":"dest_token_addresses","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"dest_pool_datas","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"update_prices","parameters":[{"name":"source_tokens","type":"vector\u003caddress\u003e"},{"name":"source_usd_per_token","type":"vector\u003cu256\u003e"},{"name":"gas_dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"gas_usd_per_unit_gas","type":"vector\u003cu256\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"update_prices_internal","parameters":[{"name":"source_tokens","type":"vector\u003caddress\u003e"},{"name":"source_usd_per_token","type":"vector\u003cu256\u003e"},{"name":"gas_dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"gas_usd_per_unit_gas","type":"vector\u003cu256\u003e"}]}]`
 
 // Structs
 
@@ -551,6 +552,29 @@ func (c FeeQuoterTransactor) ApplyTokenTransferFeeConfigUpdates(opts *bind.Trans
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
+func (c FeeQuoterTransactor) EncodeUpdatePrices(sourceTokens []aptos.AccountAddress, sourceUsdPerToken []*big.Int, gasDestChainSelectors []uint64, gasUsdPerUnitGas []*big.Int) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("update_prices", nil, []string{
+		"vector<address>",
+		"vector<u256>",
+		"vector<u64>",
+		"vector<u256>",
+	}, []any{
+		sourceTokens,
+		sourceUsdPerToken,
+		gasDestChainSelectors,
+		gasUsdPerUnitGas,
+	})
+}
+
+func (c FeeQuoterTransactor) UpdatePrices(opts *bind.TransactOpts, sourceTokens []aptos.AccountAddress, sourceUsdPerToken []*big.Int, gasDestChainSelectors []uint64, gasUsdPerUnitGas []*big.Int) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeUpdatePrices(sourceTokens, sourceUsdPerToken, gasDestChainSelectors, gasUsdPerUnitGas)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
 func (c FeeQuoterTransactor) EncodeApplyPremiumMultiplierWeiPerEthUpdates(tokens []aptos.AccountAddress, premiumMultiplierWeiPerEth []uint64) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("apply_premium_multiplier_wei_per_eth_updates", nil, []string{
 		"vector<address>",
@@ -627,8 +651,8 @@ func (c FeeQuoterTransactor) ApplyDestChainConfigUpdates(opts *bind.TransactOpts
 
 // Other Functions
 
-func (c FeeQuoterCaller) EncodeUpdatePrices(sourceTokens []aptos.AccountAddress, sourceUsdPerToken []*big.Int, gasDestChainSelectors []uint64, gasUsdPerUnitGas []*big.Int) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("update_prices", nil, []string{
+func (c FeeQuoterCaller) EncodeUpdatePricesInternal(sourceTokens []aptos.AccountAddress, sourceUsdPerToken []*big.Int, gasDestChainSelectors []uint64, gasUsdPerUnitGas []*big.Int) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("update_prices_internal", nil, []string{
 		"vector<address>",
 		"vector<u256>",
 		"vector<u64>",
