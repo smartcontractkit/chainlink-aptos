@@ -8,17 +8,27 @@ on:
   pull_request:
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      found: ${{ steps.c.outputs.found }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/changes
+        id: c
+        with:
+          folder: aptos
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.found == 'true'
     steps:
     - name: Check out code
       uses: actions/checkout@v4
 
     - name: Install Aptos CLI
       uses: aptos-labs/actions/install-aptos-cli@ce57287eb852b9819c1d74fecc3be187677559fd # v0.1
-      with:
-        CLI_VERSION: 7.0.0
 
     - name: Run tests
       run: contracts/scripts/test.sh
