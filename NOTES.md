@@ -78,7 +78,7 @@ For monitoring we use Beholder API and infrastructure.
 
 Run local Beholder env:
 
-1. Check out the Atlas repo: https://github.com/smartcontractkit/atlas
+1. Check out the Atlas repo
 2. `cd $ATLAS_PATH/beholder`
 3. `make start && docker stop beholderdemo` - to start the stack and stop polluting  the Kafka topic with demo messages
 4. `make consume-topic` - to check for new messages on the topic (requires redpanda rpk CLI)

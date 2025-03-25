@@ -27,7 +27,9 @@ module ccip_dummy_receiver::dummy_receiver {
 
     public fun ccip_receive<T: key>(_metadata: Object<T>): Option<u128> {
         let message =
-            receiver_registry::get_receiver_input(@ccip_dummy_receiver, DummyReceiverProof {});
+            receiver_registry::get_receiver_input(
+                @ccip_dummy_receiver, DummyReceiverProof {}
+            );
         let data = client::get_data(&message);
 
         event::emit(ReceivedMessage { data });

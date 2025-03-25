@@ -8,3 +8,6 @@ AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "
 
 [addresses]
 large_packages = "_"
+
+[dev-addresses]
+large_packages = "0x9000"

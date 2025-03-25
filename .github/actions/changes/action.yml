@@ -1,0 +1,27 @@
+name: 'Detect Subfolder Changes'
+description: 'Detects changes in specified integration folder'
+
+inputs:
+  folder:
+    description: "the path to check"
+
+outputs:
+  found:
+    description: 'Whether or not changes were detected'
+    value: ${{ steps.changes.outputs.src == 'true' || steps.changes.outputs.github == 'true' }} 
+      # this really only needs to run on .github changes that affect the specific subfolder - but it is hard to maintain
+      # an exact list of file paths, eg if we use actions in .github/actions, each file would have to be added
+      # to this list. selective globbing (ie. .github/**/chain_name-*) is also not guaranteed to work if there
+      # are generic actions that are used across the repo (eg. sonarqube). so, run on any CI change.
+runs:
+  using: 'composite'
+  steps:
+    - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+      id: changes
+      with:
+        list-files: 'csv'
+        filters: |
+          src:
+            - '${{ inputs.folder }}/**'
+          github:
+            - '.github/**'
