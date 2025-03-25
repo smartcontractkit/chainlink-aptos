@@ -13,20 +13,7 @@ env:
   CL_ECR: ${{ secrets.QA_AWS_ACCOUNT_NUMBER }}.dkr.ecr.${{ secrets.QA_AWS_REGION }}.amazonaws.com/chainlink
 
 jobs:
-  detect-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      found: ${{ steps.c.outputs.found }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/changes
-        id: c
-        with:
-          folder: aptos
-
   run-tests:
-    needs: [detect-changes]
-    if: needs.detect-changes.outputs.found == 'true'
     environment: integration
     permissions:
       id-token: write
