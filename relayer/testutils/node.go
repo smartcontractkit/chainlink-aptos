@@ -40,7 +40,7 @@ func StartAptosNode() error {
 		return fmt.Errorf("failed to find Git root: %v", err)
 	}
 
-	scriptPath := filepath.Join(gitRoot, "aptos/scripts/devnet.sh")
+	scriptPath := filepath.Join(gitRoot, "scripts/devnet.sh")
 	cmd := exec.Command(scriptPath)
 
 	output, err := cmd.CombinedOutput()

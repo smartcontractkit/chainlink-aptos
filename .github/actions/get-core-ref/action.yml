@@ -1,0 +1,14 @@
+name: 'Get core_ref from PR'
+description: 'Extracts core_ref from the pull request body and sets it as an environment variable. We use the core_ref to determine the image tag pull.'
+outputs:
+  core_ref:
+    description: 'The extracted core_ref or default value.'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Get core ref
+      shell: bash
+      env: 
+        PR_BODY: ${{ github.event.pull_request.body }}
+      run: ./.github/actions/get-core-ref/get_core_ref.sh

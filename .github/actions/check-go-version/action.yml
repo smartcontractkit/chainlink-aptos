@@ -1,0 +1,22 @@
+name: 'Extract Go Version'
+description: 'Extracts the Go version from the .tool-versions file and sets it as an environment variable.'
+inputs:
+  working-directory:
+    description: 'The directory where the .tool-versions file is located.'
+    required: true
+    default: '.'
+
+outputs:
+  go_version:
+    description: 'The extracted Go version.'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Extract go version
+      shell: bash
+      run: |
+          set -euo pipefail
+          go_version=$(grep -E '^golang [0-9]+\.[0-9]+\.[0-9]+' ${{ inputs.working-directory }}/.tool-versions | awk '{print $2}')
+          echo "go_version=${go_version}" >> $GITHUB_ENV
+          echo "::set-output name=go_version::${go_version}"
