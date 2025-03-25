@@ -51,13 +51,9 @@ func Compile(ccipAddress, mcmsAddress aptos.AccountAddress) (compile.CompiledPac
 }
 
 func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIPRouter {
-	router := bind.NewBoundContract(address, "router", client)
 	return CCIPRouterContract{
 		address: address,
-		router: module_router.RouterContract{
-			RouterCaller:     module_router.RouterCaller{BoundContract: router},
-			RouterTransactor: module_router.RouterTransactor{BoundContract: router},
-		},
+		router:  module_router.NewRouter(address, client),
 	}
 }
 

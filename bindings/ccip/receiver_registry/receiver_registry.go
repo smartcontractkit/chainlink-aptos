@@ -23,9 +23,24 @@ var (
 
 type ReceiverRegistry interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
+
+	EncodeCall() ReceiverRegistryEncoder
+}
+
+type ReceiverRegistryEncoder interface {
+	TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	FinishReceive(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
 const FunctionInfo = `[{"package":"ccip","module":"receiver_registry","name":"finish_receive","parameters":[{"name":"receiver_address","type":"address"}]}]`
+
+func NewReceiverRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) ReceiverRegistry {
+	contract := bind.NewBoundContract(address, "ccip", "receiver_registry", client)
+	return ReceiverRegistryContract{
+		BoundContract:           contract,
+		receiverRegistryEncoder: receiverRegistryEncoder{BoundContract: contract},
+	}
+}
 
 // Structs
 
@@ -41,22 +56,20 @@ type ReceiverRegistered struct {
 }
 
 type ReceiverRegistryContract struct {
-	ReceiverRegistryCaller
-	ReceiverRegistryTransactor
+	*bind.BoundContract
+	receiverRegistryEncoder
+}
+
+var _ ReceiverRegistry = ReceiverRegistryContract{}
+
+func (c ReceiverRegistryContract) EncodeCall() ReceiverRegistryEncoder {
+	return c.receiverRegistryEncoder
 }
 
 // View Functions
 
-type ReceiverRegistryCaller struct {
-	*bind.BoundContract
-}
-
-func (c ReceiverRegistryCaller) EncodeTypeAndVersion() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("type_and_version", nil, []string{}, []any{})
-}
-
-func (c ReceiverRegistryCaller) TypeAndVersion(opts *bind.CallOpts) (string, error) {
-	module, function, typeTags, args, err := c.EncodeTypeAndVersion()
+func (c ReceiverRegistryContract) TypeAndVersion(opts *bind.CallOpts) (string, error) {
+	module, function, typeTags, args, err := c.receiverRegistryEncoder.TypeAndVersion()
 	if err != nil {
 		return *new(string), err
 	}
@@ -78,13 +91,16 @@ func (c ReceiverRegistryCaller) TypeAndVersion(opts *bind.CallOpts) (string, err
 
 // Entry Functions
 
-type ReceiverRegistryTransactor struct {
+// Encoder
+type receiverRegistryEncoder struct {
 	*bind.BoundContract
 }
 
-// Other Functions
+func (c receiverRegistryEncoder) TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("type_and_version", nil, []string{}, []any{})
+}
 
-func (c ReceiverRegistryCaller) EncodeFinishReceive(receiverAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c receiverRegistryEncoder) FinishReceive(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("finish_receive", nil, []string{
 		"address",
 	}, []any{

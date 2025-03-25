@@ -73,32 +73,13 @@ func Bind(
 	address aptos.AccountAddress,
 	client aptos.AptosRpcClient,
 ) MCMS {
-	mcmsContract := bind.NewBoundContract(address, "mcms", client)
-	mcmsAccountContract := bind.NewBoundContract(address, "mcms_account", client)
-	mcmsDeployerContract := bind.NewBoundContract(address, "mcms_deployer", client)
-	mcmsExecutorContract := bind.NewBoundContract(address, "mcms_executor", client)
-	mcmsRegistryContract := bind.NewBoundContract(address, "mcms_registry", client)
 	return MCMSContract{
-		address: address,
-		mcms: module_mcms.MCMSContract{
-			MCMSCaller:     module_mcms.MCMSCaller{BoundContract: mcmsContract},
-			MCMSTransactor: module_mcms.MCMSTransactor{BoundContract: mcmsContract},
-		},
-		mcmsAccount: module_mcms_account.MCMSAccountContract{
-			MCMSAccountCaller:     module_mcms_account.MCMSAccountCaller{BoundContract: mcmsAccountContract},
-			MCMSAccountTransactor: module_mcms_account.MCMSAccountTransactor{BoundContract: mcmsAccountContract},
-		},
-		mcmsDeployer: module_mcms_deployer.MCMSDeployerContract{
-			MCMSDeployerTransactor: module_mcms_deployer.MCMSDeployerTransactor{BoundContract: mcmsDeployerContract},
-		},
-		mcmsExecutor: module_mcms_executor.MCMSExecutorContract{
-			MCMSExecutorCaller:     module_mcms_executor.MCMSExecutorCaller{BoundContract: mcmsExecutorContract},
-			MCMSExecutorTransactor: module_mcms_executor.MCMSExecutorTransactor{BoundContract: mcmsExecutorContract},
-		},
-		mcmsRegistry: module_mcms_registry.MCMSRegistryContract{
-			MCMSRegistryCaller:     module_mcms_registry.MCMSRegistryCaller{BoundContract: mcmsRegistryContract},
-			MCMSRegistryTransactor: module_mcms_registry.MCMSRegistryTransactor{BoundContract: mcmsRegistryContract},
-		},
+		address:      address,
+		mcms:         module_mcms.NewMCMS(address, client),
+		mcmsAccount:  module_mcms_account.NewMCMSAccount(address, client),
+		mcmsDeployer: module_mcms_deployer.NewMCMSDeployer(address, client),
+		mcmsExecutor: module_mcms_executor.NewMCMSExecutor(address, client),
+		mcmsRegistry: module_mcms_registry.NewMCMSRegistry(address, client),
 	}
 }
 

@@ -28,9 +28,28 @@ type Auth interface {
 	AcceptOwnership(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 	ExecuteOwnershipTransfer(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
 	AssertIsRouter(opts *bind.TransactOpts, caller aptos.AccountAddress) (*api.PendingTransaction, error)
+
+	EncodeCall() AuthEncoder
+}
+
+type AuthEncoder interface {
+	Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TransferOwnership(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	AssertIsRouter(caller aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	AssertOnlyOwner(caller aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
 const FunctionInfo = `[{"package":"ccip","module":"auth","name":"accept_ownership","parameters":null},{"package":"ccip","module":"auth","name":"assert_is_router","parameters":[{"name":"caller","type":"address"}]},{"package":"ccip","module":"auth","name":"assert_only_owner","parameters":[{"name":"caller","type":"address"}]},{"package":"ccip","module":"auth","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"ccip","module":"auth","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
+
+func NewAuth(address aptos.AccountAddress, client aptos.AptosRpcClient) Auth {
+	contract := bind.NewBoundContract(address, "ccip", "auth", client)
+	return AuthContract{
+		BoundContract: contract,
+		authEncoder:   authEncoder{BoundContract: contract},
+	}
+}
 
 // Structs
 
@@ -42,22 +61,20 @@ type PendingRouterSignerCapability struct {
 }
 
 type AuthContract struct {
-	AuthCaller
-	AuthTransactor
+	*bind.BoundContract
+	authEncoder
+}
+
+var _ Auth = AuthContract{}
+
+func (c AuthContract) EncodeCall() AuthEncoder {
+	return c.authEncoder
 }
 
 // View Functions
 
-type AuthCaller struct {
-	*bind.BoundContract
-}
-
-func (c AuthCaller) EncodeOwner() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("owner", nil, []string{}, []any{})
-}
-
-func (c AuthCaller) Owner(opts *bind.CallOpts) (aptos.AccountAddress, error) {
-	module, function, typeTags, args, err := c.EncodeOwner()
+func (c AuthContract) Owner(opts *bind.CallOpts) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.authEncoder.Owner()
 	if err != nil {
 		return *new(aptos.AccountAddress), err
 	}
@@ -79,11 +96,52 @@ func (c AuthCaller) Owner(opts *bind.CallOpts) (aptos.AccountAddress, error) {
 
 // Entry Functions
 
-type AuthTransactor struct {
+func (c AuthContract) TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.authEncoder.TransferOwnership(to)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c AuthContract) AcceptOwnership(opts *bind.TransactOpts) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.authEncoder.AcceptOwnership()
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c AuthContract) ExecuteOwnershipTransfer(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.authEncoder.ExecuteOwnershipTransfer(to)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c AuthContract) AssertIsRouter(opts *bind.TransactOpts, caller aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.authEncoder.AssertIsRouter(caller)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+// Encoder
+type authEncoder struct {
 	*bind.BoundContract
 }
 
-func (c AuthTransactor) EncodeTransferOwnership(to aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c authEncoder) Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("owner", nil, []string{}, []any{})
+}
+
+func (c authEncoder) TransferOwnership(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("transfer_ownership", nil, []string{
 		"address",
 	}, []any{
@@ -91,29 +149,11 @@ func (c AuthTransactor) EncodeTransferOwnership(to aptos.AccountAddress) (aptos.
 	})
 }
 
-func (c AuthTransactor) TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeTransferOwnership(to)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c AuthTransactor) EncodeAcceptOwnership() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c authEncoder) AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("accept_ownership", nil, []string{}, []any{})
 }
 
-func (c AuthTransactor) AcceptOwnership(opts *bind.TransactOpts) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeAcceptOwnership()
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c AuthTransactor) EncodeExecuteOwnershipTransfer(to aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c authEncoder) ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("execute_ownership_transfer", nil, []string{
 		"address",
 	}, []any{
@@ -121,16 +161,7 @@ func (c AuthTransactor) EncodeExecuteOwnershipTransfer(to aptos.AccountAddress) 
 	})
 }
 
-func (c AuthTransactor) ExecuteOwnershipTransfer(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeExecuteOwnershipTransfer(to)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c AuthTransactor) EncodeAssertIsRouter(caller aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c authEncoder) AssertIsRouter(caller aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("assert_is_router", nil, []string{
 		"address",
 	}, []any{
@@ -138,18 +169,7 @@ func (c AuthTransactor) EncodeAssertIsRouter(caller aptos.AccountAddress) (aptos
 	})
 }
 
-func (c AuthTransactor) AssertIsRouter(opts *bind.TransactOpts, caller aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeAssertIsRouter(caller)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-// Other Functions
-
-func (c AuthCaller) EncodeAssertOnlyOwner(caller aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c authEncoder) AssertOnlyOwner(caller aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("assert_only_owner", nil, []string{
 		"address",
 	}, []any{

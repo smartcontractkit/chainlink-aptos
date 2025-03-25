@@ -22,9 +22,23 @@ var (
 )
 
 type MCMSUser interface {
+	EncodeCall() MCMSUserEncoder
+}
+
+type MCMSUserEncoder interface {
+	FunctionOne(arg1 string, arg2 []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	FunctionTwo(arg1 aptos.AccountAddress, arg2 *big.Int) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
 const FunctionInfo = `[{"package":"mcms_test","module":"mcms_user","name":"function_one","parameters":[{"name":"arg1","type":"0x1::string::String"},{"name":"arg2","type":"vector\u003cu8\u003e"}]},{"package":"mcms_test","module":"mcms_user","name":"function_two","parameters":[{"name":"arg1","type":"address"},{"name":"arg2","type":"u128"}]}]`
+
+func NewMCMSUser(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMSUser {
+	contract := bind.NewBoundContract(address, "mcms_test", "mcms_user", client)
+	return MCMSUserContract{
+		BoundContract:   contract,
+		mcmsUserEncoder: mcmsUserEncoder{BoundContract: contract},
+	}
+}
 
 // Structs
 
@@ -40,25 +54,26 @@ type SampleMcmsCallback struct {
 }
 
 type MCMSUserContract struct {
-	MCMSUserCaller
-	MCMSUserTransactor
+	*bind.BoundContract
+	mcmsUserEncoder
+}
+
+var _ MCMSUser = MCMSUserContract{}
+
+func (c MCMSUserContract) EncodeCall() MCMSUserEncoder {
+	return c.mcmsUserEncoder
 }
 
 // View Functions
 
-type MCMSUserCaller struct {
-	*bind.BoundContract
-}
-
 // Entry Functions
 
-type MCMSUserTransactor struct {
+// Encoder
+type mcmsUserEncoder struct {
 	*bind.BoundContract
 }
 
-// Other Functions
-
-func (c MCMSUserCaller) EncodeFunctionOne(arg1 string, arg2 []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsUserEncoder) FunctionOne(arg1 string, arg2 []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("function_one", nil, []string{
 		"0x1::string::String",
 		"vector<u8>",
@@ -68,7 +83,7 @@ func (c MCMSUserCaller) EncodeFunctionOne(arg1 string, arg2 []byte) (aptos.Modul
 	})
 }
 
-func (c MCMSUserCaller) EncodeFunctionTwo(arg1 aptos.AccountAddress, arg2 *big.Int) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsUserEncoder) FunctionTwo(arg1 aptos.AccountAddress, arg2 *big.Int) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("function_two", nil, []string{
 		"address",
 		"u128",

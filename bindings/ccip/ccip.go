@@ -101,43 +101,15 @@ func Compile(address aptos.AccountAddress, mcmsAddress aptos.AccountAddress, reg
 }
 
 func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIP {
-	authContract := bind.NewBoundContract(address, "auth", client)
-	feeQuoterContract := bind.NewBoundContract(address, "fee_quoter", client)
-	offrampContract := bind.NewBoundContract(address, "offramp", client)
-	onrampContract := bind.NewBoundContract(address, "onramp", client)
-	receiverRegistryContract := bind.NewBoundContract(address, "receiver_registry", client)
-	rmnRemoteContract := bind.NewBoundContract(address, "rmn_remote", client)
-	tokenAdminRegistryContract := bind.NewBoundContract(address, "token_admin_registry", client)
 	return CCIPContract{
-		address: address,
-		auth: module_auth.AuthContract{
-			AuthCaller:     module_auth.AuthCaller{BoundContract: authContract},
-			AuthTransactor: module_auth.AuthTransactor{BoundContract: authContract},
-		},
-		feeQuoter: module_fee_quoter.FeeQuoterContract{
-			FeeQuoterCaller:     module_fee_quoter.FeeQuoterCaller{BoundContract: feeQuoterContract},
-			FeeQuoterTransactor: module_fee_quoter.FeeQuoterTransactor{BoundContract: feeQuoterContract},
-		},
-		offramp: module_offramp.OfframpContract{
-			OfframpCaller:     module_offramp.OfframpCaller{BoundContract: offrampContract},
-			OfframpTransactor: module_offramp.OfframpTransactor{BoundContract: offrampContract},
-		},
-		onramp: module_onramp.OnrampContract{
-			OnrampCaller:     module_onramp.OnrampCaller{BoundContract: onrampContract},
-			OnrampTransactor: module_onramp.OnrampTransactor{BoundContract: onrampContract},
-		},
-		receiverRegistry: module_receiver_registry.ReceiverRegistryContract{
-			ReceiverRegistryCaller:     module_receiver_registry.ReceiverRegistryCaller{BoundContract: receiverRegistryContract},
-			ReceiverRegistryTransactor: module_receiver_registry.ReceiverRegistryTransactor{BoundContract: receiverRegistryContract},
-		},
-		rmnRemote: module_rmn_remote.RMNRemoteContract{
-			RMNRemoteCaller:     module_rmn_remote.RMNRemoteCaller{BoundContract: rmnRemoteContract},
-			RMNRemoteTransactor: module_rmn_remote.RMNRemoteTransactor{BoundContract: rmnRemoteContract},
-		},
-		tokenAdminRegistry: module_token_admin_registry.TokenAdminRegistryContract{
-			TokenAdminRegistryCaller:     module_token_admin_registry.TokenAdminRegistryCaller{BoundContract: tokenAdminRegistryContract},
-			TokenAdminRegistryTransactor: module_token_admin_registry.TokenAdminRegistryTransactor{BoundContract: tokenAdminRegistryContract},
-		},
+		address:            address,
+		auth:               module_auth.NewAuth(address, client),
+		feeQuoter:          module_fee_quoter.NewFeeQuoter(address, client),
+		offramp:            module_offramp.NewOfframp(address, client),
+		onramp:             module_onramp.NewOnramp(address, client),
+		receiverRegistry:   module_receiver_registry.NewReceiverRegistry(address, client),
+		rmnRemote:          module_rmn_remote.NewRMNRemote(address, client),
+		tokenAdminRegistry: module_token_admin_registry.NewTokenAdminRegistry(address, client),
 	}
 }
 

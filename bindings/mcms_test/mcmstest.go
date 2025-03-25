@@ -44,13 +44,9 @@ func Compile(MCMSAddress aptos.AccountAddress) (compile.CompiledPackage, error) 
 }
 
 func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMSTest {
-	mcmsUser := bind.NewBoundContract(address, "mcms_user", client)
 	return MCMSTestContract{
-		address: address,
-		mcmsUser: module_mcms_user.MCMSUserContract{
-			MCMSUserCaller:     module_mcms_user.MCMSUserCaller{BoundContract: mcmsUser},
-			MCMSUserTransactor: module_mcms_user.MCMSUserTransactor{BoundContract: mcmsUser},
-		},
+		address:  address,
+		mcmsUser: module_mcms_user.NewMCMSUser(address, client),
 	}
 }
 

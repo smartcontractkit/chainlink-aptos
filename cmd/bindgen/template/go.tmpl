@@ -30,9 +30,31 @@ type {{toUpperCamel .Module}} interface {
   {{ range .EntryFuncs}}
     {{.Name}}(opts *bind.TransactOpts, {{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (*api.PendingTransaction, error)
   {{- end}}
+
+  EncodeCall() {{toUpperCamel .Module}}Encoder
+}
+
+type {{toUpperCamel .Module}}Encoder interface {
+  {{- range .ViewFuncs}}
+    {{.Name}}({{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+  {{- end}}
+  {{- range .EntryFuncs}}
+    {{.Name}}({{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+  {{- end}}
+  {{- range .OtherFuncs}}
+    {{.Name}}({{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+  {{- end}}
 }
 
 const FunctionInfo = `{{.FunctionInfo}}`
+
+func New{{toUpperCamel .Module}}(address aptos.AccountAddress, client aptos.AptosRpcClient) {{toUpperCamel .Module}} {
+  contract := bind.NewBoundContract(address, "{{.Package}}", "{{.Module}}", client)
+  return {{toUpperCamel .Module}}Contract {
+    BoundContract: contract,
+    {{toLowerCamel .Module}}Encoder: {{toLowerCamel .Module}}Encoder{BoundContract: contract},
+  }
+}
 
 // Structs
 
@@ -44,31 +66,21 @@ const FunctionInfo = `{{.FunctionInfo}}`
 {{end}}
 
 type {{toUpperCamel .Module}}Contract struct {
-  {{toUpperCamel .Module}}Caller
-  {{toUpperCamel .Module}}Transactor
+  *bind.BoundContract
+  {{toLowerCamel .Module}}Encoder
+}
+
+var _ {{toUpperCamel .Module}} = {{toUpperCamel .Module}}Contract{}
+
+func (c {{toUpperCamel .Module}}Contract) EncodeCall() {{toUpperCamel .Module}}Encoder {
+  return c.{{toLowerCamel .Module}}Encoder
 }
 
 // View Functions
 
-type {{toUpperCamel .Module}}Caller struct {
-  *bind.BoundContract
-}
-
 {{range .ViewFuncs}}
-  func (c {{toUpperCamel $.Module}}Caller) Encode{{.Name}}({{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-    return c.BoundContract.Encode("{{.MoveName}}", nil, []string{
-      {{- range .Params}}
-        "{{.Type.MoveType}}",
-      {{- end}}
-      }, []any{
-      {{- range .Params}}
-        {{.Name}},
-      {{- end}}
-      })
-  }
-
-  func (c {{toUpperCamel $.Module}}Caller) {{.Name}}(opts *bind.CallOpts, {{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) ({{range .Returns}}{{.GoType}},{{end}} error) {
-    module, function, typeTags, args, err := c.Encode{{.Name}}({{range .Params}}{{.Name}}, {{end}})
+  func (c {{toUpperCamel $.Module}}Contract) {{.Name}}(opts *bind.CallOpts, {{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) ({{range .Returns}}{{.GoType}},{{end}} error) {
+    module, function, typeTags, args, err := c.{{toLowerCamel $.Module}}Encoder.{{.Name}}({{range .Params}}{{.Name}}, {{end}})
     if err != nil {
       return {{range .Returns}}*new({{.GoType}}),{{end}} err
     }
@@ -93,25 +105,9 @@ type {{toUpperCamel .Module}}Caller struct {
 
 // Entry Functions
 
-type {{toUpperCamel .Module}}Transactor struct {
-  *bind.BoundContract
-}
-
 {{range .EntryFuncs}}
-  func (c {{toUpperCamel $.Module}}Transactor) Encode{{.Name}}({{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-    return c.BoundContract.Encode("{{.MoveName}}", nil, []string{
-      {{- range .Params}}
-        "{{.Type.MoveType}}",
-      {{- end}}
-      }, []any{
-      {{- range .Params}}
-        {{.Name}},
-      {{- end}}
-      })
-  }
-
-  func (c {{toUpperCamel $.Module}}Transactor) {{.Name}}(opts *bind.TransactOpts, {{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (*api.PendingTransaction, error) {
-    module, function, typeTags, args, err := c.Encode{{.Name}}({{range .Params}}{{.Name}}, {{end}})
+  func (c {{toUpperCamel $.Module}}Contract) {{.Name}}(opts *bind.TransactOpts, {{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (*api.PendingTransaction, error) {
+  module, function, typeTags, args, err := c.{{toLowerCamel $.Module}}Encoder.{{.Name}}({{range .Params}}{{.Name}}, {{end}})
     if err != nil {
       return nil, err
     }
@@ -120,9 +116,41 @@ type {{toUpperCamel .Module}}Transactor struct {
   }
 {{end}}
 
-{{if .OtherFuncs}}// Other Functions{{end}}
+// Encoder
+type {{toLowerCamel .Module}}Encoder struct {
+  *bind.BoundContract
+}
+
+{{range .ViewFuncs}}
+  func (c {{toLowerCamel $.Module}}Encoder) {{.Name}}({{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+  return c.BoundContract.Encode("{{.MoveName}}", nil, []string{
+  {{- range .Params}}
+    "{{.Type.MoveType}}",
+  {{- end}}
+  }, []any{
+  {{- range .Params}}
+      {{.Name}},
+  {{- end}}
+  })
+  }
+{{end}}
+
+{{range .EntryFuncs}}
+  func (c {{toLowerCamel $.Module}}Encoder) {{.Name}}({{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+    return c.BoundContract.Encode("{{.MoveName}}", nil, []string{
+    {{- range .Params}}
+      "{{.Type.MoveType}}",
+    {{- end}}
+    }, []any{
+    {{- range .Params}}
+        {{.Name}},
+    {{- end}}
+    })
+  }
+{{end}}
+
 {{range .OtherFuncs}}
-  func (c {{toUpperCamel $.Module}}Caller) Encode{{.Name}}({{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+  func (c {{toLowerCamel $.Module}}Encoder) {{.Name}}({{range .Params}}{{.Name}} {{.Type.GoType}},{{end}}) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
     return c.BoundContract.Encode("{{.MoveName}}", nil, []string{
     {{- range .Params}}
       "{{.Type.MoveType}}",

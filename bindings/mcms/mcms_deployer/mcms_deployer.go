@@ -26,9 +26,26 @@ type MCMSDeployer interface {
 	StageCodeChunkAndPublishToObject(opts *bind.TransactOpts, metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, newOwnerSeed []byte) (*api.PendingTransaction, error)
 	StageCodeChunkAndUpgradeObjectCode(opts *bind.TransactOpts, metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, codeObjectAddress aptos.AccountAddress) (*api.PendingTransaction, error)
 	CleanupStagingArea(opts *bind.TransactOpts) (*api.PendingTransaction, error)
+
+	EncodeCall() MCMSDeployerEncoder
+}
+
+type MCMSDeployerEncoder interface {
+	StageCodeChunk(metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	StageCodeChunkAndPublishToObject(metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, newOwnerSeed []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	StageCodeChunkAndUpgradeObjectCode(metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, codeObjectAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	CleanupStagingArea() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
 const FunctionInfo = `[{"package":"mcms","module":"mcms_deployer","name":"cleanup_staging_area","parameters":null},{"package":"mcms","module":"mcms_deployer","name":"stage_code_chunk","parameters":[{"name":"metadata_chunk","type":"vector\u003cu8\u003e"},{"name":"code_indices","type":"vector\u003cu16\u003e"},{"name":"code_chunks","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"mcms","module":"mcms_deployer","name":"stage_code_chunk_and_publish_to_object","parameters":[{"name":"metadata_chunk","type":"vector\u003cu8\u003e"},{"name":"code_indices","type":"vector\u003cu16\u003e"},{"name":"code_chunks","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"new_owner_seed","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms_deployer","name":"stage_code_chunk_and_upgrade_object_code","parameters":[{"name":"metadata_chunk","type":"vector\u003cu8\u003e"},{"name":"code_indices","type":"vector\u003cu16\u003e"},{"name":"code_chunks","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"code_object_address","type":"address"}]}]`
+
+func NewMCMSDeployer(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMSDeployer {
+	contract := bind.NewBoundContract(address, "mcms", "mcms_deployer", client)
+	return MCMSDeployerContract{
+		BoundContract:       contract,
+		mcmsDeployerEncoder: mcmsDeployerEncoder{BoundContract: contract},
+	}
+}
 
 // Structs
 
@@ -38,23 +55,62 @@ type StagingArea struct {
 }
 
 type MCMSDeployerContract struct {
-	MCMSDeployerCaller
-	MCMSDeployerTransactor
+	*bind.BoundContract
+	mcmsDeployerEncoder
+}
+
+var _ MCMSDeployer = MCMSDeployerContract{}
+
+func (c MCMSDeployerContract) EncodeCall() MCMSDeployerEncoder {
+	return c.mcmsDeployerEncoder
 }
 
 // View Functions
 
-type MCMSDeployerCaller struct {
-	*bind.BoundContract
-}
-
 // Entry Functions
 
-type MCMSDeployerTransactor struct {
+func (c MCMSDeployerContract) StageCodeChunk(opts *bind.TransactOpts, metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.mcmsDeployerEncoder.StageCodeChunk(metadataChunk, codeIndices, codeChunks)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c MCMSDeployerContract) StageCodeChunkAndPublishToObject(opts *bind.TransactOpts, metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, newOwnerSeed []byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.mcmsDeployerEncoder.StageCodeChunkAndPublishToObject(metadataChunk, codeIndices, codeChunks, newOwnerSeed)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c MCMSDeployerContract) StageCodeChunkAndUpgradeObjectCode(opts *bind.TransactOpts, metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, codeObjectAddress aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.mcmsDeployerEncoder.StageCodeChunkAndUpgradeObjectCode(metadataChunk, codeIndices, codeChunks, codeObjectAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c MCMSDeployerContract) CleanupStagingArea(opts *bind.TransactOpts) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.mcmsDeployerEncoder.CleanupStagingArea()
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+// Encoder
+type mcmsDeployerEncoder struct {
 	*bind.BoundContract
 }
 
-func (c MCMSDeployerTransactor) EncodeStageCodeChunk(metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsDeployerEncoder) StageCodeChunk(metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("stage_code_chunk", nil, []string{
 		"vector<u8>",
 		"vector<u16>",
@@ -66,16 +122,7 @@ func (c MCMSDeployerTransactor) EncodeStageCodeChunk(metadataChunk []byte, codeI
 	})
 }
 
-func (c MCMSDeployerTransactor) StageCodeChunk(opts *bind.TransactOpts, metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeStageCodeChunk(metadataChunk, codeIndices, codeChunks)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c MCMSDeployerTransactor) EncodeStageCodeChunkAndPublishToObject(metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, newOwnerSeed []byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsDeployerEncoder) StageCodeChunkAndPublishToObject(metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, newOwnerSeed []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("stage_code_chunk_and_publish_to_object", nil, []string{
 		"vector<u8>",
 		"vector<u16>",
@@ -89,16 +136,7 @@ func (c MCMSDeployerTransactor) EncodeStageCodeChunkAndPublishToObject(metadataC
 	})
 }
 
-func (c MCMSDeployerTransactor) StageCodeChunkAndPublishToObject(opts *bind.TransactOpts, metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, newOwnerSeed []byte) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeStageCodeChunkAndPublishToObject(metadataChunk, codeIndices, codeChunks, newOwnerSeed)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c MCMSDeployerTransactor) EncodeStageCodeChunkAndUpgradeObjectCode(metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, codeObjectAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsDeployerEncoder) StageCodeChunkAndUpgradeObjectCode(metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, codeObjectAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("stage_code_chunk_and_upgrade_object_code", nil, []string{
 		"vector<u8>",
 		"vector<u16>",
@@ -112,24 +150,6 @@ func (c MCMSDeployerTransactor) EncodeStageCodeChunkAndUpgradeObjectCode(metadat
 	})
 }
 
-func (c MCMSDeployerTransactor) StageCodeChunkAndUpgradeObjectCode(opts *bind.TransactOpts, metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, codeObjectAddress aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeStageCodeChunkAndUpgradeObjectCode(metadataChunk, codeIndices, codeChunks, codeObjectAddress)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c MCMSDeployerTransactor) EncodeCleanupStagingArea() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsDeployerEncoder) CleanupStagingArea() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("cleanup_staging_area", nil, []string{}, []any{})
-}
-
-func (c MCMSDeployerTransactor) CleanupStagingArea(opts *bind.TransactOpts) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeCleanupStagingArea()
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }

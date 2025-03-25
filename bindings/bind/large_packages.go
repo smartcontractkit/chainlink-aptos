@@ -43,7 +43,7 @@ func DeployOrBindLargePackages(
 		if err := predeployedAddress.ParseStringRelaxed(LargePackagesModuleAddress); err != nil {
 			return aptos.AccountAddress{}, nil, LargePackages{}, err
 		}
-		largePackagesContract := NewBoundContract(predeployedAddress, "large_packages", client)
+		largePackagesContract := NewBoundContract(predeployedAddress, "large_packages", "large_packages", client)
 		return predeployedAddress, nil, LargePackages{Address: predeployedAddress, LargePackagesTransactor: LargePackagesTransactor{BoundContract: largePackagesContract}}, nil
 	default:
 		return DeployLargePackages(auth, client)
@@ -70,7 +70,7 @@ func DeployLargePackages(
 		return aptos.AccountAddress{}, nil, LargePackages{}, err
 	}
 
-	largePackagesContract := NewBoundContract(address, "large_packages", client)
+	largePackagesContract := NewBoundContract(address, "large_packages", "large_packages", client)
 	return address, tx, LargePackages{Address: address, LargePackagesTransactor: LargePackagesTransactor{BoundContract: largePackagesContract}}, nil
 }
 

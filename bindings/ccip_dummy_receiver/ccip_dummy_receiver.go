@@ -47,13 +47,9 @@ func Compile(address aptos.AccountAddress, ccipAddress aptos.AccountAddress) (co
 }
 
 func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIPDummyReceiver {
-	dummyReceiverContract := bind.NewBoundContract(address, "dummy_receiver", client)
 	return CCIPDummyReceiverContract{
-		address: address,
-		dummyReceiver: module_dummy_receiver.DummyReceiverContract{
-			DummyReceiverCaller:     module_dummy_receiver.DummyReceiverCaller{BoundContract: dummyReceiverContract},
-			DummyReceiverTransactor: module_dummy_receiver.DummyReceiverTransactor{BoundContract: dummyReceiverContract},
-		},
+		address:       address,
+		dummyReceiver: module_dummy_receiver.NewDummyReceiver(address, client),
 	}
 }
 

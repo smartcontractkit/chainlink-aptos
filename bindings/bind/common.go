@@ -33,35 +33,46 @@ type TransactOpts struct {
 	SequenceNumber    *uint64
 }
 
-type BoundContract struct {
-	address aptos.AccountAddress
-	module  string
-	client  aptos.AptosRpcClient
+type ModuleInformation struct {
+	PackageName string
+	ModuleName  string
+	Address     aptos.AccountAddress
 }
 
-func NewBoundContract(address aptos.AccountAddress, module string, client aptos.AptosRpcClient) *BoundContract {
+type BoundContract struct {
+	address                 aptos.AccountAddress
+	packageName, moduleName string
+	client                  aptos.AptosRpcClient
+}
+
+func NewBoundContract(address aptos.AccountAddress, packageName, moduleName string, client aptos.AptosRpcClient) *BoundContract {
 	return &BoundContract{
-		address: address,
-		module:  module,
-		client:  client,
+		address:     address,
+		packageName: packageName,
+		moduleName:  moduleName,
+		client:      client,
 	}
 }
 
-func (c *BoundContract) Encode(function string, typeArgs, paramTypes []string, paramValues []any) (module aptos.ModuleId, fun string, argTypes []aptos.TypeTag, args [][]byte, err error) {
+func (c *BoundContract) Encode(function string, typeArgs, paramTypes []string, paramValues []any) (moduleInfo ModuleInformation, fun string, argTypes []aptos.TypeTag, args [][]byte, err error) {
 	typeTags, args, err := serializeArgs(typeArgs, paramTypes, paramValues)
 	if err != nil {
-		return aptos.ModuleId{}, "", nil, nil, err
+		return ModuleInformation{}, "", nil, nil, err
 	}
 
-	return aptos.ModuleId{
-		Address: c.address,
-		Name:    c.module,
+	return ModuleInformation{
+		PackageName: c.moduleName,
+		ModuleName:  c.moduleName,
+		Address:     c.address,
 	}, function, typeTags, args, nil
 }
 
-func (c *BoundContract) Call(opts *CallOpts, module aptos.ModuleId, function string, argTypes []aptos.TypeTag, args [][]byte) ([]any, error) {
+func (c *BoundContract) Call(opts *CallOpts, module ModuleInformation, function string, argTypes []aptos.TypeTag, args [][]byte) ([]any, error) {
 	payload := aptos.ViewPayload{
-		Module:   module,
+		Module: aptos.ModuleId{
+			Address: module.Address,
+			Name:    module.ModuleName,
+		},
 		Function: function,
 		ArgTypes: argTypes,
 		Args:     args,
@@ -76,9 +87,12 @@ func (c *BoundContract) Call(opts *CallOpts, module aptos.ModuleId, function str
 	return c.client.View(&payload, ledgerVersion...)
 }
 
-func (c *BoundContract) Transact(opts *TransactOpts, module aptos.ModuleId, function string, argTypes []aptos.TypeTag, args [][]byte) (*api.PendingTransaction, error) {
+func (c *BoundContract) Transact(opts *TransactOpts, module ModuleInformation, function string, argTypes []aptos.TypeTag, args [][]byte) (*api.PendingTransaction, error) {
 	payload := aptos.TransactionPayload{Payload: &aptos.EntryFunction{
-		Module:   module,
+		Module: aptos.ModuleId{
+			Address: module.Address,
+			Name:    module.ModuleName,
+		},
 		Function: function,
 		ArgTypes: argTypes,
 		Args:     args,
