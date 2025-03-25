@@ -1,14 +1,16 @@
-package codec
+package chainwriter
 
 import (
 	"testing"
+
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
 )
 
 func TestEncodeFunctionParams(t *testing.T) {
 	tests := []struct {
 		name       string
 		argMap     map[string]interface{}
-		params     []AptosFunctionParam
+		params     []chainreader.AptosFunctionParam
 		wantTypes  []string
 		wantValues []any
 		wantErr    string
@@ -19,7 +21,7 @@ func TestEncodeFunctionParams(t *testing.T) {
 				"arg1": "value1",
 				"arg2": 42,
 			},
-			params: []AptosFunctionParam{
+			params: []chainreader.AptosFunctionParam{
 				{Name: "arg1", Type: "string", Required: true},
 				{Name: "arg2", Type: "int", Required: true},
 			},
@@ -31,7 +33,7 @@ func TestEncodeFunctionParams(t *testing.T) {
 			argMap: map[string]interface{}{
 				"arg1": "value1",
 			},
-			params: []AptosFunctionParam{
+			params: []chainreader.AptosFunctionParam{
 				{Name: "arg1", Type: "string", Required: true},
 				{Name: "arg2", Type: "int", Required: true},
 			},
@@ -42,7 +44,7 @@ func TestEncodeFunctionParams(t *testing.T) {
 			argMap: map[string]interface{}{
 				"arg1": "value1",
 			},
-			params: []AptosFunctionParam{
+			params: []chainreader.AptosFunctionParam{
 				{Name: "arg1", Type: "string", Required: true},
 				{Name: "arg2", Type: "int", Required: false, DefaultValue: 42},
 			},
@@ -55,7 +57,7 @@ func TestEncodeFunctionParams(t *testing.T) {
 				"arg1": "value1",
 				"arg2": 100,
 			},
-			params: []AptosFunctionParam{
+			params: []chainreader.AptosFunctionParam{
 				{Name: "arg1", Type: "string", Required: true},
 				{Name: "arg2", Type: "int", Required: false, DefaultValue: 42},
 			},
@@ -66,7 +68,7 @@ func TestEncodeFunctionParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			types, values, err := EncodeFunctionParams(tt.argMap, tt.params)
+			types, values, err := convertFunctionParams(tt.argMap, tt.params)
 
 			if err != nil {
 				if err.Error() != tt.wantErr {

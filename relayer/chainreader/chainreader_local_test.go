@@ -24,7 +24,6 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
@@ -125,7 +124,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 				Name: "echo",
 				Functions: map[string]*ChainReaderFunction{
 					"echo_u64": {
-						Params: []codec.AptosFunctionParam{
+						Params: []AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "u64",
@@ -133,7 +132,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"echo_u32_u64_tuple": {
-						Params: []codec.AptosFunctionParam{
+						Params: []AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "u32",
@@ -145,7 +144,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"echo_string": {
-						Params: []codec.AptosFunctionParam{
+						Params: []AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "0x1::string::String",
@@ -153,7 +152,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"echo_byte_vector": {
-						Params: []codec.AptosFunctionParam{
+						Params: []AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "vector<u8>",
@@ -161,7 +160,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"echo_byte_vector_vector": {
-						Params: []codec.AptosFunctionParam{
+						Params: []AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "vector<vector<u8>>",
@@ -169,7 +168,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"echo_u256": {
-						Params: []codec.AptosFunctionParam{
+						Params: []AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "u256",

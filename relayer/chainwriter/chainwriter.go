@@ -13,7 +13,7 @@ import (
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
-	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
 
@@ -63,6 +63,26 @@ func (a *aptosChainWriter) Close() error {
 	})
 }
 
+func convertFunctionParams(argMap map[string]interface{}, params []chainreader.AptosFunctionParam) ([]string, []any, error) {
+	types := make([]string, len(params))
+	values := make([]any, len(params))
+
+	for i, paramConfig := range params {
+		argValue, ok := argMap[paramConfig.Name]
+		if !ok {
+			if paramConfig.Required {
+				return nil, nil, fmt.Errorf("missing argument: %s", paramConfig.Name)
+			}
+			argValue = paramConfig.DefaultValue
+		}
+
+		types[i] = paramConfig.Type
+		values[i] = argValue
+	}
+
+	return types, values, nil
+}
+
 func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, method string, args any, transactionID string, toAddress string, meta *commontypes.TxMeta, value *big.Int) error {
 	moduleConfig, ok := a.config.Modules[contractName]
 	if !ok {
@@ -82,11 +102,10 @@ func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, 
 
 	paramTypes := []string{}
 	paramValues := []any{}
-
 	if functionConfig.Params != nil {
-		paramTypes, paramValues, err = codec.EncodeFunctionParams(argMap, functionConfig.Params)
+		paramTypes, paramValues, err = convertFunctionParams(argMap, functionConfig.Params)
 		if err != nil {
-			return fmt.Errorf("failed to encode function params: %+w", err)
+			return fmt.Errorf("failed to encode params: %+w", err)
 		}
 	}
 

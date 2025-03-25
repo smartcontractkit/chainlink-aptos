@@ -1,9 +1,5 @@
 package chainreader
 
-import (
-	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
-)
-
 type ChainReaderConfig struct {
 	Modules map[string]*ChainReaderModule
 }
@@ -20,7 +16,7 @@ type ChainReaderFunction struct {
 	// The function name (optional). When not provided, the key in the map under which this function
 	// is stored is used.
 	Name   string
-	Params []codec.AptosFunctionParam
+	Params []AptosFunctionParam
 }
 
 type ChainReaderEvent struct {
@@ -29,4 +25,15 @@ type ChainReaderEvent struct {
 	Name string
 	// <account_address>::<module_name>::<event_struct>
 	EventHandle string
+}
+
+type AptosFunctionParam struct {
+	// The function parameter name.
+	Name string
+	// The function parameter Move type.
+	Type string
+	// True if this is a required parameter, false otherwise.
+	Required bool
+	// If this is not a required parameter and it is not provided, this default value will be used.
+	DefaultValue any
 }

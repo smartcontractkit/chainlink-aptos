@@ -1,7 +1,7 @@
 package chainwriter
 
 import (
-	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
 )
 
 type FeeStrategy int
@@ -33,5 +33,5 @@ type ChainWriterFunction struct {
 	// The account address (optional). When not provided, the address is calculated
 	// from the public key.
 	FromAddress string
-	Params      []codec.AptosFunctionParam
+	Params      []chainreader.AptosFunctionParam
 }
