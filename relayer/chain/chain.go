@@ -100,7 +100,9 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger) 
 		return nil, fmt.Errorf("invalid chain ID %s: could not parse as an integer: %w", cfg.ChainID, err)
 	}
 
-	cfg.Chain.Workflow.PublicKey = accounts[0]
+	if cfg.Chain.Workflow != nil {
+		cfg.Chain.Workflow.PublicKey = accounts[0]
+	}
 
 	ch := &chain{
 		id:   cfg.ChainID,
