@@ -44,7 +44,7 @@ type Chain struct {
 	TransactionManager *txm.Config
 	BalanceMonitor     *monitor.GenericBalanceConfig
 	WriteTargetCap     *write_target.Config
-	Workflow           WorkflowConfig
+	Workflow           *WorkflowConfig
 }
 
 type Node struct {
