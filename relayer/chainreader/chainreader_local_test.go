@@ -1,4 +1,4 @@
-// //go:build integration
+//go:build integration
 
 package chainreader
 
@@ -50,7 +50,7 @@ func TestChainReaderLocal(t *testing.T) {
 	})
 
 	t.Run("QueryKey", func(t *testing.T) {
-		// runQueryKeyTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
+		runQueryKeyTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
 	})
 }
 

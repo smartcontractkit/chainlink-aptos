@@ -337,7 +337,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 					return nil, fmt.Errorf("failed to call view function: %+w", err)
 				}
 
-				err = codec.DecodeAptosAPIResponse(data, &eventAccountAddress)
+				err = codec.DecodeAptosJsonValue(data[0], &eventAccountAddress)
 				if err != nil {
 					return nil, fmt.Errorf("failed to decode event account address function output: %+w", err)
 				}
