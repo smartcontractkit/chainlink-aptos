@@ -112,9 +112,17 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 			serializer.Bool(v)
 			return nil
 		}
+		if v, ok := argVal.(uint64); ok && (v == uint64(0) || v == uint64(1)) {
+			serializer.Bool(v == uint64(1))
+			return nil
+		}
 	case aptos.TypeTagU8:
 		if v, ok := argVal.(uint8); ok {
 			serializer.U8(v)
+			return nil
+		}
+		if v, ok := argVal.(uint64); ok && v == uint64(uint8(v)) {
+			serializer.U8(uint8(v))
 			return nil
 		}
 		if v, ok := argVal.(int); ok && v == int(uint8(v)) {
@@ -138,6 +146,10 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 			serializer.U16(v)
 			return nil
 		}
+		if v, ok := argVal.(uint64); ok && v == uint64(uint16(v)) {
+			serializer.U16(uint16(v))
+			return nil
+		}
 		if v, ok := argVal.(int); ok && v == int(uint16(v)) {
 			serializer.U16(uint16(v))
 			return nil
@@ -157,6 +169,10 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 	case aptos.TypeTagU32:
 		if v, ok := argVal.(uint32); ok {
 			serializer.U32(v)
+			return nil
+		}
+		if v, ok := argVal.(uint64); ok && v == uint64(uint32(v)) {
+			serializer.U32(uint32(v))
 			return nil
 		}
 		if v, ok := argVal.(int); ok && v == int(uint32(v)) {
@@ -201,6 +217,11 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 			serializer.U128(*v)
 			return nil
 		}
+		if v, ok := argVal.(uint64); ok {
+			b := big.NewInt(0).SetUint64(v)
+			serializer.U128(*b)
+			return nil
+		}
 		if v, ok := argVal.(int); ok && v >= 0 {
 			b := big.NewInt(int64(v))
 			serializer.U128(*b)
@@ -220,6 +241,11 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 	case aptos.TypeTagU256:
 		if v, ok := argVal.(*big.Int); ok {
 			serializer.U256(*v)
+			return nil
+		}
+		if v, ok := argVal.(uint64); ok {
+			b := big.NewInt(0).SetUint64(v)
+			serializer.U256(*b)
 			return nil
 		}
 		if v, ok := argVal.(int); ok && v >= 0 {
@@ -291,7 +317,7 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 	default:
 		return errors.New("unsupported arg type")
 	}
-	return fmt.Errorf("invalid argument: %v", argVal)
+	return errors.New("unsupported arg value type")
 }
 
 func GetBcsValues(data []byte, typeTags ...aptos.TypeTag) ([]any, error) {
