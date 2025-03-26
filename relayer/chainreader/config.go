@@ -55,7 +55,8 @@ type ChainReaderEvent struct {
 }
 
 type RenamedField struct {
-	// The new field name.
+	// The new field name (optional). This does not need to be provided if this field does not need
+	// to be renamed.
 	NewName string
 
 	// Rename sub-fields. This assumes that the event field value is a struct or a map with string keys.
