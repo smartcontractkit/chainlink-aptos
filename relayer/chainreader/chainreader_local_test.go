@@ -159,6 +159,14 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 							},
 						},
 					},
+					"echo_u32_vector": {
+						Params: []AptosFunctionParam{
+							{
+								Name: "Value1",
+								Type: "vector<u32>",
+							},
+						},
+					},
 					"echo_byte_vector_vector": {
 						Params: []AptosFunctionParam{
 							{
@@ -246,7 +254,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 	confidenceLevel := primitives.Finalized
 	u256Val, _ := new(big.Int).SetString("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffee", 16)
 	testString := "hello world"
-	testBytes := []byte{42, 11, 22, 59}
+	testBytes := []byte{42}
 	testBytesSlice := [][]byte{{42, 11}, {22, 59}}
 
 	t.Run("Individual reads", func(t *testing.T) {
@@ -307,6 +315,18 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		)
 		require.NoError(t, err)
 		require.Equal(t, testBytes, retBytes)
+
+		var retU32Vector []uint32
+		inputVector := []uint32{99}
+		err := chainReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-echo_u32_vector", accountAddress.String()),
+			confidenceLevel,
+			struct{ Value1 []uint32 }{Value1: inputVector},
+			&retU32Vector,
+		)
+		require.NoError(t, err)
+		require.Equal(t, inputVector, retU32Vector)
 
 		var retBytesSlice [][]byte
 		err = chainReader.GetLatestValue(

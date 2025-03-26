@@ -97,6 +97,11 @@ module test::echo {
     }
 
     #[view]
+    public fun echo_u32_vector(val: vector<u32>): vector<u32> {
+        val
+    }
+
+    #[view]
     public fun echo_byte_vector_vector(val: vector<vector<u8>>): vector<vector<u8>> {
         val
     }
