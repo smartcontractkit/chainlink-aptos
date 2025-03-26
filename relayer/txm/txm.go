@@ -150,12 +150,12 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 
 		typeTag, err := CreateTypeTag(typeName)
 		if err != nil {
-			return fmt.Errorf("failed to parse type %s: %+w", typeName, err)
+			return fmt.Errorf("failed to parse param type %s: %+w", typeName, err)
 		}
 
 		bcsValue, err := CreateBcsValue(typeTag, typeValue)
 		if err != nil {
-			return fmt.Errorf("failed to serialize value %s: %+w", typeValue, err)
+			return fmt.Errorf("failed to serialize param value %+v (type %T) using type tag %s: %+w", typeValue, typeValue, typeTag.String(), err)
 		}
 
 		bcsValues = append(bcsValues, bcsValue)
