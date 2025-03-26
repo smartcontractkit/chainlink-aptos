@@ -21,15 +21,35 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type MCMSAccountInterface interface {
+type MCMSAccount interface {
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	IsSelfOwned(opts *bind.CallOpts) (bool, error)
 
 	TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
 	TransferOwnershipToSelf(opts *bind.TransactOpts) (*api.PendingTransaction, error)
+
+	// Encoder returns the encoder implementation of this module.
+	Encoder() MCMSAccountEncoder
+}
+
+type MCMSAccountEncoder interface {
+	Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	IsSelfOwned() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TransferOwnership(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TransferOwnershipToSelf() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	AssertIsOwner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
 const FunctionInfo = `[{"package":"mcms","module":"mcms_account","name":"accept_ownership","parameters":null},{"package":"mcms","module":"mcms_account","name":"assert_is_owner","parameters":null},{"package":"mcms","module":"mcms_account","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"mcms","module":"mcms_account","name":"transfer_ownership_to_self","parameters":null}]`
+
+func NewMCMSAccount(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMSAccount {
+	contract := bind.NewBoundContract(address, "mcms", "mcms_account", client)
+	return MCMSAccountContract{
+		BoundContract:      contract,
+		mcmsAccountEncoder: mcmsAccountEncoder{BoundContract: contract},
+	}
+}
 
 // Structs
 
@@ -48,23 +68,21 @@ type OwnershipTransferred struct {
 	To   aptos.AccountAddress `move:"address"`
 }
 
-type MCMSAccount struct {
-	MCMSAccountCaller
-	MCMSAccountTransactor
+type MCMSAccountContract struct {
+	*bind.BoundContract
+	mcmsAccountEncoder
+}
+
+var _ MCMSAccount = MCMSAccountContract{}
+
+func (c MCMSAccountContract) Encoder() MCMSAccountEncoder {
+	return c.mcmsAccountEncoder
 }
 
 // View Functions
 
-type MCMSAccountCaller struct {
-	*bind.BoundContract
-}
-
-func (c MCMSAccountCaller) EncodeOwner() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("owner", nil, []string{}, []any{})
-}
-
-func (c MCMSAccountCaller) Owner(opts *bind.CallOpts) (aptos.AccountAddress, error) {
-	module, function, typeTags, args, err := c.EncodeOwner()
+func (c MCMSAccountContract) Owner(opts *bind.CallOpts) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.mcmsAccountEncoder.Owner()
 	if err != nil {
 		return *new(aptos.AccountAddress), err
 	}
@@ -84,12 +102,8 @@ func (c MCMSAccountCaller) Owner(opts *bind.CallOpts) (aptos.AccountAddress, err
 	return r0, nil
 }
 
-func (c MCMSAccountCaller) EncodeIsSelfOwned() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("is_self_owned", nil, []string{}, []any{})
-}
-
-func (c MCMSAccountCaller) IsSelfOwned(opts *bind.CallOpts) (bool, error) {
-	module, function, typeTags, args, err := c.EncodeIsSelfOwned()
+func (c MCMSAccountContract) IsSelfOwned(opts *bind.CallOpts) (bool, error) {
+	module, function, typeTags, args, err := c.mcmsAccountEncoder.IsSelfOwned()
 	if err != nil {
 		return *new(bool), err
 	}
@@ -111,11 +125,38 @@ func (c MCMSAccountCaller) IsSelfOwned(opts *bind.CallOpts) (bool, error) {
 
 // Entry Functions
 
-type MCMSAccountTransactor struct {
+func (c MCMSAccountContract) TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.mcmsAccountEncoder.TransferOwnership(to)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c MCMSAccountContract) TransferOwnershipToSelf(opts *bind.TransactOpts) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.mcmsAccountEncoder.TransferOwnershipToSelf()
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+// Encoder
+type mcmsAccountEncoder struct {
 	*bind.BoundContract
 }
 
-func (c MCMSAccountTransactor) EncodeTransferOwnership(to aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsAccountEncoder) Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("owner", nil, []string{}, []any{})
+}
+
+func (c mcmsAccountEncoder) IsSelfOwned() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("is_self_owned", nil, []string{}, []any{})
+}
+
+func (c mcmsAccountEncoder) TransferOwnership(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("transfer_ownership", nil, []string{
 		"address",
 	}, []any{
@@ -123,34 +164,14 @@ func (c MCMSAccountTransactor) EncodeTransferOwnership(to aptos.AccountAddress) 
 	})
 }
 
-func (c MCMSAccountTransactor) TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeTransferOwnership(to)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c MCMSAccountTransactor) EncodeTransferOwnershipToSelf() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsAccountEncoder) TransferOwnershipToSelf() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("transfer_ownership_to_self", nil, []string{}, []any{})
 }
 
-func (c MCMSAccountTransactor) TransferOwnershipToSelf(opts *bind.TransactOpts) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeTransferOwnershipToSelf()
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-// Other Functions
-
-func (c MCMSAccountCaller) EncodeAcceptOwnership() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsAccountEncoder) AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("accept_ownership", nil, []string{}, []any{})
 }
 
-func (c MCMSAccountCaller) EncodeAssertIsOwner() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsAccountEncoder) AssertIsOwner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("assert_is_owner", nil, []string{}, []any{})
 }

@@ -12,14 +12,49 @@ import (
 	module_mcms_registry "github.com/smartcontractkit/chainlink-aptos/bindings/mcms/mcms_registry"
 )
 
-type MCMS struct {
-	Address aptos.AccountAddress
+type MCMS interface {
+	Address() aptos.AccountAddress
+	MCMS() module_mcms.MCMS
+	MCMSAccount() module_mcms_account.MCMSAccount
+	MCMSDeployer() module_mcms_deployer.MCMSDeployer
+	MCMSExecutor() module_mcms_executor.MCMSExecutor
+	MCMSRegistry() module_mcms_registry.MCMSRegistry
+}
 
-	MCMS         module_mcms.MCMS
-	MCMSAccount  module_mcms_account.MCMSAccount
-	MCMSDeployer module_mcms_deployer.MCMSDeployer
-	MCMSExecutor module_mcms_executor.MCMSExecutor
-	MCMSRegistry module_mcms_registry.MCMSRegistry
+var _ MCMS = MCMSContract{}
+
+type MCMSContract struct {
+	address aptos.AccountAddress
+
+	mcms         module_mcms.MCMS
+	mcmsAccount  module_mcms_account.MCMSAccount
+	mcmsDeployer module_mcms_deployer.MCMSDeployer
+	mcmsExecutor module_mcms_executor.MCMSExecutor
+	mcmsRegistry module_mcms_registry.MCMSRegistry
+}
+
+func (M MCMSContract) Address() aptos.AccountAddress {
+	return M.address
+}
+
+func (M MCMSContract) MCMS() module_mcms.MCMS {
+	return M.mcms
+}
+
+func (M MCMSContract) MCMSAccount() module_mcms_account.MCMSAccount {
+	return M.mcmsAccount
+}
+
+func (M MCMSContract) MCMSDeployer() module_mcms_deployer.MCMSDeployer {
+	return M.mcmsDeployer
+}
+
+func (M MCMSContract) MCMSExecutor() module_mcms_executor.MCMSExecutor {
+	return M.mcmsExecutor
+}
+
+func (M MCMSContract) MCMSRegistry() module_mcms_registry.MCMSRegistry {
+	return M.mcmsRegistry
 }
 
 const (
@@ -38,32 +73,13 @@ func Bind(
 	address aptos.AccountAddress,
 	client aptos.AptosRpcClient,
 ) MCMS {
-	mcmsContract := bind.NewBoundContract(address, "mcms", client)
-	mcmsAccountContract := bind.NewBoundContract(address, "mcms_account", client)
-	mcmsDeployerContract := bind.NewBoundContract(address, "mcms_deployer", client)
-	mcmsExecutorContract := bind.NewBoundContract(address, "mcms_executor", client)
-	mcmsRegistryContract := bind.NewBoundContract(address, "mcms_registry", client)
-	return MCMS{
-		Address: address,
-		MCMS: module_mcms.MCMS{
-			MCMSCaller:     module_mcms.MCMSCaller{BoundContract: mcmsContract},
-			MCMSTransactor: module_mcms.MCMSTransactor{BoundContract: mcmsContract},
-		},
-		MCMSAccount: module_mcms_account.MCMSAccount{
-			MCMSAccountCaller:     module_mcms_account.MCMSAccountCaller{BoundContract: mcmsAccountContract},
-			MCMSAccountTransactor: module_mcms_account.MCMSAccountTransactor{BoundContract: mcmsAccountContract},
-		},
-		MCMSDeployer: module_mcms_deployer.MCMSDeployer{
-			MCMSDeployerTransactor: module_mcms_deployer.MCMSDeployerTransactor{BoundContract: mcmsDeployerContract},
-		},
-		MCMSExecutor: module_mcms_executor.MCMSExecutor{
-			MCMSExecutorCaller:     module_mcms_executor.MCMSExecutorCaller{BoundContract: mcmsExecutorContract},
-			MCMSExecutorTransactor: module_mcms_executor.MCMSExecutorTransactor{BoundContract: mcmsExecutorContract},
-		},
-		MCMSRegistry: module_mcms_registry.MCMSRegistry{
-			MCMSRegistryCaller:     module_mcms_registry.MCMSRegistryCaller{BoundContract: mcmsRegistryContract},
-			MCMSRegistryTransactor: module_mcms_registry.MCMSRegistryTransactor{BoundContract: mcmsRegistryContract},
-		},
+	return MCMSContract{
+		address:      address,
+		mcms:         module_mcms.NewMCMS(address, client),
+		mcmsAccount:  module_mcms_account.NewMCMSAccount(address, client),
+		mcmsDeployer: module_mcms_deployer.NewMCMSDeployer(address, client),
+		mcmsExecutor: module_mcms_executor.NewMCMSExecutor(address, client),
+		mcmsRegistry: module_mcms_registry.NewMCMSRegistry(address, client),
 	}
 }
 
@@ -84,7 +100,7 @@ func DeployToResourceAccount(
 		"mcms_owner": auth.AccountAddress(),
 	})
 	if err != nil {
-		return aptos.AccountAddress{}, nil, MCMS{}, err
+		return aptos.AccountAddress{}, nil, MCMSContract{}, err
 	}
 
 	return address, tx, Bind(address, client), nil
