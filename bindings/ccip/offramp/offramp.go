@@ -162,7 +162,9 @@ type ExecutionStateChanged struct {
 }
 
 type CommitReportAccepted struct {
-	CommitReport CommitReport `move:"CommitReport"`
+	BlessedMerkleRoots   []MerkleRoot `move:"vector<MerkleRoot>"`
+	UnblessedMerkleRoots []MerkleRoot `move:"vector<MerkleRoot>"`
+	PriceUpdates         PriceUpdates `move:"PriceUpdates"`
 }
 
 type SkippedReportExecution struct {
