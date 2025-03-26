@@ -127,7 +127,7 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 
 			bcsValue, err := txm.CreateBcsValue(typeTag, argValue)
 			if err != nil {
-				return fmt.Errorf("failed to serialize value %s: %+w", argValue, err)
+				return fmt.Errorf("failed to serialize value %+v (type %T) using type tag %s: %+w", argValue, argValue, typeTag.String(), err)
 			}
 
 			paramValues = append(paramValues, bcsValue)
