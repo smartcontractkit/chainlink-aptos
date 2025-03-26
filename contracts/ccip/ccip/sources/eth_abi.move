@@ -218,21 +218,22 @@ module ccip::eth_abi {
         // First read length as u256
         let length = (decode_u256(stream) as u64);
 
+        let padding_len = if (length % 32 == 0) { 0 }
+        else {
+            32 - (length % 32)
+        };
+
         let data = &stream.data;
         let cur = stream.cur;
 
         assert!(
-            cur + length <= vector::length(data),
+            cur + length + padding_len <= vector::length(data),
             error::out_of_range(E_OUT_OF_BYTES)
         );
 
         let bytes = vector::slice(data, cur, cur + length);
 
         // Skip padding bytes
-        let padding_len = if (length % 32 == 0) { 0 }
-        else {
-            32 - (length % 32)
-        };
         stream.cur = cur + length + padding_len;
 
         bytes

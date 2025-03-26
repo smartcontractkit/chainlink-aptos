@@ -7,12 +7,29 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
 	module_router "github.com/smartcontractkit/chainlink-aptos/bindings/ccip_router/router"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/compile"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/mcms"
 )
 
-type CCIPRouter struct {
-	Address aptos.AccountAddress
+type CCIPRouter interface {
+	Address() aptos.AccountAddress
 
-	Router module_router.Router
+	Router() module_router.Router
+}
+
+var _ CCIPRouter = CCIPRouterContract{}
+
+type CCIPRouterContract struct {
+	address aptos.AccountAddress
+
+	router module_router.Router
+}
+
+func (C CCIPRouterContract) Address() aptos.AccountAddress {
+	return C.address
+}
+
+func (C CCIPRouterContract) Router() module_router.Router {
+	return C.router
 }
 
 const (
@@ -35,13 +52,9 @@ func Compile(ccipAddress, mcmsAddress aptos.AccountAddress) (compile.CompiledPac
 }
 
 func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIPRouter {
-	router := bind.NewBoundContract(address, "router", client)
-	return CCIPRouter{
-		Address: address,
-		Router: module_router.Router{
-			RouterCaller:     module_router.RouterCaller{BoundContract: router},
-			RouterTransactor: module_router.RouterTransactor{BoundContract: router},
-		},
+	return CCIPRouterContract{
+		address: address,
+		router:  module_router.NewRouter(address, client),
 	}
 }
 
@@ -60,7 +73,12 @@ func DeployToExistingObject(
 	}
 	tx, err := bind.UpgradePackageToObject(auth, client, "ccip_router", namedAddresses, objectAddress)
 	if err != nil {
-		return nil, CCIPRouter{}, err
+		return nil, CCIPRouterContract{}, err
 	}
 	return tx, Bind(objectAddress, client), nil
+}
+
+func as() {
+	mcmsBindings := mcms.Bind(aptos.AccountThree, nil)
+	mcmsBindings.MCMS().SetConfig()
 }

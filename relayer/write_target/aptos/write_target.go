@@ -9,7 +9,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
 
 	aptosacc "github.com/smartcontractkit/chainlink-aptos/relayer/account"
-	chain "github.com/smartcontractkit/chainlink-aptos/relayer/chain"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainwriter"
 	aptosconfig "github.com/smartcontractkit/chainlink-aptos/relayer/config"

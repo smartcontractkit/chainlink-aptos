@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type MCMSInterface interface {
+type MCMS interface {
 	GetConfig(opts *bind.CallOpts) (Config, error)
 	GetOpCount(opts *bind.CallOpts) (uint64, error)
 	GetRoot(opts *bind.CallOpts) ([]byte, uint64, error)
@@ -30,9 +30,30 @@ type MCMSInterface interface {
 	SetRoot(opts *bind.TransactOpts, root []byte, validUntil uint64, chainId *big.Int, multisig aptos.AccountAddress, preOpCount uint64, postOpCount uint64, overridePreviousRoot bool, metadataProof [][]byte, signatures [][]byte) (*api.PendingTransaction, error)
 	Execute(opts *bind.TransactOpts, chainId *big.Int, multisig aptos.AccountAddress, nonce uint64, to aptos.AccountAddress, moduleName string, function string, data []byte, proof [][]byte) (*api.PendingTransaction, error)
 	SetConfig(opts *bind.TransactOpts, signerAddresses [][]byte, signerGroups []byte, groupQuorums []byte, groupParents []byte, clearRoot bool) (*api.PendingTransaction, error)
+
+	// Encoder returns the encoder implementation of this module.
+	Encoder() MCMSEncoder
+}
+
+type MCMSEncoder interface {
+	GetConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetOpCount() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetRoot() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetRootMetadata() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	SetRoot(root []byte, validUntil uint64, chainId *big.Int, multisig aptos.AccountAddress, preOpCount uint64, postOpCount uint64, overridePreviousRoot bool, metadataProof [][]byte, signatures [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	Execute(chainId *big.Int, multisig aptos.AccountAddress, nonce uint64, to aptos.AccountAddress, moduleName string, function string, data []byte, proof [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	SetConfig(signerAddresses [][]byte, signerGroups []byte, groupQuorums []byte, groupParents []byte, clearRoot bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
 const FunctionInfo = `[{"package":"mcms","module":"mcms","name":"execute","parameters":[{"name":"chain_id","type":"u256"},{"name":"multisig","type":"address"},{"name":"nonce","type":"u64"},{"name":"to","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"proof","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"mcms","module":"mcms","name":"set_config","parameters":[{"name":"signer_addresses","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"signer_groups","type":"vector\u003cu8\u003e"},{"name":"group_quorums","type":"vector\u003cu8\u003e"},{"name":"group_parents","type":"vector\u003cu8\u003e"},{"name":"clear_root","type":"bool"}]},{"package":"mcms","module":"mcms","name":"set_root","parameters":[{"name":"root","type":"vector\u003cu8\u003e"},{"name":"valid_until","type":"u64"},{"name":"chain_id","type":"u256"},{"name":"multisig","type":"address"},{"name":"pre_op_count","type":"u64"},{"name":"post_op_count","type":"u64"},{"name":"override_previous_root","type":"bool"},{"name":"metadata_proof","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"signatures","type":"vector\u003cvector\u003cu8\u003e\u003e"}]}]`
+
+func NewMCMS(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMS {
+	contract := bind.NewBoundContract(address, "mcms", "mcms", client)
+	return MCMSContract{
+		BoundContract: contract,
+		mcmsEncoder:   mcmsEncoder{BoundContract: contract},
+	}
+}
 
 // Structs
 
@@ -97,23 +118,21 @@ type OpExecuted struct {
 	Data       []byte               `move:"vector<u8>"`
 }
 
-type MCMS struct {
-	MCMSCaller
-	MCMSTransactor
+type MCMSContract struct {
+	*bind.BoundContract
+	mcmsEncoder
+}
+
+var _ MCMS = MCMSContract{}
+
+func (c MCMSContract) Encoder() MCMSEncoder {
+	return c.mcmsEncoder
 }
 
 // View Functions
 
-type MCMSCaller struct {
-	*bind.BoundContract
-}
-
-func (c MCMSCaller) EncodeGetConfig() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_config", nil, []string{}, []any{})
-}
-
-func (c MCMSCaller) GetConfig(opts *bind.CallOpts) (Config, error) {
-	module, function, typeTags, args, err := c.EncodeGetConfig()
+func (c MCMSContract) GetConfig(opts *bind.CallOpts) (Config, error) {
+	module, function, typeTags, args, err := c.mcmsEncoder.GetConfig()
 	if err != nil {
 		return *new(Config), err
 	}
@@ -133,12 +152,8 @@ func (c MCMSCaller) GetConfig(opts *bind.CallOpts) (Config, error) {
 	return r0, nil
 }
 
-func (c MCMSCaller) EncodeGetOpCount() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_op_count", nil, []string{}, []any{})
-}
-
-func (c MCMSCaller) GetOpCount(opts *bind.CallOpts) (uint64, error) {
-	module, function, typeTags, args, err := c.EncodeGetOpCount()
+func (c MCMSContract) GetOpCount(opts *bind.CallOpts) (uint64, error) {
+	module, function, typeTags, args, err := c.mcmsEncoder.GetOpCount()
 	if err != nil {
 		return *new(uint64), err
 	}
@@ -158,12 +173,8 @@ func (c MCMSCaller) GetOpCount(opts *bind.CallOpts) (uint64, error) {
 	return r0, nil
 }
 
-func (c MCMSCaller) EncodeGetRoot() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_root", nil, []string{}, []any{})
-}
-
-func (c MCMSCaller) GetRoot(opts *bind.CallOpts) ([]byte, uint64, error) {
-	module, function, typeTags, args, err := c.EncodeGetRoot()
+func (c MCMSContract) GetRoot(opts *bind.CallOpts) ([]byte, uint64, error) {
+	module, function, typeTags, args, err := c.mcmsEncoder.GetRoot()
 	if err != nil {
 		return *new([]byte), *new(uint64), err
 	}
@@ -184,12 +195,8 @@ func (c MCMSCaller) GetRoot(opts *bind.CallOpts) ([]byte, uint64, error) {
 	return r0, r1, nil
 }
 
-func (c MCMSCaller) EncodeGetRootMetadata() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_root_metadata", nil, []string{}, []any{})
-}
-
-func (c MCMSCaller) GetRootMetadata(opts *bind.CallOpts) (RootMetadata, error) {
-	module, function, typeTags, args, err := c.EncodeGetRootMetadata()
+func (c MCMSContract) GetRootMetadata(opts *bind.CallOpts) (RootMetadata, error) {
+	module, function, typeTags, args, err := c.mcmsEncoder.GetRootMetadata()
 	if err != nil {
 		return *new(RootMetadata), err
 	}
@@ -211,11 +218,55 @@ func (c MCMSCaller) GetRootMetadata(opts *bind.CallOpts) (RootMetadata, error) {
 
 // Entry Functions
 
-type MCMSTransactor struct {
+func (c MCMSContract) SetRoot(opts *bind.TransactOpts, root []byte, validUntil uint64, chainId *big.Int, multisig aptos.AccountAddress, preOpCount uint64, postOpCount uint64, overridePreviousRoot bool, metadataProof [][]byte, signatures [][]byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.mcmsEncoder.SetRoot(root, validUntil, chainId, multisig, preOpCount, postOpCount, overridePreviousRoot, metadataProof, signatures)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c MCMSContract) Execute(opts *bind.TransactOpts, chainId *big.Int, multisig aptos.AccountAddress, nonce uint64, to aptos.AccountAddress, moduleName string, function string, data []byte, proof [][]byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.mcmsEncoder.Execute(chainId, multisig, nonce, to, moduleName, function, data, proof)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c MCMSContract) SetConfig(opts *bind.TransactOpts, signerAddresses [][]byte, signerGroups []byte, groupQuorums []byte, groupParents []byte, clearRoot bool) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.mcmsEncoder.SetConfig(signerAddresses, signerGroups, groupQuorums, groupParents, clearRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+// Encoder
+type mcmsEncoder struct {
 	*bind.BoundContract
 }
 
-func (c MCMSTransactor) EncodeSetRoot(root []byte, validUntil uint64, chainId *big.Int, multisig aptos.AccountAddress, preOpCount uint64, postOpCount uint64, overridePreviousRoot bool, metadataProof [][]byte, signatures [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsEncoder) GetConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_config", nil, []string{}, []any{})
+}
+
+func (c mcmsEncoder) GetOpCount() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_op_count", nil, []string{}, []any{})
+}
+
+func (c mcmsEncoder) GetRoot() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_root", nil, []string{}, []any{})
+}
+
+func (c mcmsEncoder) GetRootMetadata() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_root_metadata", nil, []string{}, []any{})
+}
+
+func (c mcmsEncoder) SetRoot(root []byte, validUntil uint64, chainId *big.Int, multisig aptos.AccountAddress, preOpCount uint64, postOpCount uint64, overridePreviousRoot bool, metadataProof [][]byte, signatures [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("set_root", nil, []string{
 		"vector<u8>",
 		"u64",
@@ -239,16 +290,7 @@ func (c MCMSTransactor) EncodeSetRoot(root []byte, validUntil uint64, chainId *b
 	})
 }
 
-func (c MCMSTransactor) SetRoot(opts *bind.TransactOpts, root []byte, validUntil uint64, chainId *big.Int, multisig aptos.AccountAddress, preOpCount uint64, postOpCount uint64, overridePreviousRoot bool, metadataProof [][]byte, signatures [][]byte) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeSetRoot(root, validUntil, chainId, multisig, preOpCount, postOpCount, overridePreviousRoot, metadataProof, signatures)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c MCMSTransactor) EncodeExecute(chainId *big.Int, multisig aptos.AccountAddress, nonce uint64, to aptos.AccountAddress, moduleName string, function string, data []byte, proof [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsEncoder) Execute(chainId *big.Int, multisig aptos.AccountAddress, nonce uint64, to aptos.AccountAddress, moduleName string, function string, data []byte, proof [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("execute", nil, []string{
 		"u256",
 		"address",
@@ -270,16 +312,7 @@ func (c MCMSTransactor) EncodeExecute(chainId *big.Int, multisig aptos.AccountAd
 	})
 }
 
-func (c MCMSTransactor) Execute(opts *bind.TransactOpts, chainId *big.Int, multisig aptos.AccountAddress, nonce uint64, to aptos.AccountAddress, moduleName string, function string, data []byte, proof [][]byte) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeExecute(chainId, multisig, nonce, to, moduleName, function, data, proof)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c MCMSTransactor) EncodeSetConfig(signerAddresses [][]byte, signerGroups []byte, groupQuorums []byte, groupParents []byte, clearRoot bool) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsEncoder) SetConfig(signerAddresses [][]byte, signerGroups []byte, groupQuorums []byte, groupParents []byte, clearRoot bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("set_config", nil, []string{
 		"vector<vector<u8>>",
 		"vector<u8>",
@@ -293,13 +326,4 @@ func (c MCMSTransactor) EncodeSetConfig(signerAddresses [][]byte, signerGroups [
 		groupParents,
 		clearRoot,
 	})
-}
-
-func (c MCMSTransactor) SetConfig(opts *bind.TransactOpts, signerAddresses [][]byte, signerGroups []byte, groupQuorums []byte, groupParents []byte, clearRoot bool) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeSetConfig(signerAddresses, signerGroups, groupQuorums, groupParents, clearRoot)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }

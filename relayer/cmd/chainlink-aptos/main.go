@@ -10,7 +10,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer"
-	chain "github.com/smartcontractkit/chainlink-aptos/relayer/chain"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/config"
 )
 

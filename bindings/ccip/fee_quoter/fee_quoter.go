@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type FeeQuoterInterface interface {
+type FeeQuoter interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	GetTokenPrice(opts *bind.CallOpts, token aptos.AccountAddress) (TimestampedPrice, error)
 	GetTokenPrices(opts *bind.CallOpts, tokens []aptos.AccountAddress) ([]TimestampedPrice, error)
@@ -39,9 +39,41 @@ type FeeQuoterInterface interface {
 	ApplyTokenTransferFeeConfigUpdates(opts *bind.TransactOpts, destChainSelector uint64, addTokens []aptos.AccountAddress, addMinFeeUsdCents []uint32, addMaxFeeUsdCents []uint32, addDeciBps []uint16, addDestGasOverhead []uint32, addDestBytesOverhead []uint32, addIsEnabled []bool, removeTokens []aptos.AccountAddress) (*api.PendingTransaction, error)
 	ApplyPremiumMultiplierWeiPerEthUpdates(opts *bind.TransactOpts, tokens []aptos.AccountAddress, premiumMultiplierWeiPerEth []uint64) (*api.PendingTransaction, error)
 	ApplyDestChainConfigUpdates(opts *bind.TransactOpts, destChainSelector uint64, isEnabled bool, maxNumberOfTokensPerMsg uint16, maxDataBytes uint32, maxPerMsgGasLimit uint32, destGasOverhead uint32, destGasPerPayloadByteBase byte, destGasPerPayloadByteHigh byte, destGasPerPayloadByteThreshold uint16, destDataAvailabilityOverheadGas uint32, destGasPerDataAvailabilityByte uint16, destDataAvailabilityMultiplierBps uint16, chainFamilySelector []byte, enforceOutOfOrder bool, defaultTokenFeeUsdCents uint16, defaultTokenDestGasOverhead uint32, defaultTxGasLimit uint32, gasMultiplierWeiPerEth uint64, gasPriceStalenessThreshold uint32, networkFeeUsdCents uint32) (*api.PendingTransaction, error)
+
+	// Encoder returns the encoder implementation of this module.
+	Encoder() FeeQuoterEncoder
+}
+
+type FeeQuoterEncoder interface {
+	TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetTokenPrice(token aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetTokenPrices(tokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetDestChainGasPrice(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetTokenAndGasPrices(token aptos.AccountAddress, destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ConvertTokenAmount(fromToken aptos.AccountAddress, fromTokenAmount uint64, toToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetFeeTokens() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetTokenTransferFeeConfig(destChainSelector uint64, token aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetPremiumMultiplierWeiPerEth(token aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetDestChainConfig(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetStaticConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	Initialize(maxFeeJuelsPerMsg uint64, linkToken aptos.AccountAddress, tokenPriceStalenessThreshold uint64, feeTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ApplyFeeTokenUpdates(feeTokensToRemove []aptos.AccountAddress, feeTokensToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ApplyTokenTransferFeeConfigUpdates(destChainSelector uint64, addTokens []aptos.AccountAddress, addMinFeeUsdCents []uint32, addMaxFeeUsdCents []uint32, addDeciBps []uint16, addDestGasOverhead []uint32, addDestBytesOverhead []uint32, addIsEnabled []bool, removeTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ApplyPremiumMultiplierWeiPerEthUpdates(tokens []aptos.AccountAddress, premiumMultiplierWeiPerEth []uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ApplyDestChainConfigUpdates(destChainSelector uint64, isEnabled bool, maxNumberOfTokensPerMsg uint16, maxDataBytes uint32, maxPerMsgGasLimit uint32, destGasOverhead uint32, destGasPerPayloadByteBase byte, destGasPerPayloadByteHigh byte, destGasPerPayloadByteThreshold uint16, destDataAvailabilityOverheadGas uint32, destGasPerDataAvailabilityByte uint16, destDataAvailabilityMultiplierBps uint16, chainFamilySelector []byte, enforceOutOfOrder bool, defaultTokenFeeUsdCents uint16, defaultTokenDestGasOverhead uint32, defaultTxGasLimit uint32, gasMultiplierWeiPerEth uint64, gasPriceStalenessThreshold uint32, networkFeeUsdCents uint32) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	UpdatePrices(sourceTokens []aptos.AccountAddress, sourceUsdPerToken []*big.Int, gasDestChainSelectors []uint64, gasUsdPerUnitGas []*big.Int) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ProcessMessageArgs(destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, destTokenAddresses [][]byte, destPoolDatas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
 const FunctionInfo = `[{"package":"ccip","module":"fee_quoter","name":"apply_dest_chain_config_updates","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"is_enabled","type":"bool"},{"name":"max_number_of_tokens_per_msg","type":"u16"},{"name":"max_data_bytes","type":"u32"},{"name":"max_per_msg_gas_limit","type":"u32"},{"name":"dest_gas_overhead","type":"u32"},{"name":"dest_gas_per_payload_byte_base","type":"u8"},{"name":"dest_gas_per_payload_byte_high","type":"u8"},{"name":"dest_gas_per_payload_byte_threshold","type":"u16"},{"name":"dest_data_availability_overhead_gas","type":"u32"},{"name":"dest_gas_per_data_availability_byte","type":"u16"},{"name":"dest_data_availability_multiplier_bps","type":"u16"},{"name":"chain_family_selector","type":"vector\u003cu8\u003e"},{"name":"enforce_out_of_order","type":"bool"},{"name":"default_token_fee_usd_cents","type":"u16"},{"name":"default_token_dest_gas_overhead","type":"u32"},{"name":"default_tx_gas_limit","type":"u32"},{"name":"gas_multiplier_wei_per_eth","type":"u64"},{"name":"gas_price_staleness_threshold","type":"u32"},{"name":"network_fee_usd_cents","type":"u32"}]},{"package":"ccip","module":"fee_quoter","name":"apply_fee_token_updates","parameters":[{"name":"fee_tokens_to_remove","type":"vector\u003caddress\u003e"},{"name":"fee_tokens_to_add","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"apply_premium_multiplier_wei_per_eth_updates","parameters":[{"name":"tokens","type":"vector\u003caddress\u003e"},{"name":"premium_multiplier_wei_per_eth","type":"vector\u003cu64\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"apply_token_transfer_fee_config_updates","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"add_tokens","type":"vector\u003caddress\u003e"},{"name":"add_min_fee_usd_cents","type":"vector\u003cu32\u003e"},{"name":"add_max_fee_usd_cents","type":"vector\u003cu32\u003e"},{"name":"add_deci_bps","type":"vector\u003cu16\u003e"},{"name":"add_dest_gas_overhead","type":"vector\u003cu32\u003e"},{"name":"add_dest_bytes_overhead","type":"vector\u003cu32\u003e"},{"name":"add_is_enabled","type":"vector\u003cbool\u003e"},{"name":"remove_tokens","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"initialize","parameters":[{"name":"max_fee_juels_per_msg","type":"u64"},{"name":"link_token","type":"address"},{"name":"token_price_staleness_threshold","type":"u64"},{"name":"fee_tokens","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"process_message_args","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"fee_token","type":"address"},{"name":"fee_token_amount","type":"u64"},{"name":"extra_args","type":"vector\u003cu8\u003e"},{"name":"dest_token_addresses","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"dest_pool_datas","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"update_prices","parameters":[{"name":"source_tokens","type":"vector\u003caddress\u003e"},{"name":"source_usd_per_token","type":"vector\u003cu256\u003e"},{"name":"gas_dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"gas_usd_per_unit_gas","type":"vector\u003cu256\u003e"}]}]`
+
+func NewFeeQuoter(address aptos.AccountAddress, client aptos.AptosRpcClient) FeeQuoter {
+	contract := bind.NewBoundContract(address, "ccip", "fee_quoter", client)
+	return FeeQuoterContract{
+		BoundContract:    contract,
+		feeQuoterEncoder: feeQuoterEncoder{BoundContract: contract},
+	}
+}
 
 // Structs
 
@@ -143,23 +175,21 @@ type PremiumMultiplierWeiPerEthUpdated struct {
 type McmsCallback struct {
 }
 
-type FeeQuoter struct {
-	FeeQuoterCaller
-	FeeQuoterTransactor
+type FeeQuoterContract struct {
+	*bind.BoundContract
+	feeQuoterEncoder
+}
+
+var _ FeeQuoter = FeeQuoterContract{}
+
+func (c FeeQuoterContract) Encoder() FeeQuoterEncoder {
+	return c.feeQuoterEncoder
 }
 
 // View Functions
 
-type FeeQuoterCaller struct {
-	*bind.BoundContract
-}
-
-func (c FeeQuoterCaller) EncodeTypeAndVersion() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("type_and_version", nil, []string{}, []any{})
-}
-
-func (c FeeQuoterCaller) TypeAndVersion(opts *bind.CallOpts) (string, error) {
-	module, function, typeTags, args, err := c.EncodeTypeAndVersion()
+func (c FeeQuoterContract) TypeAndVersion(opts *bind.CallOpts) (string, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.TypeAndVersion()
 	if err != nil {
 		return *new(string), err
 	}
@@ -179,16 +209,8 @@ func (c FeeQuoterCaller) TypeAndVersion(opts *bind.CallOpts) (string, error) {
 	return r0, nil
 }
 
-func (c FeeQuoterCaller) EncodeGetTokenPrice(token aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_token_price", nil, []string{
-		"address",
-	}, []any{
-		token,
-	})
-}
-
-func (c FeeQuoterCaller) GetTokenPrice(opts *bind.CallOpts, token aptos.AccountAddress) (TimestampedPrice, error) {
-	module, function, typeTags, args, err := c.EncodeGetTokenPrice(token)
+func (c FeeQuoterContract) GetTokenPrice(opts *bind.CallOpts, token aptos.AccountAddress) (TimestampedPrice, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.GetTokenPrice(token)
 	if err != nil {
 		return *new(TimestampedPrice), err
 	}
@@ -208,16 +230,8 @@ func (c FeeQuoterCaller) GetTokenPrice(opts *bind.CallOpts, token aptos.AccountA
 	return r0, nil
 }
 
-func (c FeeQuoterCaller) EncodeGetTokenPrices(tokens []aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_token_prices", nil, []string{
-		"vector<address>",
-	}, []any{
-		tokens,
-	})
-}
-
-func (c FeeQuoterCaller) GetTokenPrices(opts *bind.CallOpts, tokens []aptos.AccountAddress) ([]TimestampedPrice, error) {
-	module, function, typeTags, args, err := c.EncodeGetTokenPrices(tokens)
+func (c FeeQuoterContract) GetTokenPrices(opts *bind.CallOpts, tokens []aptos.AccountAddress) ([]TimestampedPrice, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.GetTokenPrices(tokens)
 	if err != nil {
 		return *new([]TimestampedPrice), err
 	}
@@ -237,16 +251,8 @@ func (c FeeQuoterCaller) GetTokenPrices(opts *bind.CallOpts, tokens []aptos.Acco
 	return r0, nil
 }
 
-func (c FeeQuoterCaller) EncodeGetDestChainGasPrice(destChainSelector uint64) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_dest_chain_gas_price", nil, []string{
-		"u64",
-	}, []any{
-		destChainSelector,
-	})
-}
-
-func (c FeeQuoterCaller) GetDestChainGasPrice(opts *bind.CallOpts, destChainSelector uint64) (TimestampedPrice, error) {
-	module, function, typeTags, args, err := c.EncodeGetDestChainGasPrice(destChainSelector)
+func (c FeeQuoterContract) GetDestChainGasPrice(opts *bind.CallOpts, destChainSelector uint64) (TimestampedPrice, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.GetDestChainGasPrice(destChainSelector)
 	if err != nil {
 		return *new(TimestampedPrice), err
 	}
@@ -266,18 +272,8 @@ func (c FeeQuoterCaller) GetDestChainGasPrice(opts *bind.CallOpts, destChainSele
 	return r0, nil
 }
 
-func (c FeeQuoterCaller) EncodeGetTokenAndGasPrices(token aptos.AccountAddress, destChainSelector uint64) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_token_and_gas_prices", nil, []string{
-		"address",
-		"u64",
-	}, []any{
-		token,
-		destChainSelector,
-	})
-}
-
-func (c FeeQuoterCaller) GetTokenAndGasPrices(opts *bind.CallOpts, token aptos.AccountAddress, destChainSelector uint64) (*big.Int, *big.Int, error) {
-	module, function, typeTags, args, err := c.EncodeGetTokenAndGasPrices(token, destChainSelector)
+func (c FeeQuoterContract) GetTokenAndGasPrices(opts *bind.CallOpts, token aptos.AccountAddress, destChainSelector uint64) (*big.Int, *big.Int, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.GetTokenAndGasPrices(token, destChainSelector)
 	if err != nil {
 		return *new(*big.Int), *new(*big.Int), err
 	}
@@ -298,20 +294,8 @@ func (c FeeQuoterCaller) GetTokenAndGasPrices(opts *bind.CallOpts, token aptos.A
 	return r0, r1, nil
 }
 
-func (c FeeQuoterCaller) EncodeConvertTokenAmount(fromToken aptos.AccountAddress, fromTokenAmount uint64, toToken aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("convert_token_amount", nil, []string{
-		"address",
-		"u64",
-		"address",
-	}, []any{
-		fromToken,
-		fromTokenAmount,
-		toToken,
-	})
-}
-
-func (c FeeQuoterCaller) ConvertTokenAmount(opts *bind.CallOpts, fromToken aptos.AccountAddress, fromTokenAmount uint64, toToken aptos.AccountAddress) (uint64, error) {
-	module, function, typeTags, args, err := c.EncodeConvertTokenAmount(fromToken, fromTokenAmount, toToken)
+func (c FeeQuoterContract) ConvertTokenAmount(opts *bind.CallOpts, fromToken aptos.AccountAddress, fromTokenAmount uint64, toToken aptos.AccountAddress) (uint64, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.ConvertTokenAmount(fromToken, fromTokenAmount, toToken)
 	if err != nil {
 		return *new(uint64), err
 	}
@@ -331,12 +315,8 @@ func (c FeeQuoterCaller) ConvertTokenAmount(opts *bind.CallOpts, fromToken aptos
 	return r0, nil
 }
 
-func (c FeeQuoterCaller) EncodeGetFeeTokens() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_fee_tokens", nil, []string{}, []any{})
-}
-
-func (c FeeQuoterCaller) GetFeeTokens(opts *bind.CallOpts) ([]aptos.AccountAddress, error) {
-	module, function, typeTags, args, err := c.EncodeGetFeeTokens()
+func (c FeeQuoterContract) GetFeeTokens(opts *bind.CallOpts) ([]aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.GetFeeTokens()
 	if err != nil {
 		return *new([]aptos.AccountAddress), err
 	}
@@ -356,18 +336,8 @@ func (c FeeQuoterCaller) GetFeeTokens(opts *bind.CallOpts) ([]aptos.AccountAddre
 	return r0, nil
 }
 
-func (c FeeQuoterCaller) EncodeGetTokenTransferFeeConfig(destChainSelector uint64, token aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_token_transfer_fee_config", nil, []string{
-		"u64",
-		"address",
-	}, []any{
-		destChainSelector,
-		token,
-	})
-}
-
-func (c FeeQuoterCaller) GetTokenTransferFeeConfig(opts *bind.CallOpts, destChainSelector uint64, token aptos.AccountAddress) (TokenTransferFeeConfig, error) {
-	module, function, typeTags, args, err := c.EncodeGetTokenTransferFeeConfig(destChainSelector, token)
+func (c FeeQuoterContract) GetTokenTransferFeeConfig(opts *bind.CallOpts, destChainSelector uint64, token aptos.AccountAddress) (TokenTransferFeeConfig, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.GetTokenTransferFeeConfig(destChainSelector, token)
 	if err != nil {
 		return *new(TokenTransferFeeConfig), err
 	}
@@ -387,16 +357,8 @@ func (c FeeQuoterCaller) GetTokenTransferFeeConfig(opts *bind.CallOpts, destChai
 	return r0, nil
 }
 
-func (c FeeQuoterCaller) EncodeGetPremiumMultiplierWeiPerEth(token aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_premium_multiplier_wei_per_eth", nil, []string{
-		"address",
-	}, []any{
-		token,
-	})
-}
-
-func (c FeeQuoterCaller) GetPremiumMultiplierWeiPerEth(opts *bind.CallOpts, token aptos.AccountAddress) (uint64, error) {
-	module, function, typeTags, args, err := c.EncodeGetPremiumMultiplierWeiPerEth(token)
+func (c FeeQuoterContract) GetPremiumMultiplierWeiPerEth(opts *bind.CallOpts, token aptos.AccountAddress) (uint64, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.GetPremiumMultiplierWeiPerEth(token)
 	if err != nil {
 		return *new(uint64), err
 	}
@@ -416,16 +378,8 @@ func (c FeeQuoterCaller) GetPremiumMultiplierWeiPerEth(opts *bind.CallOpts, toke
 	return r0, nil
 }
 
-func (c FeeQuoterCaller) EncodeGetDestChainConfig(destChainSelector uint64) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_dest_chain_config", nil, []string{
-		"u64",
-	}, []any{
-		destChainSelector,
-	})
-}
-
-func (c FeeQuoterCaller) GetDestChainConfig(opts *bind.CallOpts, destChainSelector uint64) (DestChainConfig, error) {
-	module, function, typeTags, args, err := c.EncodeGetDestChainConfig(destChainSelector)
+func (c FeeQuoterContract) GetDestChainConfig(opts *bind.CallOpts, destChainSelector uint64) (DestChainConfig, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.GetDestChainConfig(destChainSelector)
 	if err != nil {
 		return *new(DestChainConfig), err
 	}
@@ -445,12 +399,8 @@ func (c FeeQuoterCaller) GetDestChainConfig(opts *bind.CallOpts, destChainSelect
 	return r0, nil
 }
 
-func (c FeeQuoterCaller) EncodeGetStaticConfig() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_static_config", nil, []string{}, []any{})
-}
-
-func (c FeeQuoterCaller) GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error) {
-	module, function, typeTags, args, err := c.EncodeGetStaticConfig()
+func (c FeeQuoterContract) GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.GetStaticConfig()
 	if err != nil {
 		return *new(StaticConfig), err
 	}
@@ -472,11 +422,141 @@ func (c FeeQuoterCaller) GetStaticConfig(opts *bind.CallOpts) (StaticConfig, err
 
 // Entry Functions
 
-type FeeQuoterTransactor struct {
+func (c FeeQuoterContract) Initialize(opts *bind.TransactOpts, maxFeeJuelsPerMsg uint64, linkToken aptos.AccountAddress, tokenPriceStalenessThreshold uint64, feeTokens []aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.Initialize(maxFeeJuelsPerMsg, linkToken, tokenPriceStalenessThreshold, feeTokens)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c FeeQuoterContract) ApplyFeeTokenUpdates(opts *bind.TransactOpts, feeTokensToRemove []aptos.AccountAddress, feeTokensToAdd []aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.ApplyFeeTokenUpdates(feeTokensToRemove, feeTokensToAdd)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c FeeQuoterContract) ApplyTokenTransferFeeConfigUpdates(opts *bind.TransactOpts, destChainSelector uint64, addTokens []aptos.AccountAddress, addMinFeeUsdCents []uint32, addMaxFeeUsdCents []uint32, addDeciBps []uint16, addDestGasOverhead []uint32, addDestBytesOverhead []uint32, addIsEnabled []bool, removeTokens []aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.ApplyTokenTransferFeeConfigUpdates(destChainSelector, addTokens, addMinFeeUsdCents, addMaxFeeUsdCents, addDeciBps, addDestGasOverhead, addDestBytesOverhead, addIsEnabled, removeTokens)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c FeeQuoterContract) ApplyPremiumMultiplierWeiPerEthUpdates(opts *bind.TransactOpts, tokens []aptos.AccountAddress, premiumMultiplierWeiPerEth []uint64) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.ApplyPremiumMultiplierWeiPerEthUpdates(tokens, premiumMultiplierWeiPerEth)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c FeeQuoterContract) ApplyDestChainConfigUpdates(opts *bind.TransactOpts, destChainSelector uint64, isEnabled bool, maxNumberOfTokensPerMsg uint16, maxDataBytes uint32, maxPerMsgGasLimit uint32, destGasOverhead uint32, destGasPerPayloadByteBase byte, destGasPerPayloadByteHigh byte, destGasPerPayloadByteThreshold uint16, destDataAvailabilityOverheadGas uint32, destGasPerDataAvailabilityByte uint16, destDataAvailabilityMultiplierBps uint16, chainFamilySelector []byte, enforceOutOfOrder bool, defaultTokenFeeUsdCents uint16, defaultTokenDestGasOverhead uint32, defaultTxGasLimit uint32, gasMultiplierWeiPerEth uint64, gasPriceStalenessThreshold uint32, networkFeeUsdCents uint32) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.ApplyDestChainConfigUpdates(destChainSelector, isEnabled, maxNumberOfTokensPerMsg, maxDataBytes, maxPerMsgGasLimit, destGasOverhead, destGasPerPayloadByteBase, destGasPerPayloadByteHigh, destGasPerPayloadByteThreshold, destDataAvailabilityOverheadGas, destGasPerDataAvailabilityByte, destDataAvailabilityMultiplierBps, chainFamilySelector, enforceOutOfOrder, defaultTokenFeeUsdCents, defaultTokenDestGasOverhead, defaultTxGasLimit, gasMultiplierWeiPerEth, gasPriceStalenessThreshold, networkFeeUsdCents)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+// Encoder
+type feeQuoterEncoder struct {
 	*bind.BoundContract
 }
 
-func (c FeeQuoterTransactor) EncodeInitialize(maxFeeJuelsPerMsg uint64, linkToken aptos.AccountAddress, tokenPriceStalenessThreshold uint64, feeTokens []aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c feeQuoterEncoder) TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("type_and_version", nil, []string{}, []any{})
+}
+
+func (c feeQuoterEncoder) GetTokenPrice(token aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_token_price", nil, []string{
+		"address",
+	}, []any{
+		token,
+	})
+}
+
+func (c feeQuoterEncoder) GetTokenPrices(tokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_token_prices", nil, []string{
+		"vector<address>",
+	}, []any{
+		tokens,
+	})
+}
+
+func (c feeQuoterEncoder) GetDestChainGasPrice(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_dest_chain_gas_price", nil, []string{
+		"u64",
+	}, []any{
+		destChainSelector,
+	})
+}
+
+func (c feeQuoterEncoder) GetTokenAndGasPrices(token aptos.AccountAddress, destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_token_and_gas_prices", nil, []string{
+		"address",
+		"u64",
+	}, []any{
+		token,
+		destChainSelector,
+	})
+}
+
+func (c feeQuoterEncoder) ConvertTokenAmount(fromToken aptos.AccountAddress, fromTokenAmount uint64, toToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("convert_token_amount", nil, []string{
+		"address",
+		"u64",
+		"address",
+	}, []any{
+		fromToken,
+		fromTokenAmount,
+		toToken,
+	})
+}
+
+func (c feeQuoterEncoder) GetFeeTokens() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_fee_tokens", nil, []string{}, []any{})
+}
+
+func (c feeQuoterEncoder) GetTokenTransferFeeConfig(destChainSelector uint64, token aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_token_transfer_fee_config", nil, []string{
+		"u64",
+		"address",
+	}, []any{
+		destChainSelector,
+		token,
+	})
+}
+
+func (c feeQuoterEncoder) GetPremiumMultiplierWeiPerEth(token aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_premium_multiplier_wei_per_eth", nil, []string{
+		"address",
+	}, []any{
+		token,
+	})
+}
+
+func (c feeQuoterEncoder) GetDestChainConfig(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_dest_chain_config", nil, []string{
+		"u64",
+	}, []any{
+		destChainSelector,
+	})
+}
+
+func (c feeQuoterEncoder) GetStaticConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_static_config", nil, []string{}, []any{})
+}
+
+func (c feeQuoterEncoder) Initialize(maxFeeJuelsPerMsg uint64, linkToken aptos.AccountAddress, tokenPriceStalenessThreshold uint64, feeTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("initialize", nil, []string{
 		"u64",
 		"address",
@@ -490,16 +570,7 @@ func (c FeeQuoterTransactor) EncodeInitialize(maxFeeJuelsPerMsg uint64, linkToke
 	})
 }
 
-func (c FeeQuoterTransactor) Initialize(opts *bind.TransactOpts, maxFeeJuelsPerMsg uint64, linkToken aptos.AccountAddress, tokenPriceStalenessThreshold uint64, feeTokens []aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeInitialize(maxFeeJuelsPerMsg, linkToken, tokenPriceStalenessThreshold, feeTokens)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c FeeQuoterTransactor) EncodeApplyFeeTokenUpdates(feeTokensToRemove []aptos.AccountAddress, feeTokensToAdd []aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c feeQuoterEncoder) ApplyFeeTokenUpdates(feeTokensToRemove []aptos.AccountAddress, feeTokensToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("apply_fee_token_updates", nil, []string{
 		"vector<address>",
 		"vector<address>",
@@ -509,16 +580,7 @@ func (c FeeQuoterTransactor) EncodeApplyFeeTokenUpdates(feeTokensToRemove []apto
 	})
 }
 
-func (c FeeQuoterTransactor) ApplyFeeTokenUpdates(opts *bind.TransactOpts, feeTokensToRemove []aptos.AccountAddress, feeTokensToAdd []aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeApplyFeeTokenUpdates(feeTokensToRemove, feeTokensToAdd)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c FeeQuoterTransactor) EncodeApplyTokenTransferFeeConfigUpdates(destChainSelector uint64, addTokens []aptos.AccountAddress, addMinFeeUsdCents []uint32, addMaxFeeUsdCents []uint32, addDeciBps []uint16, addDestGasOverhead []uint32, addDestBytesOverhead []uint32, addIsEnabled []bool, removeTokens []aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c feeQuoterEncoder) ApplyTokenTransferFeeConfigUpdates(destChainSelector uint64, addTokens []aptos.AccountAddress, addMinFeeUsdCents []uint32, addMaxFeeUsdCents []uint32, addDeciBps []uint16, addDestGasOverhead []uint32, addDestBytesOverhead []uint32, addIsEnabled []bool, removeTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("apply_token_transfer_fee_config_updates", nil, []string{
 		"u64",
 		"vector<address>",
@@ -542,16 +604,7 @@ func (c FeeQuoterTransactor) EncodeApplyTokenTransferFeeConfigUpdates(destChainS
 	})
 }
 
-func (c FeeQuoterTransactor) ApplyTokenTransferFeeConfigUpdates(opts *bind.TransactOpts, destChainSelector uint64, addTokens []aptos.AccountAddress, addMinFeeUsdCents []uint32, addMaxFeeUsdCents []uint32, addDeciBps []uint16, addDestGasOverhead []uint32, addDestBytesOverhead []uint32, addIsEnabled []bool, removeTokens []aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeApplyTokenTransferFeeConfigUpdates(destChainSelector, addTokens, addMinFeeUsdCents, addMaxFeeUsdCents, addDeciBps, addDestGasOverhead, addDestBytesOverhead, addIsEnabled, removeTokens)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c FeeQuoterTransactor) EncodeApplyPremiumMultiplierWeiPerEthUpdates(tokens []aptos.AccountAddress, premiumMultiplierWeiPerEth []uint64) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c feeQuoterEncoder) ApplyPremiumMultiplierWeiPerEthUpdates(tokens []aptos.AccountAddress, premiumMultiplierWeiPerEth []uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("apply_premium_multiplier_wei_per_eth_updates", nil, []string{
 		"vector<address>",
 		"vector<u64>",
@@ -561,16 +614,7 @@ func (c FeeQuoterTransactor) EncodeApplyPremiumMultiplierWeiPerEthUpdates(tokens
 	})
 }
 
-func (c FeeQuoterTransactor) ApplyPremiumMultiplierWeiPerEthUpdates(opts *bind.TransactOpts, tokens []aptos.AccountAddress, premiumMultiplierWeiPerEth []uint64) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeApplyPremiumMultiplierWeiPerEthUpdates(tokens, premiumMultiplierWeiPerEth)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c FeeQuoterTransactor) EncodeApplyDestChainConfigUpdates(destChainSelector uint64, isEnabled bool, maxNumberOfTokensPerMsg uint16, maxDataBytes uint32, maxPerMsgGasLimit uint32, destGasOverhead uint32, destGasPerPayloadByteBase byte, destGasPerPayloadByteHigh byte, destGasPerPayloadByteThreshold uint16, destDataAvailabilityOverheadGas uint32, destGasPerDataAvailabilityByte uint16, destDataAvailabilityMultiplierBps uint16, chainFamilySelector []byte, enforceOutOfOrder bool, defaultTokenFeeUsdCents uint16, defaultTokenDestGasOverhead uint32, defaultTxGasLimit uint32, gasMultiplierWeiPerEth uint64, gasPriceStalenessThreshold uint32, networkFeeUsdCents uint32) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c feeQuoterEncoder) ApplyDestChainConfigUpdates(destChainSelector uint64, isEnabled bool, maxNumberOfTokensPerMsg uint16, maxDataBytes uint32, maxPerMsgGasLimit uint32, destGasOverhead uint32, destGasPerPayloadByteBase byte, destGasPerPayloadByteHigh byte, destGasPerPayloadByteThreshold uint16, destDataAvailabilityOverheadGas uint32, destGasPerDataAvailabilityByte uint16, destDataAvailabilityMultiplierBps uint16, chainFamilySelector []byte, enforceOutOfOrder bool, defaultTokenFeeUsdCents uint16, defaultTokenDestGasOverhead uint32, defaultTxGasLimit uint32, gasMultiplierWeiPerEth uint64, gasPriceStalenessThreshold uint32, networkFeeUsdCents uint32) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("apply_dest_chain_config_updates", nil, []string{
 		"u64",
 		"bool",
@@ -616,18 +660,7 @@ func (c FeeQuoterTransactor) EncodeApplyDestChainConfigUpdates(destChainSelector
 	})
 }
 
-func (c FeeQuoterTransactor) ApplyDestChainConfigUpdates(opts *bind.TransactOpts, destChainSelector uint64, isEnabled bool, maxNumberOfTokensPerMsg uint16, maxDataBytes uint32, maxPerMsgGasLimit uint32, destGasOverhead uint32, destGasPerPayloadByteBase byte, destGasPerPayloadByteHigh byte, destGasPerPayloadByteThreshold uint16, destDataAvailabilityOverheadGas uint32, destGasPerDataAvailabilityByte uint16, destDataAvailabilityMultiplierBps uint16, chainFamilySelector []byte, enforceOutOfOrder bool, defaultTokenFeeUsdCents uint16, defaultTokenDestGasOverhead uint32, defaultTxGasLimit uint32, gasMultiplierWeiPerEth uint64, gasPriceStalenessThreshold uint32, networkFeeUsdCents uint32) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeApplyDestChainConfigUpdates(destChainSelector, isEnabled, maxNumberOfTokensPerMsg, maxDataBytes, maxPerMsgGasLimit, destGasOverhead, destGasPerPayloadByteBase, destGasPerPayloadByteHigh, destGasPerPayloadByteThreshold, destDataAvailabilityOverheadGas, destGasPerDataAvailabilityByte, destDataAvailabilityMultiplierBps, chainFamilySelector, enforceOutOfOrder, defaultTokenFeeUsdCents, defaultTokenDestGasOverhead, defaultTxGasLimit, gasMultiplierWeiPerEth, gasPriceStalenessThreshold, networkFeeUsdCents)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-// Other Functions
-
-func (c FeeQuoterCaller) EncodeUpdatePrices(sourceTokens []aptos.AccountAddress, sourceUsdPerToken []*big.Int, gasDestChainSelectors []uint64, gasUsdPerUnitGas []*big.Int) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c feeQuoterEncoder) UpdatePrices(sourceTokens []aptos.AccountAddress, sourceUsdPerToken []*big.Int, gasDestChainSelectors []uint64, gasUsdPerUnitGas []*big.Int) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("update_prices", nil, []string{
 		"vector<address>",
 		"vector<u256>",
@@ -641,7 +674,7 @@ func (c FeeQuoterCaller) EncodeUpdatePrices(sourceTokens []aptos.AccountAddress,
 	})
 }
 
-func (c FeeQuoterCaller) EncodeProcessMessageArgs(destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, destTokenAddresses [][]byte, destPoolDatas [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c feeQuoterEncoder) ProcessMessageArgs(destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, destTokenAddresses [][]byte, destPoolDatas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("process_message_args", nil, []string{
 		"u64",
 		"address",

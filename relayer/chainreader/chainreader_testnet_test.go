@@ -26,5 +26,11 @@ func runTestnetTest(t *testing.T, rpcUrl string) {
 		t.Fatal("PRIVATE_KEY or ADDRESS environment variable is not set")
 	}
 
-	runChainReaderTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
+	t.Run("GetLatestValue", func(t *testing.T) {
+		runGetLatestValueTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
+	})
+
+	t.Run("QueryKey", func(t *testing.T) {
+		runQueryKeyTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
+	})
 }

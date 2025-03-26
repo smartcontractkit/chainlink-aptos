@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type TokenAdminRegistryInterface interface {
+type TokenAdminRegistry interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	GetPools(opts *bind.CallOpts, localTokens []aptos.AccountAddress) ([]aptos.AccountAddress, error)
 	GetPool(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, error)
@@ -32,9 +32,34 @@ type TokenAdminRegistryInterface interface {
 	SetPool(opts *bind.TransactOpts, localToken aptos.AccountAddress, tokenPoolAddress aptos.AccountAddress) (*api.PendingTransaction, error)
 	TransferAdminRole(opts *bind.TransactOpts, localToken aptos.AccountAddress, newAdmin aptos.AccountAddress) (*api.PendingTransaction, error)
 	AcceptAdminRole(opts *bind.TransactOpts, localToken aptos.AccountAddress) (*api.PendingTransaction, error)
+
+	// Encoder returns the encoder implementation of this module.
+	Encoder() TokenAdminRegistryEncoder
+}
+
+type TokenAdminRegistryEncoder interface {
+	TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetPools(localTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetPool(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetTokenConfig(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetAllConfiguredTokens(startingBucketIndex uint64, startingVectorIndex uint64, maxCount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	IsAdministrator(localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	SetPool(localToken aptos.AccountAddress, tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TransferAdminRole(localToken aptos.AccountAddress, newAdmin aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	AcceptAdminRole(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	FinishLockOrBurn(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	FinishReleaseOrMint(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
 const FunctionInfo = `[{"package":"ccip","module":"token_admin_registry","name":"accept_admin_role","parameters":[{"name":"local_token","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"finish_lock_or_burn","parameters":[{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"finish_release_or_mint","parameters":[{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"set_pool","parameters":[{"name":"local_token","type":"address"},{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"transfer_admin_role","parameters":[{"name":"local_token","type":"address"},{"name":"new_admin","type":"address"}]}]`
+
+func NewTokenAdminRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) TokenAdminRegistry {
+	contract := bind.NewBoundContract(address, "ccip", "token_admin_registry", client)
+	return TokenAdminRegistryContract{
+		BoundContract:             contract,
+		tokenAdminRegistryEncoder: tokenAdminRegistryEncoder{BoundContract: contract},
+	}
+}
 
 // Structs
 
@@ -101,23 +126,21 @@ type AdministratorTransferred struct {
 type McmsCallback struct {
 }
 
-type TokenAdminRegistry struct {
-	TokenAdminRegistryCaller
-	TokenAdminRegistryTransactor
+type TokenAdminRegistryContract struct {
+	*bind.BoundContract
+	tokenAdminRegistryEncoder
+}
+
+var _ TokenAdminRegistry = TokenAdminRegistryContract{}
+
+func (c TokenAdminRegistryContract) Encoder() TokenAdminRegistryEncoder {
+	return c.tokenAdminRegistryEncoder
 }
 
 // View Functions
 
-type TokenAdminRegistryCaller struct {
-	*bind.BoundContract
-}
-
-func (c TokenAdminRegistryCaller) EncodeTypeAndVersion() (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("type_and_version", nil, []string{}, []any{})
-}
-
-func (c TokenAdminRegistryCaller) TypeAndVersion(opts *bind.CallOpts) (string, error) {
-	module, function, typeTags, args, err := c.EncodeTypeAndVersion()
+func (c TokenAdminRegistryContract) TypeAndVersion(opts *bind.CallOpts) (string, error) {
+	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.TypeAndVersion()
 	if err != nil {
 		return *new(string), err
 	}
@@ -137,16 +160,8 @@ func (c TokenAdminRegistryCaller) TypeAndVersion(opts *bind.CallOpts) (string, e
 	return r0, nil
 }
 
-func (c TokenAdminRegistryCaller) EncodeGetPools(localTokens []aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_pools", nil, []string{
-		"vector<address>",
-	}, []any{
-		localTokens,
-	})
-}
-
-func (c TokenAdminRegistryCaller) GetPools(opts *bind.CallOpts, localTokens []aptos.AccountAddress) ([]aptos.AccountAddress, error) {
-	module, function, typeTags, args, err := c.EncodeGetPools(localTokens)
+func (c TokenAdminRegistryContract) GetPools(opts *bind.CallOpts, localTokens []aptos.AccountAddress) ([]aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.GetPools(localTokens)
 	if err != nil {
 		return *new([]aptos.AccountAddress), err
 	}
@@ -166,16 +181,8 @@ func (c TokenAdminRegistryCaller) GetPools(opts *bind.CallOpts, localTokens []ap
 	return r0, nil
 }
 
-func (c TokenAdminRegistryCaller) EncodeGetPool(localToken aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_pool", nil, []string{
-		"address",
-	}, []any{
-		localToken,
-	})
-}
-
-func (c TokenAdminRegistryCaller) GetPool(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, error) {
-	module, function, typeTags, args, err := c.EncodeGetPool(localToken)
+func (c TokenAdminRegistryContract) GetPool(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.GetPool(localToken)
 	if err != nil {
 		return *new(aptos.AccountAddress), err
 	}
@@ -195,16 +202,8 @@ func (c TokenAdminRegistryCaller) GetPool(opts *bind.CallOpts, localToken aptos.
 	return r0, nil
 }
 
-func (c TokenAdminRegistryCaller) EncodeGetTokenConfig(localToken aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_token_config", nil, []string{
-		"address",
-	}, []any{
-		localToken,
-	})
-}
-
-func (c TokenAdminRegistryCaller) GetTokenConfig(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, aptos.AccountAddress, aptos.AccountAddress, error) {
-	module, function, typeTags, args, err := c.EncodeGetTokenConfig(localToken)
+func (c TokenAdminRegistryContract) GetTokenConfig(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, aptos.AccountAddress, aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.GetTokenConfig(localToken)
 	if err != nil {
 		return *new(aptos.AccountAddress), *new(aptos.AccountAddress), *new(aptos.AccountAddress), err
 	}
@@ -226,20 +225,8 @@ func (c TokenAdminRegistryCaller) GetTokenConfig(opts *bind.CallOpts, localToken
 	return r0, r1, r2, nil
 }
 
-func (c TokenAdminRegistryCaller) EncodeGetAllConfiguredTokens(startingBucketIndex uint64, startingVectorIndex uint64, maxCount uint64) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_all_configured_tokens", nil, []string{
-		"u64",
-		"u64",
-		"u64",
-	}, []any{
-		startingBucketIndex,
-		startingVectorIndex,
-		maxCount,
-	})
-}
-
-func (c TokenAdminRegistryCaller) GetAllConfiguredTokens(opts *bind.CallOpts, startingBucketIndex uint64, startingVectorIndex uint64, maxCount uint64) ([]aptos.AccountAddress, *uint64, *uint64, error) {
-	module, function, typeTags, args, err := c.EncodeGetAllConfiguredTokens(startingBucketIndex, startingVectorIndex, maxCount)
+func (c TokenAdminRegistryContract) GetAllConfiguredTokens(opts *bind.CallOpts, startingBucketIndex uint64, startingVectorIndex uint64, maxCount uint64) ([]aptos.AccountAddress, *uint64, *uint64, error) {
+	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.GetAllConfiguredTokens(startingBucketIndex, startingVectorIndex, maxCount)
 	if err != nil {
 		return *new([]aptos.AccountAddress), *new(*uint64), *new(*uint64), err
 	}
@@ -261,18 +248,8 @@ func (c TokenAdminRegistryCaller) GetAllConfiguredTokens(opts *bind.CallOpts, st
 	return r0, r1.Value(), r2.Value(), nil
 }
 
-func (c TokenAdminRegistryCaller) EncodeIsAdministrator(localToken aptos.AccountAddress, administrator aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("is_administrator", nil, []string{
-		"address",
-		"address",
-	}, []any{
-		localToken,
-		administrator,
-	})
-}
-
-func (c TokenAdminRegistryCaller) IsAdministrator(opts *bind.CallOpts, localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bool, error) {
-	module, function, typeTags, args, err := c.EncodeIsAdministrator(localToken, administrator)
+func (c TokenAdminRegistryContract) IsAdministrator(opts *bind.CallOpts, localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bool, error) {
+	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.IsAdministrator(localToken, administrator)
 	if err != nil {
 		return *new(bool), err
 	}
@@ -294,11 +271,89 @@ func (c TokenAdminRegistryCaller) IsAdministrator(opts *bind.CallOpts, localToke
 
 // Entry Functions
 
-type TokenAdminRegistryTransactor struct {
+func (c TokenAdminRegistryContract) SetPool(opts *bind.TransactOpts, localToken aptos.AccountAddress, tokenPoolAddress aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.SetPool(localToken, tokenPoolAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c TokenAdminRegistryContract) TransferAdminRole(opts *bind.TransactOpts, localToken aptos.AccountAddress, newAdmin aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.TransferAdminRole(localToken, newAdmin)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c TokenAdminRegistryContract) AcceptAdminRole(opts *bind.TransactOpts, localToken aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.AcceptAdminRole(localToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+// Encoder
+type tokenAdminRegistryEncoder struct {
 	*bind.BoundContract
 }
 
-func (c TokenAdminRegistryTransactor) EncodeSetPool(localToken aptos.AccountAddress, tokenPoolAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c tokenAdminRegistryEncoder) TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("type_and_version", nil, []string{}, []any{})
+}
+
+func (c tokenAdminRegistryEncoder) GetPools(localTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_pools", nil, []string{
+		"vector<address>",
+	}, []any{
+		localTokens,
+	})
+}
+
+func (c tokenAdminRegistryEncoder) GetPool(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_pool", nil, []string{
+		"address",
+	}, []any{
+		localToken,
+	})
+}
+
+func (c tokenAdminRegistryEncoder) GetTokenConfig(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_token_config", nil, []string{
+		"address",
+	}, []any{
+		localToken,
+	})
+}
+
+func (c tokenAdminRegistryEncoder) GetAllConfiguredTokens(startingBucketIndex uint64, startingVectorIndex uint64, maxCount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_all_configured_tokens", nil, []string{
+		"u64",
+		"u64",
+		"u64",
+	}, []any{
+		startingBucketIndex,
+		startingVectorIndex,
+		maxCount,
+	})
+}
+
+func (c tokenAdminRegistryEncoder) IsAdministrator(localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("is_administrator", nil, []string{
+		"address",
+		"address",
+	}, []any{
+		localToken,
+		administrator,
+	})
+}
+
+func (c tokenAdminRegistryEncoder) SetPool(localToken aptos.AccountAddress, tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("set_pool", nil, []string{
 		"address",
 		"address",
@@ -308,16 +363,7 @@ func (c TokenAdminRegistryTransactor) EncodeSetPool(localToken aptos.AccountAddr
 	})
 }
 
-func (c TokenAdminRegistryTransactor) SetPool(opts *bind.TransactOpts, localToken aptos.AccountAddress, tokenPoolAddress aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeSetPool(localToken, tokenPoolAddress)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c TokenAdminRegistryTransactor) EncodeTransferAdminRole(localToken aptos.AccountAddress, newAdmin aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c tokenAdminRegistryEncoder) TransferAdminRole(localToken aptos.AccountAddress, newAdmin aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("transfer_admin_role", nil, []string{
 		"address",
 		"address",
@@ -327,16 +373,7 @@ func (c TokenAdminRegistryTransactor) EncodeTransferAdminRole(localToken aptos.A
 	})
 }
 
-func (c TokenAdminRegistryTransactor) TransferAdminRole(opts *bind.TransactOpts, localToken aptos.AccountAddress, newAdmin aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeTransferAdminRole(localToken, newAdmin)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c TokenAdminRegistryTransactor) EncodeAcceptAdminRole(localToken aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c tokenAdminRegistryEncoder) AcceptAdminRole(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("accept_admin_role", nil, []string{
 		"address",
 	}, []any{
@@ -344,18 +381,7 @@ func (c TokenAdminRegistryTransactor) EncodeAcceptAdminRole(localToken aptos.Acc
 	})
 }
 
-func (c TokenAdminRegistryTransactor) AcceptAdminRole(opts *bind.TransactOpts, localToken aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeAcceptAdminRole(localToken)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-// Other Functions
-
-func (c TokenAdminRegistryCaller) EncodeFinishLockOrBurn(tokenPoolAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c tokenAdminRegistryEncoder) FinishLockOrBurn(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("finish_lock_or_burn", nil, []string{
 		"address",
 	}, []any{
@@ -363,7 +389,7 @@ func (c TokenAdminRegistryCaller) EncodeFinishLockOrBurn(tokenPoolAddress aptos.
 	})
 }
 
-func (c TokenAdminRegistryCaller) EncodeFinishReleaseOrMint(tokenPoolAddress aptos.AccountAddress) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c tokenAdminRegistryEncoder) FinishReleaseOrMint(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("finish_release_or_mint", nil, []string{
 		"address",
 	}, []any{

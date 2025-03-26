@@ -13,14 +13,14 @@ module test::echo {
         text: String
     }
 
-    struct TripleValueEvent has store, drop {
+    struct VectorVectorEvent has store, drop {
         values: vector<vector<u8>>
     }
 
     struct EventStore has key {
         single_value_events: event::EventHandle<SingleValueEvent>,
         double_value_events: event::EventHandle<DoubleValueEvent>,
-        triple_value_events: event::EventHandle<TripleValueEvent>
+        vector_vector_events: event::EventHandle<VectorVectorEvent>
     }
 
     fun init_module(account: &signer) {
@@ -29,7 +29,7 @@ module test::echo {
             EventStore {
                 single_value_events: account::new_event_handle<SingleValueEvent>(account),
                 double_value_events: account::new_event_handle<DoubleValueEvent>(account),
-                triple_value_events: account::new_event_handle<TripleValueEvent>(account)
+                vector_vector_events: account::new_event_handle<VectorVectorEvent>(account)
             }
         );
     }
@@ -51,7 +51,13 @@ module test::echo {
 
         let values = vector::empty<vector<u8>>();
         vector::push_back(&mut values, bytes);
-        event::emit_event(&mut store.triple_value_events, TripleValueEvent { values });
+        event::emit_event(&mut store.vector_vector_events, VectorVectorEvent { values });
+    }
+
+    // used to test event account address handling in ChainReader
+    #[view]
+    public fun get_event_address(): address {
+        @test
     }
 
     #[view]
