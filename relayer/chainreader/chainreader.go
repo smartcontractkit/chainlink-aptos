@@ -157,6 +157,13 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		return fmt.Errorf("failed to call view function: %+w", err)
 	}
 
+	// In order to support multi-returns, all values are returned as []any
+	// However, vector or tuple return types are not necessary wrapped
+	// in an additional slice, eg:
+	// u32 return type -> [1]
+	// (u32, u64) tuple return type -> [1, 2]
+	// vector<u8> return type -> ["0x12345678"]
+	// vector<vector<u8>> return type -> ["0x1234", "0x5678"]
 	var rawData any
 	if len(data) == 1 {
 		rawData = data[0]
