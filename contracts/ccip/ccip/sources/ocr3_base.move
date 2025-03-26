@@ -14,8 +14,8 @@ module ccip::ocr3_base {
 
     const MAX_NUM_ORACLES: u64 = 256;
 
-    const OCR_PLUGIN_TYPE_COMMIT: u8 = 1;
-    const OCR_PLUGIN_TYPE_EXECUTION: u8 = 2;
+    const OCR_PLUGIN_TYPE_COMMIT: u8 = 0;
+    const OCR_PLUGIN_TYPE_EXECUTION: u8 = 1;
 
     struct ConfigInfo has store, drop {
         config_digest: vector<u8>,
