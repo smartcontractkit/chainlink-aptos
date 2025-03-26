@@ -19,7 +19,7 @@ module test::echo {
 
     struct Nested has store, drop {
         id: u64,
-        description: String,
+        description: String
     }
 
     struct ComplexStruct has store, drop {
@@ -109,19 +109,13 @@ module test::echo {
     #[view]
     public fun get_complex_struct(val: u64, text: String): ComplexStruct {
         let nested = Nested { id: val, description: text };
-        let values = vector::empty<u64>();
-        vector::push_back(&mut values, val);
-        vector::push_back(&mut values, val + 1);
-        ComplexStruct { flag: true, nested, values }
+        ComplexStruct { flag: true, nested, values: vector[val, val + 1] }
     }
 
     #[view]
     public fun get_complex_struct_array(val: u64, text: String): vector<ComplexStruct> {
-        let complexes = vector::empty<ComplexStruct>();
         let cs1 = get_complex_struct(val, text);
         let cs2 = get_complex_struct(val, text);
-        vector::push_back(&mut complexes, cs1);
-        vector::push_back(&mut complexes, cs2);
-        complexes
+        vector[cs1, cs2]
     }
 }
