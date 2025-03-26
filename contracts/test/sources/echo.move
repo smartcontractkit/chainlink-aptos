@@ -17,6 +17,17 @@ module test::echo {
         values: vector<vector<u8>>
     }
 
+    struct Nested has store, drop {
+        id: u64,
+        description: String
+    }
+
+    struct ComplexStruct has store, drop {
+        flag: bool,
+        nested: Nested,
+        values: vector<u64>
+    }
+
     struct EventStore has key {
         single_value_events: event::EventHandle<SingleValueEvent>,
         double_value_events: event::EventHandle<DoubleValueEvent>,
@@ -86,7 +97,25 @@ module test::echo {
     }
 
     #[view]
+    public fun echo_u32_vector(val: vector<u32>): vector<u32> {
+        val
+    }
+
+    #[view]
     public fun echo_byte_vector_vector(val: vector<vector<u8>>): vector<vector<u8>> {
         val
+    }
+
+    #[view]
+    public fun get_complex_struct(val: u64, text: String): ComplexStruct {
+        let nested = Nested { id: val, description: text };
+        ComplexStruct { flag: true, nested, values: vector[val, val + 1] }
+    }
+
+    #[view]
+    public fun get_complex_struct_array(val: u64, text: String): vector<ComplexStruct> {
+        let cs1 = get_complex_struct(val, text);
+        let cs2 = get_complex_struct(val, text);
+        vector[cs1, cs2]
     }
 }

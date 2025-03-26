@@ -157,7 +157,25 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		return fmt.Errorf("failed to call view function: %+w", err)
 	}
 
-	return codec.DecodeAptosAPIResponse(data, returnVal)
+	// In order to support multi-returns, all values are returned as []any
+	// However, vector or tuple return types are not necessary wrapped
+	// in an additional slice, eg:
+	// u32 return type -> [1]
+	// (u32, u64) tuple return type -> [1, 2]
+	// vector<u8> return type -> ["0x12345678"]
+	// vector<vector<u8>> return type -> ["0x1234", "0x5678"]
+	var unwrappedData any
+	if len(data) == 1 {
+		unwrappedData = data[0]
+	} else {
+		unwrappedData = data
+	}
+
+	if err := maybeRenameFields(unwrappedData, functionConfig.ResultFieldRenames); err != nil {
+		return fmt.Errorf("failed to rename function return value fields: %+w", err)
+	}
+
+	return codec.DecodeAptosJsonValue(unwrappedData, returnVal)
 }
 
 func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request types.BatchGetLatestValuesRequest) (types.BatchGetLatestValuesResult, error) {
@@ -303,7 +321,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 					return nil, fmt.Errorf("failed to call view function: %+w", err)
 				}
 
-				err = codec.DecodeAptosAPIResponse(data, &eventAccountAddress)
+				err = codec.DecodeAptosJsonValue(data[0], &eventAccountAddress)
 				if err != nil {
 					return nil, fmt.Errorf("failed to decode event account address function output: %+w", err)
 				}
@@ -334,7 +352,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	for _, event := range events {
 		jsonData := event.Data
 
-		if err := renameFields(jsonData, eventConfig.EventFieldRenames); err != nil {
+		if err := renameMapFields(jsonData, eventConfig.EventFieldRenames); err != nil {
 			return nil, fmt.Errorf("failed to rename event fields: %+w", err)
 		}
 
@@ -358,40 +376,50 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	return sequences, nil
 }
 
-func renameFields(jsonData map[string]any, renames map[string]RenamedEventField) error {
-	if renames == nil {
-		return nil
-	}
+func renameMapFields(jsonData map[string]any, renames map[string]RenamedField) error {
 	for origName, rename := range renames {
-		jsonValue, ok := jsonData[origName]
+		subValue, ok := jsonData[origName]
 		if !ok {
 			return fmt.Errorf("no such field: %s", origName)
 		}
-		jsonData[rename.NewName] = jsonValue
-		delete(jsonData, origName)
 
-		if jsonMap, ok := jsonValue.(map[string]any); ok {
-			if err := renameFields(jsonMap, rename.SubFieldRenames); err != nil {
-				return err
-			}
-		} else if jsonSlice, ok := jsonValue.([]any); ok {
-			for i, elem := range jsonSlice {
-				if elemMap, ok := elem.(map[string]any); ok {
-					if err := renameFields(elemMap, rename.SubFieldRenames); err != nil {
-						return err
-					}
-				} else {
-					if len(rename.SubFieldRenames) > 0 {
-						return fmt.Errorf("sub field renames provided for field '%s' but array element at index %d is not a map", origName, i)
-					}
-				}
-			}
-		} else {
-			if len(rename.SubFieldRenames) > 0 {
-				return fmt.Errorf("sub field renames provided for field '%s' but value is not a map", origName)
-			}
+		// it's possible we don't want to rename this field, but only want the sub fields to be renamed.
+		if rename.NewName != "" {
+			jsonData[rename.NewName] = subValue
+			delete(jsonData, origName)
+		}
+
+		if err := maybeRenameFields(subValue, rename.SubFieldRenames); err != nil {
+			return fmt.Errorf("sub field renames failed for field %s: %+w", origName, err)
 		}
 	}
+	return nil
+}
+
+func maybeRenameFields(jsonValue any, renames map[string]RenamedField) error {
+	// no renames are provided, we don't put any constraint on jsonValue
+	if len(renames) == 0 {
+		return nil
+	}
+
+	if jsonMap, ok := jsonValue.(map[string]any); ok {
+		if err := renameMapFields(jsonMap, renames); err != nil {
+			return err
+		}
+	} else if jsonSlice, ok := jsonValue.([]any); ok {
+		for i, elem := range jsonSlice {
+			if elemMap, ok := elem.(map[string]any); ok {
+				if err := renameMapFields(elemMap, renames); err != nil {
+					return err
+				}
+			} else {
+				return fmt.Errorf("sub field renames provided but array element at index %d is not a map", i)
+			}
+		}
+	} else {
+		return fmt.Errorf("sub field renames provided but value is not a map or slice of maps")
+	}
+
 	return nil
 }
 

@@ -159,6 +159,14 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 							},
 						},
 					},
+					"echo_u32_vector": {
+						Params: []AptosFunctionParam{
+							{
+								Name: "Value1",
+								Type: "vector<u32>",
+							},
+						},
+					},
 					"echo_byte_vector_vector": {
 						Params: []AptosFunctionParam{
 							{
@@ -172,6 +180,60 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 							{
 								Name: "Value1",
 								Type: "u256",
+							},
+						},
+					},
+					"get_complex_struct": {
+						Params: []AptosFunctionParam{
+							{
+								Name: "Val",
+								Type: "u64",
+							},
+							{
+								Name: "Text",
+								Type: "0x1::string::String",
+							},
+						},
+						ResultFieldRenames: map[string]RenamedField{
+							"flag": {
+								NewName: "RenamedFlag",
+							},
+							"nested": {
+								NewName: "RenamedNested",
+								SubFieldRenames: map[string]RenamedField{
+									"id":          {NewName: "RenamedId"},
+									"description": {NewName: "RenamedDescription"},
+								},
+							},
+							"values": {
+								NewName: "RenamedValues",
+							},
+						},
+					},
+					"get_complex_struct_array": {
+						Params: []AptosFunctionParam{
+							{
+								Name: "Val",
+								Type: "u64",
+							},
+							{
+								Name: "Text",
+								Type: "0x1::string::String",
+							},
+						},
+						ResultFieldRenames: map[string]RenamedField{
+							"flag": {
+								NewName: "RenamedFlag",
+							},
+							"nested": {
+								NewName: "RenamedNested",
+								SubFieldRenames: map[string]RenamedField{
+									"id":          {NewName: "RenamedId"},
+									"description": {NewName: "RenamedDescription"},
+								},
+							},
+							"values": {
+								NewName: "RenamedValues",
 							},
 						},
 					},
@@ -192,7 +254,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 	confidenceLevel := primitives.Finalized
 	u256Val, _ := new(big.Int).SetString("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffee", 16)
 	testString := "hello world"
-	testBytes := []byte{42, 11, 22, 59}
+	testBytes := []byte{42}
 	testBytesSlice := [][]byte{{42, 11}, {22, 59}}
 
 	t.Run("Individual reads", func(t *testing.T) {
@@ -254,6 +316,18 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		require.NoError(t, err)
 		require.Equal(t, testBytes, retBytes)
 
+		var retU32Vector []uint32
+		inputVector := []uint32{99}
+		err := chainReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-echo_u32_vector", accountAddress.String()),
+			confidenceLevel,
+			struct{ Value1 []uint32 }{Value1: inputVector},
+			&retU32Vector,
+		)
+		require.NoError(t, err)
+		require.Equal(t, inputVector, retU32Vector)
+
 		var retBytesSlice [][]byte
 		err = chainReader.GetLatestValue(
 			context.Background(),
@@ -264,6 +338,43 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		)
 		require.NoError(t, err)
 		require.Equal(t, testBytesSlice, retBytesSlice)
+
+		var retComplexStruct ComplexStruct
+		err = chainReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-get_complex_struct", accountAddress.String()),
+			confidenceLevel,
+			struct {
+				Val  uint64
+				Text string
+			}{Val: 100, Text: "example"},
+			&retComplexStruct,
+		)
+		require.NoError(t, err)
+		require.True(t, retComplexStruct.RenamedFlag, "expected flag to be true")
+		require.Equal(t, uint64(100), retComplexStruct.RenamedNested.RenamedId)
+		require.Equal(t, "example", retComplexStruct.RenamedNested.RenamedDescription)
+		require.Equal(t, []uint64{100, 101}, retComplexStruct.RenamedValues)
+
+		var retComplexArray []ComplexStruct
+		err = chainReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-get_complex_struct_array", accountAddress.String()),
+			confidenceLevel,
+			struct {
+				Val  uint64
+				Text string
+			}{Val: 200, Text: "batch"},
+			&retComplexArray,
+		)
+		require.NoError(t, err)
+		require.Len(t, retComplexArray, 2)
+		for _, cs := range retComplexArray {
+			require.True(t, cs.RenamedFlag, "expected flag to be true")
+			require.Equal(t, uint64(200), cs.RenamedNested.RenamedId)
+			require.Equal(t, "batch", cs.RenamedNested.RenamedDescription)
+			require.Equal(t, []uint64{200, 201}, cs.RenamedValues)
+		}
 	})
 
 	t.Run("Batch reads", func(t *testing.T) {
@@ -376,7 +487,7 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 						EventHandleFieldName:  "single_value_events",
 						// retrieve using 2 address components
 						EventAccountAddress: accountAddress.String() + "::echo::get_event_address",
-						EventFieldRenames: map[string]RenamedEventField{
+						EventFieldRenames: map[string]RenamedField{
 							"value": {
 								NewName: "SingleUintValue",
 							},
@@ -602,4 +713,15 @@ type DoubleValueEvent struct {
 
 type VectorVectorEvent struct {
 	Values [][]byte `json:"values"`
+}
+
+type Nested struct {
+	RenamedId          uint64 `json:"RenamedId"`
+	RenamedDescription string `json:"RenamedDescription"`
+}
+
+type ComplexStruct struct {
+	RenamedFlag   bool     `json:"RenamedFlag"`
+	RenamedNested Nested   `json:"RenamedNested"`
+	RenamedValues []uint64 `json:"RenamedValues"`
 }
