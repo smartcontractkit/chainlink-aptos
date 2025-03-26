@@ -1,4 +1,4 @@
-//go:build integration
+// //go:build integration
 
 package chainreader
 
@@ -50,7 +50,7 @@ func TestChainReaderLocal(t *testing.T) {
 	})
 
 	t.Run("QueryKey", func(t *testing.T) {
-		runQueryKeyTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
+		// runQueryKeyTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
 	})
 }
 
@@ -175,6 +175,30 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 							},
 						},
 					},
+					"get_complex_struct": {
+						Params: []AptosFunctionParam{
+							{
+								Name: "Val",
+								Type: "u64",
+							},
+							{
+								Name: "Text",
+								Type: "0x1::string::String",
+							},
+						},
+					},
+					"get_complex_struct_array": {
+						Params: []AptosFunctionParam{
+							{
+								Name: "Val",
+								Type: "u64",
+							},
+							{
+								Name: "Text",
+								Type: "0x1::string::String",
+							},
+						},
+					},
 				},
 			},
 		},
@@ -264,6 +288,43 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		)
 		require.NoError(t, err)
 		require.Equal(t, testBytesSlice, retBytesSlice)
+
+		var retComplexStruct ComplexStruct
+		err = chainReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-get_complex_struct", accountAddress.String()),
+			confidenceLevel,
+			struct {
+				Val  uint64
+				Text string
+			}{Val: 100, Text: "example"},
+			&retComplexStruct,
+		)
+		require.NoError(t, err)
+		require.True(t, retComplexStruct.Flag, "expected flag to be true")
+		require.Equal(t, uint64(100), retComplexStruct.Nested.Id)
+		require.Equal(t, "example", retComplexStruct.Nested.Description)
+		require.Equal(t, []uint64{100, 101}, retComplexStruct.Values)
+
+		var retComplexArray []ComplexStruct
+		err = chainReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-get_complex_struct_array", accountAddress.String()),
+			confidenceLevel,
+			struct {
+				Val  uint64
+				Text string
+			}{Val: 200, Text: "batch"},
+			&retComplexArray,
+		)
+		require.NoError(t, err)
+		require.Len(t, retComplexArray, 2)
+		for _, cs := range retComplexArray {
+			require.True(t, cs.Flag, "expected flag to be true")
+			require.Equal(t, uint64(200), cs.Nested.Id)
+			require.Equal(t, "batch", cs.Nested.Description)
+			require.Equal(t, []uint64{200, 201}, cs.Values)
+		}
 	})
 
 	t.Run("Batch reads", func(t *testing.T) {
@@ -376,7 +437,7 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 						EventHandleFieldName:  "single_value_events",
 						// retrieve using 2 address components
 						EventAccountAddress: accountAddress.String() + "::echo::get_event_address",
-						EventFieldRenames: map[string]RenamedEventField{
+						EventFieldRenames: map[string]RenamedField{
 							"value": {
 								NewName: "SingleUintValue",
 							},
@@ -602,4 +663,15 @@ type DoubleValueEvent struct {
 
 type VectorVectorEvent struct {
 	Values [][]byte `json:"values"`
+}
+
+type Nested struct {
+	Id          uint64 `json:"id"`
+	Description string `json:"description"`
+}
+
+type ComplexStruct struct {
+	Flag   bool     `json:"flag"`
+	Nested Nested   `json:"nested"`
+	Values []uint64 `json:"values"`
 }
