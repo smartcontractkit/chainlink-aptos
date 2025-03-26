@@ -157,7 +157,34 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		return fmt.Errorf("failed to call view function: %+w", err)
 	}
 
-	return codec.DecodeAptosAPIResponse(data, returnVal)
+	var rawData any
+	if len(data) == 1 {
+		rawData = data[0]
+	} else {
+		rawData = data
+	}
+
+	if len(functionConfig.ResultFieldRenames) > 0 {
+		switch v := rawData.(type) {
+		case map[string]any:
+			if err := renameFields(v, functionConfig.ResultFieldRenames); err != nil {
+				return err
+			}
+			rawData = v
+		case []any:
+			for i, elem := range v {
+				if m, ok := elem.(map[string]any); ok {
+					if err := renameFields(m, functionConfig.ResultFieldRenames); err != nil {
+						return err
+					}
+					v[i] = m
+				}
+			}
+			rawData = v
+		}
+	}
+
+	return codec.DecodeAptosJsonValue(rawData, returnVal)
 }
 
 func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request types.BatchGetLatestValuesRequest) (types.BatchGetLatestValuesResult, error) {
@@ -358,7 +385,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	return sequences, nil
 }
 
-func renameFields(jsonData map[string]any, renames map[string]RenamedEventField) error {
+func renameFields(jsonData map[string]any, renames map[string]RenamedField) error {
 	if renames == nil {
 		return nil
 	}

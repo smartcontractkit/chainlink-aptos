@@ -186,6 +186,21 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 								Type: "0x1::string::String",
 							},
 						},
+						ResultFieldRenames: map[string]RenamedField{
+							"flag": {
+								NewName: "RenamedFlag",
+							},
+							"nested": {
+								NewName: "RenamedNested",
+								SubFieldRenames: map[string]RenamedField{
+									"id":          {NewName: "RenamedId"},
+									"description": {NewName: "RenamedDescription"},
+								},
+							},
+							"values": {
+								NewName: "RenamedValues",
+							},
+						},
 					},
 					"get_complex_struct_array": {
 						Params: []AptosFunctionParam{
@@ -196,6 +211,21 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 							{
 								Name: "Text",
 								Type: "0x1::string::String",
+							},
+						},
+						ResultFieldRenames: map[string]RenamedField{
+							"flag": {
+								NewName: "RenamedFlag",
+							},
+							"nested": {
+								NewName: "RenamedNested",
+								SubFieldRenames: map[string]RenamedField{
+									"id":          {NewName: "RenamedId"},
+									"description": {NewName: "RenamedDescription"},
+								},
+							},
+							"values": {
+								NewName: "RenamedValues",
 							},
 						},
 					},
@@ -301,10 +331,10 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 			&retComplexStruct,
 		)
 		require.NoError(t, err)
-		require.True(t, retComplexStruct.Flag, "expected flag to be true")
-		require.Equal(t, uint64(100), retComplexStruct.Nested.Id)
-		require.Equal(t, "example", retComplexStruct.Nested.Description)
-		require.Equal(t, []uint64{100, 101}, retComplexStruct.Values)
+		require.True(t, retComplexStruct.RenamedFlag, "expected flag to be true")
+		require.Equal(t, uint64(100), retComplexStruct.RenamedNested.RenamedId)
+		require.Equal(t, "example", retComplexStruct.RenamedNested.RenamedDescription)
+		require.Equal(t, []uint64{100, 101}, retComplexStruct.RenamedValues)
 
 		var retComplexArray []ComplexStruct
 		err = chainReader.GetLatestValue(
@@ -320,10 +350,10 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		require.NoError(t, err)
 		require.Len(t, retComplexArray, 2)
 		for _, cs := range retComplexArray {
-			require.True(t, cs.Flag, "expected flag to be true")
-			require.Equal(t, uint64(200), cs.Nested.Id)
-			require.Equal(t, "batch", cs.Nested.Description)
-			require.Equal(t, []uint64{200, 201}, cs.Values)
+			require.True(t, cs.RenamedFlag, "expected flag to be true")
+			require.Equal(t, uint64(200), cs.RenamedNested.RenamedId)
+			require.Equal(t, "batch", cs.RenamedNested.RenamedDescription)
+			require.Equal(t, []uint64{200, 201}, cs.RenamedValues)
 		}
 	})
 
@@ -666,12 +696,12 @@ type VectorVectorEvent struct {
 }
 
 type Nested struct {
-	Id          uint64 `json:"id"`
-	Description string `json:"description"`
+	RenamedId          uint64 `json:"RenamedId"`
+	RenamedDescription string `json:"RenamedDescription"`
 }
 
 type ComplexStruct struct {
-	Flag   bool     `json:"flag"`
-	Nested Nested   `json:"nested"`
-	Values []uint64 `json:"values"`
+	RenamedFlag   bool     `json:"RenamedFlag"`
+	RenamedNested Nested   `json:"RenamedNested"`
+	RenamedValues []uint64 `json:"RenamedValues"`
 }
