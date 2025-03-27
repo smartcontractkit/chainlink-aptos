@@ -25,8 +25,6 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
-
-	aptosacc "github.com/smartcontractkit/chainlink-aptos/relayer/account"
 )
 
 type Chain interface {
@@ -128,7 +126,7 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger) 
 	}
 
 	// Setup accounts balance monitor
-	ch.balanceMonitor, err = aptosacc.NewBalanceMonitor(aptosacc.BalanceMonitorOpts{
+	ch.balanceMonitor, err = monitor.NewBalanceMonitor(monitor.BalanceMonitorOpts{
 		ChainInfo: chainInfo,
 
 		Config:    *cfg.BalanceMonitor,

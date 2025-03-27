@@ -25,8 +25,6 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 
 	wt "github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/platform/write-target"
-
-	aptosacc "github.com/smartcontractkit/chainlink-aptos/relayer/account"
 )
 
 var (
@@ -325,7 +323,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 
 		// Notice: more Apots-specific logic to decode the transmitter address (not portable)
 		// Needs to be moved to CR codec (decoder), same as for Option<> type decoding above
-		address, err := aptosacc.HexAddrToAccountAddress(transmitterAddr.Vec[0])
+		address, err := utils.HexAddressToAddress(transmitterAddr.Vec[0])
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse transmitter address: %w", err)
 		}

@@ -22,7 +22,7 @@ const ChainFamilyName = "aptos"
 
 var DefaultConfigSet = ConfigSet{
 	TransactionManager: txm.DefaultConfigSet,
-	BalanceMonitor: monitor.Config{
+	BalanceMonitor: monitor.GenericBalanceConfig{
 		BalancePollPeriod: *config.MustNewDuration(10 * time.Second),
 	},
 	WriteTargetCap: write_target.DefaultConfigSet,
@@ -30,7 +30,7 @@ var DefaultConfigSet = ConfigSet{
 
 type ConfigSet struct { //nolint:revive
 	TransactionManager txm.Config
-	BalanceMonitor     monitor.Config
+	BalanceMonitor     monitor.GenericBalanceConfig
 	WriteTargetCap     write_target.Config
 }
 
@@ -42,7 +42,7 @@ type WorkflowConfig struct {
 
 type Chain struct {
 	TransactionManager *txm.Config
-	BalanceMonitor     *monitor.Config
+	BalanceMonitor     *monitor.GenericBalanceConfig
 	WriteTargetCap     *write_target.Config
 	Workflow           *WorkflowConfig
 }
