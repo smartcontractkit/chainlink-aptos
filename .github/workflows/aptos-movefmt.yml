@@ -8,6 +8,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Aptos CLI
         uses: aptos-labs/actions/install-aptos-cli@ce57287eb852b9819c1d74fecc3be187677559fd # v0.1
+        with:
+          CLI_VERSION: 7.0.0
       - name: Update movefmt
         run: aptos update movefmt --target-version 1.0.6 # Fix version to prevent accidentally breaking the CI
       - name: Format each module that contains a movefmt.toml file
