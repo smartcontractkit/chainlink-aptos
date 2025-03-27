@@ -23,7 +23,7 @@ var (
 
 type RMNRemoteInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
-	Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootMinSequenceNumbers []uint64, merkleRootMaxSequenceNumbers []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error)
+	Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error)
 	GetVersionedConfig(opts *bind.CallOpts) (uint32, Config, error)
 	GetLocalChainSelector(opts *bind.CallOpts) (uint64, error)
 	GetReportDigestHeader(opts *bind.CallOpts) ([]byte, error)
@@ -68,8 +68,8 @@ type Report struct {
 
 type MerkleRoot struct {
 	SourceChainSelector uint64 `move:"u64"`
-	MinSequenceNumber   uint64 `move:"u64"`
-	MaxSequenceNumber   uint64 `move:"u64"`
+	MinSeqNr            uint64 `move:"u64"`
+	MaxSeqNr            uint64 `move:"u64"`
 	MerkleRoot          []byte `move:"vector<u8>"`
 }
 
@@ -125,7 +125,7 @@ func (c RMNRemoteCaller) TypeAndVersion(opts *bind.CallOpts) (string, error) {
 	return r0, nil
 }
 
-func (c RMNRemoteCaller) EncodeVerify(merkleRootSourceChainSelectors []uint64, merkleRootMinSequenceNumbers []uint64, merkleRootMaxSequenceNumbers []uint64, merkleRootValues [][]byte, signatures [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c RMNRemoteCaller) EncodeVerify(merkleRootSourceChainSelectors []uint64, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("verify", nil, []string{
 		"vector<u64>",
 		"vector<u64>",
@@ -134,15 +134,15 @@ func (c RMNRemoteCaller) EncodeVerify(merkleRootSourceChainSelectors []uint64, m
 		"vector<vector<u8>>",
 	}, []any{
 		merkleRootSourceChainSelectors,
-		merkleRootMinSequenceNumbers,
-		merkleRootMaxSequenceNumbers,
+		merkleRootMinSeqNrs,
+		merkleRootMaxSeqNrs,
 		merkleRootValues,
 		signatures,
 	})
 }
 
-func (c RMNRemoteCaller) Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootMinSequenceNumbers []uint64, merkleRootMaxSequenceNumbers []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error) {
-	module, function, typeTags, args, err := c.EncodeVerify(merkleRootSourceChainSelectors, merkleRootMinSequenceNumbers, merkleRootMaxSequenceNumbers, merkleRootValues, signatures)
+func (c RMNRemoteCaller) Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error) {
+	module, function, typeTags, args, err := c.EncodeVerify(merkleRootSourceChainSelectors, merkleRootMinSeqNrs, merkleRootMaxSeqNrs, merkleRootValues, signatures)
 	if err != nil {
 		return *new(bool), err
 	}

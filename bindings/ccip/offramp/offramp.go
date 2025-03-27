@@ -29,30 +29,29 @@ type OfframpInterface interface {
 	GetSourceChainConfig(opts *bind.CallOpts, sourceChainSelector uint64) (SourceChainConfig, error)
 	GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error)
 	GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, error)
-	LatestConfigDetails(opts *bind.CallOpts, ocrPluginType byte) ([]byte, byte, byte, bool, [][]byte, []aptos.AccountAddress, error)
 
-	Initialize(opts *bind.TransactOpts, chainSelector uint64, permissionlessExecutionThresholdSecs uint32, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (*api.PendingTransaction, error)
+	Initialize(opts *bind.TransactOpts, chainSelector uint64, permissionlessExecutionThresholdSeconds uint32, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (*api.PendingTransaction, error)
 	Execute(opts *bind.TransactOpts, reportContext [][]byte, report []byte) (*api.PendingTransaction, error)
 	ManuallyExecute(opts *bind.TransactOpts, reportBytes []byte) (*api.PendingTransaction, error)
 	Commit(opts *bind.TransactOpts, reportContext [][]byte, report []byte, rs [][]byte, ss [][]byte, vs []byte) (*api.PendingTransaction, error)
-	SetDynamicConfig(opts *bind.TransactOpts, permissionlessExecutionThresholdSecs uint32) (*api.PendingTransaction, error)
+	SetDynamicConfig(opts *bind.TransactOpts, permissionlessExecutionThresholdSeconds uint32) (*api.PendingTransaction, error)
 	ApplySourceChainConfigUpdates(opts *bind.TransactOpts, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (*api.PendingTransaction, error)
 	SetOcr3Config(opts *bind.TransactOpts, configDigest []byte, ocrPluginType byte, bigF byte, isSignatureVerificationEnabled bool, signers [][]byte, transmitters []aptos.AccountAddress) (*api.PendingTransaction, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"offramp","name":"apply_source_chain_config_updates","parameters":[{"name":"source_chains_selector","type":"vector\u003cu64\u003e"},{"name":"source_chains_is_enabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_is_rmn_verification_disabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_on_ramp","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"offramp","name":"commit","parameters":[{"name":"report_context","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"report","type":"vector\u003cu8\u003e"},{"name":"rs","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"ss","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"vs","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"execute","parameters":[{"name":"report_context","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"report","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"initialize","parameters":[{"name":"chain_selector","type":"u64"},{"name":"permissionless_execution_threshold_secs","type":"u32"},{"name":"source_chains_selector","type":"vector\u003cu64\u003e"},{"name":"source_chains_is_enabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_is_rmn_verification_disabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_on_ramp","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"offramp","name":"manually_execute","parameters":[{"name":"report_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"set_dynamic_config","parameters":[{"name":"permissionless_execution_threshold_secs","type":"u32"}]},{"package":"ccip","module":"offramp","name":"set_ocr3_config","parameters":[{"name":"config_digest","type":"vector\u003cu8\u003e"},{"name":"ocr_plugin_type","type":"u8"},{"name":"big_f","type":"u8"},{"name":"is_signature_verification_enabled","type":"bool"},{"name":"signers","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"transmitters","type":"vector\u003caddress\u003e"}]}]`
+const FunctionInfo = `[{"package":"ccip","module":"offramp","name":"apply_source_chain_config_updates","parameters":[{"name":"source_chains_selector","type":"vector\u003cu64\u003e"},{"name":"source_chains_is_enabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_is_rmn_verification_disabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_on_ramp","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"offramp","name":"commit","parameters":[{"name":"report_context","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"report","type":"vector\u003cu8\u003e"},{"name":"rs","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"ss","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"vs","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"execute","parameters":[{"name":"report_context","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"report","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"initialize","parameters":[{"name":"chain_selector","type":"u64"},{"name":"permissionless_execution_threshold_seconds","type":"u32"},{"name":"source_chains_selector","type":"vector\u003cu64\u003e"},{"name":"source_chains_is_enabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_is_rmn_verification_disabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_on_ramp","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"offramp","name":"manually_execute","parameters":[{"name":"report_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"set_dynamic_config","parameters":[{"name":"permissionless_execution_threshold_seconds","type":"u32"}]},{"package":"ccip","module":"offramp","name":"set_ocr3_config","parameters":[{"name":"config_digest","type":"vector\u003cu8\u003e"},{"name":"ocr_plugin_type","type":"u8"},{"name":"big_f","type":"u8"},{"name":"is_signature_verification_enabled","type":"bool"},{"name":"signers","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"transmitters","type":"vector\u003caddress\u003e"}]}]`
 
 // Structs
 
 type OffRampState struct {
-	ChainSelector                        uint64 `move:"u64"`
-	PermissionlessExecutionThresholdSecs uint32 `move:"u32"`
-	LatestPriceSequenceNumber            uint64 `move:"u64"`
+	ChainSelector                           uint64 `move:"u64"`
+	PermissionlessExecutionThresholdSeconds uint32 `move:"u32"`
+	LatestPriceSequenceNumber               uint64 `move:"u64"`
 }
 
 type SourceChainConfig struct {
 	IsEnabled                 bool   `move:"bool"`
-	MinSequenceNumber         uint64 `move:"u64"`
+	MinSeqNr                  uint64 `move:"u64"`
 	IsRMNVerificationDisabled bool   `move:"bool"`
 	OnRamp                    []byte `move:"vector<u8>"`
 }
@@ -114,8 +113,8 @@ type GasPriceUpdate struct {
 type MerkleRoot struct {
 	SourceChainSelector uint64 `move:"u64"`
 	OnRampAddress       []byte `move:"vector<u8>"`
-	MinSequenceNumber   uint64 `move:"u64"`
-	MaxSequenceNumber   uint64 `move:"u64"`
+	MinSeqNr            uint64 `move:"u64"`
+	MaxSeqNr            uint64 `move:"u64"`
 	MerkleRoot          []byte `move:"vector<u8>"`
 }
 
@@ -124,7 +123,7 @@ type StaticConfig struct {
 }
 
 type DynamicConfig struct {
-	PermissionlessExecutionThresholdSecs uint32 `move:"u32"`
+	PermissionlessExecutionThresholdSeconds uint32 `move:"u32"`
 }
 
 type StaticConfigSet struct {
@@ -132,13 +131,13 @@ type StaticConfigSet struct {
 }
 
 type DynamicConfigSet struct {
-	PermissionlessExecutionThresholdSecs uint32 `move:"u32"`
+	PermissionlessExecutionThresholdSeconds uint32 `move:"u32"`
 }
 
 type SourceChainConfigSet struct {
 	SourceChainSelector       uint64 `move:"u64"`
 	IsEnabled                 bool   `move:"bool"`
-	MinSequenceNumber         uint64 `move:"u64"`
+	MinSeqNr                  uint64 `move:"u64"`
 	IsRMNVerificationDisabled bool   `move:"bool"`
 	OnRamp                    []byte `move:"vector<u8>"`
 }
@@ -374,47 +373,13 @@ func (c OfframpCaller) GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, err
 	return r0, nil
 }
 
-func (c OfframpCaller) EncodeLatestConfigDetails(ocrPluginType byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("latest_config_details", nil, []string{
-		"u8",
-	}, []any{
-		ocrPluginType,
-	})
-}
-
-func (c OfframpCaller) LatestConfigDetails(opts *bind.CallOpts, ocrPluginType byte) ([]byte, byte, byte, bool, [][]byte, []aptos.AccountAddress, error) {
-	module, function, typeTags, args, err := c.EncodeLatestConfigDetails(ocrPluginType)
-	if err != nil {
-		return *new([]byte), *new(byte), *new(byte), *new(bool), *new([][]byte), *new([]aptos.AccountAddress), err
-	}
-
-	callData, err := c.Call(opts, module, function, typeTags, args)
-	if err != nil {
-		return *new([]byte), *new(byte), *new(byte), *new(bool), *new([][]byte), *new([]aptos.AccountAddress), err
-	}
-
-	var (
-		r0 []byte
-		r1 byte
-		r2 byte
-		r3 bool
-		r4 [][]byte
-		r5 []aptos.AccountAddress
-	)
-
-	if err := codec.DecodeAptosJsonArray(callData, &r0, &r1, &r2, &r3, &r4, &r5); err != nil {
-		return *new([]byte), *new(byte), *new(byte), *new(bool), *new([][]byte), *new([]aptos.AccountAddress), err
-	}
-	return r0, r1, r2, r3, r4, r5, nil
-}
-
 // Entry Functions
 
 type OfframpTransactor struct {
 	*bind.BoundContract
 }
 
-func (c OfframpTransactor) EncodeInitialize(chainSelector uint64, permissionlessExecutionThresholdSecs uint32, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c OfframpTransactor) EncodeInitialize(chainSelector uint64, permissionlessExecutionThresholdSeconds uint32, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("initialize", nil, []string{
 		"u64",
 		"u32",
@@ -424,7 +389,7 @@ func (c OfframpTransactor) EncodeInitialize(chainSelector uint64, permissionless
 		"vector<vector<u8>>",
 	}, []any{
 		chainSelector,
-		permissionlessExecutionThresholdSecs,
+		permissionlessExecutionThresholdSeconds,
 		sourceChainsSelector,
 		sourceChainsIsEnabled,
 		sourceChainsIsRMNVerificationDisabled,
@@ -432,8 +397,8 @@ func (c OfframpTransactor) EncodeInitialize(chainSelector uint64, permissionless
 	})
 }
 
-func (c OfframpTransactor) Initialize(opts *bind.TransactOpts, chainSelector uint64, permissionlessExecutionThresholdSecs uint32, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeInitialize(chainSelector, permissionlessExecutionThresholdSecs, sourceChainsSelector, sourceChainsIsEnabled, sourceChainsIsRMNVerificationDisabled, sourceChainsOnRamp)
+func (c OfframpTransactor) Initialize(opts *bind.TransactOpts, chainSelector uint64, permissionlessExecutionThresholdSeconds uint32, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeInitialize(chainSelector, permissionlessExecutionThresholdSeconds, sourceChainsSelector, sourceChainsIsEnabled, sourceChainsIsRMNVerificationDisabled, sourceChainsOnRamp)
 	if err != nil {
 		return nil, err
 	}
@@ -502,16 +467,16 @@ func (c OfframpTransactor) Commit(opts *bind.TransactOpts, reportContext [][]byt
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (c OfframpTransactor) EncodeSetDynamicConfig(permissionlessExecutionThresholdSecs uint32) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
+func (c OfframpTransactor) EncodeSetDynamicConfig(permissionlessExecutionThresholdSeconds uint32) (aptos.ModuleId, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("set_dynamic_config", nil, []string{
 		"u32",
 	}, []any{
-		permissionlessExecutionThresholdSecs,
+		permissionlessExecutionThresholdSeconds,
 	})
 }
 
-func (c OfframpTransactor) SetDynamicConfig(opts *bind.TransactOpts, permissionlessExecutionThresholdSecs uint32) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.EncodeSetDynamicConfig(permissionlessExecutionThresholdSecs)
+func (c OfframpTransactor) SetDynamicConfig(opts *bind.TransactOpts, permissionlessExecutionThresholdSeconds uint32) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.EncodeSetDynamicConfig(permissionlessExecutionThresholdSeconds)
 	if err != nil {
 		return nil, err
 	}
