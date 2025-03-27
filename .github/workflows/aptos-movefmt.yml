@@ -15,7 +15,7 @@ jobs:
       - name: Run movefmt
         working-directory: contracts
         run: movefmt
-      - name: Check if any field have been changed
+      - name: Check if any files have been changed
         run: |
           if ! git diff --quiet HEAD; then
           	echo "The following files don't have the required formatting applied, run \`movefmt\` to apply:" >> $GITHUB_STEP_SUMMARY

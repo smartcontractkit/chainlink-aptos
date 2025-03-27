@@ -1,0 +1,19 @@
+name: Aptos - Check generated bindings
+# This workflow checks that all generated bindings are up-to-date
+on: [pull_request]
+jobs:
+  movefmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run go generate
+        run: go generate ./gen.go
+      - name: Check if any files have been changed
+        run: |
+          if ! git diff --quiet HEAD; then
+          	echo "The following bindings don't match the latest generated version, run \`go generate ./gen.go\` and commit your changes:" >> $GITHUB_STEP_SUMMARY
+          	git diff --name-only | while read -r n ; do
+          		echo "- $n" >> $GITHUB_STEP_SUMMARY
+          	done
+          	exit 1
+          fi
