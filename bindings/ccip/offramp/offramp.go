@@ -81,7 +81,7 @@ type OffRampState struct {
 
 type SourceChainConfig struct {
 	IsEnabled                 bool   `move:"bool"`
-	MinSequenceNumber         uint64 `move:"u64"`
+	MinSeqNr                  uint64 `move:"u64"`
 	IsRMNVerificationDisabled bool   `move:"bool"`
 	OnRamp                    []byte `move:"vector<u8>"`
 }
@@ -143,8 +143,8 @@ type GasPriceUpdate struct {
 type MerkleRoot struct {
 	SourceChainSelector uint64 `move:"u64"`
 	OnRampAddress       []byte `move:"vector<u8>"`
-	MinSequenceNumber   uint64 `move:"u64"`
-	MaxSequenceNumber   uint64 `move:"u64"`
+	MinSeqNr            uint64 `move:"u64"`
+	MaxSeqNr            uint64 `move:"u64"`
 	MerkleRoot          []byte `move:"vector<u8>"`
 }
 
@@ -167,7 +167,7 @@ type DynamicConfigSet struct {
 type SourceChainConfigSet struct {
 	SourceChainSelector       uint64 `move:"u64"`
 	IsEnabled                 bool   `move:"bool"`
-	MinSequenceNumber         uint64 `move:"u64"`
+	MinSeqNr                  uint64 `move:"u64"`
 	IsRMNVerificationDisabled bool   `move:"bool"`
 	OnRamp                    []byte `move:"vector<u8>"`
 }

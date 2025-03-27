@@ -68,7 +68,7 @@ module ccip::offramp {
 
     struct SourceChainConfig has store, drop, copy {
         is_enabled: bool,
-        min_sequence_number: u64,
+        min_seq_nr: u64,
         is_rmn_verification_disabled: bool,
         on_ramp: vector<u8>
     }
@@ -134,8 +134,8 @@ module ccip::offramp {
     struct MerkleRoot has store, drop, copy {
         source_chain_selector: u64,
         on_ramp_address: vector<u8>,
-        min_sequence_number: u64,
-        max_sequence_number: u64,
+        min_seq_nr: u64,
+        max_seq_nr: u64,
         merkle_root: vector<u8>
     }
 
@@ -161,7 +161,7 @@ module ccip::offramp {
     struct SourceChainConfigSet has store, drop {
         source_chain_selector: u64,
         is_enabled: bool,
-        min_sequence_number: u64,
+        min_seq_nr: u64,
         is_rmn_verification_disabled: bool,
         on_ramp: vector<u8>
     }
@@ -604,8 +604,8 @@ module ccip::offramp {
         blessed_merkle_roots: &vector<MerkleRoot>, rmn_signatures: vector<vector<u8>>
     ) {
         let merkle_root_source_chains_selector = vector[];
-        let merkle_root_min_sequence_numbers = vector[];
-        let merkle_root_max_sequence_numbers = vector[];
+        let merkle_root_min_seq_nrs = vector[];
+        let merkle_root_max_seq_nrs = vector[];
         let merkle_root_values = vector[];
         vector::for_each_ref(
             blessed_merkle_roots,
@@ -616,12 +616,12 @@ module ccip::offramp {
                     merkle_root.source_chain_selector
                 );
                 vector::push_back(
-                    &mut merkle_root_min_sequence_numbers,
-                    merkle_root.min_sequence_number
+                    &mut merkle_root_min_seq_nrs,
+                    merkle_root.min_seq_nr
                 );
                 vector::push_back(
-                    &mut merkle_root_max_sequence_numbers,
-                    merkle_root.max_sequence_number
+                    &mut merkle_root_max_seq_nrs,
+                    merkle_root.max_seq_nr
                 );
                 vector::push_back(&mut merkle_root_values, merkle_root.merkle_root);
             }
@@ -629,8 +629,8 @@ module ccip::offramp {
 
         rmn_remote::verify(
             merkle_root_source_chains_selector,
-            merkle_root_min_sequence_numbers,
-            merkle_root_max_sequence_numbers,
+            merkle_root_min_seq_nrs,
+            merkle_root_max_seq_nrs,
             merkle_root_values,
             rmn_signatures
         );
@@ -668,8 +668,8 @@ module ccip::offramp {
                     error::invalid_argument(E_COMMIT_ON_RAMP_MISMATCH)
                 );
                 assert!(
-                    source_chain_config.min_sequence_number == root.min_sequence_number
-                        && root.min_sequence_number <= root.max_sequence_number,
+                    source_chain_config.min_seq_nr == root.min_seq_nr
+                        && root.min_seq_nr <= root.max_seq_nr,
                     error::invalid_argument(E_INVALID_INTERVAL)
                 );
 
@@ -685,7 +685,7 @@ module ccip::offramp {
                     error::invalid_argument(E_ROOT_ALREADY_COMMITTED)
                 );
 
-                source_chain_config.min_sequence_number = root.max_sequence_number + 1;
+                source_chain_config.min_seq_nr = root.max_seq_nr + 1;
                 smart_table::add(&mut state.roots, merkle_root, timestamp::now_seconds());
             }
         );
@@ -935,7 +935,7 @@ module ccip::offramp {
                     source_chain_selector,
                     SourceChainConfig {
                         is_enabled: false,
-                        min_sequence_number: 1,
+                        min_seq_nr: 1,
                         is_rmn_verification_disabled: false,
                         on_ramp: vector[]
                     }
@@ -959,7 +959,7 @@ module ccip::offramp {
                 SourceChainConfigSet {
                     source_chain_selector,
                     is_enabled: config.is_enabled,
-                    min_sequence_number: config.min_sequence_number,
+                    min_seq_nr: config.min_seq_nr,
                     is_rmn_verification_disabled: config.is_rmn_verification_disabled,
                     on_ramp: config.on_ramp
                 }
@@ -969,7 +969,7 @@ module ccip::offramp {
                 SourceChainConfigSet {
                     source_chain_selector,
                     is_enabled: config.is_enabled,
-                    min_sequence_number: config.min_sequence_number,
+                    min_seq_nr: config.min_seq_nr,
                     is_rmn_verification_disabled: config.is_rmn_verification_disabled,
                     on_ramp: config.on_ramp
                 }
@@ -1093,8 +1093,8 @@ module ccip::offramp {
                 MerkleRoot {
                     source_chain_selector: eth_abi::decode_u64(stream),
                     on_ramp_address: eth_abi::decode_bytes(stream),
-                    min_sequence_number: eth_abi::decode_u64(stream),
-                    max_sequence_number: eth_abi::decode_u64(stream),
+                    min_seq_nr: eth_abi::decode_u64(stream),
+                    max_seq_nr: eth_abi::decode_u64(stream),
                     merkle_root: eth_abi::decode_bytes32(stream)
                 }
             }
