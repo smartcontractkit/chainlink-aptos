@@ -84,6 +84,7 @@ module ccip::ocr3_base {
     const E_INVALID_SIGNATURE: u64 = 19;
     const E_FORKED_CHAIN: u64 = 20;
     const E_INVALID_V_SIGNATURE: u64 = 21;
+    const E_UNKNOWN_PLUGIN_TYPE: u64 = 22;
 
     public fun new(event_account: &signer): OCR3BaseState {
         OCR3BaseState {
@@ -231,6 +232,10 @@ module ccip::ocr3_base {
         ss: vector<vector<u8>>,
         vs: vector<u8>
     ) {
+        assert!(
+            table::contains(&ocr3_state.ocr3_configs, ocr_plugin_type),
+            error::invalid_argument(E_UNKNOWN_PLUGIN_TYPE)
+        );
         let ocr_config = table::borrow(&ocr3_state.ocr3_configs, ocr_plugin_type);
         let config_info = &ocr_config.config_info;
 
@@ -290,6 +295,10 @@ module ccip::ocr3_base {
     public fun latest_config_details(
         ocr3_state: &OCR3BaseState, ocr_plugin_type: u8
     ): OCRConfig {
+        assert!(
+            table::contains(&ocr3_state.ocr3_configs, ocr_plugin_type),
+            error::invalid_argument(E_UNKNOWN_PLUGIN_TYPE)
+        );
         let ocr_config = table::borrow(&ocr3_state.ocr3_configs, ocr_plugin_type);
         *ocr_config
     }
