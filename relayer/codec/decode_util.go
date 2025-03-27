@@ -11,7 +11,7 @@ import (
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 )
 
 func DecodeAptosJsonArray(from []any, to ...any) error {

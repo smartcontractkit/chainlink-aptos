@@ -25,8 +25,8 @@ import (
 	aptoscrypto "github.com/aptos-labs/aptos-go-sdk/crypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
-	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/sha3"
 
