@@ -1240,7 +1240,7 @@ module ccip::offramp {
     #[view]
     public fun latest_config_details(
         ocr_plugin_type: u8
-    ): ocr3_base::OCRConfig acquires OffRampState {
+    ): ocr3_base::LatestConfigDetails acquires OffRampState {
         let state = borrow_state();
         ocr3_base::latest_config_details(&state.ocr3_base_state, ocr_plugin_type)
     }
