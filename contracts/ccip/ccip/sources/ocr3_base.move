@@ -17,14 +17,14 @@ module ccip::ocr3_base {
     const OCR_PLUGIN_TYPE_COMMIT: u8 = 1;
     const OCR_PLUGIN_TYPE_EXECUTION: u8 = 2;
 
-    struct ConfigInfo has store, drop {
+    struct ConfigInfo has store, drop, copy {
         config_digest: vector<u8>,
         big_f: u8,
         n: u8,
         is_signature_verification_enabled: bool
     }
 
-    struct OCRConfig has store, drop {
+    struct OCRConfig has store, drop, copy {
         config_info: ConfigInfo,
         signers: vector<vector<u8>>,
         transmitters: vector<address>
@@ -290,17 +290,9 @@ module ccip::ocr3_base {
 
     public fun latest_config_details(
         ocr3_state: &OCR3BaseState, ocr_plugin_type: u8
-    ): (vector<u8>, u8, u8, bool, vector<vector<u8>>, vector<address>) {
+    ): OCRConfig {
         let ocr_config = table::borrow(&ocr3_state.ocr3_configs, ocr_plugin_type);
-        let config_info = &ocr_config.config_info;
-        (
-            config_info.config_digest,
-            config_info.big_f,
-            config_info.n,
-            config_info.is_signature_verification_enabled,
-            ocr_config.signers,
-            ocr_config.transmitters
-        )
+        *ocr_config
     }
 
     public fun assert_chain_not_forked(ocr3_state: &OCR3BaseState) {
