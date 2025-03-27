@@ -7,10 +7,10 @@ toolchain go1.23.4
 require (
 	github.com/aptos-labs/aptos-go-sdk v1.5.1-0.20250322153135-0c35be181ce8
 	github.com/ethereum/go-ethereum v1.14.11
+	github.com/go-viper/mapstructure/v2 v2.1.0
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-plugin v1.6.2
 	github.com/jpillora/backoff v1.0.0
-	github.com/mitchellh/mapstructure v1.5.0
 	github.com/pelletier/go-toml/v2 v2.2.0
 	github.com/smartcontractkit/chainlink-common v0.5.1-0.20250314131019-e227d4e2dc2f
 	github.com/stretchr/testify v1.10.0
@@ -57,7 +57,6 @@ require (
 	github.com/go-playground/locales v0.13.0 // indirect
 	github.com/go-playground/universal-translator v0.17.0 // indirect
 	github.com/go-playground/validator/v10 v10.4.1 // indirect
-	github.com/go-viper/mapstructure/v2 v2.1.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.0.1 // indirect
