@@ -17,6 +17,8 @@ type ChainReaderFunction struct {
 	// is stored is used.
 	Name   string
 	Params []AptosFunctionParam
+
+	ResultFieldRenames map[string]RenamedField
 }
 
 type AptosFunctionParam struct {
@@ -49,13 +51,14 @@ type ChainReaderEvent struct {
 	EventAccountAddress string
 
 	// Renames of event field names (optional). When not provided, the field names are used as-is.
-	EventFieldRenames map[string]RenamedEventField
+	EventFieldRenames map[string]RenamedField
 }
 
-type RenamedEventField struct {
-	// The new field name.
+type RenamedField struct {
+	// The new field name (optional). This does not need to be provided if this field does not need
+	// to be renamed.
 	NewName string
 
 	// Rename sub-fields. This assumes that the event field value is a struct or a map with string keys.
-	SubFieldRenames map[string]RenamedEventField
+	SubFieldRenames map[string]RenamedField
 }

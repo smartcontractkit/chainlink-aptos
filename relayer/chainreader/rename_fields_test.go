@@ -6,13 +6,13 @@ import (
 )
 
 // TestRenameFields contains multiple sub-tests to verify the behavior
-// of renameFields under different conditions.
+// of renameMapFields under different conditions.
 func TestRenameFields(t *testing.T) {
 	tests := []struct {
 		name     string
 		jsonData map[string]any
-		renames  map[string]RenamedEventField
-		expected map[string]any // expected result after renameFields is applied
+		renames  map[string]RenamedField
+		expected map[string]any // expected result after renameMapFields is applied
 		wantErr  bool
 		errMsg   string // expected error message (if any)
 	}{
@@ -26,7 +26,7 @@ func TestRenameFields(t *testing.T) {
 		{
 			name:     "simple rename",
 			jsonData: map[string]any{"a": 123, "b": "stuff"},
-			renames: map[string]RenamedEventField{
+			renames: map[string]RenamedField{
 				"a": {NewName: "alpha", SubFieldRenames: nil},
 			},
 			expected: map[string]any{"alpha": 123, "b": "stuff"},
@@ -35,7 +35,7 @@ func TestRenameFields(t *testing.T) {
 		{
 			name:     "non-existing field",
 			jsonData: map[string]any{"a": 1, "b": 2},
-			renames: map[string]RenamedEventField{
+			renames: map[string]RenamedField{
 				"c": {NewName: "gamma", SubFieldRenames: nil},
 			},
 			expected: nil,
@@ -45,7 +45,7 @@ func TestRenameFields(t *testing.T) {
 		{
 			name:     "empty renames",
 			jsonData: map[string]any{"a": 1, "b": 2},
-			renames:  map[string]RenamedEventField{},
+			renames:  map[string]RenamedField{},
 			expected: map[string]any{"a": 1, "b": 2},
 			wantErr:  false,
 		},
@@ -55,10 +55,10 @@ func TestRenameFields(t *testing.T) {
 				"a": map[string]any{"x": 1, "y": 2},
 				"b": "hello",
 			},
-			renames: map[string]RenamedEventField{
+			renames: map[string]RenamedField{
 				"a": {
 					NewName: "alpha",
-					SubFieldRenames: map[string]RenamedEventField{
+					SubFieldRenames: map[string]RenamedField{
 						"x": {NewName: "x_new", SubFieldRenames: nil},
 					},
 				},
@@ -72,10 +72,10 @@ func TestRenameFields(t *testing.T) {
 		{
 			name:     "subfield non-map error (top-level)",
 			jsonData: map[string]any{"a": "not a map"},
-			renames: map[string]RenamedEventField{
+			renames: map[string]RenamedField{
 				"a": {
 					NewName: "alpha",
-					SubFieldRenames: map[string]RenamedEventField{
+					SubFieldRenames: map[string]RenamedField{
 						"x": {NewName: "x_new", SubFieldRenames: nil},
 					},
 				},
@@ -83,20 +83,20 @@ func TestRenameFields(t *testing.T) {
 			// an error should be returned because field "a" is not a map
 			expected: nil,
 			wantErr:  true,
-			errMsg:   "sub field renames provided for field 'a' but value is not a map",
+			errMsg:   "sub field renames failed for field a: sub field renames provided but value is not a map or slice of maps",
 		},
 		{
 			name: "nested subfield non-map error",
 			jsonData: map[string]any{
 				"a": map[string]any{"x": 100},
 			},
-			renames: map[string]RenamedEventField{
+			renames: map[string]RenamedField{
 				"a": {
 					NewName: "alpha",
-					SubFieldRenames: map[string]RenamedEventField{
+					SubFieldRenames: map[string]RenamedField{
 						"x": {
 							NewName: "x_new",
-							SubFieldRenames: map[string]RenamedEventField{
+							SubFieldRenames: map[string]RenamedField{
 								"inner": {NewName: "inner_new", SubFieldRenames: nil},
 							},
 						},
@@ -106,7 +106,7 @@ func TestRenameFields(t *testing.T) {
 			// here the renaming for field "x" should cause an error because 100 is not a map.
 			expected: nil,
 			wantErr:  true,
-			errMsg:   "sub field renames provided for field 'x' but value is not a map",
+			errMsg:   "sub field renames failed for field a: sub field renames failed for field x: sub field renames provided but value is not a map or slice of maps",
 		},
 		{
 			name: "array of structs rename",
@@ -116,10 +116,10 @@ func TestRenameFields(t *testing.T) {
 					map[string]any{"id": 2, "name": "item2"},
 				},
 			},
-			renames: map[string]RenamedEventField{
+			renames: map[string]RenamedField{
 				"items": {
 					NewName: "elements",
-					SubFieldRenames: map[string]RenamedEventField{
+					SubFieldRenames: map[string]RenamedField{
 						"id":   {NewName: "itemId", SubFieldRenames: nil},
 						"name": {NewName: "itemName", SubFieldRenames: nil},
 					},
@@ -138,10 +138,10 @@ func TestRenameFields(t *testing.T) {
 			jsonData: map[string]any{
 				"items": []any{},
 			},
-			renames: map[string]RenamedEventField{
+			renames: map[string]RenamedField{
 				"items": {
 					NewName: "elements",
-					SubFieldRenames: map[string]RenamedEventField{
+					SubFieldRenames: map[string]RenamedField{
 						"id": {NewName: "itemId", SubFieldRenames: nil},
 					},
 				},
@@ -167,17 +167,17 @@ func TestRenameFields(t *testing.T) {
 					},
 				},
 			},
-			renames: map[string]RenamedEventField{
+			renames: map[string]RenamedField{
 				"parent": {
 					NewName: "family",
-					SubFieldRenames: map[string]RenamedEventField{
+					SubFieldRenames: map[string]RenamedField{
 						"children": {
 							NewName: "kids",
-							SubFieldRenames: map[string]RenamedEventField{
+							SubFieldRenames: map[string]RenamedField{
 								"childId": {NewName: "id", SubFieldRenames: nil},
 								"details": {
 									NewName: "info",
-									SubFieldRenames: map[string]RenamedEventField{
+									SubFieldRenames: map[string]RenamedField{
 										"grade": {NewName: "level", SubFieldRenames: nil},
 									},
 								},
@@ -207,17 +207,17 @@ func TestRenameFields(t *testing.T) {
 			jsonData: map[string]any{
 				"items": []any{1, 2, 3},
 			},
-			renames: map[string]RenamedEventField{
+			renames: map[string]RenamedField{
 				"items": {
 					NewName: "numbers",
-					SubFieldRenames: map[string]RenamedEventField{
+					SubFieldRenames: map[string]RenamedField{
 						"value": {NewName: "val", SubFieldRenames: nil},
 					},
 				},
 			},
 			expected: nil,
 			wantErr:  true,
-			errMsg:   "sub field renames provided for field 'items' but array element at index 0 is not a map",
+			errMsg:   "sub field renames failed for field items: sub field renames provided but array element at index 0 is not a map",
 		},
 		{
 			name: "mixed array elements",
@@ -227,23 +227,23 @@ func TestRenameFields(t *testing.T) {
 					"not a map",
 				},
 			},
-			renames: map[string]RenamedEventField{
+			renames: map[string]RenamedField{
 				"items": {
 					NewName: "elements",
-					SubFieldRenames: map[string]RenamedEventField{
+					SubFieldRenames: map[string]RenamedField{
 						"id": {NewName: "itemId", SubFieldRenames: nil},
 					},
 				},
 			},
 			expected: nil,
 			wantErr:  true,
-			errMsg:   "sub field renames provided for field 'items' but array element at index 1 is not a map",
+			errMsg:   "sub field renames failed for field items: sub field renames provided but array element at index 1 is not a map",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := renameFields(tc.jsonData, tc.renames)
+			err := renameMapFields(tc.jsonData, tc.renames)
 			if tc.wantErr {
 				if err == nil {
 					t.Errorf("%q: expected error but got nil", tc.name)
