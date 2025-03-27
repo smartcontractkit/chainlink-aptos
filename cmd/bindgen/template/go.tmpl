@@ -12,6 +12,10 @@ import (
 
   "github.com/smartcontractkit/chainlink-aptos/bindings/bind"
   "github.com/smartcontractkit/chainlink-aptos/relayer/codec"
+
+{{- range .Imports}}
+  {{.PackageName}} "{{.Path}}"
+{{- end}}
 )
 
 var (
