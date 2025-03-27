@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/aptos-labs/aptos-go-sdk"
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
