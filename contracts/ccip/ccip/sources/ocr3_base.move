@@ -136,7 +136,8 @@ module ccip::ocr3_base {
 
         // If F is 0, then the config is not yet set.
         if (config_info.big_f == 0) {
-            config_info.is_signature_verification_enabled = is_signature_verification_enabled;
+            config_info.is_signature_verification_enabled =
+                is_signature_verification_enabled;
         } else {
             assert!(
                 config_info.is_signature_verification_enabled

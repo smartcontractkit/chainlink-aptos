@@ -60,7 +60,6 @@ func CompilePackage(packageName contracts.Package, namedAddresses map[string]apt
 		"--assume-yes",
 		"--override-size-check",
 		"--skip-fetch-latest-git-deps",
-		"--move-1",
 	}
 	if len(namedAddr) > 0 {
 		args = append(args, "--named-addresses", strings.Join(namedAddr, ","))
