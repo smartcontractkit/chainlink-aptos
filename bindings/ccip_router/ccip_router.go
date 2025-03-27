@@ -7,7 +7,6 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
 	module_router "github.com/smartcontractkit/chainlink-aptos/bindings/ccip_router/router"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/compile"
-	"github.com/smartcontractkit/chainlink-aptos/bindings/mcms"
 )
 
 type CCIPRouter interface {
@@ -76,9 +75,4 @@ func DeployToExistingObject(
 		return nil, CCIPRouterContract{}, err
 	}
 	return tx, Bind(objectAddress, client), nil
-}
-
-func as() {
-	mcmsBindings := mcms.Bind(aptos.AccountThree, nil)
-	mcmsBindings.MCMS().SetConfig()
 }
