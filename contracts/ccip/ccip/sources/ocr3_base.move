@@ -47,6 +47,10 @@ module ccip::ocr3_base {
         transmitted_events: EventHandle<Transmitted>
     }
 
+    struct LatestConfigDetails has copy, drop {
+        ocr_config: OCRConfig
+    }
+
     #[event]
     struct ConfigSet has store, drop {
         ocr_plugin_type: u8,
@@ -294,13 +298,13 @@ module ccip::ocr3_base {
 
     public fun latest_config_details(
         ocr3_state: &OCR3BaseState, ocr_plugin_type: u8
-    ): OCRConfig {
+    ): LatestConfigDetails {
         assert!(
             table::contains(&ocr3_state.ocr3_configs, ocr_plugin_type),
             error::invalid_argument(E_UNKNOWN_PLUGIN_TYPE)
         );
         let ocr_config = table::borrow(&ocr3_state.ocr3_configs, ocr_plugin_type);
-        *ocr_config
+        LatestConfigDetails { ocr_config: *ocr_config }
     }
 
     public fun assert_chain_not_forked(ocr3_state: &OCR3BaseState) {
