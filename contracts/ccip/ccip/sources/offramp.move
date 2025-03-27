@@ -712,15 +712,19 @@ module ccip::offramp {
         source_chain_selector: u64
     ): SourceChainConfig acquires OffRampState {
         let state = borrow_state();
-        assert!(
-            smart_table::contains(&state.source_chain_configs, source_chain_selector),
-            error::invalid_argument(E_UNKNOWN_SOURCE_CHAIN_SELECTOR)
-        );
+        if (smart_table::contains(&state.source_chain_configs, source_chain_selector)) {
+            let source_chain_config =
+                smart_table::borrow(&state.source_chain_configs, source_chain_selector);
 
-        let source_chain_config =
-            smart_table::borrow(&state.source_chain_configs, source_chain_selector);
-
-        *source_chain_config
+            *source_chain_config
+        } else {
+            SourceChainConfig {
+                is_enabled: false,
+                min_seq_nr: 0,
+                is_rmn_verification_disabled: false,
+                on_ramp: vector[]
+            }
+        }
     }
 
     // ================================================================
