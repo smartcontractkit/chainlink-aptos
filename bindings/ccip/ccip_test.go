@@ -61,7 +61,7 @@ func TestDeployCCIP(t *testing.T) {
 
 	{
 		fmt.Println("RMNRemote.Initialize")
-		tx, err = ccip.RMNRemote.Initialize(opts, 743186221051783445)
+		tx, err = ccip.RMNRemote().Initialize(opts, 743186221051783445)
 		assert.NoError(t, err)
 		data, err = testnetClient.WaitForTransaction(tx.Hash)
 		assert.NoError(t, err)
@@ -77,7 +77,7 @@ func TestDeployCCIP(t *testing.T) {
 	// }
 	{
 		fmt.Println("Onramp.Initialize")
-		tx, err = ccip.Onramp.Initialize(opts, 743186221051783445, account.AccountAddress(), []uint64{16015286601757825753}, []bool{true}, []bool{false})
+		tx, err = ccip.Onramp().Initialize(opts, 743186221051783445, account.AccountAddress(), []uint64{16015286601757825753}, []bool{true}, []bool{false})
 		assert.NoError(t, err)
 		data, err = testnetClient.WaitForTransaction(tx.Hash)
 		assert.NoError(t, err)
@@ -85,7 +85,7 @@ func TestDeployCCIP(t *testing.T) {
 	}
 	{
 		fmt.Println("Offramp.Initialize")
-		tx, err = ccip.Offramp.Initialize(opts, 743186221051783445, 30, []uint64{16015286601757825753}, []bool{true}, []bool{true}, [][]byte{[]byte("0x1234567890")})
+		tx, err = ccip.Offramp().Initialize(opts, 743186221051783445, 30, []uint64{16015286601757825753}, []bool{true}, []bool{true}, [][]byte{[]byte("0x1234567890")})
 		assert.NoError(t, err)
 		data, err = testnetClient.WaitForTransaction(tx.Hash)
 		assert.NoError(t, err)
@@ -93,23 +93,15 @@ func TestDeployCCIP(t *testing.T) {
 	}
 	{
 		fmt.Println("FeeQuoter.Initialize")
-		tx, err = ccip.FeeQuoter.Initialize(opts, 1000, token, 12400, []aptos.AccountAddress{token})
+		tx, err = ccip.FeeQuoter().Initialize(opts, 1000, token, 12400, []aptos.AccountAddress{token})
 		assert.NoError(t, err)
 		data, err = testnetClient.WaitForTransaction(tx.Hash)
 		assert.NoError(t, err)
 		assert.True(t, data.Success, "transaction failed", data.VmStatus)
 	}
-	// {
-	// 	fmt.Println("TokenAdminRegistry.Initialize")
-	// 	tx, err = ccip.TokenAdminRegistry.Initialize(opts)
-	// 	assert.NoError(t, err)
-	// 	data, err = testnetClient.WaitForTransaction(tx.Hash)
-	// 	assert.NoError(t, err)
-	// 	assert.True(t, data.Success, "transaction failed", data.VmStatus)
-	// }
 	{
 		fmt.Println("FeeQuoter.ApplyFeeTokenUpdates")
-		tx, err := ccip.FeeQuoter.ApplyFeeTokenUpdates(opts, nil, []aptos.AccountAddress{token})
+		tx, err := ccip.FeeQuoter().ApplyFeeTokenUpdates(opts, nil, []aptos.AccountAddress{token})
 		assert.NoError(t, err)
 		data, err := testnetClient.WaitForTransaction(tx.Hash)
 		assert.NoError(t, err)
@@ -117,7 +109,7 @@ func TestDeployCCIP(t *testing.T) {
 	}
 	{
 		fmt.Println("FeeQuoter.ApplyTokenTransferFeeConfigUpdates")
-		tx, err := ccip.FeeQuoter.ApplyTokenTransferFeeConfigUpdates(opts, 16015286601757825753, []aptos.AccountAddress{token}, []uint32{1}, []uint32{10000}, []uint16{0}, []uint32{1000}, []uint32{1000}, []bool{true}, nil)
+		tx, err := ccip.FeeQuoter().ApplyTokenTransferFeeConfigUpdates(opts, 16015286601757825753, []aptos.AccountAddress{token}, []uint32{1}, []uint32{10000}, []uint16{0}, []uint32{1000}, []uint32{1000}, []bool{true}, nil)
 		assert.NoError(t, err)
 		data, err := testnetClient.WaitForTransaction(tx.Hash)
 		assert.NoError(t, err)
@@ -125,7 +117,7 @@ func TestDeployCCIP(t *testing.T) {
 	}
 	{
 		fmt.Println("FeeQuoter.ApplyDestChainConfigUpdates")
-		tx, err := ccip.FeeQuoter.ApplyDestChainConfigUpdates(opts,
+		tx, err := ccip.FeeQuoter().ApplyDestChainConfigUpdates(opts,
 			16015286601757825753,
 			true,
 			1,
@@ -154,7 +146,7 @@ func TestDeployCCIP(t *testing.T) {
 	}
 	{
 		fmt.Println("FeeQuoter.UpdatePrices")
-		tx, err := ccip.FeeQuoter.UpdatePrices(opts, []aptos.AccountAddress{token}, []*big.Int{big.NewInt(1000)}, []uint64{16015286601757825753}, []*big.Int{big.NewInt(0)})
+		tx, err := ccip.FeeQuoter().UpdatePrices(opts, []aptos.AccountAddress{token}, []*big.Int{big.NewInt(1000)}, []uint64{16015286601757825753}, []*big.Int{big.NewInt(0)})
 		assert.NoError(t, err)
 		data, err := testnetClient.WaitForTransaction(tx.Hash)
 		assert.NoError(t, err)
@@ -162,7 +154,7 @@ func TestDeployCCIP(t *testing.T) {
 	}
 	{
 		fmt.Println("FeeQuoter.ApplyPremiumMultiplierWeiPerEthUpdates")
-		tx, err := ccip.FeeQuoter.ApplyPremiumMultiplierWeiPerEthUpdates(opts, []aptos.AccountAddress{token}, []uint64{1})
+		tx, err := ccip.FeeQuoter().ApplyPremiumMultiplierWeiPerEthUpdates(opts, []aptos.AccountAddress{token}, []uint64{1})
 		assert.NoError(t, err)
 		data, err := testnetClient.WaitForTransaction(tx.Hash)
 		assert.NoError(t, err)
@@ -189,7 +181,7 @@ func TestSend(t *testing.T) {
 	opts := &bind.TransactOpts{Signer: account}
 
 	ccip := cciprouter.Bind(ccipAddress, testnetClient)
-	tx, err := ccip.Router.CCIPSend(opts, 16015286601757825753, toAddress, []byte("Hello, world!"), nil, nil, nil, feeTokenAddress, aptos.AccountZero, extraArgs)
+	tx, err := ccip.Router().CCIPSend(opts, 16015286601757825753, toAddress, []byte("Hello, world!"), nil, nil, nil, feeTokenAddress, aptos.AccountZero, extraArgs)
 	require.NoError(t, err)
 	data, err := testnetClient.WaitForTransaction(tx.Hash)
 	require.NoError(t, err)

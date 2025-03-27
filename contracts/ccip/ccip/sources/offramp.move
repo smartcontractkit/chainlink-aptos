@@ -864,7 +864,8 @@ module ccip::offramp {
     inline fun set_dynamic_config_internal(
         state: &mut OffRampState, permissionless_execution_threshold_secs: u32
     ) {
-        state.permissionless_execution_threshold_secs = permissionless_execution_threshold_secs;
+        state.permissionless_execution_threshold_secs =
+            permissionless_execution_threshold_secs;
         event::emit(DynamicConfigSet { permissionless_execution_threshold_secs });
         event::emit_event(
             &mut state.dynamic_config_set_events,

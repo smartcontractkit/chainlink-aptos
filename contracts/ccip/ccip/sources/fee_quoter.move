@@ -712,13 +712,15 @@ module ccip::fee_quoter {
                 * (dest_chain_config.dest_gas_per_payload_byte_base as u256);
         if (call_data_length
             > (dest_chain_config.dest_gas_per_payload_byte_threshold as u256)) {
-            dest_call_data_cost = (
-                dest_chain_config.dest_gas_per_payload_byte_base as u256
-            ) * (dest_chain_config.dest_gas_per_payload_byte_threshold as u256)
-                + (
-                call_data_length
-                    - (dest_chain_config.dest_gas_per_payload_byte_threshold as u256)
-            ) * (dest_chain_config.dest_gas_per_payload_byte_high as u256);
+            dest_call_data_cost =
+                (dest_chain_config.dest_gas_per_payload_byte_base as u256)
+                    * (dest_chain_config.dest_gas_per_payload_byte_threshold as u256)
+                    + (
+                        call_data_length
+                            - (
+                                dest_chain_config.dest_gas_per_payload_byte_threshold as u256
+                            )
+                    ) * (dest_chain_config.dest_gas_per_payload_byte_high as u256);
         };
 
         let total_dest_chain_gas =
@@ -969,13 +971,15 @@ module ccip::fee_quoter {
                     );
 
                 if (!transfer_fee_config.is_enabled) {
-                    token_transfer_fee_wei = token_transfer_fee_wei
-                        + ((dest_chain_config.default_token_fee_usd_cents as u256)
-                        * VAL_1E16);
-                    token_transfer_gas = token_transfer_gas
-                        + dest_chain_config.default_token_dest_gas_overhead;
-                    token_transfer_bytes_overhead = token_transfer_bytes_overhead
-                        + CCIP_LOCK_OR_BURN_V1_RET_BYTES;
+                    token_transfer_fee_wei =
+                        token_transfer_fee_wei
+                            + ((dest_chain_config.default_token_fee_usd_cents as u256)
+                                * VAL_1E16);
+                    token_transfer_gas =
+                        token_transfer_gas
+                            + dest_chain_config.default_token_dest_gas_overhead;
+                    token_transfer_bytes_overhead =
+                        token_transfer_bytes_overhead + CCIP_LOCK_OR_BURN_V1_RET_BYTES;
                 } else {
                     let bps_fee_usd_wei = 0;
                     if (transfer_fee_config.deci_bps > 0) {
@@ -989,15 +993,16 @@ module ccip::fee_quoter {
                             calc_usd_value_from_token_amount(
                                 local_token_amount, token_price.price
                             );
-                        bps_fee_usd_wei = (
-                            token_usd_value * (transfer_fee_config.deci_bps as u256)
-                        ) / VAL_1E5;
+                        bps_fee_usd_wei =
+                            (token_usd_value * (transfer_fee_config.deci_bps as u256))
+                                / VAL_1E5;
                     };
 
-                    token_transfer_gas = token_transfer_gas
-                        + transfer_fee_config.dest_gas_overhead;
-                    token_transfer_bytes_overhead = token_transfer_bytes_overhead
-                        + transfer_fee_config.dest_bytes_overhead;
+                    token_transfer_gas =
+                        token_transfer_gas + transfer_fee_config.dest_gas_overhead;
+                    token_transfer_bytes_overhead =
+                        token_transfer_bytes_overhead
+                            + transfer_fee_config.dest_bytes_overhead;
 
                     let min_fee_usd_wei =
                         (transfer_fee_config.min_fee_usd_cents as u256) * VAL_1E16;
