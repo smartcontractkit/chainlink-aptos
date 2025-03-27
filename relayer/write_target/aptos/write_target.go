@@ -8,11 +8,11 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
 
-	aptosacc "github.com/smartcontractkit/chainlink-aptos/relayer/account"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainwriter"
 	aptosconfig "github.com/smartcontractkit/chainlink-aptos/relayer/config"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
@@ -194,11 +194,11 @@ func getTransmitter(cwConfig chainwriter.ChainWriterConfig) (string, error) {
 	if transmitter == "" {
 		// If the address is not specified, we assume the public key is for its corresponding address
 		// and not for an address with a rotated authentication key.
-		ed25519PublicKey, err := aptosacc.HexPublicKeyToEd25519PublicKey(functionConfig.PublicKey)
+		ed25519PublicKey, err := utils.HexPublicKeyToEd25519PublicKey(functionConfig.PublicKey)
 		if err != nil {
 			return "", fmt.Errorf("failed to convert public key: %+w", err)
 		}
-		acc := aptosacc.Ed25519PublicKeyToAccount(ed25519PublicKey)
+		acc := utils.Ed25519PublicKeyToAddress(ed25519PublicKey)
 		transmitter = acc.String()
 	}
 	return transmitter, nil
