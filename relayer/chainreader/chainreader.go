@@ -12,12 +12,16 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/go-viper/mapstructure/v2"
 
+	"github.com/smartcontractkit/chainlink-ccip/pkg/consts"
+	//"github.com/smartcontractkit/chainlink-ccip/pkg/reader"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
+	module_ocr3_base "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/ocr3_base"
+	module_offramp "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/offramp"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
@@ -33,6 +37,8 @@ type aptosChainReader struct {
 
 	client aptos.AptosRpcClient
 }
+
+var _ types.ContractTypeProvider = &aptosChainReader{}
 
 func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config ChainReaderConfig) types.ContractReader {
 	return &aptosChainReader{
@@ -506,4 +512,42 @@ func (a *aptosChainReader) Unbind(ctx context.Context, bindings []types.BoundCon
 		}
 	}
 	return nil
+}
+
+func (a *aptosChainReader) CreateContractType(readName string, forEncoding bool) (any, error) {
+	a.logger.Infow("CreateContractType", "readName", readName, "forEncoding", forEncoding)
+
+	if !forEncoding {
+		// for retVal
+		readComponents := strings.Split(readName, "-")
+		if len(readComponents) != 3 {
+			return nil, fmt.Errorf("invalid read identifier: %s", readName)
+		}
+		_, contractName, method := readComponents[0], readComponents[1], readComponents[2]
+
+		// TODO: make this a map
+		if contractName == consts.ContractNameOffRamp {
+			if method == consts.MethodNameOffRampLatestConfigDetails {
+				// TODO: why is this wrapped in a struct with OCRConfig?
+				// ref: https://github.com/smartcontractkit/chainlink-ccip/blob/bee7c32c71cf0aec594c051fef328b4a7281a1fc/pkg/reader/ccip.go#L140
+				return &module_ocr3_base.LatestConfigDetails{}, nil
+				//ocrConfigResponse := reader.OfframpConfig{}.CommitLatestOCRConfig
+				//return &ocrConfigResponse, nil
+			} else if method == consts.MethodNameOffRampGetStaticConfig {
+				return &module_offramp.StaticConfig{}, nil
+				//staticConfig := reader.OfframpConfig{}.StaticConfig
+				//return &staticConfig, nil
+			} else if method == consts.MethodNameOffRampGetDynamicConfig {
+				return &module_offramp.DynamicConfig{}, nil
+				//dynamicConfig := reader.OfframpConfig{}.DynamicConfig
+				//return &dynamicConfig, nil
+			} else if method == consts.MethodNameGetSourceChainConfig {
+				return &module_offramp.SourceChainConfig{}, nil
+				//return &reader.SourceChainConfig{}, nil
+			}
+		}
+	}
+
+	// return the default
+	return &map[string]any{}, nil
 }
