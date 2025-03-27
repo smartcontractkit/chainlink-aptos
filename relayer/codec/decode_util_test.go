@@ -1,4 +1,4 @@
-package codec
+package codec_test
 
 import (
 	"math/big"
@@ -7,7 +7,14 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 )
+
+var DecodeAptosJsonValue = codec.DecodeAptosJsonValue
+var DecodeAptosJsonArray = codec.DecodeAptosJsonArray
+
+type TestChainSelector uint64
 
 func TestDecodeAptosJsonValue(t *testing.T) {
 	t.Run("String to String", func(t *testing.T) {
@@ -161,6 +168,46 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 		expected := aptos.AccountOne
 		assert.Equal(t, expected, result)
 	})
+
+	t.Run("map to custom type", func(t *testing.T) {
+		type MessageWithSelector struct {
+			Selector TestChainSelector
+			Message  string
+		}
+
+		var result MessageWithSelector
+		err := DecodeAptosJsonValue(map[string]any{"selector": "12345", "message": "test message"}, &result)
+		assert.NoError(t, err)
+		assert.Equal(t, TestChainSelector(12345), result.Selector)
+		assert.Equal(t, "test message", result.Message)
+	})
+
+	t.Run("map with chain_selector", func(t *testing.T) {
+		type ChainItem struct {
+			ChainSelector TestChainSelector
+		}
+
+		var result ChainItem
+		err := DecodeAptosJsonValue(map[string]any{"chain_selector": "4457093679053095497"}, &result)
+		assert.NoError(t, err)
+		assert.Equal(t, TestChainSelector(4457093679053095497), result.ChainSelector)
+	})
+
+	t.Run("map with chain_selector passed in as any", func(t *testing.T) {
+		type chainItem struct {
+			ChainSelector TestChainSelector
+		}
+
+		type anyStruct struct {
+			value any
+		}
+
+		var result chainItem
+		anyResult := &anyStruct{value: &result}
+		err := DecodeAptosJsonValue(map[string]any{"chain_selector": "4457093679053095497"}, anyResult.value)
+		assert.NoError(t, err)
+		assert.Equal(t, TestChainSelector(4457093679053095497), result.ChainSelector)
+	})
 }
 
 func compareBigIntSlices(a, b []*big.Int) bool {
@@ -236,5 +283,31 @@ func TestDecodeAptosJsonArray(t *testing.T) {
 		var result string
 		err := DecodeAptosJsonArray([]any{"hello", "world"}, &result)
 		assert.Error(t, err)
+	})
+	t.Run("Numeric String and Hex String to Custom Type (ChainSelector) and []byte", func(t *testing.T) {
+		var (
+			selector TestChainSelector
+			data     []byte
+		)
+		// Pass pointers to the concrete types
+		err := DecodeAptosJsonArray([]any{"55555", "0xbeef"}, &selector, &data)
+		assert.NoError(t, err)
+		assert.Equal(t, TestChainSelector(55555), selector)
+		assert.Equal(t, []byte{0xbe, 0xef}, data)
+	})
+
+	t.Run("JSON Number and Hex String to Custom Type (ChainSelector) and Aptos Address", func(t *testing.T) {
+		var (
+			selector TestChainSelector
+			addr     aptos.AccountAddress
+		)
+		err := DecodeAptosJsonArray([]any{float64(12345), "0xf00d"}, &selector, &addr)
+		assert.NoError(t, err)
+		assert.Equal(t, TestChainSelector(12345), selector)
+
+		expectedAddr := aptos.AccountAddress{}
+		err = expectedAddr.ParseStringRelaxed("0xf00d") // Error ignored as it's for test setup
+		assert.NoError(t, err)
+		assert.Equal(t, expectedAddr, addr)
 	})
 }
