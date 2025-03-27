@@ -1238,19 +1238,19 @@ module ccip::fee_quoter {
                     &mut state.dest_chain_configs, dest_chain_selector
                 );
             *dest_chain_config_ref = dest_chain_config;
-            event::emit(DestChainAdded { dest_chain_selector, dest_chain_config });
+            event::emit(DestChainConfigUpdated { dest_chain_selector, dest_chain_config });
             event::emit_event(
-                &mut state.dest_chain_added_events,
-                DestChainAdded { dest_chain_selector, dest_chain_config }
+                &mut state.dest_chain_config_updated_events,
+                DestChainConfigUpdated { dest_chain_selector, dest_chain_config }
             );
         } else {
             smart_table::add(
                 &mut state.dest_chain_configs, dest_chain_selector, dest_chain_config
             );
-            event::emit(DestChainConfigUpdated { dest_chain_selector, dest_chain_config });
+            event::emit(DestChainAdded { dest_chain_selector, dest_chain_config });
             event::emit_event(
-                &mut state.dest_chain_config_updated_events,
-                DestChainConfigUpdated { dest_chain_selector, dest_chain_config }
+                &mut state.dest_chain_added_events,
+                DestChainAdded { dest_chain_selector, dest_chain_config }
             );
         }
     }
