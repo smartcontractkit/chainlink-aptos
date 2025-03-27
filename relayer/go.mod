@@ -13,6 +13,7 @@ require (
 	github.com/jpillora/backoff v1.0.0
 	github.com/pelletier/go-toml/v2 v2.2.0
 	github.com/smartcontractkit/chainlink-aptos v0.0.0-20250326235312-b9f6f2a53608
+	github.com/smartcontractkit/chainlink-ccip v0.0.0-20250326145329-5d025a20422e
 	github.com/smartcontractkit/chainlink-common v0.5.1-0.20250314131019-e227d4e2dc2f
 	github.com/stretchr/testify v1.10.0
 	go.opentelemetry.io/otel v1.30.0
