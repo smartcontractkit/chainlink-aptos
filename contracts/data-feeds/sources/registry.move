@@ -450,9 +450,8 @@ module data_feeds::registry {
         let benchmark_price: u256;
         if (schema == SCHEMA_V3 || schema == SCHEMA_V4) {
             // offsets are the same for timestamp and benchmark in v3 and v4.
-            observation_timestamp = (
-                to_u32be(vector::slice(&report_data, 3 * 32 - 4, 3 * 32)) as u256
-            );
+            observation_timestamp =
+                (to_u32be(vector::slice(&report_data, 3 * 32 - 4, 3 * 32)) as u256);
             // NOTE: aptos has no signed integer types, so can't parse as i196, this is a raw representation
             benchmark_price = to_u256be(vector::slice(&report_data, 6 * 32, 7 * 32));
         } else {

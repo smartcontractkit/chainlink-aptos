@@ -380,8 +380,8 @@ module mcms::mcms {
             error::invalid_argument(E_PROOF_CANNOT_BE_VERIFIED)
         );
 
-        state.expiring_root_and_op_count.op_count = state.expiring_root_and_op_count.op_count
-            + 1;
+        state.expiring_root_and_op_count.op_count =
+            state.expiring_root_and_op_count.op_count + 1;
 
         dispatch(to, module_name, function, data);
 
