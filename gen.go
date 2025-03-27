@@ -2,6 +2,7 @@ package aptos
 
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/auth.move --output ./bindings/ccip/auth
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/fee_quoter.move --output ./bindings/ccip/fee_quoter
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/ocr3_base.move --output ./bindings/ccip/ocr3_base
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/offramp.move --output ./bindings/ccip/offramp
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/onramp.move --output ./bindings/ccip/onramp
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/receiver_registry.move --output ./bindings/ccip/receiver_registry
