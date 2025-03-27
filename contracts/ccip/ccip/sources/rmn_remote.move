@@ -56,8 +56,8 @@ module ccip::rmn_remote {
 
     struct MerkleRoot has drop {
         source_chain_selector: u64,
-        min_sequence_number: u64,
-        max_sequence_number: u64,
+        min_seq_nr: u64,
+        max_seq_nr: u64,
         merkle_root: vector<u8>
     }
 
@@ -152,8 +152,8 @@ module ccip::rmn_remote {
             |merkle_root| {
                 let merkle_root: &MerkleRoot = merkle_root;
                 eth_abi::encode_u64(&mut digest, merkle_root.source_chain_selector);
-                eth_abi::encode_u64(&mut digest, merkle_root.min_sequence_number);
-                eth_abi::encode_u64(&mut digest, merkle_root.max_sequence_number);
+                eth_abi::encode_u64(&mut digest, merkle_root.min_seq_nr);
+                eth_abi::encode_u64(&mut digest, merkle_root.max_seq_nr);
                 eth_abi::encode_bytes32(&mut digest, merkle_root.merkle_root);
             }
         );
@@ -163,8 +163,8 @@ module ccip::rmn_remote {
     #[view]
     public fun verify(
         merkle_root_source_chain_selectors: vector<u64>,
-        merkle_root_min_sequence_numbers: vector<u64>,
-        merkle_root_max_sequence_numbers: vector<u64>,
+        merkle_root_min_seq_nrs: vector<u64>,
+        merkle_root_max_seq_nrs: vector<u64>,
         merkle_root_values: vector<vector<u8>>,
         signatures: vector<vector<u8>>
     ): bool acquires RMNRemoteState {
@@ -180,11 +180,11 @@ module ccip::rmn_remote {
 
         let merkle_root_len = vector::length(&merkle_root_source_chain_selectors);
         assert!(
-            merkle_root_len == vector::length(&merkle_root_min_sequence_numbers),
+            merkle_root_len == vector::length(&merkle_root_min_seq_nrs),
             error::invalid_argument(E_MERKLE_ROOT_LENGTH_MISMATCH)
         );
         assert!(
-            merkle_root_len == vector::length(&merkle_root_max_sequence_numbers),
+            merkle_root_len == vector::length(&merkle_root_max_seq_nrs),
             error::invalid_argument(E_MERKLE_ROOT_LENGTH_MISMATCH)
         );
         assert!(
@@ -197,19 +197,12 @@ module ccip::rmn_remote {
         for (i in 0..merkle_root_len) {
             let source_chain_selector =
                 *vector::borrow(&merkle_root_source_chain_selectors, i);
-            let min_sequence_number =
-                *vector::borrow(&merkle_root_min_sequence_numbers, i);
-            let max_sequence_number =
-                *vector::borrow(&merkle_root_max_sequence_numbers, i);
+            let min_seq_nr = *vector::borrow(&merkle_root_min_seq_nrs, i);
+            let max_seq_nr = *vector::borrow(&merkle_root_max_seq_nrs, i);
             let merkle_root = *vector::borrow(&merkle_root_values, i);
             vector::push_back(
                 &mut merkle_roots,
-                MerkleRoot {
-                    source_chain_selector,
-                    min_sequence_number,
-                    max_sequence_number,
-                    merkle_root
-                }
+                MerkleRoot { source_chain_selector, min_seq_nr, max_seq_nr, merkle_root }
             );
         };
 
