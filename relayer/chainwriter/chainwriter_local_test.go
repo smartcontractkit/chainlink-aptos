@@ -242,7 +242,7 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 	require.Equal(t, fmt.Sprintf("%d", expectedValue), valueStr)
 }
 
-func waitForTransaction(t *testing.T, chainWriter commontypes.ChainWriter, id string, waitSecs int) {
+func waitForTransaction(t *testing.T, chainWriter commontypes.ContractWriter, id string, waitSecs int) {
 	for i := 1; i <= waitSecs; i++ {
 		status, err := chainWriter.GetTransactionStatus(context.Background(), id)
 		require.NoError(t, err)

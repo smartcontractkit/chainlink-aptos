@@ -295,8 +295,8 @@ github.com/sirupsen/logrus v1.4.1/go.mod h1:ni0Sbl8bgC9z8RoU9G6nDWqqs/fq4eDPysMB
 github.com/sirupsen/logrus v1.4.2/go.mod h1:tLMulIdttU9McNUspp0xgXVQah82FyeX6MwdIuYE2rE=
 github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82 h1:6C8qej6f1bStuePVkLSFxoU22XBS165D3klxlzRg8F4=
 github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82/go.mod h1:xe4pgH49k4SsmkQq5OT8abwhWmnzkhpgnXeekbx2efw=
-github.com/smartcontractkit/chainlink-common v0.4.2-0.20250227203031-2537a8c226bb h1:y3yZ7DNYzqeJnub0e1LPj+e8lUUXTuS8vFKQWYfRbP8=
-github.com/smartcontractkit/chainlink-common v0.4.2-0.20250227203031-2537a8c226bb/go.mod h1:YQuXIqQpmpAqstWV0LHaDTJ5nsSWuip5ivEM+Fisb+4=
+github.com/smartcontractkit/chainlink-common v0.5.1-0.20250314131019-e227d4e2dc2f h1:5j1pQ2jWIRo8IWHDv02TcjPoLSaTO6Hc2NcRH+3cmWU=
+github.com/smartcontractkit/chainlink-common v0.5.1-0.20250314131019-e227d4e2dc2f/go.mod h1:YQuXIqQpmpAqstWV0LHaDTJ5nsSWuip5ivEM+Fisb+4=
 github.com/smartcontractkit/chainlink-integrations/evm v0.0.0-20250317165050-f8c18e1f415e h1:7cuecivOBSTGh1xjVGL7LdITaK9MEtH8Faad5iSysMY=
 github.com/smartcontractkit/chainlink-integrations/evm v0.0.0-20250317165050-f8c18e1f415e/go.mod h1:mUaMYzycg5ehp404VREZcxJMrE7aImqyfstqRosibV4=
 github.com/smartcontractkit/grpc-proxy v0.0.0-20240830132753-a7e17fec5ab7 h1:12ijqMM9tvYVEm+nR826WsrNi6zCKpwBhuApq127wHs=

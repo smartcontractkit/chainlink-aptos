@@ -2,7 +2,9 @@ package relayer
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
@@ -11,7 +13,9 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
-	chain "github.com/smartcontractkit/chainlink-aptos/relayer/chain"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainwriter"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target/aptos"
 )
 
@@ -83,12 +87,34 @@ func (r *relayer) HealthReport() map[string]error {
 	return map[string]error{r.Name(): r.Healthy()}
 }
 
-func (r *relayer) NewChainWriter(ctx context.Context, config []byte) (types.ChainWriter, error) {
-	return nil, errors.New("chain writer is not supported for aptos")
+func (r *relayer) NewContractWriter(ctx context.Context, configBytes []byte) (types.ContractWriter, error) {
+	cfg := chainwriter.ChainWriterConfig{}
+	if err := json.Unmarshal(configBytes, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshall chain writer config err: %s", err)
+	}
+
+	client, err := r.chain.GetClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	chainWriter := chainwriter.NewChainWriter(r.lggr, client, r.chain.TxManager(), cfg)
+	return chainWriter, nil
 }
 
-func (r *relayer) NewContractReader(ctx context.Context, _ []byte) (types.ContractReader, error) {
-	return nil, errors.New("contract reader is not supported for aptos")
+func (r *relayer) NewContractReader(ctx context.Context, configBytes []byte) (types.ContractReader, error) {
+	cfg := chainreader.ChainReaderConfig{}
+	if err := json.Unmarshal(configBytes, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshall chain reader config err: %s", err)
+	}
+
+	client, err := r.chain.GetClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	chainReader := chainreader.NewChainReader(r.lggr, client, cfg)
+	return chainReader, nil
 }
 
 func (r *relayer) NewConfigProvider(ctx context.Context, args types.RelayArgs) (types.ConfigProvider, error) {
