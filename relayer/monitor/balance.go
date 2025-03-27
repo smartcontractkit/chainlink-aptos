@@ -26,20 +26,20 @@ type Config struct {
 	BalancePollPeriod config.Duration
 }
 
-// BalanceClient defines the interface for getting account balances.
-type BalanceClient interface {
+// GenericBalanceClient defines the interface for getting account balances.
+type GenericBalanceClient interface {
 	GetAccountBalance(addr string) (float64, error)
 }
 
-// BalanceMonitorOpts contains the options for creating a new balance monitor.
-type BalanceMonitorOpts struct {
+// GenericBalanceMonitorOpts contains the options for creating a new balance monitor.
+type GenericBalanceMonitorOpts struct {
 	ChainInfo           ChainInfo
 	ChainNativeCurrency string
 
-	Config           Config
-	Logger           logger.Logger
-	Keystore         core.Keystore
-	NewBalanceClient func() (BalanceClient, error)
+	Config                  Config
+	Logger                  logger.Logger
+	Keystore                core.Keystore
+	NewGenericBalanceClient func() (GenericBalanceClient, error)
 
 	// Maps a public key to an account address (optional, can return key as is)
 	KeyToAccountMapper func(context.Context, string) (string, error)
@@ -49,12 +49,8 @@ type BalanceMonitorOpts struct {
 //   - Solana: /solana/pkg/solana/monitor
 //   - TRON: /tron/relayer/monitor
 //
-// NewBalanceMonitor returns a balance monitoring services.Service which reports the balance of all Keystore accounts.
-func NewBalanceMonitor(opts BalanceMonitorOpts) (services.Service, error) {
-	return newBalanceMonitor(opts)
-}
-
-func newBalanceMonitor(opts BalanceMonitorOpts) (*balanceMonitor, error) {
+// NewGenericBalanceMonitor returns a balance monitoring services.Service which reports the balance of all Keystore accounts.
+func NewGenericBalanceMonitor(opts GenericBalanceMonitorOpts) (services.Service, error) {
 	// Try to create a new gauge for account balance
 	gauge, err := NewGaugeAccBalance(opts.ChainNativeCurrency)
 	if err != nil {
@@ -62,12 +58,12 @@ func newBalanceMonitor(opts BalanceMonitorOpts) (*balanceMonitor, error) {
 	}
 
 	lggr := logger.Named(opts.Logger, "BalanceMonitor")
-	return &balanceMonitor{
+	return &genericBalanceMonitor{
 		cfg:  opts.Config,
 		lggr: lggr,
 		ks:   opts.Keystore,
 
-		newReader:          opts.NewBalanceClient,
+		newReader:          opts.NewGenericBalanceClient,
 		keyToAccountMapper: opts.KeyToAccountMapper,
 		updateFn: func(ctx context.Context, acc string, balance float64) {
 			lggr.Infow("Account balance updated", "unit", opts.ChainNativeCurrency, "account", acc, "balance", balance)
@@ -79,38 +75,38 @@ func newBalanceMonitor(opts BalanceMonitorOpts) (*balanceMonitor, error) {
 	}, nil
 }
 
-type balanceMonitor struct {
+type genericBalanceMonitor struct {
 	services.StateMachine
 	cfg  Config
 	lggr logger.Logger
 	ks   core.Keystore
 
-	// Returns a new BalanceClient
-	newReader func() (BalanceClient, error)
+	// Returns a new GenericBalanceClient
+	newReader func() (GenericBalanceClient, error)
 	// Maps a public key to an account address (optional, can return key as is)
 	keyToAccountMapper func(context.Context, string) (string, error)
 	// Updates the balance metric
 	updateFn func(ctx context.Context, acc string, balance float64) // overridable for testing
 
 	// Cached instance, intermitently reset to nil.
-	reader BalanceClient
+	reader GenericBalanceClient
 
 	stop services.StopChan
 	done chan struct{}
 }
 
-func (m *balanceMonitor) Name() string {
+func (m *genericBalanceMonitor) Name() string {
 	return m.lggr.Name()
 }
 
-func (m *balanceMonitor) Start(context.Context) error {
+func (m *genericBalanceMonitor) Start(context.Context) error {
 	return m.StartOnce(m.Name(), func() error {
 		go m.start()
 		return nil
 	})
 }
 
-func (m *balanceMonitor) Close() error {
+func (m *genericBalanceMonitor) Close() error {
 	return m.StopOnce(m.Name(), func() error {
 		close(m.stop)
 		<-m.done
@@ -118,12 +114,12 @@ func (m *balanceMonitor) Close() error {
 	})
 }
 
-func (m *balanceMonitor) HealthReport() map[string]error {
+func (m *genericBalanceMonitor) HealthReport() map[string]error {
 	return map[string]error{m.Name(): m.Healthy()}
 }
 
 // monitor fn continously updates balances, until stop signal is received.
-func (m *balanceMonitor) start() {
+func (m *genericBalanceMonitor) start() {
 	defer close(m.done)
 	ctx, cancel := m.stop.NewCtx()
 	defer cancel()
@@ -141,8 +137,8 @@ func (m *balanceMonitor) start() {
 	}
 }
 
-// getReader returns the stored BalanceClient, creating a new one if necessary.
-func (m *balanceMonitor) getReader() (BalanceClient, error) {
+// getReader returns the stored GenericBalanceClient, creating a new one if necessary.
+func (m *genericBalanceMonitor) getReader() (GenericBalanceClient, error) {
 	if m.reader == nil {
 		var err error
 		m.reader, err = m.newReader()
@@ -153,8 +149,8 @@ func (m *balanceMonitor) getReader() (BalanceClient, error) {
 	return m.reader, nil
 }
 
-// updateBalances updates the balances of all accounts in the keystore, using the provided BalanceClient and the updateFn.
-func (m *balanceMonitor) updateBalances(ctx context.Context) {
+// updateBalances updates the balances of all accounts in the keystore, using the provided GenericBalanceClient and the updateFn.
+func (m *genericBalanceMonitor) updateBalances(ctx context.Context) {
 	m.lggr.Debug("Updating account balances")
 	keys, err := m.ks.Accounts(ctx)
 	if err != nil {
