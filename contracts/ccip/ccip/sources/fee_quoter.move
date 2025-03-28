@@ -345,38 +345,32 @@ module ccip::fee_quoter {
         let state = borrow_state_mut();
 
         // Remove tokens
-        vector::for_each_ref(
-            &fee_tokens_to_remove,
-            |fee_token| {
-                let fee_token = *fee_token;
-                let (found, index) = vector::index_of(&state.fee_tokens, &fee_token);
-                if (found) {
-                    vector::remove(&mut state.fee_tokens, index);
-                    event::emit(FeeTokenRemoved { fee_token });
-                    event::emit_event(
-                        &mut state.fee_token_removed_events,
-                        FeeTokenRemoved { fee_token }
-                    );
-                };
-            }
-        );
+        fee_tokens_to_remove.for_each_ref(|fee_token| {
+            let fee_token = *fee_token;
+            let (found, index) = state.fee_tokens.index_of(&fee_token);
+            if (found) {
+                state.fee_tokens.remove(index);
+                event::emit(FeeTokenRemoved { fee_token });
+                event::emit_event(
+                    &mut state.fee_token_removed_events,
+                    FeeTokenRemoved { fee_token }
+                );
+            };
+        });
 
         // Add new tokens
-        vector::for_each_ref(
-            &fee_tokens_to_add,
-            |fee_token| {
-                let fee_token = *fee_token;
-                let (found, _) = vector::index_of(&state.fee_tokens, &fee_token);
-                if (!found) {
-                    vector::push_back(&mut state.fee_tokens, fee_token);
-                    event::emit(FeeTokenAdded { fee_token });
-                    event::emit_event(
-                        &mut state.fee_token_added_events,
-                        FeeTokenAdded { fee_token }
-                    );
-                };
-            }
-        );
+        fee_tokens_to_add.for_each_ref(|fee_token| {
+            let fee_token = *fee_token;
+            let (found, _) = state.fee_tokens.index_of(&fee_token);
+            if (!found) {
+                state.fee_tokens.push_back(fee_token);
+                event::emit(FeeTokenAdded { fee_token });
+                event::emit_event(
+                    &mut state.fee_token_added_events,
+                    FeeTokenAdded { fee_token }
+                );
+            };
+        });
     }
 
     #[view]
@@ -392,18 +386,16 @@ module ccip::fee_quoter {
         state: &FeeQuoterState, dest_chain_selector: u64, token: address
     ): &TokenTransferFeeConfig {
         assert!(
-            smart_table::contains(
-                &state.token_transfer_fee_configs, dest_chain_selector
-            ),
+            state.token_transfer_fee_configs.contains(dest_chain_selector),
             error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
         );
         let dest_chain_fee_configs =
-            smart_table::borrow(&state.token_transfer_fee_configs, dest_chain_selector);
+            state.token_transfer_fee_configs.borrow(dest_chain_selector);
         assert!(
-            smart_table::contains(dest_chain_fee_configs, token),
+            dest_chain_fee_configs.contains(token),
             error::invalid_argument(E_TOKEN_NOT_SUPPORTED)
         );
-        smart_table::borrow(dest_chain_fee_configs, token)
+        dest_chain_fee_configs.borrow(token)
     }
 
     // Note that unlike EVM, this only allows changes for a single dest chain selector
@@ -424,54 +416,46 @@ module ccip::fee_quoter {
 
         let state = borrow_state_mut();
 
-        if (!smart_table::contains(
-            &state.token_transfer_fee_configs, dest_chain_selector
-        )) {
-            smart_table::add(
-                &mut state.token_transfer_fee_configs,
-                dest_chain_selector,
-                smart_table::new()
-            );
+        if (!state.token_transfer_fee_configs.contains(dest_chain_selector)) {
+            state.token_transfer_fee_configs.add(dest_chain_selector, smart_table::new());
         };
         let token_transfer_fee_configs =
-            smart_table::borrow_mut(
-                &mut state.token_transfer_fee_configs, dest_chain_selector
-            );
+            state.token_transfer_fee_configs.borrow_mut(dest_chain_selector);
 
-        let add_tokens_len = vector::length(&add_tokens);
+        let add_tokens_len = add_tokens.length();
         assert!(
-            add_tokens_len == vector::length(&add_min_fee_usd_cents),
+            add_tokens_len == add_min_fee_usd_cents.length(),
             error::invalid_argument(E_TOKEN_TRANSFER_FEE_CONFIG_MISMATCH)
         );
         assert!(
-            add_tokens_len == vector::length(&add_max_fee_usd_cents),
+            add_tokens_len == add_max_fee_usd_cents.length(),
             error::invalid_argument(E_TOKEN_TRANSFER_FEE_CONFIG_MISMATCH)
         );
         assert!(
-            add_tokens_len == vector::length(&add_deci_bps),
+            add_tokens_len == add_deci_bps.length(),
             error::invalid_argument(E_TOKEN_TRANSFER_FEE_CONFIG_MISMATCH)
         );
         assert!(
-            add_tokens_len == vector::length(&add_dest_gas_overhead),
+            add_tokens_len == add_dest_gas_overhead.length(),
             error::invalid_argument(E_TOKEN_TRANSFER_FEE_CONFIG_MISMATCH)
         );
         assert!(
-            add_tokens_len == vector::length(&add_dest_bytes_overhead),
+            add_tokens_len == add_dest_bytes_overhead.length(),
             error::invalid_argument(E_TOKEN_TRANSFER_FEE_CONFIG_MISMATCH)
         );
         assert!(
-            add_tokens_len == vector::length(&add_is_enabled),
+            add_tokens_len == add_is_enabled.length(),
             error::invalid_argument(E_TOKEN_TRANSFER_FEE_CONFIG_MISMATCH)
         );
 
         for (i in 0..add_tokens_len) {
-            let token = *vector::borrow(&add_tokens, i);
-            let min_fee_usd_cents = *vector::borrow(&add_min_fee_usd_cents, i);
-            let max_fee_usd_cents = *vector::borrow(&add_max_fee_usd_cents, i);
-            let deci_bps = *vector::borrow(&add_deci_bps, i);
-            let dest_gas_overhead = *vector::borrow(&add_dest_gas_overhead, i);
-            let dest_bytes_overhead = *vector::borrow(&add_dest_bytes_overhead, i);
-            let is_enabled = *vector::borrow(&add_is_enabled, i);
+            let token = add_tokens[i];
+            let min_fee_usd_cents = add_min_fee_usd_cents[i];
+            let max_fee_usd_cents = add_max_fee_usd_cents[i];
+            let deci_bps = add_deci_bps[i];
+            let dest_gas_overhead = add_dest_gas_overhead[i];
+            let dest_bytes_overhead = add_dest_bytes_overhead[i];
+            let is_enabled = add_is_enabled[i];
 
             let token_transfer_fee_config = TokenTransferFeeConfig {
                 min_fee_usd_cents,
@@ -482,9 +466,7 @@ module ccip::fee_quoter {
                 is_enabled
             };
 
-            smart_table::add(
-                token_transfer_fee_configs, token, token_transfer_fee_config
-            );
+            token_transfer_fee_configs.add(token, token_transfer_fee_config);
 
             event::emit(
                 TokenTransferFeeConfigAdded {
@@ -503,23 +485,20 @@ module ccip::fee_quoter {
             );
         };
 
-        vector::for_each_ref(
-            &remove_tokens,
-            |token| {
-                let token: address = *token;
-                if (smart_table::contains(token_transfer_fee_configs, token)) {
-                    smart_table::remove(token_transfer_fee_configs, token);
+        remove_tokens.for_each_ref(|token| {
+            let token: address = *token;
+            if (token_transfer_fee_configs.contains(token)) {
+                token_transfer_fee_configs.remove(token);
 
-                    event::emit(
-                        TokenTransferFeeConfigRemoved { dest_chain_selector, token }
-                    );
-                    event::emit_event(
-                        &mut state.token_transfer_fee_config_removed_events,
-                        TokenTransferFeeConfigRemoved { dest_chain_selector, token }
-                    );
-                }
+                event::emit(
+                    TokenTransferFeeConfigRemoved { dest_chain_selector, token }
+                );
+                event::emit_event(
+                    &mut state.token_transfer_fee_config_removed_events,
+                    TokenTransferFeeConfigRemoved { dest_chain_selector, token }
+                );
             }
-        );
+        });
     }
 
     public(friend) fun update_prices(
@@ -529,76 +508,63 @@ module ccip::fee_quoter {
         gas_usd_per_unit_gas: vector<u256>
     ) acquires FeeQuoterState {
         assert!(
-            vector::length(&source_tokens) == vector::length(&source_usd_per_token),
+            source_tokens.length() == source_usd_per_token.length(),
             error::invalid_argument(E_TOKEN_UPDATE_MISMATCH)
         );
         assert!(
-            vector::length(&gas_dest_chain_selectors)
-                == vector::length(&gas_usd_per_unit_gas),
+            gas_dest_chain_selectors.length() == gas_usd_per_unit_gas.length(),
             error::invalid_argument(E_GAS_UPDATE_MISMATCH)
         );
 
         let state = borrow_state_mut();
         let timestamp_secs = timestamp::now_seconds();
 
-        vector::zip_ref(
-            &source_tokens,
-            &source_usd_per_token,
-            |token, usd_per_token| {
-                let timestamped_price = TimestampedPrice {
-                    price: *usd_per_token,
-                    timestamp_secs
-                };
-                smart_table::upsert(&mut state.usd_per_token, *token, timestamped_price);
-                event::emit(
-                    UsdPerTokenUpdated {
-                        token: *token,
-                        usd_per_token: *usd_per_token,
-                        timestamp: timestamp_secs
-                    }
-                );
-                event::emit_event(
-                    &mut state.usd_per_token_updated_events,
-                    UsdPerTokenUpdated {
-                        token: *token,
-                        usd_per_token: *usd_per_token,
-                        timestamp: timestamp_secs
-                    }
-                );
-            }
-        );
+        source_tokens.zip_ref(&source_usd_per_token, |token, usd_per_token| {
+            let timestamped_price = TimestampedPrice {
+                price: *usd_per_token,
+                timestamp_secs
+            };
+            state.usd_per_token.upsert(*token, timestamped_price);
+            event::emit(
+                UsdPerTokenUpdated {
+                    token: *token,
+                    usd_per_token: *usd_per_token,
+                    timestamp: timestamp_secs
+                }
+            );
+            event::emit_event(
+                &mut state.usd_per_token_updated_events,
+                UsdPerTokenUpdated {
+                    token: *token,
+                    usd_per_token: *usd_per_token,
+                    timestamp: timestamp_secs
+                }
+            );
+        });
 
-        vector::zip_ref(
-            &gas_dest_chain_selectors,
-            &gas_usd_per_unit_gas,
-            |dest_chain_selector, usd_per_unit_gas| {
-                let timestamped_price = TimestampedPrice {
-                    price: *usd_per_unit_gas,
-                    timestamp_secs
-                };
-                smart_table::upsert(
-                    &mut state.usd_per_unit_gas_by_dest_chain,
-                    *dest_chain_selector,
-                    timestamped_price
-                );
+        gas_dest_chain_selectors.zip_ref(&gas_usd_per_unit_gas, |dest_chain_selector, usd_per_unit_gas| {
+            let timestamped_price = TimestampedPrice {
+                price: *usd_per_unit_gas,
+                timestamp_secs
+            };
+            state.usd_per_unit_gas_by_dest_chain.upsert(*dest_chain_selector, timestamped_price);
 
-                event::emit(
-                    UsdPerUnitGasUpdated {
-                        dest_chain_selector: *dest_chain_selector,
-                        usd_per_unit_gas: *usd_per_unit_gas,
-                        timestamp: timestamp_secs
-                    }
-                );
-                event::emit_event(
-                    &mut state.usd_per_unit_gas_updated_events,
-                    UsdPerUnitGasUpdated {
-                        dest_chain_selector: *dest_chain_selector,
-                        usd_per_unit_gas: *usd_per_unit_gas,
-                        timestamp: timestamp_secs
-                    }
-                );
-            }
-        );
+            event::emit(
+                UsdPerUnitGasUpdated {
+                    dest_chain_selector: *dest_chain_selector,
+                    usd_per_unit_gas: *usd_per_unit_gas,
+                    timestamp: timestamp_secs
+                }
+            );
+            event::emit_event(
+                &mut state.usd_per_unit_gas_updated_events,
+                UsdPerUnitGasUpdated {
+                    dest_chain_selector: *dest_chain_selector,
+                    usd_per_unit_gas: *usd_per_unit_gas,
+                    timestamp: timestamp_secs
+                }
+            );
+        });
     }
 
     // TODO: should this be public?
@@ -622,7 +588,7 @@ module ccip::fee_quoter {
         );
 
         assert!(
-            vector::contains(&state.fee_tokens, &fee_token),
+            state.fee_tokens.contains(&fee_token),
             error::invalid_argument(E_FEE_TOKEN_NOT_SUPPORTED)
         );
 
@@ -672,7 +638,7 @@ module ccip::fee_quoter {
             };
         let premium_multiplier =
             get_premium_multiplier_wei_per_eth_internal(state, fee_token);
-        premium_fee_usd_wei = premium_fee_usd_wei * (premium_multiplier as u256); // Apply premium multiplier in wei/eth units
+        premium_fee_usd_wei *= (premium_multiplier as u256); // Apply premium multiplier in wei/eth units
 
         let data_availability_cost_usd_36_decimals =
             if (dest_chain_config.dest_data_availability_multiplier_bps > 0) {
@@ -737,32 +703,24 @@ module ccip::fee_quoter {
 
         let state = borrow_state_mut();
 
-        vector::zip_ref(
-            &tokens,
-            &premium_multiplier_wei_per_eth,
-            |token, premium_multiplier_wei_per_eth| {
-                let token: address = *token;
-                let premium_multiplier_wei_per_eth: u64 = *premium_multiplier_wei_per_eth;
-                smart_table::upsert(
-                    &mut state.premium_multiplier_wei_per_eth,
+        tokens.zip_ref(&premium_multiplier_wei_per_eth, |token, premium_multiplier_wei_per_eth| {
+            let token: address = *token;
+            let premium_multiplier_wei_per_eth: u64 = *premium_multiplier_wei_per_eth;
+            state.premium_multiplier_wei_per_eth.upsert(token, premium_multiplier_wei_per_eth);
+            event::emit(
+                PremiumMultiplierWeiPerEthUpdated {
                     token,
                     premium_multiplier_wei_per_eth
-                );
-                event::emit(
-                    PremiumMultiplierWeiPerEthUpdated {
-                        token,
-                        premium_multiplier_wei_per_eth
-                    }
-                );
-                event::emit_event(
-                    &mut state.premium_multiplier_wei_per_eth_updated_events,
-                    PremiumMultiplierWeiPerEthUpdated {
-                        token,
-                        premium_multiplier_wei_per_eth
-                    }
-                );
-            }
-        );
+                }
+            );
+            event::emit_event(
+                &mut state.premium_multiplier_wei_per_eth_updated_events,
+                PremiumMultiplierWeiPerEthUpdated {
+                    token,
+                    premium_multiplier_wei_per_eth
+                }
+            );
+        });
     }
 
     #[view]
@@ -775,16 +733,16 @@ module ccip::fee_quoter {
         state: &FeeQuoterState, token: address
     ): u64 {
         assert!(
-            smart_table::contains(&state.premium_multiplier_wei_per_eth, token),
+            state.premium_multiplier_wei_per_eth.contains(token),
             error::invalid_argument(E_UNKNOWN_TOKEN)
         );
-        *smart_table::borrow(&state.premium_multiplier_wei_per_eth, token)
+        *state.premium_multiplier_wei_per_eth.borrow(token)
     }
 
     inline fun resolve_evm_gas_limit(
         dest_chain_config: &DestChainConfig, extra_args: vector<u8>
     ): u256 {
-        let extra_args_len = vector::length(&extra_args);
+        let extra_args_len = extra_args.length();
         if (extra_args_len == 0) {
             dest_chain_config.default_tx_gas_limit as u256
         } else {
@@ -807,7 +765,7 @@ module ccip::fee_quoter {
         extra_args: vector<u8>,
         require_valid_token_receiver: bool
     ): u256 {
-        let extra_args_len = vector::length(&extra_args);
+        let extra_args_len = extra_args.length();
         assert!(extra_args_len > 0, error::invalid_argument(E_INVALID_EXTRA_ARGS_DATA));
         let (
             compute_units,
@@ -826,7 +784,7 @@ module ccip::fee_quoter {
         );
         if (require_valid_token_receiver) {
             assert!(
-                vector::length(&token_receiver) == 32,
+                token_receiver.length() == 32,
                 error::invalid_argument(E_INVALID_TOKEN_RECEIVER)
             );
             let token_receiver_uint = eth_abi::decode_u256_value(token_receiver);
@@ -841,9 +799,9 @@ module ccip::fee_quoter {
     inline fun decode_evm_extra_args(extra_args: vector<u8>): (u256, bool) {
         // TODO: we need extra validation here. if extra_args length is less than tag length + data length,
         // vector::slice will revert.
-        let extra_args_len = vector::length(&extra_args);
-        let args_tag = vector::slice(&extra_args, 0, 4);
-        let args_data = vector::slice(&extra_args, 4, extra_args_len);
+        let extra_args_len = extra_args.length();
+        let args_tag = extra_args.slice(0, 4);
+        let args_data = extra_args.slice(4, extra_args_len);
 
         if (args_tag == EVM_EXTRA_ARGS_V2_TAG) {
             decode_evm_extra_args_v2(args_data)
@@ -874,13 +832,13 @@ module ccip::fee_quoter {
     ): (u32, u64, bool, vector<u8>, vector<vector<u8>>) {
         // TODO: we need extra validation here. if extra_args length is less than tag length + data length,
         // vector::slice will revert.
-        let extra_args_len = vector::length(&extra_args);
-        let args_tag = vector::slice(&extra_args, 0, 4);
+        let extra_args_len = extra_args.length();
+        let args_tag = extra_args.slice(0, 4);
         assert!(
             args_tag == SVM_EXTRA_ARGS_V1_TAG,
             error::invalid_argument(E_INVALID_EXTRA_ARGS_TAG)
         );
-        let args_data = vector::slice(&extra_args, 4, extra_args_len);
+        let args_data = extra_args.slice(4, extra_args_len);
         decode_svm_extra_args_v1(args_data)
     }
 
@@ -942,69 +900,56 @@ module ccip::fee_quoter {
         let token_transfer_gas: u32 = 0;
         let token_transfer_bytes_overhead: u32 = 0;
 
-        vector::zip_ref(
-            &local_token_addresses,
-            &local_token_amounts,
-            |local_token_address, local_token_amount| {
-                let local_token_address: address = *local_token_address;
-                let local_token_amount: u64 = *local_token_amount;
+        local_token_addresses.zip_ref(&local_token_amounts, |local_token_address, local_token_amount| {
+            let local_token_address: address = *local_token_address;
+            let local_token_amount: u64 = *local_token_amount;
 
-                let transfer_fee_config =
-                    get_token_transfer_fee_config_internal(
-                        state, dest_chain_selector, local_token_address
-                    );
+            let transfer_fee_config =
+                get_token_transfer_fee_config_internal(
+                    state, dest_chain_selector, local_token_address
+                );
 
-                if (!transfer_fee_config.is_enabled) {
-                    token_transfer_fee_wei =
-                        token_transfer_fee_wei
-                            + ((dest_chain_config.default_token_fee_usd_cents as u256)
-                                * VAL_1E16);
-                    token_transfer_gas =
-                        token_transfer_gas
-                            + dest_chain_config.default_token_dest_gas_overhead;
-                    token_transfer_bytes_overhead =
-                        token_transfer_bytes_overhead + CCIP_LOCK_OR_BURN_V1_RET_BYTES;
-                } else {
-                    let bps_fee_usd_wei = 0;
-                    if (transfer_fee_config.deci_bps > 0) {
-                        let token_price =
-                            if (local_token_address == fee_token) {
-                                fee_token_price
-                            } else {
-                                get_token_price_internal(state, local_token_address)
-                            };
-                        let token_usd_value =
-                            calc_usd_value_from_token_amount(
-                                local_token_amount, token_price.price
-                            );
-                        bps_fee_usd_wei =
-                            (token_usd_value * (transfer_fee_config.deci_bps as u256))
-                                / VAL_1E5;
-                    };
-
-                    token_transfer_gas =
-                        token_transfer_gas + transfer_fee_config.dest_gas_overhead;
-                    token_transfer_bytes_overhead =
-                        token_transfer_bytes_overhead
-                            + transfer_fee_config.dest_bytes_overhead;
-
-                    let min_fee_usd_wei =
-                        (transfer_fee_config.min_fee_usd_cents as u256) * VAL_1E16;
-                    let max_fee_usd_wei =
-                        (transfer_fee_config.max_fee_usd_cents as u256) * VAL_1E16;
-                    let selected_fee_usd_wei =
-                        if (bps_fee_usd_wei < min_fee_usd_wei) {
-                            min_fee_usd_wei
-                        } else if (bps_fee_usd_wei > max_fee_usd_wei) {
-                            max_fee_usd_wei
+            if (!transfer_fee_config.is_enabled) {
+                token_transfer_fee_wei += ((dest_chain_config.default_token_fee_usd_cents as u256)
+                    * VAL_1E16);
+                token_transfer_gas += dest_chain_config.default_token_dest_gas_overhead;
+                token_transfer_bytes_overhead += CCIP_LOCK_OR_BURN_V1_RET_BYTES;
+            } else {
+                let bps_fee_usd_wei = 0;
+                if (transfer_fee_config.deci_bps > 0) {
+                    let token_price =
+                        if (local_token_address == fee_token) {
+                            fee_token_price
                         } else {
-                            bps_fee_usd_wei
+                            get_token_price_internal(state, local_token_address)
                         };
-                    token_transfer_fee_wei = token_transfer_fee_wei
-                        + selected_fee_usd_wei;
-                }
+                    let token_usd_value =
+                        calc_usd_value_from_token_amount(
+                            local_token_amount, token_price.price
+                        );
+                    bps_fee_usd_wei =
+                        (token_usd_value * (transfer_fee_config.deci_bps as u256))
+                            / VAL_1E5;
+                };
+
+                token_transfer_gas += transfer_fee_config.dest_gas_overhead;
+                token_transfer_bytes_overhead += transfer_fee_config.dest_bytes_overhead;
+
+                let min_fee_usd_wei =
+                    (transfer_fee_config.min_fee_usd_cents as u256) * VAL_1E16;
+                let max_fee_usd_wei =
+                    (transfer_fee_config.max_fee_usd_cents as u256) * VAL_1E16;
+                let selected_fee_usd_wei =
+                    if (bps_fee_usd_wei < min_fee_usd_wei) {
+                        min_fee_usd_wei
+                    } else if (bps_fee_usd_wei > max_fee_usd_wei) {
+                        max_fee_usd_wei
+                    } else {
+                        bps_fee_usd_wei
+                    };
+                token_transfer_fee_wei += selected_fee_usd_wei;
             }
-        );
+        });
 
         (token_transfer_fee_wei, token_transfer_gas, token_transfer_bytes_overhead)
     }
@@ -1012,7 +957,7 @@ module ccip::fee_quoter {
     inline fun calc_usd_value_from_token_amount(
         token_amount: u64, token_price: u256
     ): u256 {
-        (token_amount as u256) * (token_price as u256) / VAL_1E18
+        (token_amount as u256) * token_price / VAL_1E18
     }
 
     public(friend) fun process_message_args(
@@ -1050,7 +995,7 @@ module ccip::fee_quoter {
         let (converted_extra_args, is_out_of_order_execution) =
             process_chain_family_selector(
                 dest_chain_config,
-                !vector::is_empty(&dest_token_addresses),
+                !dest_token_addresses.is_empty(),
                 extra_args
             );
 
@@ -1092,7 +1037,7 @@ module ccip::fee_quoter {
             ) = decode_svm_extra_args(extra_args);
             if (is_message_with_token_transfers) {
                 assert!(
-                    vector::length(&token_receiver) == 32,
+                    token_receiver.length() == 32,
                     error::invalid_argument(E_INVALID_TOKEN_RECEIVER)
                 );
                 let token_receiver_uint = eth_abi::decode_u256_value(token_receiver);
@@ -1115,13 +1060,13 @@ module ccip::fee_quoter {
     ): vector<vector<u8>> {
         let chain_family_selector = dest_chain_config.chain_family_selector;
 
-        let tokens_len = vector::length(&dest_token_addresses);
+        let tokens_len = dest_token_addresses.length();
 
         let dest_exec_data_per_token = vector[];
         for (i in 0..tokens_len) {
-            let dest_token_address = *vector::borrow(&dest_token_addresses, i);
-            let dest_pool_data = vector::borrow(&dest_pool_datas, i);
-            let dest_pool_data_len = vector::length(dest_pool_data);
+            let dest_token_address = dest_token_addresses[i];
+            let dest_pool_data = dest_pool_datas.borrow(i);
+            let dest_pool_data_len = dest_pool_data.length();
             if (dest_pool_data_len > (CCIP_LOCK_OR_BURN_V1_RET_BYTES as u64)) {
                 assert!(
                     dest_pool_data_len
@@ -1162,10 +1107,10 @@ module ccip::fee_quoter {
         state: &FeeQuoterState, dest_chain_selector: u64
     ): &DestChainConfig {
         assert!(
-            smart_table::contains(&state.dest_chain_configs, dest_chain_selector),
+            state.dest_chain_configs.contains(dest_chain_selector),
             error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
         );
-        smart_table::borrow(&state.dest_chain_configs, dest_chain_selector)
+        state.dest_chain_configs.borrow(dest_chain_selector)
     }
 
     public entry fun apply_dest_chain_config_updates(
@@ -1232,11 +1177,9 @@ module ccip::fee_quoter {
             network_fee_usd_cents
         };
 
-        if (smart_table::contains(&state.dest_chain_configs, dest_chain_selector)) {
+        if (state.dest_chain_configs.contains(dest_chain_selector)) {
             let dest_chain_config_ref =
-                smart_table::borrow_mut(
-                    &mut state.dest_chain_configs, dest_chain_selector
-                );
+                state.dest_chain_configs.borrow_mut(dest_chain_selector);
             *dest_chain_config_ref = dest_chain_config;
             event::emit(DestChainConfigUpdated { dest_chain_selector, dest_chain_config });
             event::emit_event(
@@ -1244,9 +1187,7 @@ module ccip::fee_quoter {
                 DestChainConfigUpdated { dest_chain_selector, dest_chain_config }
             );
         } else {
-            smart_table::add(
-                &mut state.dest_chain_configs, dest_chain_selector, dest_chain_config
-            );
+            state.dest_chain_configs.add(dest_chain_selector, dest_chain_config);
             event::emit(DestChainAdded { dest_chain_selector, dest_chain_config });
             event::emit_event(
                 &mut state.dest_chain_added_events,
@@ -1277,24 +1218,20 @@ module ccip::fee_quoter {
         state: &FeeQuoterState, token: address
     ): TimestampedPrice {
         assert!(
-            smart_table::contains(&state.usd_per_token, token),
+            state.usd_per_token.contains(token),
             error::invalid_argument(E_UNKNOWN_TOKEN)
         );
-        *smart_table::borrow(&state.usd_per_token, token)
+        *state.usd_per_token.borrow(token)
     }
 
     inline fun get_dest_chain_gas_price_internal(
         state: &FeeQuoterState, dest_chain_selector: u64
     ): TimestampedPrice {
         assert!(
-            smart_table::contains(
-                &state.usd_per_unit_gas_by_dest_chain, dest_chain_selector
-            ),
+            state.usd_per_unit_gas_by_dest_chain.contains(dest_chain_selector),
             error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
         );
-        *smart_table::borrow(
-            &state.usd_per_unit_gas_by_dest_chain, dest_chain_selector
-        )
+        *state.usd_per_unit_gas_by_dest_chain.borrow(dest_chain_selector)
     }
 
     inline fun get_validated_gas_price_internal(
@@ -1347,9 +1284,8 @@ module ccip::fee_quoter {
     }
 
     inline fun validate_evm_address(encoded_address: vector<u8>) {
-        let encoded_address_len = vector::length(&encoded_address);
         assert!(
-            encoded_address_len == 32, error::invalid_argument(E_INVALID_EVM_ADDRESS)
+            encoded_address.length() == 32, error::invalid_argument(E_INVALID_EVM_ADDRESS)
         );
 
         let encoded_address_uint = eth_abi::decode_u256_value(encoded_address);
@@ -1367,16 +1303,11 @@ module ccip::fee_quoter {
     inline fun validate_svm_address(
         encoded_address: vector<u8>, must_be_non_zero: bool
     ) {
-        let encoded_address_len = vector::length(&encoded_address);
         assert!(
-            encoded_address_len == 32, error::invalid_argument(E_INVALID_SVM_ADDRESS)
+            encoded_address.length() == 32, error::invalid_argument(E_INVALID_SVM_ADDRESS)
         );
 
         if (must_be_non_zero) {
-            assert!(
-                vector::length(&encoded_address) == 32,
-                error::invalid_argument(E_INVALID_SVM_ADDRESS)
-            );
             let encoded_address_uint = eth_abi::decode_u256_value(encoded_address);
             assert!(
                 encoded_address_uint > 0,

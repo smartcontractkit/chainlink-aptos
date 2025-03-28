@@ -118,20 +118,16 @@ module ccip::ocr3_base {
         assert!(big_f != 0, error::invalid_argument(E_BIG_F_MUST_BE_POSITIVE));
 
         let ocr_config =
-            table::borrow_mut_with_default(
-                &mut ocr3_state.ocr3_configs,
-                ocr_plugin_type,
-                OCRConfig {
-                    config_info: ConfigInfo {
-                        config_digest: vector[],
-                        big_f: 0,
-                        n: 0,
-                        is_signature_verification_enabled: false
-                    },
-                    signers: vector[],
-                    transmitters: vector[]
-                }
-            );
+            ocr3_state.ocr3_configs.borrow_mut_with_default(ocr_plugin_type, OCRConfig {
+                config_info: ConfigInfo {
+                    config_digest: vector[],
+                    big_f: 0,
+                    n: 0,
+                    is_signature_verification_enabled: false
+                },
+                signers: vector[],
+                transmitters: vector[]
+            });
 
         let config_info = &mut ocr_config.config_info;
 
@@ -148,31 +144,31 @@ module ccip::ocr3_base {
         };
 
         assert!(
-            vector::length(&transmitters) <= MAX_NUM_ORACLES,
+            transmitters.length() <= MAX_NUM_ORACLES,
             error::invalid_argument(E_TOO_MANY_TRANSMITTERS)
         );
         assert!(
-            vector::length(&transmitters) > 0,
+            transmitters.length() > 0,
             error::invalid_argument(E_NO_TRANSMITTERS)
         );
 
         if (is_signature_verification_enabled) {
             assert!(
-                vector::length(&signers) <= MAX_NUM_ORACLES,
+                signers.length() <= MAX_NUM_ORACLES,
                 error::invalid_argument(E_TOO_MANY_SIGNERS)
             );
             assert!(
-                vector::length(&signers) > 3 * (big_f as u64),
+                signers.length() > 3 * (big_f as u64),
                 error::invalid_argument(E_BIG_F_TOO_HIGH)
             );
             // NOTE: Transmitters cannot exceed signers. Transmitters do not have to be >= 3F + 1 because they can
             // match >= 3fChain + 1, where fChain <= F. fChain is not represented in MultiOCR3Base - so we skip this check.
             assert!(
-                vector::length(&signers) >= vector::length(&transmitters),
+                signers.length() >= transmitters.length(),
                 error::invalid_argument(E_TOO_MANY_TRANSMITTERS)
             );
 
-            config_info.n = vector::length(&signers) as u8;
+            config_info.n = signers.length() as u8;
 
             ocr_config.signers = signers;
 
@@ -206,7 +202,7 @@ module ccip::ocr3_base {
     ) {
         assert!(!has_duplicates(&signers), error::invalid_argument(E_REPEATED_SIGNERS));
 
-        table::upsert(signer_oracles, ocr_plugin_type, signers);
+        signer_oracles.upsert(ocr_plugin_type, signers);
     }
 
     inline fun assign_transmitter_oracles(
@@ -219,7 +215,7 @@ module ccip::ocr3_base {
             error::invalid_argument(E_REPEATED_TRANSMITTERS)
         );
 
-        table::upsert(transmitter_oracles, ocr_plugin_type, *transmitters);
+        transmitter_oracles.upsert(ocr_plugin_type, *transmitters);
     }
 
     public fun transmit(
@@ -232,23 +228,23 @@ module ccip::ocr3_base {
         ss: vector<vector<u8>>,
         vs: vector<u8>
     ) {
-        let ocr_config = table::borrow(&ocr3_state.ocr3_configs, ocr_plugin_type);
+        let ocr_config = ocr3_state.ocr3_configs.borrow(ocr_plugin_type);
         let config_info = &ocr_config.config_info;
 
         assert!(
-            vector::length(&report_context) == 2,
+            report_context.length() == 2,
             error::invalid_argument(E_INVALID_REPORT_CONTEXT_LENGTH)
         );
 
-        let config_digest = *vector::borrow(&report_context, 0);
+        let config_digest = report_context[0];
         assert!(
-            vector::length(&config_digest) == 32,
+            config_digest.length() == 32,
             error::invalid_argument(E_INVALID_CONFIG_DIGEST_LENGTH)
         );
 
-        let sequence_bytes = *vector::borrow(&report_context, 1);
+        let sequence_bytes = report_context[1];
         assert!(
-            vector::length(&sequence_bytes) == 32,
+            sequence_bytes.length() == 32,
             error::invalid_argument(E_INVALID_SEQUENCE_LENGTH)
         );
 
@@ -262,21 +258,21 @@ module ccip::ocr3_base {
         assert_chain_not_forked(ocr3_state);
 
         let plugin_transmitters =
-            table::borrow(&ocr3_state.transmitter_oracles, ocr_plugin_type);
+            ocr3_state.transmitter_oracles.borrow(ocr_plugin_type);
         assert!(
-            vector::contains(plugin_transmitters, &transmitter),
+            plugin_transmitters.contains(&transmitter),
             error::permission_denied(E_UNAUTHORIZED_TRANSMITTER)
         );
 
         if (config_info.is_signature_verification_enabled) {
             assert!(
-                vector::length(&rs) == (config_info.big_f as u64) + 1,
+                rs.length() == (config_info.big_f as u64) + 1,
                 error::invalid_argument(E_WRONG_NUMBER_OF_SIGNATURES)
             );
 
             let hashed_report = hash_report(report, config_digest, sequence_bytes);
             let plugin_signers =
-                table::borrow(&ocr3_state.signer_oracles, ocr_plugin_type);
+                ocr3_state.signer_oracles.borrow(ocr_plugin_type);
             verify_signature(plugin_signers, hashed_report, rs, ss, vs);
         };
 
@@ -291,7 +287,7 @@ module ccip::ocr3_base {
     public fun latest_config_details(
         ocr3_state: &OCR3BaseState, ocr_plugin_type: u8
     ): OCRConfig {
-        let ocr_config = table::borrow(&ocr3_state.ocr3_configs, ocr_plugin_type);
+        let ocr_config = ocr3_state.ocr3_configs.borrow(ocr_plugin_type);
         *ocr_config
     }
 
@@ -306,10 +302,10 @@ module ccip::ocr3_base {
     public inline fun deserialize_sequence_bytes(
         sequence_bytes: vector<u8>
     ): u64 {
-        let len = vector::length(&sequence_bytes);
+        let len = sequence_bytes.length();
         let result: u64 = 0;
         for (i in (len - 8)..len) {
-            result = (result << 8) + (*vector::borrow(&sequence_bytes, i) as u64);
+            result = (result << 8) + (sequence_bytes[i] as u64);
         };
         result
     }
@@ -320,9 +316,9 @@ module ccip::ocr3_base {
     ): vector<u8> {
         let bytes = vector[];
 
-        vector::append(&mut bytes, aptos_hash::keccak256(report));
-        vector::append(&mut bytes, config_digest);
-        vector::append(&mut bytes, sequence_bytes);
+        bytes.append(aptos_hash::keccak256(report));
+        bytes.append(config_digest);
+        bytes.append(sequence_bytes);
 
         aptos_hash::keccak256(bytes)
     }
@@ -334,18 +330,18 @@ module ccip::ocr3_base {
         ss: vector<vector<u8>>,
         vs: vector<u8>
     ) {
-        let seen = bit_vector::new(vector::length(signers));
-        let len = vector::length(&rs);
+        let seen = bit_vector::new(signers.length());
+        let len = rs.length();
         assert!(
-            len == vector::length(&ss) && len == vector::length(&vs),
+            len == ss.length() && len == vs.length(),
             error::invalid_argument(E_INVALID_SIGNATURE)
         );
 
         for (i in 0..len) {
-            let signature_bytes = *vector::borrow(&rs, i);
-            vector::append(&mut signature_bytes, *vector::borrow(&ss, i));
+            let signature_bytes = rs[i];
+            signature_bytes.append(ss[i]);
 
-            let v = *vector::borrow(&vs, i);
+            let v = vs[i];
             assert!(
                 v < 4,
                 error::invalid_argument(E_INVALID_V_SIGNATURE)
@@ -356,29 +352,27 @@ module ccip::ocr3_base {
             let public_key = secp256k1::ecdsa_recover(hashed_report, v, &signature);
             let public_key_bytes =
                 secp256k1::ecdsa_raw_public_key_to_bytes(
-                    &option::extract(&mut public_key)
+                    &public_key.extract()
                 );
-            let evm_address = vector::trim(
-                &mut aptos_hash::keccak256(public_key_bytes), 12
-            );
+            let evm_address = aptos_hash::keccak256(public_key_bytes).trim(12);
 
-            let (exists, index) = vector::index_of(signers, &evm_address);
+            let (exists, index) = signers.index_of(&evm_address);
             assert!(exists, error::invalid_argument(E_UNAUTHORIZED_SIGNER));
             assert!(
-                !bit_vector::is_index_set(&seen, index),
+                !seen.is_index_set(index),
                 error::invalid_argument(E_NON_UNIQUE_SIGNATURES)
             );
-            bit_vector::set(&mut seen, index);
+            seen.set(index);
         }
     }
 
     inline fun has_duplicates<T>(a: &vector<T>): bool {
-        let len = vector::length(a);
+        let len = a.length();
         let found = false;
 
         for (i in 0..len) {
             for (j in (i + 1)..len) {
-                if (vector::borrow(a, i) == vector::borrow(a, j)) {
+                if (a[i] == a[j]) {
                     found = true;
                 }
             }

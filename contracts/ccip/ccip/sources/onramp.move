@@ -200,18 +200,18 @@ module ccip::onramp {
     #[view]
     public fun is_chain_supported(dest_chain_selector: u64): bool acquires OnRampState {
         let state = borrow_state();
-        smart_table::contains(&state.dest_chain_configs, dest_chain_selector)
+        state.dest_chain_configs.contains(dest_chain_selector)
     }
 
     #[view]
     public fun get_expected_next_sequence_number(dest_chain_selector: u64): u64 acquires OnRampState {
         let state = borrow_state();
         assert!(
-            smart_table::contains(&state.dest_chain_configs, dest_chain_selector),
+            state.dest_chain_configs.contains(dest_chain_selector),
             error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
         );
         let dest_chain_config =
-            smart_table::borrow(&state.dest_chain_configs, dest_chain_selector);
+            state.dest_chain_configs.borrow(dest_chain_selector);
         dest_chain_config.sequence_number + 1
     }
 
@@ -335,12 +335,12 @@ module ccip::onramp {
 
         let state = borrow_state_mut();
         assert!(
-            smart_table::contains(&state.dest_chain_configs, dest_chain_selector),
+            state.dest_chain_configs.contains(dest_chain_selector),
             error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
         );
 
         let dest_chain_config =
-            smart_table::borrow_mut(&mut state.dest_chain_configs, dest_chain_selector);
+            state.dest_chain_configs.borrow_mut(dest_chain_selector);
         assert!(
             dest_chain_config.is_enabled,
             error::permission_denied(E_DEST_CHAIN_NOT_ENABLED)
@@ -348,9 +348,7 @@ module ccip::onramp {
 
         if (dest_chain_config.allowlist_enabled) {
             assert!(
-                vector::contains(
-                    &dest_chain_config.allowed_senders, &signer::address_of(caller)
-                ),
+                dest_chain_config.allowed_senders.contains(&signer::address_of(caller)),
                 error::permission_denied(E_SENDER_NOT_ALLOWED)
             );
         };
@@ -360,12 +358,12 @@ module ccip::onramp {
         let dest_token_addresses = vector[];
         let dest_pool_datas = vector[];
 
-        let tokens_len = vector::length(&token_addresses);
+        let tokens_len = token_addresses.length();
         let token_transfers = vector[];
         for (i in 0..tokens_len) {
-            let token = *vector::borrow(&token_addresses, i);
-            let amount = *vector::borrow(&token_amounts, i);
-            let token_store = *vector::borrow(&token_store_addresses, i);
+            let token = token_addresses[i];
+            let amount = token_amounts[i];
+            let token_store = token_store_addresses[i];
 
             let fa_metadata = resolve_fungible_asset(token);
             let resolved_store = resolve_fungible_store(sender, fa_metadata, token_store);
@@ -402,19 +400,16 @@ module ccip::onramp {
             vector::push_back(&mut dest_token_addresses, dest_token_address);
             vector::push_back(&mut dest_pool_datas, dest_pool_data);
 
-            vector::push_back(
-                &mut token_transfers,
-                Aptos2AnyTokenTransfer {
-                    source_pool_address: token_pool_address,
-                    dest_token_address,
-                    extra_data: dest_pool_data,
-                    amount,
-                    dest_exec_data: vector[]
-                }
-            );
+            token_transfers.push_back(Aptos2AnyTokenTransfer {
+                source_pool_address: token_pool_address,
+                dest_token_address,
+                extra_data: dest_pool_data,
+                amount,
+                dest_exec_data: vector[]
+            });
         };
 
-        dest_chain_config.sequence_number = dest_chain_config.sequence_number + 1;
+        dest_chain_config.sequence_number += 1;
 
         let sequence_number = dest_chain_config.sequence_number;
 
@@ -433,14 +428,10 @@ module ccip::onramp {
                 dest_pool_datas
             );
 
-        vector::zip_mut(
-            &mut token_transfers,
-            &mut dest_exec_data_per_token,
-            |token_amount, dest_exec_data| {
-                let token_amount: &mut Aptos2AnyTokenTransfer = token_amount;
-                token_amount.dest_exec_data = *dest_exec_data;
-            }
-        );
+        token_transfers.zip_mut(&mut dest_exec_data_per_token, |token_amount, dest_exec_data| {
+            let token_amount: &mut Aptos2AnyTokenTransfer = token_amount;
+            token_amount.dest_exec_data = *dest_exec_data;
+        });
 
         let nonce =
             if (is_out_of_order_execution) { 0 }
@@ -510,12 +501,12 @@ module ccip::onramp {
         let state = borrow_state();
 
         assert!(
-            smart_table::contains(&state.dest_chain_configs, dest_chain_selector),
+            state.dest_chain_configs.contains(dest_chain_selector),
             error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
         );
 
         let dest_chain_config =
-            smart_table::borrow(&state.dest_chain_configs, dest_chain_selector);
+            state.dest_chain_configs.borrow(dest_chain_selector);
 
         (
             dest_chain_config.is_enabled,
@@ -531,12 +522,12 @@ module ccip::onramp {
         let state = borrow_state();
 
         assert!(
-            smart_table::contains(&state.dest_chain_configs, dest_chain_selector),
+            state.dest_chain_configs.contains(dest_chain_selector),
             error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
         );
 
         let dest_chain_config =
-            smart_table::borrow(&state.dest_chain_configs, dest_chain_selector);
+            state.dest_chain_configs.borrow(dest_chain_selector);
 
         (dest_chain_config.allowlist_enabled, dest_chain_config.allowed_senders)
     }
@@ -555,64 +546,53 @@ module ccip::onramp {
             error::permission_denied(E_ONLY_CALLABLE_BY_OWNER_OR_ALLOWLIST_ADMIN)
         );
 
-        let dest_chains_len = vector::length(&dest_chain_selectors);
+        let dest_chains_len = dest_chain_selectors.length();
         assert!(
-            dest_chains_len == vector::length(&dest_chain_allowlist_enabled),
+            dest_chains_len == dest_chain_allowlist_enabled.length(),
             error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
         );
         assert!(
-            dest_chains_len == vector::length(&dest_chain_add_allowed_senders),
+            dest_chains_len == dest_chain_add_allowed_senders.length(),
             error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
         );
         assert!(
-            dest_chains_len == vector::length(&dest_chain_remove_allowed_senders),
+            dest_chains_len == dest_chain_remove_allowed_senders.length(),
             error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
         );
 
         for (i in 0..dest_chains_len) {
-            let dest_chain_selector = *vector::borrow(&dest_chain_selectors, i);
+            let dest_chain_selector = dest_chain_selectors[i];
             assert!(
-                smart_table::contains(&state.dest_chain_configs, dest_chain_selector),
+                state.dest_chain_configs.contains(dest_chain_selector),
                 error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
             );
 
-            let allowlist_enabled = *vector::borrow(&dest_chain_allowlist_enabled, i);
-            let add_allowed_senders = *vector::borrow(
-                &dest_chain_add_allowed_senders, i
-            );
+            let allowlist_enabled = dest_chain_allowlist_enabled[i];
+            let add_allowed_senders = dest_chain_add_allowed_senders[i];
             let remove_allowed_senders =
-                *vector::borrow(&dest_chain_remove_allowed_senders, i);
+                dest_chain_remove_allowed_senders[i];
 
             let dest_chain_config =
-                smart_table::borrow_mut(
-                    &mut state.dest_chain_configs, dest_chain_selector
-                );
+                state.dest_chain_configs.borrow_mut(dest_chain_selector);
             dest_chain_config.allowlist_enabled = allowlist_enabled;
 
-            if (vector::length(&add_allowed_senders) > 0) {
+            if (add_allowed_senders.length() > 0) {
                 assert!(
                     allowlist_enabled,
                     error::invalid_argument(E_INVALID_ALLOWLIST_REQUEST)
                 );
-                vector::for_each_ref(
-                    &add_allowed_senders,
-                    |sender_address| {
-                        let sender_address: address = *sender_address;
-                        assert!(
-                            sender_address != @0x0,
-                            error::invalid_argument(E_INVALID_ALLOWLIST_ADDRESS)
-                        );
+                add_allowed_senders.for_each_ref(|sender_address| {
+                    let sender_address: address = *sender_address;
+                    assert!(
+                        sender_address != @0x0,
+                        error::invalid_argument(E_INVALID_ALLOWLIST_ADDRESS)
+                    );
 
-                        let (found, _) = vector::index_of(
-                            &dest_chain_config.allowed_senders, &sender_address
-                        );
-                        if (!found) {
-                            vector::push_back(
-                                &mut dest_chain_config.allowed_senders, sender_address
-                            );
-                        };
-                    }
-                );
+                    let (found, _) = dest_chain_config.allowed_senders.index_of(&sender_address);
+                    if (!found) {
+                        dest_chain_config.allowed_senders.push_back(sender_address);
+                    };
+                });
 
                 event::emit(
                     AllowlistSendersAdded {
@@ -629,20 +609,13 @@ module ccip::onramp {
                 );
             };
 
-            if (vector::length(&remove_allowed_senders) > 0) {
-                vector::for_each_ref(
-                    &remove_allowed_senders,
-                    |sender_address| {
-                        let (found, i) = vector::index_of(
-                            &dest_chain_config.allowed_senders, sender_address
-                        );
-                        if (found) {
-                            vector::swap_remove(
-                                &mut dest_chain_config.allowed_senders, i
-                            );
-                        }
+            if (remove_allowed_senders.length() > 0) {
+                remove_allowed_senders.for_each_ref(|sender_address| {
+                    let (found, i) = dest_chain_config.allowed_senders.index_of(sender_address);
+                    if (found) {
+                        dest_chain_config.allowed_senders.swap_remove(i);
                     }
-                );
+                });
 
                 event::emit(
                     AllowlistSendersRemoved {
@@ -667,12 +640,12 @@ module ccip::onramp {
     ): u64 acquires OnRampState {
         let state = borrow_state();
         assert!(
-            smart_table::contains(&state.outbound_nonces, dest_chain_selector),
+            state.outbound_nonces.contains(dest_chain_selector),
             error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
         );
         let dest_chain_nonces =
-            smart_table::borrow(&state.outbound_nonces, dest_chain_selector);
-        *smart_table::borrow_with_default(dest_chain_nonces, sender, &0)
+            state.outbound_nonces.borrow(dest_chain_selector);
+        *dest_chain_nonces.borrow_with_default(sender, &0)
     }
 
     #[view]
@@ -734,23 +707,20 @@ module ccip::onramp {
 
         let token_hash = vector[];
         eth_abi::encode_u256(
-            &mut token_hash, vector::length(&message.token_amounts) as u256
+            &mut token_hash, message.token_amounts.length() as u256
         );
-        vector::for_each_ref(
-            &message.token_amounts,
-            |token_transfer| {
-                let token_transfer: &Aptos2AnyTokenTransfer = token_transfer;
-                eth_abi::encode_address(
-                    &mut token_hash, token_transfer.source_pool_address
-                );
-                eth_abi::encode_bytes(
-                    &mut token_hash, token_transfer.dest_token_address
-                );
-                eth_abi::encode_bytes(&mut token_hash, token_transfer.extra_data);
-                eth_abi::encode_u64(&mut token_hash, token_transfer.amount);
-                eth_abi::encode_bytes(&mut token_hash, token_transfer.dest_exec_data);
-            }
-        );
+        message.token_amounts.for_each_ref(|token_transfer| {
+            let token_transfer: &Aptos2AnyTokenTransfer = token_transfer;
+            eth_abi::encode_address(
+                &mut token_hash, token_transfer.source_pool_address
+            );
+            eth_abi::encode_bytes(
+                &mut token_hash, token_transfer.dest_token_address
+            );
+            eth_abi::encode_bytes(&mut token_hash, token_transfer.extra_data);
+            eth_abi::encode_u64(&mut token_hash, token_transfer.amount);
+            eth_abi::encode_bytes(&mut token_hash, token_transfer.dest_exec_data);
+        });
         eth_abi::encode_bytes32(&mut outer_hash, aptos_hash::keccak256(token_hash));
 
         eth_abi::encode_bytes32(
@@ -766,46 +736,38 @@ module ccip::onramp {
         dest_chain_enabled: vector<bool>,
         dest_chain_allowlist_enabled: vector<bool>
     ) {
-        let dest_chains_len = vector::length(&dest_chain_selectors);
+        let dest_chains_len = dest_chain_selectors.length();
         assert!(
-            dest_chains_len == vector::length(&dest_chain_enabled),
+            dest_chains_len == dest_chain_enabled.length(),
             error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
         );
         assert!(
-            dest_chains_len == vector::length(&dest_chain_allowlist_enabled),
+            dest_chains_len == dest_chain_allowlist_enabled.length(),
             error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
         );
 
         for (i in 0..dest_chains_len) {
-            let dest_chain_selector = *vector::borrow(&dest_chain_selectors, i);
+            let dest_chain_selector = dest_chain_selectors[i];
             assert!(
                 dest_chain_selector != 0,
                 error::invalid_argument(E_INVALID_DEST_CHAIN_SELECTOR)
             );
 
-            let is_enabled = *vector::borrow(&dest_chain_enabled, i);
-            let allowlist_enabled = *vector::borrow(&dest_chain_allowlist_enabled, i);
+            let is_enabled = dest_chain_enabled[i];
+            let allowlist_enabled = dest_chain_allowlist_enabled[i];
 
-            if (!smart_table::contains(&state.dest_chain_configs, dest_chain_selector)) {
-                smart_table::add(
-                    &mut state.dest_chain_configs,
-                    dest_chain_selector,
-                    DestChainConfig {
-                        is_enabled: false,
-                        sequence_number: 0,
-                        allowlist_enabled: false,
-                        allowed_senders: vector[]
-                    }
-                );
-                smart_table::add(
-                    &mut state.outbound_nonces, dest_chain_selector, smart_table::new()
-                );
+            if (!state.dest_chain_configs.contains(dest_chain_selector)) {
+                state.dest_chain_configs.add(dest_chain_selector, DestChainConfig {
+                    is_enabled: false,
+                    sequence_number: 0,
+                    allowlist_enabled: false,
+                    allowed_senders: vector[]
+                });
+                state.outbound_nonces.add(dest_chain_selector, smart_table::new());
             };
 
             let dest_chain_config =
-                smart_table::borrow_mut(
-                    &mut state.dest_chain_configs, dest_chain_selector
-                );
+                state.dest_chain_configs.borrow_mut(dest_chain_selector);
 
             dest_chain_config.is_enabled = is_enabled;
             dest_chain_config.allowlist_enabled = allowlist_enabled;
@@ -834,14 +796,12 @@ module ccip::onramp {
         state: &mut OnRampState, dest_chain_selector: u64, sender: address
     ): u64 {
         assert!(
-            smart_table::contains(&state.outbound_nonces, dest_chain_selector),
+            state.outbound_nonces.contains(dest_chain_selector),
             error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
         );
         let dest_chain_nonces =
-            smart_table::borrow_mut(&mut state.outbound_nonces, dest_chain_selector);
-        let nonce_ref = smart_table::borrow_mut_with_default(
-            dest_chain_nonces, sender, 0
-        );
+            state.outbound_nonces.borrow_mut(dest_chain_selector);
+        let nonce_ref = dest_chain_nonces.borrow_mut_with_default(sender, 0);
         let incremented_nonce = *nonce_ref + 1;
         *nonce_ref = incremented_nonce;
         incremented_nonce

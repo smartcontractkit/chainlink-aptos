@@ -69,12 +69,8 @@ module ccip::client {
     public(friend) fun new_dest_token_amounts(
         token_addresses: vector<address>, token_amounts: vector<u64>
     ): vector<Any2AptosTokenAmount> {
-        vector::zip_map_ref(
-            &token_addresses,
-            &token_amounts,
-            |token_address, token_amount| {
-                Any2AptosTokenAmount { token: *token_address, amount: *token_amount }
-            }
-        )
+        token_addresses.zip_map_ref(&token_amounts, |token_address, token_amount| {
+            Any2AptosTokenAmount { token: *token_address, amount: *token_amount }
+        })
     }
 }
