@@ -6,6 +6,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install Aptos CLI
+        uses: aptos-labs/actions/install-aptos-cli@ce57287eb852b9819c1d74fecc3be187677559fd # v0.1
+        with:
+          CLI_VERSION: 7.0.0
       - name: Run go generate
         run: go generate ./gen.go
       - name: Check if any files have been changed
@@ -17,3 +21,5 @@ jobs:
           	done
           	exit 1
           fi
+      - name: Run go test
+        run: go test ./bindings/...

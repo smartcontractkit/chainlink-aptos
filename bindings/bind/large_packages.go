@@ -1,8 +1,6 @@
 package bind
 
 import (
-	"sync"
-
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/api"
 
@@ -22,11 +20,6 @@ type LargePackagesInterface interface {
 	StageCodeChunkAndPublishToObject(opts *TransactOpts, metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte) (*api.PendingTransaction, error)
 	StageCodeChunkAndUpgradeObjectCode(opts *TransactOpts, metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, objectAddress aptos.AccountAddress) (*api.PendingTransaction, error)
 }
-
-var (
-	packageAddress aptos.AccountAddress
-	once           sync.Once
-)
 
 func DeployOrBindLargePackages(
 	auth aptos.TransactionSigner,
@@ -64,6 +57,9 @@ func DeployLargePackages(
 	output, err := compile.CompilePackage("large_packages", map[string]aptos.AccountAddress{
 		"large_packages": address,
 	})
+	if err != nil {
+		return aptos.AccountAddress{}, nil, LargePackages{}, err
+	}
 
 	tx, err := objectCodeDeploymentPublish(auth, client, output)
 	if err != nil {

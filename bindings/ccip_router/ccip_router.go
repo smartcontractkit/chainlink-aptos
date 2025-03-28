@@ -7,6 +7,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
 	module_router "github.com/smartcontractkit/chainlink-aptos/bindings/ccip_router/router"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/compile"
+	"github.com/smartcontractkit/chainlink-aptos/contracts"
 )
 
 type CCIPRouter interface {
@@ -47,7 +48,7 @@ func Compile(ccipAddress, mcmsAddress aptos.AccountAddress) (compile.CompiledPac
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
 	// Compile using CLI
-	return compile.CompilePackage("ccip_router", namedAddresses)
+	return compile.CompilePackage(contracts.CCIPRouter, namedAddresses)
 }
 
 func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIPRouter {
@@ -70,7 +71,7 @@ func DeployToExistingObject(
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
-	tx, err := bind.UpgradePackageToObject(auth, client, "ccip_router", namedAddresses, objectAddress)
+	tx, err := bind.UpgradePackageToObject(auth, client, contracts.CCIPRouter, namedAddresses, objectAddress)
 	if err != nil {
 		return nil, CCIPRouterContract{}, err
 	}

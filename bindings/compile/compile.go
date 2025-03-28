@@ -36,7 +36,12 @@ func CompilePackage(packageName contracts.Package, namedAddresses map[string]apt
 	if err != nil {
 		return CompiledPackage{}, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
-	defer os.RemoveAll(dstDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			fmt.Printf("failed to remove temporary directory %q: %s", path, err)
+		}
+	}(dstDir)
 
 	srcDir := filepath.Join(".")
 	dstRoot := filepath.Join(dstDir, "contracts")
@@ -133,13 +138,17 @@ func writeEFS(efs embed.FS, srcDir, dstDir string) error {
 		if err != nil {
 			return fmt.Errorf("failed to open src file %q: %w", path, err)
 		}
-		defer srcFile.Close()
+		defer func(srcFile fs.File) {
+			_ = srcFile.Close()
+		}(srcFile)
 
 		dstFile, err := os.Create(dstPath)
 		if err != nil {
 			return fmt.Errorf("failed to create dst file %q: %w", dstPath, err)
 		}
-		defer dstFile.Close()
+		defer func(dstFile *os.File) {
+			_ = dstFile.Close()
+		}(dstFile)
 
 		_, err = io.Copy(dstFile, srcFile)
 		if err != nil {

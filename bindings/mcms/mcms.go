@@ -5,11 +5,13 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk/api"
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/compile"
 	module_mcms "github.com/smartcontractkit/chainlink-aptos/bindings/mcms/mcms"
 	module_mcms_account "github.com/smartcontractkit/chainlink-aptos/bindings/mcms/mcms_account"
 	module_mcms_deployer "github.com/smartcontractkit/chainlink-aptos/bindings/mcms/mcms_deployer"
 	module_mcms_executor "github.com/smartcontractkit/chainlink-aptos/bindings/mcms/mcms_executor"
 	module_mcms_registry "github.com/smartcontractkit/chainlink-aptos/bindings/mcms/mcms_registry"
+	"github.com/smartcontractkit/chainlink-aptos/contracts"
 )
 
 type MCMS interface {
@@ -83,6 +85,14 @@ func Bind(
 	}
 }
 
+func Compile(address, owner aptos.AccountAddress) (compile.CompiledPackage, error) {
+	namedAddresses := map[string]aptos.AccountAddress{
+		"mcms":       address,
+		"mcms_owner": owner,
+	}
+	return compile.CompilePackage(contracts.MCMS, namedAddresses)
+}
+
 // DeployToResourceAccount deploys the MCMS contract to a new resource account.
 // The address of that resource account is determined by the deployer account + an optional seed.
 // If no seed is provided, the default seed DefaultSeed is used.
@@ -96,7 +106,7 @@ func DeployToResourceAccount(
 	if len(seed) > 0 {
 		mcmsSeed = seed[0]
 	}
-	address, tx, err := bind.DeployPackageToResourceAccount(auth, client, "mcms", mcmsSeed, map[string]aptos.AccountAddress{
+	address, tx, err := bind.DeployPackageToResourceAccount(auth, client, contracts.MCMS, mcmsSeed, map[string]aptos.AccountAddress{
 		"mcms_owner": auth.AccountAddress(),
 	})
 	if err != nil {
