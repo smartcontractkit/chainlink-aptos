@@ -67,6 +67,7 @@ module ccip::offramp {
     }
 
     struct SourceChainConfig has store, drop, copy {
+        router: address,
         is_enabled: bool,
         min_seq_nr: u64,
         is_rmn_verification_disabled: bool,
@@ -139,22 +140,26 @@ module ccip::offramp {
         merkle_root: vector<u8>
     }
 
-    struct StaticConfig has store, drop {
-        chain_selector: u64
+    struct StaticConfig has store, drop, copy {
+        chain_selector: u64,
+        rmn_remote: address,
+        token_admin_registry: address,
+        nonce_manager: address,
     }
 
-    struct DynamicConfig has store, drop {
+    struct DynamicConfig has store, drop, copy {
+        fee_quoter: address,
         permissionless_execution_threshold_seconds: u32
     }
 
     #[event]
     struct StaticConfigSet has store, drop {
-        chain_selector: u64
+        static_config: StaticConfig,
     }
 
     #[event]
     struct DynamicConfigSet has store, drop {
-        permissionless_execution_threshold_seconds: u32
+        dynamic_config: DynamicConfig,
     }
 
     #[event]
@@ -278,9 +283,11 @@ module ccip::offramp {
             )
         };
 
-        event::emit(StaticConfigSet { chain_selector });
+        let static_config = create_static_config(chain_selector);
+
+        event::emit(StaticConfigSet { static_config });
         event::emit_event(
-            &mut state.static_config_set_events, StaticConfigSet { chain_selector }
+            &mut state.static_config_set_events, StaticConfigSet { static_config }
         );
 
         set_dynamic_config_internal(
@@ -716,6 +723,7 @@ module ccip::offramp {
             *source_chain_config
         } else {
             SourceChainConfig {
+                router: @0x0,
                 is_enabled: false,
                 min_seq_nr: 0,
                 is_rmn_verification_disabled: false,
@@ -731,15 +739,13 @@ module ccip::offramp {
     #[view]
     public fun get_static_config(): StaticConfig acquires OffRampState {
         let state = borrow_state();
-        StaticConfig { chain_selector: state.chain_selector }
+        create_static_config(state.chain_selector)
     }
 
     #[view]
     public fun get_dynamic_config(): DynamicConfig acquires OffRampState {
         let state = borrow_state();
-        DynamicConfig {
-            permissionless_execution_threshold_seconds: state.permissionless_execution_threshold_seconds
-        }
+        create_dynamic_config(state.permissionless_execution_threshold_seconds)
     }
 
     public entry fun set_dynamic_config(
@@ -886,10 +892,11 @@ module ccip::offramp {
         state: &mut OffRampState, permissionless_execution_threshold_seconds: u32
     ) {
         state.permissionless_execution_threshold_seconds = permissionless_execution_threshold_seconds;
-        event::emit(DynamicConfigSet { permissionless_execution_threshold_seconds });
+        let dynamic_config = create_dynamic_config(permissionless_execution_threshold_seconds);
+        event::emit(DynamicConfigSet { dynamic_config });
         event::emit_event(
             &mut state.dynamic_config_set_events,
-            DynamicConfigSet { permissionless_execution_threshold_seconds }
+            DynamicConfigSet { dynamic_config }
         );
     }
 
@@ -934,6 +941,7 @@ module ccip::offramp {
                     &mut state.source_chain_configs,
                     source_chain_selector,
                     SourceChainConfig {
+                        router: @ccip,
                         is_enabled: false,
                         min_seq_nr: 1,
                         is_rmn_verification_disabled: false,
@@ -1175,6 +1183,22 @@ module ccip::offramp {
             );
 
         ExecutionReport { source_chain_selector, message, offchain_token_data, proofs }
+    }
+
+    inline fun create_static_config(chain_selector: u64): StaticConfig {
+        StaticConfig {
+            chain_selector,
+            rmn_remote: @ccip,
+            token_admin_registry: @ccip,
+            nonce_manager: @ccip,
+        }
+    }
+
+    inline fun create_dynamic_config(permissionless_execution_threshold_seconds: u32): DynamicConfig {
+        DynamicConfig {
+            fee_quoter: @ccip,
+            permissionless_execution_threshold_seconds
+        }
     }
 
     // ================================================================
