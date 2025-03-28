@@ -337,8 +337,6 @@ module ccip::offramp {
             ocr3_base::ocr_plugin_type_execution(),
             report_context,
             report,
-            vector::empty(),
-            vector::empty(),
             vector::empty()
         )
     }
@@ -506,16 +504,12 @@ module ccip::offramp {
         caller: &signer,
         report_context: vector<vector<u8>>,
         report: vector<u8>,
-        rs: vector<vector<u8>>,
-        ss: vector<vector<u8>>,
-        vs: vector<u8>
+        signatures: vector<vector<u8>>
     ) acquires OffRampState {
         let state = borrow_state_mut();
         let commit_report = deserialize_commit_report(report);
 
-        verify_blessed_roots(
-            &commit_report.blessed_merkle_roots, commit_report.rmn_signatures
-        );
+        verify_blessed_roots(&commit_report.blessed_merkle_roots, signatures);
 
         if (vector::length(&commit_report.price_updates.token_price_updates) > 0
             || vector::length(&commit_report.price_updates.gas_price_updates) > 0) {
@@ -598,9 +592,7 @@ module ccip::offramp {
             ocr3_base::ocr_plugin_type_commit(),
             report_context,
             report,
-            rs,
-            ss,
-            vs
+            signatures
         )
     }
 

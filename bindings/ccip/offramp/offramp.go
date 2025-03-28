@@ -34,7 +34,7 @@ type Offramp interface {
 	Initialize(opts *bind.TransactOpts, chainSelector uint64, permissionlessExecutionThresholdSecs uint32, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (*api.PendingTransaction, error)
 	Execute(opts *bind.TransactOpts, reportContext [][]byte, report []byte) (*api.PendingTransaction, error)
 	ManuallyExecute(opts *bind.TransactOpts, reportBytes []byte) (*api.PendingTransaction, error)
-	Commit(opts *bind.TransactOpts, reportContext [][]byte, report []byte, rs [][]byte, ss [][]byte, vs []byte) (*api.PendingTransaction, error)
+	Commit(opts *bind.TransactOpts, reportContext [][]byte, report []byte, signatures [][]byte) (*api.PendingTransaction, error)
 	SetDynamicConfig(opts *bind.TransactOpts, permissionlessExecutionThresholdSecs uint32) (*api.PendingTransaction, error)
 	ApplySourceChainConfigUpdates(opts *bind.TransactOpts, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (*api.PendingTransaction, error)
 	SetOcr3Config(opts *bind.TransactOpts, configDigest []byte, ocrPluginType byte, bigF byte, isSignatureVerificationEnabled bool, signers [][]byte, transmitters []aptos.AccountAddress) (*api.PendingTransaction, error)
@@ -55,13 +55,13 @@ type OfframpEncoder interface {
 	Initialize(chainSelector uint64, permissionlessExecutionThresholdSecs uint32, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Execute(reportContext [][]byte, report []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ManuallyExecute(reportBytes []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	Commit(reportContext [][]byte, report []byte, rs [][]byte, ss [][]byte, vs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	Commit(reportContext [][]byte, report []byte, signatures [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	SetDynamicConfig(permissionlessExecutionThresholdSecs uint32) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplySourceChainConfigUpdates(sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	SetOcr3Config(configDigest []byte, ocrPluginType byte, bigF byte, isSignatureVerificationEnabled bool, signers [][]byte, transmitters []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"offramp","name":"apply_source_chain_config_updates","parameters":[{"name":"source_chains_selector","type":"vector\u003cu64\u003e"},{"name":"source_chains_is_enabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_is_rmn_verification_disabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_on_ramp","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"offramp","name":"commit","parameters":[{"name":"report_context","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"report","type":"vector\u003cu8\u003e"},{"name":"rs","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"ss","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"vs","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"execute","parameters":[{"name":"report_context","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"report","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"initialize","parameters":[{"name":"chain_selector","type":"u64"},{"name":"permissionless_execution_threshold_secs","type":"u32"},{"name":"source_chains_selector","type":"vector\u003cu64\u003e"},{"name":"source_chains_is_enabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_is_rmn_verification_disabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_on_ramp","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"offramp","name":"manually_execute","parameters":[{"name":"report_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"set_dynamic_config","parameters":[{"name":"permissionless_execution_threshold_secs","type":"u32"}]},{"package":"ccip","module":"offramp","name":"set_ocr3_config","parameters":[{"name":"config_digest","type":"vector\u003cu8\u003e"},{"name":"ocr_plugin_type","type":"u8"},{"name":"big_f","type":"u8"},{"name":"is_signature_verification_enabled","type":"bool"},{"name":"signers","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"transmitters","type":"vector\u003caddress\u003e"}]}]`
+const FunctionInfo = `[{"package":"ccip","module":"offramp","name":"apply_source_chain_config_updates","parameters":[{"name":"source_chains_selector","type":"vector\u003cu64\u003e"},{"name":"source_chains_is_enabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_is_rmn_verification_disabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_on_ramp","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"offramp","name":"commit","parameters":[{"name":"report_context","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"report","type":"vector\u003cu8\u003e"},{"name":"signatures","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"offramp","name":"execute","parameters":[{"name":"report_context","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"report","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"initialize","parameters":[{"name":"chain_selector","type":"u64"},{"name":"permissionless_execution_threshold_secs","type":"u32"},{"name":"source_chains_selector","type":"vector\u003cu64\u003e"},{"name":"source_chains_is_enabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_is_rmn_verification_disabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_on_ramp","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"offramp","name":"manually_execute","parameters":[{"name":"report_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"set_dynamic_config","parameters":[{"name":"permissionless_execution_threshold_secs","type":"u32"}]},{"package":"ccip","module":"offramp","name":"set_ocr3_config","parameters":[{"name":"config_digest","type":"vector\u003cu8\u003e"},{"name":"ocr_plugin_type","type":"u8"},{"name":"big_f","type":"u8"},{"name":"is_signature_verification_enabled","type":"bool"},{"name":"signers","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"transmitters","type":"vector\u003caddress\u003e"}]}]`
 
 func NewOfframp(address aptos.AccountAddress, client aptos.AptosRpcClient) Offramp {
 	contract := bind.NewBoundContract(address, "ccip", "offramp", client)
@@ -416,8 +416,8 @@ func (c OfframpContract) ManuallyExecute(opts *bind.TransactOpts, reportBytes []
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (c OfframpContract) Commit(opts *bind.TransactOpts, reportContext [][]byte, report []byte, rs [][]byte, ss [][]byte, vs []byte) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.offrampEncoder.Commit(reportContext, report, rs, ss, vs)
+func (c OfframpContract) Commit(opts *bind.TransactOpts, reportContext [][]byte, report []byte, signatures [][]byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.offrampEncoder.Commit(reportContext, report, signatures)
 	if err != nil {
 		return nil, err
 	}
@@ -543,19 +543,15 @@ func (c offrampEncoder) ManuallyExecute(reportBytes []byte) (bind.ModuleInformat
 	})
 }
 
-func (c offrampEncoder) Commit(reportContext [][]byte, report []byte, rs [][]byte, ss [][]byte, vs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c offrampEncoder) Commit(reportContext [][]byte, report []byte, signatures [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("commit", nil, []string{
 		"vector<vector<u8>>",
 		"vector<u8>",
 		"vector<vector<u8>>",
-		"vector<vector<u8>>",
-		"vector<u8>",
 	}, []any{
 		reportContext,
 		report,
-		rs,
-		ss,
-		vs,
+		signatures,
 	})
 }
 
