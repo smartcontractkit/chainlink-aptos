@@ -6,9 +6,7 @@ module ccip::ocr3_base {
     use std::secp256k1;
     use std::error;
     use std::event::{Self, EventHandle};
-    use std::option;
     use std::table::{Self, Table};
-    use std::vector;
 
     use ccip::auth;
 

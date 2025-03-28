@@ -3,8 +3,6 @@
 /// will need to know the address of @ccip ontop of @ccip_router. consider
 /// moving this, or not using structs at all
 module ccip::client {
-    use std::vector;
-
     friend ccip::offramp;
 
     struct Any2AptosMessage has store, drop, copy {

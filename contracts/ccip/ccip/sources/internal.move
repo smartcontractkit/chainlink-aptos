@@ -1,6 +1,5 @@
 module ccip::internal {
     use std::error;
-    use std::vector;
 
     friend ccip::fee_quoter;
     friend ccip::onramp;

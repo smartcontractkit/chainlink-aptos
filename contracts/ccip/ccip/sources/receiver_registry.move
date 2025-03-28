@@ -11,7 +11,6 @@ module ccip::receiver_registry {
     use std::option::{Self, Option};
     use std::signer;
     use std::string::{Self, String};
-    use std::vector;
 
     use ccip::client;
     use ccip::state_object;

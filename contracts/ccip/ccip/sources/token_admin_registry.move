@@ -12,7 +12,6 @@ module ccip::token_admin_registry {
     use std::smart_table::{Self, SmartTable};
     use std::string::{Self, String};
     use std::type_info::{Self, TypeInfo};
-    use std::vector;
 
     use ccip::auth;
     use ccip::state_object;

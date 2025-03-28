@@ -11,7 +11,6 @@ module ccip::rmn_remote {
     use std::signer;
     use std::string::{Self, String};
     use std::smart_table::{Self, SmartTable};
-    use std::vector;
 
     use ccip::auth;
     use ccip::eth_abi;

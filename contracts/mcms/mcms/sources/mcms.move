@@ -5,12 +5,10 @@ module mcms::mcms {
     use std::chain_id;
     use std::error;
     use std::event;
-    use std::option;
     use std::secp256k1;
     use std::simple_map::{SimpleMap, Self};
     use std::string::{Self, String};
     use std::timestamp;
-    use std::vector;
 
     use mcms::bcs_stream;
     use mcms::mcms_account;

@@ -3,7 +3,6 @@
 module mcms::mcms_deployer {
     use std::code::PackageRegistry;
     use std::error;
-    use std::vector;
     use std::smart_table::{Self, SmartTable};
     use std::object;
     use std::object_code_deployment;

@@ -3,7 +3,6 @@
 module mcms::mcms_executor {
     use std::signer;
     use std::string::String;
-    use std::vector;
 
     use mcms::mcms;
 

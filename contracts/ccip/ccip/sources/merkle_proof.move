@@ -1,6 +1,5 @@
 module ccip::merkle_proof {
     use std::aptos_hash;
-    use std::vector::{Self, fold};
     use std::error;
 
     const LEAF_DOMAIN_SEPARATOR: vector<u8> = x"0000000000000000000000000000000000000000000000000000000000000000";

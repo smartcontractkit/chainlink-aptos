@@ -2,7 +2,6 @@ module ccip::allowlist {
     use std::account;
     use std::event::{Self, EventHandle};
     use std::error;
-    use std::vector;
 
     struct AllowlistState has store {
         allowlist_enabled: bool,
