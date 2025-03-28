@@ -125,8 +125,8 @@ module ccip::fee_quoter {
     }
 
     struct TimestampedPrice has store, drop, copy {
-        price: u256,
-        timestamp_secs: u64
+        value: u256,
+        timestamp: u64
     }
 
     #[event]
@@ -319,7 +319,7 @@ module ccip::fee_quoter {
             get_validated_gas_price_internal(
                 state, dest_chain_config, dest_chain_selector
             );
-        (token_price.price, gas_price_value)
+        (token_price.value, gas_price_value)
     }
 
     #[view]
@@ -517,19 +517,21 @@ module ccip::fee_quoter {
         );
 
         let state = borrow_state_mut();
-        let timestamp_secs = timestamp::now_seconds();
+        let timestamp = timestamp::now_seconds();
 
         source_tokens.zip_ref(
             &source_usd_per_token,
             |token, usd_per_token| {
-                let timestamped_price =
-                    TimestampedPrice { price: *usd_per_token, timestamp_secs };
+                let timestamped_price = TimestampedPrice {
+                    value: *usd_per_token,
+                    timestamp
+                };
                 state.usd_per_token.upsert(*token, timestamped_price);
                 event::emit(
                     UsdPerTokenUpdated {
                         token: *token,
                         usd_per_token: *usd_per_token,
-                        timestamp: timestamp_secs
+                        timestamp: timestamp
                     }
                 );
                 event::emit_event(
@@ -537,7 +539,7 @@ module ccip::fee_quoter {
                     UsdPerTokenUpdated {
                         token: *token,
                         usd_per_token: *usd_per_token,
-                        timestamp: timestamp_secs
+                        timestamp: timestamp
                     }
                 );
             }
@@ -547,7 +549,7 @@ module ccip::fee_quoter {
             &gas_usd_per_unit_gas,
             |dest_chain_selector, usd_per_unit_gas| {
                 let timestamped_price =
-                    TimestampedPrice { price: *usd_per_unit_gas, timestamp_secs };
+                    TimestampedPrice { value: *usd_per_unit_gas, timestamp };
                 state.usd_per_unit_gas_by_dest_chain.upsert(
                     *dest_chain_selector, timestamped_price
                 );
@@ -556,7 +558,7 @@ module ccip::fee_quoter {
                     UsdPerUnitGasUpdated {
                         dest_chain_selector: *dest_chain_selector,
                         usd_per_unit_gas: *usd_per_unit_gas,
-                        timestamp: timestamp_secs
+                        timestamp: timestamp
                     }
                 );
                 event::emit_event(
@@ -564,7 +566,7 @@ module ccip::fee_quoter {
                     UsdPerUnitGasUpdated {
                         dest_chain_selector: *dest_chain_selector,
                         usd_per_unit_gas: *usd_per_unit_gas,
-                        timestamp: timestamp_secs
+                        timestamp: timestamp
                     }
                 );
             }
@@ -689,7 +691,7 @@ module ccip::fee_quoter {
                     * (dest_chain_config.gas_multiplier_wei_per_eth as u256)
             ) + premium_fee_usd_wei + data_availability_cost_usd_36_decimals;
 
-        let fee_token_cost = total_cost_usd / fee_token_price.price;
+        let fee_token_cost = total_cost_usd / fee_token_price.value;
 
         // we need to convert back to a u64 which is what the fungible asset module uses for amounts.
         assert!(
@@ -938,7 +940,7 @@ module ccip::fee_quoter {
                             };
                         let token_usd_value =
                             calc_usd_value_from_token_amount(
-                                local_token_amount, token_price.price
+                                local_token_amount, token_price.value
                             );
                         bps_fee_usd_wei =
                             (token_usd_value * (transfer_fee_config.deci_bps as u256))
@@ -1254,15 +1256,14 @@ module ccip::fee_quoter {
     ): u256 {
         let gas_price = get_dest_chain_gas_price_internal(state, dest_chain_selector);
         if (dest_chain_config.gas_price_staleness_threshold > 0) {
-            let time_passed_seconds = timestamp::now_seconds()
-                - gas_price.timestamp_secs;
+            let time_passed_seconds = timestamp::now_seconds() - gas_price.timestamp;
             assert!(
                 time_passed_seconds
                     <= (dest_chain_config.gas_price_staleness_threshold as u64),
                 error::invalid_state(E_STALE_GAS_PRICE)
             );
         };
-        gas_price.price
+        gas_price.value
     }
 
     inline fun convert_token_amount_internal(
@@ -1275,7 +1276,7 @@ module ccip::fee_quoter {
         let to_token_price = get_token_price_internal(state, to_token);
 
         let to_token_amount =
-            ((from_token_amount as u256) * from_token_price.price) / to_token_price.price;
+            ((from_token_amount as u256) * from_token_price.value) / to_token_price.value;
         assert!(
             to_token_amount <= MAX_U64,
             error::invalid_argument(E_TO_TOKEN_AMOUNT_TOO_LARGE)
