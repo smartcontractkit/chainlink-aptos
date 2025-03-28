@@ -176,10 +176,10 @@ module mcms::mcms_registry {
     ): address acquires RegistryState {
         let state = borrow_state();
         assert!(
-            smart_table::contains(&state.registered_addresses, account_address),
+            state.registered_addresses.contains(account_address),
             error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
-        *smart_table::borrow(&state.registered_addresses, account_address)
+        *state.registered_addresses.borrow(account_address)
     }
 
     #[view]
@@ -263,12 +263,12 @@ module mcms::mcms_registry {
 
         let state = borrow_state();
         assert!(
-            smart_table::contains(&state.registered_addresses, object_address),
+            state.registered_addresses.contains(object_address),
             error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
 
         let owner_address =
-            *smart_table::borrow(&state.registered_addresses, object_address);
+            *state.registered_addresses.borrow(object_address);
         // this could occur if the code object has already been transferred away either through this process
         // or through a TransferRef if the object was pre-existing.
         assert!(
@@ -286,17 +286,16 @@ module mcms::mcms_registry {
         let pending_transfers = borrow_global_mut<OwnerTransfers>(owner_address);
 
         // override any pending transfers if a new transfer has been requested.
-        smart_table::upsert(
-            &mut pending_transfers.pending_transfers,
+        pending_transfers.pending_transfers.upsert(
             object_address,
             PendingCodeObjectTransfer { to: new_owner_address, accepted: false }
         );
 
         event::emit(
             CodeObjectTransferRequested {
-                object_address: object_address,
+                object_address,
                 mcms_owner_address: owner_address,
-                new_owner_address: new_owner_address
+                new_owner_address
             }
         );
     }
@@ -313,12 +312,12 @@ module mcms::mcms_registry {
 
         let state = borrow_state();
         assert!(
-            smart_table::contains(&state.registered_addresses, object_address),
+            state.registered_addresses.contains(object_address),
             error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
 
         let owner_address =
-            *smart_table::borrow(&state.registered_addresses, object_address);
+            *state.registered_addresses.borrow(object_address);
         // these conditions could occur if the code object was pre-existing and the owner transferred object ownership or disabled
         // ungated transfers using the TransferRef after this transfer process was initiated.
         assert!(
@@ -337,14 +336,12 @@ module mcms::mcms_registry {
         let pending_transfers = borrow_global_mut<OwnerTransfers>(owner_address);
 
         assert!(
-            smart_table::contains(&pending_transfers.pending_transfers, object_address),
+            pending_transfers.pending_transfers.contains(object_address),
             error::invalid_state(E_NO_PENDING_TRANSFER)
         );
 
         let pending_transfer =
-            smart_table::borrow_mut(
-                &mut pending_transfers.pending_transfers, object_address
-            );
+            pending_transfers.pending_transfers.borrow_mut(object_address);
         assert!(
             pending_transfer.to == signer::address_of(caller),
             error::permission_denied(E_NOT_PROPOSED_OWNER)
@@ -358,7 +355,7 @@ module mcms::mcms_registry {
 
         event::emit(
             CodeObjectTransferAccepted {
-                object_address: object_address,
+                object_address,
                 mcms_owner_address: owner_address,
                 new_owner_address: pending_transfer.to
             }
@@ -379,12 +376,12 @@ module mcms::mcms_registry {
 
         let state = borrow_state();
         assert!(
-            smart_table::contains(&state.registered_addresses, object_address),
+            state.registered_addresses.contains(object_address),
             error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
 
         let owner_address =
-            *smart_table::borrow(&state.registered_addresses, object_address);
+            *state.registered_addresses.borrow(object_address);
         // these conditions could occur if the code object was pre-existing and the owner transferred object ownership or disabled
         // ungated transfers using the TransferRef after this transfer process was initiated.
         assert!(
@@ -403,13 +400,11 @@ module mcms::mcms_registry {
         let pending_transfers = borrow_global_mut<OwnerTransfers>(owner_address);
 
         assert!(
-            smart_table::contains(&pending_transfers.pending_transfers, object_address),
+            pending_transfers.pending_transfers.contains(object_address),
             error::invalid_state(E_NO_PENDING_TRANSFER)
         );
         let pending_transfer =
-            smart_table::borrow_mut(
-                &mut pending_transfers.pending_transfers, object_address
-            );
+            pending_transfers.pending_transfers.borrow_mut(object_address);
         assert!(
             pending_transfer.to == new_owner_address,
             error::invalid_state(E_NEW_OWNER_MISMATCH)
@@ -426,17 +421,17 @@ module mcms::mcms_registry {
 
         event::emit(
             CodeObjectTransferred {
-                object_address: object_address,
+                object_address,
                 mcms_owner_address: owner_address,
-                new_owner_address: new_owner_address
+                new_owner_address
             }
         );
 
-        smart_table::remove(&mut pending_transfers.pending_transfers, object_address);
-        if (smart_table::length(&pending_transfers.pending_transfers) == 0) {
+        pending_transfers.pending_transfers.remove(object_address);
+        if (pending_transfers.pending_transfers.length() == 0) {
             let OwnerTransfers { pending_transfers } =
                 move_from<OwnerTransfers>(owner_address);
-            smart_table::destroy_empty(pending_transfers);
+            pending_transfers.destroy_empty();
         }
     }
 
@@ -444,7 +439,7 @@ module mcms::mcms_registry {
         new_owner_seed: vector<u8>
     ): signer acquires RegistryState {
         let owner_seed = NEW_OBJECT_REGISTRATION_SEED;
-        vector::append(&mut owner_seed, new_owner_seed);
+        owner_seed.append(new_owner_seed);
         let new_code_object_address = get_new_code_object_address(new_owner_seed);
         let owner_signer =
             create_owner_internal(
@@ -474,11 +469,11 @@ module mcms::mcms_registry {
 
         let state = borrow_state();
         assert!(
-            smart_table::contains(&state.registered_addresses, object_address),
+            state.registered_addresses.contains(object_address),
             error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
         let owner_address =
-            *smart_table::borrow(&state.registered_addresses, object_address);
+            *state.registered_addresses.borrow(object_address);
 
         let owner_registration = borrow_owner_registration(owner_address);
         account::create_signer_with_capability(&owner_registration.owner_cap)
@@ -488,7 +483,7 @@ module mcms::mcms_registry {
         state: &mut RegistryState, object_address: address
     ): signer {
         let owner_seed = EXISTING_OBJECT_REGISTRATION_SEED;
-        vector::append(&mut owner_seed, bcs::to_bytes(&object_address));
+        owner_seed.append(bcs::to_bytes(&object_address));
         create_owner_internal(state, owner_seed, object_address, false)
     }
 
@@ -518,11 +513,7 @@ module mcms::mcms_registry {
             }
         );
 
-        smart_table::add(
-            &mut state.registered_addresses,
-            code_object_address,
-            signer::address_of(&owner_signer)
-        );
+        state.registered_addresses.add(code_object_address, signer::address_of(&owner_signer));
         owner_signer
     }
 
@@ -533,8 +524,8 @@ module mcms::mcms_registry {
         let account_address = signer::address_of(account);
         let account_address_bytes = bcs::to_bytes(&account_address);
 
-        let module_name_bytes = *string::bytes(&module_name);
-        let module_name_len = vector::length(&module_name_bytes);
+        let module_name_bytes = *module_name.bytes();
+        let module_name_len = module_name_bytes.length();
         assert!(
             module_name_len > 0,
             error::invalid_argument(E_EMPTY_MODULE_NAME)
@@ -547,7 +538,7 @@ module mcms::mcms_registry {
         let state = borrow_state_mut();
 
         let owner_address =
-            if (!smart_table::contains(&state.registered_addresses, account_address)) {
+            if (!state.registered_addresses.contains(account_address)) {
                 let owner_signer =
                     create_owner_for_preexisting_code_object_internal(
                         state, account_address
@@ -564,24 +555,24 @@ module mcms::mcms_registry {
 
                 owner_address
             } else {
-                *smart_table::borrow(&state.registered_addresses, account_address)
+                *state.registered_addresses.borrow(account_address)
             };
 
         let registration = borrow_owner_registration_mut(owner_address);
 
         assert!(
-            !smart_table::contains(&registration.callback_modules, module_name_bytes),
+            !registration.callback_modules.contains(module_name_bytes),
             error::invalid_argument(E_MODULE_ALREADY_REGISTERED)
         );
 
         let proof_type_info = type_info::type_of<T>();
 
         assert!(
-            type_info::account_address(&proof_type_info) == account_address,
+            proof_type_info.account_address() == account_address,
             error::invalid_argument(E_PROOF_NOT_AT_ACCOUNT_ADDRESS)
         );
         assert!(
-            type_info::module_name(&proof_type_info) == module_name_bytes,
+            proof_type_info.module_name() == module_name_bytes,
             error::invalid_argument(E_PROOF_NOT_IN_MODULE)
         );
 
@@ -589,8 +580,8 @@ module mcms::mcms_registry {
             account::create_signer_with_capability(&registration.owner_cap);
 
         let object_seed = DISPATCH_OBJECT_SEED;
-        vector::append(&mut object_seed, account_address_bytes);
-        vector::append(&mut object_seed, module_name_bytes);
+        object_seed.append(account_address_bytes);
+        object_seed.append(module_name_bytes);
 
         let dispatch_constructor_ref =
             object::create_named_object(&owner_signer, object_seed);
@@ -622,9 +613,7 @@ module mcms::mcms_registry {
             dispatch_extend_ref
         };
 
-        smart_table::add(
-            &mut registration.callback_modules, module_name_bytes, registered_module
-        );
+        registration.callback_modules.add(module_name_bytes, registered_module);
 
         event::emit(EntrypointRegistered { owner_address, account_address, module_name });
 
@@ -640,12 +629,12 @@ module mcms::mcms_registry {
         let state = borrow_state();
 
         assert!(
-            smart_table::contains(&state.registered_addresses, callback_address),
+            state.registered_addresses.contains(callback_address),
             error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
 
         let owner_address =
-            *smart_table::borrow(&state.registered_addresses, callback_address);
+            *state.registered_addresses.borrow(callback_address);
         assert!(
             !exists<ExecutingCallbackParams>(owner_address),
             error::invalid_state(E_CALLBACK_PARAMS_ALREADY_EXISTS)
@@ -653,11 +642,9 @@ module mcms::mcms_registry {
 
         let registration = borrow_owner_registration(owner_address);
 
-        let callback_module_name_bytes = *string::bytes(&callback_module_name);
+        let callback_module_name_bytes = *callback_module_name.bytes();
         let registered_module =
-            smart_table::borrow(
-                &registration.callback_modules, callback_module_name_bytes
-            );
+            registration.callback_modules.borrow(callback_module_name_bytes);
 
         let owner_signer =
             account::create_signer_with_capability(&registration.owner_cap);
@@ -678,12 +665,12 @@ module mcms::mcms_registry {
         let state = borrow_state();
 
         assert!(
-            smart_table::contains(&state.registered_addresses, callback_address),
+            state.registered_addresses.contains(callback_address),
             error::invalid_state(E_ADDRESS_NOT_REGISTERED)
         );
 
         let owner_address =
-            *smart_table::borrow(&state.registered_addresses, callback_address);
+            *state.registered_addresses.borrow(callback_address);
         assert!(
             !exists<ExecutingCallbackParams>(owner_address),
             error::invalid_argument(E_CALLBACK_PARAMS_NOT_CONSUMED)
@@ -696,12 +683,12 @@ module mcms::mcms_registry {
         let state = borrow_state();
 
         assert!(
-            smart_table::contains(&state.registered_addresses, callback_address),
+            state.registered_addresses.contains(callback_address),
             error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
 
         let owner_address =
-            *smart_table::borrow(&state.registered_addresses, callback_address);
+            *state.registered_addresses.borrow(callback_address);
         assert!(
             exists<ExecutingCallbackParams>(owner_address),
             error::invalid_state(E_MISSING_CALLBACK_PARAMS)

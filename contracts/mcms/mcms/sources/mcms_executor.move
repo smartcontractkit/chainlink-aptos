@@ -27,11 +27,11 @@ module mcms::mcms_executor {
         };
         let pending_execute =
             borrow_global_mut<PendingExecute>(signer::address_of(caller));
-        if (!vector::is_empty(&data_chunk)) {
-            vector::append(&mut pending_execute.data, data_chunk);
+        if (!data_chunk.is_empty()) {
+            pending_execute.data.append(data_chunk);
         };
-        if (!vector::is_empty(&partial_proofs)) {
-            vector::append(&mut pending_execute.proofs, partial_proofs);
+        if (!partial_proofs.is_empty()) {
+            pending_execute.proofs.append(partial_proofs);
         };
     }
 
@@ -57,11 +57,11 @@ module mcms::mcms_executor {
         };
         let PendingExecute { data, proofs } =
             move_from<PendingExecute>(signer::address_of(caller));
-        if (!vector::is_empty(&data_chunk)) {
-            vector::append(&mut data, data_chunk);
+        if (!data_chunk.is_empty()) {
+            data.append(data_chunk);
         };
-        if (!vector::is_empty(&partial_proofs)) {
-            vector::append(&mut proofs, partial_proofs)
+        if (!partial_proofs.is_empty()) {
+            proofs.append(partial_proofs)
         };
         mcms::execute(
             chain_id,
