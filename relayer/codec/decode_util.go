@@ -115,6 +115,13 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 			return addr, nil
 		}
 		if t.Elem().Kind() == reflect.Uint8 {
+			if str == "" {
+				// hex.DecodeString returns an error if the string is empty
+				return []uint8{}, nil
+			} else if len(str)%2 == 1 {
+				// hex.DecodeString does not support odd length strings
+				str = "0" + str
+			}
 			bytes, err := hex.DecodeString(str)
 			if err != nil {
 				return nil, fmt.Errorf("failed to decode hex string %q: %w", str, err)
