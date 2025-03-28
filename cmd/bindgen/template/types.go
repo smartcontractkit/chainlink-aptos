@@ -7,7 +7,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/cmd/bindgen/parse"
 )
 
-func createGoTypeFromMove(s string, localStructs map[string]*parse.Struct) (tmplType, error) {
+func createGoTypeFromMove(s string, localStructs map[string]parse.Struct, externalStructs []parse.ExternalStruct) (tmplType, error) {
 	switch s {
 	case "u8":
 		return tmplType{
@@ -52,7 +52,7 @@ func createGoTypeFromMove(s string, localStructs map[string]*parse.Struct) (tmpl
 	default:
 		if strings.HasPrefix(s, "vector<") && strings.HasSuffix(s, ">") {
 			innerTypeName := strings.TrimSuffix(strings.TrimPrefix(s, "vector<"), ">")
-			innerType, err := createGoTypeFromMove(innerTypeName, localStructs)
+			innerType, err := createGoTypeFromMove(innerTypeName, localStructs, externalStructs)
 			if err != nil {
 				return tmplType{}, err
 			}
@@ -63,7 +63,7 @@ func createGoTypeFromMove(s string, localStructs map[string]*parse.Struct) (tmpl
 		}
 		if strings.HasPrefix(s, "Option<") && strings.HasSuffix(s, ">") {
 			innerTypeName := strings.TrimSuffix(strings.TrimPrefix(s, "Option<"), ">")
-			innerType, err := createGoTypeFromMove(innerTypeName, localStructs)
+			innerType, err := createGoTypeFromMove(innerTypeName, localStructs, externalStructs)
 			if err != nil {
 				return tmplType{}, err
 			}
@@ -77,7 +77,7 @@ func createGoTypeFromMove(s string, localStructs map[string]*parse.Struct) (tmpl
 		}
 		if strings.HasPrefix(s, "option::Option<") && strings.HasSuffix(s, ">") {
 			innerTypeName := strings.TrimSuffix(strings.TrimPrefix(s, "option::Option<"), ">")
-			innerType, err := createGoTypeFromMove(innerTypeName, localStructs)
+			innerType, err := createGoTypeFromMove(innerTypeName, localStructs, externalStructs)
 			if err != nil {
 				return tmplType{}, err
 			}
@@ -91,7 +91,7 @@ func createGoTypeFromMove(s string, localStructs map[string]*parse.Struct) (tmpl
 		}
 		if strings.HasPrefix(s, "std::option::Option<") && strings.HasSuffix(s, ">") {
 			innerTypeName := strings.TrimSuffix(strings.TrimPrefix(s, "std::option::Option<"), ">")
-			innerType, err := createGoTypeFromMove(innerTypeName, localStructs)
+			innerType, err := createGoTypeFromMove(innerTypeName, localStructs, externalStructs)
 			if err != nil {
 				return tmplType{}, err
 			}
@@ -109,6 +109,22 @@ func createGoTypeFromMove(s string, localStructs map[string]*parse.Struct) (tmpl
 				GoType:   s,
 				MoveType: s,
 			}, nil
+		}
+		// Check if external struct
+		for _, externalStruct := range externalStructs {
+			// Type could be used as package::module::Struct, module::Struct or Struct directly, depending on the import
+			if s == fmt.Sprintf("%s::%s::%s", externalStruct.Package, externalStruct.Module, externalStruct.Name) ||
+				s == fmt.Sprintf("%s::%s", externalStruct.Module, externalStruct.Name) ||
+				s == externalStruct.Name {
+				return tmplType{
+					GoType:   fmt.Sprintf("module_%s.%s", externalStruct.Module, ToUpperCamelCase(externalStruct.Name)),
+					MoveType: s,
+					Import: &tmplImport{
+						Path:        externalStruct.ImportPath,
+						PackageName: fmt.Sprintf("module_%s", externalStruct.Module),
+					},
+				}, nil
+			}
 		}
 	}
 	return tmplType{}, fmt.Errorf("unknown move type: %s", s)
