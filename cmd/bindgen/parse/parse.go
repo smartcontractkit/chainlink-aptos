@@ -29,6 +29,14 @@ type Struct struct {
 	Fields []Param
 }
 
+type ExternalStruct struct {
+	ImportPath string
+
+	Package string
+	Module  string
+	Name    string
+}
+
 func PackageModule(module []byte) (pkg string, mod string, err error) {
 	lang := tree_sitter.NewLanguage(tree_sitter_move_on_aptos.Language())
 	n, err := tree_sitter.ParseCtx(context.Background(), module, lang)

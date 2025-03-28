@@ -103,12 +103,12 @@ module ccip::ownable {
 
     public fun accept_ownership(caller: address, state: &mut OwnableState) {
         assert!(
-            option::is_some(&state.pending_transfer),
+            state.pending_transfer.is_some(),
             error::permission_denied(E_NO_PENDING_TRANSFER)
         );
 
         let current_owner = owner_internal(state);
-        let pending_transfer = option::borrow_mut(&mut state.pending_transfer);
+        let pending_transfer = state.pending_transfer.borrow_mut();
 
         // check that the owner has not changed from a direct call to 0x1::object::transfer,
         // in which case the transfer flow should be restarted.
@@ -141,7 +141,7 @@ module ccip::ownable {
         assert_only_owner_internal(caller_address, state);
 
         let current_owner = owner_internal(state);
-        let pending_transfer = option::extract(&mut state.pending_transfer);
+        let pending_transfer = state.pending_transfer.extract();
 
         // check that the owner has not changed from a direct call to 0x1::object::transfer,
         // in which case the transfer flow should be restarted.

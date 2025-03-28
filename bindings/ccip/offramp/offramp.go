@@ -10,6 +10,7 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk/api"
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
+	module_ocr3_base "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/ocr3_base"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 )
 
@@ -29,7 +30,7 @@ type Offramp interface {
 	GetSourceChainConfig(opts *bind.CallOpts, sourceChainSelector uint64) (SourceChainConfig, error)
 	GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error)
 	GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, error)
-	LatestConfigDetails(opts *bind.CallOpts, ocrPluginType byte) ([]byte, byte, byte, bool, [][]byte, []aptos.AccountAddress, error)
+	LatestConfigDetails(opts *bind.CallOpts, ocrPluginType byte) (module_ocr3_base.OCRConfig, error)
 
 	Initialize(opts *bind.TransactOpts, chainSelector uint64, permissionlessExecutionThresholdSecs uint32, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (*api.PendingTransaction, error)
 	Execute(opts *bind.TransactOpts, reportContext [][]byte, report []byte) (*api.PendingTransaction, error)
@@ -191,7 +192,9 @@ type ExecutionStateChanged struct {
 }
 
 type CommitReportAccepted struct {
-	CommitReport CommitReport `move:"CommitReport"`
+	BlessedMerkleRoots   []MerkleRoot `move:"vector<MerkleRoot>"`
+	UnblessedMerkleRoots []MerkleRoot `move:"vector<MerkleRoot>"`
+	PriceUpdates         PriceUpdates `move:"PriceUpdates"`
 }
 
 type SkippedReportExecution struct {
@@ -361,30 +364,25 @@ func (c OfframpContract) GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, e
 	return r0, nil
 }
 
-func (c OfframpContract) LatestConfigDetails(opts *bind.CallOpts, ocrPluginType byte) ([]byte, byte, byte, bool, [][]byte, []aptos.AccountAddress, error) {
+func (c OfframpContract) LatestConfigDetails(opts *bind.CallOpts, ocrPluginType byte) (module_ocr3_base.OCRConfig, error) {
 	module, function, typeTags, args, err := c.offrampEncoder.LatestConfigDetails(ocrPluginType)
 	if err != nil {
-		return *new([]byte), *new(byte), *new(byte), *new(bool), *new([][]byte), *new([]aptos.AccountAddress), err
+		return *new(module_ocr3_base.OCRConfig), err
 	}
 
 	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return *new([]byte), *new(byte), *new(byte), *new(bool), *new([][]byte), *new([]aptos.AccountAddress), err
+		return *new(module_ocr3_base.OCRConfig), err
 	}
 
 	var (
-		r0 []byte
-		r1 byte
-		r2 byte
-		r3 bool
-		r4 [][]byte
-		r5 []aptos.AccountAddress
+		r0 module_ocr3_base.OCRConfig
 	)
 
-	if err := codec.DecodeAptosJsonArray(callData, &r0, &r1, &r2, &r3, &r4, &r5); err != nil {
-		return *new([]byte), *new(byte), *new(byte), *new(bool), *new([][]byte), *new([]aptos.AccountAddress), err
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(module_ocr3_base.OCRConfig), err
 	}
-	return r0, r1, r2, r3, r4, r5, nil
+	return r0, nil
 }
 
 // Entry Functions

@@ -11,7 +11,6 @@ module ccip::receiver_registry {
     use std::option::{Self, Option};
     use std::signer;
     use std::string::{Self, String};
-    use std::vector;
 
     use ccip::client;
     use ccip::state_object;
@@ -88,7 +87,7 @@ module ccip::receiver_registry {
         let dispatch_signer = object::generate_signer_for_extending(&state.extend_ref);
 
         let dispatch_object_seed = bcs::to_bytes(&receiver_address);
-        vector::append(&mut dispatch_object_seed, b"CCIPReceiverRegistration");
+        dispatch_object_seed.append(b"CCIPReceiverRegistration");
 
         let dispatch_constructor_ref =
             object::create_named_object(&dispatch_signer, dispatch_object_seed);

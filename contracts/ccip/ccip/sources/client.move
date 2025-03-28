@@ -3,8 +3,6 @@
 /// will need to know the address of @ccip ontop of @ccip_router. consider
 /// moving this, or not using structs at all
 module ccip::client {
-    use std::vector;
-
     friend ccip::offramp;
 
     struct Any2AptosMessage has store, drop, copy {
@@ -69,8 +67,7 @@ module ccip::client {
     public(friend) fun new_dest_token_amounts(
         token_addresses: vector<address>, token_amounts: vector<u64>
     ): vector<Any2AptosTokenAmount> {
-        vector::zip_map_ref(
-            &token_addresses,
+        token_addresses.zip_map_ref(
             &token_amounts,
             |token_address, token_amount| {
                 Any2AptosTokenAmount { token: *token_address, amount: *token_amount }

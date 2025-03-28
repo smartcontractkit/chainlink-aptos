@@ -26,6 +26,7 @@ type tmplData struct {
 	ViewFuncs    []*tmplFunc
 	EntryFuncs   []*tmplFunc
 	OtherFuncs   []*tmplFunc
+	Imports      []*tmplImport
 }
 
 type tmplStruct struct {
@@ -37,11 +38,17 @@ type tmplOption struct {
 	UnderlyingGoType string
 }
 
+type tmplImport struct {
+	Path        string // The import path, e.g. github.com/smartcontractkit/chainlink-aptos/path/etc
+	PackageName string // The package name to import this import with, e.g. module_ocr3_base
+}
+
 type tmplType struct {
 	GoType   string
 	MoveType string
 
 	Option *tmplOption
+	Import *tmplImport // Optional go import to add for this type
 }
 
 type tmplField struct {
@@ -56,24 +63,25 @@ type tmplFunc struct {
 	Returns  []tmplType
 }
 
-func Convert(pkg, mod string, structs []parse.Struct, functions []parse.Func) (tmplData, error) {
+func Convert(pkg, mod string, structs []parse.Struct, functions []parse.Func, externalStructs []parse.ExternalStruct) (tmplData, error) {
 	data := tmplData{
 		Package: pkg,
 		Module:  mod,
 	}
-	structMap := make(map[string]*parse.Struct)
+	structMap := make(map[string]parse.Struct)
+	importMap := make(map[string]*tmplImport)
 	for _, s := range structs {
 		out := &tmplStruct{
 			Name:   s.Name,
 			Fields: nil,
 		}
-		structMap[s.Name] = &s
+		structMap[s.Name] = s
 		data.Structs = append(data.Structs, out)
 	}
 	for i, s := range data.Structs {
 		parsedStruct := structMap[s.Name]
 		for _, field := range parsedStruct.Fields {
-			goType, err := createGoTypeFromMove(field.Type, structMap)
+			goType, err := createGoTypeFromMove(field.Type, structMap, externalStructs)
 			if err != nil {
 				log.Printf("WARNING: Ignoring unknown type of struct %q: %v\n", s.Name, field.Type)
 				continue
@@ -82,6 +90,9 @@ func Convert(pkg, mod string, structs []parse.Struct, functions []parse.Func) (t
 				Type: goType,
 				Name: ToUpperCamelCase(field.Name),
 			})
+			if goType.Import != nil {
+				importMap[goType.Import.Path] = goType.Import
+			}
 		}
 	}
 
@@ -109,7 +120,8 @@ func Convert(pkg, mod string, structs []parse.Struct, functions []parse.Func) (t
 				// Ignore the signer parameter
 				continue
 			}
-			typ, err := createGoTypeFromMove(param.Type, structMap)
+			// external types aren't supported as parameters, therefore passing no externalStructs
+			typ, err := createGoTypeFromMove(param.Type, structMap, nil)
 			if err != nil {
 				if f.IsEntry {
 					panic(fmt.Sprintf("Function %v has unsupported parameter %v, type %v", f.Name, param.Name, param.Type))
@@ -138,9 +150,10 @@ func Convert(pkg, mod string, structs []parse.Struct, functions []parse.Func) (t
 			})
 		}
 		for _, returnType := range f.ReturnTypes {
-			typ, err := createGoTypeFromMove(returnType, structMap)
+			typ, err := createGoTypeFromMove(returnType, structMap, externalStructs)
 			if err != nil {
-				if f.IsEntry {
+				if f.IsView {
+					// If the function is a view function and has an unknown return type, panic
 					panic(fmt.Sprintf("Function %v has an unknown return type: %v: %v", f.Name, returnType, err))
 				} else {
 					log.Printf("WARNING: Ignoring function %v due to unknown return type: %v", f.Name, returnType)
@@ -149,6 +162,9 @@ func Convert(pkg, mod string, structs []parse.Struct, functions []parse.Func) (t
 				}
 			}
 			out.Returns = append(out.Returns, typ)
+			if typ.Import != nil {
+				importMap[typ.Import.Path] = typ.Import
+			}
 		}
 		if skip {
 			continue
@@ -171,6 +187,9 @@ func Convert(pkg, mod string, structs []parse.Struct, functions []parse.Func) (t
 		return tmplData{}, err
 	}
 	data.FunctionInfo = string(marshalledInfo)
+	for _, v := range importMap {
+		data.Imports = append(data.Imports, v)
+	}
 	return data, nil
 }
 
