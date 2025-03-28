@@ -160,10 +160,7 @@ module ccip::offramp {
     #[event]
     struct SourceChainConfigSet has store, drop {
         source_chain_selector: u64,
-        is_enabled: bool,
-        min_seq_nr: u64,
-        is_rmn_verification_disabled: bool,
-        on_ramp: vector<u8>
+        source_chain_config: SourceChainConfig
     }
 
     #[event]
@@ -961,20 +958,14 @@ module ccip::offramp {
             event::emit(
                 SourceChainConfigSet {
                     source_chain_selector,
-                    is_enabled: config.is_enabled,
-                    min_seq_nr: config.min_seq_nr,
-                    is_rmn_verification_disabled: config.is_rmn_verification_disabled,
-                    on_ramp: config.on_ramp
+                    source_chain_config: *config
                 }
             );
             event::emit_event(
                 &mut state.source_chain_config_set_events,
                 SourceChainConfigSet {
                     source_chain_selector,
-                    is_enabled: config.is_enabled,
-                    min_seq_nr: config.min_seq_nr,
-                    is_rmn_verification_disabled: config.is_rmn_verification_disabled,
-                    on_ramp: config.on_ramp
+                    source_chain_config: *config
                 }
             );
         }
