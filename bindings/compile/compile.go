@@ -41,7 +41,7 @@ func CompilePackage(packageName contracts.Package, namedAddresses map[string]apt
 		if err != nil {
 			fmt.Printf("failed to remove temporary directory %q: %s", path, err)
 		}
-	}(dstDir) //nolint:errcheck
+	}(dstDir)
 
 	srcDir := filepath.Join(".")
 	dstRoot := filepath.Join(dstDir, "contracts")
