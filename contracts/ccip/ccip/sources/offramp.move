@@ -253,8 +253,7 @@ module ccip::offramp {
             error::invalid_argument(E_ALREADY_INITIALIZED)
         );
         assert!(
-            source_chains_selector.length()
-                == source_chains_is_enabled.length(),
+            source_chains_selector.length() == source_chains_is_enabled.length(),
             error::invalid_argument(E_SOURCE_CHAIN_SELECTORS_MISMATCH)
         );
 
@@ -359,8 +358,7 @@ module ccip::offramp {
         );
         let source_chain_execution_states =
             state.execution_states.borrow(source_chain_selector);
-        let execution_state =
-            source_chain_execution_states.borrow(sequence_number);
+        let execution_state = source_chain_execution_states.borrow(sequence_number);
         *execution_state
     }
 
@@ -424,7 +422,9 @@ module ccip::offramp {
         let message = &execution_report.message;
         let sequence_number = message.header.sequence_number;
         let execution_state_ref =
-            source_chain_execution_states.borrow_mut_with_default(sequence_number, EXECUTION_STATE_UNTOUCHED);
+            source_chain_execution_states.borrow_mut_with_default(
+                sequence_number, EXECUTION_STATE_UNTOUCHED
+            );
 
         if (*execution_state_ref != EXECUTION_STATE_UNTOUCHED) {
             event::emit(SkippedAlreadyExecuted { source_chain_selector, sequence_number });
@@ -443,8 +443,7 @@ module ccip::offramp {
 
         let number_of_tokens_in_msg = message.token_amounts.length();
         assert!(
-            number_of_tokens_in_msg
-                == execution_report.offchain_token_data.length(),
+            number_of_tokens_in_msg == execution_report.offchain_token_data.length(),
             error::invalid_argument(E_TOKEN_DATA_MISMATCH)
         );
 
@@ -518,30 +517,32 @@ module ccip::offramp {
 
                 let source_tokens = vector[];
                 let source_usd_per_token = vector[];
-                commit_report.price_updates.token_price_updates.for_each_ref(|token_price_update| {
-                    let token_price_update: &TokenPriceUpdate = token_price_update;
-                    vector::push_back(
-                        &mut source_tokens, token_price_update.source_token
-                    );
-                    vector::push_back(
-                        &mut source_usd_per_token,
-                        token_price_update.usd_per_token
-                    );
-                });
+                commit_report.price_updates.token_price_updates.for_each_ref(
+                    |token_price_update| {
+                        let token_price_update: &TokenPriceUpdate = token_price_update;
+                        vector::push_back(
+                            &mut source_tokens, token_price_update.source_token
+                        );
+                        vector::push_back(
+                            &mut source_usd_per_token, token_price_update.usd_per_token
+                        );
+                    }
+                );
 
                 let gas_dest_chain_selectors = vector[];
                 let gas_usd_per_unit_gas = vector[];
-                commit_report.price_updates.gas_price_updates.for_each_ref(|gas_price_update| {
-                    let gas_price_update: &GasPriceUpdate = gas_price_update;
-                    vector::push_back(
-                        &mut gas_dest_chain_selectors,
-                        gas_price_update.dest_chain_selector
-                    );
-                    vector::push_back(
-                        &mut gas_usd_per_unit_gas,
-                        gas_price_update.usd_per_unit_gas
-                    );
-                });
+                commit_report.price_updates.gas_price_updates.for_each_ref(
+                    |gas_price_update| {
+                        let gas_price_update: &GasPriceUpdate = gas_price_update;
+                        vector::push_back(
+                            &mut gas_dest_chain_selectors,
+                            gas_price_update.dest_chain_selector
+                        );
+                        vector::push_back(
+                            &mut gas_usd_per_unit_gas, gas_price_update.usd_per_unit_gas
+                        );
+                    }
+                );
 
                 fee_quoter::update_prices(
                     source_tokens,
@@ -595,22 +596,18 @@ module ccip::offramp {
         let merkle_root_min_seq_nrs = vector[];
         let merkle_root_max_seq_nrs = vector[];
         let merkle_root_values = vector[];
-        blessed_merkle_roots.for_each_ref(|merkle_root| {
-            let merkle_root: &MerkleRoot = merkle_root;
-            vector::push_back(
-                &mut merkle_root_source_chains_selector,
-                merkle_root.source_chain_selector
-            );
-            vector::push_back(
-                &mut merkle_root_min_seq_nrs,
-                merkle_root.min_seq_nr
-            );
-            vector::push_back(
-                &mut merkle_root_max_seq_nrs,
-                merkle_root.max_seq_nr
-            );
-            vector::push_back(&mut merkle_root_values, merkle_root.merkle_root);
-        });
+        blessed_merkle_roots.for_each_ref(
+            |merkle_root| {
+                let merkle_root: &MerkleRoot = merkle_root;
+                vector::push_back(
+                    &mut merkle_root_source_chains_selector,
+                    merkle_root.source_chain_selector
+                );
+                vector::push_back(&mut merkle_root_min_seq_nrs, merkle_root.min_seq_nr);
+                vector::push_back(&mut merkle_root_max_seq_nrs, merkle_root.max_seq_nr);
+                vector::push_back(&mut merkle_root_values, merkle_root.merkle_root);
+            }
+        );
 
         rmn_remote::verify(
             merkle_root_source_chains_selector,
@@ -624,51 +621,50 @@ module ccip::offramp {
     inline fun commit_merkle_roots(
         state: &mut OffRampState, merkle_roots: vector<MerkleRoot>, is_blessed: bool
     ) {
-        merkle_roots.for_each_ref(|root| {
-            let root: &MerkleRoot = root;
-            let source_chain_selector = root.source_chain_selector;
+        merkle_roots.for_each_ref(
+            |root| {
+                let root: &MerkleRoot = root;
+                let source_chain_selector = root.source_chain_selector;
 
-            assert!(
-                !rmn_remote::is_cursed_u128(source_chain_selector as u128),
-                error::permission_denied(E_CURSED_BY_RMN)
-            );
+                assert!(
+                    !rmn_remote::is_cursed_u128(source_chain_selector as u128),
+                    error::permission_denied(E_CURSED_BY_RMN)
+                );
 
-            assert_source_chain_enabled(state, source_chain_selector);
+                assert_source_chain_enabled(state, source_chain_selector);
 
-            let source_chain_config =
-                state.source_chain_configs.borrow_mut(source_chain_selector);
+                let source_chain_config =
+                    state.source_chain_configs.borrow_mut(source_chain_selector);
 
-            // If the root is blessed but RMN blessing is disabled for the source chain, or if the root is not
-            // blessed but RMN blessing is enabled, we revert.
-            assert!(
-                is_blessed != source_chain_config.is_rmn_verification_disabled, 0
-            );
+                // If the root is blessed but RMN blessing is disabled for the source chain, or if the root is not
+                // blessed but RMN blessing is enabled, we revert.
+                assert!(is_blessed != source_chain_config.is_rmn_verification_disabled, 0);
 
-            assert!(
-                source_chain_config.on_ramp == root.on_ramp_address,
-                error::invalid_argument(E_COMMIT_ON_RAMP_MISMATCH)
-            );
-            assert!(
-                source_chain_config.min_seq_nr == root.min_seq_nr
-                    && root.min_seq_nr <= root.max_seq_nr,
-                error::invalid_argument(E_INVALID_INTERVAL)
-            );
+                assert!(
+                    source_chain_config.on_ramp == root.on_ramp_address,
+                    error::invalid_argument(E_COMMIT_ON_RAMP_MISMATCH)
+                );
+                assert!(
+                    source_chain_config.min_seq_nr == root.min_seq_nr
+                        && root.min_seq_nr <= root.max_seq_nr,
+                    error::invalid_argument(E_INVALID_INTERVAL)
+                );
 
-            let merkle_root = root.merkle_root;
-            assert!(
-                merkle_root.length() == 32
-                    && merkle_root != ZERO_MERKLE_ROOT,
-                error::invalid_argument(E_INVALID_ROOT)
-            );
+                let merkle_root = root.merkle_root;
+                assert!(
+                    merkle_root.length() == 32 && merkle_root != ZERO_MERKLE_ROOT,
+                    error::invalid_argument(E_INVALID_ROOT)
+                );
 
-            assert!(
-                !state.roots.contains(merkle_root),
-                error::invalid_argument(E_ROOT_ALREADY_COMMITTED)
-            );
+                assert!(
+                    !state.roots.contains(merkle_root),
+                    error::invalid_argument(E_ROOT_ALREADY_COMMITTED)
+                );
 
-            source_chain_config.min_seq_nr = root.max_seq_nr + 1;
-            state.roots.add(merkle_root, timestamp::now_seconds());
-        });
+                source_chain_config.min_seq_nr = root.max_seq_nr + 1;
+                state.roots.add(merkle_root, timestamp::now_seconds());
+            }
+        );
     }
 
     #[view]
@@ -800,18 +796,21 @@ module ccip::offramp {
         let local_token_addresses = vector[];
         let local_token_amounts = vector[];
 
-        token_amounts.zip_ref(message_offchain_token_data, |token_transfer, current_offchain_token_data| {
-            let (token_address, token_amount) =
-                release_or_mint_single_token(
-                    token_transfer,
-                    current_offchain_token_data,
-                    sender,
-                    receiver,
-                    source_chain_selector
-                );
-            local_token_addresses.push_back(token_address);
-            local_token_amounts.push_back(token_amount);
-        });
+        token_amounts.zip_ref(
+            message_offchain_token_data,
+            |token_transfer, current_offchain_token_data| {
+                let (token_address, token_amount) =
+                    release_or_mint_single_token(
+                        token_transfer,
+                        current_offchain_token_data,
+                        sender,
+                        receiver,
+                        source_chain_selector
+                    );
+                local_token_addresses.push_back(token_address);
+                local_token_amounts.push_back(token_amount);
+            }
+        );
 
         (local_token_addresses, local_token_amounts)
     }
@@ -883,8 +882,7 @@ module ccip::offramp {
             error::invalid_argument(E_SOURCE_CHAIN_SELECTORS_MISMATCH)
         );
         assert!(
-            source_chains_len
-                == source_chains_is_rmn_verification_disabled.length(),
+            source_chains_len == source_chains_is_rmn_verification_disabled.length(),
             error::invalid_argument(E_SOURCE_CHAIN_SELECTORS_MISMATCH)
         );
         assert!(
@@ -904,17 +902,19 @@ module ccip::offramp {
             );
 
             if (!state.source_chain_configs.contains(source_chain_selector)) {
-                state.source_chain_configs.add(source_chain_selector, SourceChainConfig {
-                    is_enabled: false,
-                    min_seq_nr: 1,
-                    is_rmn_verification_disabled: false,
-                    on_ramp: vector[]
-                });
+                state.source_chain_configs.add(
+                    source_chain_selector,
+                    SourceChainConfig {
+                        is_enabled: false,
+                        min_seq_nr: 1,
+                        is_rmn_verification_disabled: false,
+                        on_ramp: vector[]
+                    }
+                );
                 state.execution_states.add(source_chain_selector, smart_table::new());
             };
 
-            let config =
-                state.source_chain_configs.borrow_mut(source_chain_selector);
+            let config = state.source_chain_configs.borrow_mut(source_chain_selector);
             config.is_enabled = is_enabled;
             config.on_ramp = on_ramp;
             config.is_rmn_verification_disabled = is_rmn_verification_disabled;
@@ -977,21 +977,19 @@ module ccip::offramp {
         eth_abi::encode_bytes32(&mut outer_hash, aptos_hash::keccak256(message.data));
 
         let token_hash = vector[];
-        eth_abi::encode_u256(
-            &mut token_hash, message.token_amounts.length() as u256
+        eth_abi::encode_u256(&mut token_hash, message.token_amounts.length() as u256);
+        message.token_amounts.for_each_ref(
+            |token_transfer| {
+                let token_transfer: &Any2AptosTokenTransfer = token_transfer;
+                eth_abi::encode_bytes(&mut token_hash, token_transfer.source_pool_address);
+                eth_abi::encode_address(
+                    &mut token_hash, token_transfer.dest_token_address
+                );
+                eth_abi::encode_u32(&mut token_hash, token_transfer.dest_gas_amount);
+                eth_abi::encode_bytes(&mut token_hash, token_transfer.extra_data);
+                eth_abi::encode_u256(&mut token_hash, token_transfer.amount);
+            }
         );
-        message.token_amounts.for_each_ref(|token_transfer| {
-            let token_transfer: &Any2AptosTokenTransfer = token_transfer;
-            eth_abi::encode_bytes(
-                &mut token_hash, token_transfer.source_pool_address
-            );
-            eth_abi::encode_address(
-                &mut token_hash, token_transfer.dest_token_address
-            );
-            eth_abi::encode_u32(&mut token_hash, token_transfer.dest_gas_amount);
-            eth_abi::encode_bytes(&mut token_hash, token_transfer.extra_data);
-            eth_abi::encode_u256(&mut token_hash, token_transfer.amount);
-        });
         eth_abi::encode_bytes32(&mut outer_hash, aptos_hash::keccak256(token_hash));
 
         aptos_hash::keccak256(outer_hash)

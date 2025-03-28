@@ -352,8 +352,7 @@ module ccip::fee_quoter {
                 state.fee_tokens.remove(index);
                 event::emit(FeeTokenRemoved { fee_token });
                 event::emit_event(
-                    &mut state.fee_token_removed_events,
-                    FeeTokenRemoved { fee_token }
+                    &mut state.fee_token_removed_events, FeeTokenRemoved { fee_token }
                 );
             };
         });
@@ -366,8 +365,7 @@ module ccip::fee_quoter {
                 state.fee_tokens.push_back(fee_token);
                 event::emit(FeeTokenAdded { fee_token });
                 event::emit_event(
-                    &mut state.fee_token_added_events,
-                    FeeTokenAdded { fee_token }
+                    &mut state.fee_token_added_events, FeeTokenAdded { fee_token }
                 );
             };
         });
@@ -485,20 +483,22 @@ module ccip::fee_quoter {
             );
         };
 
-        remove_tokens.for_each_ref(|token| {
-            let token: address = *token;
-            if (token_transfer_fee_configs.contains(token)) {
-                token_transfer_fee_configs.remove(token);
+        remove_tokens.for_each_ref(
+            |token| {
+                let token: address = *token;
+                if (token_transfer_fee_configs.contains(token)) {
+                    token_transfer_fee_configs.remove(token);
 
-                event::emit(
-                    TokenTransferFeeConfigRemoved { dest_chain_selector, token }
-                );
-                event::emit_event(
-                    &mut state.token_transfer_fee_config_removed_events,
-                    TokenTransferFeeConfigRemoved { dest_chain_selector, token }
-                );
+                    event::emit(
+                        TokenTransferFeeConfigRemoved { dest_chain_selector, token }
+                    );
+                    event::emit_event(
+                        &mut state.token_transfer_fee_config_removed_events,
+                        TokenTransferFeeConfigRemoved { dest_chain_selector, token }
+                    );
+                }
             }
-        });
+        );
     }
 
     public(friend) fun update_prices(
@@ -519,52 +519,56 @@ module ccip::fee_quoter {
         let state = borrow_state_mut();
         let timestamp_secs = timestamp::now_seconds();
 
-        source_tokens.zip_ref(&source_usd_per_token, |token, usd_per_token| {
-            let timestamped_price = TimestampedPrice {
-                price: *usd_per_token,
-                timestamp_secs
-            };
-            state.usd_per_token.upsert(*token, timestamped_price);
-            event::emit(
-                UsdPerTokenUpdated {
-                    token: *token,
-                    usd_per_token: *usd_per_token,
-                    timestamp: timestamp_secs
-                }
-            );
-            event::emit_event(
-                &mut state.usd_per_token_updated_events,
-                UsdPerTokenUpdated {
-                    token: *token,
-                    usd_per_token: *usd_per_token,
-                    timestamp: timestamp_secs
-                }
-            );
-        });
+        source_tokens.zip_ref(
+            &source_usd_per_token,
+            |token, usd_per_token| {
+                let timestamped_price =
+                    TimestampedPrice { price: *usd_per_token, timestamp_secs };
+                state.usd_per_token.upsert(*token, timestamped_price);
+                event::emit(
+                    UsdPerTokenUpdated {
+                        token: *token,
+                        usd_per_token: *usd_per_token,
+                        timestamp: timestamp_secs
+                    }
+                );
+                event::emit_event(
+                    &mut state.usd_per_token_updated_events,
+                    UsdPerTokenUpdated {
+                        token: *token,
+                        usd_per_token: *usd_per_token,
+                        timestamp: timestamp_secs
+                    }
+                );
+            }
+        );
 
-        gas_dest_chain_selectors.zip_ref(&gas_usd_per_unit_gas, |dest_chain_selector, usd_per_unit_gas| {
-            let timestamped_price = TimestampedPrice {
-                price: *usd_per_unit_gas,
-                timestamp_secs
-            };
-            state.usd_per_unit_gas_by_dest_chain.upsert(*dest_chain_selector, timestamped_price);
+        gas_dest_chain_selectors.zip_ref(
+            &gas_usd_per_unit_gas,
+            |dest_chain_selector, usd_per_unit_gas| {
+                let timestamped_price =
+                    TimestampedPrice { price: *usd_per_unit_gas, timestamp_secs };
+                state.usd_per_unit_gas_by_dest_chain.upsert(
+                    *dest_chain_selector, timestamped_price
+                );
 
-            event::emit(
-                UsdPerUnitGasUpdated {
-                    dest_chain_selector: *dest_chain_selector,
-                    usd_per_unit_gas: *usd_per_unit_gas,
-                    timestamp: timestamp_secs
-                }
-            );
-            event::emit_event(
-                &mut state.usd_per_unit_gas_updated_events,
-                UsdPerUnitGasUpdated {
-                    dest_chain_selector: *dest_chain_selector,
-                    usd_per_unit_gas: *usd_per_unit_gas,
-                    timestamp: timestamp_secs
-                }
-            );
-        });
+                event::emit(
+                    UsdPerUnitGasUpdated {
+                        dest_chain_selector: *dest_chain_selector,
+                        usd_per_unit_gas: *usd_per_unit_gas,
+                        timestamp: timestamp_secs
+                    }
+                );
+                event::emit_event(
+                    &mut state.usd_per_unit_gas_updated_events,
+                    UsdPerUnitGasUpdated {
+                        dest_chain_selector: *dest_chain_selector,
+                        usd_per_unit_gas: *usd_per_unit_gas,
+                        timestamp: timestamp_secs
+                    }
+                );
+            }
+        );
     }
 
     // TODO: should this be public?
@@ -638,7 +642,7 @@ module ccip::fee_quoter {
             };
         let premium_multiplier =
             get_premium_multiplier_wei_per_eth_internal(state, fee_token);
-        premium_fee_usd_wei *= (premium_multiplier as u256); // Apply premium multiplier in wei/eth units
+        premium_fee_usd_wei *=(premium_multiplier as u256); // Apply premium multiplier in wei/eth units
 
         let data_availability_cost_usd_36_decimals =
             if (dest_chain_config.dest_data_availability_multiplier_bps > 0) {
@@ -703,24 +707,29 @@ module ccip::fee_quoter {
 
         let state = borrow_state_mut();
 
-        tokens.zip_ref(&premium_multiplier_wei_per_eth, |token, premium_multiplier_wei_per_eth| {
-            let token: address = *token;
-            let premium_multiplier_wei_per_eth: u64 = *premium_multiplier_wei_per_eth;
-            state.premium_multiplier_wei_per_eth.upsert(token, premium_multiplier_wei_per_eth);
-            event::emit(
-                PremiumMultiplierWeiPerEthUpdated {
-                    token,
-                    premium_multiplier_wei_per_eth
-                }
-            );
-            event::emit_event(
-                &mut state.premium_multiplier_wei_per_eth_updated_events,
-                PremiumMultiplierWeiPerEthUpdated {
-                    token,
-                    premium_multiplier_wei_per_eth
-                }
-            );
-        });
+        tokens.zip_ref(
+            &premium_multiplier_wei_per_eth,
+            |token, premium_multiplier_wei_per_eth| {
+                let token: address = *token;
+                let premium_multiplier_wei_per_eth: u64 = *premium_multiplier_wei_per_eth;
+                state.premium_multiplier_wei_per_eth.upsert(
+                    token, premium_multiplier_wei_per_eth
+                );
+                event::emit(
+                    PremiumMultiplierWeiPerEthUpdated {
+                        token,
+                        premium_multiplier_wei_per_eth
+                    }
+                );
+                event::emit_event(
+                    &mut state.premium_multiplier_wei_per_eth_updated_events,
+                    PremiumMultiplierWeiPerEthUpdated {
+                        token,
+                        premium_multiplier_wei_per_eth
+                    }
+                );
+            }
+        );
     }
 
     #[view]
@@ -900,56 +909,61 @@ module ccip::fee_quoter {
         let token_transfer_gas: u32 = 0;
         let token_transfer_bytes_overhead: u32 = 0;
 
-        local_token_addresses.zip_ref(&local_token_amounts, |local_token_address, local_token_amount| {
-            let local_token_address: address = *local_token_address;
-            let local_token_amount: u64 = *local_token_amount;
+        local_token_addresses.zip_ref(
+            &local_token_amounts,
+            |local_token_address, local_token_amount| {
+                let local_token_address: address = *local_token_address;
+                let local_token_amount: u64 = *local_token_amount;
 
-            let transfer_fee_config =
-                get_token_transfer_fee_config_internal(
-                    state, dest_chain_selector, local_token_address
-                );
+                let transfer_fee_config =
+                    get_token_transfer_fee_config_internal(
+                        state, dest_chain_selector, local_token_address
+                    );
 
-            if (!transfer_fee_config.is_enabled) {
-                token_transfer_fee_wei += ((dest_chain_config.default_token_fee_usd_cents as u256)
-                    * VAL_1E16);
-                token_transfer_gas += dest_chain_config.default_token_dest_gas_overhead;
-                token_transfer_bytes_overhead += CCIP_LOCK_OR_BURN_V1_RET_BYTES;
-            } else {
-                let bps_fee_usd_wei = 0;
-                if (transfer_fee_config.deci_bps > 0) {
-                    let token_price =
-                        if (local_token_address == fee_token) {
-                            fee_token_price
-                        } else {
-                            get_token_price_internal(state, local_token_address)
-                        };
-                    let token_usd_value =
-                        calc_usd_value_from_token_amount(
-                            local_token_amount, token_price.price
-                        );
-                    bps_fee_usd_wei =
-                        (token_usd_value * (transfer_fee_config.deci_bps as u256))
-                            / VAL_1E5;
-                };
-
-                token_transfer_gas += transfer_fee_config.dest_gas_overhead;
-                token_transfer_bytes_overhead += transfer_fee_config.dest_bytes_overhead;
-
-                let min_fee_usd_wei =
-                    (transfer_fee_config.min_fee_usd_cents as u256) * VAL_1E16;
-                let max_fee_usd_wei =
-                    (transfer_fee_config.max_fee_usd_cents as u256) * VAL_1E16;
-                let selected_fee_usd_wei =
-                    if (bps_fee_usd_wei < min_fee_usd_wei) {
-                        min_fee_usd_wei
-                    } else if (bps_fee_usd_wei > max_fee_usd_wei) {
-                        max_fee_usd_wei
-                    } else {
-                        bps_fee_usd_wei
+                if (!transfer_fee_config.is_enabled) {
+                    token_transfer_fee_wei +=(
+                        (dest_chain_config.default_token_fee_usd_cents as u256)
+                            * VAL_1E16
+                    );
+                    token_transfer_gas += dest_chain_config.default_token_dest_gas_overhead;
+                    token_transfer_bytes_overhead += CCIP_LOCK_OR_BURN_V1_RET_BYTES;
+                } else {
+                    let bps_fee_usd_wei = 0;
+                    if (transfer_fee_config.deci_bps > 0) {
+                        let token_price =
+                            if (local_token_address == fee_token) {
+                                fee_token_price
+                            } else {
+                                get_token_price_internal(state, local_token_address)
+                            };
+                        let token_usd_value =
+                            calc_usd_value_from_token_amount(
+                                local_token_amount, token_price.price
+                            );
+                        bps_fee_usd_wei =
+                            (token_usd_value * (transfer_fee_config.deci_bps as u256))
+                                / VAL_1E5;
                     };
-                token_transfer_fee_wei += selected_fee_usd_wei;
+
+                    token_transfer_gas += transfer_fee_config.dest_gas_overhead;
+                    token_transfer_bytes_overhead += transfer_fee_config.dest_bytes_overhead;
+
+                    let min_fee_usd_wei =
+                        (transfer_fee_config.min_fee_usd_cents as u256) * VAL_1E16;
+                    let max_fee_usd_wei =
+                        (transfer_fee_config.max_fee_usd_cents as u256) * VAL_1E16;
+                    let selected_fee_usd_wei =
+                        if (bps_fee_usd_wei < min_fee_usd_wei) {
+                            min_fee_usd_wei
+                        } else if (bps_fee_usd_wei > max_fee_usd_wei) {
+                            max_fee_usd_wei
+                        } else {
+                            bps_fee_usd_wei
+                        };
+                    token_transfer_fee_wei += selected_fee_usd_wei;
+                }
             }
-        });
+        );
 
         (token_transfer_fee_wei, token_transfer_gas, token_transfer_bytes_overhead)
     }
@@ -1285,7 +1299,8 @@ module ccip::fee_quoter {
 
     inline fun validate_evm_address(encoded_address: vector<u8>) {
         assert!(
-            encoded_address.length() == 32, error::invalid_argument(E_INVALID_EVM_ADDRESS)
+            encoded_address.length() == 32,
+            error::invalid_argument(E_INVALID_EVM_ADDRESS)
         );
 
         let encoded_address_uint = eth_abi::decode_u256_value(encoded_address);
@@ -1304,7 +1319,8 @@ module ccip::fee_quoter {
         encoded_address: vector<u8>, must_be_non_zero: bool
     ) {
         assert!(
-            encoded_address.length() == 32, error::invalid_argument(E_INVALID_SVM_ADDRESS)
+            encoded_address.length() == 32,
+            error::invalid_argument(E_INVALID_SVM_ADDRESS)
         );
 
         if (must_be_non_zero) {

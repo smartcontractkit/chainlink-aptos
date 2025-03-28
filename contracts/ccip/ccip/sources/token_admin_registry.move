@@ -178,17 +178,18 @@ module ccip::token_admin_registry {
     ): vector<address> acquires TokenAdminRegistryState {
         let state = borrow_state();
 
-        local_tokens.map_ref(|local_token| {
-            let local_token: address = *local_token;
-            if (state.token_configs.contains(local_token)) {
-                let token_config =
-                    state.token_configs.borrow(local_token);
-                token_config.token_pool_address
-            } else {
-                // returns @0x0 for assets without token pools.
-                @0x0
+        local_tokens.map_ref(
+            |local_token| {
+                let local_token: address = *local_token;
+                if (state.token_configs.contains(local_token)) {
+                    let token_config = state.token_configs.borrow(local_token);
+                    token_config.token_pool_address
+                } else {
+                    // returns @0x0 for assets without token pools.
+                    @0x0
+                }
             }
-        })
+        )
     }
 
     #[view]
@@ -230,7 +231,9 @@ module ccip::token_admin_registry {
         // ref: https://github.com/aptos-labs/aptos-core/blob/6593fb81261f25490ffddc2252a861c994234c2a/aptos-move/framework/aptos-stdlib/sources/data_structures/smart_table.move#L212
 
         let state = borrow_state();
-        state.token_configs.keys_paginated(starting_bucket_index, starting_vector_index, max_count)
+        state.token_configs.keys_paginated(
+            starting_bucket_index, starting_vector_index, max_count
+        )
     }
 
     // ================================================================
@@ -585,7 +588,9 @@ module ccip::token_admin_registry {
             error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT)
         );
 
-        registration.executing_lock_or_burn_output_v1.fill(LockOrBurnOutputV1 { dest_token_address, dest_pool_data })
+        registration.executing_lock_or_burn_output_v1.fill(
+            LockOrBurnOutputV1 { dest_token_address, dest_pool_data }
+        )
     }
 
     public fun get_release_or_mint_input_v1<ProofType: drop>(
@@ -653,7 +658,9 @@ module ccip::token_admin_registry {
             error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_OUTPUT)
         );
 
-        registration.executing_release_or_mint_output_v1.fill(ReleaseOrMintOutputV1 { destination_amount })
+        registration.executing_release_or_mint_output_v1.fill(
+            ReleaseOrMintOutputV1 { destination_amount }
+        )
     }
 
     // LockOrBurnInput accessors
@@ -840,16 +847,18 @@ module ccip::token_admin_registry {
         );
 
         registration.execution_state = EXECUTION_STATE_RELEASE_OR_MINT;
-        registration.executing_release_or_mint_input_v1.fill(ReleaseOrMintInputV1 {
-            sender,
-            receiver,
-            source_amount,
-            local_token,
-            remote_chain_selector,
-            source_pool_address,
-            source_pool_data,
-            offchain_token_data
-        });
+        registration.executing_release_or_mint_input_v1.fill(
+            ReleaseOrMintInputV1 {
+                sender,
+                receiver,
+                source_amount,
+                local_token,
+                remote_chain_selector,
+                source_pool_address,
+                source_pool_data,
+                offchain_token_data
+            }
+        );
 
         (
             object::generate_signer_for_extending(&registration.dispatch_extend_ref),
@@ -897,8 +906,7 @@ module ccip::token_admin_registry {
             );
         };
 
-        let output =
-            registration.executing_release_or_mint_output_v1.extract();
+        let output = registration.executing_release_or_mint_output_v1.extract();
 
         output.destination_amount
     }

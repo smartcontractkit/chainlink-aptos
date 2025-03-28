@@ -45,8 +45,7 @@ module ccip::eth_abi {
     }
 
     public fun encode_bool(out: &mut vector<u8>, value: bool) {
-        out.append(if (value) ENCODED_BOOL_TRUE
-        else ENCODED_BOOL_FALSE)
+        out.append(if (value) ENCODED_BOOL_TRUE else ENCODED_BOOL_FALSE)
     }
 
     public inline fun encode_bytes32(

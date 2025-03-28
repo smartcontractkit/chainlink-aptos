@@ -267,8 +267,7 @@ module mcms::mcms_registry {
             error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
 
-        let owner_address =
-            *state.registered_addresses.borrow(object_address);
+        let owner_address = *state.registered_addresses.borrow(object_address);
         // this could occur if the code object has already been transferred away either through this process
         // or through a TransferRef if the object was pre-existing.
         assert!(
@@ -316,8 +315,7 @@ module mcms::mcms_registry {
             error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
 
-        let owner_address =
-            *state.registered_addresses.borrow(object_address);
+        let owner_address = *state.registered_addresses.borrow(object_address);
         // these conditions could occur if the code object was pre-existing and the owner transferred object ownership or disabled
         // ungated transfers using the TransferRef after this transfer process was initiated.
         assert!(
@@ -380,8 +378,7 @@ module mcms::mcms_registry {
             error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
 
-        let owner_address =
-            *state.registered_addresses.borrow(object_address);
+        let owner_address = *state.registered_addresses.borrow(object_address);
         // these conditions could occur if the code object was pre-existing and the owner transferred object ownership or disabled
         // ungated transfers using the TransferRef after this transfer process was initiated.
         assert!(
@@ -472,8 +469,7 @@ module mcms::mcms_registry {
             state.registered_addresses.contains(object_address),
             error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
-        let owner_address =
-            *state.registered_addresses.borrow(object_address);
+        let owner_address = *state.registered_addresses.borrow(object_address);
 
         let owner_registration = borrow_owner_registration(owner_address);
         account::create_signer_with_capability(&owner_registration.owner_cap)
@@ -513,7 +509,9 @@ module mcms::mcms_registry {
             }
         );
 
-        state.registered_addresses.add(code_object_address, signer::address_of(&owner_signer));
+        state.registered_addresses.add(
+            code_object_address, signer::address_of(&owner_signer)
+        );
         owner_signer
     }
 
@@ -633,8 +631,7 @@ module mcms::mcms_registry {
             error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
 
-        let owner_address =
-            *state.registered_addresses.borrow(callback_address);
+        let owner_address = *state.registered_addresses.borrow(callback_address);
         assert!(
             !exists<ExecutingCallbackParams>(owner_address),
             error::invalid_state(E_CALLBACK_PARAMS_ALREADY_EXISTS)
@@ -669,8 +666,7 @@ module mcms::mcms_registry {
             error::invalid_state(E_ADDRESS_NOT_REGISTERED)
         );
 
-        let owner_address =
-            *state.registered_addresses.borrow(callback_address);
+        let owner_address = *state.registered_addresses.borrow(callback_address);
         assert!(
             !exists<ExecutingCallbackParams>(owner_address),
             error::invalid_argument(E_CALLBACK_PARAMS_NOT_CONSUMED)
@@ -687,8 +683,7 @@ module mcms::mcms_registry {
             error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
         );
 
-        let owner_address =
-            *state.registered_addresses.borrow(callback_address);
+        let owner_address = *state.registered_addresses.borrow(callback_address);
         assert!(
             exists<ExecutingCallbackParams>(owner_address),
             error::invalid_state(E_MISSING_CALLBACK_PARAMS)

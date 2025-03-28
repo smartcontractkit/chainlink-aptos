@@ -13,14 +13,14 @@ module ccip::merkle_proof {
     }
 
     public fun merkle_root(leaf: vector<u8>, proofs: vector<vector<u8>>): vector<u8> {
-        proofs.fold(leaf, |acc, proof| hash_pair(acc, proof))
+        proofs.fold(
+            leaf, |acc, proof| hash_pair(acc, proof)
+        )
     }
 
     public fun vector_u8_gt(a: &vector<u8>, b: &vector<u8>): bool {
         let len = a.length();
-        assert!(
-            len == b.length(), error::invalid_argument(E_VECTOR_LENGTH_MISMATCH)
-        );
+        assert!(len == b.length(), error::invalid_argument(E_VECTOR_LENGTH_MISMATCH));
 
         // compare each byte until not equal
         for (i in 0..len) {

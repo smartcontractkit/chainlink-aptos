@@ -46,7 +46,9 @@ module ccip::internal {
             let token = token_addresses[i];
             let amount = token_amounts[i];
             let token_store = token_store_addresses[i];
-            converted_token_amounts.push_back(Aptos2AnyTokenAmount { token, amount, token_store });
+            converted_token_amounts.push_back(
+                Aptos2AnyTokenAmount { token, amount, token_store }
+            );
         };
         Aptos2AnyMessage {
             receiver,

@@ -603,9 +603,7 @@ module mcms::mcms {
         // first, we count the signers as children
         signer_groups.for_each_ref(|group| {
             let group: u64 = *group as u64;
-            assert!(
-                group < NUM_GROUPS, error::invalid_argument(E_OUT_OF_BOUNDS_GROUP)
-            );
+            assert!(group < NUM_GROUPS, error::invalid_argument(E_OUT_OF_BOUNDS_GROUP));
             let count = group_children_counts.borrow_mut(group);
             *count += 1;
         });
@@ -841,17 +839,19 @@ module mcms::mcms {
         leaf: vector<u8>
     ): bool {
         let computed_hash = leaf;
-        proof.for_each_ref(|proof_element| {
-            let (left, right) =
-                if (vector_u8_gt(&computed_hash, proof_element)) {
-                    (*proof_element, computed_hash)
-                } else {
-                    (computed_hash, *proof_element)
-                };
-            let hash_input: vector<u8> = left;
-            hash_input.append(right);
-            computed_hash = keccak256(hash_input);
-        });
+        proof.for_each_ref(
+            |proof_element| {
+                let (left, right) =
+                    if (vector_u8_gt(&computed_hash, proof_element)) {
+                        (*proof_element, computed_hash)
+                    } else {
+                        (computed_hash, *proof_element)
+                    };
+                let hash_input: vector<u8> = left;
+                hash_input.append(right);
+                computed_hash = keccak256(hash_input);
+            }
+        );
         computed_hash == root
     }
 
@@ -897,9 +897,7 @@ module mcms::mcms {
     /// compares two vectors of equal length, returns true if a > b, false otherwise.
     fun vector_u8_gt(a: &vector<u8>, b: &vector<u8>): bool {
         let len = a.length();
-        assert!(
-            len == b.length(), error::invalid_argument(E_CMP_VECTORS_DIFF_LEN)
-        );
+        assert!(len == b.length(), error::invalid_argument(E_CMP_VECTORS_DIFF_LEN));
 
         if (len == 0) {
             return false

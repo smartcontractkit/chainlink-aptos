@@ -118,16 +118,19 @@ module ccip::ocr3_base {
         assert!(big_f != 0, error::invalid_argument(E_BIG_F_MUST_BE_POSITIVE));
 
         let ocr_config =
-            ocr3_state.ocr3_configs.borrow_mut_with_default(ocr_plugin_type, OCRConfig {
-                config_info: ConfigInfo {
-                    config_digest: vector[],
-                    big_f: 0,
-                    n: 0,
-                    is_signature_verification_enabled: false
-                },
-                signers: vector[],
-                transmitters: vector[]
-            });
+            ocr3_state.ocr3_configs.borrow_mut_with_default(
+                ocr_plugin_type,
+                OCRConfig {
+                    config_info: ConfigInfo {
+                        config_digest: vector[],
+                        big_f: 0,
+                        n: 0,
+                        is_signature_verification_enabled: false
+                    },
+                    signers: vector[],
+                    transmitters: vector[]
+                }
+            );
 
         let config_info = &mut ocr_config.config_info;
 
@@ -257,8 +260,7 @@ module ccip::ocr3_base {
 
         assert_chain_not_forked(ocr3_state);
 
-        let plugin_transmitters =
-            ocr3_state.transmitter_oracles.borrow(ocr_plugin_type);
+        let plugin_transmitters = ocr3_state.transmitter_oracles.borrow(ocr_plugin_type);
         assert!(
             plugin_transmitters.contains(&transmitter),
             error::permission_denied(E_UNAUTHORIZED_TRANSMITTER)
@@ -271,8 +273,7 @@ module ccip::ocr3_base {
             );
 
             let hashed_report = hash_report(report, config_digest, sequence_bytes);
-            let plugin_signers =
-                ocr3_state.signer_oracles.borrow(ocr_plugin_type);
+            let plugin_signers = ocr3_state.signer_oracles.borrow(ocr_plugin_type);
             verify_signature(plugin_signers, hashed_report, rs, ss, vs);
         };
 
@@ -351,9 +352,7 @@ module ccip::ocr3_base {
 
             let public_key = secp256k1::ecdsa_recover(hashed_report, v, &signature);
             let public_key_bytes =
-                secp256k1::ecdsa_raw_public_key_to_bytes(
-                    &public_key.extract()
-                );
+                secp256k1::ecdsa_raw_public_key_to_bytes(&public_key.extract());
             let evm_address = aptos_hash::keccak256(public_key_bytes).trim(12);
 
             let (exists, index) = signers.index_of(&evm_address);

@@ -232,7 +232,10 @@ module ccip::allowlist_test {
     inline fun assert_add_events_emitted(
         added_addresses: vector<address>
     ) {
-        let expected = added_addresses.map::<address, allowlist::AllowlistAdd>(|add| allowlist::new_add_event(add));
+        let expected =
+            added_addresses.map::<address, allowlist::AllowlistAdd> (|add| allowlist::new_add_event(
+                add
+            ));
         let got = event::emitted_events<allowlist::AllowlistAdd>();
         let number_of_adds = vector::length(&expected);
 
@@ -251,9 +254,10 @@ module ccip::allowlist_test {
     inline fun assert_remove_events_emitted(
         added_addresses: vector<address>
     ) {
-        let expected = added_addresses.map::<address, allowlist::AllowlistRemove>(
-            |add| allowlist::new_remove_event(add)
-        );
+        let expected =
+            added_addresses.map::<address, allowlist::AllowlistRemove> (|add| allowlist::new_remove_event(
+                add
+            ));
         let got = event::emitted_events<allowlist::AllowlistRemove>();
         let number_of_adds = vector::length(&expected);
 

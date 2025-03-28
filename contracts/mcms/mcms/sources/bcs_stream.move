@@ -59,7 +59,7 @@ module mcms::bcs_stream {
             if (((val << shift) >> shift) != val) {
                 abort error::invalid_argument(E_MALFORMED_DATA)
             };
-            res |= (val << shift);
+            res |=(val << shift);
 
             if ((byte & 0x80) == 0) {
                 if (shift > 0 && val == 0) {
@@ -134,9 +134,7 @@ module mcms::bcs_stream {
             cur + 2 <= data.length(),
             error::out_of_range(E_OUT_OF_BYTES)
         );
-        let res =
-            (data[cur] as u16)
-                | ((data[cur + 1] as u16) << 8);
+        let res = (data[cur] as u16) | ((data[cur + 1] as u16) << 8);
 
         stream.cur += 2;
         res
@@ -153,10 +151,8 @@ module mcms::bcs_stream {
             error::out_of_range(E_OUT_OF_BYTES)
         );
         let res =
-            (data[cur] as u32)
-                | ((data[cur + 1] as u32) << 8)
-                | ((data[cur + 2] as u32) << 16)
-                | ((data[cur + 3] as u32) << 24);
+            (data[cur] as u32) | ((data[cur + 1] as u32) << 8) | ((data[cur + 2] as u32)
+                << 16) | ((data[cur + 3] as u32) << 24);
 
         stream.cur += 4;
         res
@@ -173,13 +169,9 @@ module mcms::bcs_stream {
             error::out_of_range(E_OUT_OF_BYTES)
         );
         let res =
-            (data[cur] as u64)
-                | ((data[cur + 1] as u64) << 8)
-                | ((data[cur + 2] as u64) << 16)
-                | ((data[cur + 3] as u64) << 24)
-                | ((data[cur + 4] as u64) << 32)
-                | ((data[cur + 5] as u64) << 40)
-                | ((data[cur + 6] as u64) << 48)
+            (data[cur] as u64) | ((data[cur + 1] as u64) << 8) | ((data[cur + 2] as u64)
+                << 16) | ((data[cur + 3] as u64) << 24) | ((data[cur + 4] as u64) << 32)
+                | ((data[cur + 5] as u64) << 40) | ((data[cur + 6] as u64) << 48)
                 | ((data[cur + 7] as u64) << 56);
 
         stream.cur += 8;
@@ -197,22 +189,14 @@ module mcms::bcs_stream {
             error::out_of_range(E_OUT_OF_BYTES)
         );
         let res =
-            (data[cur] as u128)
-                | ((data[cur + 1] as u128) << 8)
-                | ((data[cur + 2] as u128) << 16)
-                | ((data[cur + 3] as u128) << 24)
-                | ((data[cur + 4] as u128) << 32)
-                | ((data[cur + 5] as u128) << 40)
-                | ((data[cur + 6] as u128) << 48)
-                | ((data[cur + 7] as u128) << 56)
-                | ((data[cur + 8] as u128) << 64)
-                | ((data[cur + 9] as u128) << 72)
-                | ((data[cur + 10] as u128) << 80)
-                | ((data[cur + 11] as u128) << 88)
-                | ((data[cur + 12] as u128) << 96)
-                | ((data[cur + 13] as u128) << 104)
-                | ((data[cur + 14] as u128) << 112)
-                | ((data[cur + 15] as u128) << 120);
+            (data[cur] as u128) | ((data[cur + 1] as u128) << 8)
+                | ((data[cur + 2] as u128) << 16) | ((data[cur + 3] as u128) << 24)
+                | ((data[cur + 4] as u128) << 32) | ((data[cur + 5] as u128) << 40)
+                | ((data[cur + 6] as u128) << 48) | ((data[cur + 7] as u128) << 56)
+                | ((data[cur + 8] as u128) << 64) | ((data[cur + 9] as u128) << 72)
+                | ((data[cur + 10] as u128) << 80) | ((data[cur + 11] as u128) << 88)
+                | ((data[cur + 12] as u128) << 96) | ((data[cur + 13] as u128) << 104)
+                | ((data[cur + 14] as u128) << 112) | ((data[cur + 15] as u128) << 120);
 
         stream.cur += 16;
         res
@@ -229,38 +213,22 @@ module mcms::bcs_stream {
             error::out_of_range(E_OUT_OF_BYTES)
         );
         let res =
-            (data[cur] as u256)
-                | ((data[cur + 1] as u256) << 8)
-                | ((data[cur + 2] as u256) << 16)
-                | ((data[cur + 3] as u256) << 24)
-                | ((data[cur + 4] as u256) << 32)
-                | ((data[cur + 5] as u256) << 40)
-                | ((data[cur + 6] as u256) << 48)
-                | ((data[cur + 7] as u256) << 56)
-                | ((data[cur + 8] as u256) << 64)
-                | ((data[cur + 9] as u256) << 72)
-                | ((data[cur + 10] as u256) << 80)
-                | ((data[cur + 11] as u256) << 88)
-                | ((data[cur + 12] as u256) << 96)
-                | ((data[cur + 13] as u256) << 104)
-                | ((data[cur + 14] as u256) << 112)
-                | ((data[cur + 15] as u256) << 120)
-                | ((data[cur + 16] as u256) << 128)
-                | ((data[cur + 17] as u256) << 136)
-                | ((data[cur + 18] as u256) << 144)
-                | ((data[cur + 19] as u256) << 152)
-                | ((data[cur + 20] as u256) << 160)
-                | ((data[cur + 21] as u256) << 168)
-                | ((data[cur + 22] as u256) << 176)
-                | ((data[cur + 23] as u256) << 184)
-                | ((data[cur + 24] as u256) << 192)
-                | ((data[cur + 25] as u256) << 200)
-                | ((data[cur + 26] as u256) << 208)
-                | ((data[cur + 27] as u256) << 216)
-                | ((data[cur + 28] as u256) << 224)
-                | ((data[cur + 29] as u256) << 232)
-                | ((data[cur + 30] as u256) << 240)
-                | ((data[cur + 31] as u256) << 248);
+            (data[cur] as u256) | ((data[cur + 1] as u256) << 8)
+                | ((data[cur + 2] as u256) << 16) | ((data[cur + 3] as u256) << 24)
+                | ((data[cur + 4] as u256) << 32) | ((data[cur + 5] as u256) << 40)
+                | ((data[cur + 6] as u256) << 48) | ((data[cur + 7] as u256) << 56)
+                | ((data[cur + 8] as u256) << 64) | ((data[cur + 9] as u256) << 72)
+                | ((data[cur + 10] as u256) << 80) | ((data[cur + 11] as u256) << 88)
+                | ((data[cur + 12] as u256) << 96) | ((data[cur + 13] as u256) << 104)
+                | ((data[cur + 14] as u256) << 112) | ((data[cur + 15] as u256) << 120)
+                | ((data[cur + 16] as u256) << 128) | ((data[cur + 17] as u256) << 136)
+                | ((data[cur + 18] as u256) << 144) | ((data[cur + 19] as u256) << 152)
+                | ((data[cur + 20] as u256) << 160) | ((data[cur + 21] as u256) << 168)
+                | ((data[cur + 22] as u256) << 176) | ((data[cur + 23] as u256) << 184)
+                | ((data[cur + 24] as u256) << 192) | ((data[cur + 25] as u256) << 200)
+                | ((data[cur + 26] as u256) << 208) | ((data[cur + 27] as u256) << 216)
+                | ((data[cur + 28] as u256) << 224) | ((data[cur + 29] as u256) << 232)
+                | ((data[cur + 30] as u256) << 240) | ((data[cur + 31] as u256) << 248);
 
         stream.cur += 32;
         res

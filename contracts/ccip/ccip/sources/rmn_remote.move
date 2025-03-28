@@ -147,13 +147,15 @@ module ccip::rmn_remote {
         eth_abi::encode_address(&mut digest, report.rmn_remote_contract_address);
         eth_abi::encode_address(&mut digest, report.off_ramp_address);
         eth_abi::encode_bytes32(&mut digest, report.rmn_home_contract_config_digest);
-        report.merkle_roots.for_each_ref(|merkle_root| {
-            let merkle_root: &MerkleRoot = merkle_root;
-            eth_abi::encode_u64(&mut digest, merkle_root.source_chain_selector);
-            eth_abi::encode_u64(&mut digest, merkle_root.min_seq_nr);
-            eth_abi::encode_u64(&mut digest, merkle_root.max_seq_nr);
-            eth_abi::encode_bytes32(&mut digest, merkle_root.merkle_root);
-        });
+        report.merkle_roots.for_each_ref(
+            |merkle_root| {
+                let merkle_root: &MerkleRoot = merkle_root;
+                eth_abi::encode_u64(&mut digest, merkle_root.source_chain_selector);
+                eth_abi::encode_u64(&mut digest, merkle_root.min_seq_nr);
+                eth_abi::encode_u64(&mut digest, merkle_root.max_seq_nr);
+                eth_abi::encode_bytes32(&mut digest, merkle_root.merkle_root);
+            }
+        );
         aptos_hash::keccak256(digest)
     }
 
@@ -192,12 +194,13 @@ module ccip::rmn_remote {
         // Since we cannot pass structs, we need to reconstruct it from the individual components.
         let merkle_roots = vector[];
         for (i in 0..merkle_root_len) {
-            let source_chain_selector =
-                merkle_root_source_chain_selectors[i];
+            let source_chain_selector = merkle_root_source_chain_selectors[i];
             let min_seq_nr = merkle_root_min_seq_nrs[i];
             let max_seq_nr = merkle_root_max_seq_nrs[i];
             let merkle_root = merkle_root_values[i];
-            merkle_roots.push_back(MerkleRoot { source_chain_selector, min_seq_nr, max_seq_nr, merkle_root });
+            merkle_roots.push_back(
+                MerkleRoot { source_chain_selector, min_seq_nr, max_seq_nr, merkle_root }
+            );
         };
 
         let report = Report {
@@ -225,9 +228,7 @@ module ccip::rmn_remote {
             );
 
             let public_key_bytes =
-                secp256k1::ecdsa_raw_public_key_to_bytes(
-                    &maybe_public_key.extract()
-                );
+                secp256k1::ecdsa_raw_public_key_to_bytes(&maybe_public_key.extract());
             // trim the first 12 bytes of the hash to recover the ethereum address.
             let eth_address = aptos_hash::keccak256(public_key_bytes).trim(12);
 
@@ -290,21 +291,25 @@ module ccip::rmn_remote {
 
         state.signers.clear();
 
-        let signers = signer_onchain_public_keys.zip_map_ref(&node_indexes, |signer_public_key_bytes, node_indexes| {
-            let signer_public_key_bytes: vector<u8> = *signer_public_key_bytes;
-            let node_index: u64 = *node_indexes;
-            // expect an ethereum address of 20 bytes.
-            assert!(
-                signer_public_key_bytes.length() == 20,
-                error::invalid_argument(E_INVALID_PUBLIC_KEY_LENGTH)
+        let signers =
+            signer_onchain_public_keys.zip_map_ref(
+                &node_indexes,
+                |signer_public_key_bytes, node_indexes| {
+                    let signer_public_key_bytes: vector<u8> = *signer_public_key_bytes;
+                    let node_index: u64 = *node_indexes;
+                    // expect an ethereum address of 20 bytes.
+                    assert!(
+                        signer_public_key_bytes.length() == 20,
+                        error::invalid_argument(E_INVALID_PUBLIC_KEY_LENGTH)
+                    );
+                    assert!(
+                        !state.signers.contains(signer_public_key_bytes),
+                        error::invalid_argument(E_DUPLICATE_SIGNER)
+                    );
+                    state.signers.add(signer_public_key_bytes, true);
+                    Signer { onchain_public_key: signer_public_key_bytes, node_index }
+                }
             );
-            assert!(
-                !state.signers.contains(signer_public_key_bytes),
-                error::invalid_argument(E_DUPLICATE_SIGNER)
-            );
-            state.signers.add(signer_public_key_bytes, true);
-            Signer { onchain_public_key: signer_public_key_bytes, node_index }
-        });
 
         let new_config = Config { rmn_home_contract_config_digest, signers, f_sign };
         state.config = new_config;
@@ -347,18 +352,20 @@ module ccip::rmn_remote {
 
         let state = borrow_state_mut();
 
-        subjects.for_each_ref(|subject| {
-            let subject: vector<u8> = *subject;
-            assert!(
-                subject.length() == 16,
-                error::invalid_argument(E_INVALID_SUBJECT_LENGTH)
-            );
-            assert!(
-                !state.cursed_subjects.contains(subject),
-                error::invalid_argument(E_ALREADY_CURSED)
-            );
-            state.cursed_subjects.add(subject, true);
-        });
+        subjects.for_each_ref(
+            |subject| {
+                let subject: vector<u8> = *subject;
+                assert!(
+                    subject.length() == 16,
+                    error::invalid_argument(E_INVALID_SUBJECT_LENGTH)
+                );
+                assert!(
+                    !state.cursed_subjects.contains(subject),
+                    error::invalid_argument(E_ALREADY_CURSED)
+                );
+                state.cursed_subjects.add(subject, true);
+            }
+        );
         event::emit(Cursed { subjects });
         event::emit_event(&mut state.cursed_events, Cursed { subjects });
     }
@@ -395,8 +402,7 @@ module ccip::rmn_remote {
     }
 
     public fun is_cursed(subject: vector<u8>): bool acquires RMNRemoteState {
-        borrow_state().cursed_subjects.contains(subject)
-            || is_cursed_global()
+        borrow_state().cursed_subjects.contains(subject) || is_cursed_global()
     }
 
     public fun is_cursed_u128(subject_value: u128): bool acquires RMNRemoteState {

@@ -211,23 +211,24 @@ module ccip_token_pool::token_pool {
                 remote_pools: vector[]
             };
 
-            remote_pool_addresses.for_each_ref(|remote_pool_address| {
-                let remote_pool_address: vector<u8> = *remote_pool_address;
-                let (found, _) = remote_chain_config.remote_pools.index_of(&remote_pool_address);
-                assert!(
-                    !found, error::invalid_argument(E_REMOTE_POOL_ALREADY_ADDED)
-                );
+            remote_pool_addresses.for_each_ref(
+                |remote_pool_address| {
+                    let remote_pool_address: vector<u8> = *remote_pool_address;
+                    let (found, _) =
+                        remote_chain_config.remote_pools.index_of(&remote_pool_address);
+                    assert!(!found, error::invalid_argument(E_REMOTE_POOL_ALREADY_ADDED));
 
-                remote_chain_config.remote_pools.push_back(remote_pool_address);
+                    remote_chain_config.remote_pools.push_back(remote_pool_address);
 
-                event::emit(
-                    RemotePoolAdded { remote_chain_selector, remote_pool_address }
-                );
-                event::emit_event(
-                    &mut state.remote_pool_added_events,
-                    RemotePoolAdded { remote_chain_selector, remote_pool_address }
-                );
-            });
+                    event::emit(
+                        RemotePoolAdded { remote_chain_selector, remote_pool_address }
+                    );
+                    event::emit_event(
+                        &mut state.remote_pool_added_events,
+                        RemotePoolAdded { remote_chain_selector, remote_pool_address }
+                    );
+                }
+            );
 
             state.remote_chain_configs.add(remote_chain_selector, remote_chain_config);
 
