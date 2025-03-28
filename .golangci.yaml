@@ -1,11 +1,13 @@
-version: "2"
 linters:
-  default: standard
-formatters:
   enable:
+    - errcheck
     - gofmt
     - goimports
-  settings:
-    goimports:
-      local-prefixes:
-        - github.com/smartcontractkit/chainlink-aptos
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+linters-settings:
+  goimports:
+    local-prefixes: github.com/smartcontractkit/chainlink-aptos
