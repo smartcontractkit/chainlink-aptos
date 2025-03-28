@@ -327,13 +327,9 @@ module ccip::ocr3_base {
     inline fun hash_report(
         report: vector<u8>, config_digest: vector<u8>, sequence_bytes: vector<u8>
     ): vector<u8> {
-        let bytes = vector[];
-
-        vector::append(&mut bytes, aptos_hash::keccak256(report));
-        vector::append(&mut bytes, config_digest);
-        vector::append(&mut bytes, sequence_bytes);
-
-        aptos_hash::keccak256(bytes)
+        vector::append(&mut report, config_digest);
+        vector::append(&mut report, sequence_bytes);
+        aptos_hash::blake2b_256(report)
     }
 
     inline fun verify_signature(
