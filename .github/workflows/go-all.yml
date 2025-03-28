@@ -1,0 +1,30 @@
+name: Go
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+  pull_request:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Linting Go
+        uses: smartcontractkit/.github/actions/ci-lint-go@01d931b0455a754d12e7143cc54a5a3521a8f6f6 # ci-lint-go@0.3.1
+        with:
+          golangci-lint-version: v1.64.8
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Aptos CLI
+        uses: aptos-labs/actions/install-aptos-cli@ce57287eb852b9819c1d74fecc3be187677559fd # v0.1
+        with:
+          CLI_VERSION: 7.0.0
+      - name: Build and test
+        uses: smartcontractkit/.github/actions/ci-test-go@ci-test-go/0.3.5
+        with:
+          use-go-cache: true

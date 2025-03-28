@@ -8,6 +8,7 @@ import (
 )
 
 func Test_createChunks(t *testing.T) {
+	t.Parallel()
 	type args struct {
 		output        compile.CompiledPackage
 		chunkSizeByte uint
@@ -157,7 +158,7 @@ func Test_createChunks(t *testing.T) {
 				{
 					Metadata:    nil,
 					CodeIndices: []uint16{0, 1},
-					Chunks:      [][]byte{{3}, []byte{4}},
+					Chunks:      [][]byte{{3}, {4}},
 				},
 				{
 					Metadata:    nil,
@@ -167,7 +168,7 @@ func Test_createChunks(t *testing.T) {
 				{
 					Metadata:    nil,
 					CodeIndices: []uint16{1, 2},
-					Chunks:      [][]byte{{7}, []byte{8}},
+					Chunks:      [][]byte{{7}, {8}},
 				},
 				{
 					Metadata:    nil,
@@ -180,6 +181,7 @@ func Test_createChunks(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := CreateChunks(tt.args.output, tt.args.chunkSizeByte)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CreateChunks() error = %+v, wantErr %+v", err, tt.wantErr)

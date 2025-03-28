@@ -13,6 +13,7 @@ import (
 	module_rmn_remote "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/rmn_remote"
 	module_token_admin_registry "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/token_admin_registry"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/compile"
+	"github.com/smartcontractkit/chainlink-aptos/contracts"
 )
 
 type CCIP interface {
@@ -97,7 +98,7 @@ func Compile(address aptos.AccountAddress, mcmsAddress aptos.AccountAddress, reg
 		namedAddresses["mcms_register_entrypoints"] = address
 	}
 	// Compile using CLI
-	return compile.CompilePackage("ccip", namedAddresses)
+	return compile.CompilePackage(contracts.CCIP, namedAddresses)
 }
 
 func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIP {
@@ -129,7 +130,7 @@ func DeployToObject(
 	if registerMCMSEntrypoints {
 		namedAddresses["mcms_register_entrypoints"] = mcmsAddress
 	}
-	address, tx, err := bind.DeployPackageToObject(auth, client, "ccip", namedAddresses)
+	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.CCIP, namedAddresses)
 	if err != nil {
 		return aptos.AccountAddress{}, nil, CCIPContract{}, err
 	}

@@ -36,9 +36,10 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 	module_mcms_user.FunctionInfo,
 )
 
-func Compile(MCMSAddress aptos.AccountAddress) (compile.CompiledPackage, error) {
+func Compile(address, mcmsAddress aptos.AccountAddress) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
-		"mcms": MCMSAddress,
+		"mcms_test": mcmsAddress,
+		"mcms":      mcmsAddress,
 	}
 	return compile.CompilePackage(contracts.MCMSTest, namedAddresses)
 }

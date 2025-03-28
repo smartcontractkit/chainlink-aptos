@@ -7,6 +7,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
 	module_dummy_receiver "github.com/smartcontractkit/chainlink-aptos/bindings/ccip_dummy_receiver/dummy_receiver"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/compile"
+	"github.com/smartcontractkit/chainlink-aptos/contracts"
 )
 
 type CCIPDummyReceiver interface {
@@ -43,7 +44,7 @@ func Compile(address aptos.AccountAddress, ccipAddress aptos.AccountAddress) (co
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
 	// Compile using CLI
-	return compile.CompilePackage("ccip_dummy_receiver", namedAddresses)
+	return compile.CompilePackage(contracts.CCIPDummyReceiver, namedAddresses)
 }
 
 func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIPDummyReceiver {
@@ -65,7 +66,7 @@ func DeployToObject(
 		"mcms":                      aptos.AccountZero,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
-	address, tx, err := bind.DeployPackageToObject(auth, client, "ccip_dummy_receiver", namedAddresses)
+	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.CCIPDummyReceiver, namedAddresses)
 	if err != nil {
 		return aptos.AccountAddress{}, nil, CCIPDummyReceiverContract{}, err
 	}

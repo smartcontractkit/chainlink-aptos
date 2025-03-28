@@ -16,8 +16,8 @@ const (
 	CCIPBurnMintPool    = Package("ccip_burn_mint_pool")
 	CCIPLockReleasePool = Package("ccip_lock_release_pool")
 	CCIPTokenPool       = Package("ccip_token_pool")
-	CCIPRouter       	= Package("ccip_router")
-	CCIPDummyReceiver = Package("ccip_dummy_receiver")
+	CCIPRouter          = Package("ccip_router")
+	CCIPDummyReceiver   = Package("ccip_dummy_receiver")
 
 	MCMS     = Package("mcms")
 	MCMSTest = Package("mcms_test")
@@ -29,11 +29,11 @@ const (
 var Contracts map[Package]string = map[Package]string{
 	CCIP:                filepath.Join("ccip", "ccip"),
 	CCIPPingPongDemo:    filepath.Join("ccip", "ccip_ping_pong_demo"),
-	CCIPBurnMintPool:    filepath.Join("ccip", "token_pools", "ccip_burn_mint_pool"),
-	CCIPLockReleasePool: filepath.Join("ccip", "token_pools", "ccip_lock_release_pool"),
-	CCIPTokenPool:       filepath.Join("ccip", "token_pools", "token_pool"),
-	CCIPRouter:       	 filepath.Join("ccip", "ccip_router"),
-	CCIPDummyReceiver:    filepath.Join("ccip", "ccip_dummy_receiver"),
+	CCIPBurnMintPool:    filepath.Join("ccip", "ccip_token_pools", "burn_mint_token_pool"),
+	CCIPLockReleasePool: filepath.Join("ccip", "ccip_token_pools", "lock_release_token_pool"),
+	CCIPTokenPool:       filepath.Join("ccip", "ccip_token_pools", "token_pool"),
+	CCIPRouter:          filepath.Join("ccip", "ccip_router"),
+	CCIPDummyReceiver:   filepath.Join("ccip", "ccip_dummy_receiver"),
 
 	MCMS:     filepath.Join("mcms", "mcms"),
 	MCMSTest: filepath.Join("mcms", "mcms_test"),
