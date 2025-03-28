@@ -613,35 +613,34 @@ module mcms::mcms {
             // ensure we have a well-formed group tree:
             // - the root should have itself as parent
             // - all other groups should have a parent group with a lower index
-            let group_parent = group_parents.borrow(i);
+            let group_parent = group_parents[i] as u64;
             assert!(
-                i == 0 || (*group_parent as u64) < i,
+                i == 0 || group_parent < i,
                 error::invalid_argument(E_GROUP_TREE_NOT_WELL_FORMED)
             );
             assert!(
-                i != 0 || (*group_parent as u64) == 0,
+                i != 0 || group_parent == 0,
                 error::invalid_argument(E_GROUP_TREE_NOT_WELL_FORMED)
             );
 
-            let group_quorum = group_quorums.borrow(i);
-            let disabled = *group_quorum == 0;
-            let group_children_count = group_children_counts.borrow(i);
+            let group_quorum = group_quorums[i];
+            let disabled = group_quorum == 0;
+            let group_children_count = group_children_counts[i];
             if (disabled) {
                 // if group is disabled, ensure it has no children
                 assert!(
-                    *group_children_count == 0,
+                    group_children_count == 0,
                     error::invalid_argument(E_SIGNER_IN_DISABLED_GROUP)
                 );
             } else {
                 // if group is enabled, ensure group quorum can be met
-                let group_quorum = group_quorums.borrow(i);
                 assert!(
-                    *group_children_count >= *group_quorum,
+                    group_children_count >= group_quorum,
                     error::invalid_argument(E_OUT_OF_BOUNDS_GROUP_QUORUM)
                 );
 
                 // propagate children counts to parent group
-                let count = group_children_counts.borrow_mut((*group_parent as u64));
+                let count = group_children_counts.borrow_mut(group_parent);
                 *count += 1;
             };
         };
@@ -658,26 +657,26 @@ module mcms::mcms {
         // evm zero address (20 bytes of 0) is the smallest address possible
         let prev_signer_addr = vector[];
         for (i in 0..signer_addresses.length()) {
-            let signer_addr = signer_addresses.borrow(i);
+            let signer_addr = signer_addresses[i];
             assert!(
                 signer_addr.length() == 20,
                 error::invalid_argument(E_INVALID_SIGNER_ADDR_LEN)
             );
             if (i > 0) {
                 assert!(
-                    vector_u8_gt(signer_addr, &prev_signer_addr),
+                    vector_u8_gt(&signer_addr, &prev_signer_addr),
                     error::invalid_argument(E_SIGNER_ADDR_MUST_BE_INCREASING)
                 );
             };
 
             let signer = Signer {
-                addr: *signer_addr,
+                addr: signer_addr,
                 index: (i as u8),
                 group: signer_groups[i]
             };
-            state.signers.add(*signer_addr, signer);
+            state.signers.add(signer_addr, signer);
             state.config.signers.push_back(signer);
-            prev_signer_addr = *signer_addr;
+            prev_signer_addr = signer_addr;
         };
 
         if (clear_root) {

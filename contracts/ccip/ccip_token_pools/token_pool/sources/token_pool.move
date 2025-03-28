@@ -199,7 +199,7 @@ module ccip_token_pool::token_pool {
                 !state.remote_chain_configs.contains(remote_chain_selector),
                 error::invalid_argument(E_REMOTE_CHAIN_ALREADY_EXISTS)
             );
-            let remote_pool_addresses = remote_pool_addresses_to_add.borrow(i);
+            let remote_pool_addresses = remote_pool_addresses_to_add[i];
             let remote_token_address = remote_token_addresses_to_add[i];
             assert!(
                 !remote_token_address.is_empty(),
@@ -211,9 +211,9 @@ module ccip_token_pool::token_pool {
                 remote_pools: vector[]
             };
 
-            remote_pool_addresses.for_each_ref(
+            remote_pool_addresses.for_each(
                 |remote_pool_address| {
-                    let remote_pool_address: vector<u8> = *remote_pool_address;
+                    let remote_pool_address: vector<u8> = remote_pool_address;
                     let (found, _) =
                         remote_chain_config.remote_pools.index_of(&remote_pool_address);
                     assert!(!found, error::invalid_argument(E_REMOTE_POOL_ALREADY_ADDED));

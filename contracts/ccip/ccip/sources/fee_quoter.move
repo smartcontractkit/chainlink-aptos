@@ -1079,8 +1079,7 @@ module ccip::fee_quoter {
         let dest_exec_data_per_token = vector[];
         for (i in 0..tokens_len) {
             let dest_token_address = dest_token_addresses[i];
-            let dest_pool_data = dest_pool_datas.borrow(i);
-            let dest_pool_data_len = dest_pool_data.length();
+            let dest_pool_data_len = dest_pool_datas[i].length();
             if (dest_pool_data_len > (CCIP_LOCK_OR_BURN_V1_RET_BYTES as u64)) {
                 assert!(
                     dest_pool_data_len
