@@ -22,7 +22,7 @@ module ccip::eth_abi {
     const E_INVALID_U256_LENGTH: u64 = 6;
 
     public inline fun encode_address(out: &mut vector<u8>, value: address) {
-        vector::append(out, bcs::to_bytes(&value))
+        out.append(bcs::to_bytes(&value))
     }
 
     public inline fun encode_u8(out: &mut vector<u8>, value: u8) {
@@ -40,83 +40,82 @@ module ccip::eth_abi {
     public inline fun encode_u256(out: &mut vector<u8>, value: u256) {
         let value_bytes = bcs::to_bytes(&value);
         // little endian to big endian
-        vector::reverse(&mut value_bytes);
-        vector::append(out, value_bytes)
+        value_bytes.reverse();
+        out.append(value_bytes)
     }
 
     public fun encode_bool(out: &mut vector<u8>, value: bool) {
-        vector::append(out, if (value) ENCODED_BOOL_TRUE
-        else ENCODED_BOOL_FALSE)
+        out.append(if (value) ENCODED_BOOL_TRUE else ENCODED_BOOL_FALSE)
     }
 
     public inline fun encode_bytes32(
         out: &mut vector<u8>, value: vector<u8>
     ) {
-        assert!(vector::length(&value) <= 32, 600001);
-        let padding_len = 32 - vector::length(&value);
+        assert!(value.length() <= 32, 600001);
+        let padding_len = 32 - value.length();
         for (i in 0..padding_len) {
-            vector::push_back(out, 0);
+            out.push_back(0);
         };
-        vector::append(out, value)
+        out.append(value)
     }
 
     public inline fun encode_bytes(out: &mut vector<u8>, value: vector<u8>) {
-        encode_u256(out, (vector::length(&value) as u256));
+        encode_u256(out, (value.length() as u256));
 
-        vector::append(out, value);
-        let padding_len = 32 - (vector::length(&value) % 32);
+        out.append(value);
+        let padding_len = 32 - (value.length() % 32);
         for (i in 0..padding_len) {
-            vector::push_back(out, 0);
+            out.push_back(0);
         }
     }
 
     public fun encode_selector(out: &mut vector<u8>, value: vector<u8>) {
-        assert!(vector::length(&value) == 4, error::invalid_argument(E_INVALID_SELECTOR));
-        vector::append(out, value);
+        assert!(value.length() == 4, error::invalid_argument(E_INVALID_SELECTOR));
+        out.append(value);
     }
 
     public inline fun encode_packed_address(
         out: &mut vector<u8>, value: address
     ) {
-        vector::append(out, bcs::to_bytes(&value))
+        out.append(bcs::to_bytes(&value))
     }
 
     public inline fun encode_packed_bytes(
         out: &mut vector<u8>, value: vector<u8>
     ) {
-        vector::append(out, value)
+        out.append(value)
     }
 
     public inline fun encode_packed_bytes32(
         out: &mut vector<u8>, value: vector<u8>
     ) {
-        assert!(vector::length(&value) <= 32, 600002);
-        vector::append(out, value)
+        assert!(value.length() <= 32, 600002);
+        out.append(value)
     }
 
     public inline fun encode_packed_u8(out: &mut vector<u8>, value: u8) {
-        vector::push_back(out, value)
+        out.push_back(value)
     }
 
     public inline fun encode_packed_u32(out: &mut vector<u8>, value: u32) {
         let value_bytes = bcs::to_bytes(&value);
         // little endian to big endian
-        vector::reverse(&mut value_bytes);
-        vector::append(out, value_bytes)
+        value_bytes.reverse();
+        out.append(value_bytes)
     }
 
     public inline fun encode_packed_u64(out: &mut vector<u8>, value: u64) {
         let value_bytes = bcs::to_bytes(&value);
         // little endian to big endian
-        vector::reverse(&mut value_bytes);
-        vector::append(out, value_bytes)
+        value_bytes.reverse();
+        out.append(value_bytes)
     }
 
     public inline fun encode_packed_u256(out: &mut vector<u8>, value: u256) {
         let value_bytes = bcs::to_bytes(&value);
         // little endian to big endian
-        vector::reverse(&mut value_bytes);
-        vector::append(out, value_bytes)
+        value_bytes.reverse();
+        out.append(value_bytes)
     }
 
     struct ABIStream has drop {
@@ -133,20 +132,20 @@ module ccip::eth_abi {
         let cur = stream.cur;
 
         assert!(
-            cur + 32 <= vector::length(data),
+            cur + 32 <= data.length(),
             error::out_of_range(E_OUT_OF_BYTES)
         );
 
         // Verify first 12 bytes are zero
         for (i in 0..12) {
             assert!(
-                *vector::borrow(data, cur + i) == 0,
+                data[cur + i] == 0,
                 error::invalid_argument(E_INVALID_ADDRESS)
             );
         };
 
         // Extract last 20 bytes for address
-        let addr_bytes = vector::slice(data, cur + 12, cur + 32);
+        let addr_bytes = data.slice(cur + 12, cur + 32);
         stream.cur = cur + 32;
 
         from_bcs::to_address(addr_bytes)
@@ -157,13 +156,13 @@ module ccip::eth_abi {
         let cur = stream.cur;
 
         assert!(
-            cur + 32 <= vector::length(data),
+            cur + 32 <= data.length(),
             error::out_of_range(E_OUT_OF_BYTES)
         );
 
-        let value_bytes = vector::slice(data, cur, cur + 32);
+        let value_bytes = data.slice(cur, cur + 32);
         // Convert from big endian to little endian
-        vector::reverse(&mut value_bytes);
+        value_bytes.reverse();
 
         stream.cur = cur + 32;
         from_bcs::to_u256(value_bytes)
@@ -186,11 +185,11 @@ module ccip::eth_abi {
         let cur = stream.cur;
 
         assert!(
-            cur + 32 <= vector::length(data),
+            cur + 32 <= data.length(),
             error::out_of_range(E_OUT_OF_BYTES)
         );
 
-        let value = vector::slice(data, cur, cur + 32);
+        let value = data.slice(cur, cur + 32);
         stream.cur = cur + 32;
 
         if (value == ENCODED_BOOL_FALSE) { false }
@@ -205,11 +204,11 @@ module ccip::eth_abi {
         let cur = stream.cur;
 
         assert!(
-            cur + 32 <= vector::length(data),
+            cur + 32 <= data.length(),
             error::out_of_range(E_OUT_OF_BYTES)
         );
 
-        let bytes = vector::slice(data, cur, cur + 32);
+        let bytes = data.slice(cur, cur + 32);
         stream.cur = cur + 32;
         bytes
     }
@@ -227,11 +226,11 @@ module ccip::eth_abi {
         let cur = stream.cur;
 
         assert!(
-            cur + length + padding_len <= vector::length(data),
+            cur + length + padding_len <= data.length(),
             error::out_of_range(E_OUT_OF_BYTES)
         );
 
-        let bytes = vector::slice(data, cur, cur + length);
+        let bytes = data.slice(cur, cur + length);
 
         // Skip padding bytes
         stream.cur = cur + length + padding_len;
@@ -246,7 +245,7 @@ module ccip::eth_abi {
         let v = vector::empty();
 
         for (i in 0..len) {
-            vector::push_back(&mut v, elem_decoder(stream));
+            v.push_back(elem_decoder(stream));
         };
 
         v
@@ -254,10 +253,10 @@ module ccip::eth_abi {
 
     public fun decode_u256_value(value_bytes: vector<u8>): u256 {
         assert!(
-            vector::length(&value_bytes) == 32,
+            value_bytes.length() == 32,
             error::invalid_argument(E_INVALID_U256_LENGTH)
         );
-        vector::reverse(&mut value_bytes);
+        value_bytes.reverse();
         from_bcs::to_u256(value_bytes)
     }
 }

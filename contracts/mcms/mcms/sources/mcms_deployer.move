@@ -3,7 +3,6 @@
 module mcms::mcms_deployer {
     use std::code::PackageRegistry;
     use std::error;
-    use std::vector;
     use std::smart_table::{Self, SmartTable};
     use std::object;
     use std::object_code_deployment;
@@ -97,7 +96,7 @@ module mcms::mcms_deployer {
         code_chunks: vector<vector<u8>>
     ): &mut StagingArea {
         assert!(
-            vector::length(&code_indices) == vector::length(&code_chunks),
+            code_indices.length() == code_chunks.length(),
             error::invalid_argument(E_CODE_MISMATCH)
         );
 
@@ -114,20 +113,18 @@ module mcms::mcms_deployer {
 
         let staging_area = borrow_global_mut<StagingArea>(@mcms);
 
-        if (!vector::is_empty(&metadata_chunk)) {
-            vector::append(&mut staging_area.metadata_serialized, metadata_chunk);
+        if (!metadata_chunk.is_empty()) {
+            staging_area.metadata_serialized.append(metadata_chunk);
         };
 
-        for (i in 0..vector::length(&code_chunks)) {
-            let inner_code = *vector::borrow(&code_chunks, i);
-            let idx = (*vector::borrow(&code_indices, i) as u64);
+        for (i in 0..code_chunks.length()) {
+            let inner_code = code_chunks[i];
+            let idx = (code_indices[i] as u64);
 
-            if (smart_table::contains(&staging_area.code, idx)) {
-                vector::append(
-                    smart_table::borrow_mut(&mut staging_area.code, idx), inner_code
-                );
+            if (staging_area.code.contains(idx)) {
+                staging_area.code.borrow_mut(idx).append(inner_code);
             } else {
-                smart_table::add(&mut staging_area.code, idx, inner_code);
+                staging_area.code.add(idx, inner_code);
                 if (idx > staging_area.last_module_idx) {
                     staging_area.last_module_idx = idx;
                 }
@@ -141,10 +138,7 @@ module mcms::mcms_deployer {
         let last_module_idx = staging_area.last_module_idx;
         let code = vector[];
         for (i in 0..(last_module_idx + 1)) {
-            vector::push_back(
-                &mut code,
-                *smart_table::borrow(&staging_area.code, i)
-            );
+            code.push_back(*staging_area.code.borrow(i));
         };
         code
     }
@@ -152,6 +146,6 @@ module mcms::mcms_deployer {
     inline fun cleanup_staging_area_internal() {
         let StagingArea { metadata_serialized: _, code, last_module_idx: _ } =
             move_from<StagingArea>(@mcms);
-        smart_table::destroy(code);
+        code.destroy();
     }
 }

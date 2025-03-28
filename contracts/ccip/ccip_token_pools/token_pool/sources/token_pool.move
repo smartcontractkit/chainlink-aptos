@@ -158,13 +158,13 @@ module ccip_token_pool::token_pool {
     // ================================================================
 
     public fun get_supported_chains(state: &TokenPoolState): vector<u64> {
-        smart_table::keys(&state.remote_chain_configs)
+        state.remote_chain_configs.keys()
     }
 
     public fun is_supported_chain(
         state: &TokenPoolState, remote_chain_selector: u64
     ): bool {
-        smart_table::contains(&state.remote_chain_configs, remote_chain_selector)
+        state.remote_chain_configs.contains(remote_chain_selector)
     }
 
     public fun apply_chain_updates(
@@ -174,48 +174,35 @@ module ccip_token_pool::token_pool {
         remote_pool_addresses_to_add: vector<vector<vector<u8>>>,
         remote_token_addresses_to_add: vector<vector<u8>>
     ) {
-        vector::for_each_ref(
-            &remote_chain_selectors_to_remove,
-            |remote_chain_selector| {
-                let remote_chain_selector: u64 = *remote_chain_selector;
-                assert!(
-                    smart_table::contains(
-                        &state.remote_chain_configs, remote_chain_selector
-                    ),
-                    error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
-                );
-                smart_table::remove(
-                    &mut state.remote_chain_configs, remote_chain_selector
-                );
-            }
-        );
+        remote_chain_selectors_to_remove.for_each_ref(|remote_chain_selector| {
+            let remote_chain_selector: u64 = *remote_chain_selector;
+            assert!(
+                state.remote_chain_configs.contains(remote_chain_selector),
+                error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
+            );
+            state.remote_chain_configs.remove(remote_chain_selector);
+        });
 
-        let add_len = vector::length(&remote_chain_selectors_to_add);
+        let add_len = remote_chain_selectors_to_add.length();
         assert!(
-            add_len == vector::length(&remote_pool_addresses_to_add),
+            add_len == remote_pool_addresses_to_add.length(),
             error::invalid_argument(E_REMOTE_CHAIN_TO_ADD_MISMATCH)
         );
         assert!(
-            add_len == vector::length(&remote_token_addresses_to_add),
+            add_len == remote_token_addresses_to_add.length(),
             error::invalid_argument(E_REMOTE_CHAIN_TO_ADD_MISMATCH)
         );
 
         for (i in 0..add_len) {
-            let remote_chain_selector = *vector::borrow(
-                &remote_chain_selectors_to_add, i
-            );
+            let remote_chain_selector = remote_chain_selectors_to_add[i];
             assert!(
-                !smart_table::contains(
-                    &state.remote_chain_configs, remote_chain_selector
-                ),
+                !state.remote_chain_configs.contains(remote_chain_selector),
                 error::invalid_argument(E_REMOTE_CHAIN_ALREADY_EXISTS)
             );
-            let remote_pool_addresses = vector::borrow(&remote_pool_addresses_to_add, i);
-            let remote_token_address = *vector::borrow(
-                &remote_token_addresses_to_add, i
-            );
+            let remote_pool_addresses = remote_pool_addresses_to_add[i];
+            let remote_token_address = remote_token_addresses_to_add[i];
             assert!(
-                !vector::is_empty(&remote_token_address),
+                !remote_token_address.is_empty(),
                 error::invalid_argument(E_ZERO_ADDRESS_NOT_ALLOWED)
             );
 
@@ -224,20 +211,14 @@ module ccip_token_pool::token_pool {
                 remote_pools: vector[]
             };
 
-            vector::for_each_ref(
-                remote_pool_addresses,
+            remote_pool_addresses.for_each(
                 |remote_pool_address| {
-                    let remote_pool_address: vector<u8> = *remote_pool_address;
-                    let (found, _) = vector::index_of(
-                        &remote_chain_config.remote_pools, &remote_pool_address
-                    );
-                    assert!(
-                        !found, error::invalid_argument(E_REMOTE_POOL_ALREADY_ADDED)
-                    );
+                    let remote_pool_address: vector<u8> = remote_pool_address;
+                    let (found, _) =
+                        remote_chain_config.remote_pools.index_of(&remote_pool_address);
+                    assert!(!found, error::invalid_argument(E_REMOTE_POOL_ALREADY_ADDED));
 
-                    vector::push_back(
-                        &mut remote_chain_config.remote_pools, remote_pool_address
-                    );
+                    remote_chain_config.remote_pools.push_back(remote_pool_address);
 
                     event::emit(
                         RemotePoolAdded { remote_chain_selector, remote_pool_address }
@@ -249,11 +230,7 @@ module ccip_token_pool::token_pool {
                 }
             );
 
-            smart_table::add(
-                &mut state.remote_chain_configs,
-                remote_chain_selector,
-                remote_chain_config
-            );
+            state.remote_chain_configs.add(remote_chain_selector, remote_chain_config);
 
             event::emit(ChainAdded { remote_chain_selector, remote_token_address });
             event::emit_event(
@@ -271,11 +248,11 @@ module ccip_token_pool::token_pool {
         state: &TokenPoolState, remote_chain_selector: u64
     ): vector<vector<u8>> {
         assert!(
-            smart_table::contains(&state.remote_chain_configs, remote_chain_selector),
+            state.remote_chain_configs.contains(remote_chain_selector),
             error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
         );
         let remote_chain_config =
-            smart_table::borrow(&state.remote_chain_configs, remote_chain_selector);
+            state.remote_chain_configs.borrow(remote_chain_selector);
         remote_chain_config.remote_pools
     }
 
@@ -283,7 +260,7 @@ module ccip_token_pool::token_pool {
         state: &TokenPoolState, remote_chain_selector: u64, remote_pool_address: vector<u8>
     ): bool {
         let remote_pools = get_remote_pools(state, remote_chain_selector);
-        let (found, _) = vector::index_of(&remote_pools, &remote_pool_address);
+        let (found, _) = remote_pools.index_of(&remote_pool_address);
         found
     }
 
@@ -291,11 +268,11 @@ module ccip_token_pool::token_pool {
         state: &TokenPoolState, remote_chain_selector: u64
     ): vector<u8> {
         assert!(
-            smart_table::contains(&state.remote_chain_configs, remote_chain_selector),
+            state.remote_chain_configs.contains(remote_chain_selector),
             error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
         );
         let remote_chain_config =
-            smart_table::borrow(&state.remote_chain_configs, remote_chain_selector);
+            state.remote_chain_configs.borrow(remote_chain_selector);
         remote_chain_config.remote_token_address
     }
 
@@ -305,25 +282,21 @@ module ccip_token_pool::token_pool {
         remote_pool_address: vector<u8>
     ) {
         assert!(
-            !vector::is_empty(&remote_pool_address),
+            !remote_pool_address.is_empty(),
             error::invalid_argument(E_ZERO_ADDRESS_NOT_ALLOWED)
         );
 
         assert!(
-            smart_table::contains(&state.remote_chain_configs, remote_chain_selector),
+            state.remote_chain_configs.contains(remote_chain_selector),
             error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
         );
         let remote_chain_config =
-            smart_table::borrow_mut(
-                &mut state.remote_chain_configs, remote_chain_selector
-            );
+            state.remote_chain_configs.borrow_mut(remote_chain_selector);
 
-        let (found, _) = vector::index_of(
-            &remote_chain_config.remote_pools, &remote_pool_address
-        );
+        let (found, _) = remote_chain_config.remote_pools.index_of(&remote_pool_address);
         assert!(!found, error::invalid_argument(E_REMOTE_POOL_ALREADY_ADDED));
 
-        vector::push_back(&mut remote_chain_config.remote_pools, remote_pool_address);
+        remote_chain_config.remote_pools.push_back(remote_pool_address);
 
         event::emit(RemotePoolAdded { remote_chain_selector, remote_pool_address });
         event::emit_event(
@@ -338,21 +311,17 @@ module ccip_token_pool::token_pool {
         remote_pool_address: vector<u8>
     ) {
         assert!(
-            smart_table::contains(&state.remote_chain_configs, remote_chain_selector),
+            state.remote_chain_configs.contains(remote_chain_selector),
             error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
         );
         let remote_chain_config =
-            smart_table::borrow_mut(
-                &mut state.remote_chain_configs, remote_chain_selector
-            );
+            state.remote_chain_configs.borrow_mut(remote_chain_selector);
 
-        let (found, i) = vector::index_of(
-            &remote_chain_config.remote_pools, &remote_pool_address
-        );
+        let (found, i) = remote_chain_config.remote_pools.index_of(&remote_pool_address);
         assert!(found, error::invalid_argument(E_UNKNOWN_REMOTE_POOL));
 
         // remove instead of swap_remove for readability, so the newest added pool is always at the end.
-        vector::remove(&mut remote_chain_config.remote_pools, i);
+        remote_chain_config.remote_pools.remove(i);
 
         event::emit(RemotePoolRemoved { remote_chain_selector, remote_pool_address });
         event::emit_event(
@@ -477,7 +446,7 @@ module ccip_token_pool::token_pool {
     public fun parse_remote_decimals(
         source_pool_data: vector<u8>, local_decimals: u8
     ): u8 {
-        let data_len = vector::length(&source_pool_data);
+        let data_len = source_pool_data.length();
         if (data_len == 0) {
             // Fallback to the local value.
             return local_decimals
@@ -521,14 +490,14 @@ module ccip_token_pool::token_pool {
             let decimals_diff = remote_decimals - local_decimals;
             let current_amount = remote_amount;
             for (i in 0..decimals_diff) {
-                current_amount = current_amount / 10;
+                current_amount /= 10;
             };
             return current_amount
         } else {
             let decimals_diff = local_decimals - remote_decimals;
             let current_amount = remote_amount;
             for (i in 0..decimals_diff) {
-                current_amount = current_amount * 10;
+                current_amount *= 10;
             };
             return current_amount
         }
@@ -583,7 +552,7 @@ module ccip_token_pool::token_pool {
         } = state;
 
         allowlist::destroy_allowlist(allowlist_state);
-        smart_table::destroy(remote_chain_configs);
+        remote_chain_configs.destroy();
         event::destroy_handle(locked_events);
         event::destroy_handle(released_events);
         event::destroy_handle(remote_pool_added_events);

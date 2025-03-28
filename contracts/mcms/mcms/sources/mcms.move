@@ -5,12 +5,10 @@ module mcms::mcms {
     use std::chain_id;
     use std::error;
     use std::event;
-    use std::option;
     use std::secp256k1;
     use std::simple_map::{SimpleMap, Self};
     use std::string::{Self, String};
     use std::timestamp;
-    use std::vector;
 
     use mcms::bcs_stream;
     use mcms::mcms_account;
@@ -227,7 +225,7 @@ module mcms::mcms {
         let signed_hash = compute_eth_message_hash(root, valid_until);
 
         assert!(
-            simple_map::contains_key(&mut state.seen_signed_hashes, &signed_hash) == false,
+            state.seen_signed_hashes.contains_key(&signed_hash) == false,
             error::invalid_argument(E_ALREADY_SEEN_HASH)
         );
 
@@ -267,9 +265,9 @@ module mcms::mcms {
         let prev_address = vector[];
         let group_vote_counts: vector<u8> = vector[];
         right_pad_vec(&mut group_vote_counts, NUM_GROUPS);
-        let signatures_len = vector::length(&signatures);
+        let signatures_len = signatures.length();
         for (i in 0..signatures_len) {
-            let signature = *vector::borrow(&signatures, i);
+            let signature = signatures[i];
             let signer_addr = ecdsa_recover_evm_addr(signed_hash, signature);
             // the off-chain system is required to sort the signatures by the
             // signer address in an increasing order
@@ -282,20 +280,18 @@ module mcms::mcms {
             prev_address = signer_addr;
 
             assert!(
-                simple_map::contains_key(&state.signers, &signer_addr),
+                state.signers.contains_key(&signer_addr),
                 error::invalid_argument(E_INVALID_SIGNER)
             );
-            let signer = *simple_map::borrow(&state.signers, &signer_addr);
+            let signer = *state.signers.borrow(&signer_addr);
 
             // check group quorums
             let group: u8 = signer.group;
             while (true) {
-                let group_vote_count = vector::borrow_mut(
-                    &mut group_vote_counts, (group as u64)
-                );
-                *group_vote_count = *group_vote_count + 1;
+                let group_vote_count = group_vote_counts.borrow_mut((group as u64));
+                *group_vote_count += 1;
 
-                let quorum = vector::borrow(&state.config.group_quorums, (group as u64));
+                let quorum = state.config.group_quorums.borrow((group as u64));
                 if (*group_vote_count != *quorum) {
                     // bail out unless we just hit the quorum. we only hit each quorum once,
                     // so we never move on to the parent of a group more than once.
@@ -308,23 +304,23 @@ module mcms::mcms {
                 };
 
                 // group quorum reached, restart loop and check parent group
-                group = *vector::borrow(&state.config.group_parents, (group as u64));
+                group = state.config.group_parents[(group as u64)];
             };
         };
 
         // the group at the root of the tree (with index 0) determines whether the vote passed,
         // we cannot proceed if it isn't configured with a valid (non-zero) quorum
-        let root_group_quorum = vector::borrow(&state.config.group_quorums, 0);
+        let root_group_quorum = state.config.group_quorums.borrow(0);
         assert!(*root_group_quorum != 0, error::invalid_argument(E_MISSING_CONFIG));
 
         // check root group reached quorum
-        let root_group_vote_count = vector::borrow(&group_vote_counts, 0);
+        let root_group_vote_count = group_vote_counts.borrow(0);
         assert!(
             *root_group_vote_count >= *root_group_quorum,
             error::invalid_argument(E_INSUFFICIENT_SIGNERS)
         );
 
-        simple_map::add(&mut state.seen_signed_hashes, signed_hash, true);
+        state.seen_signed_hashes.add(signed_hash, true);
         state.expiring_root_and_op_count = ExpiringRootAndOpCount {
             root,
             valid_until,
@@ -380,8 +376,7 @@ module mcms::mcms {
             error::invalid_argument(E_PROOF_CANNOT_BE_VERIFIED)
         );
 
-        state.expiring_root_and_op_count.op_count =
-            state.expiring_root_and_op_count.op_count + 1;
+        state.expiring_root_and_op_count.op_count += 1;
 
         dispatch(to, module_name, function, data);
 
@@ -396,8 +391,8 @@ module mcms::mcms {
         function_name: String,
         data: vector<u8>
     ) {
-        let module_name_bytes = *string::bytes(&module_name);
-        let function_name_bytes = *string::bytes(&function_name);
+        let module_name_bytes = *module_name.bytes();
+        let function_name_bytes = *function_name.bytes();
         if (receiver == @mcms) {
             if (module_name_bytes == b"mcms") {
                 // dispatch to the mcms module's functions for setting config.
@@ -582,20 +577,20 @@ module mcms::mcms {
         let state = borrow_state_mut();
 
         assert!(
-            vector::length(&signer_addresses) != 0
-                && vector::length(&signer_addresses) <= MAX_NUM_SIGNERS,
+            signer_addresses.length() != 0
+                && signer_addresses.length() <= MAX_NUM_SIGNERS,
             error::invalid_argument(E_INVALID_NUM_SIGNERS)
         );
         assert!(
-            vector::length(&signer_addresses) == vector::length(&signer_groups),
+            signer_addresses.length() == signer_groups.length(),
             error::invalid_argument(E_SIGNER_GROUPS_LEN_MISMATCH)
         );
         assert!(
-            vector::length(&group_quorums) == NUM_GROUPS,
+            group_quorums.length() == NUM_GROUPS,
             error::invalid_argument(E_INVALID_GROUP_QUORUM_LEN)
         );
         assert!(
-            vector::length(&group_parents) == NUM_GROUPS,
+            group_parents.length() == NUM_GROUPS,
             error::invalid_argument(E_INVALID_GROUP_PARENTS_LEN)
         );
 
@@ -604,17 +599,12 @@ module mcms::mcms {
         let group_children_counts = vector[];
         right_pad_vec(&mut group_children_counts, NUM_GROUPS);
         // first, we count the signers as children
-        vector::for_each_ref(
-            &signer_groups,
-            |group| {
-                let group: u64 = *group as u64;
-                assert!(
-                    group < NUM_GROUPS, error::invalid_argument(E_OUT_OF_BOUNDS_GROUP)
-                );
-                let count = vector::borrow_mut(&mut group_children_counts, group);
-                *count = *count + 1;
-            }
-        );
+        signer_groups.for_each_ref(|group| {
+            let group: u64 = *group as u64;
+            assert!(group < NUM_GROUPS, error::invalid_argument(E_OUT_OF_BOUNDS_GROUP));
+            let count = group_children_counts.borrow_mut(group);
+            *count += 1;
+        });
 
         // second, we iterate backwards so as to check each group and propagate counts from
         // child group to parent groups up the tree to the root
@@ -623,38 +613,35 @@ module mcms::mcms {
             // ensure we have a well-formed group tree:
             // - the root should have itself as parent
             // - all other groups should have a parent group with a lower index
-            let group_parent = vector::borrow(&group_parents, i);
+            let group_parent = group_parents[i] as u64;
             assert!(
-                i == 0 || (*group_parent as u64) < i,
+                i == 0 || group_parent < i,
                 error::invalid_argument(E_GROUP_TREE_NOT_WELL_FORMED)
             );
             assert!(
-                i != 0 || (*group_parent as u64) == 0,
+                i != 0 || group_parent == 0,
                 error::invalid_argument(E_GROUP_TREE_NOT_WELL_FORMED)
             );
 
-            let group_quorum = vector::borrow(&group_quorums, i);
-            let disabled = *group_quorum == 0;
-            let group_children_count = vector::borrow(&group_children_counts, i);
+            let group_quorum = group_quorums[i];
+            let disabled = group_quorum == 0;
+            let group_children_count = group_children_counts[i];
             if (disabled) {
                 // if group is disabled, ensure it has no children
                 assert!(
-                    *group_children_count == 0,
+                    group_children_count == 0,
                     error::invalid_argument(E_SIGNER_IN_DISABLED_GROUP)
                 );
             } else {
                 // if group is enabled, ensure group quorum can be met
-                let group_quorum = vector::borrow(&group_quorums, i);
                 assert!(
-                    *group_children_count >= *group_quorum,
+                    group_children_count >= group_quorum,
                     error::invalid_argument(E_OUT_OF_BOUNDS_GROUP_QUORUM)
                 );
 
                 // propagate children counts to parent group
-                let count = vector::borrow_mut(
-                    &mut group_children_counts, (*group_parent as u64)
-                );
-                *count = *count + 1;
+                let count = group_children_counts.borrow_mut(group_parent);
+                *count += 1;
             };
         };
 
@@ -669,27 +656,27 @@ module mcms::mcms {
         // check signer addresses are in increasing order and save signers to state
         // evm zero address (20 bytes of 0) is the smallest address possible
         let prev_signer_addr = vector[];
-        for (i in 0..vector::length(&signer_addresses)) {
-            let signer_addr = vector::borrow(&signer_addresses, i);
+        for (i in 0..signer_addresses.length()) {
+            let signer_addr = signer_addresses[i];
             assert!(
-                vector::length(signer_addr) == 20,
+                signer_addr.length() == 20,
                 error::invalid_argument(E_INVALID_SIGNER_ADDR_LEN)
             );
             if (i > 0) {
                 assert!(
-                    vector_u8_gt(signer_addr, &prev_signer_addr),
+                    vector_u8_gt(&signer_addr, &prev_signer_addr),
                     error::invalid_argument(E_SIGNER_ADDR_MUST_BE_INCREASING)
                 );
             };
 
             let signer = Signer {
-                addr: *signer_addr,
+                addr: signer_addr,
                 index: (i as u8),
-                group: *vector::borrow(&signer_groups, i)
+                group: signer_groups[i]
             };
-            simple_map::add(&mut state.signers, *signer_addr, signer);
-            vector::push_back(&mut state.config.signers, signer);
-            prev_signer_addr = *signer_addr;
+            state.signers.add(signer_addr, signer);
+            state.config.signers.push_back(signer);
+            prev_signer_addr = signer_addr;
         };
 
         if (clear_root) {
@@ -725,11 +712,11 @@ module mcms::mcms {
     ): vector<u8> {
         // ensure signature has correct length - (r,s,v) concatenated = 65 bytes
         assert!(
-            vector::length(&signature) == 65,
+            signature.length() == 65,
             error::invalid_argument(E_INVALID_SIGNATURE_LEN)
         );
         // extract v from signature
-        let v = vector::pop_back(&mut signature);
+        let v = signature.pop_back();
         // convert 64 byte signature into ECDSASignature struct
         let sig = secp256k1::ecdsa_signature_from_bytes(signature);
         // Aptos uses the rust libsecp256k1 parse() under the hood which has a different numbering scheme
@@ -744,14 +731,14 @@ module mcms::mcms {
         let public_key =
             aptos_std::secp256k1::ecdsa_recover(eth_signed_message_hash, v, &sig);
         assert!(
-            option::is_some(&public_key),
+            public_key.is_some(),
             error::invalid_argument(E_FAILED_ECDSA_RECOVER)
         );
 
         // return last 20 bytes of hashed public key as the recovered ethereum address
         let public_key_bytes =
-            secp256k1::ecdsa_raw_public_key_to_bytes(&option::extract(&mut public_key));
-        std::vector::trim((&mut keccak256(public_key_bytes)), 12) // trims publicKeyBytes to 12 bytes, returns trimmed last 20 bytes
+            secp256k1::ecdsa_raw_public_key_to_bytes(&public_key.extract());
+        (&mut keccak256(public_key_bytes)).trim(12) // trims publicKeyBytes to 12 bytes, returns trimmed last 20 bytes
     }
 
     inline fun compute_eth_message_hash(
@@ -759,9 +746,9 @@ module mcms::mcms {
     ): vector<u8> {
         // abi.encode(root (bytes32), valid_until)
         let valid_until_bytes = encode_uint(valid_until, 32);
-        assert!(vector::length(&root) == 32, error::invalid_argument(E_INVALID_ROOT_LEN)); // root should be 32 bytes
+        assert!(root.length() == 32, error::invalid_argument(E_INVALID_ROOT_LEN)); // root should be 32 bytes
         let abi_encoded_params = &mut root;
-        vector::append(abi_encoded_params, valid_until_bytes);
+        abi_encoded_params.append(valid_until_bytes);
 
         // keccak256(abi_encoded_params)
         let hashed_encoded_params = keccak256(*abi_encoded_params);
@@ -769,7 +756,7 @@ module mcms::mcms {
         // ECDSA.toEthSignedMessageHash()
         let eth_msg_prefix = b"\x19Ethereum Signed Message:\n32";
         let hash = &mut eth_msg_prefix;
-        vector::append(hash, hashed_encoded_params);
+        hash.append(hashed_encoded_params);
         keccak256(*hash)
     }
 
@@ -788,14 +775,12 @@ module mcms::mcms {
         left_pad_vec(&mut override_previous_root, 32);
 
         let hash_preimage: vector<u8> = vector[];
-        vector::append(
-            &mut hash_preimage, MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA
-        );
-        vector::append(&mut hash_preimage, chain_id);
-        vector::append(&mut hash_preimage, multisig);
-        vector::append(&mut hash_preimage, pre_op_count);
-        vector::append(&mut hash_preimage, post_op_count);
-        vector::append(&mut hash_preimage, override_previous_root);
+        hash_preimage.append(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA);
+        hash_preimage.append(chain_id);
+        hash_preimage.append(multisig);
+        hash_preimage.append(pre_op_count);
+        hash_preimage.append(post_op_count);
+        hash_preimage.append(override_previous_root);
         // since we are using this in a merkle tree/proof, hash_preimage should be greater than 64 bytes
         // to prevent collisions with internal nodes. the above operations already guarantee this so no need to check.
         keccak256(hash_preimage)
@@ -809,35 +794,35 @@ module mcms::mcms {
         let to = bcs::to_bytes(&op.to);
 
         assert!(
-            string::length(&op.module_name) <= 64,
+            op.module_name.length() <= 64,
             error::invalid_argument(E_MODULE_NAME_TOO_LONG)
         );
-        let module_name = *string::bytes(&op.module_name);
+        let module_name = *op.module_name.bytes();
         left_pad_vec(&mut module_name, 64);
 
         assert!(
-            string::length(&op.function) <= 64,
+            op.function.length() <= 64,
             error::invalid_argument(E_FUNCTION_NAME_TOO_LONG)
         );
-        let function = *string::bytes(&op.function);
+        let function = *op.function.bytes();
         left_pad_vec(&mut function, 64);
 
         let hash_preimage: vector<u8> = vector[];
-        vector::append(&mut hash_preimage, MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP);
-        vector::append(&mut hash_preimage, chain_id);
-        vector::append(&mut hash_preimage, multisig);
-        vector::append(&mut hash_preimage, nonce);
-        vector::append(&mut hash_preimage, to);
-        vector::append(&mut hash_preimage, module_name);
-        vector::append(&mut hash_preimage, function);
-        vector::append(&mut hash_preimage, op.data);
+        hash_preimage.append(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP);
+        hash_preimage.append(chain_id);
+        hash_preimage.append(multisig);
+        hash_preimage.append(nonce);
+        hash_preimage.append(to);
+        hash_preimage.append(module_name);
+        hash_preimage.append(function);
+        hash_preimage.append(op.data);
 
         // right pad op.data to multiple of 32 bytes
-        let pad_amount = 32 - (vector::length(&op.data) % 32);
+        let pad_amount = 32 - (op.data.length() % 32);
         right_pad_vec(&mut hash_preimage, pad_amount);
         while (pad_amount > 0) {
-            vector::push_back(&mut hash_preimage, 0);
-            pad_amount = pad_amount - 1;
+            hash_preimage.push_back(0);
+            pad_amount -= 1;
         };
 
         // since we are using this in a merkle tree/proof, hash_preimage should be greater than 64 bytes
@@ -851,8 +836,7 @@ module mcms::mcms {
         leaf: vector<u8>
     ): bool {
         let computed_hash = leaf;
-        vector::for_each_ref(
-            &proof,
+        proof.for_each_ref(
             |proof_element| {
                 let (left, right) =
                     if (vector_u8_gt(&computed_hash, proof_element)) {
@@ -861,7 +845,7 @@ module mcms::mcms {
                         (computed_hash, *proof_element)
                     };
                 let hash_input: vector<u8> = left;
-                vector::append(&mut hash_input, right);
+                hash_input.append(right);
                 computed_hash = keccak256(hash_input);
             }
         );
@@ -871,48 +855,46 @@ module mcms::mcms {
     inline fun encode_uint<T: drop>(input: T, num_bytes: u64): vector<u8> {
         let bcs_bytes = bcs::to_bytes(&input);
 
-        let len = vector::length(&bcs_bytes);
+        let len = bcs_bytes.length();
         if (len < num_bytes) {
             let bytes_to_pad = num_bytes - len;
             for (i in 0..bytes_to_pad) {
-                vector::push_back(&mut bcs_bytes, 0);
+                bcs_bytes.push_back(0);
             };
         };
 
         // little endian to big endian
-        vector::reverse(&mut bcs_bytes);
+        bcs_bytes.reverse();
 
         bcs_bytes
     }
 
     inline fun right_pad_vec(v: &mut vector<u8>, num_bytes: u64) {
-        let len = vector::length(v);
+        let len = v.length();
         if (len < num_bytes) {
             let bytes_to_pad = num_bytes - len;
             for (i in 0..bytes_to_pad) {
-                vector::push_back(v, 0);
+                v.push_back(0);
             };
         };
     }
 
     inline fun left_pad_vec(v: &mut vector<u8>, num_bytes: u64) {
-        let len = vector::length(v);
+        let len = v.length();
         if (len < num_bytes) {
             let bytes_to_pad = num_bytes - len;
-            vector::reverse(v);
+            v.reverse();
             for (i in 0..bytes_to_pad) {
-                vector::push_back(v, 0);
+                v.push_back(0);
             };
-            vector::reverse(v);
+            v.reverse();
         };
     }
 
     /// compares two vectors of equal length, returns true if a > b, false otherwise.
     fun vector_u8_gt(a: &vector<u8>, b: &vector<u8>): bool {
-        let len = vector::length(a);
-        assert!(
-            len == vector::length(b), error::invalid_argument(E_CMP_VECTORS_DIFF_LEN)
-        );
+        let len = a.length();
+        assert!(len == b.length(), error::invalid_argument(E_CMP_VECTORS_DIFF_LEN));
 
         if (len == 0) {
             return false
@@ -920,8 +902,8 @@ module mcms::mcms {
 
         // compare each byte until not equal
         for (i in 0..len) {
-            let byte_a = *vector::borrow(a, i);
-            let byte_b = *vector::borrow(b, i);
+            let byte_a = a[i];
+            let byte_b = b[i];
             if (byte_a > byte_b) {
                 return true
             } else if (byte_a < byte_b) {
@@ -2139,13 +2121,10 @@ module mcms::mcms {
             x"e0F4758dbD92E2499C95cb2c57bF605be032AF42"
         ];
         let prev_address = x"0000000000000000000000000000000000000001";
-        vector::for_each_ref(
-            &sorted_addresses,
-            |addr| {
-                assert!(vector_u8_gt(addr, &prev_address), 7);
-                prev_address = *addr;
-            }
-        );
+        sorted_addresses.for_each_ref(|addr| {
+            assert!(vector_u8_gt(addr, &prev_address), 7);
+            prev_address = *addr;
+        });
     }
 
     #[test]

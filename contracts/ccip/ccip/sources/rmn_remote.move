@@ -11,7 +11,6 @@ module ccip::rmn_remote {
     use std::signer;
     use std::string::{Self, String};
     use std::smart_table::{Self, SmartTable};
-    use std::vector;
 
     use ccip::auth;
     use ccip::eth_abi;
@@ -147,8 +146,7 @@ module ccip::rmn_remote {
         eth_abi::encode_address(&mut digest, report.rmn_remote_contract_address);
         eth_abi::encode_address(&mut digest, report.off_ramp_address);
         eth_abi::encode_bytes32(&mut digest, report.rmn_home_contract_config_digest);
-        vector::for_each_ref(
-            &report.merkle_roots,
+        report.merkle_roots.for_each_ref(
             |merkle_root| {
                 let merkle_root: &MerkleRoot = merkle_root;
                 eth_abi::encode_u64(&mut digest, merkle_root.source_chain_selector);
@@ -172,36 +170,34 @@ module ccip::rmn_remote {
 
         assert!(state.config_count > 0, error::invalid_argument(E_CONFIG_NOT_SET));
 
-        let signatures_len = vector::length(&signatures);
+        let signatures_len = signatures.length();
         assert!(
             signatures_len >= (state.config.f_sign + 1),
             error::invalid_argument(E_THRESHOLD_NOT_MET)
         );
 
-        let merkle_root_len = vector::length(&merkle_root_source_chain_selectors);
+        let merkle_root_len = merkle_root_source_chain_selectors.length();
         assert!(
-            merkle_root_len == vector::length(&merkle_root_min_seq_nrs),
+            merkle_root_len == merkle_root_min_seq_nrs.length(),
             error::invalid_argument(E_MERKLE_ROOT_LENGTH_MISMATCH)
         );
         assert!(
-            merkle_root_len == vector::length(&merkle_root_max_seq_nrs),
+            merkle_root_len == merkle_root_max_seq_nrs.length(),
             error::invalid_argument(E_MERKLE_ROOT_LENGTH_MISMATCH)
         );
         assert!(
-            merkle_root_len == vector::length(&merkle_root_values),
+            merkle_root_len == merkle_root_values.length(),
             error::invalid_argument(E_MERKLE_ROOT_LENGTH_MISMATCH)
         );
 
         // Since we cannot pass structs, we need to reconstruct it from the individual components.
         let merkle_roots = vector[];
         for (i in 0..merkle_root_len) {
-            let source_chain_selector =
-                *vector::borrow(&merkle_root_source_chain_selectors, i);
-            let min_seq_nr = *vector::borrow(&merkle_root_min_seq_nrs, i);
-            let max_seq_nr = *vector::borrow(&merkle_root_max_seq_nrs, i);
-            let merkle_root = *vector::borrow(&merkle_root_values, i);
-            vector::push_back(
-                &mut merkle_roots,
+            let source_chain_selector = merkle_root_source_chain_selectors[i];
+            let min_seq_nr = merkle_root_min_seq_nrs[i];
+            let max_seq_nr = merkle_root_max_seq_nrs[i];
+            let merkle_root = merkle_root_values[i];
+            merkle_roots.push_back(
                 MerkleRoot { source_chain_selector, min_seq_nr, max_seq_nr, merkle_root }
             );
         };
@@ -219,28 +215,24 @@ module ccip::rmn_remote {
 
         let previous_eth_address = vector[];
         for (i in 0..signatures_len) {
-            let signature_bytes = *vector::borrow(&signatures, i);
+            let signature_bytes = signatures[i];
             let signature = secp256k1::ecdsa_signature_from_bytes(signature_bytes);
 
             // rmn only generates signatures with v = 27, subtract the ethereum recover id offset of 27 to get zero.
             let v = 0;
             let maybe_public_key = secp256k1::ecdsa_recover(digest, v, &signature);
             assert!(
-                option::is_some(&maybe_public_key),
+                maybe_public_key.is_some(),
                 error::invalid_argument(E_INVALID_SIGNATURE)
             );
 
             let public_key_bytes =
-                secp256k1::ecdsa_raw_public_key_to_bytes(
-                    &option::extract(&mut maybe_public_key)
-                );
+                secp256k1::ecdsa_raw_public_key_to_bytes(&maybe_public_key.extract());
             // trim the first 12 bytes of the hash to recover the ethereum address.
-            let eth_address = vector::trim(
-                &mut aptos_hash::keccak256(public_key_bytes), 12
-            );
+            let eth_address = aptos_hash::keccak256(public_key_bytes).trim(12);
 
             assert!(
-                smart_table::contains(&state.signers, eth_address),
+                state.signers.contains(eth_address),
                 error::invalid_argument(E_UNEXPECTED_SIGNER)
             );
             if (i > 0) {
@@ -267,7 +259,7 @@ module ccip::rmn_remote {
         let state = borrow_state_mut();
 
         assert!(
-            vector::length(&rmn_home_contract_config_digest) == 32,
+            rmn_home_contract_config_digest.length() == 32,
             error::invalid_argument(E_INVALID_DIGEST_LENGTH)
         );
 
@@ -276,15 +268,15 @@ module ccip::rmn_remote {
             error::invalid_argument(E_ZERO_VALUE_NOT_ALLOWED)
         );
 
-        let signers_len = vector::length(&signer_onchain_public_keys);
+        let signers_len = signer_onchain_public_keys.length();
         assert!(
-            signers_len == vector::length(&node_indexes),
+            signers_len == node_indexes.length(),
             error::invalid_argument(E_SIGNERS_MISMATCH)
         );
 
         for (i in 1..signers_len) {
-            let previous_node_index = *vector::borrow(&node_indexes, i - 1);
-            let current_node_index = *vector::borrow(&node_indexes, i);
+            let previous_node_index = node_indexes[i - 1];
+            let current_node_index = node_indexes[i];
             assert!(
                 previous_node_index < current_node_index,
                 error::invalid_argument(E_INVALID_SIGNER_ORDER)
@@ -296,27 +288,27 @@ module ccip::rmn_remote {
             error::invalid_argument(E_NOT_ENOUGH_SIGNERS)
         );
 
-        smart_table::clear(&mut state.signers);
+        state.signers.clear();
 
-        let signers = vector::zip_map_ref(
-            &signer_onchain_public_keys,
-            &node_indexes,
-            |signer_public_key_bytes, node_indexes| {
-                let signer_public_key_bytes: vector<u8> = *signer_public_key_bytes;
-                let node_index: u64 = *node_indexes;
-                // expect an ethereum address of 20 bytes.
-                assert!(
-                    vector::length(&signer_public_key_bytes) == 20,
-                    error::invalid_argument(E_INVALID_PUBLIC_KEY_LENGTH)
-                );
-                assert!(
-                    !smart_table::contains(&state.signers, signer_public_key_bytes),
-                    error::invalid_argument(E_DUPLICATE_SIGNER)
-                );
-                smart_table::add(&mut state.signers, signer_public_key_bytes, true);
-                Signer { onchain_public_key: signer_public_key_bytes, node_index }
-            }
-        );
+        let signers =
+            signer_onchain_public_keys.zip_map_ref(
+                &node_indexes,
+                |signer_public_key_bytes, node_indexes| {
+                    let signer_public_key_bytes: vector<u8> = *signer_public_key_bytes;
+                    let node_index: u64 = *node_indexes;
+                    // expect an ethereum address of 20 bytes.
+                    assert!(
+                        signer_public_key_bytes.length() == 20,
+                        error::invalid_argument(E_INVALID_PUBLIC_KEY_LENGTH)
+                    );
+                    assert!(
+                        !state.signers.contains(signer_public_key_bytes),
+                        error::invalid_argument(E_DUPLICATE_SIGNER)
+                    );
+                    state.signers.add(signer_public_key_bytes, true);
+                    Signer { onchain_public_key: signer_public_key_bytes, node_index }
+                }
+            );
 
         let new_config = Config { rmn_home_contract_config_digest, signers, f_sign };
         state.config = new_config;
@@ -359,19 +351,18 @@ module ccip::rmn_remote {
 
         let state = borrow_state_mut();
 
-        vector::for_each_ref(
-            &subjects,
+        subjects.for_each_ref(
             |subject| {
                 let subject: vector<u8> = *subject;
                 assert!(
-                    vector::length(&subject) == 16,
+                    subject.length() == 16,
                     error::invalid_argument(E_INVALID_SUBJECT_LENGTH)
                 );
                 assert!(
-                    !smart_table::contains(&state.cursed_subjects, subject),
+                    !state.cursed_subjects.contains(subject),
                     error::invalid_argument(E_ALREADY_CURSED)
                 );
-                smart_table::add(&mut state.cursed_subjects, subject, true);
+                state.cursed_subjects.add(subject, true);
             }
         );
         event::emit(Cursed { subjects });
@@ -389,37 +380,33 @@ module ccip::rmn_remote {
 
         let state = borrow_state_mut();
 
-        vector::for_each_ref(
-            &subjects,
-            |subject| {
-                let subject: vector<u8> = *subject;
-                assert!(
-                    smart_table::contains(&state.cursed_subjects, subject),
-                    error::invalid_argument(E_NOT_CURSED)
-                );
-                smart_table::remove(&mut state.cursed_subjects, subject);
-            }
-        );
+        subjects.for_each_ref(|subject| {
+            let subject: vector<u8> = *subject;
+            assert!(
+                state.cursed_subjects.contains(subject),
+                error::invalid_argument(E_NOT_CURSED)
+            );
+            state.cursed_subjects.remove(subject);
+        });
         event::emit(Uncursed { subjects });
         event::emit_event(&mut state.uncursed_events, Uncursed { subjects });
     }
 
     public fun get_cursed_subjects(): vector<vector<u8>> acquires RMNRemoteState {
-        smart_table::keys(&borrow_state().cursed_subjects)
+        borrow_state().cursed_subjects.keys()
     }
 
     public fun is_cursed_global(): bool acquires RMNRemoteState {
-        smart_table::contains(&borrow_state().cursed_subjects, GLOBAL_CURSE_SUBJECT)
+        borrow_state().cursed_subjects.contains(GLOBAL_CURSE_SUBJECT)
     }
 
     public fun is_cursed(subject: vector<u8>): bool acquires RMNRemoteState {
-        smart_table::contains(&borrow_state().cursed_subjects, subject)
-            || is_cursed_global()
+        borrow_state().cursed_subjects.contains(subject) || is_cursed_global()
     }
 
     public fun is_cursed_u128(subject_value: u128): bool acquires RMNRemoteState {
         let subject = bcs::to_bytes(&subject_value);
-        vector::reverse(&mut subject);
+        subject.reverse();
         is_cursed(subject)
     }
 

@@ -1,6 +1,5 @@
 module ccip::internal {
     use std::error;
-    use std::vector;
 
     friend ccip::fee_quoter;
     friend ccip::onramp;
@@ -32,22 +31,21 @@ module ccip::internal {
         fee_token_store: address,
         extra_args: vector<u8>
     ): Aptos2AnyMessage {
-        let tokens_len = vector::length(&token_addresses);
+        let tokens_len = token_addresses.length();
         assert!(
-            tokens_len == vector::length(&token_amounts),
+            tokens_len == token_amounts.length(),
             error::invalid_argument(E_TOKEN_ARGUMENTS_MISMATCH)
         );
         assert!(
-            tokens_len == vector::length(&token_store_addresses),
+            tokens_len == token_store_addresses.length(),
             error::invalid_argument(E_TOKEN_ARGUMENTS_MISMATCH)
         );
         let converted_token_amounts = vector[];
         for (i in 0..tokens_len) {
-            let token = *vector::borrow(&token_addresses, i);
-            let amount = *vector::borrow(&token_amounts, i);
-            let token_store = *vector::borrow(&token_store_addresses, i);
-            vector::push_back(
-                &mut converted_token_amounts,
+            let token = token_addresses[i];
+            let amount = token_amounts[i];
+            let token_store = token_store_addresses[i];
+            converted_token_amounts.push_back(
                 Aptos2AnyTokenAmount { token, amount, token_store }
             );
         };
@@ -79,14 +77,11 @@ module ccip::internal {
     ): (vector<address>, vector<u64>) {
         let token_addresses = vector[];
         let token_amounts = vector[];
-        vector::for_each_ref(
-            &message.token_amounts,
-            |token_amount| {
-                let token_amount: &Aptos2AnyTokenAmount = token_amount;
-                vector::push_back(&mut token_addresses, token_amount.token);
-                vector::push_back(&mut token_amounts, token_amount.amount);
-            }
-        );
+        message.token_amounts.for_each_ref(|token_amount| {
+            let token_amount: &Aptos2AnyTokenAmount = token_amount;
+            token_addresses.push_back(token_amount.token);
+            token_amounts.push_back(token_amount.amount);
+        });
         (token_addresses, token_amounts)
     }
 }
