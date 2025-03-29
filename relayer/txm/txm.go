@@ -19,9 +19,9 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
-	"github.com/smartcontractkit/chainlink-common/pkg/utils"
+	commonutils "github.com/smartcontractkit/chainlink-common/pkg/utils"
 
-	aptosacc "github.com/smartcontractkit/chainlink-aptos/relayer/account"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
 var _ services.Service = &AptosTxm{}
@@ -37,7 +37,7 @@ type AptosTxm struct {
 
 	broadcastChan chan string
 	accountStore  *AccountStore
-	starter       utils.StartStopOnce
+	starter       commonutils.StartStopOnce
 	done          sync.WaitGroup
 	stop          chan struct{}
 
@@ -109,7 +109,7 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 
 	ctxLogger := GetContexedTxLogger(a.baseLogger, transactionID, txMetadata)
 
-	ed25519PublicKey, err := aptosacc.HexPublicKeyToEd25519PublicKey(publicKey)
+	ed25519PublicKey, err := utils.HexPublicKeyToEd25519PublicKey(publicKey)
 	if err != nil {
 		return fmt.Errorf("failed to convert public key: %+w", err)
 	}
@@ -117,7 +117,7 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 	if fromAddress == "" {
 		// If the address is not specified, we assume the public key is for its corresponding address
 		// and not for an address with a rotated authentication key.
-		acc := aptosacc.Ed25519PublicKeyToAccount(ed25519PublicKey)
+		acc := utils.Ed25519PublicKeyToAddress(ed25519PublicKey)
 		fromAddress = acc.String()
 	}
 
@@ -234,7 +234,7 @@ func (a *AptosTxm) GetStatus(transactionID string) (commontypes.TransactionStatu
 func (a *AptosTxm) broadcastLoop() {
 	defer a.done.Done()
 
-	_, cancel := utils.ContextFromChan(a.stop)
+	_, cancel := commonutils.ContextFromChan(a.stop)
 	defer cancel()
 
 	a.baseLogger.Debugw("broadcastLoop: started")
@@ -489,7 +489,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 func (a *AptosTxm) confirmLoop() {
 	defer a.done.Done()
 
-	_, cancel := utils.ContextFromChan(a.stop)
+	_, cancel := commonutils.ContextFromChan(a.stop)
 	defer cancel()
 
 	pollDuration := time.Duration(a.config.ConfirmPollSecs) * time.Second
@@ -507,7 +507,7 @@ func (a *AptosTxm) confirmLoop() {
 			remaining := pollDuration - time.Since(start)
 			if remaining > 0 {
 				// reset tick for the remaining time
-				tick = time.After(utils.WithJitter(remaining))
+				tick = time.After(commonutils.WithJitter(remaining))
 			} else {
 				// reset tick to fire immediately
 				tick = time.After(0)

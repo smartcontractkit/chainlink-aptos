@@ -1,10 +1,10 @@
-package aptos
+package utils
 
 import (
 	"testing"
 )
 
-func TestHexAddrToAccountAddressCanonicalRepresentation(t *testing.T) {
+func TestHexAddressToAddressCanonicalRepresentation(t *testing.T) {
 	tests := []struct {
 		input          string
 		expectedOutput string
@@ -37,7 +37,7 @@ func TestHexAddrToAccountAddressCanonicalRepresentation(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		output, err := HexAddrToAccountAddress(test.input)
+		output, err := HexAddressToAddress(test.input)
 		if test.expectError {
 			if err == nil {
 				t.Errorf("expected error for input %s, but got none", test.input)
