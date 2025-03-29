@@ -1,7 +1,8 @@
 package chainreader
 
 type ChainReaderConfig struct {
-	Modules map[string]*ChainReaderModule
+	IsLoopPlugin bool
+	Modules      map[string]*ChainReaderModule
 }
 
 type ChainReaderModule struct {
