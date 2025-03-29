@@ -252,6 +252,11 @@ module ccip::rmn_remote {
         true
     }
 
+    #[view]
+    public fun get_arm(): address {
+        @ccip
+    }
+
     public entry fun set_config(
         caller: &signer,
         rmn_home_contract_config_digest: vector<u8>,
@@ -397,18 +402,22 @@ module ccip::rmn_remote {
         event::emit_event(&mut state.uncursed_events, Uncursed { subjects });
     }
 
+    #[view]
     public fun get_cursed_subjects(): vector<vector<u8>> acquires RMNRemoteState {
         borrow_state().cursed_subjects.keys()
     }
 
+    #[view]
     public fun is_cursed_global(): bool acquires RMNRemoteState {
         borrow_state().cursed_subjects.contains(GLOBAL_CURSE_SUBJECT)
     }
 
+    #[view]
     public fun is_cursed(subject: vector<u8>): bool acquires RMNRemoteState {
         borrow_state().cursed_subjects.contains(subject) || is_cursed_global()
     }
 
+    #[view]
     public fun is_cursed_u128(subject_value: u128): bool acquires RMNRemoteState {
         let subject = bcs::to_bytes(&subject_value);
         subject.reverse();

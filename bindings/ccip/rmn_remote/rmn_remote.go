@@ -24,9 +24,14 @@ var (
 type RMNRemote interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error)
+	GetArm(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	GetVersionedConfig(opts *bind.CallOpts) (VersionedConfig, error)
 	GetLocalChainSelector(opts *bind.CallOpts) (uint64, error)
 	GetReportDigestHeader(opts *bind.CallOpts) ([]byte, error)
+	GetCursedSubjects(opts *bind.CallOpts) ([][]byte, error)
+	IsCursedGlobal(opts *bind.CallOpts) (bool, error)
+	IsCursed(opts *bind.CallOpts, subject []byte) (bool, error)
+	IsCursedU128(opts *bind.CallOpts, subjectValue *big.Int) (bool, error)
 
 	Initialize(opts *bind.TransactOpts, localChainSelector uint64) (*api.PendingTransaction, error)
 	SetConfig(opts *bind.TransactOpts, rmnHomeContractConfigDigest []byte, signerOnchainPublicKeys [][]byte, nodeIndexes []uint64, fSign uint64) (*api.PendingTransaction, error)
@@ -42,22 +47,23 @@ type RMNRemote interface {
 type RMNRemoteEncoder interface {
 	TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Verify(merkleRootSourceChainSelectors []uint64, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetArm() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetVersionedConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetLocalChainSelector() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetReportDigestHeader() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetCursedSubjects() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	IsCursedGlobal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	IsCursed(subject []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	IsCursedU128(subjectValue *big.Int) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Initialize(localChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	SetConfig(rmnHomeContractConfigDigest []byte, signerOnchainPublicKeys [][]byte, nodeIndexes []uint64, fSign uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Curse(subject []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CurseMultiple(subjects [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Uncurse(subject []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	UncurseMultiple(subjects [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	GetCursedSubjects() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	IsCursedGlobal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	IsCursed(subject []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	IsCursedU128(subjectValue *big.Int) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"rmn_remote","name":"curse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"curse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"get_cursed_subjects","parameters":null},{"package":"ccip","module":"rmn_remote","name":"initialize","parameters":[{"name":"local_chain_selector","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"is_cursed","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"is_cursed_global","parameters":null},{"package":"ccip","module":"rmn_remote","name":"is_cursed_u128","parameters":[{"name":"subject_value","type":"u128"}]},{"package":"ccip","module":"rmn_remote","name":"set_config","parameters":[{"name":"rmn_home_contract_config_digest","type":"vector\u003cu8\u003e"},{"name":"signer_onchain_public_keys","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"node_indexes","type":"vector\u003cu64\u003e"},{"name":"f_sign","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]}]`
+const FunctionInfo = `[{"package":"ccip","module":"rmn_remote","name":"curse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"curse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"initialize","parameters":[{"name":"local_chain_selector","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"set_config","parameters":[{"name":"rmn_home_contract_config_digest","type":"vector\u003cu8\u003e"},{"name":"signer_onchain_public_keys","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"node_indexes","type":"vector\u003cu64\u003e"},{"name":"f_sign","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]}]`
 
 func NewRMNRemote(address aptos.AccountAddress, client aptos.AptosRpcClient) RMNRemote {
 	contract := bind.NewBoundContract(address, "ccip", "rmn_remote", client)
@@ -178,6 +184,27 @@ func (c RMNRemoteContract) Verify(opts *bind.CallOpts, merkleRootSourceChainSele
 	return r0, nil
 }
 
+func (c RMNRemoteContract) GetArm(opts *bind.CallOpts) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.rmnRemoteEncoder.GetArm()
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	var (
+		r0 aptos.AccountAddress
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+	return r0, nil
+}
+
 func (c RMNRemoteContract) GetVersionedConfig(opts *bind.CallOpts) (VersionedConfig, error) {
 	module, function, typeTags, args, err := c.rmnRemoteEncoder.GetVersionedConfig()
 	if err != nil {
@@ -237,6 +264,90 @@ func (c RMNRemoteContract) GetReportDigestHeader(opts *bind.CallOpts) ([]byte, e
 
 	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
 		return *new([]byte), err
+	}
+	return r0, nil
+}
+
+func (c RMNRemoteContract) GetCursedSubjects(opts *bind.CallOpts) ([][]byte, error) {
+	module, function, typeTags, args, err := c.rmnRemoteEncoder.GetCursedSubjects()
+	if err != nil {
+		return *new([][]byte), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new([][]byte), err
+	}
+
+	var (
+		r0 [][]byte
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new([][]byte), err
+	}
+	return r0, nil
+}
+
+func (c RMNRemoteContract) IsCursedGlobal(opts *bind.CallOpts) (bool, error) {
+	module, function, typeTags, args, err := c.rmnRemoteEncoder.IsCursedGlobal()
+	if err != nil {
+		return *new(bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	var (
+		r0 bool
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(bool), err
+	}
+	return r0, nil
+}
+
+func (c RMNRemoteContract) IsCursed(opts *bind.CallOpts, subject []byte) (bool, error) {
+	module, function, typeTags, args, err := c.rmnRemoteEncoder.IsCursed(subject)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	var (
+		r0 bool
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(bool), err
+	}
+	return r0, nil
+}
+
+func (c RMNRemoteContract) IsCursedU128(opts *bind.CallOpts, subjectValue *big.Int) (bool, error) {
+	module, function, typeTags, args, err := c.rmnRemoteEncoder.IsCursedU128(subjectValue)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	var (
+		r0 bool
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(bool), err
 	}
 	return r0, nil
 }
@@ -322,6 +433,10 @@ func (c rmnRemoteEncoder) Verify(merkleRootSourceChainSelectors []uint64, merkle
 	})
 }
 
+func (c rmnRemoteEncoder) GetArm() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_arm", nil, []string{}, []any{})
+}
+
 func (c rmnRemoteEncoder) GetVersionedConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("get_versioned_config", nil, []string{}, []any{})
 }
@@ -332,6 +447,30 @@ func (c rmnRemoteEncoder) GetLocalChainSelector() (bind.ModuleInformation, strin
 
 func (c rmnRemoteEncoder) GetReportDigestHeader() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("get_report_digest_header", nil, []string{}, []any{})
+}
+
+func (c rmnRemoteEncoder) GetCursedSubjects() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_cursed_subjects", nil, []string{}, []any{})
+}
+
+func (c rmnRemoteEncoder) IsCursedGlobal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("is_cursed_global", nil, []string{}, []any{})
+}
+
+func (c rmnRemoteEncoder) IsCursed(subject []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("is_cursed", nil, []string{
+		"vector<u8>",
+	}, []any{
+		subject,
+	})
+}
+
+func (c rmnRemoteEncoder) IsCursedU128(subjectValue *big.Int) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("is_cursed_u128", nil, []string{
+		"u128",
+	}, []any{
+		subjectValue,
+	})
 }
 
 func (c rmnRemoteEncoder) Initialize(localChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
@@ -385,29 +524,5 @@ func (c rmnRemoteEncoder) UncurseMultiple(subjects [][]byte) (bind.ModuleInforma
 		"vector<vector<u8>>",
 	}, []any{
 		subjects,
-	})
-}
-
-func (c rmnRemoteEncoder) GetCursedSubjects() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("get_cursed_subjects", nil, []string{}, []any{})
-}
-
-func (c rmnRemoteEncoder) IsCursedGlobal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("is_cursed_global", nil, []string{}, []any{})
-}
-
-func (c rmnRemoteEncoder) IsCursed(subject []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("is_cursed", nil, []string{
-		"vector<u8>",
-	}, []any{
-		subject,
-	})
-}
-
-func (c rmnRemoteEncoder) IsCursedU128(subjectValue *big.Int) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("is_cursed_u128", nil, []string{
-		"u128",
-	}, []any{
-		subjectValue,
 	})
 }
