@@ -27,7 +27,8 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 	t.Run("Uneven Hex String to []byte", func(t *testing.T) {
 		var result []byte
 		err := DecodeAptosJsonValue("0x1234567", &result)
-		assert.Error(t, err)
+		assert.NoError(t, err)
+		assert.Equal(t, []byte{0x01, 0x23, 0x45, 0x67}, result)
 	})
 
 	t.Run("Hex String to *big.Int", func(t *testing.T) {
