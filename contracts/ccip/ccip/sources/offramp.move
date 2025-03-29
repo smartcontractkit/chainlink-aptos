@@ -501,9 +501,11 @@ module ccip::offramp {
         let state = borrow_state_mut();
         let commit_report = deserialize_commit_report(report);
 
-        verify_blessed_roots(
-            &commit_report.blessed_merkle_roots, commit_report.rmn_signatures
-        );
+        if (commit_report.blessed_merkle_roots.length() > 0) {
+            verify_blessed_roots(
+                &commit_report.blessed_merkle_roots, commit_report.rmn_signatures
+            );
+        };
 
         if (commit_report.price_updates.token_price_updates.length() > 0
             || commit_report.price_updates.gas_price_updates.length() > 0) {
