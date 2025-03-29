@@ -122,8 +122,8 @@ type TokenTransferFeeConfig struct {
 }
 
 type TimestampedPrice struct {
-	Price         *big.Int `move:"u256"`
-	TimestampSecs uint64   `move:"u64"`
+	Value     *big.Int `move:"u256"`
+	Timestamp uint64   `move:"u64"`
 }
 
 type FeeTokenAdded struct {
