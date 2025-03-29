@@ -94,6 +94,10 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		return fmt.Errorf("no such contract: %s", contractName)
 	}
 
+	if moduleConfig.Functions == nil {
+		return fmt.Errorf("no functions for contract: %s", contractName)
+	}
+
 	functionConfig, ok := moduleConfig.Functions[method]
 	if !ok {
 		return fmt.Errorf("no such method: %s", method)
@@ -289,6 +293,10 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	moduleConfig, ok := a.config.Modules[contractName]
 	if !ok {
 		return nil, fmt.Errorf("no such module: %s", contractName)
+	}
+
+	if moduleConfig.Events == nil {
+		return nil, fmt.Errorf("no events for contract: %s", contractName)
 	}
 
 	eventConfig, ok := moduleConfig.Events[eventKey]
