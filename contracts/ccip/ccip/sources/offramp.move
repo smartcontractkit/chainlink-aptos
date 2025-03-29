@@ -999,7 +999,7 @@ module ccip::offramp {
                 &mut stream,
                 |stream| {
                     TokenPriceUpdate {
-                        source_token: eth_abi::decode_address(stream),
+                        source_token: eth_abi::decode_aptos_address(stream),
                         usd_per_token: eth_abi::decode_u256(stream)
                     }
                 }
@@ -1091,7 +1091,7 @@ module ccip::offramp {
 
         let sender = eth_abi::decode_bytes(&mut stream);
         let data = eth_abi::decode_bytes(&mut stream);
-        let receiver = eth_abi::decode_address(&mut stream);
+        let receiver = eth_abi::decode_aptos_address(&mut stream);
         let gas_limit = eth_abi::decode_u256(&mut stream);
 
         let token_amounts =
@@ -1099,7 +1099,7 @@ module ccip::offramp {
                 &mut stream,
                 |stream| {
                     let source_pool_address = eth_abi::decode_bytes(stream);
-                    let dest_token_address = eth_abi::decode_address(stream);
+                    let dest_token_address = eth_abi::decode_aptos_address(stream);
                     let dest_gas_amount = eth_abi::decode_u32(stream);
                     let extra_data = eth_abi::decode_bytes(stream);
                     let amount = eth_abi::decode_u256(stream);
