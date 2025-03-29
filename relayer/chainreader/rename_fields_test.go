@@ -83,7 +83,7 @@ func TestRenameFields(t *testing.T) {
 			// an error should be returned because field "a" is not a map
 			expected: nil,
 			wantErr:  true,
-			errMsg:   "sub field renames failed for field a: sub field renames provided but value is not a map or slice of maps",
+			errMsg:   "sub field renames failed for field a: sub field renames provided but value is not a map or slice of maps: string",
 		},
 		{
 			name: "nested subfield non-map error",
@@ -106,7 +106,7 @@ func TestRenameFields(t *testing.T) {
 			// here the renaming for field "x" should cause an error because 100 is not a map.
 			expected: nil,
 			wantErr:  true,
-			errMsg:   "sub field renames failed for field a: sub field renames failed for field x: sub field renames provided but value is not a map or slice of maps",
+			errMsg:   "sub field renames failed for field a: sub field renames failed for field x: sub field renames provided but value is not a map or slice of maps: int",
 		},
 		{
 			name: "array of structs rename",
@@ -217,7 +217,7 @@ func TestRenameFields(t *testing.T) {
 			},
 			expected: nil,
 			wantErr:  true,
-			errMsg:   "sub field renames failed for field items: sub field renames provided but array element at index 0 is not a map",
+			errMsg:   "sub field renames failed for field items: sub field renames provided but array element at index 0 is not a map: int",
 		},
 		{
 			name: "mixed array elements",
@@ -237,7 +237,7 @@ func TestRenameFields(t *testing.T) {
 			},
 			expected: nil,
 			wantErr:  true,
-			errMsg:   "sub field renames failed for field items: sub field renames provided but array element at index 1 is not a map",
+			errMsg:   "sub field renames failed for field items: sub field renames provided but array element at index 1 is not a map: string",
 		},
 	}
 
