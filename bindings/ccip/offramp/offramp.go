@@ -166,11 +166,8 @@ type DynamicConfigSet struct {
 }
 
 type SourceChainConfigSet struct {
-	SourceChainSelector       uint64 `move:"u64"`
-	IsEnabled                 bool   `move:"bool"`
-	MinSeqNr                  uint64 `move:"u64"`
-	IsRMNVerificationDisabled bool   `move:"bool"`
-	OnRamp                    []byte `move:"vector<u8>"`
+	SourceChainSelector uint64            `move:"u64"`
+	SourceChainConfig   SourceChainConfig `move:"SourceChainConfig"`
 }
 
 type SkippedAlreadyExecuted struct {
