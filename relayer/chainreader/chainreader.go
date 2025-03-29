@@ -438,21 +438,36 @@ func maybeRenameFields(jsonValue any, renames map[string]RenamedField) error {
 		if err := renameMapFields(jsonMap, renames); err != nil {
 			return err
 		}
-	} else if jsonSlice, ok := jsonValue.([]any); ok {
+	} else if jsonSlice, ok := unwrapSlice(jsonValue); ok {
 		for i, elem := range jsonSlice {
 			if elemMap, ok := elem.(map[string]any); ok {
 				if err := renameMapFields(elemMap, renames); err != nil {
 					return err
 				}
 			} else {
-				return fmt.Errorf("sub field renames provided but array element at index %d is not a map", i)
+				return fmt.Errorf("sub field renames provided but array element at index %d is not a map: %T", i, elem)
 			}
 		}
 	} else {
-		return fmt.Errorf("sub field renames provided but value is not a map or slice of maps")
+		return fmt.Errorf("sub field renames provided but value is not a map or slice of maps: %T", jsonValue)
 	}
 
 	return nil
+}
+
+func unwrapSlice(value any) ([]any, bool) {
+	sliceValue, ok := value.([]any)
+	if !ok {
+		return nil, false
+	}
+	for len(sliceValue) == 1 {
+		innerSliceValue, ok := sliceValue[0].([]any)
+		if !ok {
+			break
+		}
+		sliceValue = innerSliceValue
+	}
+	return sliceValue, true
 }
 
 func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContract) error {
