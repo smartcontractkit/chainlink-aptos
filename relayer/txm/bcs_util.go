@@ -1,6 +1,7 @@
 package txm
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -106,6 +107,11 @@ func CreateBcsValue(typeTag aptos.TypeTag, typeValue any) ([]byte, error) {
 // copied from https://github.com/coming-chat/go-aptos-sdk/blob/c2468230eadcf531e6aaadf961ea1e7c13ab0693/transaction_builder/builder_util.go#L222
 // we don't use it directly because this is only called from TransactionBuilderABI.BuildTransactionPayload, which requires supplying the ABI first.
 func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer) error {
+	// support json.Number as arguments are passed as JSON when we are a LOOP plugin
+	if v, ok := argVal.(json.Number); ok {
+		argVal = v.String()
+	}
+
 	switch argType.Value.GetType() {
 	case aptos.TypeTagBool:
 		if v, ok := argVal.(bool); ok {
@@ -115,6 +121,18 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 		if v, ok := argVal.(uint64); ok && (v == uint64(0) || v == uint64(1)) {
 			serializer.Bool(v == uint64(1))
 			return nil
+		}
+
+		if v, ok := argVal.(string); ok {
+			if v == "1" || v == "true" {
+				serializer.Bool(true)
+				return nil
+			}
+			if v == "0" || v == "false" {
+				serializer.Bool(false)
+				return nil
+			}
+			return fmt.Errorf("invalid bool value: %s", v)
 		}
 	case aptos.TypeTagU8:
 		if v, ok := argVal.(uint8); ok {
