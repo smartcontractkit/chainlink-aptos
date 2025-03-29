@@ -79,12 +79,37 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 
 	str = strings.TrimPrefix(str, "0x")
 
+	// Handle single-field struct case first by recursing via DecodeAptosJsonValue
+	if t.Kind() == reflect.Struct && t.NumField() == 1 {
+		field := t.Field(0)
+		// Create a new zero value struct
+		newStructVal := reflect.New(t).Elem()
+		// Get a pointer to the field within the new struct
+		fieldPtr := newStructVal.Field(0).Addr().Interface()
+
+		// Recursively decode the original hex string data into the field pointer
+		// DecodeAptosJsonValue will apply the appropriate hooks (including this one)
+		// for the field's type.
+		if err := DecodeAptosJsonValue(data, fieldPtr); err != nil {
+			return nil, fmt.Errorf("failed decoding hex string for single-field struct %v field %s (%v): %w", t, field.Name, field.Type, err)
+		}
+		// Return the populated struct instance
+		return newStructVal.Interface(), nil
+	}
+
 	switch t.Kind() {
 	case reflect.String:
 		return data, nil
 	case reflect.Slice:
 		if t.Elem().Kind() != reflect.Uint8 {
 			return nil, fmt.Errorf("unsupported target slice element type for hex string conversion: %v", t.Elem().Kind())
+		}
+		if str == "" {
+			// hex.DecodeString returns an error if the string is empty
+			return []uint8{}, nil
+		} else if len(str)%2 == 1 {
+			// hex.DecodeString does not support odd length strings
+			str = "0" + str
 		}
 		return hex.DecodeString(str)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
@@ -167,6 +192,18 @@ func numericStringHook(f reflect.Type, t reflect.Type, data interface{}) (interf
 		return data, nil
 	}
 
+	if t.Kind() == reflect.Struct && t.NumField() == 1 {
+		field := t.Field(0)
+		newStructVal := reflect.New(t).Elem()
+		fieldPtr := newStructVal.Field(0).Addr().Interface()
+
+		// Decode the original numeric string data into the field pointer
+		if err := DecodeAptosJsonValue(data, fieldPtr); err != nil {
+			return nil, fmt.Errorf("failed decoding numeric string for single-field struct %v field %s (%v): %w", t, field.Name, field.Type, err)
+		}
+		return newStructVal.Interface(), nil
+	}
+
 	switch t.Kind() {
 	case reflect.String:
 		return data, nil
@@ -219,7 +256,21 @@ func booleanHook(f reflect.Type, t reflect.Type, data interface{}) (interface{},
 
 	boolValue, ok := data.(bool)
 	if !ok {
+		// This should technically not happen if f.Kind() == reflect.Bool
 		return data, nil
+	}
+
+	// Handle single-field struct case first by recursing via DecodeAptosJsonValue
+	if t.Kind() == reflect.Struct && t.NumField() == 1 {
+		field := t.Field(0)
+		newStructVal := reflect.New(t).Elem()
+		fieldPtr := newStructVal.Field(0).Addr().Interface()
+
+		// Decode the original boolean data into the field pointer
+		if err := DecodeAptosJsonValue(data, fieldPtr); err != nil {
+			return nil, fmt.Errorf("failed decoding boolean for single-field struct %v field %s (%v): %w", t, field.Name, field.Type, err)
+		}
+		return newStructVal.Interface(), nil
 	}
 
 	switch t.Kind() {
@@ -248,6 +299,18 @@ func arrayHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, e
 	fKind := f.Kind()
 	if fKind != reflect.Slice && fKind != reflect.Array {
 		return data, nil
+	}
+
+	if t.Kind() == reflect.Struct && t.NumField() == 1 {
+		field := t.Field(0)
+		newStructVal := reflect.New(t).Elem()
+		fieldPtr := newStructVal.Field(0).Addr().Interface()
+
+		// Decode the original boolean data into the field pointer
+		if err := DecodeAptosJsonValue(data, fieldPtr); err != nil {
+			return nil, fmt.Errorf("failed decoding boolean for single-field struct %v field %s (%v): %w", t, field.Name, field.Type, err)
+		}
+		return newStructVal.Interface(), nil
 	}
 
 	if t.Kind() != reflect.Slice {
