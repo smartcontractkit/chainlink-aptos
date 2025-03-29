@@ -81,10 +81,11 @@ type OffRampState struct {
 }
 
 type SourceChainConfig struct {
-	IsEnabled                 bool   `move:"bool"`
-	MinSeqNr                  uint64 `move:"u64"`
-	IsRMNVerificationDisabled bool   `move:"bool"`
-	OnRamp                    []byte `move:"vector<u8>"`
+	Router                    aptos.AccountAddress `move:"address"`
+	IsEnabled                 bool                 `move:"bool"`
+	MinSeqNr                  uint64               `move:"u64"`
+	IsRMNVerificationDisabled bool                 `move:"bool"`
+	OnRamp                    []byte               `move:"vector<u8>"`
 }
 
 type RampMessageHeader struct {
@@ -150,19 +151,23 @@ type MerkleRoot struct {
 }
 
 type StaticConfig struct {
-	ChainSelector uint64 `move:"u64"`
+	ChainSelector      uint64               `move:"u64"`
+	RMNRemote          aptos.AccountAddress `move:"address"`
+	TokenAdminRegistry aptos.AccountAddress `move:"address"`
+	NonceManager       aptos.AccountAddress `move:"address"`
 }
 
 type DynamicConfig struct {
-	PermissionlessExecutionThresholdSeconds uint32 `move:"u32"`
+	FeeQuoter                               aptos.AccountAddress `move:"address"`
+	PermissionlessExecutionThresholdSeconds uint32               `move:"u32"`
 }
 
 type StaticConfigSet struct {
-	ChainSelector uint64 `move:"u64"`
+	StaticConfig StaticConfig `move:"StaticConfig"`
 }
 
 type DynamicConfigSet struct {
-	PermissionlessExecutionThresholdSeconds uint32 `move:"u32"`
+	DynamicConfig DynamicConfig `move:"DynamicConfig"`
 }
 
 type SourceChainConfigSet struct {
