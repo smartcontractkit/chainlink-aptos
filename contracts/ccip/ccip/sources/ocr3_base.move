@@ -3,10 +3,11 @@ module ccip::ocr3_base {
     use std::aptos_hash;
     use std::bit_vector;
     use std::chain_id;
-    use std::secp256k1;
+    use std::ed25519;
     use std::error;
     use std::event::{Self, EventHandle};
     use std::table::{Self, Table};
+    use std::vector;
 
     use ccip::auth;
 
@@ -38,7 +39,7 @@ module ccip::ocr3_base {
         // ocr plugin type -> ocr config
         ocr3_configs: Table<u8, OCRConfig>,
         // ocr plugin type -> signers
-        signer_oracles: Table<u8, vector<vector<u8>>>,
+        signer_oracles: Table<u8, vector<ed25519::UnvalidatedPublicKey>>,
         // ocr plugin type -> transmitters
         transmitter_oracles: Table<u8, vector<address>>,
         config_set_events: EventHandle<ConfigSet>,
@@ -82,6 +83,7 @@ module ccip::ocr3_base {
     const E_INVALID_SIGNATURE: u64 = 19;
     const E_FORKED_CHAIN: u64 = 20;
     const E_INVALID_V_SIGNATURE: u64 = 21;
+    const E_UNKNOWN_PLUGIN_TYPE: u64 = 22;
 
     public fun new(event_account: &signer): OCR3BaseState {
         OCR3BaseState {
@@ -174,7 +176,7 @@ module ccip::ocr3_base {
             ocr_config.signers = signers;
 
             assign_signer_oracles(
-                &mut ocr3_state.signer_oracles, ocr_plugin_type, signers
+                &mut ocr3_state.signer_oracles, ocr_plugin_type, &signers
             );
         };
 
@@ -197,13 +199,28 @@ module ccip::ocr3_base {
     }
 
     inline fun assign_signer_oracles(
-        signer_oracles: &mut Table<u8, vector<vector<u8>>>,
+        signer_oracles: &mut Table<u8, vector<ed25519::UnvalidatedPublicKey>>,
         ocr_plugin_type: u8,
-        signers: vector<vector<u8>>
+        signers: &vector<vector<u8>>
     ) {
-        assert!(!has_duplicates(&signers), error::invalid_argument(E_REPEATED_SIGNERS));
+        assert!(!has_duplicates(signers), error::invalid_argument(E_REPEATED_SIGNERS));
 
-        signer_oracles.upsert(ocr_plugin_type, signers);
+        let validated_signers = vector::map_ref(
+            signers,
+            |signer| {
+                let maybe_validated_public_key =
+                    ed25519::new_validated_public_key_from_bytes(*signer);
+                assert!(
+                    maybe_validated_public_key.is_some(),
+                    error::invalid_argument(E_COULD_NOT_VALIDATE_SIGNER_KEY)
+                );
+                ed25519::public_key_into_unvalidated(
+                    maybe_validated_public_key.extract()
+                )
+            }
+        );
+
+        signer_oracles.upsert(ocr_plugin_type, validated_signers);
     }
 
     inline fun assign_transmitter_oracles(
@@ -225,9 +242,7 @@ module ccip::ocr3_base {
         ocr_plugin_type: u8,
         report_context: vector<vector<u8>>,
         report: vector<u8>,
-        rs: vector<vector<u8>>,
-        ss: vector<vector<u8>>,
-        vs: vector<u8>
+        signatures: vector<vector<u8>>
     ) {
         let ocr_config = ocr3_state.ocr3_configs.borrow(ocr_plugin_type);
         let config_info = &ocr_config.config_info;
@@ -266,13 +281,13 @@ module ccip::ocr3_base {
 
         if (config_info.is_signature_verification_enabled) {
             assert!(
-                rs.length() == (config_info.big_f as u64) + 1,
+                signatures.length() == (config_info.big_f as u64) + 1,
                 error::invalid_argument(E_WRONG_NUMBER_OF_SIGNATURES)
             );
 
             let hashed_report = hash_report(report, config_digest, sequence_bytes);
             let plugin_signers = ocr3_state.signer_oracles.borrow(ocr_plugin_type);
-            verify_signature(plugin_signers, hashed_report, rs, ss, vs);
+            verify_signature(plugin_signers, hashed_report, signatures);
         };
 
         let sequence_number: u64 = deserialize_sequence_bytes(sequence_bytes);
@@ -319,44 +334,37 @@ module ccip::ocr3_base {
     }
 
     inline fun verify_signature(
-        signers: &vector<vector<u8>>,
+        signers: &vector<ed25519::UnvalidatedPublicKey>,
         hashed_report: vector<u8>,
-        rs: vector<vector<u8>>,
-        ss: vector<vector<u8>>,
-        vs: vector<u8>
+        signatures: vector<vector<u8>>
     ) {
-        let seen = bit_vector::new(signers.length());
-        let len = rs.length();
-        assert!(
-            len == ss.length() && len == vs.length(),
-            error::invalid_argument(E_INVALID_SIGNATURE)
+        let seen = bit_vector::new(vector::length(signers));
+        vector::for_each_ref(
+            &signatures,
+            |signature_bytes| {
+                let public_key =
+                    ed25519::new_unvalidated_public_key_from_bytes(
+                        vector::slice(signature_bytes, 0, 32)
+                    );
+                let (exists, index) = vector::index_of(signers, &public_key);
+                assert!(exists, error::invalid_argument(E_UNAUTHORIZED_SIGNER));
+                assert!(
+                    !bit_vector::is_index_set(&seen, index),
+                    error::invalid_argument(E_NON_UNIQUE_SIGNATURES)
+                );
+                bit_vector::set(&mut seen, index);
+                let signature =
+                    ed25519::new_signature_from_bytes(
+                        vector::slice(signature_bytes, 32, 96)
+                    );
+
+                let verified =
+                    ed25519::signature_verify_strict(
+                        &signature, &public_key, hashed_report
+                    );
+                assert!(verified, error::invalid_argument(E_INVALID_SIGNATURE));
+            }
         );
-
-        for (i in 0..len) {
-            let signature_bytes = rs[i];
-            signature_bytes.append(ss[i]);
-
-            let v = vs[i];
-            assert!(
-                v < 4,
-                error::invalid_argument(E_INVALID_V_SIGNATURE)
-            );
-
-            let signature = secp256k1::ecdsa_signature_from_bytes(signature_bytes);
-
-            let public_key = secp256k1::ecdsa_recover(hashed_report, v, &signature);
-            let public_key_bytes =
-                secp256k1::ecdsa_raw_public_key_to_bytes(&public_key.extract());
-            let evm_address = aptos_hash::keccak256(public_key_bytes).trim(12);
-
-            let (exists, index) = signers.index_of(&evm_address);
-            assert!(exists, error::invalid_argument(E_UNAUTHORIZED_SIGNER));
-            assert!(
-                !seen.is_index_set(index),
-                error::invalid_argument(E_NON_UNIQUE_SIGNATURES)
-            );
-            seen.set(index);
-        }
     }
 
     inline fun has_duplicates<T>(a: &vector<T>): bool {
