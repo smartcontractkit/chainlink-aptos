@@ -16,6 +16,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainwriter"
+	aptosutils "github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target/aptos"
 )
 
@@ -97,8 +98,11 @@ func (r *relayer) NewContractWriter(ctx context.Context, configBytes []byte) (ty
 		return nil, fmt.Errorf("failed to unmarshall chain writer config err: %s", err)
 	}
 
+	aptosutils.AppendLog("NewContractWriter called config %s", string(configBytes))
+
 	client, err := r.chain.GetClient()
 	if err != nil {
+		aptosutils.AppendLog("COULD NOT GE CLIENT: %+v", err)
 		return nil, fmt.Errorf("failed to get client: %w", err)
 	}
 

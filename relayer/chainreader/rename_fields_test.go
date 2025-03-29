@@ -6,13 +6,13 @@ import (
 )
 
 // TestRenameFields contains multiple sub-tests to verify the behavior
-// of renameMapFields under different conditions.
+// of RenameMapFields under different conditions.
 func TestRenameFields(t *testing.T) {
 	tests := []struct {
 		name     string
 		jsonData map[string]any
 		renames  map[string]RenamedField
-		expected map[string]any // expected result after renameMapFields is applied
+		expected map[string]any // expected result after RenameMapFields is applied
 		wantErr  bool
 		errMsg   string // expected error message (if any)
 	}{
@@ -243,7 +243,7 @@ func TestRenameFields(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := renameMapFields(tc.jsonData, tc.renames)
+			err := RenameMapFields(tc.jsonData, tc.renames)
 			if tc.wantErr {
 				if err == nil {
 					t.Errorf("%q: expected error but got nil", tc.name)

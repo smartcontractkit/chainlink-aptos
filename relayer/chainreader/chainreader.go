@@ -18,12 +18,14 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
-	"github.com/smartcontractkit/chainlink-common/pkg/utils"
+	commonutils "github.com/smartcontractkit/chainlink-common/pkg/utils"
 
+	//module_fee_quoter "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/fee_quoter"
 	module_ocr3_base "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/ocr3_base"
 	module_offramp "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/offramp"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
 type aptosChainReader struct {
@@ -31,7 +33,7 @@ type aptosChainReader struct {
 
 	logger                logger.Logger
 	config                ChainReaderConfig
-	starter               utils.StartStopOnce
+	starter               commonutils.StartStopOnce
 	moduleAddresses       map[string]aptos.AccountAddress
 	eventAccountAddresses map[string]aptos.AccountAddress
 
@@ -122,6 +124,7 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		if err != nil {
 			return fmt.Errorf("failed to unmarshal JSON params: %+w", err)
 		}
+		utils.AppendLog("DEBUG: LOOP CHAIN READER PLUGIN: readIdentifier: %s paramBytes: %s argMap: %+v", readIdentifier, string(*paramBytes), argMap)
 	} else {
 		if err := mapstructure.Decode(params, &argMap); err != nil {
 			return fmt.Errorf("failed to parse arguments: %+w", err)
@@ -194,6 +197,7 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		if err != nil {
 			return fmt.Errorf("failed to re-marshal data: %+w", err)
 		}
+		utils.AppendLog("DEBUG: LOOP CHAIN READER PLUGIN: readIdentifier: %s resultBytes: %s", readIdentifier, string(resultBytes))
 		returnValPtr, ok := returnVal.(*[]byte)
 		if !ok {
 			return fmt.Errorf("return value is not a pointer to []byte as expected when running as a LOOP plugin")
@@ -398,7 +402,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	for _, event := range events {
 		jsonData := event.Data
 
-		if err := renameMapFields(jsonData, eventConfig.EventFieldRenames); err != nil {
+		if err := RenameMapFields(jsonData, eventConfig.EventFieldRenames); err != nil {
 			return nil, fmt.Errorf("failed to rename event fields: %+w", err)
 		}
 
@@ -422,7 +426,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	return sequences, nil
 }
 
-func renameMapFields(jsonData map[string]any, renames map[string]RenamedField) error {
+func RenameMapFields(jsonData map[string]any, renames map[string]RenamedField) error {
 	for origName, rename := range renames {
 		subValue, ok := jsonData[origName]
 		if !ok {
@@ -435,27 +439,27 @@ func renameMapFields(jsonData map[string]any, renames map[string]RenamedField) e
 			delete(jsonData, origName)
 		}
 
-		if err := maybeRenameFields(subValue, rename.SubFieldRenames); err != nil {
+		if err := MaybeRenameFields(subValue, rename.SubFieldRenames); err != nil {
 			return fmt.Errorf("sub field renames failed for field %s: %+w", origName, err)
 		}
 	}
 	return nil
 }
 
-func maybeRenameFields(jsonValue any, renames map[string]RenamedField) error {
+func MaybeRenameFields(jsonValue any, renames map[string]RenamedField) error {
 	// no renames are provided, we don't put any constraint on jsonValue
 	if len(renames) == 0 {
 		return nil
 	}
 
 	if jsonMap, ok := jsonValue.(map[string]any); ok {
-		if err := renameMapFields(jsonMap, renames); err != nil {
+		if err := RenameMapFields(jsonMap, renames); err != nil {
 			return err
 		}
 	} else if jsonSlice, ok := unwrapSlice(jsonValue); ok {
 		for i, elem := range jsonSlice {
 			if elemMap, ok := elem.(map[string]any); ok {
-				if err := renameMapFields(elemMap, renames); err != nil {
+				if err := RenameMapFields(elemMap, renames); err != nil {
 					return err
 				}
 			} else {
@@ -515,7 +519,18 @@ func (a *aptosChainReader) Unbind(ctx context.Context, bindings []types.BoundCon
 }
 
 func (a *aptosChainReader) CreateContractType(readName string, forEncoding bool) (any, error) {
-	a.logger.Infow("CreateContractType", "readName", readName, "forEncoding", forEncoding)
+	// only called when LOOP plugin
+	return &[]byte{}, nil
+	//if !forEncoding {
+	//// for retVal
+	//return &[]byte{}, nil
+	//} else {
+	//return &map[string]any{}, nil
+	//}
+}
+
+func (a *aptosChainReader) CreateContractTypeOld(readName string, forEncoding bool) (any, error) {
+	//a.logger.Infow("CreateContractType", "readName", readName, "forEncoding", forEncoding)
 
 	if !forEncoding {
 		// for retVal
@@ -544,6 +559,19 @@ func (a *aptosChainReader) CreateContractType(readName string, forEncoding bool)
 			} else if method == consts.MethodNameGetSourceChainConfig {
 				return &module_offramp.SourceChainConfig{}, nil
 				//return &reader.SourceChainConfig{}, nil
+			} else if method == consts.MethodNameGetLatestPriceSequenceNumber {
+				var val uint64 = 0
+				return &val, nil
+			}
+		} else if contractName == consts.ContractNameFeeQuoter {
+			if method == consts.MethodNameFeeQuoterGetStaticConfig {
+				// because the fee juels field is cciptypes.BigInt, and it can't unmarshal from a number.
+				type staticConfig struct {
+					MaxFeeJuelsPerMsg            big.Int
+					LinkToken                    []byte
+					TokenPriceStalenessThreshold uint64 `move:"u64"`
+				}
+				return &staticConfig{}, nil
 			}
 		}
 	}

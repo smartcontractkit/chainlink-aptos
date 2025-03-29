@@ -11,10 +11,11 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
-	"github.com/smartcontractkit/chainlink-common/pkg/utils"
+	commonutils "github.com/smartcontractkit/chainlink-common/pkg/utils"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
 type aptosChainWriter struct {
@@ -23,7 +24,7 @@ type aptosChainWriter struct {
 	feeClient aptos.AptosRpcClient
 	config    ChainWriterConfig
 
-	starter utils.StartStopOnce
+	starter commonutils.StartStopOnce
 	stop    chan struct{}
 }
 
@@ -84,6 +85,7 @@ func convertFunctionParams(argMap map[string]interface{}, params []chainreader.A
 }
 
 func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, method string, args any, transactionID string, toAddress string, meta *commontypes.TxMeta, value *big.Int) error {
+	utils.AppendLog("DEBUG: aptosChainWriter.SubmitTransaction called contract %+v method %+v args %+v", contractName, method, args)
 	moduleConfig, ok := a.config.Modules[contractName]
 	if !ok {
 		return fmt.Errorf("no such contract: %s", contractName)
