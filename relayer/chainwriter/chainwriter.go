@@ -142,7 +142,7 @@ func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, 
 		return fmt.Errorf("failed to enqueue transaction %s: %+w", transactionID, err)
 	}
 
-	ctxLogger.Infow("Workflow DON submitted transaction for execution", "contractName", contractName, "method", method, "toAddress", toAddress)
+	ctxLogger.Infow("submitted transaction for execution", "contractName", contractName, "method", method, "toAddress", toAddress)
 	return nil
 }
 
