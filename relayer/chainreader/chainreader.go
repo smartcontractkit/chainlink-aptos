@@ -1,7 +1,9 @@
 package chainreader
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -98,8 +100,22 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 	}
 
 	argMap := make(map[string]interface{})
-	if err := mapstructure.Decode(params, &argMap); err != nil {
-		return fmt.Errorf("failed to parse arguments: %+w", err)
+
+	if a.config.IsLoopPlugin {
+		paramBytes := params.(*[]byte)
+
+		// use json.Number to decode uint64 correctly. when we serialize into bcs, serializeArg will convert it into the appropriate number type.
+		decoder := json.NewDecoder(bytes.NewReader(*paramBytes))
+		decoder.UseNumber()
+
+		err := decoder.Decode(&argMap)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal JSON params: %+w", err)
+		}
+	} else {
+		if err := mapstructure.Decode(params, &argMap); err != nil {
+			return fmt.Errorf("failed to parse arguments: %+w", err)
+		}
 	}
 
 	paramValues := [][]byte{}
@@ -157,6 +173,26 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		return fmt.Errorf("failed to call view function: %+w", err)
 	}
 
+	if err := maybeRenameFields(data, functionConfig.ResultFieldRenames); err != nil {
+		return fmt.Errorf("failed to rename function return value fields: %+w", err)
+	}
+
+	if a.config.IsLoopPlugin {
+		// immediately remarshal the data
+		// TODO: update aptos-go-sdk to allow returning the string directly
+		resultBytes, err := json.Marshal(data)
+		if err != nil {
+			return fmt.Errorf("failed to re-marshal data: %+w", err)
+		}
+		returnValPtr, ok := returnVal.(*[]byte)
+		if !ok {
+			return fmt.Errorf("return value is not a pointer to []byte as expected when running as a LOOP plugin")
+		}
+		*returnValPtr = make([]byte, len(resultBytes))
+		copy(*returnValPtr, resultBytes)
+		return nil
+	}
+
 	// In order to support multi-returns, all values are returned as []any
 	// However, vector or tuple return types are not necessary wrapped
 	// in an additional slice, eg:
@@ -169,10 +205,6 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		unwrappedData = data[0]
 	} else {
 		unwrappedData = data
-	}
-
-	if err := maybeRenameFields(unwrappedData, functionConfig.ResultFieldRenames); err != nil {
-		return fmt.Errorf("failed to rename function return value fields: %+w", err)
 	}
 
 	return codec.DecodeAptosJsonValue(unwrappedData, returnVal)
