@@ -60,6 +60,11 @@ module ccip::rmn_remote {
         merkle_root: vector<u8>
     }
 
+    struct VersionedConfig has copy, drop {
+        version: u32,
+        config: Config
+    }
+
     #[event]
     struct ConfigSet has store, drop {
         version: u32,
@@ -325,9 +330,9 @@ module ccip::rmn_remote {
     }
 
     #[view]
-    public fun get_versioned_config(): (u32, Config) acquires RMNRemoteState {
+    public fun get_versioned_config(): VersionedConfig acquires RMNRemoteState {
         let state = borrow_state();
-        (state.config_count, state.config)
+        VersionedConfig { version: state.config_count, config: state.config }
     }
 
     #[view]
