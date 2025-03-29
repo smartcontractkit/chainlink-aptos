@@ -44,7 +44,7 @@ module ccip::offramp {
         chain_selector: u64,
 
         // dynamic config
-        permissionless_execution_threshold_secs: u32,
+        permissionless_execution_threshold_seconds: u32,
 
         // State
         // source chain selector -> config
@@ -144,7 +144,7 @@ module ccip::offramp {
     }
 
     struct DynamicConfig has store, drop {
-        permissionless_execution_threshold_secs: u32
+        permissionless_execution_threshold_seconds: u32
     }
 
     #[event]
@@ -154,7 +154,7 @@ module ccip::offramp {
 
     #[event]
     struct DynamicConfigSet has store, drop {
-        permissionless_execution_threshold_secs: u32
+        permissionless_execution_threshold_seconds: u32
     }
 
     #[event]
@@ -240,7 +240,7 @@ module ccip::offramp {
     public entry fun initialize(
         caller: &signer,
         chain_selector: u64,
-        permissionless_execution_threshold_secs: u32,
+        permissionless_execution_threshold_seconds: u32,
         source_chains_selector: vector<u64>,
         source_chains_is_enabled: vector<bool>,
         source_chains_is_rmn_verification_disabled: vector<bool>,
@@ -262,7 +262,7 @@ module ccip::offramp {
         let state = OffRampState {
             ocr3_base_state: ocr3_base::new(&state_object_signer),
             chain_selector,
-            permissionless_execution_threshold_secs: 0,
+            permissionless_execution_threshold_seconds: 0,
             source_chain_configs: smart_table::new(),
             execution_states: smart_table::new(),
             roots: smart_table::new(),
@@ -287,7 +287,7 @@ module ccip::offramp {
 
         set_dynamic_config_internal(
             &mut state,
-            permissionless_execution_threshold_secs
+            permissionless_execution_threshold_seconds
         );
         apply_source_chain_config_updates_internal(
             &mut state,
@@ -486,7 +486,7 @@ module ccip::offramp {
         let timestamp_committed_secs = *state.roots.borrow(root);
 
         (timestamp::now_seconds() - timestamp_committed_secs)
-            > (state.permissionless_execution_threshold_secs as u64)
+            > (state.permissionless_execution_threshold_seconds as u64)
     }
 
     // ================================================================
@@ -713,18 +713,18 @@ module ccip::offramp {
     public fun get_dynamic_config(): DynamicConfig acquires OffRampState {
         let state = borrow_state();
         DynamicConfig {
-            permissionless_execution_threshold_secs: state.permissionless_execution_threshold_secs
+            permissionless_execution_threshold_seconds: state.permissionless_execution_threshold_seconds
         }
     }
 
     public entry fun set_dynamic_config(
-        caller: &signer, permissionless_execution_threshold_secs: u32
+        caller: &signer, permissionless_execution_threshold_seconds: u32
     ) acquires OffRampState {
         auth::assert_only_owner(signer::address_of(caller));
 
         set_dynamic_config_internal(
             borrow_state_mut(),
-            permissionless_execution_threshold_secs
+            permissionless_execution_threshold_seconds
         )
     }
 
@@ -857,14 +857,14 @@ module ccip::offramp {
     }
 
     inline fun set_dynamic_config_internal(
-        state: &mut OffRampState, permissionless_execution_threshold_secs: u32
+        state: &mut OffRampState, permissionless_execution_threshold_seconds: u32
     ) {
-        state.permissionless_execution_threshold_secs =
-            permissionless_execution_threshold_secs;
-        event::emit(DynamicConfigSet { permissionless_execution_threshold_secs });
+        state.permissionless_execution_threshold_seconds =
+            permissionless_execution_threshold_seconds;
+        event::emit(DynamicConfigSet { permissionless_execution_threshold_seconds });
         event::emit_event(
             &mut state.dynamic_config_set_events,
-            DynamicConfigSet { permissionless_execution_threshold_secs }
+            DynamicConfigSet { permissionless_execution_threshold_seconds }
         );
     }
 
@@ -1217,7 +1217,7 @@ module ccip::offramp {
 
         if (function_bytes == b"initialize") {
             let chain_selector = bcs_stream::deserialize_u64(&mut stream);
-            let permissionless_execution_threshold_secs =
+            let permissionless_execution_threshold_seconds =
                 bcs_stream::deserialize_u32(&mut stream);
             let source_chains_selector =
                 bcs_stream::deserialize_vector(
@@ -1239,7 +1239,7 @@ module ccip::offramp {
             initialize(
                 &caller,
                 chain_selector,
-                permissionless_execution_threshold_secs,
+                permissionless_execution_threshold_seconds,
                 source_chains_selector,
                 source_chains_is_enabled,
                 source_chains_is_rmn_verification_disabled,
@@ -1271,12 +1271,12 @@ module ccip::offramp {
                 source_chains_on_ramp
             )
         } else if (function_bytes == b"set_dynamic_config") {
-            let permissionless_execution_threshold_secs =
+            let permissionless_execution_threshold_seconds =
                 bcs_stream::deserialize_u32(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
             set_dynamic_config(
                 &caller,
-                permissionless_execution_threshold_secs
+                permissionless_execution_threshold_seconds
             )
         } else if (function_bytes == b"set_ocr3_config") {
             let config_digest = bcs_stream::deserialize_vector_u8(&mut stream);
