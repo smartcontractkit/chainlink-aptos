@@ -127,7 +127,7 @@ module ccip::eth_abi {
         ABIStream { data, cur: 0 }
     }
 
-    public fun decode_address(stream: &mut ABIStream): address {
+    public fun decode_eth_address(stream: &mut ABIStream): vector<u8> {
         let data = &stream.data;
         let cur = stream.cur;
 
@@ -148,6 +148,12 @@ module ccip::eth_abi {
         let addr_bytes = data.slice(cur + 12, cur + 32);
         stream.cur = cur + 32;
 
+        addr_bytes
+    }
+
+    // an aptos address is encoded as an eth abi bytes32.
+    public fun decode_aptos_address(stream: &mut ABIStream): address {
+        let addr_bytes = decode_bytes32(stream);
         from_bcs::to_address(addr_bytes)
     }
 
