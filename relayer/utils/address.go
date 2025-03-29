@@ -59,3 +59,11 @@ func HexAddressToAddress(addr string) (aptos.AccountAddress, error) {
 	}
 	return address, nil
 }
+
+func PublicKeyBytesToAddress(publicKey []byte) (aptos.AccountAddress, error) {
+	if len(publicKey) != ed25519.PublicKeySize {
+		return aptos.AccountAddress{}, fmt.Errorf("invalid key length: %d bytes, expected %d bytes", len(publicKey), ed25519.PublicKeySize)
+	}
+
+	return Ed25519PublicKeyToAddress(ed25519.PublicKey(publicKey)), nil
+}
