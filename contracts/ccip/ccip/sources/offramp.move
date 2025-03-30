@@ -15,7 +15,7 @@ module ccip::offramp {
 
     use ccip::auth;
     use ccip::client;
-    use ccip::eth_abi::{Self, ABIStream};
+    use ccip::eth_abi;
     use ccip::fee_quoter;
     use ccip::merkle_proof;
     use ccip::ocr3_base;
@@ -25,7 +25,7 @@ module ccip::offramp {
     use ccip::token_admin_dispatcher;
     use ccip::token_admin_registry;
 
-    use mcms::bcs_stream;
+    use mcms::bcs_stream::{Self, BCSStream};
     use mcms::mcms_registry;
 
     // These have to match the EVM states
@@ -993,25 +993,24 @@ module ccip::offramp {
     // ================================================================
 
     inline fun deserialize_commit_report(report_bytes: vector<u8>): CommitReport {
-        let stream = eth_abi::new_stream(report_bytes);
+        let stream = bcs_stream::new(report_bytes);
         let token_price_updates =
-            eth_abi::decode_vector(
+            bcs_stream::deserialize_vector(
                 &mut stream,
                 |stream| {
                     TokenPriceUpdate {
-                        source_token: eth_abi::decode_aptos_address(stream),
-                        usd_per_token: eth_abi::decode_u256(stream)
+                        source_token: bcs_stream::deserialize_address(stream),
+                        usd_per_token: bcs_stream::deserialize_u256(stream)
                     }
                 }
             );
-
         let gas_price_updates =
-            eth_abi::decode_vector(
+            bcs_stream::deserialize_vector(
                 &mut stream,
                 |stream| {
                     GasPriceUpdate {
-                        dest_chain_selector: eth_abi::decode_u64(stream),
-                        usd_per_unit_gas: eth_abi::decode_u256(stream)
+                        dest_chain_selector: bcs_stream::deserialize_u64(stream),
+                        usd_per_unit_gas: bcs_stream::deserialize_u256(stream)
                     }
                 }
             );
@@ -1020,14 +1019,9 @@ module ccip::offramp {
         let unblessed_merkle_roots = parse_merkle_root(&mut stream);
 
         let rmn_signatures =
-            eth_abi::decode_vector(
+            bcs_stream::deserialize_vector(
                 &mut stream,
-                |stream| {
-                    let r = eth_abi::decode_bytes32(stream);
-                    let s = eth_abi::decode_bytes32(stream);
-                    vector::append(&mut r, s);
-                    r
-                }
+                |stream| { bcs_stream::deserialize_fixed_vector_u8(stream, 64) }
             );
 
         CommitReport {
@@ -1038,16 +1032,16 @@ module ccip::offramp {
         }
     }
 
-    inline fun parse_merkle_root(stream: &mut ABIStream): vector<MerkleRoot> {
-        eth_abi::decode_vector(
+    inline fun parse_merkle_root(stream: &mut BCSStream): vector<MerkleRoot> {
+        bcs_stream::deserialize_vector(
             stream,
             |stream| {
                 MerkleRoot {
-                    source_chain_selector: eth_abi::decode_u64(stream),
-                    on_ramp_address: eth_abi::decode_bytes(stream),
-                    min_seq_nr: eth_abi::decode_u64(stream),
-                    max_seq_nr: eth_abi::decode_u64(stream),
-                    merkle_root: eth_abi::decode_bytes32(stream)
+                    source_chain_selector: bcs_stream::deserialize_u64(stream),
+                    on_ramp_address: bcs_stream::deserialize_vector_u8(stream),
+                    min_seq_nr: bcs_stream::deserialize_u64(stream),
+                    max_seq_nr: bcs_stream::deserialize_u64(stream),
+                    merkle_root: bcs_stream::deserialize_fixed_vector_u8(stream, 32)
                 }
             }
         )
@@ -1383,21 +1377,19 @@ module ccip::offramp {
         assert!(metadata_hash_alternate == expected_hash_alternate, 2);
     }
 
-
     #[test]
     fun test_commit() {
-    let report_context = vector[
-      x"000ae8f76a6d60b56c17d10ae94c0865656d72737f0d1301fd7f88d4eb599276",
-      x"0000000000000000000000000000000000000000000000000000000000000009",
-    ];
-    let report_bytes = x"000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000012000000000000000000000000000000000000000000000000000000000000001400000000000000000000000000000000000000000000000000000000000000260000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000c9f9284461c852b00000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001f0a90d2a69f16005bd2bf262af828d51f62404678927bfd62c6dd9352217045a0000000000000000000000000000000000000000000000000000000000000014eab1f75d5a1d4fca39ad27a629f8c6106bd4d8d60000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-    let report = deserialize_commit_report(report_bytes);
-    let signatures = vector[
-      x"6c1fbc1ae46b49242b1264cd7140256fdf3041674b0f3ab633dab69a16e01c403a3e34a7e14daab104b9730ebb732a72f0f034f019c7d5c7f1af4e8026f3e512d3e906cc2e8a12d37987ac2b25a43c8a1068243aebba97c2d918027ea900f908",
-      x"bb3d7d03d1e4707d153211150b44e0c69f72c274b19e9b2964adad82ea542102f3976b16f1557be6cc6789aa4739c168f17986fe92415a81f9aecf0b791886475573f61f9553609f0cb813d28e97132d7ab03e515044a128b91f80d1467ef40b",
-    ];
-
-
+        let report_context = vector[
+            x"000ae8f76a6d60b56c17d10ae94c0865656d72737f0d1301fd7f88d4eb599276",
+            x"0000000000000000000000000000000000000000000000000000000000000009"
+        ];
+        let report_bytes =
+            x"000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000012000000000000000000000000000000000000000000000000000000000000001400000000000000000000000000000000000000000000000000000000000000260000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000c9f9284461c852b00000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001f0a90d2a69f16005bd2bf262af828d51f62404678927bfd62c6dd9352217045a0000000000000000000000000000000000000000000000000000000000000014eab1f75d5a1d4fca39ad27a629f8c6106bd4d8d60000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+        let report = deserialize_commit_report(report_bytes);
+        let signatures = vector[
+            x"6c1fbc1ae46b49242b1264cd7140256fdf3041674b0f3ab633dab69a16e01c403a3e34a7e14daab104b9730ebb732a72f0f034f019c7d5c7f1af4e8026f3e512d3e906cc2e8a12d37987ac2b25a43c8a1068243aebba97c2d918027ea900f908",
+            x"bb3d7d03d1e4707d153211150b44e0c69f72c274b19e9b2964adad82ea542102f3976b16f1557be6cc6789aa4739c168f17986fe92415a81f9aecf0b791886475573f61f9553609f0cb813d28e97132d7ab03e515044a128b91f80d1467ef40b"
+        ];
 
     }
 }
