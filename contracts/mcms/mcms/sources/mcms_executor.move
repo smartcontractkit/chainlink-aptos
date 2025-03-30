@@ -64,6 +64,7 @@ module mcms::mcms_executor {
             proofs.append(partial_proofs)
         };
         mcms::execute(
+            caller,
             role,
             chain_id,
             multisig,
