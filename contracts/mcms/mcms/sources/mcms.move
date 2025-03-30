@@ -12,66 +12,17 @@ module mcms::mcms {
     use aptos_framework::object::{Self, ExtendRef, Object};
     use aptos_framework::timestamp;
     use aptos_std::secp256k1;
-    use mcms::bcs_stream;
+    use mcms::bcs_stream::{Self, BCSStream};
     use mcms::mcms_account;
     use mcms::mcms_deployer;
     use mcms::mcms_registry;
     use mcms::params::{Self};
 
-    const E_ALREADY_SEEN_HASH: u64 = 1;
-    const E_POST_OP_COUNT_REACHED: u64 = 2;
-    const E_WRONG_CHAIN_ID: u64 = 3;
-    const E_WRONG_MULTISIG: u64 = 4;
-    const E_ROOT_EXPIRED: u64 = 5;
-    const E_WRONG_NONCE: u64 = 6;
-    const E_VALID_UNTIL_EXPIRED: u64 = 7;
-    const E_INVALID_SIGNER: u64 = 8;
-    const E_MISSING_CONFIG: u64 = 9;
-    const E_INSUFFICIENT_SIGNERS: u64 = 10;
-    const E_PROOF_CANNOT_BE_VERIFIED: u64 = 11;
-    const E_PENDING_OPS: u64 = 12;
-    const E_WRONG_PRE_OP_COUNT: u64 = 13;
-    const E_WRONG_POST_OP_COUNT: u64 = 14;
-    const E_INVALID_NUM_SIGNERS: u64 = 15;
-    const E_SIGNER_GROUPS_LEN_MISMATCH: u64 = 16;
-    const E_INVALID_GROUP_QUORUM_LEN: u64 = 17;
-    const E_INVALID_GROUP_PARENTS_LEN: u64 = 18;
-    const E_OUT_OF_BOUNDS_GROUP: u64 = 19;
-    const E_GROUP_TREE_NOT_WELL_FORMED: u64 = 20;
-    const E_SIGNER_IN_DISABLED_GROUP: u64 = 21;
-    const E_OUT_OF_BOUNDS_GROUP_QUORUM: u64 = 22;
-    const E_SIGNER_ADDR_MUST_BE_INCREASING: u64 = 23;
-    const E_INVALID_SIGNER_ADDR_LEN: u64 = 24;
-    const E_UNKNOWN_MCMS_MODULE_FUNCTION: u64 = 25;
-    const E_UNKNOWN_FRAMEWORK_MODULE_FUNCTION: u64 = 26;
-    const E_UNKNOWN_FRAMEWORK_MODULE: u64 = 27;
-    const E_SELF_CALL_ROLE_MISMATCH: u64 = 28;
-    const E_NOT_BYPASSER_ROLE: u64 = 29;
-    const E_INVALID_ROLE: u64 = 30;
-    const E_NOT_AUTHORIZED_ROLE: u64 = 31;
-    const E_NOT_AUTHORIZED: u64 = 32;
-    const E_OPERATION_ALREADY_SCHEDULED: u64 = 33;
-    const E_INSUFFICIENT_DELAY: u64 = 34;
-    const E_OPERATION_NOT_READY: u64 = 35;
-    const E_MISSING_DEPENDENCY: u64 = 36;
-    const E_OPERATION_CANNOT_BE_CANCELLED: u64 = 37;
-    const E_FUNCTION_BLOCKED: u64 = 38;
-    const E_INVALID_INDEX: u64 = 39;
-    const E_UNKNOWN_MCMS_ACCOUNT_MODULE_FUNCTION: u64 = 40;
-    const E_UNKNOWN_MCMS_DEPLOYER_MODULE_FUNCTION: u64 = 41;
-    const E_UNKNOWN_MCMS_REGISTRY_MODULE_FUNCTION: u64 = 42;
-    const E_INVALID_PARAMETERS: u64 = 43;
-    const E_INVALID_SIGNATURE_LEN: u64 = 44;
-    const E_INVALID_V_SIGNATURE: u64 = 45;
-    const E_FAILED_ECDSA_RECOVER: u64 = 46;
-    const E_INVALID_MODULE_NAME: u64 = 47;
-    const E_UNKNOWN_MCMS_TIMELOCK_FUNCTION: u64 = 48;
-    const E_INVALID_ROOT_LEN: u64 = 49;
-
     const BYPASSER_ROLE: u8 = 0;
     const CANCELLER_ROLE: u8 = 1;
     const PROPOSER_ROLE: u8 = 2;
-    const MAX_ROLE: u8 = 3;
+    const TIMELOCK_ROLE: u8 = 3;
+    const MAX_ROLE: u8 = 4;
 
     const NUM_GROUPS: u64 = 32;
     const MAX_NUM_SIGNERS: u64 = 200;
@@ -199,6 +150,58 @@ module mcms::mcms {
         function_name: String,
         data: vector<u8>
     }
+
+    const E_ALREADY_SEEN_HASH: u64 = 1;
+    const E_POST_OP_COUNT_REACHED: u64 = 2;
+    const E_WRONG_CHAIN_ID: u64 = 3;
+    const E_WRONG_MULTISIG: u64 = 4;
+    const E_ROOT_EXPIRED: u64 = 5;
+    const E_WRONG_NONCE: u64 = 6;
+    const E_VALID_UNTIL_EXPIRED: u64 = 7;
+    const E_INVALID_SIGNER: u64 = 8;
+    const E_MISSING_CONFIG: u64 = 9;
+    const E_INSUFFICIENT_SIGNERS: u64 = 10;
+    const E_PROOF_CANNOT_BE_VERIFIED: u64 = 11;
+    const E_PENDING_OPS: u64 = 12;
+    const E_WRONG_PRE_OP_COUNT: u64 = 13;
+    const E_WRONG_POST_OP_COUNT: u64 = 14;
+    const E_INVALID_NUM_SIGNERS: u64 = 15;
+    const E_SIGNER_GROUPS_LEN_MISMATCH: u64 = 16;
+    const E_INVALID_GROUP_QUORUM_LEN: u64 = 17;
+    const E_INVALID_GROUP_PARENTS_LEN: u64 = 18;
+    const E_OUT_OF_BOUNDS_GROUP: u64 = 19;
+    const E_GROUP_TREE_NOT_WELL_FORMED: u64 = 20;
+    const E_SIGNER_IN_DISABLED_GROUP: u64 = 21;
+    const E_OUT_OF_BOUNDS_GROUP_QUORUM: u64 = 22;
+    const E_SIGNER_ADDR_MUST_BE_INCREASING: u64 = 23;
+    const E_INVALID_SIGNER_ADDR_LEN: u64 = 24;
+    const E_UNKNOWN_MCMS_MODULE_FUNCTION: u64 = 25;
+    const E_UNKNOWN_FRAMEWORK_MODULE_FUNCTION: u64 = 26;
+    const E_UNKNOWN_FRAMEWORK_MODULE: u64 = 27;
+    const E_SELF_CALL_ROLE_MISMATCH: u64 = 28;
+    const E_NOT_BYPASSER_ROLE: u64 = 29;
+    const E_INVALID_ROLE: u64 = 30;
+    const E_NOT_AUTHORIZED_ROLE: u64 = 31;
+    const E_NOT_AUTHORIZED: u64 = 32;
+    const E_OPERATION_ALREADY_SCHEDULED: u64 = 33;
+    const E_INSUFFICIENT_DELAY: u64 = 34;
+    const E_OPERATION_NOT_READY: u64 = 35;
+    const E_MISSING_DEPENDENCY: u64 = 36;
+    const E_OPERATION_CANNOT_BE_CANCELLED: u64 = 37;
+    const E_FUNCTION_BLOCKED: u64 = 38;
+    const E_INVALID_INDEX: u64 = 39;
+    const E_UNKNOWN_MCMS_ACCOUNT_MODULE_FUNCTION: u64 = 40;
+    const E_UNKNOWN_MCMS_DEPLOYER_MODULE_FUNCTION: u64 = 41;
+    const E_UNKNOWN_MCMS_REGISTRY_MODULE_FUNCTION: u64 = 42;
+    const E_INVALID_PARAMETERS: u64 = 43;
+    const E_INVALID_SIGNATURE_LEN: u64 = 44;
+    const E_INVALID_V_SIGNATURE: u64 = 45;
+    const E_FAILED_ECDSA_RECOVER: u64 = 46;
+    const E_INVALID_MODULE_NAME: u64 = 47;
+    const E_UNKNOWN_MCMS_TIMELOCK_FUNCTION: u64 = 48;
+    const E_INVALID_ROOT_LEN: u64 = 49;
+    const E_NOT_CANCELLER_ROLE: u64 = 50;
+    const E_NOT_TIMELOCK_ROLE: u64 = 51;
 
     fun init_module(publisher: &signer) {
         let bypasser = create_multisig(publisher, BYPASSER_ROLE);
@@ -501,6 +504,7 @@ module mcms::mcms {
         );
     }
 
+    // Only callable from `execute`, the role that was validated is passed down to the timelock functions
     inline fun dispatch_to_timelock(
         role: u8, function_name: String, data: vector<u8>
     ) {
@@ -508,32 +512,26 @@ module mcms::mcms {
         let stream = bcs_stream::new(data);
 
         if (function_name_bytes == b"timelock_schedule_batch") {
-            assert_bypasser_or_proposer_role(role);
-            timelock_deserialize_and_schedule_batch(&mut stream)
+            deserialize_and_timelock_schedule_batch(role, &mut stream)
         } else if (function_name_bytes == b"timelock_bypasser_execute_batch") {
-            assert_bypasser_role(role);
-            timelock_deserialize_and_bypasser_execute_batch(&mut stream)
+            deserialize_and_timelock_bypasser_execute_batch(role, &mut stream)
         } else if (function_name_bytes == b"timelock_execute_batch") {
-            timelock_deserialize_and_execute_batch(&mut stream)
+            deserialize_and_timelock_execute_batch(&mut stream)
         } else if (function_name_bytes == b"timelock_cancel") {
-            assert_bypasser_or_canceller_role(role);
-            timelock_deserialize_and_cancel(&mut stream)
+            deserialize_and_timelock_cancel(role, &mut stream)
         } else if (function_name_bytes == b"timelock_update_min_delay") {
-            assert_bypasser_role(role);
-            timelock_deserialize_and_update_min_delay(&mut stream)
+            deserialize_and_timelock_update_min_delay(role, &mut stream)
         } else if (function_name_bytes == b"timelock_block_function") {
-            assert_bypasser_role(role);
-            timelock_deserialize_and_block_function(&mut stream)
+            deserialize_and_timelock_block_function(role, &mut stream)
         } else if (function_name_bytes == b"timelock_unblock_function") {
-            assert_bypasser_role(role);
-            timelock_deserialize_and_unblock_function(&mut stream)
+            deserialize_and_timelock_unblock_function(role, &mut stream)
         } else {
             abort E_UNKNOWN_MCMS_TIMELOCK_FUNCTION
         }
     }
 
-    inline fun timelock_deserialize_and_schedule_batch(
-        stream: &mut bcs_stream::BCSStream
+    inline fun deserialize_and_timelock_schedule_batch(
+        role: u8, stream: &mut BCSStream
     ) {
         let targets =
             bcs_stream::deserialize_vector(
@@ -557,6 +555,7 @@ module mcms::mcms {
         bcs_stream::assert_is_consumed(stream);
 
         timelock_schedule_batch(
+            role,
             targets,
             module_names,
             function_names,
@@ -567,8 +566,8 @@ module mcms::mcms {
         )
     }
 
-    inline fun timelock_deserialize_and_bypasser_execute_batch(
-        stream: &mut bcs_stream::BCSStream
+    inline fun deserialize_and_timelock_bypasser_execute_batch(
+        role: u8, stream: &mut BCSStream
     ) {
         let targets =
             bcs_stream::deserialize_vector(
@@ -588,11 +587,17 @@ module mcms::mcms {
             );
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_bypasser_execute_batch(targets, module_names, function_names, datas)
+        timelock_bypasser_execute_batch(
+            role,
+            targets,
+            module_names,
+            function_names,
+            datas
+        )
     }
 
-    inline fun timelock_deserialize_and_execute_batch(
-        stream: &mut bcs_stream::BCSStream
+    inline fun deserialize_and_timelock_execute_batch(
+        stream: &mut BCSStream
     ) {
         let targets =
             bcs_stream::deserialize_vector(
@@ -624,237 +629,44 @@ module mcms::mcms {
         )
     }
 
-    inline fun timelock_deserialize_and_cancel(
-        stream: &mut bcs_stream::BCSStream
+    inline fun deserialize_and_timelock_cancel(
+        role: u8, stream: &mut BCSStream
     ) {
         let id = bcs_stream::deserialize_vector_u8(stream);
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_cancel(id)
+        timelock_cancel(role, id)
     }
 
-    inline fun timelock_deserialize_and_update_min_delay(
-        stream: &mut bcs_stream::BCSStream
+    inline fun deserialize_and_timelock_update_min_delay(
+        role: u8, stream: &mut BCSStream
     ) {
         let new_min_delay = bcs_stream::deserialize_u64(stream);
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_update_min_delay(new_min_delay)
+        timelock_update_min_delay(role, new_min_delay)
     }
 
-    inline fun timelock_deserialize_and_block_function(
-        stream: &mut bcs_stream::BCSStream
+    inline fun deserialize_and_timelock_block_function(
+        role: u8, stream: &mut BCSStream
     ) {
         let target = bcs_stream::deserialize_address(stream);
         let module_name = bcs_stream::deserialize_string(stream);
         let function_name = bcs_stream::deserialize_string(stream);
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_block_function(target, module_name, function_name)
+        timelock_block_function(role, target, module_name, function_name)
     }
 
-    inline fun timelock_deserialize_and_unblock_function(
-        stream: &mut bcs_stream::BCSStream
+    inline fun deserialize_and_timelock_unblock_function(
+        role: u8, stream: &mut BCSStream
     ) {
         let target = bcs_stream::deserialize_address(stream);
         let module_name = bcs_stream::deserialize_string(stream);
         let function_name = bcs_stream::deserialize_string(stream);
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_unblock_function(target, module_name, function_name)
-    }
-
-    /// If we reach here, we know that the call was scheduled and is ready to be executed.
-    /// No role checks are needed here because the call was already scheduled by a bypasser or proposer.
-    inline fun dispatch(
-        target: address,
-        module_name: String,
-        function_name: String,
-        data: vector<u8>
-    ) {
-        let module_name_bytes = *module_name.bytes();
-        let function_name_bytes = *function_name.bytes();
-
-        if (target == @mcms) {
-            if (module_name_bytes == b"mcms") {
-                // dispatch to the mcms module's functions for setting config, scheduling, executing, and canceling operations.
-                dispatch_to_self(function_name_bytes, data);
-            } else if (module_name_bytes == b"mcms_account") {
-                // dispatch to the account module's functions for ownership transfers.
-                dispatch_to_account(function_name_bytes, data);
-            } else if (module_name_bytes == b"mcms_deployer") {
-                // dispatch to the deployer module's functions for deploying and upgrading contracts.
-                dispatch_to_deployer(function_name_bytes, data);
-            } else if (module_name_bytes == b"mcms_registry") {
-                // dispatch to the registry module's functions for code object management.
-                dispatch_to_registry(function_name_bytes, data);
-            }
-        } else {
-            // If role is present, it must be a bypasser (calling from `execute`).
-            let object_meta =
-                mcms_registry::start_dispatch(target, module_name, function_name, data);
-            aptos_framework::dispatchable_fungible_asset::derived_supply(object_meta);
-            mcms_registry::finish_dispatch(target);
-        }
-    }
-
-    inline fun dispatch_to_self(
-        function_name_bytes: vector<u8>, data: vector<u8>
-    ) {
-        let stream = bcs_stream::new(data);
-
-        if (function_name_bytes == b"set_config") {
-            let role_param = bcs_stream::deserialize_u8(&mut stream);
-            let signer_addresses =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
-                );
-            let signer_groups = bcs_stream::deserialize_vector_u8(&mut stream);
-            let group_quorums = bcs_stream::deserialize_vector_u8(&mut stream);
-            let group_parents = bcs_stream::deserialize_vector_u8(&mut stream);
-            let clear_root = bcs_stream::deserialize_bool(&mut stream);
-            bcs_stream::assert_is_consumed(&stream);
-
-            set_config(
-                &mcms_account::get_signer(), // Must get MCMS signer for `set_config`
-                role_param,
-                signer_addresses,
-                signer_groups,
-                group_quorums,
-                group_parents,
-                clear_root
-            );
-        } else if (function_name_bytes == b"timelock_schedule_batch") {
-            timelock_deserialize_and_schedule_batch(&mut stream)
-        } else if (function_name_bytes == b"timelock_bypasser_execute_batch") {
-            timelock_deserialize_and_bypasser_execute_batch(&mut stream)
-        } else if (function_name_bytes == b"timelock_execute_batch") {
-            timelock_deserialize_and_execute_batch(&mut stream)
-        } else if (function_name_bytes == b"timelock_cancel") {
-            timelock_deserialize_and_cancel(&mut stream)
-        } else if (function_name_bytes == b"timelock_update_min_delay") {
-            timelock_deserialize_and_update_min_delay(&mut stream)
-        } else if (function_name_bytes == b"timelock_block_function") {
-            timelock_deserialize_and_block_function(&mut stream)
-        } else if (function_name_bytes == b"timelock_unblock_function") {
-            timelock_deserialize_and_unblock_function(&mut stream)
-        } else {
-            abort E_UNKNOWN_MCMS_MODULE_FUNCTION
-        }
-    }
-
-    inline fun dispatch_to_account(
-        function_name_bytes: vector<u8>, data: vector<u8>
-    ) {
-        let stream = bcs_stream::new(data);
-        let self_signer = &mcms_account::get_signer();
-
-        if (function_name_bytes == b"transfer_ownership") {
-            let target = bcs_stream::deserialize_address(&mut stream);
-            bcs_stream::assert_is_consumed(&stream);
-            mcms_account::transfer_ownership(self_signer, target);
-        } else if (function_name_bytes == b"accept_ownership") {
-            mcms_account::accept_ownership(self_signer);
-        } else {
-            abort E_UNKNOWN_MCMS_ACCOUNT_MODULE_FUNCTION;
-        }
-    }
-
-    inline fun dispatch_to_deployer(
-        function_name_bytes: vector<u8>, data: vector<u8>
-    ) {
-        let self_signer = &mcms_account::get_signer();
-        let stream = bcs_stream::new(data);
-
-        if (function_name_bytes == b"stage_code_chunk") {
-            let metadata_chunk = bcs_stream::deserialize_vector_u8(&mut stream);
-            let code_indices =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| { bcs_stream::deserialize_u16(stream) }
-                );
-            let code_chunks =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
-                );
-            mcms_deployer::stage_code_chunk(
-                self_signer,
-                metadata_chunk,
-                code_indices,
-                code_chunks
-            );
-        } else if (function_name_bytes == b"stage_code_chunk_and_publish_to_object") {
-            let metadata_chunk = bcs_stream::deserialize_vector_u8(&mut stream);
-            let code_indices =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| { bcs_stream::deserialize_u16(stream) }
-                );
-            let code_chunks =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
-                );
-            let new_owner_seed = bcs_stream::deserialize_vector_u8(&mut stream);
-            mcms_deployer::stage_code_chunk_and_publish_to_object(
-                self_signer,
-                metadata_chunk,
-                code_indices,
-                code_chunks,
-                new_owner_seed
-            );
-        } else if (function_name_bytes == b"stage_code_chunk_and_upgrade_object_code") {
-            let metadata_chunk = bcs_stream::deserialize_vector_u8(&mut stream);
-            let code_indices =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| { bcs_stream::deserialize_u16(stream) }
-                );
-            let code_chunks =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
-                );
-            let code_object_address = bcs_stream::deserialize_address(&mut stream);
-            mcms_deployer::stage_code_chunk_and_upgrade_object_code(
-                self_signer,
-                metadata_chunk,
-                code_indices,
-                code_chunks,
-                code_object_address
-            );
-        } else if (function_name_bytes == b"cleanup_staging_area") {
-            bcs_stream::assert_is_consumed(&stream);
-            mcms_deployer::cleanup_staging_area(self_signer);
-        } else {
-            abort E_UNKNOWN_MCMS_DEPLOYER_MODULE_FUNCTION;
-        }
-    }
-
-    inline fun dispatch_to_registry(
-        function_name_bytes: vector<u8>, data: vector<u8>
-    ) {
-        let stream = bcs_stream::new(data);
-        let self_signer = &mcms_account::get_signer();
-
-        if (function_name_bytes == b"create_owner_for_preexisting_code_object") {
-            let object_address = bcs_stream::deserialize_address(&mut stream);
-            bcs_stream::assert_is_consumed(&stream);
-            mcms_registry::create_owner_for_preexisting_code_object(
-                self_signer, object_address
-            );
-        } else if (function_name_bytes == b"transfer_code_object") {
-            let object_address = bcs_stream::deserialize_address(&mut stream);
-            let new_owner_address = bcs_stream::deserialize_address(&mut stream);
-            bcs_stream::assert_is_consumed(&stream);
-            mcms_registry::transfer_code_object(
-                self_signer, object_address, new_owner_address
-            );
-        } else {
-            abort E_UNKNOWN_MCMS_REGISTRY_MODULE_FUNCTION;
-        }
+        timelock_unblock_function(role, target, module_name, function_name)
     }
 
     /// Updates the multisig configuration, including signer addresses and group settings.
@@ -1138,8 +950,18 @@ module mcms::mcms {
     }
 
     #[view]
+    public fun timelock_role(): u8 {
+        TIMELOCK_ROLE
+    }
+
+    #[view]
     public fun is_valid_role(role: u8): bool {
         role < MAX_ROLE
+    }
+
+    #[view]
+    public fun zero_hash(): vector<u8> {
+        ZERO_HASH
     }
 
     fun hash_metadata_leaf(metadata: RootMetadata): vector<u8> {
@@ -1168,24 +990,6 @@ module mcms::mcms {
 
     inline fun borrow_mut(): &mut MultisigState acquires MultisigState {
         borrow_global_mut<MultisigState>(@mcms)
-    }
-
-    fun assert_bypasser_role(role: u8) {
-        assert!(role == BYPASSER_ROLE, E_NOT_BYPASSER_ROLE);
-    }
-
-    inline fun assert_bypasser_or_proposer_role(role: u8) {
-        assert!(
-            role == BYPASSER_ROLE || role == PROPOSER_ROLE,
-            E_INVALID_ROLE
-        );
-    }
-
-    inline fun assert_bypasser_or_canceller_role(role: u8) {
-        assert!(
-            role == BYPASSER_ROLE || role == CANCELLER_ROLE,
-            E_INVALID_ROLE
-        );
     }
 
     public fun role(root_metadata: RootMetadata): u8 {
@@ -1222,10 +1026,6 @@ module mcms::mcms {
 
     public fun config_group_parents(config: &Config): vector<u8> {
         config.group_parents
-    }
-
-    public fun zero_hash(): vector<u8> {
-        ZERO_HASH
     }
 
     // =======================================================================================
@@ -1315,8 +1115,9 @@ module mcms::mcms {
     }
 
     /// Schedule a batch of calls to be executed after a delay.
-    /// This function can only be called by users with the PROPOSER or BYPASSER role.
+    /// This function can only be called by PROPOSER or ADMIN role.
     inline fun timelock_schedule_batch(
+        role: u8,
         targets: vector<address>,
         module_names: vector<String>,
         function_names: vector<String>,
@@ -1325,6 +1126,11 @@ module mcms::mcms {
         salt: vector<u8>,
         delay: u64
     ) {
+        assert!(
+            role == PROPOSER_ROLE || role == TIMELOCK_ROLE,
+            E_NOT_AUTHORIZED_ROLE
+        );
+
         let calls = create_calls(targets, module_names, function_names, datas);
         let id = hash_operation_batch(calls, predecessor, salt);
         let timelock = borrow_mut_timelock();
@@ -1358,8 +1164,9 @@ module mcms::mcms {
         );
         assert!(delay >= timelock.min_delay, E_INSUFFICIENT_DELAY);
 
-        let timestamp = timestamp::now_seconds() + delay;
+        let timestamp = timestamp::now_seconds() + timelock.min_delay + delay;
         timelock.timestamps.add(id, timestamp);
+
     }
 
     inline fun timelock_before_call(
@@ -1388,6 +1195,7 @@ module mcms::mcms {
     ) acquires Multisig, MultisigState, Timelock {
         let calls = create_calls(targets, module_names, function_names, datas);
         let id = hash_operation_batch(calls, predecessor, salt);
+
         timelock_before_call(id, predecessor);
 
         for (i in 0..calls.length()) {
@@ -1397,7 +1205,7 @@ module mcms::mcms {
             let function_name = function.function_name;
             let data = calls[i].data;
 
-            dispatch(target, module_name, function_name, data);
+            timelock_dispatch(target, module_name, function_name, data);
 
             event::emit(
                 CallExecuted { id, index: i, target, module_name, function_name, data }
@@ -1408,18 +1216,24 @@ module mcms::mcms {
     }
 
     fun timelock_bypasser_execute_batch(
+        role: u8,
         targets: vector<address>,
         module_names: vector<String>,
         function_names: vector<String>,
         datas: vector<vector<u8>>
     ) acquires Multisig, MultisigState, Timelock {
+        assert!(
+            role == BYPASSER_ROLE || role == TIMELOCK_ROLE,
+            E_NOT_AUTHORIZED_ROLE
+        );
+
         for (i in 0..targets.length()) {
             let target = targets[i];
             let module_name = module_names[i];
             let function_name = function_names[i];
             let data = datas[i];
 
-            dispatch(target, module_name, function_name, data);
+            timelock_dispatch(target, module_name, function_name, data);
 
             event::emit(
                 BypasserCallExecuted { index: i, target, module_name, function_name, data }
@@ -1427,14 +1241,206 @@ module mcms::mcms {
         };
     }
 
-    inline fun timelock_cancel(id: vector<u8>) {
+    /// If we reach here, we know that the call was scheduled and is ready to be executed.
+    /// Only callable from `timelock_execute_batch` or `timelock_bypasser_execute_batch`
+    inline fun timelock_dispatch(
+        target: address,
+        module_name: String,
+        function_name: String,
+        data: vector<u8>
+    ) {
+        let module_name_bytes = *module_name.bytes();
+        let function_name_bytes = *function_name.bytes();
+
+        if (target == @mcms) {
+            if (module_name_bytes == b"mcms") {
+                // dispatch to the mcms module's functions for setting config, scheduling, executing, and canceling operations.
+                timelock_dispatch_to_self(function_name, data);
+            } else if (module_name_bytes == b"mcms_account") {
+                // dispatch to the account module's functions for ownership transfers.
+                timelock_dispatch_to_account(function_name_bytes, data);
+            } else if (module_name_bytes == b"mcms_deployer") {
+                // dispatch to the deployer module's functions for deploying and upgrading contracts.
+                timelock_dispatch_to_deployer(function_name_bytes, data);
+            } else if (module_name_bytes == b"mcms_registry") {
+                // dispatch to the registry module's functions for code object management.
+                timelock_dispatch_to_registry(function_name_bytes, data);
+            }
+        } else {
+            // If role is present, it must be a bypasser (calling from `execute`).
+            let object_meta =
+                mcms_registry::start_dispatch(target, module_name, function_name, data);
+            aptos_framework::dispatchable_fungible_asset::derived_supply(object_meta);
+            mcms_registry::finish_dispatch(target);
+        }
+    }
+
+    inline fun timelock_dispatch_to_self(
+        function_name: String, data: vector<u8>
+    ) {
+        let stream = bcs_stream::new(data);
+        let fn_bytes = *function_name.bytes();
+        let prefix = b"timelock";
+
+        if (fn_bytes.length() >= prefix.length()
+            && fn_bytes.slice(0, prefix.length()) == prefix) {
+            // Pass `TIMELOCK_ROLE` as the function call has already been validated
+            dispatch_to_timelock(TIMELOCK_ROLE, function_name, data);
+        } else if (fn_bytes == b"set_config") {
+            let role_param = bcs_stream::deserialize_u8(&mut stream);
+            let signer_addresses =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
+                );
+            let signer_groups = bcs_stream::deserialize_vector_u8(&mut stream);
+            let group_quorums = bcs_stream::deserialize_vector_u8(&mut stream);
+            let group_parents = bcs_stream::deserialize_vector_u8(&mut stream);
+            let clear_root = bcs_stream::deserialize_bool(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+
+            set_config(
+                &mcms_account::get_signer(), // Must get MCMS signer for `set_config`
+                role_param,
+                signer_addresses,
+                signer_groups,
+                group_quorums,
+                group_parents,
+                clear_root
+            );
+        } else {
+            abort E_UNKNOWN_MCMS_MODULE_FUNCTION
+        }
+    }
+
+    inline fun timelock_dispatch_to_account(
+        function_name_bytes: vector<u8>, data: vector<u8>
+    ) {
+        let stream = bcs_stream::new(data);
+        let self_signer = &mcms_account::get_signer();
+
+        if (function_name_bytes == b"transfer_ownership") {
+            let target = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            mcms_account::transfer_ownership(self_signer, target);
+        } else if (function_name_bytes == b"accept_ownership") {
+            mcms_account::accept_ownership(self_signer);
+        } else {
+            abort E_UNKNOWN_MCMS_ACCOUNT_MODULE_FUNCTION;
+        }
+    }
+
+    inline fun timelock_dispatch_to_deployer(
+        function_name_bytes: vector<u8>, data: vector<u8>
+    ) {
+        let self_signer = &mcms_account::get_signer();
+        let stream = bcs_stream::new(data);
+
+        if (function_name_bytes == b"stage_code_chunk") {
+            let metadata_chunk = bcs_stream::deserialize_vector_u8(&mut stream);
+            let code_indices =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_u16(stream) }
+                );
+            let code_chunks =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
+                );
+            mcms_deployer::stage_code_chunk(
+                self_signer,
+                metadata_chunk,
+                code_indices,
+                code_chunks
+            );
+        } else if (function_name_bytes == b"stage_code_chunk_and_publish_to_object") {
+            let metadata_chunk = bcs_stream::deserialize_vector_u8(&mut stream);
+            let code_indices =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_u16(stream) }
+                );
+            let code_chunks =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
+                );
+            let new_owner_seed = bcs_stream::deserialize_vector_u8(&mut stream);
+            mcms_deployer::stage_code_chunk_and_publish_to_object(
+                self_signer,
+                metadata_chunk,
+                code_indices,
+                code_chunks,
+                new_owner_seed
+            );
+        } else if (function_name_bytes == b"stage_code_chunk_and_upgrade_object_code") {
+            let metadata_chunk = bcs_stream::deserialize_vector_u8(&mut stream);
+            let code_indices =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_u16(stream) }
+                );
+            let code_chunks =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
+                );
+            let code_object_address = bcs_stream::deserialize_address(&mut stream);
+            mcms_deployer::stage_code_chunk_and_upgrade_object_code(
+                self_signer,
+                metadata_chunk,
+                code_indices,
+                code_chunks,
+                code_object_address
+            );
+        } else if (function_name_bytes == b"cleanup_staging_area") {
+            bcs_stream::assert_is_consumed(&stream);
+            mcms_deployer::cleanup_staging_area(self_signer);
+        } else {
+            abort E_UNKNOWN_MCMS_DEPLOYER_MODULE_FUNCTION;
+        }
+    }
+
+    inline fun timelock_dispatch_to_registry(
+        function_name_bytes: vector<u8>, data: vector<u8>
+    ) {
+        let stream = bcs_stream::new(data);
+        let self_signer = &mcms_account::get_signer();
+
+        if (function_name_bytes == b"create_owner_for_preexisting_code_object") {
+            let object_address = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            mcms_registry::create_owner_for_preexisting_code_object(
+                self_signer, object_address
+            );
+        } else if (function_name_bytes == b"transfer_code_object") {
+            let object_address = bcs_stream::deserialize_address(&mut stream);
+            let new_owner_address = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            mcms_registry::transfer_code_object(
+                self_signer, object_address, new_owner_address
+            );
+        } else {
+            abort E_UNKNOWN_MCMS_REGISTRY_MODULE_FUNCTION;
+        }
+    }
+
+    inline fun timelock_cancel(role: u8, id: vector<u8>) {
+        assert!(
+            role == CANCELLER_ROLE || role == TIMELOCK_ROLE,
+            E_NOT_AUTHORIZED_ROLE
+        );
+
         assert!(timelock_is_operation_pending(id), E_OPERATION_CANNOT_BE_CANCELLED);
 
         borrow_mut_timelock().timestamps.remove(id);
         event::emit(Cancelled { id });
     }
 
-    inline fun timelock_update_min_delay(new_min_delay: u64) {
+    inline fun timelock_update_min_delay(role: u8, new_min_delay: u64) {
+        assert!(role == TIMELOCK_ROLE, E_NOT_TIMELOCK_ROLE);
+
         let timelock = borrow_mut_timelock();
         let old_min_delay = timelock.min_delay;
         timelock.min_delay = new_min_delay;
@@ -1443,8 +1449,13 @@ module mcms::mcms {
     }
 
     inline fun timelock_block_function(
-        target: address, module_name: String, function_name: String
+        role: u8,
+        target: address,
+        module_name: String,
+        function_name: String
     ) {
+        assert!(role == TIMELOCK_ROLE, E_NOT_TIMELOCK_ROLE);
+
         let already_blocked = false;
         let new_function = Function { target, module_name, function_name };
         let timelock = borrow_mut_timelock();
@@ -1464,8 +1475,13 @@ module mcms::mcms {
     }
 
     inline fun timelock_unblock_function(
-        target: address, module_name: String, function_name: String
+        role: u8,
+        target: address,
+        module_name: String,
+        function_name: String
     ) {
+        assert!(role == TIMELOCK_ROLE, E_NOT_TIMELOCK_ROLE);
+
         let function_to_unblock = Function { target, module_name, function_name };
         let timelock = borrow_mut_timelock();
 
@@ -1701,6 +1717,7 @@ module mcms::mcms {
 
     #[test_only]
     public fun test_timelock_schedule_batch(
+        role: u8,
         targets: vector<address>,
         module_names: vector<String>,
         function_names: vector<String>,
@@ -1710,6 +1727,7 @@ module mcms::mcms {
         delay: u64
     ) acquires Timelock {
         timelock_schedule_batch(
+            role,
             targets,
             module_names,
             function_names,
@@ -1721,37 +1739,50 @@ module mcms::mcms {
     }
 
     #[test_only]
-    public fun test_timelock_update_min_delay(delay: u64) acquires Timelock {
-        timelock_update_min_delay(delay);
+    public fun test_timelock_update_min_delay(role: u8, delay: u64) acquires Timelock {
+        timelock_update_min_delay(role, delay);
     }
 
     #[test_only]
-    public fun test_timelock_cancel(id: vector<u8>) acquires Timelock {
-        timelock_cancel(id);
+    public fun test_timelock_cancel(role: u8, id: vector<u8>) acquires Timelock {
+        timelock_cancel(role, id);
     }
 
     #[test_only]
     public fun test_timelock_bypasser_execute_batch(
+        role: u8,
         targets: vector<address>,
         module_names: vector<String>,
         function_names: vector<String>,
         datas: vector<vector<u8>>
     ) acquires Multisig, MultisigState, Timelock {
-        timelock_bypasser_execute_batch(targets, module_names, function_names, datas);
+        timelock_bypasser_execute_batch(
+            role,
+            targets,
+            module_names,
+            function_names,
+            datas
+        );
     }
 
     #[test_only]
     public fun test_timelock_block_function(
-        target: address, module_name: String, function_name: String
+        role: u8,
+        target: address,
+        module_name: String,
+        function_name: String
     ) acquires Timelock {
-        timelock_block_function(target, module_name, function_name);
+        timelock_block_function(role, target, module_name, function_name);
     }
 
     #[test_only]
     public fun test_timelock_unblock_function(
-        target: address, module_name: String, function_name: String
+        role: u8,
+        target: address,
+        module_name: String,
+        function_name: String
     ) acquires Timelock {
-        timelock_unblock_function(target, module_name, function_name);
+        timelock_unblock_function(role, target, module_name, function_name);
     }
 
     #[test_only]
