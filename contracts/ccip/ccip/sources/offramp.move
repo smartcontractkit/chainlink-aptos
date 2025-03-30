@@ -15,7 +15,7 @@ module ccip::offramp {
 
     use ccip::auth;
     use ccip::client;
-    use ccip::eth_abi::{Self, ABIStream};
+    use ccip::eth_abi;
     use ccip::fee_quoter;
     use ccip::merkle_proof;
     use ccip::ocr3_base;
@@ -25,7 +25,7 @@ module ccip::offramp {
     use ccip::token_admin_dispatcher;
     use ccip::token_admin_registry;
 
-    use mcms::bcs_stream;
+    use mcms::bcs_stream::{Self, BCSStream};
     use mcms::mcms_registry;
 
     // These have to match the EVM states
@@ -993,25 +993,24 @@ module ccip::offramp {
     // ================================================================
 
     inline fun deserialize_commit_report(report_bytes: vector<u8>): CommitReport {
-        let stream = eth_abi::new_stream(report_bytes);
+        let stream = bcs_stream::new(report_bytes);
         let token_price_updates =
-            eth_abi::decode_vector(
+            bcs_stream::deserialize_vector(
                 &mut stream,
                 |stream| {
                     TokenPriceUpdate {
-                        source_token: eth_abi::decode_address(stream),
-                        usd_per_token: eth_abi::decode_u256(stream)
+                        source_token: bcs_stream::deserialize_address(stream),
+                        usd_per_token: bcs_stream::deserialize_u256(stream)
                     }
                 }
             );
-
         let gas_price_updates =
-            eth_abi::decode_vector(
+            bcs_stream::deserialize_vector(
                 &mut stream,
                 |stream| {
                     GasPriceUpdate {
-                        dest_chain_selector: eth_abi::decode_u64(stream),
-                        usd_per_unit_gas: eth_abi::decode_u256(stream)
+                        dest_chain_selector: bcs_stream::deserialize_u64(stream),
+                        usd_per_unit_gas: bcs_stream::deserialize_u256(stream)
                     }
                 }
             );
@@ -1020,14 +1019,9 @@ module ccip::offramp {
         let unblessed_merkle_roots = parse_merkle_root(&mut stream);
 
         let rmn_signatures =
-            eth_abi::decode_vector(
+            bcs_stream::deserialize_vector(
                 &mut stream,
-                |stream| {
-                    let r = eth_abi::decode_bytes32(stream);
-                    let s = eth_abi::decode_bytes32(stream);
-                    vector::append(&mut r, s);
-                    r
-                }
+                |stream| { bcs_stream::deserialize_fixed_vector_u8(stream, 64) }
             );
 
         CommitReport {
@@ -1038,16 +1032,16 @@ module ccip::offramp {
         }
     }
 
-    inline fun parse_merkle_root(stream: &mut ABIStream): vector<MerkleRoot> {
-        eth_abi::decode_vector(
+    inline fun parse_merkle_root(stream: &mut BCSStream): vector<MerkleRoot> {
+        bcs_stream::deserialize_vector(
             stream,
             |stream| {
                 MerkleRoot {
-                    source_chain_selector: eth_abi::decode_u64(stream),
-                    on_ramp_address: eth_abi::decode_bytes(stream),
-                    min_seq_nr: eth_abi::decode_u64(stream),
-                    max_seq_nr: eth_abi::decode_u64(stream),
-                    merkle_root: eth_abi::decode_bytes32(stream)
+                    source_chain_selector: bcs_stream::deserialize_u64(stream),
+                    on_ramp_address: bcs_stream::deserialize_vector_u8(stream),
+                    min_seq_nr: bcs_stream::deserialize_u64(stream),
+                    max_seq_nr: bcs_stream::deserialize_u64(stream),
+                    merkle_root: bcs_stream::deserialize_fixed_vector_u8(stream, 32)
                 }
             }
         )
