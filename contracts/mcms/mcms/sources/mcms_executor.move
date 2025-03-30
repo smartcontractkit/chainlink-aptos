@@ -36,6 +36,7 @@ module mcms::mcms_executor {
 
     public entry fun stage_data_and_execute(
         caller: &signer,
+        role: u8,
         chain_id: u256,
         multisig: address,
         nonce: u64,
@@ -63,6 +64,8 @@ module mcms::mcms_executor {
             proofs.append(partial_proofs)
         };
         mcms::execute(
+            caller,
+            role,
             chain_id,
             multisig,
             nonce,
