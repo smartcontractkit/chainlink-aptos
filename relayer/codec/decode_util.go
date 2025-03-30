@@ -28,18 +28,6 @@ func DecodeAptosJsonArray(from []any, to ...any) error {
 }
 
 func DecodeAptosJsonValue(from any, to any) error {
-	// Handle interface targets by creating a concrete value of the underlying type
-	rv := reflect.ValueOf(to)
-	if rv.Kind() == reflect.Ptr && rv.Elem().Kind() == reflect.Interface {
-		concreteValue := reflect.New(rv.Elem().Type()).Elem().Interface()
-		err := DecodeAptosJsonValue(from, &concreteValue)
-		if err != nil {
-			return err
-		}
-		rv.Elem().Set(reflect.ValueOf(concreteValue))
-		return nil
-	}
-
 	config := &mapstructure.DecoderConfig{
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
 			hexStringHook,
@@ -113,15 +101,7 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 		}
 		return hex.DecodeString(str)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		val, err := strconv.ParseUint(str, 16, 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse hex to uint: %w", err)
-		}
-		if overflowUint(t, val) {
-			return nil, fmt.Errorf("value %d overflows %v", val, t)
-		}
-		// Use Convert to handle types with underlying uint kinds (like ChainSelector)
-		return reflect.ValueOf(val).Convert(t).Interface(), nil
+		return strconv.ParseUint(str, 16, 64)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		val, err := strconv.ParseInt(str, 16, 64)
 		if err != nil {
@@ -246,7 +226,7 @@ func numericStringHook(f reflect.Type, t reflect.Type, data interface{}) (interf
 	default:
 	}
 
-	return nil, fmt.Errorf("unsupported target type for numeric string conversion: %v (name %s %s)", t.Kind(), t.Name(), t.String())
+	return nil, fmt.Errorf("unsupported target type for numeric string conversion: %v", t.Kind())
 }
 
 func booleanHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
