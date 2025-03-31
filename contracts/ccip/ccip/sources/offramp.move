@@ -1380,18 +1380,65 @@ module ccip::offramp {
     }
 
     #[test]
-    fun test_commit() {
-        let report_context = vector[
-            x"000ae8f76a6d60b56c17d10ae94c0865656d72737f0d1301fd7f88d4eb599276",
-            x"0000000000000000000000000000000000000000000000000000000000000009"
-        ];
-        let report_bytes =
-            x"000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000012000000000000000000000000000000000000000000000000000000000000001400000000000000000000000000000000000000000000000000000000000000260000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000c9f9284461c852b00000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001f0a90d2a69f16005bd2bf262af828d51f62404678927bfd62c6dd9352217045a0000000000000000000000000000000000000000000000000000000000000014eab1f75d5a1d4fca39ad27a629f8c6106bd4d8d60000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        let report = deserialize_commit_report(report_bytes);
-        let signatures = vector[
-            x"6c1fbc1ae46b49242b1264cd7140256fdf3041674b0f3ab633dab69a16e01c403a3e34a7e14daab104b9730ebb732a72f0f034f019c7d5c7f1af4e8026f3e512d3e906cc2e8a12d37987ac2b25a43c8a1068243aebba97c2d918027ea900f908",
-            x"bb3d7d03d1e4707d153211150b44e0c69f72c274b19e9b2964adad82ea542102f3976b16f1557be6cc6789aa4739c168f17986fe92415a81f9aecf0b791886475573f61f9553609f0cb813d28e97132d7ab03e515044a128b91f80d1467ef40b"
-        ];
+    fun test_deserialize_execution_report() {
+        let expected_sender = x"5bb234f28b9441e85014e6dbd31a9f29106ed0f1";
+        let expected_data = x"68656c6c6f20434349505265636569766572";
+        let expected_receiver =
+            @0x3924c22ae3d49459b7e942cf0780ad4d9fb6cd94750e5dd027df6ad2f83a686a;
+        let expected_gas_limit = 100000;
+        let expected_message_id =
+            x"1937f0fe7ded7c902c04d72b222faea04ed830dee9316f1e4034d72970301a66";
+        let expected_source_chain_selector = 909606746561742123;
+        let expected_dest_chain_selector = 4457093679053095497;
+        let expected_sequence_number = 1;
+        let expected_nonce = 0;
+        let expected_leaf_bytes =
+            x"ccd307dec76b159785d925eb002ce6b2dd98ad17d02bc6e8a7d62238a6ede93c";
 
+        let report_bytes =
+            x"2b851c4684929f0c1937f0fe7ded7c902c04d72b222faea04ed830dee9316f1e4034d72970301a662b851c4684929f0c4942991e16c7da3d01000000000000000000000000000000145bb234f28b9441e85014e6dbd31a9f29106ed0f11268656c6c6f204343495052656365697665723924c22ae3d49459b7e942cf0780ad4d9fb6cd94750e5dd027df6ad2f83a686aa086010000000000000000000000000000000000000000000000000000000000000000";
+        let onramp = x"ce7cbb6201001f1de59b6df2c0c90f5aeb013752";
+        let execution_report = deserialize_execution_report(report_bytes);
+
+        assert!(execution_report.message.sender == expected_sender, 5);
+        assert!(execution_report.message.data == expected_data, 6);
+        assert!(execution_report.message.receiver == expected_receiver, 7);
+        assert!(execution_report.message.gas_limit == expected_gas_limit, 8);
+        assert!(execution_report.message.header.message_id == expected_message_id, 9);
+        assert!(
+            execution_report.message.header.source_chain_selector
+                == expected_source_chain_selector,
+            1
+        );
+        assert!(
+            execution_report.message.header.dest_chain_selector
+                == expected_dest_chain_selector,
+            2
+        );
+        assert!(
+            execution_report.message.header.sequence_number == expected_sequence_number,
+            3
+        );
+        assert!(execution_report.message.header.nonce == expected_nonce, 4);
+
+        std::debug::print(&execution_report);
+
+        let metadata_hash =
+            calculate_metadata_hash(
+                execution_report.source_chain_selector,
+                execution_report.message.header.dest_chain_selector,
+                onramp
+            );
+
+        std::debug::print(&metadata_hash);
+
+        let hashed_leaf = calculate_message_hash(
+            &execution_report.message, metadata_hash
+        );
+        assert!(
+            expected_leaf_bytes
+                == x"ccd307dec76b159785d925eb002ce6b2dd98ad17d02bc6e8a7d62238a6ede93c",
+            1
+        );
     }
 }
