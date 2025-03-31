@@ -3,14 +3,15 @@ package chainreader
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/aptos-labs/aptos-go-sdk"
+	"github.com/go-viper/mapstructure/v2"
+	"math/big"
 	"reflect"
 	"sort"
 	"strings"
-
-	"github.com/aptos-labs/aptos-go-sdk"
-	"github.com/go-viper/mapstructure/v2"
 
 	"github.com/smartcontractkit/chainlink-ccip/pkg/consts"
 	//"github.com/smartcontractkit/chainlink-ccip/pkg/reader"
@@ -43,6 +44,7 @@ type aptosChainReader struct {
 var _ types.ContractTypeProvider = &aptosChainReader{}
 
 func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config ChainReaderConfig) types.ContractReader {
+	utils.AppendLog("DEBUG: aptosChainReader.NewChainReader")
 	return &aptosChainReader{
 		logger:                logger.Named(lgr, "AptosChainReader"),
 		client:                client,
@@ -89,6 +91,7 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 	// Source the read configuration, by contract name
 	address, ok := a.moduleAddresses[contractName]
 	if !ok {
+		utils.AppendLog("DEBUG: aptosChainReader.GetLatestValue failed to get bound address for module %s", contractName)
 		return fmt.Errorf("no bound address for module %s", contractName)
 	}
 
@@ -186,7 +189,7 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		return fmt.Errorf("failed to call view function: %+w", err)
 	}
 
-	if err := maybeRenameFields(data, functionConfig.ResultFieldRenames); err != nil {
+	if err := MaybeRenameFields(data, functionConfig.ResultFieldRenames); err != nil {
 		return fmt.Errorf("failed to rename function return value fields: %+w", err)
 	}
 
@@ -271,15 +274,22 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	contractName := contract.Name
 
 	address, ok := a.moduleAddresses[contractName]
+
+	eventKey := filter.Key
+
+	utils.AppendLog("DEBUG: aptosChainReader.QueryKey called with contractName %s, key %s, filter %+v, limitAndSort %+v moduleAddresses %+v", contractName, eventKey, filter, limitAndSort, a.moduleAddresses)
+	utils.AppendLog("DEBUG: aptosChainReader.QueryKey looking up address for %s (key %s) - found: %v", contractName, eventKey, ok)
 	if !ok {
+		utils.AppendLog("ERROR: aptosChainReader.QueryKey no bound address for module %s", contractName)
 		return nil, fmt.Errorf("no bound address for module %s", contractName)
 	}
 
+	utils.AppendLog("DEBUG: aptosChainReader.QueryKey comparing bound address %s vs provided %s (key %s)", address.String(), contract.Address, eventKey)
 	if address.String() != contract.Address {
+		utils.AppendLog("ERROR: aptosChainReader.QueryKey bound address %s does not match provided address %s", address, contract.Address)
 		return nil, fmt.Errorf("bound address %s for module %s does not match provided address %s", address, contractName, contract.Address)
 	}
 
-	eventKey := filter.Key
 	// temp: parsing offset from queryFilter because limitAndSort doesn't support offset-based pagination
 	var eventOffset uint64 = 0
 	for _, expr := range filter.Expressions {
@@ -300,17 +310,23 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 
 	limit := limitAndSort.Limit.Count
 
+	utils.AppendLog("DEBUG: aptosChainReader.QueryKey looking up module config for %s (key %s)", contractName, eventKey)
 	moduleConfig, ok := a.config.Modules[contractName]
 	if !ok {
+		utils.AppendLog("ERROR: aptosChainReader.QueryKey no module config found for %s", contractName)
 		return nil, fmt.Errorf("no such module: %s", contractName)
 	}
 
+	utils.AppendLog("DEBUG: aptosChainReader.QueryKey checking events config for %s (key %s)", contractName, eventKey)
 	if moduleConfig.Events == nil {
+		utils.AppendLog("ERROR: aptosChainReader.QueryKey no events configured for %s", contractName)
 		return nil, fmt.Errorf("no events for contract: %s", contractName)
 	}
 
+	utils.AppendLog("DEBUG: aptosChainReader.QueryKey looking up event config for key %s", eventKey)
 	eventConfig, ok := moduleConfig.Events[eventKey]
 	if !ok {
+		utils.AppendLog("ERROR: aptosChainReader.QueryKey event key %s not found in module %s", eventKey, contractName)
 		return nil, fmt.Errorf("no such event key: %s", eventKey)
 	}
 
@@ -329,8 +345,10 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		components := strings.Split(eventConfig.EventAccountAddress, "::")
 
 		if len(components) == 1 {
+			utils.AppendLog("DEBUG: aptosChainReader.QueryKey parsing simple event account address: %s", components[0])
 			err := eventAccountAddress.ParseStringRelaxed(components[0])
 			if err != nil {
+				utils.AppendLog("ERROR: aptosChainReader.QueryKey failed to parse event account address %s: %v", components[0], err)
 				return nil, fmt.Errorf("failed to parse event account address: %+w", err)
 			}
 		} else {
@@ -382,10 +400,14 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 
 	eventHandle := address.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
 
+	utils.AppendLog("DEBUG: aptosChainReader.QueryKey fetching events with params: account=%s, handle=%s, field=%s, offset=%d, limit=%d",
+		eventAccountAddress.String(), eventHandle, eventConfig.EventHandleFieldName, eventOffset, limit)
 	events, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventConfig.EventHandleFieldName, &eventOffset, &limit)
 	if err != nil {
+		utils.AppendLog("ERROR: aptosChainReader.QueryKey failed to get events: %v", err)
 		return nil, fmt.Errorf("failed to get events: %+w", err)
 	}
+	utils.AppendLog("DEBUG: aptosChainReader.QueryKey fetched %d events: %+v", len(events), events)
 
 	for _, sortBy := range limitAndSort.SortBy {
 		if seqSort, ok := sortBy.(query.SortBySequence); ok {
@@ -398,31 +420,64 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		}
 	}
 
-	var sequences []types.Sequence
-	for _, event := range events {
+	sequences := []types.Sequence{}
+	headCache := map[uint64]types.Head{}
+	for i, event := range events {
+		utils.AppendLog("DEBUG: aptosChainReader.QueryKey processing event %d with seqNum %d version %d (key %s)", i, event.SequenceNumber, event.Version, eventKey)
 		jsonData := event.Data
+		utils.AppendLog("DEBUG: aptosChainReader.QueryKey raw event data: %+v", jsonData)
 
 		if err := RenameMapFields(jsonData, eventConfig.EventFieldRenames); err != nil {
 			return nil, fmt.Errorf("failed to rename event fields: %+w", err)
 		}
 
-		// create new instance of eventData for each event
-		eventData := reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
+		var eventData any
+		if a.config.IsLoopPlugin {
+			// immediately remarshal the data
+			// TODO: update aptos-go-sdk to allow returning the string directly
+			resultBytes, err := json.Marshal(jsonData)
+			if err != nil {
+				return nil, fmt.Errorf("failed to re-marshal event for seqNum %d: %w", event.SequenceNumber, err)
+			}
+			eventData = resultBytes
+		} else {
+			// create new instance of eventData for each event
+			eventData = reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
 
-		err := codec.DecodeAptosJsonValue(jsonData, &eventData)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode event data: %+w", err)
+			err := codec.DecodeAptosJsonValue(jsonData, &eventData)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode event data: %+w", err)
+			}
 		}
 
+		head, ok := headCache[event.Version]
+		if !ok {
+			block, err := a.client.BlockByVersion(event.Version, false)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get block by version: %w", err)
+			}
+			hexBytes, err := hex.DecodeString(strings.TrimPrefix(block.BlockHash, "0x"))
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode block hash: %w", err)
+			}
+			head = types.Head{
+				Height: fmt.Sprintf("%d", block.BlockHeight),
+				Hash:   hexBytes,
+				// microseconds to seconds
+				Timestamp: block.BlockTimestamp / 1000000,
+			}
+			headCache[event.Version] = head
+		}
+		utils.AppendLog("DEBUG: aptosChainReader.QueryKey head %+v", head)
 		sequence := types.Sequence{
 			Cursor: fmt.Sprintf("%d", event.SequenceNumber),
-			// todo: enrich with block data?
-			Head: types.Head{},
-			Data: eventData,
+			Head:   head,
+			Data:   eventData,
 		}
 		sequences = append(sequences, sequence)
 	}
 
+	utils.AppendLog("DEBUG: aptosChainReader.QueryKey returning %d sequences (key %s)", len(sequences), eventKey)
 	return sequences, nil
 }
 
@@ -489,8 +544,10 @@ func unwrapSlice(value any) ([]any, bool) {
 }
 
 func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContract) error {
+	utils.AppendLog("DEBUG: aptosChainReader.Bind %+v", bindings)
 	newBindings := map[string]aptos.AccountAddress{}
 	for _, binding := range bindings {
+		utils.AppendLog("DEBUG: aptosChainReader.Bind binding now Name %s address %s", binding.Name, binding.Address)
 		moduleAddress := &aptos.AccountAddress{}
 		err := moduleAddress.ParseStringRelaxed(binding.Address)
 		if err != nil {
@@ -503,10 +560,14 @@ func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContr
 		a.moduleAddresses[name] = address
 	}
 
+	utils.AppendLog("DEBUG: aptosChainReader.Bind results %+v", a.moduleAddresses)
+
 	return nil
 }
 
 func (a *aptosChainReader) Unbind(ctx context.Context, bindings []types.BoundContract) error {
+	utils.AppendLog("DEBUG: aptosChainReader.Unbind %+v", bindings)
+
 	for _, binding := range bindings {
 		key := binding.Name
 		if _, ok := a.moduleAddresses[key]; ok {
