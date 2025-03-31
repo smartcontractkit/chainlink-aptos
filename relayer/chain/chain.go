@@ -245,6 +245,9 @@ func (c *chain) ID() string {
 // TODO: should be replaced with a head tracker component
 func (c *chain) LatestHead(ctx context.Context) (types.Head, error) {
 	client, err := c.GetClient()
+	if err != nil {
+		return types.Head{}, fmt.Errorf("failed to get client: %w", err)
+	}
 
 	// Try to get the latest block height and block by height
 	info, err := client.Info()

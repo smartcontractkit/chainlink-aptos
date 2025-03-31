@@ -10,9 +10,11 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 )
 
+type CtxKeySkip string
+
 const (
 	// Helper keys to avoid duplicating attributes
-	CtxKeySkipAppendAttrs = "skip_append_attrs"
+	CtxKeySkipAppendAttrs CtxKeySkip = "skip_append_attrs"
 )
 
 // BeholderClient is a Beholder client extension with a custom ProtoEmitter

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,7 +24,7 @@ func CompileMovePackage(
 	namedAddresses map[string]aptos.AccountAddress,
 	moduleOrder []string,
 ) CompilationResult {
-	outputDir, err := ioutil.TempDir("", "aptos_compile")
+	outputDir, err := os.MkdirTemp("", "aptos_compile")
 	if err != nil {
 		t.Fatalf("Failed to create temporary directory: %v", err)
 	}

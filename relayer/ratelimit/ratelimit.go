@@ -2,10 +2,11 @@ package ratelimit
 
 import (
 	"context"
+	"time"
+
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/api"
 	"golang.org/x/sync/semaphore"
-	"time"
 )
 
 type rateLimitedClient struct {

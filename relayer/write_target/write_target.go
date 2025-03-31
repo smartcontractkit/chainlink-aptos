@@ -212,12 +212,12 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
 	}
 
-	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteInitiated(info))
+	_ = c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteInitiated(info))
 
 	// Check whether the report is valid (e.g., not empty)
 	if len(inputs.Report) == 0 {
 		// We received any empty report -- this means we should skip transmission.
-		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSkipped(info, "empty report"))
+		_ = c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSkipped(info, "empty report"))
 		return success(), nil
 	}
 
@@ -342,7 +342,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		// Source the transmitter address from the on-chain state
 		info.reportTransmissionState = state
 
-		c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(info, head))
+		_ = c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(info, head))
 		return success(), nil
 	}
 
@@ -391,7 +391,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}
 
 	c.lggr.Debugw("Transaction submitted", "request", request, "transaction-id", txID)
-	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSent(info, head, txID.String()))
+	_ = c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSent(info, head, txID.String()))
 
 	// TODO: implement a background WriteTxConfirmer to periodically source new events/transactions,
 	// relevant to this forwarder), and emit write-tx-accepted/confirmed events.
@@ -467,7 +467,7 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 		select {
 		case <-ctx.Done():
 			// We (eventually) failed to confirm the report was transmitted
-			c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteError(&info, 0, "write confirmation - failed", "timed out"))
+			_ = c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteError(&info, 0, "write confirmation - failed", "timed out"))
 			return
 		case <-ticker.C:
 			// Fetch the latest head from the chain (timestamp)
@@ -497,7 +497,7 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 				// TODO: check if accepted with an error (e.g., on-chain revert)
 				// Notice: this functionality is not available in the current CW/TXM API
 				acceptedWithErr := false
-				if acceptedWithErr {
+				if acceptedWithErr { //nolint:staticcheck
 					// TODO: [Beholder] Emit 'platform.write-target.WriteError' if accepted with an error (surface specific on-chain error)
 					// Notice: no return, we continue to check for confirmation (tx could be accepted by another node)
 				}
@@ -522,7 +522,7 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 			// Source the transmitter address from the on-chain state
 			info.reportTransmissionState = state
 
-			c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(&info, head))
+			_ = c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(&info, head))
 			return
 		}
 	}

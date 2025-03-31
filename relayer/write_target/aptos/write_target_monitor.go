@@ -59,7 +59,7 @@ func NewAptosWriteTargetMonitor(ctx context.Context, lggr logger.Logger) (*monit
 			&dataFeedsProcessor{emitter, registryMetrics},
 		},
 	}
-	return &monitor.BeholderClient{&client, &protoEmitterProxy}, nil
+	return &monitor.BeholderClient{Client: &client, ProtoEmitter: &protoEmitterProxy}, nil
 }
 
 // ProtoEmitter proxy specific to the Aptos WT

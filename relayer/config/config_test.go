@@ -8,6 +8,7 @@ import (
 )
 
 func TestTOMLConfig(t *testing.T) {
+	t.Parallel()
 	raw := `
 ChainID = "2"
 [[Nodes]]
@@ -45,6 +46,6 @@ Name = "node-1"
 URL = "http://node-1"
 	`
 
-	cfg, err = NewDecodedTOMLConfig(raw)
+	_, err = NewDecodedTOMLConfig(raw)
 	require.ErrorContains(t, err, "config is disabled")
 }

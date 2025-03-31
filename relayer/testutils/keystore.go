@@ -23,7 +23,7 @@ func NewTestKeystore(t *testing.T) *TestKeystore {
 func (tk *TestKeystore) AddKey(privateKey ed25519.PrivateKey) {
 	publicKey := fmt.Sprintf("%064x", privateKey.Public())
 	if _, ok := tk.Keys[publicKey]; ok {
-		tk.t.Fatal(fmt.Sprintf("Key already exists: %s", publicKey))
+		tk.t.Fatalf("Key already exists: %s", publicKey)
 	}
 	tk.Keys[publicKey] = privateKey
 }
@@ -31,7 +31,7 @@ func (tk *TestKeystore) AddKey(privateKey ed25519.PrivateKey) {
 func (tk *TestKeystore) Sign(ctx context.Context, id string, hash []byte) ([]byte, error) {
 	privateKey, ok := tk.Keys[id]
 	if !ok {
-		tk.t.Fatal(fmt.Sprintf("No such key: %s", id))
+		tk.t.Fatalf("No such key: %s", id)
 	}
 
 	// used to check if the account exists.

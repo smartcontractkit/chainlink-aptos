@@ -8,6 +8,7 @@ import (
 // TestRenameFields contains multiple sub-tests to verify the behavior
 // of renameMapFields under different conditions.
 func TestRenameFields(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		jsonData map[string]any
@@ -243,6 +244,7 @@ func TestRenameFields(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			err := renameMapFields(tc.jsonData, tc.renames)
 			if tc.wantErr {
 				if err == nil {

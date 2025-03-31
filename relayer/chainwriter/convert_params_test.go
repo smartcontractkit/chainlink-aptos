@@ -7,6 +7,7 @@ import (
 )
 
 func TestEncodeFunctionParams(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		argMap     map[string]interface{}
@@ -68,6 +69,7 @@ func TestEncodeFunctionParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			types, values, err := convertFunctionParams(tt.argMap, tt.params)
 
 			if err != nil {

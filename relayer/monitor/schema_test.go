@@ -12,6 +12,7 @@ import (
 )
 
 func TestToSchemaPath(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input    proto.Message
 		expected string
@@ -44,6 +45,7 @@ func TestToSchemaPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
+			t.Parallel()
 			result := toSchemaPath(tt.input, "/<base-path>")
 			assert.Equal(t, tt.expected, result)
 		})
