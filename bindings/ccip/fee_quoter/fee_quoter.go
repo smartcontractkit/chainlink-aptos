@@ -31,6 +31,7 @@ type FeeQuoter interface {
 	GetFeeTokens(opts *bind.CallOpts) ([]aptos.AccountAddress, error)
 	GetTokenTransferFeeConfig(opts *bind.CallOpts, destChainSelector uint64, token aptos.AccountAddress) (TokenTransferFeeConfig, error)
 	GetPremiumMultiplierWeiPerEth(opts *bind.CallOpts, token aptos.AccountAddress) (uint64, error)
+	ProcessMessageArgs(opts *bind.CallOpts, destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, destTokenAddresses [][]byte, destPoolDatas [][]byte) (uint64, bool, []byte, [][]byte, error)
 	GetDestChainConfig(opts *bind.CallOpts, destChainSelector uint64) (DestChainConfig, error)
 	GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error)
 
@@ -54,6 +55,7 @@ type FeeQuoterEncoder interface {
 	GetFeeTokens() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetTokenTransferFeeConfig(destChainSelector uint64, token aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetPremiumMultiplierWeiPerEth(token aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ProcessMessageArgs(destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, destTokenAddresses [][]byte, destPoolDatas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetDestChainConfig(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStaticConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Initialize(maxFeeJuelsPerMsg uint64, linkToken aptos.AccountAddress, tokenPriceStalenessThreshold uint64, feeTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -62,11 +64,10 @@ type FeeQuoterEncoder interface {
 	ApplyPremiumMultiplierWeiPerEthUpdates(tokens []aptos.AccountAddress, premiumMultiplierWeiPerEth []uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplyDestChainConfigUpdates(destChainSelector uint64, isEnabled bool, maxNumberOfTokensPerMsg uint16, maxDataBytes uint32, maxPerMsgGasLimit uint32, destGasOverhead uint32, destGasPerPayloadByteBase byte, destGasPerPayloadByteHigh byte, destGasPerPayloadByteThreshold uint16, destDataAvailabilityOverheadGas uint32, destGasPerDataAvailabilityByte uint16, destDataAvailabilityMultiplierBps uint16, chainFamilySelector []byte, enforceOutOfOrder bool, defaultTokenFeeUsdCents uint16, defaultTokenDestGasOverhead uint32, defaultTxGasLimit uint32, gasMultiplierWeiPerEth uint64, gasPriceStalenessThreshold uint32, networkFeeUsdCents uint32) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	UpdatePrices(sourceTokens []aptos.AccountAddress, sourceUsdPerToken []*big.Int, gasDestChainSelectors []uint64, gasUsdPerUnitGas []*big.Int) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	ProcessMessageArgs(destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, destTokenAddresses [][]byte, destPoolDatas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"fee_quoter","name":"apply_dest_chain_config_updates","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"is_enabled","type":"bool"},{"name":"max_number_of_tokens_per_msg","type":"u16"},{"name":"max_data_bytes","type":"u32"},{"name":"max_per_msg_gas_limit","type":"u32"},{"name":"dest_gas_overhead","type":"u32"},{"name":"dest_gas_per_payload_byte_base","type":"u8"},{"name":"dest_gas_per_payload_byte_high","type":"u8"},{"name":"dest_gas_per_payload_byte_threshold","type":"u16"},{"name":"dest_data_availability_overhead_gas","type":"u32"},{"name":"dest_gas_per_data_availability_byte","type":"u16"},{"name":"dest_data_availability_multiplier_bps","type":"u16"},{"name":"chain_family_selector","type":"vector\u003cu8\u003e"},{"name":"enforce_out_of_order","type":"bool"},{"name":"default_token_fee_usd_cents","type":"u16"},{"name":"default_token_dest_gas_overhead","type":"u32"},{"name":"default_tx_gas_limit","type":"u32"},{"name":"gas_multiplier_wei_per_eth","type":"u64"},{"name":"gas_price_staleness_threshold","type":"u32"},{"name":"network_fee_usd_cents","type":"u32"}]},{"package":"ccip","module":"fee_quoter","name":"apply_fee_token_updates","parameters":[{"name":"fee_tokens_to_remove","type":"vector\u003caddress\u003e"},{"name":"fee_tokens_to_add","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"apply_premium_multiplier_wei_per_eth_updates","parameters":[{"name":"tokens","type":"vector\u003caddress\u003e"},{"name":"premium_multiplier_wei_per_eth","type":"vector\u003cu64\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"apply_token_transfer_fee_config_updates","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"add_tokens","type":"vector\u003caddress\u003e"},{"name":"add_min_fee_usd_cents","type":"vector\u003cu32\u003e"},{"name":"add_max_fee_usd_cents","type":"vector\u003cu32\u003e"},{"name":"add_deci_bps","type":"vector\u003cu16\u003e"},{"name":"add_dest_gas_overhead","type":"vector\u003cu32\u003e"},{"name":"add_dest_bytes_overhead","type":"vector\u003cu32\u003e"},{"name":"add_is_enabled","type":"vector\u003cbool\u003e"},{"name":"remove_tokens","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"initialize","parameters":[{"name":"max_fee_juels_per_msg","type":"u64"},{"name":"link_token","type":"address"},{"name":"token_price_staleness_threshold","type":"u64"},{"name":"fee_tokens","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"fee_quoter","name":"process_message_args","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"fee_token","type":"address"},{"name":"fee_token_amount","type":"u64"},{"name":"extra_args","type":"vector\u003cu8\u003e"},{"name":"dest_token_addresses","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"dest_pool_datas","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"update_prices","parameters":[{"name":"source_tokens","type":"vector\u003caddress\u003e"},{"name":"source_usd_per_token","type":"vector\u003cu256\u003e"},{"name":"gas_dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"gas_usd_per_unit_gas","type":"vector\u003cu256\u003e"}]}]`
+const FunctionInfo = `[{"package":"ccip","module":"fee_quoter","name":"apply_dest_chain_config_updates","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"is_enabled","type":"bool"},{"name":"max_number_of_tokens_per_msg","type":"u16"},{"name":"max_data_bytes","type":"u32"},{"name":"max_per_msg_gas_limit","type":"u32"},{"name":"dest_gas_overhead","type":"u32"},{"name":"dest_gas_per_payload_byte_base","type":"u8"},{"name":"dest_gas_per_payload_byte_high","type":"u8"},{"name":"dest_gas_per_payload_byte_threshold","type":"u16"},{"name":"dest_data_availability_overhead_gas","type":"u32"},{"name":"dest_gas_per_data_availability_byte","type":"u16"},{"name":"dest_data_availability_multiplier_bps","type":"u16"},{"name":"chain_family_selector","type":"vector\u003cu8\u003e"},{"name":"enforce_out_of_order","type":"bool"},{"name":"default_token_fee_usd_cents","type":"u16"},{"name":"default_token_dest_gas_overhead","type":"u32"},{"name":"default_tx_gas_limit","type":"u32"},{"name":"gas_multiplier_wei_per_eth","type":"u64"},{"name":"gas_price_staleness_threshold","type":"u32"},{"name":"network_fee_usd_cents","type":"u32"}]},{"package":"ccip","module":"fee_quoter","name":"apply_fee_token_updates","parameters":[{"name":"fee_tokens_to_remove","type":"vector\u003caddress\u003e"},{"name":"fee_tokens_to_add","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"apply_premium_multiplier_wei_per_eth_updates","parameters":[{"name":"tokens","type":"vector\u003caddress\u003e"},{"name":"premium_multiplier_wei_per_eth","type":"vector\u003cu64\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"apply_token_transfer_fee_config_updates","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"add_tokens","type":"vector\u003caddress\u003e"},{"name":"add_min_fee_usd_cents","type":"vector\u003cu32\u003e"},{"name":"add_max_fee_usd_cents","type":"vector\u003cu32\u003e"},{"name":"add_deci_bps","type":"vector\u003cu16\u003e"},{"name":"add_dest_gas_overhead","type":"vector\u003cu32\u003e"},{"name":"add_dest_bytes_overhead","type":"vector\u003cu32\u003e"},{"name":"add_is_enabled","type":"vector\u003cbool\u003e"},{"name":"remove_tokens","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"initialize","parameters":[{"name":"max_fee_juels_per_msg","type":"u64"},{"name":"link_token","type":"address"},{"name":"token_price_staleness_threshold","type":"u64"},{"name":"fee_tokens","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"fee_quoter","name":"update_prices","parameters":[{"name":"source_tokens","type":"vector\u003caddress\u003e"},{"name":"source_usd_per_token","type":"vector\u003cu256\u003e"},{"name":"gas_dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"gas_usd_per_unit_gas","type":"vector\u003cu256\u003e"}]}]`
 
 func NewFeeQuoter(address aptos.AccountAddress, client aptos.AptosRpcClient) FeeQuoter {
 	contract := bind.NewBoundContract(address, "ccip", "fee_quoter", client)
@@ -379,6 +380,30 @@ func (c FeeQuoterContract) GetPremiumMultiplierWeiPerEth(opts *bind.CallOpts, to
 	return r0, nil
 }
 
+func (c FeeQuoterContract) ProcessMessageArgs(opts *bind.CallOpts, destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, destTokenAddresses [][]byte, destPoolDatas [][]byte) (uint64, bool, []byte, [][]byte, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.ProcessMessageArgs(destChainSelector, feeToken, feeTokenAmount, extraArgs, destTokenAddresses, destPoolDatas)
+	if err != nil {
+		return *new(uint64), *new(bool), *new([]byte), *new([][]byte), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(uint64), *new(bool), *new([]byte), *new([][]byte), err
+	}
+
+	var (
+		r0 uint64
+		r1 bool
+		r2 []byte
+		r3 [][]byte
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0, &r1, &r2, &r3); err != nil {
+		return *new(uint64), *new(bool), *new([]byte), *new([][]byte), err
+	}
+	return r0, r1, r2, r3, nil
+}
+
 func (c FeeQuoterContract) GetDestChainConfig(opts *bind.CallOpts, destChainSelector uint64) (DestChainConfig, error) {
 	module, function, typeTags, args, err := c.feeQuoterEncoder.GetDestChainConfig(destChainSelector)
 	if err != nil {
@@ -545,6 +570,24 @@ func (c feeQuoterEncoder) GetPremiumMultiplierWeiPerEth(token aptos.AccountAddre
 	})
 }
 
+func (c feeQuoterEncoder) ProcessMessageArgs(destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, destTokenAddresses [][]byte, destPoolDatas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("process_message_args", nil, []string{
+		"u64",
+		"address",
+		"u64",
+		"vector<u8>",
+		"vector<vector<u8>>",
+		"vector<vector<u8>>",
+	}, []any{
+		destChainSelector,
+		feeToken,
+		feeTokenAmount,
+		extraArgs,
+		destTokenAddresses,
+		destPoolDatas,
+	})
+}
+
 func (c feeQuoterEncoder) GetDestChainConfig(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("get_dest_chain_config", nil, []string{
 		"u64",
@@ -672,24 +715,6 @@ func (c feeQuoterEncoder) UpdatePrices(sourceTokens []aptos.AccountAddress, sour
 		sourceUsdPerToken,
 		gasDestChainSelectors,
 		gasUsdPerUnitGas,
-	})
-}
-
-func (c feeQuoterEncoder) ProcessMessageArgs(destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, destTokenAddresses [][]byte, destPoolDatas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("process_message_args", nil, []string{
-		"u64",
-		"address",
-		"u64",
-		"vector<u8>",
-		"vector<vector<u8>>",
-		"vector<vector<u8>>",
-	}, []any{
-		destChainSelector,
-		feeToken,
-		feeTokenAmount,
-		extraArgs,
-		destTokenAddresses,
-		destPoolDatas,
 	})
 }
 
