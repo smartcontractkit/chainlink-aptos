@@ -1,11 +1,11 @@
 ARG BASE_IMAGE=chainlink:aptos
 
 # Build image: Plugins
-FROM golang:1.23-bullseye as buildplugins
+FROM golang:1.24-bullseye as buildplugins
 RUN go version
 
 WORKDIR /build
-COPY relayer . 
+COPY . .
 RUN go install ./cmd/chainlink-aptos
 
 # Use the BASE_IMAGE argument in the FROM instruction
