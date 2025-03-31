@@ -1049,26 +1049,26 @@ module ccip::offramp {
 
     inline fun deserialize_execution_reports(reports_bytes: vector<u8>):
         vector<ExecutionReport> {
-        let stream = eth_abi::new_stream(reports_bytes);
-        eth_abi::decode_vector(
+        let stream = bcs_stream::new(reports_bytes);
+        bcs_stream::deserialize_vector(
             &mut stream,
             |stream| {
-                let report_bytes = eth_abi::decode_bytes(stream);
+                let report_bytes = bcs_stream::deserialize_vector_u8(stream);
                 deserialize_execution_report(report_bytes)
             }
         )
     }
 
     inline fun deserialize_execution_report(report_bytes: vector<u8>): ExecutionReport {
-        let stream = eth_abi::new_stream(report_bytes);
+        let stream = bcs_stream::new(report_bytes);
 
-        let source_chain_selector = eth_abi::decode_u64(&mut stream);
+        let source_chain_selector = bcs_stream::deserialize_u64(&mut stream);
 
-        let message_id = eth_abi::decode_bytes32(&mut stream);
-        let header_source_chain_selector = eth_abi::decode_u64(&mut stream);
-        let dest_chain_selector = eth_abi::decode_u64(&mut stream);
-        let sequence_number = eth_abi::decode_u64(&mut stream);
-        let nonce = eth_abi::decode_u64(&mut stream);
+        let message_id = bcs_stream::deserialize_fixed_vector_u8(&mut stream, 32);
+        let header_source_chain_selector = bcs_stream::deserialize_u64(&mut stream);
+        let dest_chain_selector = bcs_stream::deserialize_u64(&mut stream);
+        let sequence_number = bcs_stream::deserialize_u64(&mut stream);
+        let nonce = bcs_stream::deserialize_u64(&mut stream);
 
         let header = RampMessageHeader {
             message_id,
@@ -1083,20 +1083,20 @@ module ccip::offramp {
             error::invalid_argument(E_SOURCE_CHAIN_SELECTOR_MISMATCH)
         );
 
-        let sender = eth_abi::decode_bytes(&mut stream);
-        let data = eth_abi::decode_bytes(&mut stream);
-        let receiver = eth_abi::decode_aptos_address(&mut stream);
-        let gas_limit = eth_abi::decode_u256(&mut stream);
+        let sender = bcs_stream::deserialize_vector_u8(&mut stream);
+        let data = bcs_stream::deserialize_vector_u8(&mut stream);
+        let receiver = bcs_stream::deserialize_address(&mut stream);
+        let gas_limit = bcs_stream::deserialize_u256(&mut stream);
 
         let token_amounts =
-            eth_abi::decode_vector(
+            bcs_stream::deserialize_vector(
                 &mut stream,
                 |stream| {
-                    let source_pool_address = eth_abi::decode_bytes(stream);
-                    let dest_token_address = eth_abi::decode_aptos_address(stream);
-                    let dest_gas_amount = eth_abi::decode_u32(stream);
-                    let extra_data = eth_abi::decode_bytes(stream);
-                    let amount = eth_abi::decode_u256(stream);
+                    let source_pool_address = bcs_stream::deserialize_vector_u8(stream);
+                    let dest_token_address = bcs_stream::deserialize_address(stream);
+                    let dest_gas_amount = bcs_stream::deserialize_u32(stream);
+                    let extra_data = bcs_stream::deserialize_vector_u8(stream);
+                    let amount = bcs_stream::deserialize_u256(stream);
 
                     Any2AptosTokenTransfer {
                         source_pool_address,
@@ -1118,12 +1118,14 @@ module ccip::offramp {
         };
 
         let offchain_token_data =
-            eth_abi::decode_vector(&mut stream, |stream| eth_abi::decode_bytes(stream));
+            bcs_stream::deserialize_vector(
+                &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
+            );
 
         let proofs =
-            eth_abi::decode_vector(
+            bcs_stream::deserialize_vector(
                 &mut stream,
-                |stream| eth_abi::decode_bytes32(stream)
+                |stream| bcs_stream::deserialize_fixed_vector_u8(stream, 32)
             );
 
         ExecutionReport { source_chain_selector, message, offchain_token_data, proofs }
