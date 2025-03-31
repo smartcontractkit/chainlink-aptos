@@ -1378,4 +1378,60 @@ module ccip::offramp {
         assert!(metadata_hash == expected_hash, 1);
         assert!(metadata_hash_alternate == expected_hash_alternate, 2);
     }
+
+    #[test]
+    fun test_deserialize_execution_report() {
+        let expected_sender = x"d87929a32cf0cbdc9e2d07ffc7c33344079de727";
+        let expected_data = x"68656c6c6f20434349505265636569766572";
+        let expected_receiver =
+            @0xbd8a1fb0af25dc8700d2d302cfbae718c3b2c3c61cfe47f58a45b1126c006490;
+        let expected_gas_limit = 100000;
+        let expected_message_id =
+            x"20865dcacbd6afb6a2288daa164caf75517009a289fa3135281fb1e4800b11bc";
+        let expected_source_chain_selector = 909606746561742123;
+        let expected_dest_chain_selector = 743186221051783445;
+        let expected_sequence_number = 1;
+        let expected_nonce = 0;
+        let expected_leaf_bytes =
+            x"258dc7f9ec033388ee50bf3e0debfc841a278054f5b2ce41728f7459267c719e";
+
+        let report_bytes =
+            x"2b851c4684929f0c20865dcacbd6afb6a2288daa164caf75517009a289fa3135281fb1e4800b11bc2b851c4684929f0c15a9c133ee53500a0100000000000000000000000000000014d87929a32cf0cbdc9e2d07ffc7c33344079de7271268656c6c6f20434349505265636569766572bd8a1fb0af25dc8700d2d302cfbae718c3b2c3c61cfe47f58a45b1126c006490a086010000000000000000000000000000000000000000000000000000000000000000";
+        let onramp = x"47a1f0a819457f01153f35c6b6b0d42e2e16e91e";
+        let execution_report = deserialize_execution_report(report_bytes);
+        std::debug::print(&execution_report);
+
+        assert!(execution_report.message.sender == expected_sender, 5);
+        assert!(execution_report.message.data == expected_data, 6);
+        assert!(execution_report.message.receiver == expected_receiver, 7);
+        assert!(execution_report.message.gas_limit == expected_gas_limit, 8);
+        assert!(execution_report.message.header.message_id == expected_message_id, 9);
+        assert!(
+            execution_report.message.header.source_chain_selector
+                == expected_source_chain_selector,
+            1
+        );
+        assert!(
+            execution_report.message.header.dest_chain_selector
+                == expected_dest_chain_selector,
+            2
+        );
+        assert!(
+            execution_report.message.header.sequence_number == expected_sequence_number,
+            3
+        );
+        assert!(execution_report.message.header.nonce == expected_nonce, 4);
+
+        let metadata_hash =
+            calculate_metadata_hash(
+                execution_report.source_chain_selector,
+                execution_report.message.header.dest_chain_selector,
+                onramp
+            );
+        let hashed_leaf = calculate_message_hash(
+            &execution_report.message, metadata_hash
+        );
+
+        assert!(expected_leaf_bytes == hashed_leaf, 1);
+    }
 }
