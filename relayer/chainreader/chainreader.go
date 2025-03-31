@@ -24,6 +24,7 @@ import (
 	//module_fee_quoter "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/fee_quoter"
 	module_ocr3_base "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/ocr3_base"
 	module_offramp "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/offramp"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/loop"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
@@ -290,9 +291,20 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		return nil, fmt.Errorf("bound address %s for module %s does not match provided address %s", address, contractName, contract.Address)
 	}
 
+	var expressions []query.Expression
+	if !a.config.IsLoopPlugin {
+		expressions = filter.Expressions
+	} else {
+		convertedExpressions, err := loop.DeserializeExpressions(filter.Expressions)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deserialize QueryKey expressions: %w", err)
+		}
+		expressions = convertedExpressions
+	}
+
 	// temp: parsing offset from queryFilter because limitAndSort doesn't support offset-based pagination
 	var eventOffset uint64 = 0
-	for _, expr := range filter.Expressions {
+	for _, expr := range expressions {
 		if expr.IsPrimitive() {
 			if comparator, ok := expr.Primitive.(*primitives.Comparator); ok && comparator.Name == "offset" {
 				for _, valueComparator := range comparator.ValueComparators {
