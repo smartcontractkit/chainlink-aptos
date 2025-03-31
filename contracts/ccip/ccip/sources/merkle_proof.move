@@ -52,4 +52,10 @@ module ccip::merkle_proof {
             hash_internal_node(b, a)
         }
     }
+
+    #[test]
+    fun test_single_leaf() {
+        let leaf = x"aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899";
+        assert!(merkle_root(leaf, vector[]) == leaf);
+    }
 }
