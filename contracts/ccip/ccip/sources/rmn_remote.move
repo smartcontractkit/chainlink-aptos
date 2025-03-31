@@ -432,9 +432,9 @@ module ccip::rmn_remote {
         borrow_global_mut<RMNRemoteState>(state_object::object_address())
     }
 
-    //
-    // MCMS entrypoint
-    //
+    // ================================================================
+    // |                      MCMS Entrypoint                         |
+    // ================================================================
 
     struct McmsCallback has drop {}
 

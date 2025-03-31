@@ -1210,9 +1210,9 @@ module ccip::offramp {
         ocr3_base::latest_config_details(&state.ocr3_base_state, ocr_plugin_type)
     }
 
-    //
-    // MCMS entrypoint
-    //
+    // ================================================================
+    // |                      MCMS Entrypoint                         |
+    // ================================================================
 
     struct McmsCallback has drop {}
 
