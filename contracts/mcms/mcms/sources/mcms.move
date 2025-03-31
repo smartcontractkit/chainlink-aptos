@@ -67,6 +67,7 @@ module mcms::mcms {
     const E_INVALID_MODULE_NAME: u64 = 47;
     const E_UNKNOWN_MCMS_TIMELOCK_FUNCTION: u64 = 48;
     const E_INVALID_ROOT_LEN: u64 = 49;
+
     const BYPASSER_ROLE: u8 = 0;
     const CANCELLER_ROLE: u8 = 1;
     const PROPOSER_ROLE: u8 = 2;
@@ -91,8 +92,8 @@ module mcms::mcms {
     const DONE_TIMESTAMP: u64 = 1;
 
     const ZERO_HASH: vector<u8> = vector[
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0
     ];
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
@@ -470,7 +471,9 @@ module mcms::mcms {
         // computes keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP, op))
         let hashed_leaf = hash_op_leaf(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP, op);
         assert!(
-            verify_merkle_proof(proof, multisig.expiring_root_and_op_count.root, hashed_leaf),
+            verify_merkle_proof(
+                proof, multisig.expiring_root_and_op_count.root, hashed_leaf
+            ),
             E_PROOF_CANNOT_BE_VERIFIED
         );
 
@@ -498,7 +501,9 @@ module mcms::mcms {
         );
     }
 
-    inline fun dispatch_to_timelock(role: u8, function_name: String, data: vector<u8>) {
+    inline fun dispatch_to_timelock(
+        role: u8, function_name: String, data: vector<u8>
+    ) {
         let function_name_bytes = *function_name.bytes();
         let stream = bcs_stream::new(data);
 
@@ -1077,7 +1082,7 @@ module mcms::mcms {
         let multisig = borrow_multisig(multisig_object(role));
         (
             multisig.expiring_root_and_op_count.root,
-            multisig.expiring_root_and_op_count.valid_until,
+            multisig.expiring_root_and_op_count.valid_until
         )
     }
 
@@ -1219,6 +1224,10 @@ module mcms::mcms {
         config.group_parents
     }
 
+    public fun zero_hash(): vector<u8> {
+        ZERO_HASH
+    }
+
     // =======================================================================================
     // |                                 Timelock Implementation                              |
     // =======================================================================================
@@ -1343,17 +1352,24 @@ module mcms::mcms {
     inline fun timelock_schedule(
         timelock: &mut Timelock, id: vector<u8>, delay: u64
     ) {
-        assert!(!timelock_is_operation_internal(timelock, id), E_OPERATION_ALREADY_SCHEDULED);
+        assert!(
+            !timelock_is_operation_internal(timelock, id),
+            E_OPERATION_ALREADY_SCHEDULED
+        );
         assert!(delay >= timelock.min_delay, E_INSUFFICIENT_DELAY);
 
-        let timestamp = timestamp::now_seconds() + timelock.min_delay + delay;
+        let timestamp = timestamp::now_seconds() + delay;
         timelock.timestamps.add(id, timestamp);
-
     }
 
-    inline fun timelock_before_call(id: vector<u8>, predecessor: vector<u8>) {
+    inline fun timelock_before_call(
+        id: vector<u8>, predecessor: vector<u8>
+    ) {
         assert!(timelock_is_operation_ready(id), E_OPERATION_NOT_READY);
-        assert!(predecessor == ZERO_HASH || timelock_is_operation_done(predecessor), E_MISSING_DEPENDENCY);
+        assert!(
+            predecessor == ZERO_HASH || timelock_is_operation_done(predecessor),
+            E_MISSING_DEPENDENCY
+        );
     }
 
     inline fun timelock_after_call(id: vector<u8>) {
@@ -1372,7 +1388,6 @@ module mcms::mcms {
     ) acquires Multisig, MultisigState, Timelock {
         let calls = create_calls(targets, module_names, function_names, datas);
         let id = hash_operation_batch(calls, predecessor, salt);
-
         timelock_before_call(id, predecessor);
 
         for (i in 0..calls.length()) {
@@ -1487,7 +1502,9 @@ module mcms::mcms {
         timelock_is_operation_internal(borrow_timelock(), id)
     }
 
-    inline fun timelock_is_operation_internal(timelock: &Timelock, id: vector<u8>): bool {
+    inline fun timelock_is_operation_internal(
+        timelock: &Timelock, id: vector<u8>
+    ): bool {
         timelock.timestamps.contains(id) && *timelock.timestamps.borrow(id) > 0
     }
 
@@ -1747,7 +1764,6 @@ module mcms::mcms {
         module_name: String,
         function_name: String,
         data: vector<u8>
-
     ): Op {
         Op {
             role,
