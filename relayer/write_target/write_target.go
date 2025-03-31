@@ -7,10 +7,8 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"math/big"
 	"time"
 
-	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
@@ -18,33 +16,58 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/consensus/ocr3/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
-	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/report/platform"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 
 	wt "github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/platform/write-target"
-
-	aptosacc "github.com/smartcontractkit/chainlink-aptos/relayer/account"
 )
 
 var (
 	_ capabilities.TargetCapability = &writeTarget{}
 )
 
-// required field of target's config in the workflow spec
+// TODO: Move this file to chainlink-common. This is just here for POC purposes.
+
+type TransactionStatus uint8
+
+// new chain agnostic transmission state types
+const (
+	TransmissionStateNotAttempted TransactionStatus = iota
+	TransmissionStateSucceeded
+	TransmissionStateFailed // retry
+	TransmissionStateFatal  // don't retry
+)
+
+// alter TransmissionState to reference specific types rather than just
+// success bool
+type TransmissionState struct {
+	Status      TransactionStatus
+	Transmitter string
+	Err         error
+}
+
+type TargetStrategy interface {
+	// QueryTransmissionState defines how the report should be queried
+	// via ChainReader, and how resulting errors should be classified.
+	QueryTransmissionState(ctx context.Context, rec string, workflowExecutionID string, reportID uint16) (*TransmissionState, error)
+	// TransmitReport constructs the tx to transmit the report, and defines
+	// any specific handling for sending the report via ChainWriter.
+	TransmitReport(ctx context.Context, receiver string, report []byte, reportContext []byte, signatures [][]byte, workflowExecutionID string) (string, error)
+}
+
+var (
+	_ capabilities.TargetCapability = &writeTarget{}
+)
+
+// chain-agnostic consts
 const (
 	CapabilityName = "write"
 
 	// Input keys
+	// Is this key chain agnostic?
 	KeySignedReport = "signed_report"
-
-	// Static contract info
-	ContractName                            = "forwarder"
-	ContractMethodName_report               = "report"
-	ContractMethodName_getTransmissionState = "getTransmissionState"
-	ContractMethodName_getTransmitter       = "getTransmitter"
 )
 
 type writeTarget struct {
@@ -64,8 +87,9 @@ type writeTarget struct {
 
 	nodeAddress      string
 	forwarderAddress string
-}
 
+	targetStrategy TargetStrategy
+}
 type WriteTargetOpts struct {
 	ID string
 
@@ -85,16 +109,13 @@ type WriteTargetOpts struct {
 
 	NodeAddress      string
 	ForwarderAddress string
+
+	TargetStrategy TargetStrategy
 }
 
 // Capability-specific configuration
 type ReqConfig struct {
 	Address string
-}
-
-type TransmissionState struct {
-	Transmitter string
-	Success     bool
 }
 
 // NewWriteTargetID returns the capability ID for the write target
@@ -132,6 +153,7 @@ func NewWriteTarget(opts WriteTargetOpts) capabilities.TargetCapability {
 		opts.ConfigValidateFn,
 		opts.NodeAddress,
 		opts.ForwarderAddress,
+		opts.TargetStrategy,
 	}
 }
 
@@ -207,13 +229,6 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	// Source the report ID from the input
 	info.reportInfo.reportID = binary.BigEndian.Uint16(inputs.ID)
 
-	// Decode the workflow execution ID
-	rawExecutionID, err := hex.DecodeString(request.Metadata.WorkflowExecutionID)
-	if err != nil {
-		msg := builder.buildWriteError(info, 0, "failed to decode the workflow execution ID", err.Error())
-		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
-	}
-
 	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteInitiated(info))
 
 	// Check whether the report is valid (e.g., not empty)
@@ -247,21 +262,6 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
 	}
 
-	// Check whether the report was already transmitted on chain
-	binding := commontypes.BoundContract{
-		Address: info.forwarder,
-		Name:    ContractName,
-	}
-	queryInputs := struct {
-		Receiver            string
-		WorkflowExecutionID []byte
-		ReportID            uint16
-	}{
-		Receiver:            info.receiver,
-		WorkflowExecutionID: rawExecutionID,
-		ReportID:            info.reportInfo.reportID,
-	}
-
 	// Fetch the latest head from the chain (timestamp), retry with a default backoff strategy
 	ctx = context.WithValue(ctx, utils.CtxKeyTracingID, info.request.Metadata.WorkflowExecutionID)
 	head, err := utils.WithRetry(ctx, c.lggr, c.cs.LatestHead)
@@ -281,60 +281,8 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		"executionID", request.Metadata.WorkflowExecutionID,
 	)
 
-	c.lggr.Debugw("querying [TransmissionState]", "binding", binding, "queryInputs", queryInputs)
+	state, err := c.targetStrategy.QueryTransmissionState(ctx, info.receiver, request.Metadata.WorkflowExecutionID, info.reportInfo.reportID)
 
-	// Notice: if not confirmed the report is published yet, we're expected to submit the report on-chain (might be
-	// competing with other nodes). We want to confirm this report was accepted and finalized eventually, or timeout
-	// and emit an error - we store the confirm query
-
-	// Helper to query the chain for the transmission state
-	// TODO: it's unclear how to source the TransmissionState via an abstracted CR API call
-	// Notice: this function is Aptos chain-specific (logic needs to be hidden behind the CR API call)
-	query := func(ctx context.Context) (*TransmissionState, error) {
-		// Check if transmission state exists
-		var transmitted bool
-		readTransmissionState := binding.ReadIdentifier(ContractMethodName_getTransmissionState)
-		err := c.cr.GetLatestValue(ctx, readTransmissionState, primitives.Unconfirmed, queryInputs, &transmitted)
-		if err != nil {
-			return nil, fmt.Errorf("failed to call [forwarder.getTransmissionState]: %w", err)
-		}
-
-		c.lggr.Debugw("[forwarder.getTransmissionState] call output", "transmitted", transmitted)
-
-		// nil state means the report was not transmitted yet
-		if !transmitted {
-			return nil, nil
-		}
-
-		// Fetch the transmitter address from the chain (decode output type)
-		// Notice: here we leak an Apots specific type and implementation - Option<string> (not-portable, not chain-agnostic)
-		var transmitterAddr struct {
-			Vec []string
-		}
-		readTransmitter := binding.ReadIdentifier(ContractMethodName_getTransmitter)
-		err = c.cr.GetLatestValue(ctx, readTransmitter, primitives.Unconfirmed, queryInputs, &transmitterAddr)
-		if err != nil {
-			return nil, fmt.Errorf("failed to call [forwarder.getTransmitter]: %w", err)
-		}
-
-		c.lggr.Debugw("[forwarder.getTransmitter] call output", "transmitterAddr", transmitterAddr)
-
-		if len(transmitterAddr.Vec) == 0 {
-			return nil, fmt.Errorf("failed to call [forwarder.getTransmitter]: unexpected empty result")
-		}
-
-		// Notice: more Apots-specific logic to decode the transmitter address (not portable)
-		// Needs to be moved to CR codec (decoder), same as for Option<> type decoding above
-		address, err := aptosacc.HexAddrToAccountAddress(transmitterAddr.Vec[0])
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse transmitter address: %w", err)
-		}
-
-		return &TransmissionState{Transmitter: address.String(), Success: true}, nil
-	}
-
-	// Fetch the transmission state, retry with a default backoff strategy
-	state, err := utils.WithRetry(ctx, c.lggr, query)
 	if err != nil {
 		msg := builder.buildWriteError(info, 0, "failed to fetch [TransmissionState]", err.Error())
 		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
@@ -356,49 +304,17 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		"executionID", request.Metadata.WorkflowExecutionID,
 	)
 
-	txID, err := uuid.NewUUID() // NOTE: CW expects us to generate an ID, rather than return one
+	txID, err := c.targetStrategy.TransmitReport(ctx, info.receiver, inputs.Report, inputs.Context, inputs.Signatures, request.Metadata.WorkflowExecutionID)
+	c.lggr.Debugw("Transaction submitted", "request", request, "transaction-id", txID)
+	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSent(info, head, txID))
 	if err != nil {
-		// This should never happen
-		return capabilities.CapabilityResponse{}, err
-	}
-
-	// Note: The codec that ChainWriter uses to encode the parameters for the contract ABI cannot handle
-	// `nil` values, including for slices. Until the bug is fixed we need to ensure that there are no
-	// `nil` values passed in the request.
-	req := struct {
-		Receiver   string
-		RawReport  []byte
-		Signatures [][]byte
-	}{
-		Receiver:   info.receiver,
-		RawReport:  append(inputs.Context, inputs.Report...),
-		Signatures: inputs.Signatures,
-	}
-
-	if req.RawReport == nil {
-		req.RawReport = make([]byte, 0)
-	}
-
-	if req.Signatures == nil {
-		req.Signatures = make([][]byte, 0)
-	}
-
-	// Submit the transaction
-	meta := commontypes.TxMeta{WorkflowExecutionID: &request.Metadata.WorkflowExecutionID}
-	value := big.NewInt(0)
-	err = c.cw.SubmitTransaction(ctx, ContractName, ContractMethodName_report, req, txID.String(), info.forwarder, &meta, value)
-	if err != nil {
-		msg := builder.buildWriteError(info, 0, "failed to invoke [forwarder.report]", err.Error())
+		msg := builder.buildWriteError(info, 0, "failed to transmit the report", err.Error())
 		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
 	}
-
-	c.lggr.Debugw("Transaction submitted", "request", request, "transaction-id", txID)
-	c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteSent(info, head, txID.String()))
-
 	// TODO: implement a background WriteTxConfirmer to periodically source new events/transactions,
 	// relevant to this forwarder), and emit write-tx-accepted/confirmed events.
 
-	go c.acceptAndConfirmWrite(ctx, *info, txID, query)
+	go c.acceptAndConfirmWrite(ctx, *info, txID)
 	return success(), nil
 }
 
@@ -418,7 +334,7 @@ func (c *writeTarget) UnregisterFromWorkflow(ctx context.Context, request capabi
 //   - 'platform.write-target.WriteAccepted'  if accepted (with or without an error)
 //   - 'platform.write-target.WriteError'     if accepted (with an error)
 //   - 'platform.write-target.WriteConfirmed' if confirmed (until timeout)
-func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInfo, txID uuid.UUID, query func(context.Context) (*TransmissionState, error)) {
+func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInfo, txID string) {
 	attrs := c.traceAttributes(info.request.Metadata.WorkflowExecutionID)
 	_, span := c.beholder.Tracer.Start(ctx, "Execute.acceptAndConfirmWrite", trace.WithAttributes(attrs...))
 	defer span.End()
@@ -443,7 +359,7 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 	// Fn helpers
 	checkAcceptedStatus := func(ctx context.Context) (commontypes.TransactionStatus, bool, error) {
 		// Check TXM for status
-		status, err := c.cw.GetTransactionStatus(ctx, txID.String())
+		status, err := c.cw.GetTransactionStatus(ctx, txID)
 		if err != nil {
 			return commontypes.Unknown, false, fmt.Errorf("failed to get tx status: %w", err)
 		}
@@ -460,7 +376,6 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 		// false if [Unknown, Pending, Failed, Fatal]
 		return status, false, nil
 	}
-	checkConfirmedStatus := query
 
 	// Store the acceptance status
 	accepted := false
@@ -506,7 +421,7 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 			}
 
 			// Check confirmation status (transmission state)
-			state, err := checkConfirmedStatus(ctx)
+			state, err := c.targetStrategy.QueryTransmissionState(ctx, info.receiver, info.request.Metadata.WorkflowExecutionID, info.reportInfo.reportID)
 			if err != nil {
 				lggr.Errorw("failed to check confirmed status", "txID", txID, "err", err)
 				continue
