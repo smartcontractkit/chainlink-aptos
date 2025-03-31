@@ -215,7 +215,7 @@ func (m *messageBuilder) buildWriteConfirmed(i *requestInfo, head types.Head) *w
 
 		// Transmission Info
 		Transmitter: i.reportTransmissionState.Transmitter,
-		Success:     i.reportTransmissionState.Success,
+		Success:     i.reportTransmissionState.Status == TransmissionStateSucceeded,
 
 		// Execution Context - Source
 		MetaSourceId: i.node,
