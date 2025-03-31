@@ -10,6 +10,7 @@ import (
 )
 
 func TestDecodeAptosJsonValue(t *testing.T) {
+	t.Parallel()
 	t.Run("String to String", func(t *testing.T) {
 		var result string
 		err := DecodeAptosJsonValue("hello world", &result)
@@ -176,6 +177,7 @@ func compareBigIntSlices(a, b []*big.Int) bool {
 }
 
 func TestDecodeAptosJsonArray(t *testing.T) {
+	t.Parallel()
 	t.Run("string,string to string,string", func(t *testing.T) {
 		var (
 			firstWord  string

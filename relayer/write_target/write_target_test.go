@@ -7,6 +7,7 @@ import (
 )
 
 func TestNewWriteTargetID(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name            string
 		chainFamilyName string
@@ -83,6 +84,7 @@ func TestNewWriteTargetID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result, err := NewWriteTargetID(tt.chainFamilyName, tt.networkName, tt.chainID, tt.version)
 			if tt.expectError {
 				require.Error(t, err)

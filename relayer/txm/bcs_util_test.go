@@ -9,7 +9,9 @@ import (
 )
 
 func TestGetBcsValues(t *testing.T) {
+	t.Parallel()
 	t.Run("uint32,uint64", func(t *testing.T) {
+		t.Parallel()
 		value1 := uint32(142)
 		typeTag1, err := CreateTypeTag("u32")
 		require.NoError(t, err)
@@ -31,6 +33,7 @@ func TestGetBcsValues(t *testing.T) {
 		require.Equal(t, decoded[1], value2)
 	})
 	t.Run("uint128,string", func(t *testing.T) {
+		t.Parallel()
 		value1 := big.NewInt(128128128128128)
 		typeTag1, err := CreateTypeTag("u128")
 		require.NoError(t, err)
@@ -52,6 +55,7 @@ func TestGetBcsValues(t *testing.T) {
 		require.Equal(t, decoded[1], value2)
 	})
 	t.Run("address,[][]uint64", func(t *testing.T) {
+		t.Parallel()
 		value1 := aptos.AccountAddress{}
 		_ = value1.ParseStringRelaxed("0x123456789")
 		typeTag1, err := CreateTypeTag("address")
@@ -74,6 +78,7 @@ func TestGetBcsValues(t *testing.T) {
 		require.EqualValues(t, value2, decoded[1])
 	})
 	t.Run("[]string,[]uint16", func(t *testing.T) {
+		t.Parallel()
 		value1 := []string{"thisisatest!", "andanotherone123"}
 		typeTag1, err := CreateTypeTag("vector<0x1::string::String>")
 		require.NoError(t, err)

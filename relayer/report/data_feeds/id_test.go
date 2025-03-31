@@ -7,6 +7,7 @@ import (
 )
 
 func TestGetDecimals(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		dataType uint8
@@ -47,6 +48,7 @@ func TestGetDecimals(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			decimals, isNumber := GetDecimals(tt.dataType)
 			require.Equal(t, tt.expected, decimals)
 			require.Equal(t, tt.isNumber, isNumber)
@@ -65,6 +67,7 @@ func TestGetDecimals(t *testing.T) {
 // 0x01 1e22d6bf 0003 32 000000000000000000000000000000000000000000000000 = X/Y Price with 18 decimals
 // 0x01 a80ff216 0003 28 000000000000000000000000000000000000000000000000 = X/Y Price with 8 decimals
 func TestFeedIDGetDataTypeDecimals(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		feedId   string
@@ -129,6 +132,7 @@ func TestFeedIDGetDataTypeDecimals(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			feedId, err := NewFeedIDFromHex(tt.feedId)
 			require.NoError(t, err)
 

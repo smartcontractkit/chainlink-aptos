@@ -11,8 +11,10 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 )
 
+type CtxKey string
+
 // CtxKeyTracingID is the context key for tracing ID
-const CtxKeyTracingID = "tracingID"
+const CtxKeyTracingID CtxKey = "tracingID"
 
 // Exponential backoff (default) is used to handle retries with increasing wait times in case of errors
 var BackoffStrategyDefault = backoff.Backoff{

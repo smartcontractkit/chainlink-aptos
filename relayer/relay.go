@@ -16,7 +16,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainwriter"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target/aptos"
+	write_target "github.com/smartcontractkit/chainlink-aptos/relayer/write_target/aptos"
 )
 
 var _ types.Relayer = (*relayer)(nil) //nolint:staticcheck

@@ -416,7 +416,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	if tx.Attempt > 0 {
 		// If we're retrying a failed transaction that we caught in the confirm loop, resync the nonce again
 		// first.
-		a.resyncNonce(client, tx.FromAddress)
+		_ = a.resyncNonce(client, tx.FromAddress)
 	}
 
 	// broadcast with basic retry to try get the tx included in the mempool
@@ -477,7 +477,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			httpErrorBody := string(httpError.Body)
 			if strings.Contains(httpErrorBody, "SEQUENCE_NUMBER_TOO_OLD") || strings.Contains(httpErrorBody, "SEQUENCE_NUMBER_TOO_NEW") {
 				// Try to resync the nonce before the next attempt.
-				a.resyncNonce(client, tx.FromAddress)
+				_ = a.resyncNonce(client, tx.FromAddress)
 			}
 		}
 	}
@@ -580,7 +580,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 				// Confirm the transaction, mark as failed to reuse the nonce.
 				err = txStore.Confirm(unconfirmedTx.Nonce, hash, true)
 				if err != nil {
-					ctxLogger.Errorw("coudln't confirm expired tx", "error", err)
+					ctxLogger.Errorw("couldn't confirm expired tx", "error", err)
 					unconfirmedTx.Tx.Status = commontypes.Failed
 					continue
 				}

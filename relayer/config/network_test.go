@@ -8,6 +8,7 @@ import (
 )
 
 func TestGetNetworkConfig(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		chainID string
 		want    aptos.NetworkConfig
@@ -23,6 +24,7 @@ func TestGetNetworkConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.chainID, func(t *testing.T) {
+			t.Parallel()
 			got, err := GetNetworkConfig(tt.chainID)
 			if tt.wantErr {
 				assert.Error(t, err)

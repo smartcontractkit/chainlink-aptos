@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/config"
@@ -222,7 +223,8 @@ func (c *TOMLConfig) ValidateConfig() (err error) {
 
 	// If network name is set, ensure it matches a known network if chain ID is known
 	if c.NetworkName != "" {
-		network, err := GetNetworkConfig(c.ChainID)
+		var network aptos.NetworkConfig
+		network, err = GetNetworkConfig(c.ChainID)
 		if err == nil && c.NetworkName != network.Name {
 			err = errors.Join(err, config.ErrInvalid{Name: "NetworkName", Msg: "does not match known network for chain ID"})
 		}

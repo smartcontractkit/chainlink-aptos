@@ -5,6 +5,7 @@ import (
 )
 
 func TestHexAddressToAddressCanonicalRepresentation(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input          string
 		expectedOutput string

@@ -14,6 +14,7 @@ import (
 type exampleFunc func(ctx context.Context) (string, error)
 
 func TestWithRetry(t *testing.T) {
+	t.Parallel()
 	lggr := logger.Test(t)
 
 	tests := []struct {
@@ -105,6 +106,7 @@ func TestWithRetry(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			ctx := context.Background()
 			ctx, cancel := context.WithTimeout(ctx, tt.timeout)
 			defer cancel()

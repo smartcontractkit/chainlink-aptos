@@ -13,6 +13,7 @@ import (
 )
 
 func TestDecodeAsReportProcessed(t *testing.T) {
+	t.Parallel()
 	// Base64-encoded report data (example)
 	// version | workflow_execution_id | timestamp | don_id | config_version | ... | data
 	encoded := "AYFtgPpLuLNQysw6LjlSNrzGuBOwVoth7qC9PmunIY3TZvW/cAAAAAEAAAABvAbzAOeX1ahXVjehSq4T4/hQgAjR/FT0xGEf/xemjLAwMDAwRk9PQkFSAAAAAAAAAAAAAAAAAAAAAAAAAKoAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHAAAMREREREREREQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEgAAMREREREREREQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZvW/aQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABm9b9pAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAElCUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASUJQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABnBQGpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAElCUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASUJQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABJQlAAMiIiIiIiIiIgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEgAAMiIiIiIiIiIgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZvW/aQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABm9b9pAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAElCUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASUJQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABnBQGpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAElCUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASUJQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABJQl"
@@ -24,13 +25,13 @@ func TestDecodeAsReportProcessed(t *testing.T) {
 	// Define test cases
 	tests := []struct {
 		name     string
-		input    wt_msg.WriteConfirmed
-		expected []FeedUpdated
+		input    *wt_msg.WriteConfirmed
+		expected []*FeedUpdated
 		wantErr  bool
 	}{
 		{
 			name: "Valid input",
-			input: wt_msg.WriteConfirmed{
+			input: &wt_msg.WriteConfirmed{
 				Node:      "example-node",
 				Forwarder: "example-forwarder",
 				Receiver:  "example-receiver",
@@ -50,7 +51,7 @@ func TestDecodeAsReportProcessed(t *testing.T) {
 				BlockHeight:    "17",
 				BlockTimestamp: 0x66f5bf69,
 			},
-			expected: []FeedUpdated{
+			expected: []*FeedUpdated{
 				{
 					FeedId:                "0x0003111111111111111100000000000000000000000000000000000000000000",
 					ObservationsTimestamp: 0x66f5bf69,
@@ -86,7 +87,7 @@ func TestDecodeAsReportProcessed(t *testing.T) {
 		},
 		{
 			name: "Invalid input",
-			input: wt_msg.WriteConfirmed{
+			input: &wt_msg.WriteConfirmed{
 				Node:      "example-node",
 				Forwarder: "example-forwarder",
 				Receiver:  "example-receiver",
@@ -101,7 +102,7 @@ func TestDecodeAsReportProcessed(t *testing.T) {
 				Transmitter: "example-transmitter",
 				Success:     true,
 			},
-			expected: []FeedUpdated{},
+			expected: []*FeedUpdated{},
 			wantErr:  true,
 		},
 		// Add more test cases as needed
@@ -109,7 +110,8 @@ func TestDecodeAsReportProcessed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := DecodeAsFeedUpdated(&tt.input)
+			t.Parallel()
+			result, err := DecodeAsFeedUpdated(tt.input)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
@@ -125,7 +127,7 @@ func TestDecodeAsReportProcessed(t *testing.T) {
 						result[i].BenchmarkVal = -1
 					}
 					// Finally, compare the values
-					require.Equal(t, m, *result[i])
+					require.Equal(t, m, result[i])
 				}
 			}
 		})
@@ -133,6 +135,7 @@ func TestDecodeAsReportProcessed(t *testing.T) {
 }
 
 func TestToBenchmarkVal(t *testing.T) {
+	t.Parallel()
 	// Helper function to set a big.Int value (base 10)
 	mustSetString := func(s string) *big.Int {
 		val, _ := new(big.Int).SetString(s, 10)
@@ -220,6 +223,7 @@ func TestToBenchmarkVal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			feedID, err := data_feeds.NewFeedIDFromHex(tt.feedID)
 			require.NoError(t, err)
 
