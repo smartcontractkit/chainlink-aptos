@@ -391,8 +391,9 @@ module ccip::ocr3_base {
 
     #[test]
     fun deserialize_sequence_number() {
-      let report_context_one = x"0000000000000000000000000000000000000000000000000000000000000009";
-      let ocr_sequence_number = deserialize_sequence_bytes(report_context_one);
-      assert!(ocr_sequence_number == 9, 1);
+        let report_context_one =
+            x"0000000000000000000000000000000000000000000000000000000000000009";
+        let ocr_sequence_number = deserialize_sequence_bytes(report_context_one);
+        assert!(ocr_sequence_number == 9, 1);
     }
 }
