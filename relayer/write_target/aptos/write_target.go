@@ -158,6 +158,8 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 		NetworkNameFull: config.NetworkNameFull,
 	}
 
+	targetStrategy := NewAptosTargetStrategy(cr, cw, lggr, transmitter)
+
 	// Create the WT capability
 	opts := write_target.WriteTargetOpts{
 		ID:     id,
@@ -172,6 +174,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 		ConfigValidateFn: validate,
 		NodeAddress:      transmitter,
 		ForwarderAddress: config.Workflow.ForwarderAddress,
+		TargetStrategy:   targetStrategy,
 	}
 	return write_target.NewWriteTarget(opts), nil
 }
@@ -179,14 +182,14 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 // getTransmitter sources the transmitter address from the CW config
 func getTransmitter(cwConfig chainwriter.ChainWriterConfig) (string, error) {
 	// Try to source the transmitter (e.g., c.cw.config.Functions["forwarder"].FromAddress)
-	moduleConfig, ok := cwConfig.Modules[write_target.ContractName]
+	moduleConfig, ok := cwConfig.Modules[ContractName]
 	if !ok {
-		return "", fmt.Errorf("no such contract: %s", write_target.ContractName)
+		return "", fmt.Errorf("no such contract: %s", ContractName)
 	}
 
-	functionConfig, ok := moduleConfig.Functions[write_target.ContractMethodName_report]
+	functionConfig, ok := moduleConfig.Functions[ContractMethodName_report]
 	if !ok {
-		return "", fmt.Errorf("no such method: %s", write_target.ContractMethodName_report)
+		return "", fmt.Errorf("no such method: %s", ContractMethodName_report)
 	}
 
 	// Notice: reusing logic from the TXM which sources the transmitter this way
