@@ -18,6 +18,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/loop"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
@@ -33,6 +34,8 @@ type aptosChainReader struct {
 
 	client aptos.AptosRpcClient
 }
+
+var _ types.ContractTypeProvider = &aptosChainReader{}
 
 func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config ChainReaderConfig) types.ContractReader {
 	return &aptosChainReader{
@@ -269,10 +272,20 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		return nil, fmt.Errorf("bound address %s for module %s does not match provided address %s", address, contractName, contract.Address)
 	}
 
-	eventKey := filter.Key
+	var expressions []query.Expression
+	if !a.config.IsLoopPlugin {
+		expressions = filter.Expressions
+	} else {
+		convertedExpressions, err := loop.DeserializeExpressions(filter.Expressions)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deserialize QueryKey expressions: %w", err)
+		}
+		expressions = convertedExpressions
+	}
+
 	// temp: parsing offset from queryFilter because limitAndSort doesn't support offset-based pagination
 	var eventOffset uint64 = 0
-	for _, expr := range filter.Expressions {
+	for _, expr := range expressions {
 		if expr.IsPrimitive() {
 			if comparator, ok := expr.Primitive.(*primitives.Comparator); ok && comparator.Name == "offset" {
 				for _, valueComparator := range comparator.ValueComparators {
@@ -299,6 +312,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		return nil, fmt.Errorf("no events for contract: %s", contractName)
 	}
 
+	eventKey := filter.Key
 	eventConfig, ok := moduleConfig.Events[eventKey]
 	if !ok {
 		return nil, fmt.Errorf("no such event key: %s", eventKey)
@@ -506,4 +520,9 @@ func (a *aptosChainReader) Unbind(ctx context.Context, bindings []types.BoundCon
 		}
 	}
 	return nil
+}
+
+func (a *aptosChainReader) CreateContractType(readName string, forEncoding bool) (any, error) {
+	// only called when LOOP plugin
+	return &[]byte{}, nil
 }
