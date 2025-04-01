@@ -27,6 +27,5 @@ jobs:
           changesets-tag-separator: "/v"
           pnpm-use-cache: false
           aws-region: ${{ secrets.AWS_REGION }}
-          # TODO: will add these secrets once I have write access.
           aws-role-arn: ${{ secrets.AWS_ROLE_ARN_GATI_CHANGESETS }}
           aws-lambda-url: ${{ secrets.AWS_LAMBDA_URL_GATI }}
