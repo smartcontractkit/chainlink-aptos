@@ -3,7 +3,7 @@
   "changelog": [
     "@changesets/changelog-github",
     {
-      "repo": "smartcontractkit/chainlink-internal-integrations"
+      "repo": "smartcontractkit/chainlink-aptos"
     }
   ],
   "privatePackages": {
