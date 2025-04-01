@@ -2,17 +2,13 @@ module mcms::merkle {
     use std::aptos_hash::keccak256;
     use std::bcs;
     use std::string::String;
-    use aptos_std::secp256k1;
 
     use mcms::params;
 
     const E_INVALID_ROOT_LEN: u64 = 0;
-    const E_INVALID_SIGNATURE_LEN: u64 = 1;
-    const E_INVALID_V_SIGNATURE: u64 = 2;
-    const E_FAILED_ECDSA_RECOVER: u64 = 3;
-    const E_INVALID_PARAMETERS: u64 = 4;
-    const E_MODULE_NAME_TOO_LONG: u64 = 5;
-    const E_FUNCTION_NAME_TOO_LONG: u64 = 6;
+    const E_INVALID_PARAMETERS: u64 = 1;
+    const E_MODULE_NAME_TOO_LONG: u64 = 2;
+    const E_FUNCTION_NAME_TOO_LONG: u64 = 3;
 
     struct Op has copy, drop {
         role: u8,
@@ -64,31 +60,6 @@ module mcms::merkle {
         let hash = &mut eth_msg_prefix;
         hash.append(hashed_encoded_params);
         keccak256(*hash)
-    }
-
-    public fun ecdsa_recover_evm_addr(
-        eth_signed_message_hash: vector<u8>, signature: vector<u8>
-    ): vector<u8> {
-        // ensure signature has correct length - (r,s,v) concatenated = 65 bytes
-        assert!(signature.length() == 65, E_INVALID_SIGNATURE_LEN);
-        // extract v from signature
-        let v = signature.pop_back();
-        // convert 64 byte signature into ECDSASignature struct
-        let sig = secp256k1::ecdsa_signature_from_bytes(signature);
-        // Aptos uses the rust libsecp256k1 parse() under the hood which has a different numbering scheme
-        // see: https://docs.rs/libsecp256k1/latest/libsecp256k1/struct.RecoveryId.html#method.parse_rpc
-        assert!(v >= 27 && v < 27 + 4, E_INVALID_V_SIGNATURE);
-        let v = v - 27;
-
-        // retrieve signer public key
-        let public_key =
-            aptos_std::secp256k1::ecdsa_recover(eth_signed_message_hash, v, &sig);
-        assert!(public_key.is_some(), E_FAILED_ECDSA_RECOVER);
-
-        // return last 20 bytes of hashed public key as the recovered ethereum address
-        let public_key_bytes =
-            secp256k1::ecdsa_raw_public_key_to_bytes(&public_key.extract());
-        (&mut keccak256(public_key_bytes)).trim(12) // trims publicKeyBytes to 12 bytes, returns trimmed last 20 bytes
     }
 
     // computes keccak256(abi.encode(domain_separator, op))

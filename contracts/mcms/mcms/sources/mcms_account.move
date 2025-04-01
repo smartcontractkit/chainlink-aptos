@@ -92,11 +92,6 @@ module mcms::mcms_account {
     }
 
     #[view]
-    public fun is_owner(address: address): bool acquires AccountState {
-        owner() == address
-    }
-
-    #[view]
     /// Returns `true` if the module is self-owned (owned by `@mcms`).
     public fun is_self_owned(): bool acquires AccountState {
         owner() == @mcms
