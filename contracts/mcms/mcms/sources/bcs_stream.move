@@ -275,6 +275,25 @@ module mcms::bcs_stream {
         res
     }
 
+    public fun deserialize_fixed_vector_u8(
+        stream: &mut BCSStream, len: u64
+    ): vector<u8> {
+        let data = &mut stream.data;
+        let cur = stream.cur;
+
+        assert!(
+            cur + len <= data.length(),
+            error::out_of_range(E_OUT_OF_BYTES)
+        );
+
+        // AIP-105 introduces vector::move_range to efficiently move a range of elements from one vector to another.
+        let res = data.trim(cur);
+        stream.data = res.trim(len);
+        stream.cur = 0;
+
+        res
+    }
+
     /// Deserializes utf-8 `String` from the stream.
     /// First, reads the length of the String, which is in uleb128 format.
     /// After determining the length, it then reads the contents of the String.
