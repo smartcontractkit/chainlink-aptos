@@ -704,16 +704,9 @@ module ccip::offramp {
     }
 
     #[view]
-    public fun get_all_source_chains(
-        starting_bucket_index: u64, starting_vector_index: u64, max_count: u64
-    ): (vector<u64>, Option<u64>, Option<u64>) acquires OffRampState {
-        // see the SmartTable documentation for descriptions of the function paramters and return values.
-        // ref: https://github.com/aptos-labs/aptos-core/blob/6593fb81261f25490ffddc2252a861c994234c2a/aptos-move/framework/aptos-stdlib/sources/data_structures/smart_table.move#L212
-
+    public fun get_all_source_chains(): vector<u64> acquires OffRampState {
         let state = borrow_state();
-        state.source_chain_configs.keys_paginated(
-            starting_bucket_index, starting_vector_index, max_count
-        )
+        state.source_chain_configs.keys()
     }
 
     // ================================================================
