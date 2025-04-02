@@ -400,13 +400,13 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	if txStore == nil {
 		sequenceNumber, err := a.getSequenceNumber(client, tx.FromAddress)
 		if err != nil {
-			ctxLogger.Errorw("failed to get sequence number", "fromAddress", tx.FromAddress, "error", err)
+			ctxLogger.Errorw("failed to get sequence number", "fromAddress", tx.FromAddress.String(), "error", err)
 			tx.Status = commontypes.Failed
 			return
 		}
 		newTxStore, err := a.accountStore.CreateTxStore(tx.FromAddress.String(), sequenceNumber)
 		if err != nil {
-			ctxLogger.Errorw("failed to create tx store", "fromAddress", tx.FromAddress, "error", err)
+			ctxLogger.Errorw("failed to create tx store", "fromAddress", tx.FromAddress.String(), "error", err)
 			tx.Status = commontypes.Failed
 			return
 		}
