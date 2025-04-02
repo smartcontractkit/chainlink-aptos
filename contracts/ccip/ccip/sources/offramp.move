@@ -15,7 +15,7 @@ module ccip::offramp {
 
     use ccip::auth;
     use ccip::client;
-    use ccip::eth_abi::{Self, ABIStream};
+    use ccip::eth_abi;
     use ccip::fee_quoter;
     use ccip::merkle_proof;
     use ccip::ocr3_base;
@@ -25,7 +25,7 @@ module ccip::offramp {
     use ccip::token_admin_dispatcher;
     use ccip::token_admin_registry;
 
-    use mcms::bcs_stream;
+    use mcms::bcs_stream::{Self, BCSStream};
     use mcms::mcms_registry;
 
     // These have to match the EVM states
@@ -993,25 +993,24 @@ module ccip::offramp {
     // ================================================================
 
     inline fun deserialize_commit_report(report_bytes: vector<u8>): CommitReport {
-        let stream = eth_abi::new_stream(report_bytes);
+        let stream = bcs_stream::new(report_bytes);
         let token_price_updates =
-            eth_abi::decode_vector(
+            bcs_stream::deserialize_vector(
                 &mut stream,
                 |stream| {
                     TokenPriceUpdate {
-                        source_token: eth_abi::decode_address(stream),
-                        usd_per_token: eth_abi::decode_u256(stream)
+                        source_token: bcs_stream::deserialize_address(stream),
+                        usd_per_token: bcs_stream::deserialize_u256(stream)
                     }
                 }
             );
-
         let gas_price_updates =
-            eth_abi::decode_vector(
+            bcs_stream::deserialize_vector(
                 &mut stream,
                 |stream| {
                     GasPriceUpdate {
-                        dest_chain_selector: eth_abi::decode_u64(stream),
-                        usd_per_unit_gas: eth_abi::decode_u256(stream)
+                        dest_chain_selector: bcs_stream::deserialize_u64(stream),
+                        usd_per_unit_gas: bcs_stream::deserialize_u256(stream)
                     }
                 }
             );
@@ -1020,14 +1019,9 @@ module ccip::offramp {
         let unblessed_merkle_roots = parse_merkle_root(&mut stream);
 
         let rmn_signatures =
-            eth_abi::decode_vector(
+            bcs_stream::deserialize_vector(
                 &mut stream,
-                |stream| {
-                    let r = eth_abi::decode_bytes32(stream);
-                    let s = eth_abi::decode_bytes32(stream);
-                    vector::append(&mut r, s);
-                    r
-                }
+                |stream| { bcs_stream::deserialize_fixed_vector_u8(stream, 64) }
             );
 
         CommitReport {
@@ -1038,16 +1032,16 @@ module ccip::offramp {
         }
     }
 
-    inline fun parse_merkle_root(stream: &mut ABIStream): vector<MerkleRoot> {
-        eth_abi::decode_vector(
+    inline fun parse_merkle_root(stream: &mut BCSStream): vector<MerkleRoot> {
+        bcs_stream::deserialize_vector(
             stream,
             |stream| {
                 MerkleRoot {
-                    source_chain_selector: eth_abi::decode_u64(stream),
-                    on_ramp_address: eth_abi::decode_bytes(stream),
-                    min_seq_nr: eth_abi::decode_u64(stream),
-                    max_seq_nr: eth_abi::decode_u64(stream),
-                    merkle_root: eth_abi::decode_bytes32(stream)
+                    source_chain_selector: bcs_stream::deserialize_u64(stream),
+                    on_ramp_address: bcs_stream::deserialize_vector_u8(stream),
+                    min_seq_nr: bcs_stream::deserialize_u64(stream),
+                    max_seq_nr: bcs_stream::deserialize_u64(stream),
+                    merkle_root: bcs_stream::deserialize_fixed_vector_u8(stream, 32)
                 }
             }
         )
@@ -1055,26 +1049,26 @@ module ccip::offramp {
 
     inline fun deserialize_execution_reports(reports_bytes: vector<u8>):
         vector<ExecutionReport> {
-        let stream = eth_abi::new_stream(reports_bytes);
-        eth_abi::decode_vector(
+        let stream = bcs_stream::new(reports_bytes);
+        bcs_stream::deserialize_vector(
             &mut stream,
             |stream| {
-                let report_bytes = eth_abi::decode_bytes(stream);
+                let report_bytes = bcs_stream::deserialize_vector_u8(stream);
                 deserialize_execution_report(report_bytes)
             }
         )
     }
 
     inline fun deserialize_execution_report(report_bytes: vector<u8>): ExecutionReport {
-        let stream = eth_abi::new_stream(report_bytes);
+        let stream = bcs_stream::new(report_bytes);
 
-        let source_chain_selector = eth_abi::decode_u64(&mut stream);
+        let source_chain_selector = bcs_stream::deserialize_u64(&mut stream);
 
-        let message_id = eth_abi::decode_bytes32(&mut stream);
-        let header_source_chain_selector = eth_abi::decode_u64(&mut stream);
-        let dest_chain_selector = eth_abi::decode_u64(&mut stream);
-        let sequence_number = eth_abi::decode_u64(&mut stream);
-        let nonce = eth_abi::decode_u64(&mut stream);
+        let message_id = bcs_stream::deserialize_fixed_vector_u8(&mut stream, 32);
+        let header_source_chain_selector = bcs_stream::deserialize_u64(&mut stream);
+        let dest_chain_selector = bcs_stream::deserialize_u64(&mut stream);
+        let sequence_number = bcs_stream::deserialize_u64(&mut stream);
+        let nonce = bcs_stream::deserialize_u64(&mut stream);
 
         let header = RampMessageHeader {
             message_id,
@@ -1089,20 +1083,20 @@ module ccip::offramp {
             error::invalid_argument(E_SOURCE_CHAIN_SELECTOR_MISMATCH)
         );
 
-        let sender = eth_abi::decode_bytes(&mut stream);
-        let data = eth_abi::decode_bytes(&mut stream);
-        let receiver = eth_abi::decode_address(&mut stream);
-        let gas_limit = eth_abi::decode_u256(&mut stream);
+        let sender = bcs_stream::deserialize_vector_u8(&mut stream);
+        let data = bcs_stream::deserialize_vector_u8(&mut stream);
+        let receiver = bcs_stream::deserialize_address(&mut stream);
+        let gas_limit = bcs_stream::deserialize_u256(&mut stream);
 
         let token_amounts =
-            eth_abi::decode_vector(
+            bcs_stream::deserialize_vector(
                 &mut stream,
                 |stream| {
-                    let source_pool_address = eth_abi::decode_bytes(stream);
-                    let dest_token_address = eth_abi::decode_address(stream);
-                    let dest_gas_amount = eth_abi::decode_u32(stream);
-                    let extra_data = eth_abi::decode_bytes(stream);
-                    let amount = eth_abi::decode_u256(stream);
+                    let source_pool_address = bcs_stream::deserialize_vector_u8(stream);
+                    let dest_token_address = bcs_stream::deserialize_address(stream);
+                    let dest_gas_amount = bcs_stream::deserialize_u32(stream);
+                    let extra_data = bcs_stream::deserialize_vector_u8(stream);
+                    let amount = bcs_stream::deserialize_u256(stream);
 
                     Any2AptosTokenTransfer {
                         source_pool_address,
@@ -1124,12 +1118,14 @@ module ccip::offramp {
         };
 
         let offchain_token_data =
-            eth_abi::decode_vector(&mut stream, |stream| eth_abi::decode_bytes(stream));
+            bcs_stream::deserialize_vector(
+                &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
+            );
 
         let proofs =
-            eth_abi::decode_vector(
+            bcs_stream::deserialize_vector(
                 &mut stream,
-                |stream| eth_abi::decode_bytes32(stream)
+                |stream| bcs_stream::deserialize_fixed_vector_u8(stream, 32)
             );
 
         ExecutionReport { source_chain_selector, message, offchain_token_data, proofs }
@@ -1381,5 +1377,61 @@ module ccip::offramp {
 
         assert!(metadata_hash == expected_hash, 1);
         assert!(metadata_hash_alternate == expected_hash_alternate, 2);
+    }
+
+    #[test]
+    fun test_deserialize_execution_report() {
+        let expected_sender = x"d87929a32cf0cbdc9e2d07ffc7c33344079de727";
+        let expected_data = x"68656c6c6f20434349505265636569766572";
+        let expected_receiver =
+            @0xbd8a1fb0af25dc8700d2d302cfbae718c3b2c3c61cfe47f58a45b1126c006490;
+        let expected_gas_limit = 100000;
+        let expected_message_id =
+            x"20865dcacbd6afb6a2288daa164caf75517009a289fa3135281fb1e4800b11bc";
+        let expected_source_chain_selector = 909606746561742123;
+        let expected_dest_chain_selector = 743186221051783445;
+        let expected_sequence_number = 1;
+        let expected_nonce = 0;
+        let expected_leaf_bytes =
+            x"258dc7f9ec033388ee50bf3e0debfc841a278054f5b2ce41728f7459267c719e";
+
+        let report_bytes =
+            x"2b851c4684929f0c20865dcacbd6afb6a2288daa164caf75517009a289fa3135281fb1e4800b11bc2b851c4684929f0c15a9c133ee53500a0100000000000000000000000000000014d87929a32cf0cbdc9e2d07ffc7c33344079de7271268656c6c6f20434349505265636569766572bd8a1fb0af25dc8700d2d302cfbae718c3b2c3c61cfe47f58a45b1126c006490a086010000000000000000000000000000000000000000000000000000000000000000";
+        let onramp = x"47a1f0a819457f01153f35c6b6b0d42e2e16e91e";
+        let execution_report = deserialize_execution_report(report_bytes);
+        std::debug::print(&execution_report);
+
+        assert!(execution_report.message.sender == expected_sender, 5);
+        assert!(execution_report.message.data == expected_data, 6);
+        assert!(execution_report.message.receiver == expected_receiver, 7);
+        assert!(execution_report.message.gas_limit == expected_gas_limit, 8);
+        assert!(execution_report.message.header.message_id == expected_message_id, 9);
+        assert!(
+            execution_report.message.header.source_chain_selector
+                == expected_source_chain_selector,
+            1
+        );
+        assert!(
+            execution_report.message.header.dest_chain_selector
+                == expected_dest_chain_selector,
+            2
+        );
+        assert!(
+            execution_report.message.header.sequence_number == expected_sequence_number,
+            3
+        );
+        assert!(execution_report.message.header.nonce == expected_nonce, 4);
+
+        let metadata_hash =
+            calculate_metadata_hash(
+                execution_report.source_chain_selector,
+                execution_report.message.header.dest_chain_selector,
+                onramp
+            );
+        let hashed_leaf = calculate_message_hash(
+            &execution_report.message, metadata_hash
+        );
+
+        assert!(expected_leaf_bytes == hashed_leaf, 1);
     }
 }
