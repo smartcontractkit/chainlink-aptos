@@ -66,7 +66,7 @@ func New{{toUpperCamel .Module}}(address aptos.AccountAddress, client aptos.Apto
 {{$structs := .Structs}}
 {{range $structs}}
   type {{.Name}} struct { {{range $field := .Fields}}
-    {{$field.Name}} {{$field.Type.GoType}} `move:"{{$field.Type.MoveType}}"` {{end}}
+    {{$field.Name}} {{if $field.Type.GoInternalType}}{{$field.Type.GoInternalType}}{{else}}{{$field.Type.GoType}}{{end}} `move:"{{if $field.Type.MoveInteralType}}{{$field.Type.MoveInteralType}}{{else}}{{$field.Type.MoveType}}{{end}}"` {{end}}
   }
 {{end}}
 
@@ -97,14 +97,14 @@ func (c {{toUpperCamel .Module}}Contract) Encoder() {{toUpperCamel .Module}}Enco
 
     var (
     {{- range $index, $element := .Returns}}
-      r{{$index}} {{if not $element.Option }} {{$element.GoType}} {{else}} bind.StdOption[{{$element.Option.UnderlyingGoType}}] {{end}}
+      r{{$index}} {{if $element.StdOption }} bind.StdOption[{{$element.StdOption.UnderlyingGoType}}] {{else if $element.StdObject}} bind.StdObject {{else}} {{$element.GoType}} {{end}}
     {{- end}}
     )
 
     if err := codec.DecodeAptosJsonArray(callData, {{range $index, $element := .Returns}}&r{{$index}}, {{end}}); err != nil {
       return {{range .Returns}}*new({{.GoType}}),{{end}} err
     }
-    return {{range $index, $element := .Returns}}r{{$index}}{{if $element.Option}}.Value(){{end}}, {{end}} nil
+  return {{range $index, $element := .Returns}}r{{$index}}{{if $element.StdOption}}.Value(){{else if $element.StdObject}}.Address(){{end}}, {{end}} nil
   }
 {{end}}
 

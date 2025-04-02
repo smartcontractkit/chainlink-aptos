@@ -49,6 +49,7 @@ type ReceiverRegistryState struct {
 }
 
 type CCIPReceiverRegistration struct {
+	DispatchMetadata bind.StdObject `move:"aptos_framework::object::Object"`
 }
 
 type ReceiverRegistered struct {

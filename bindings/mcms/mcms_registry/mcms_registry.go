@@ -47,10 +47,11 @@ type MCMSRegistryEncoder interface {
 	TransferCodeObject(objectAddress aptos.AccountAddress, newOwnerAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AcceptCodeObject(objectAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ExecuteCodeObjectTransfer(objectAddress aptos.AccountAddress, newOwnerAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	StartDispatch(callbackAddress aptos.AccountAddress, callbackModuleName string, callbackFunction string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	FinishDispatch(callbackAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"mcms","module":"mcms_registry","name":"accept_code_object","parameters":[{"name":"object_address","type":"address"}]},{"package":"mcms","module":"mcms_registry","name":"create_owner_for_preexisting_code_object","parameters":[{"name":"object_address","type":"address"}]},{"package":"mcms","module":"mcms_registry","name":"execute_code_object_transfer","parameters":[{"name":"object_address","type":"address"},{"name":"new_owner_address","type":"address"}]},{"package":"mcms","module":"mcms_registry","name":"finish_dispatch","parameters":[{"name":"callback_address","type":"address"}]},{"package":"mcms","module":"mcms_registry","name":"transfer_code_object","parameters":[{"name":"object_address","type":"address"},{"name":"new_owner_address","type":"address"}]}]`
+const FunctionInfo = `[{"package":"mcms","module":"mcms_registry","name":"accept_code_object","parameters":[{"name":"object_address","type":"address"}]},{"package":"mcms","module":"mcms_registry","name":"create_owner_for_preexisting_code_object","parameters":[{"name":"object_address","type":"address"}]},{"package":"mcms","module":"mcms_registry","name":"execute_code_object_transfer","parameters":[{"name":"object_address","type":"address"},{"name":"new_owner_address","type":"address"}]},{"package":"mcms","module":"mcms_registry","name":"finish_dispatch","parameters":[{"name":"callback_address","type":"address"}]},{"package":"mcms","module":"mcms_registry","name":"start_dispatch","parameters":[{"name":"callback_address","type":"address"},{"name":"callback_module_name","type":"0x1::string::String"},{"name":"callback_function","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms_registry","name":"transfer_code_object","parameters":[{"name":"object_address","type":"address"},{"name":"new_owner_address","type":"address"}]}]`
 
 func NewMCMSRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMSRegistry {
 	contract := bind.NewBoundContract(address, "mcms", "mcms_registry", client)
@@ -74,6 +75,7 @@ type OwnerTransfers struct {
 }
 
 type RegisteredModule struct {
+	DispatchMetadata bind.StdObject `move:"aptos_framework::object::Object"`
 }
 
 type PendingCodeObjectTransfer struct {
@@ -359,6 +361,20 @@ func (c mcmsRegistryEncoder) ExecuteCodeObjectTransfer(objectAddress aptos.Accou
 	}, []any{
 		objectAddress,
 		newOwnerAddress,
+	})
+}
+
+func (c mcmsRegistryEncoder) StartDispatch(callbackAddress aptos.AccountAddress, callbackModuleName string, callbackFunction string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("start_dispatch", nil, []string{
+		"address",
+		"0x1::string::String",
+		"0x1::string::String",
+		"vector<u8>",
+	}, []any{
+		callbackAddress,
+		callbackModuleName,
+		callbackFunction,
+		data,
 	})
 }
 

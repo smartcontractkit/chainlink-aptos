@@ -30,9 +30,10 @@ type DummyReceiver interface {
 
 type DummyReceiverEncoder interface {
 	TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	CCIPReceive(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `null`
+const FunctionInfo = `[{"package":"ccip_dummy_receiver","module":"dummy_receiver","name":"ccip_receive","parameters":[{"name":"_metadata","type":"address"}]}]`
 
 func NewDummyReceiver(address aptos.AccountAddress, client aptos.AptosRpcClient) DummyReceiver {
 	contract := bind.NewBoundContract(address, "ccip_dummy_receiver", "dummy_receiver", client)
@@ -94,4 +95,12 @@ type dummyReceiverEncoder struct {
 
 func (c dummyReceiverEncoder) TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("type_and_version", nil, []string{}, []any{})
+}
+
+func (c dummyReceiverEncoder) CCIPReceive(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("ccip_receive", nil, []string{
+		"address",
+	}, []any{
+		Metadata,
+	})
 }
