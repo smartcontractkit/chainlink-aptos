@@ -703,6 +703,12 @@ module ccip::offramp {
         }
     }
 
+    #[view]
+    public fun get_all_source_chain_configs(): (vector<u64>, vector<SourceChainConfig>) acquires OffRampState {
+        let state = borrow_state();
+        state.source_chain_configs.to_simple_map().to_vec_pair()
+    }
+
     // ================================================================
     // |                           Config                             |
     // ================================================================
