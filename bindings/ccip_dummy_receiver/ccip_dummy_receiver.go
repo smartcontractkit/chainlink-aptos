@@ -36,11 +36,11 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 	module_dummy_receiver.FunctionInfo,
 )
 
-func Compile(address aptos.AccountAddress, ccipAddress aptos.AccountAddress) (compile.CompiledPackage, error) {
+func Compile(address aptos.AccountAddress, ccipAddress aptos.AccountAddress, mcmsAddress aptos.AccountAddress) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip_dummy_receiver":       address,
 		"ccip":                      ccipAddress,
-		"mcms":                      aptos.AccountZero,
+		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
 	// Compile using CLI
@@ -60,10 +60,11 @@ func DeployToObject(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
 	ccipAddress aptos.AccountAddress,
+	mcmsAddress aptos.AccountAddress,
 ) (aptos.AccountAddress, *api.PendingTransaction, CCIPDummyReceiver, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
-		"mcms":                      aptos.AccountZero,
+		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
 	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.CCIPDummyReceiver, namedAddresses)

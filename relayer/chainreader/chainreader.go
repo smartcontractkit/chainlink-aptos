@@ -3,6 +3,7 @@ package chainreader
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -18,6 +19,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/loop"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
@@ -33,6 +35,8 @@ type aptosChainReader struct {
 
 	client aptos.AptosRpcClient
 }
+
+var _ types.ContractTypeProvider = &aptosChainReader{}
 
 func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config ChainReaderConfig) types.ContractReader {
 	return &aptosChainReader{
@@ -261,6 +265,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	contractName := contract.Name
 
 	address, ok := a.moduleAddresses[contractName]
+
 	if !ok {
 		return nil, fmt.Errorf("no bound address for module %s", contractName)
 	}
@@ -269,10 +274,20 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		return nil, fmt.Errorf("bound address %s for module %s does not match provided address %s", address, contractName, contract.Address)
 	}
 
-	eventKey := filter.Key
-	// temp: parsing offset from queryFilter because limitAndSort doesn't support offset-based pagination
+	var expressions []query.Expression
+	if !a.config.IsLoopPlugin {
+		expressions = filter.Expressions
+	} else {
+		convertedExpressions, err := loop.DeserializeExpressions(filter.Expressions)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deserialize QueryKey expressions: %w", err)
+		}
+		expressions = convertedExpressions
+	}
+
+	// TODO: parsing offset from queryFilter because limitAndSort doesn't support offset-based pagination
 	var eventOffset uint64 = 0
-	for _, expr := range filter.Expressions {
+	for _, expr := range expressions {
 		if expr.IsPrimitive() {
 			if comparator, ok := expr.Primitive.(*primitives.Comparator); ok && comparator.Name == "offset" {
 				for _, valueComparator := range comparator.ValueComparators {
@@ -299,6 +314,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		return nil, fmt.Errorf("no events for contract: %s", contractName)
 	}
 
+	eventKey := filter.Key
 	eventConfig, ok := moduleConfig.Events[eventKey]
 	if !ok {
 		return nil, fmt.Errorf("no such event key: %s", eventKey)
@@ -388,7 +404,8 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		}
 	}
 
-	var sequences []types.Sequence
+	sequences := []types.Sequence{}
+	headCache := map[uint64]types.Head{}
 	for _, event := range events {
 		jsonData := event.Data
 
@@ -396,19 +413,47 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 			return nil, fmt.Errorf("failed to rename event fields: %+w", err)
 		}
 
-		// create new instance of eventData for each event
-		eventData := reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
+		var eventData any
+		if a.config.IsLoopPlugin {
+			// immediately remarshal the data
+			// TODO: update aptos-go-sdk to allow returning the string directly
+			resultBytes, err := json.Marshal(jsonData)
+			if err != nil {
+				return nil, fmt.Errorf("failed to re-marshal event for seqNum %d: %w", event.SequenceNumber, err)
+			}
+			eventData = resultBytes
+		} else {
+			// create new instance of eventData for each event
+			eventData = reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
 
-		err := codec.DecodeAptosJsonValue(jsonData, &eventData)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode event data: %+w", err)
+			err := codec.DecodeAptosJsonValue(jsonData, &eventData)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode event data: %+w", err)
+			}
 		}
 
+		head, ok := headCache[event.Version]
+		if !ok {
+			block, err := a.client.BlockByVersion(event.Version, false)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get block by version: %w", err)
+			}
+			hexBytes, err := hex.DecodeString(strings.TrimPrefix(block.BlockHash, "0x"))
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode block hash: %w", err)
+			}
+			head = types.Head{
+				Height: fmt.Sprintf("%d", block.BlockHeight),
+				Hash:   hexBytes,
+				// microseconds to seconds
+				Timestamp: block.BlockTimestamp / 1000000,
+			}
+			headCache[event.Version] = head
+		}
 		sequence := types.Sequence{
 			Cursor: fmt.Sprintf("%d", event.SequenceNumber),
-			// todo: enrich with block data?
-			Head: types.Head{},
-			Data: eventData,
+			Head:   head,
+			Data:   eventData,
 		}
 		sequences = append(sequences, sequence)
 	}
@@ -497,6 +542,7 @@ func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContr
 }
 
 func (a *aptosChainReader) Unbind(ctx context.Context, bindings []types.BoundContract) error {
+
 	for _, binding := range bindings {
 		key := binding.Name
 		if _, ok := a.moduleAddresses[key]; ok {
@@ -506,4 +552,9 @@ func (a *aptosChainReader) Unbind(ctx context.Context, bindings []types.BoundCon
 		}
 	}
 	return nil
+}
+
+func (a *aptosChainReader) CreateContractType(readName string, forEncoding bool) (any, error) {
+	// only called when LOOP plugin
+	return &[]byte{}, nil
 }
