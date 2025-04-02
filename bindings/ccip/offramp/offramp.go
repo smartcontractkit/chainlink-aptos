@@ -28,6 +28,7 @@ type Offramp interface {
 	GetLatestPriceSequenceNumber(opts *bind.CallOpts) (uint64, error)
 	GetMerkleRoot(opts *bind.CallOpts, root []byte) (uint64, error)
 	GetSourceChainConfig(opts *bind.CallOpts, sourceChainSelector uint64) (SourceChainConfig, error)
+	GetAllSourceChainConfigs(opts *bind.CallOpts) ([]uint64, []SourceChainConfig, error)
 	GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error)
 	GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, error)
 	LatestConfigDetails(opts *bind.CallOpts, ocrPluginType byte) (module_ocr3_base.OCRConfig, error)
@@ -50,6 +51,7 @@ type OfframpEncoder interface {
 	GetLatestPriceSequenceNumber() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetMerkleRoot(root []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetSourceChainConfig(sourceChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetAllSourceChainConfigs() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStaticConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetDynamicConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	LatestConfigDetails(ocrPluginType byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -324,6 +326,28 @@ func (c OfframpContract) GetSourceChainConfig(opts *bind.CallOpts, sourceChainSe
 	return r0, nil
 }
 
+func (c OfframpContract) GetAllSourceChainConfigs(opts *bind.CallOpts) ([]uint64, []SourceChainConfig, error) {
+	module, function, typeTags, args, err := c.offrampEncoder.GetAllSourceChainConfigs()
+	if err != nil {
+		return *new([]uint64), *new([]SourceChainConfig), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new([]uint64), *new([]SourceChainConfig), err
+	}
+
+	var (
+		r0 []uint64
+		r1 []SourceChainConfig
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0, &r1); err != nil {
+		return *new([]uint64), *new([]SourceChainConfig), err
+	}
+	return r0, r1, nil
+}
+
 func (c OfframpContract) GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error) {
 	module, function, typeTags, args, err := c.offrampEncoder.GetStaticConfig()
 	if err != nil {
@@ -489,6 +513,10 @@ func (c offrampEncoder) GetSourceChainConfig(sourceChainSelector uint64) (bind.M
 	}, []any{
 		sourceChainSelector,
 	})
+}
+
+func (c offrampEncoder) GetAllSourceChainConfigs() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_all_source_chain_configs", nil, []string{}, []any{})
 }
 
 func (c offrampEncoder) GetStaticConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {

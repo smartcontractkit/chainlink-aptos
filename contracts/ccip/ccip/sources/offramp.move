@@ -704,9 +704,9 @@ module ccip::offramp {
     }
 
     #[view]
-    public fun get_all_source_chains(): (vector<u64>, vector<SourceChainConfig>) acquires OffRampState {
+    public fun get_all_source_chain_configs(): (vector<u64>, vector<SourceChainConfig>) acquires OffRampState {
         let state = borrow_state();
-        smart_table::to_simple_map(&state.source_chain_configs).to_vec_pair()
+        state.source_chain_configs.to_simple_map().to_vec_pair()
     }
 
     // ================================================================
