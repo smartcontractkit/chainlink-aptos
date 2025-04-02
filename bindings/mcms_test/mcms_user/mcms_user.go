@@ -30,9 +30,10 @@ type MCMSUser interface {
 type MCMSUserEncoder interface {
 	FunctionOne(arg1 string, arg2 []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	FunctionTwo(arg1 aptos.AccountAddress, arg2 *big.Int) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"mcms_test","module":"mcms_user","name":"function_one","parameters":[{"name":"arg1","type":"0x1::string::String"},{"name":"arg2","type":"vector\u003cu8\u003e"}]},{"package":"mcms_test","module":"mcms_user","name":"function_two","parameters":[{"name":"arg1","type":"address"},{"name":"arg2","type":"u128"}]}]`
+const FunctionInfo = `[{"package":"mcms_test","module":"mcms_user","name":"function_one","parameters":[{"name":"arg1","type":"0x1::string::String"},{"name":"arg2","type":"vector\u003cu8\u003e"}]},{"package":"mcms_test","module":"mcms_user","name":"function_two","parameters":[{"name":"arg1","type":"address"},{"name":"arg2","type":"u128"}]},{"package":"mcms_test","module":"mcms_user","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]}]`
 
 func NewMCMSUser(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMSUser {
 	contract := bind.NewBoundContract(address, "mcms_test", "mcms_user", client)
@@ -92,5 +93,13 @@ func (c mcmsUserEncoder) FunctionTwo(arg1 aptos.AccountAddress, arg2 *big.Int) (
 	}, []any{
 		arg1,
 		arg2,
+	})
+}
+
+func (c mcmsUserEncoder) MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("mcms_entrypoint", nil, []string{
+		"address",
+	}, []any{
+		Metadata,
 	})
 }

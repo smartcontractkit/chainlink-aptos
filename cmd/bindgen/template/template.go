@@ -44,11 +44,17 @@ type tmplImport struct {
 }
 
 type tmplType struct {
-	GoType   string
-	MoveType string
+	GoType          string
+	GoInternalType  string
+	MoveType        string
+	MoveInteralType string
 
-	Option *tmplOption
 	Import *tmplImport // Optional go import to add for this type
+
+	// Special types
+
+	StdOption *tmplOption
+	StdObject bool
 }
 
 type tmplField struct {
@@ -131,7 +137,7 @@ func Convert(pkg, mod string, structs []parse.Struct, functions []parse.Func, ex
 					break
 				}
 			}
-			if typ.Option != nil {
+			if typ.StdOption != nil {
 				if f.IsEntry {
 					panic(fmt.Sprintf("Function %v has unsupported option::Option parameter %q: %v", f.Name, param.Name, typ.MoveType))
 				} else {

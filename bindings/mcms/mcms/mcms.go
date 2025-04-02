@@ -58,9 +58,11 @@ func NewMCMS(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMS {
 // Structs
 
 type MultisigState struct {
-	Config                 Config                 `move:"Config"`
-	ExpiringRootAndOpCount ExpiringRootAndOpCount `move:"ExpiringRootAndOpCount"`
-	RootMetadata           RootMetadata           `move:"RootMetadata"`
+	Signers                *bind.StdSimpleMap[[]byte, Signer] `move:"std::simple_map::SimpleMap<vector<u8>,Signer>"`
+	Config                 Config                             `move:"Config"`
+	SeenSignedHashes       *bind.StdSimpleMap[[]byte, bool]   `move:"std::simple_map::SimpleMap<vector<u8>,bool>"`
+	ExpiringRootAndOpCount ExpiringRootAndOpCount             `move:"ExpiringRootAndOpCount"`
+	RootMetadata           RootMetadata                       `move:"RootMetadata"`
 }
 
 type RootMetadata struct {

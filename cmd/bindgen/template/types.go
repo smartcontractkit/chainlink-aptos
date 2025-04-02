@@ -1,6 +1,7 @@
 package template
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -50,59 +51,18 @@ func createGoTypeFromMove(s string, localStructs map[string]parse.Struct, extern
 			MoveType: "0x1::string::String",
 		}, nil
 	default:
-		if strings.HasPrefix(s, "vector<") && strings.HasSuffix(s, ">") {
-			innerTypeName := strings.TrimSuffix(strings.TrimPrefix(s, "vector<"), ">")
+		// Vectors
+		if innerTypeName, moveType, ok := isGenericType(s, "vector"); ok {
 			innerType, err := createGoTypeFromMove(innerTypeName, localStructs, externalStructs)
 			if err != nil {
 				return tmplType{}, err
 			}
 			return tmplType{
-				GoType:   "[]" + innerType.GoType,
-				MoveType: s,
+				GoType:   fmt.Sprintf("[]%s", innerType.GoType),
+				MoveType: moveType,
 			}, nil
 		}
-		if strings.HasPrefix(s, "Option<") && strings.HasSuffix(s, ">") {
-			innerTypeName := strings.TrimSuffix(strings.TrimPrefix(s, "Option<"), ">")
-			innerType, err := createGoTypeFromMove(innerTypeName, localStructs, externalStructs)
-			if err != nil {
-				return tmplType{}, err
-			}
-			return tmplType{
-				GoType:   "*" + innerType.GoType,
-				MoveType: fmt.Sprintf("0x1::option::Option<%s>", innerType.MoveType),
-				Option: &tmplOption{
-					UnderlyingGoType: innerType.GoType,
-				},
-			}, nil
-		}
-		if strings.HasPrefix(s, "option::Option<") && strings.HasSuffix(s, ">") {
-			innerTypeName := strings.TrimSuffix(strings.TrimPrefix(s, "option::Option<"), ">")
-			innerType, err := createGoTypeFromMove(innerTypeName, localStructs, externalStructs)
-			if err != nil {
-				return tmplType{}, err
-			}
-			return tmplType{
-				GoType:   "*" + innerType.GoType,
-				MoveType: fmt.Sprintf("0x1::option::Option<%s>", innerType.MoveType),
-				Option: &tmplOption{
-					UnderlyingGoType: innerType.GoType,
-				},
-			}, nil
-		}
-		if strings.HasPrefix(s, "std::option::Option<") && strings.HasSuffix(s, ">") {
-			innerTypeName := strings.TrimSuffix(strings.TrimPrefix(s, "std::option::Option<"), ">")
-			innerType, err := createGoTypeFromMove(innerTypeName, localStructs, externalStructs)
-			if err != nil {
-				return tmplType{}, err
-			}
-			return tmplType{
-				GoType:   "*" + innerType.GoType,
-				MoveType: fmt.Sprintf("0x1::option::Option<%s>", innerType.MoveType),
-				Option: &tmplOption{
-					UnderlyingGoType: innerType.GoType,
-				},
-			}, nil
-		}
+
 		// Check if local struct
 		if _, ok := localStructs[s]; ok {
 			return tmplType{
@@ -110,6 +70,7 @@ func createGoTypeFromMove(s string, localStructs map[string]parse.Struct, extern
 				MoveType: s,
 			}, nil
 		}
+
 		// Check if external struct
 		for _, externalStruct := range externalStructs {
 			// Type could be used as package::module::Struct, module::Struct or Struct directly, depending on the import
@@ -126,6 +87,79 @@ func createGoTypeFromMove(s string, localStructs map[string]parse.Struct, extern
 				}, nil
 			}
 		}
+
+		// Hardcoded stdlib structs
+		if innerTypeName, moveType, ok := isGenericType(s, "std::option::Option"); ok {
+			innerType, err := createGoTypeFromMove(innerTypeName, localStructs, externalStructs)
+			if err != nil {
+				return tmplType{}, err
+			}
+			return tmplType{
+				GoType:   "*" + innerType.GoType,
+				MoveType: moveType,
+				StdOption: &tmplOption{
+					UnderlyingGoType: innerType.GoType,
+				},
+			}, nil
+		}
+		if _, _, ok := isGenericType(s, "aptos_framework::object::Object"); ok {
+			return tmplType{
+				GoType:          "aptos.AccountAddress",
+				GoInternalType:  "bind.StdObject",
+				MoveType:        "address",
+				MoveInteralType: "aptos_framework::object::Object",
+				StdObject:       true,
+			}, nil
+		}
+		if innerTypeName, _, ok := isGenericType(s, "std::simple_map::SimpleMap"); ok {
+			splitInnerType := strings.Split(innerTypeName, ",")
+			if len(splitInnerType) != 2 {
+				return tmplType{}, errors.New("invalid type parameters in std::simple_map::SimpleMap")
+			}
+			keyName := strings.TrimSpace(splitInnerType[0])
+			valueName := strings.TrimSpace(splitInnerType[1])
+			keyType, err := createGoTypeFromMove(keyName, localStructs, externalStructs)
+			if err != nil {
+				return tmplType{}, fmt.Errorf("invalid key type parameter %q in std::simple_map::SimpleMap: %w", keyName, err)
+			}
+			valueType, err := createGoTypeFromMove(valueName, localStructs, externalStructs)
+			if err != nil {
+				return tmplType{}, fmt.Errorf("invalid value type parameter %q in std::simple_map::SimpleMap: %w", valueName, err)
+			}
+
+			return tmplType{
+				GoType:   fmt.Sprintf("*bind.StdSimpleMap[%s,%s]", keyType.GoType, valueType.GoType),
+				MoveType: fmt.Sprintf("std::simple_map::SimpleMap<%s,%s>", keyName, valueName),
+			}, nil
+		}
 	}
 	return tmplType{}, fmt.Errorf("unknown move type: %s", s)
+}
+
+func isGenericType(s string, typ string) (innerType string, moveType string, ok bool) {
+	// package::module::Struct
+	split := strings.SplitN(typ, "::", 3)
+
+	if !strings.HasSuffix(s, ">") {
+		return "", "", false
+	}
+	s = strings.TrimSuffix(s, ">")
+
+	if strings.HasPrefix(s, fmt.Sprintf("%s<", split[len(split)-1])) {
+		innerType = strings.TrimPrefix(s, fmt.Sprintf("%s<", split[len(split)-1]))
+		moveType = fmt.Sprintf("%s<%s>", typ, innerType)
+		return innerType, moveType, true
+	}
+	if len(split) > 1 && strings.HasPrefix(s, fmt.Sprintf("%s::%s<", split[len(split)-2], split[len(split)-1])) {
+		innerType = strings.TrimPrefix(s, fmt.Sprintf("%s::%s<", split[len(split)-2], split[len(split)-1]))
+		moveType = fmt.Sprintf("%s<%s>", typ, innerType)
+		return innerType, moveType, true
+	}
+	if len(split) > 2 && strings.HasPrefix(s, fmt.Sprintf("%s::%s::%s<", split[len(split)-3], split[len(split)-2], split[len(split)-1])) {
+		innerType = strings.TrimPrefix(s, fmt.Sprintf("%s::%s::%s<", split[len(split)-3], split[len(split)-2], split[len(split)-1]))
+		moveType = fmt.Sprintf("%s<%s>", typ, innerType)
+		return innerType, moveType, true
+	}
+
+	return "", "", false
 }
