@@ -23,6 +23,7 @@ import (
 var _ types.Relayer = (*relayer)(nil) //nolint:staticcheck
 
 type relayer struct {
+	types.UnimplementedRelayer
 	chain chain.Chain
 	lggr  logger.Logger
 
@@ -160,10 +161,6 @@ func (r *relayer) NewCCIPCommitProvider(ctx context.Context, rargs types.RelayAr
 
 func (r *relayer) NewCCIPExecProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.CCIPExecProvider, error) {
 	return nil, errors.New("ccip.exec is not supported for aptos")
-}
-
-func (r *relayer) EVM() (types.EVMService, error) {
-	return nil, errors.New("EVMService is not supported for aptos")
 }
 
 func (r *relayer) Replay(ctx context.Context, fromBlock string, args map[string]any) error {

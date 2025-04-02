@@ -13,7 +13,6 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
 	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainwriter"
-	aptosconfig "github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target"
@@ -40,12 +39,17 @@ const version = "1.0.0"
 
 func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Logger) (capabilities.TargetCapability, error) {
 	config := chain.Config()
+	ci := config.GetChainInfo()
 
 	// TODO: generate ID based on chain selector (we're currently using Aptos Go SDK to get name for chain ID)
 	// chainName, err := chainselectors.NameFromChainId(chain.ID().Uint64())
 
+	var tag string
+	if t := config.WriteTargetCap.Tag; t != nil {
+		tag = *t
+	}
 	// Construct the ID for the WT (e.g., "write_aptos-localnet@1.0.0")
-	id, err := write_target.NewWriteTargetID(aptosconfig.ChainFamilyName, config.NetworkName, config.ChainID, config.WriteTargetCap.Tag, version)
+	id, err := write_target.NewWriteTargetID(ci.FamilyName, ci.NetworkName, ci.ChainID, tag, version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create write target ID: %+w", err)
 	}
@@ -174,12 +178,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	}
 
 	// Construct the chain information from the config
-	chainInfo := write_target.ChainInfo{
-		ChainFamilyName: aptosconfig.ChainFamilyName, // static for this plugin
-		ChainID:         config.ChainID,
-		NetworkName:     config.NetworkName,
-		NetworkNameFull: config.NetworkNameFull,
-	}
+	chainInfo := config.GetChainInfo()
 
 	// Create the WT capability
 	opts := write_target.WriteTargetOpts{
@@ -187,7 +186,12 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 		Logger: lggr,
 		Config: *config.WriteTargetCap,
 		// TODO: simplify by passing via ChainService.GetChainStatus fn
-		ChainInfo:        chainInfo,
+		ChainInfo: write_target.ChainInfo{
+			ChainFamilyName: chainInfo.FamilyName,
+			ChainID:         chainInfo.ChainID,
+			NetworkName:     chainInfo.NetworkName,
+			NetworkNameFull: chainInfo.NetworkNameFull,
+		},
 		Beholder:         beholder,
 		ChainService:     chain,
 		ContractReader:   cr,

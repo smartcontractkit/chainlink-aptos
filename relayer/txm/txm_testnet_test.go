@@ -5,6 +5,7 @@ package txm
 import (
 	"testing"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
@@ -29,7 +30,7 @@ func runTestnetTest(t *testing.T, rpcUrl string) {
 	keystore := testutils.NewTestKeystore(t)
 	keystore.AddKey(privateKey)
 
-	config := DefaultConfigSet
+	config := config.Defaults().TransactionManager
 
-	runTxmTest(t, logger, config, rpcUrl, keystore, accountAddress, publicKey, 5)
+	runTxmTest(t, logger, *config, rpcUrl, keystore, accountAddress, publicKey, 5)
 }

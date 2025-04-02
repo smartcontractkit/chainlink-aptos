@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/sha3"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 
@@ -67,9 +68,9 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 	rlClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
 	getClient := func() (aptos.AptosRpcClient, error) { return rlClient, nil }
 
-	txmConfig := txm.DefaultConfigSet
+	txmConfig := config.Defaults().TransactionManager
 
-	txmgr, err := txm.New(logger, keystore, txmConfig, getClient)
+	txmgr, err := txm.New(logger, keystore, *txmConfig, getClient)
 	require.NoError(t, err)
 	err = txmgr.Start(context.Background())
 	require.NoError(t, err)

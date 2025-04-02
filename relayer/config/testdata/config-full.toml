@@ -1,0 +1,43 @@
+Enabled = true
+ChainID = 'fake-chain'
+NetworkName = 'net'
+NetworkNameFull = 'network'
+
+[TransactionManager]
+BroadcastChanSize = 1
+ConfirmPollSecs = 1
+ConfirmPoll = '1s'
+DefaultMaxGasAmount = 2
+MaxSimulateAttempts = 3
+MaxSubmitRetryAttempts = 4
+SubmitDelayDuration = '1m0s'
+TxExpirationSecs = 360
+TxExpiration = '1h0m0s'
+MaxTxRetryAttempts = 5
+PruneIntervalSecs = 100
+PruneInterval = '1ms'
+PruneTxExpirationSecs = 42
+PruneTxExpiration = '1µs'
+
+[LogPoller]
+EventPollingInterval = '10s'
+TxPollingInterval = '42s'
+PollTimeout = '13s'
+EventBatchSize = 99
+TxBatchSize = 10
+TXPollerDisabled = true
+
+[BalanceMonitor]
+BalancePollPeriod = '1ns'
+
+[WriteTargetCap]
+ConfirmerPollPeriod = '2h0m0s'
+ConfirmerTimeout = '2m0s'
+
+[Workflow]
+ForwarderAddress = 'foo'
+PublicKey = 'bar'
+
+[[Nodes]]
+Name = 'baz'
+URL = 'https://example.com'

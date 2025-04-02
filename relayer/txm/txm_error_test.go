@@ -18,6 +18,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 )
@@ -54,9 +55,9 @@ func TestTxmBroadcastErrors(t *testing.T) {
 	keystore := testutils.NewTestKeystore(t)
 	keystore.AddKey(privateKey)
 
-	config := DefaultConfigSet
+	config := config.Defaults().TransactionManager
 
-	runErrorsTest(t, logger, config, rpcUrl, keystore, accountAddress, publicKey)
+	runErrorsTest(t, logger, *config, rpcUrl, keystore, accountAddress, publicKey)
 }
 
 func runErrorsTest(t *testing.T, logger logger.Logger, config Config, rpcURL string, keystore loop.Keystore, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey) {
@@ -140,7 +141,7 @@ func runErrorsTest(t *testing.T, logger logger.Logger, config Config, rpcURL str
 
 	// Test with expired transaction
 	rawTx.SequenceNumber = sequenceNumber
-	rawTx.ExpirationTimestampSeconds = rawTx.ExpirationTimestampSeconds - txm.config.TxExpirationSecs - 3600 // 1 hour ago
+	rawTx.ExpirationTimestampSeconds = rawTx.ExpirationTimestampSeconds - uint64(txm.config.TxExpiration.Duration()/time.Second) - 3600 // 1 hour ago
 	signedTx, err = txm.createSignedTx(rlClient, rawTx, selectedTx.PublicKey, selectedTx.FromAddress)
 	require.NoError(t, err)
 

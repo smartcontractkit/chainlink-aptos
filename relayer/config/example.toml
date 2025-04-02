@@ -1,0 +1,5 @@
+ChainID = "4"
+
+[[Aptos.Nodes]]
+Name = 'primary'
+URL = "http://chainlink-aptos.devnet:8080/v1"

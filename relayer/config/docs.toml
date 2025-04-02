@@ -1,0 +1,75 @@
+# Enabled TODO
+Enabled = true # Default
+# ChainID TODO
+ChainID = 'TODO' # Example
+# NetworkName TODO
+NetworkName = 'TODO' # Example
+# NetworkNameFull TODO
+NetworkNameFull = 'TODO' # Example
+
+[TransactionManager]
+# BroadcastChanSize TODO
+BroadcastChanSize = 100 # Default
+# ConfirmPoll TODO
+ConfirmPoll = '2s' # Default
+# ConfirmPollSecs is deprecated. Use ConfirmPoll instead.
+ConfirmPollSecs = 1 # Example
+# DefaultMaxGasAmount TODO
+# https://github.com/aptos-labs/aptos-ts-sdk/blob/32d4360740392782c1368647f89ba62e1b6a2cb3/src/utils/const.ts#L21
+DefaultMaxGasAmount = 200000 # Default
+# MaxSimulateAttempts TODO
+MaxSimulateAttempts = 5 # Default
+# MaxSubmitRetryAttempts TODO
+MaxSubmitRetryAttempts = 10 # Default
+# SubmitDelayDuration TODO
+SubmitDelayDuration = '3s'  # Default
+# TxExpiration TODO
+TxExpiration = '10s'  # Default
+# TxExpirationSecs is deprecated. Use TxExpiration instead.
+TxExpirationSecs = 360 # Example
+# MaxTxRetryAttempts TODO
+MaxTxRetryAttempts = 5  # Default
+# PruneInterval TODO
+PruneInterval = '4h'  # Default
+# PruneIntervalSecs is deprecated. Use PruneInterval instead.
+PruneIntervalSecs = 1 # Example
+# PruneTxExpiration TODO
+PruneTxExpiration = '2h'  # Default
+# PruneTxExpirationSecs is deprecated. Use PruneTxExpiration instead.
+PruneTxExpirationSecs = 42 # Example
+
+[LogPoller]
+# EventPollingInterval TODO
+EventPollingInterval = '12s' # Default
+# TxPollingInterval TODO
+TxPollingInterval = '12s' # Default
+# PollTimeout TODO
+PollTimeout = '10s' # Default
+# EventBatchSize TODO
+EventBatchSize = 100 # Default
+# TxBatchSize TODO
+TxBatchSize = 100 # Default
+# TXPollerDisabled TODO
+TXPollerDisabled = false # Default
+
+[BalanceMonitor]
+# BalancePollPeriod TODO
+BalancePollPeriod = '10s' # Default
+
+[WriteTargetCap]
+# ConfirmerPollPeriod TODO
+ConfirmerPollPeriod = '1s' # Default
+# ConfirmerTimeout TODO
+ConfirmerTimeout = '10s' # Default
+
+[Workflow]
+# ForwarderAddress TODO
+ForwarderAddress = 'TODO' # Example
+# PublicKey TODO
+PublicKey = 'TODO' # Example
+
+[[Nodes]]
+# Name TODO
+Name = 'TODO' # Example
+# URL TODO
+URL = '' # Example
