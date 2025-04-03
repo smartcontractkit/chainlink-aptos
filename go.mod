@@ -13,7 +13,7 @@ require (
 	github.com/aptos-labs/aptos-go-sdk v1.5.1-0.20250303230301-affcbec1c549
 	github.com/aptos-labs/tree-sitter-move-on-aptos v0.0.0-20250321090037-c820eb4716e1
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
-	github.com/smartcontractkit/chainlink-aptos/relayer v0.0.0-20250329213913-29137c7903f5
+	github.com/smartcontractkit/chainlink-aptos/relayer v0.0.0-20250403143412-88b756fc7cc0
 	github.com/stretchr/testify v1.10.0
 	github.com/valyala/fastjson v1.6.4
 )
@@ -91,7 +91,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1 // indirect
 	github.com/scylladb/go-reflectx v1.0.1 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
-	github.com/smartcontractkit/chainlink-common v0.6.1-0.20250402175937-0977083b40c8 // indirect
+	github.com/smartcontractkit/chainlink-common v0.6.1-0.20250403145821-c9a3f9b7a1b0 // indirect
 	github.com/smartcontractkit/grpc-proxy v0.0.0-20240830132753-a7e17fec5ab7 // indirect
 	github.com/smartcontractkit/libocr v0.0.0-20250220133800-f3b940c4f298 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect

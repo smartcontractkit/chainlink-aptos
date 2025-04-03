@@ -9,22 +9,34 @@ require (
 	github.com/ethereum/go-ethereum v1.14.11
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-plugin v1.6.2
-	github.com/jpillora/backoff v1.0.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/pelletier/go-toml/v2 v2.2.0
-	github.com/smartcontractkit/chainlink-common v0.6.1-0.20250402175937-0977083b40c8
+	github.com/smartcontractkit/chainlink-common v0.6.1-0.20250403145821-c9a3f9b7a1b0
+	github.com/smartcontractkit/chainlink-framework/capabilities v0.0.0-20250403142442-228fe8ff93c5
 	github.com/stretchr/testify v1.10.0
-	go.opentelemetry.io/otel v1.30.0
-	go.opentelemetry.io/otel/metric v1.30.0
-	go.opentelemetry.io/otel/trace v1.30.0
 	golang.org/x/crypto v0.32.0
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0
 	google.golang.org/protobuf v1.36.6
 )
 
 require (
-	github.com/smartcontractkit/chainlink-framework/capabilities v0.0.0-20250403142442-228fe8ff93c5 // indirect
+	github.com/XSAM/otelsql v0.29.0 // indirect
+	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
+	github.com/jackc/pgconn v1.14.3 // indirect
+	github.com/jackc/pgio v1.0.0 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgproto3/v2 v2.3.3 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
+	github.com/jackc/pgtype v1.14.0 // indirect
+	github.com/jackc/pgx/v4 v4.18.3 // indirect
+	github.com/jmoiron/sqlx v1.4.0 // indirect
+	github.com/jpillora/backoff v1.0.0 // indirect
+	github.com/lib/pq v1.10.9 // indirect
+	github.com/scylladb/go-reflectx v1.0.1 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
+	go.opentelemetry.io/otel v1.30.0 // indirect
+	go.opentelemetry.io/otel/metric v1.30.0 // indirect
+	go.opentelemetry.io/otel/trace v1.30.0 // indirect
 )
 
 require (

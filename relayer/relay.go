@@ -12,7 +12,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
 	chain "github.com/smartcontractkit/chainlink-aptos/relayer/chain"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target/aptos"
+	write_target "github.com/smartcontractkit/chainlink-aptos/relayer/write_target/aptos"
 )
 
 var _ types.Relayer = (*relayer)(nil) //nolint:staticcheck
@@ -83,7 +83,7 @@ func (r *relayer) HealthReport() map[string]error {
 	return map[string]error{r.Name(): r.Healthy()}
 }
 
-func (r *relayer) NewChainWriter(ctx context.Context, config []byte) (types.ChainWriter, error) {
+func (r *relayer) NewContractWriter(ctx context.Context, config []byte) (types.ContractWriter, error) {
 	return nil, errors.New("chain writer is not supported for aptos")
 }
 
@@ -146,4 +146,8 @@ func (r *relayer) ListNodeStatuses(ctx context.Context, pageSize int32, pageToke
 
 func (r *relayer) Transact(ctx context.Context, from, to string, amount *big.Int, balanceCheck bool) error {
 	return r.chain.Transact(ctx, from, to, amount, balanceCheck)
+}
+
+func (r *relayer) Replay(ctx context.Context, fromBlock string, args map[string]any) error {
+	return errors.ErrUnsupported
 }

@@ -19,7 +19,7 @@ import (
 // aptos specific consts
 type aptosTargetStrategy struct {
 	cr commontypes.ContractReader
-	cw commontypes.ChainWriter
+	cw commontypes.ContractWriter
 
 	lggr      logger.Logger
 	forwarder string
@@ -39,7 +39,7 @@ var (
 	_ write_target.TargetStrategy = &aptosTargetStrategy{}
 )
 
-func NewAptosTargetStrategy(cr commontypes.ContractReader, cw commontypes.ChainWriter, lggr logger.Logger, forwarder string) *aptosTargetStrategy {
+func NewAptosTargetStrategy(cr commontypes.ContractReader, cw commontypes.ContractWriter, lggr logger.Logger, forwarder string) *aptosTargetStrategy {
 	return &aptosTargetStrategy{
 		cr:        cr,
 		cw:        cw,

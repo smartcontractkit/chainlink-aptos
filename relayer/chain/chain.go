@@ -295,6 +295,10 @@ func (c *chain) Transact(ctx context.Context, from, to string, amount *big.Int, 
 	return errors.ErrUnsupported
 }
 
+func (c *chain) Replay(ctx context.Context, fromBlock string, args map[string]any) error {
+	return errors.ErrUnsupported
+}
+
 // TODO BCF-2602 statuses are static for non-evm chain and should be dynamic
 func (c *chain) listNodeStatuses(start, end int) ([]types.NodeStatus, int, error) {
 	stats := make([]types.NodeStatus, 0)
