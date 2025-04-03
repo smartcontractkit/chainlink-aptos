@@ -10,10 +10,10 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
+	"github.com/smartcontractkit/chainlink-framework/capabilities/writetarget"
 
 	aptosacc "github.com/smartcontractkit/chainlink-aptos/relayer/account"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils/retry"
-	"github.com/smartcontractkit/chainlink-framework/capabilities/write_target"
 )
 
 // aptos specific consts
@@ -36,7 +36,7 @@ const (
 )
 
 var (
-	_ write_target.TargetStrategy = &aptosTargetStrategy{}
+	_ writetarget.TargetStrategy = &aptosTargetStrategy{}
 )
 
 func NewAptosTargetStrategy(cr commontypes.ContractReader, cw commontypes.ContractWriter, lggr logger.Logger, forwarder string) *aptosTargetStrategy {
@@ -48,7 +48,7 @@ func NewAptosTargetStrategy(cr commontypes.ContractReader, cw commontypes.Contra
 	}
 }
 
-func (t *aptosTargetStrategy) QueryTransmissionState(ctx context.Context, receiver string, workflowExecutionID string, reportID uint16) (*write_target.TransmissionState, error) {
+func (t *aptosTargetStrategy) QueryTransmissionState(ctx context.Context, receiver string, workflowExecutionID string, reportID uint16) (*writetarget.TransmissionState, error) {
 	rawExecutionID, err := hex.DecodeString(workflowExecutionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode workflowExecutionID: %w", err)
@@ -78,7 +78,7 @@ func (t *aptosTargetStrategy) QueryTransmissionState(ctx context.Context, receiv
 	// Helper to query the chain for the transmission state
 	// TODO: it's unclear how to source the TransmissionState via an abstracted CR API call
 	// Notice: this function is Aptos chain-specific (logic needs to be hidden behind the CR API call)
-	query := func(ctx context.Context) (*write_target.TransmissionState, error) {
+	query := func(ctx context.Context) (*writetarget.TransmissionState, error) {
 		// Check if transmission state exists
 		var transmitted bool
 		readTransmissionState := binding.ReadIdentifier(ContractMethodName_getTransmissionState)
@@ -115,7 +115,7 @@ func (t *aptosTargetStrategy) QueryTransmissionState(ctx context.Context, receiv
 			return nil, fmt.Errorf("failed to parse transmitter address: %w", err)
 		}
 
-		return &write_target.TransmissionState{Transmitter: address.String(), Status: write_target.TransmissionStateSucceeded}, nil
+		return &writetarget.TransmissionState{Transmitter: address.String(), Status: writetarget.TransmissionStateSucceeded}, nil
 	}
 
 	// Fetch the transmission state, retry with a default backoff strategy

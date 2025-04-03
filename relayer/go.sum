@@ -288,10 +288,10 @@ github.com/shopspring/decimal v1.4.0 h1:bxl37RwXBklmTi0C79JfXCEBD1cqqHt0bbgBAGFp
 github.com/shopspring/decimal v1.4.0/go.mod h1:gawqmDU56v4yIKSwfBSFip1HdCCXN8/+DMd9qYNcwME=
 github.com/sirupsen/logrus v1.4.1/go.mod h1:ni0Sbl8bgC9z8RoU9G6nDWqqs/fq4eDPysMBDgk/93Q=
 github.com/sirupsen/logrus v1.4.2/go.mod h1:tLMulIdttU9McNUspp0xgXVQah82FyeX6MwdIuYE2rE=
-github.com/smartcontractkit/chainlink-common v0.6.1-0.20250403145821-c9a3f9b7a1b0 h1:xI3Ar5ihHBtEFHgiR2xq+f9BVS5c0cdhiywAMKTVcwU=
-github.com/smartcontractkit/chainlink-common v0.6.1-0.20250403145821-c9a3f9b7a1b0/go.mod h1:WLiAjc+Q5VazhqSSxCgbN/S8eUHhinNFK+B3hHz5yJI=
-github.com/smartcontractkit/chainlink-framework/capabilities v0.0.0-20250403142442-228fe8ff93c5 h1:izRzTwjKy8/Bes5J/3VBx1RyHyNLZ62RglGUy1EAkmo=
-github.com/smartcontractkit/chainlink-framework/capabilities v0.0.0-20250403142442-228fe8ff93c5/go.mod h1:Wd8D320r5ParBY84Pyry80b0rDf0KJP9ut99D3qONaY=
+github.com/smartcontractkit/chainlink-common v0.6.1-0.20250403223319-bf977228567e h1:Y6g6Y6YZYbkcV474qLYg6TtKmbaSzzvOIkM3rLLas+s=
+github.com/smartcontractkit/chainlink-common v0.6.1-0.20250403223319-bf977228567e/go.mod h1:WLiAjc+Q5VazhqSSxCgbN/S8eUHhinNFK+B3hHz5yJI=
+github.com/smartcontractkit/chainlink-framework/capabilities v0.0.0-20250403224837-6897dbdd8e4c h1:A5E0Wh9vYl4jmjWN3I5DN9sdq8Bu7JKJNMkIsy64YEc=
+github.com/smartcontractkit/chainlink-framework/capabilities v0.0.0-20250403224837-6897dbdd8e4c/go.mod h1:9ut4/G+rHS/hBHsiJ7f5YecuGfIOykO+FcchlFKtTzk=
 github.com/smartcontractkit/grpc-proxy v0.0.0-20240830132753-a7e17fec5ab7 h1:12ijqMM9tvYVEm+nR826WsrNi6zCKpwBhuApq127wHs=
 github.com/smartcontractkit/grpc-proxy v0.0.0-20240830132753-a7e17fec5ab7/go.mod h1:FX7/bVdoep147QQhsOPkYsPEXhGZjeYx6lBSaSXtZOA=
 github.com/smartcontractkit/libocr v0.0.0-20250220133800-f3b940c4f298 h1:PKiqnVOTChlH4a4ljJKL3OKGRgYfIpJS4YD1daAIKks=

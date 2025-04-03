@@ -11,12 +11,11 @@ require (
 	github.com/hashicorp/go-plugin v1.6.2
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/pelletier/go-toml/v2 v2.2.0
-	github.com/smartcontractkit/chainlink-common v0.6.1-0.20250403145821-c9a3f9b7a1b0
-	github.com/smartcontractkit/chainlink-framework/capabilities v0.0.0-20250403142442-228fe8ff93c5
+	github.com/smartcontractkit/chainlink-common v0.6.1-0.20250403223319-bf977228567e
+	github.com/smartcontractkit/chainlink-framework/capabilities v0.0.0-20250403224837-6897dbdd8e4c
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/crypto v0.32.0
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0
-	google.golang.org/protobuf v1.36.6
 )
 
 require (
@@ -37,6 +36,7 @@ require (
 	go.opentelemetry.io/otel v1.30.0 // indirect
 	go.opentelemetry.io/otel/metric v1.30.0 // indirect
 	go.opentelemetry.io/otel/trace v1.30.0 // indirect
+	google.golang.org/protobuf v1.36.6 // indirect
 )
 
 require (

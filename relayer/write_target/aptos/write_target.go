@@ -15,8 +15,10 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	aptosconfig "github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/fees"
-	"github.com/smartcontractkit/chainlink-framework/capabilities/write_target"
 
+	"github.com/smartcontractkit/chainlink-framework/capabilities/writetarget"
+
+	"github.com/smartcontractkit/chainlink-common/pkg/beholder/monitor"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 )
@@ -30,7 +32,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	// chainName, err := chainselectors.NameFromChainId(chain.ID().Uint64())
 
 	// Construct the ID for the WT (e.g., "write_aptos-localnet@1.0.0")
-	id, err := write_target.NewWriteTargetID(aptosconfig.ChainFamilyName, config.NetworkName, config.ChainID, version)
+	id, err := writetarget.NewWriteTargetID(aptosconfig.ChainFamilyName, config.NetworkName, config.ChainID, version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create write target ID: %+w", err)
 	}
@@ -44,7 +46,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	}
 
 	// Set up a specific Beholder client for the Aptos WT
-	beholder, err := NewAptosWriteTargetMonitor(ctx, lggr)
+	beholder, err := writetarget.NewWriteTargetMonitor(ctx, lggr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Aptos WT monitor client: %+w", err)
 	}
@@ -140,7 +142,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	fe := fees.NewFeeEstimator(client)
 	cw := chainwriter.NewChainWriter(lggr, fe, chain.TxManager(), cwConfig)
 
-	validate := func(config write_target.ReqConfig) error {
+	validate := func(config writetarget.ReqConfig) error {
 		address := aptos.AccountAddress{}
 		if err = address.ParseStringRelaxed(config.Address); err != nil {
 			return fmt.Errorf("'%v' is not a valid Aptos address", config.Address)
@@ -154,7 +156,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	}
 
 	// Construct the chain information from the config
-	chainInfo := write_target.ChainInfo{
+	chainInfo := monitor.ChainInfo{
 		ChainFamilyName: aptosconfig.ChainFamilyName, // static for this plugin
 		ChainID:         config.ChainID,
 		NetworkName:     config.NetworkName,
@@ -164,7 +166,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	targetStrategy := NewAptosTargetStrategy(cr, cw, lggr, config.Workflow.ForwarderAddress)
 
 	// Create the WT capability
-	opts := write_target.WriteTargetOpts{
+	opts := writetarget.WriteTargetOpts{
 		ID:     id,
 		Logger: lggr,
 		Config: *config.WriteTargetCap,
@@ -179,7 +181,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 		ForwarderAddress: config.Workflow.ForwarderAddress,
 		TargetStrategy:   targetStrategy,
 	}
-	return write_target.NewWriteTarget(opts), nil
+	return writetarget.NewWriteTarget(opts), nil
 }
 
 // getTransmitter sources the transmitter address from the CW config

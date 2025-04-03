@@ -14,7 +14,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder/monitor"
-	"github.com/smartcontractkit/chainlink-framework/capabilities/write_target"
+	"github.com/smartcontractkit/chainlink-framework/capabilities/writetarget"
 )
 
 // Name of the chain family (e.g., "ethereum", "solana", "aptos")
@@ -25,13 +25,13 @@ var DefaultConfigSet = ConfigSet{
 	BalanceMonitor: monitor.Config{
 		BalancePollPeriod: *config.MustNewDuration(10 * time.Second),
 	},
-	WriteTargetCap: write_target.DefaultConfigSet,
+	WriteTargetCap: writetarget.DefaultConfigSet,
 }
 
 type ConfigSet struct { //nolint:revive
 	TransactionManager txm.Config
 	BalanceMonitor     monitor.Config
-	WriteTargetCap     write_target.Config
+	WriteTargetCap     writetarget.Config
 }
 
 type WorkflowConfig struct {
@@ -43,7 +43,7 @@ type WorkflowConfig struct {
 type Chain struct {
 	TransactionManager *txm.Config
 	BalanceMonitor     *monitor.Config
-	WriteTargetCap     *write_target.Config
+	WriteTargetCap     *writetarget.Config
 	Workflow           WorkflowConfig
 }
 
