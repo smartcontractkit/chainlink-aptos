@@ -15,7 +15,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	aptosconfig "github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/fees"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target"
+	"github.com/smartcontractkit/chainlink-framework/capabilities/write_target"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"

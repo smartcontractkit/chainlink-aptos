@@ -12,8 +12,8 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
 	aptosacc "github.com/smartcontractkit/chainlink-aptos/relayer/account"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target"
+	"github.com/smartcontractkit/chainlink-common/pkg/utils/retry"
+	"github.com/smartcontractkit/chainlink-framework/capabilities/write_target"
 )
 
 // aptos specific consts
@@ -119,7 +119,7 @@ func (t *aptosTargetStrategy) QueryTransmissionState(ctx context.Context, receiv
 	}
 
 	// Fetch the transmission state, retry with a default backoff strategy
-	state, err := utils.WithRetry(ctx, t.lggr, query)
+	state, err := retry.WithRetry(ctx, t.lggr, query)
 
 	return state, err
 }

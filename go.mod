@@ -1,6 +1,8 @@
 module github.com/smartcontractkit/chainlink-aptos
 
-go 1.24.0
+go 1.24.1
+
+toolchain go1.24.2
 
 replace (
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
@@ -10,9 +12,8 @@ replace (
 require (
 	github.com/aptos-labs/aptos-go-sdk v1.5.1-0.20250303230301-affcbec1c549
 	github.com/aptos-labs/tree-sitter-move-on-aptos v0.0.0-20250321090037-c820eb4716e1
-	github.com/ethereum/go-ethereum v1.15.5
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
-	github.com/smartcontractkit/chainlink-aptos/relayer v0.0.0-20250320162700-de7f1c0fd741
+	github.com/smartcontractkit/chainlink-aptos/relayer v0.0.0-20250329213913-29137c7903f5
 	github.com/stretchr/testify v1.10.0
 	github.com/valyala/fastjson v1.6.4
 )
@@ -29,6 +30,7 @@ require (
 	github.com/coder/websocket v1.8.12 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
+	github.com/ethereum/go-ethereum v1.15.5 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
@@ -89,7 +91,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1 // indirect
 	github.com/scylladb/go-reflectx v1.0.1 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
-	github.com/smartcontractkit/chainlink-common v0.4.2-0.20250227203031-2537a8c226bb // indirect
+	github.com/smartcontractkit/chainlink-common v0.6.1-0.20250402175937-0977083b40c8 // indirect
 	github.com/smartcontractkit/grpc-proxy v0.0.0-20240830132753-a7e17fec5ab7 // indirect
 	github.com/smartcontractkit/libocr v0.0.0-20250220133800-f3b940c4f298 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
@@ -126,6 +128,6 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20250219182151-9fdb1cabc7b2 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250219182151-9fdb1cabc7b2 // indirect
 	google.golang.org/grpc v1.70.0 // indirect
-	google.golang.org/protobuf v1.36.5 // indirect
+	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

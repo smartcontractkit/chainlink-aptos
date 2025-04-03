@@ -9,11 +9,11 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 
-	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
+	"github.com/smartcontractkit/chainlink-common/pkg/beholder/monitor"
 
-	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/data-feeds/on-chain/registry"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/platform/on-chain/forwarder"
-	wt "github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/platform/write-target"
+	"github.com/smartcontractkit/chainlink-common/pkg/beholder/capabilities/write_target/pb/data-feeds/on-chain/registry"
+	"github.com/smartcontractkit/chainlink-common/pkg/beholder/capabilities/write_target/pb/platform/on-chain/forwarder"
+	wt "github.com/smartcontractkit/chainlink-common/pkg/beholder/capabilities/write_target/pb/platform/write-target"
 )
 
 const (
