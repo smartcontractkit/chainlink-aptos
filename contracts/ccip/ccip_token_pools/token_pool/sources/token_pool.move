@@ -6,12 +6,13 @@ module ccip_token_pool::token_pool {
     use std::object::{Self, Object, ObjectCore};
     use std::signer;
     use std::smart_table::{Self, SmartTable};
-    use std::vector;
 
     use ccip::eth_abi;
     use ccip::token_admin_registry;
     use ccip::rmn_remote;
     use ccip::allowlist;
+
+    use ccip_token_pool::token_pool_rate_limiter;
 
     const STORE_OBJECT_SEED: vector<u8> = b"CCIPTokenPool";
 
@@ -19,6 +20,7 @@ module ccip_token_pool::token_pool {
         allowlist_state: allowlist::AllowlistState,
         fa_metadata: Object<Metadata>,
         remote_chain_configs: SmartTable<u64, RemoteChainConfig>,
+        rate_limiter_config: token_pool_rate_limiter::RateLimitState,
         locked_events: EventHandle<Locked>,
         released_events: EventHandle<Released>,
         remote_pool_added_events: EventHandle<RemotePoolAdded>,
@@ -94,22 +96,25 @@ module ccip_token_pool::token_pool {
     // |                    Initialize and state                      |
     // ================================================================
 
+    /// This function should be called from the init_module function to ensure the events
+    /// are created on the correct object.
     public fun initialize(
-        caller: &signer, local_token: address, allowlist: vector<address>
+        publisher: &signer, local_token: address, allowlist: vector<address>
     ): TokenPoolState {
-        assert_can_initialize(signer::address_of(caller));
+        assert_can_initialize(signer::address_of(publisher));
 
         let fa_metadata = object::address_to_object<Metadata>(local_token);
 
         TokenPoolState {
-            allowlist_state: allowlist::new(caller, allowlist),
+            allowlist_state: allowlist::new(publisher, allowlist),
             fa_metadata,
             remote_chain_configs: smart_table::new(),
-            locked_events: account::new_event_handle(caller),
-            released_events: account::new_event_handle(caller),
-            remote_pool_added_events: account::new_event_handle(caller),
-            remote_pool_removed_events: account::new_event_handle(caller),
-            chain_added_events: account::new_event_handle(caller)
+            rate_limiter_config: token_pool_rate_limiter::new(publisher),
+            locked_events: account::new_event_handle(publisher),
+            released_events: account::new_event_handle(publisher),
+            remote_pool_added_events: account::new_event_handle(publisher),
+            remote_pool_removed_events: account::new_event_handle(publisher),
+            chain_added_events: account::new_event_handle(publisher)
         }
     }
 
@@ -117,12 +122,10 @@ module ccip_token_pool::token_pool {
         if (caller_address == @ccip_token_pool) { return };
 
         if (object::is_object(@ccip_token_pool)) {
-            let ccip_lock_release_pool_object =
+            let token_pool_object =
                 object::address_to_object<ObjectCore>(@ccip_token_pool);
-            if (caller_address == object::owner(ccip_lock_release_pool_object)
-                || caller_address == object::root_owner(ccip_lock_release_pool_object)) {
-                return
-            };
+            if (caller_address == object::owner(token_pool_object)
+                || caller_address == object::root_owner(token_pool_object)) { return };
         };
 
         abort error::permission_denied(E_NOT_PUBLISHER)
@@ -336,9 +339,10 @@ module ccip_token_pool::token_pool {
 
     // Returns the remote token as bytes
     public fun validate_lock_or_burn(
-        state: &TokenPoolState,
+        state: &mut TokenPoolState,
         fa: &FungibleAsset,
-        input: &token_admin_registry::LockOrBurnInputV1
+        input: &token_admin_registry::LockOrBurnInputV1,
+        local_amount: u64
     ): vector<u8> {
         // Validate the fungible asset
         let fa_metadata = fungible_asset::metadata_from_asset(fa);
@@ -368,12 +372,17 @@ module ccip_token_pool::token_pool {
             abort error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
         };
 
-        // TODO Rate limits
+        token_pool_rate_limiter::consume_outbound(
+            &mut state.rate_limiter_config, remote_chain_selector, local_amount
+        );
+
         get_remote_token(state, remote_chain_selector)
     }
 
     public fun validate_release_or_mint(
-        state: &TokenPoolState, input: &token_admin_registry::ReleaseOrMintInputV1
+        state: &mut TokenPoolState,
+        input: &token_admin_registry::ReleaseOrMintInputV1,
+        local_amount: u64
     ) {
         // Validate the fungible asset
         let local_token = token_admin_registry::get_release_or_mint_local_token(input);
@@ -399,7 +408,9 @@ module ccip_token_pool::token_pool {
             error::invalid_argument(E_UNKNOWN_REMOTE_POOL)
         );
 
-        // TODO Rate limits
+        token_pool_rate_limiter::consume_inbound(
+            &mut state.rate_limiter_config, remote_chain_selector, local_amount
+        );
     }
 
     // ================================================================
@@ -518,6 +529,32 @@ module ccip_token_pool::token_pool {
     }
 
     // ================================================================
+    // |                    Rate limit config                         |
+    // ================================================================
+
+    public fun set_chain_rate_limiter_config(
+        state: &mut TokenPoolState,
+        remote_chain_selector: u64,
+        outbound_is_enabled: bool,
+        outbound_capacity: u64,
+        outbound_rate: u64,
+        inbound_is_enabled: bool,
+        inbound_capacity: u64,
+        inbound_rate: u64
+    ) {
+        token_pool_rate_limiter::set_chain_rate_limiter_config(
+            &mut state.rate_limiter_config,
+            remote_chain_selector,
+            outbound_is_enabled,
+            outbound_capacity,
+            outbound_rate,
+            inbound_is_enabled,
+            inbound_capacity,
+            inbound_rate
+        );
+    }
+
+    // ================================================================
     // |                          Allowlist                           |
     // ================================================================
 
@@ -544,6 +581,7 @@ module ccip_token_pool::token_pool {
             allowlist_state,
             fa_metadata: _fa_metadata,
             remote_chain_configs,
+            rate_limiter_config,
             locked_events,
             released_events,
             remote_pool_added_events,
@@ -558,6 +596,8 @@ module ccip_token_pool::token_pool {
         event::destroy_handle(remote_pool_added_events);
         event::destroy_handle(remote_pool_removed_events);
         event::destroy_handle(chain_added_events);
+
+        token_pool_rate_limiter::destroy_rate_limiter(rate_limiter_config);
     }
 }
 
