@@ -30,18 +30,6 @@ module mcms::params {
         };
     }
 
-    public inline fun left_pad_vec(v: &mut vector<u8>, num_bytes: u64) {
-        let len = v.length();
-        if (len < num_bytes) {
-            let bytes_to_pad = num_bytes - len;
-            v.reverse();
-            for (i in 0..bytes_to_pad) {
-                v.push_back(0);
-            };
-            v.reverse();
-        };
-    }
-
     /// compares two vectors of equal length, returns true if a > b, false otherwise.
     public fun vector_u8_gt(a: &vector<u8>, b: &vector<u8>): bool {
         let len = a.length();
