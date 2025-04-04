@@ -25,6 +25,10 @@ import (
 
 const version = "1.0.0"
 
+type AptosConfig struct {
+	Address string
+}
+
 func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Logger) (capabilities.TargetCapability, error) {
 	config := chain.Config()
 
@@ -142,12 +146,16 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	fe := fees.NewFeeEstimator(client)
 	cw := chainwriter.NewChainWriter(lggr, fe, chain.TxManager(), cwConfig)
 
-	validate := func(config writetarget.ReqConfig) error {
-		address := aptos.AccountAddress{}
-		if err = address.ParseStringRelaxed(config.Address); err != nil {
-			return fmt.Errorf("'%v' is not a valid Aptos address", config.Address)
+	validate := func(request capabilities.CapabilityRequest) (string, error) {
+		receiver, err := getReceiver(request)
+		if err != nil {
+			return "", err
 		}
-		return nil
+		address := aptos.AccountAddress{}
+		if err = address.ParseStringRelaxed(receiver); err != nil {
+			return "", fmt.Errorf("'%v' is not a valid Aptos address", receiver)
+		}
+		return receiver, nil
 	}
 
 	transmitter, err := getTransmitter(cwConfig)
@@ -210,4 +218,13 @@ func getTransmitter(cwConfig chainwriter.ChainWriterConfig) (string, error) {
 		transmitter = acc.String()
 	}
 	return transmitter, nil
+}
+
+func getReceiver(request capabilities.CapabilityRequest) (string, error) {
+	var aptosConfig AptosConfig
+	err := request.Config.UnwrapTo(&aptosConfig)
+	if err != nil {
+		return "", fmt.Errorf("failed to unwrap AptosConfig: %w", err)
+	}
+	return aptosConfig.Address, nil
 }

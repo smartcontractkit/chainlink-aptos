@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/google/uuid"
+	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
@@ -48,8 +49,13 @@ func NewAptosTargetStrategy(cr commontypes.ContractReader, cw commontypes.Contra
 	}
 }
 
-func (t *aptosTargetStrategy) QueryTransmissionState(ctx context.Context, receiver string, workflowExecutionID string, reportID uint16) (*writetarget.TransmissionState, error) {
-	rawExecutionID, err := hex.DecodeString(workflowExecutionID)
+func (t *aptosTargetStrategy) QueryTransmissionState(ctx context.Context, reportID uint16, request capabilities.CapabilityRequest) (*writetarget.TransmissionState, error) {
+	receiver, err := getReceiver(request)
+	if err != nil {
+		return nil, err
+	}
+
+	rawExecutionID, err := hex.DecodeString(request.Metadata.WorkflowExecutionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode workflowExecutionID: %w", err)
 	}
@@ -124,11 +130,16 @@ func (t *aptosTargetStrategy) QueryTransmissionState(ctx context.Context, receiv
 	return state, err
 }
 
-func (t *aptosTargetStrategy) TransmitReport(ctx context.Context, receiver string, report []byte, reportContext []byte, signatures [][]byte, workflowExecutionID string) (string, error) {
+func (t *aptosTargetStrategy) TransmitReport(ctx context.Context, report []byte, reportContext []byte, signatures [][]byte, request capabilities.CapabilityRequest) (string, error) {
 	txID, err := uuid.NewUUID() // NOTE: CW expects us to generate an ID, rather than return one
 	if err != nil {
 		// This should never happen
 		return "", err
+	}
+
+	receiver, err := getReceiver(request)
+	if err != nil {
+		return txID.String(), err
 	}
 
 	// Note: The codec that ContractWriter uses to encode the parameters for the contract ABI cannot handle
@@ -153,7 +164,7 @@ func (t *aptosTargetStrategy) TransmitReport(ctx context.Context, receiver strin
 	}
 
 	// Submit the transaction
-	meta := commontypes.TxMeta{WorkflowExecutionID: &workflowExecutionID}
+	meta := commontypes.TxMeta{WorkflowExecutionID: &request.Metadata.WorkflowExecutionID}
 	value := big.NewInt(0)
 	err = t.cw.SubmitTransaction(ctx, ContractName, ContractMethodName_report, req, txID.String(), t.forwarder, &meta, value)
 	return txID.String(), err
