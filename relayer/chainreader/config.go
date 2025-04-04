@@ -20,6 +20,7 @@ type ChainReaderFunction struct {
 	Params []AptosFunctionParam
 
 	ResultFieldRenames map[string]RenamedField
+	ResultWrap         []string
 }
 
 type AptosFunctionParam struct {

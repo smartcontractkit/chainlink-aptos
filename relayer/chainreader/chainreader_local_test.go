@@ -142,6 +142,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 								Type: "u64",
 							},
 						},
+						ResultWrap: []string{"first", "second"},
 					},
 					"echo_string": {
 						Params: []AptosFunctionParam{
@@ -280,20 +281,6 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		require.NoError(t, err)
 		require.Equal(t, u256Val, retU256)
 
-		var retTuple []uint64
-		err = chainReader.GetLatestValue(
-			context.Background(),
-			fmt.Sprintf("%s-testContract-echo_u32_u64_tuple", accountAddress.String()),
-			confidenceLevel,
-			struct {
-				Value1 uint32
-				Value2 uint64
-			}{Value1: 11, Value2: 22},
-			&retTuple,
-		)
-		require.NoError(t, err)
-		require.Equal(t, []uint64{11, 22}, retTuple)
-
 		var retString string
 		err = chainReader.GetLatestValue(
 			context.Background(),
@@ -380,7 +367,6 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 	t.Run("Batch reads", func(t *testing.T) {
 		var retUint64 uint64
 		var retU256 *big.Int
-		var retTuple []uint64
 		var retString string
 		var retBytes []byte
 		var retBytesSlice [][]byte
@@ -396,14 +382,6 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 					ReadName:  "echo_u256",
 					Params:    struct{ Value1 *big.Int }{Value1: u256Val},
 					ReturnVal: &retU256,
-				},
-				{
-					ReadName: "echo_u32_u64_tuple",
-					Params: struct {
-						Value1 uint32
-						Value2 uint64
-					}{Value1: 11, Value2: 22},
-					ReturnVal: &retTuple,
 				},
 				{
 					ReadName:  "echo_string",
@@ -427,14 +405,35 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		require.NoError(t, err)
 
 		batchResults := result[commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()}]
-		require.Len(t, batchResults, 6)
+		require.Len(t, batchResults, 5)
 
 		require.Equal(t, uint64(42), retUint64)
 		require.Equal(t, u256Val, retU256)
-		require.Equal(t, []uint64{11, 22}, retTuple)
 		require.Equal(t, testString, retString)
 		require.Equal(t, testBytes, retBytes)
 		require.Equal(t, testBytesSlice, retBytesSlice)
+	})
+
+	t.Run("Wrapped result read", func(t *testing.T) {
+		type WrappedTuple struct {
+			First  uint32 `json:"first"`
+			Second uint64 `json:"second"`
+		}
+		var ret WrappedTuple
+		err = chainReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-echo_u32_u64_tuple", accountAddress.String()),
+			confidenceLevel,
+			struct {
+				Value1 uint32
+				Value2 uint64
+			}{Value1: 11, Value2: 22},
+			&ret,
+		)
+		require.NoError(t, err)
+
+		require.Equal(t, uint32(11), ret.First)
+		require.Equal(t, uint64(22), ret.Second)
 	})
 }
 

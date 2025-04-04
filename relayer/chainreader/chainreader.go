@@ -201,21 +201,26 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		return nil
 	}
 
-	// In order to support multi-returns, all values are returned as []any
-	// However, vector or tuple return types are not necessary wrapped
-	// in an additional slice, eg:
-	// u32 return type -> [1]
-	// (u32, u64) tuple return type -> [1, 2]
-	// vector<u8> return type -> ["0x12345678"]
-	// vector<vector<u8>> return type -> ["0x1234", "0x5678"]
-	var unwrappedData any
-	if len(data) == 1 {
-		unwrappedData = data[0]
+	var finalResult any
+	if len(functionConfig.ResultWrap) > 0 {
+		if len(data) != len(functionConfig.ResultWrap) {
+			return fmt.Errorf("result wrap mismatch: expected %d elements, got %d", len(functionConfig.ResultWrap), len(data))
+		}
+
+		wrappedResult := make(map[string]any)
+		for i, fieldName := range functionConfig.ResultWrap {
+			wrappedResult[fieldName] = data[i]
+		}
+		finalResult = wrappedResult
 	} else {
-		unwrappedData = data
+		if len(data) == 1 {
+			finalResult = data[0]
+		} else {
+			finalResult = data
+		}
 	}
 
-	return codec.DecodeAptosJsonValue(unwrappedData, returnVal)
+	return codec.DecodeAptosJsonValue(finalResult, returnVal)
 }
 
 func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request types.BatchGetLatestValuesRequest) (types.BatchGetLatestValuesResult, error) {
