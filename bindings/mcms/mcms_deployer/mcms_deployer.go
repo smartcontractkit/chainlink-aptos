@@ -36,9 +36,10 @@ type MCMSDeployerEncoder interface {
 	StageCodeChunkAndPublishToObject(metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, newOwnerSeed []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	StageCodeChunkAndUpgradeObjectCode(metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, codeObjectAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CleanupStagingArea() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	CleanupStagingAreaInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"mcms","module":"mcms_deployer","name":"cleanup_staging_area","parameters":null},{"package":"mcms","module":"mcms_deployer","name":"stage_code_chunk","parameters":[{"name":"metadata_chunk","type":"vector\u003cu8\u003e"},{"name":"code_indices","type":"vector\u003cu16\u003e"},{"name":"code_chunks","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"mcms","module":"mcms_deployer","name":"stage_code_chunk_and_publish_to_object","parameters":[{"name":"metadata_chunk","type":"vector\u003cu8\u003e"},{"name":"code_indices","type":"vector\u003cu16\u003e"},{"name":"code_chunks","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"new_owner_seed","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms_deployer","name":"stage_code_chunk_and_upgrade_object_code","parameters":[{"name":"metadata_chunk","type":"vector\u003cu8\u003e"},{"name":"code_indices","type":"vector\u003cu16\u003e"},{"name":"code_chunks","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"code_object_address","type":"address"}]}]`
+const FunctionInfo = `[{"package":"mcms","module":"mcms_deployer","name":"cleanup_staging_area","parameters":null},{"package":"mcms","module":"mcms_deployer","name":"cleanup_staging_area_internal","parameters":null},{"package":"mcms","module":"mcms_deployer","name":"stage_code_chunk","parameters":[{"name":"metadata_chunk","type":"vector\u003cu8\u003e"},{"name":"code_indices","type":"vector\u003cu16\u003e"},{"name":"code_chunks","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"mcms","module":"mcms_deployer","name":"stage_code_chunk_and_publish_to_object","parameters":[{"name":"metadata_chunk","type":"vector\u003cu8\u003e"},{"name":"code_indices","type":"vector\u003cu16\u003e"},{"name":"code_chunks","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"new_owner_seed","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms_deployer","name":"stage_code_chunk_and_upgrade_object_code","parameters":[{"name":"metadata_chunk","type":"vector\u003cu8\u003e"},{"name":"code_indices","type":"vector\u003cu16\u003e"},{"name":"code_chunks","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"code_object_address","type":"address"}]}]`
 
 func NewMCMSDeployer(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMSDeployer {
 	contract := bind.NewBoundContract(address, "mcms", "mcms_deployer", client)
@@ -153,4 +154,8 @@ func (c mcmsDeployerEncoder) StageCodeChunkAndUpgradeObjectCode(metadataChunk []
 
 func (c mcmsDeployerEncoder) CleanupStagingArea() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("cleanup_staging_area", nil, []string{}, []any{})
+}
+
+func (c mcmsDeployerEncoder) CleanupStagingAreaInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("cleanup_staging_area_internal", nil, []string{}, []any{})
 }

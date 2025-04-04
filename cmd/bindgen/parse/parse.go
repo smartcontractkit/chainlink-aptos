@@ -86,10 +86,7 @@ func Functions(module []byte) ([]Func, error) {
   (attributes
     (attribute) @attribute
   )?
-  (module_member_modifier
-  	(visibility) @viz
-  )
-  (module_member_modifier)? @modifier
+  (module_member_modifier)* @modifier
   (function_decl
   	name: (identifier) @function_name
     return_type: (type)? @returnType
@@ -142,15 +139,15 @@ func Functions(module []byte) ([]Func, error) {
 				if capture.Node.Content(module) == "view" {
 					f.IsView = true
 				}
-			case 2:
+			case 1:
 				// @modifier
 				if capture.Node.Content(module) == "entry" {
 					f.IsEntry = true
 				}
-			case 3:
+			case 2:
 				// @function_name
 				f.Name = capture.Node.Content(module)
-			case 4:
+			case 3:
 				// @returnType
 				switch capture.Node.Child(0).Type() {
 				case "tuple_type":
@@ -162,7 +159,7 @@ func Functions(module []byte) ([]Func, error) {
 				default:
 					f.ReturnTypes = append(f.ReturnTypes, capture.Node.Content(module))
 				}
-			case 5:
+			case 4:
 				// @function
 				qcParam := tree_sitter.NewQueryCursor()
 				qcParam.Exec(queryParameters, capture.Node)
