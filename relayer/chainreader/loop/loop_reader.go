@@ -73,7 +73,7 @@ func (a *loopChainReader) GetLatestValue(ctx context.Context, readIdentifier str
 		return fmt.Errorf("failed to re-bind before GetLatestValue: %w", err)
 	}
 
-	err = a.cr.GetLatestValue(ctx, readIdentifier, confidenceLevel, jsonParamBytes, &convertedResult)
+	err = a.cr.GetLatestValue(ctx, readIdentifier, confidenceLevel, &jsonParamBytes, &convertedResult)
 	if err != nil {
 		return fmt.Errorf("failed to call GetLatestValue over LOOP: %w", err)
 	}
@@ -228,5 +228,6 @@ func (a *loopChainReader) decodeGLVReturnValue(label string, jsonBytes []byte, r
 	if err != nil {
 		return fmt.Errorf("failed to decode %s GetLatestValue JSON value (`%s`) to %T: %w", label, string(jsonBytes), returnVal, err)
 	}
+
 	return nil
 }
