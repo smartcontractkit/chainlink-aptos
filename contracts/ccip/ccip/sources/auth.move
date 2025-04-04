@@ -75,9 +75,9 @@ module ccip::auth {
         borrow_global_mut<AuthState>(state_object::object_address())
     }
 
-    //
-    // ccip::ownable functions
-    //
+    // ================================================================
+    // |                          Ownable                             |
+    // ================================================================
 
     #[view]
     public fun owner(): address acquires AuthState {
@@ -114,9 +114,9 @@ module ccip::auth {
         );
     }
 
-    //
-    // MCMS entrypoint
-    //
+    // ================================================================
+    // |                      MCMS Entrypoint                         |
+    // ================================================================
 
     struct McmsCallback {}
     has drop;

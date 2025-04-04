@@ -926,9 +926,9 @@ module ccip::token_admin_registry {
         borrow_global_mut<TokenPoolRegistration>(token_pool_address)
     }
 
-    //
-    // MCMS entrypoint
-    //
+    // ================================================================
+    // |                      MCMS Entrypoint                         |
+    // ================================================================
 
     struct McmsCallback has drop {}
 

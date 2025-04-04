@@ -816,9 +816,9 @@ module ccip::onramp {
         borrow_global_mut<OnRampState>(state_object::object_address())
     }
 
-    //
-    // MCMS entrypoint
-    //
+    // ================================================================
+    // |                      MCMS Entrypoint                         |
+    // ================================================================
 
     struct McmsCallback has drop {}
 

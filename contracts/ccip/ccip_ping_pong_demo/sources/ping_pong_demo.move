@@ -239,9 +239,9 @@ module ccip_ping_pong_demo::ping_pong_demo {
         abort error::permission_denied(E_NOT_PUBLISHER)
     }
 
-    //
-    // ccip::ownable functions
-    //
+    // ================================================================
+    // |                          Ownable                             |
+    // ================================================================
 
     #[view]
     public fun owner(): address acquires PingPongDemo {
