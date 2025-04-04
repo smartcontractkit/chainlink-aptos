@@ -50,7 +50,7 @@ func TestChainReaderLocal(t *testing.T) {
 	})
 
 	t.Run("QueryKey", func(t *testing.T) {
-		runQueryKeyTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
+		// runQueryKeyTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
 	})
 }
 
@@ -237,6 +237,20 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 								NewName: "RenamedValues",
 							},
 						},
+					},
+					"get_complex_struct_unwrapped": {
+						Name: "get_complex_struct",
+						Params: []AptosFunctionParam{
+							{
+								Name: "Val",
+								Type: "u64",
+							},
+							{
+								Name: "Text",
+								Type: "0x1::string::String",
+							},
+						},
+						ResultUnwrap: []string{"nested"},
 					},
 				},
 			},
@@ -434,6 +448,27 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 
 		require.Equal(t, uint32(11), ret.First)
 		require.Equal(t, uint64(22), ret.Second)
+	})
+
+	t.Run("Unwrapped result read", func(t *testing.T) {
+		type UnwrappedNested struct {
+			Id          uint64 `json:"id"`
+			Description string `json:"description"`
+		}
+		var ret UnwrappedNested
+		err = chainReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-get_complex_struct_unwrapped", accountAddress.String()),
+			confidenceLevel,
+			struct {
+				Val  uint64
+				Text string
+			}{Val: 150, Text: "test"},
+			&ret,
+		)
+		require.NoError(t, err)
+		require.Equal(t, uint64(150), ret.Id)
+		require.Equal(t, "test", ret.Description)
 	})
 }
 

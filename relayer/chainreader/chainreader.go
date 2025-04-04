@@ -203,6 +203,22 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		}
 	}
 
+	if len(functionConfig.ResultUnwrap) > 0 {
+		unwrapped := finalResult
+		for _, key := range functionConfig.ResultUnwrap {
+			m, ok := unwrapped.(map[string]any)
+			if !ok {
+				return fmt.Errorf("result unwrap error: expecting a map at key %s but got %T", key, unwrapped)
+			}
+			val, exists := m[key]
+			if !exists {
+				return fmt.Errorf("result unwrap error: key %s not found", key)
+			}
+			unwrapped = val
+		}
+		finalResult = unwrapped
+	}
+
 	if a.config.IsLoopPlugin {
 		// immediately remarshal the data
 		// TODO: update aptos-go-sdk to allow returning the string directly
