@@ -218,23 +218,15 @@ func (a *loopChainReader) getBindings() []types.BoundContract {
 }
 
 func (a *loopChainReader) decodeGLVReturnValue(label string, jsonBytes []byte, returnVal any) error {
-	var unmarshalledData []any
-	err := json.Unmarshal(jsonBytes, &unmarshalledData)
+	var result any
+	err := json.Unmarshal(jsonBytes, &result)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal %s GetLatestValue result (`%s`): %w", label, string(jsonBytes), err)
 	}
 
-	var unwrappedData any
-	if len(unmarshalledData) == 1 {
-		unwrappedData = unmarshalledData[0]
-	} else {
-		unwrappedData = unmarshalledData
-	}
-
-	err = codec.DecodeAptosJsonValue(unwrappedData, returnVal)
+	err = codec.DecodeAptosJsonValue(result, returnVal)
 	if err != nil {
 		return fmt.Errorf("failed to decode %s GetLatestValue JSON value (`%s`) to %T: %w", label, string(jsonBytes), returnVal, err)
 	}
-
 	return nil
 }

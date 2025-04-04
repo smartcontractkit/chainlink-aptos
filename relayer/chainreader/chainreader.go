@@ -185,28 +185,11 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		return fmt.Errorf("failed to rename function return value fields: %+w", err)
 	}
 
-	if a.config.IsLoopPlugin {
-		// immediately remarshal the data
-		// TODO: update aptos-go-sdk to allow returning the string directly
-		resultBytes, err := json.Marshal(data)
-		if err != nil {
-			return fmt.Errorf("failed to re-marshal data: %+w", err)
-		}
-		returnValPtr, ok := returnVal.(*[]byte)
-		if !ok {
-			return fmt.Errorf("return value is not a pointer to []byte as expected when running as a LOOP plugin")
-		}
-		*returnValPtr = make([]byte, len(resultBytes))
-		copy(*returnValPtr, resultBytes)
-		return nil
-	}
-
 	var finalResult any
 	if len(functionConfig.ResultWrap) > 0 {
 		if len(data) != len(functionConfig.ResultWrap) {
 			return fmt.Errorf("result wrap mismatch: expected %d elements, got %d", len(functionConfig.ResultWrap), len(data))
 		}
-
 		wrappedResult := make(map[string]any)
 		for i, fieldName := range functionConfig.ResultWrap {
 			wrappedResult[fieldName] = data[i]
@@ -218,6 +201,22 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		} else {
 			finalResult = data
 		}
+	}
+
+	if a.config.IsLoopPlugin {
+		// immediately remarshal the data
+		// TODO: update aptos-go-sdk to allow returning the string directly
+		resultBytes, err := json.Marshal(finalResult)
+		if err != nil {
+			return fmt.Errorf("failed to re-marshal data: %+w", err)
+		}
+		returnValPtr, ok := returnVal.(*[]byte)
+		if !ok {
+			return fmt.Errorf("return value is not a pointer to []byte as expected when running as a LOOP plugin")
+		}
+		*returnValPtr = make([]byte, len(resultBytes))
+		copy(*returnValPtr, resultBytes)
+		return nil
 	}
 
 	return codec.DecodeAptosJsonValue(finalResult, returnVal)
