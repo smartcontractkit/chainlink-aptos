@@ -43,9 +43,20 @@ type MCMSEncoder interface {
 	SetRoot(root []byte, validUntil uint64, chainId *big.Int, multisig aptos.AccountAddress, preOpCount uint64, postOpCount uint64, overridePreviousRoot bool, metadataProof [][]byte, signatures [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Execute(chainId *big.Int, multisig aptos.AccountAddress, nonce uint64, to aptos.AccountAddress, moduleName string, function string, data []byte, proof [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	SetConfig(signerAddresses [][]byte, signerGroups []byte, groupQuorums []byte, groupParents []byte, clearRoot bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	Dispatch(receiver aptos.AccountAddress, moduleName string, functionName string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	DispatchToSelf(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	DispatchToAccount(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	DispatchToDeployer(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	DispatchToRegistry(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	EcdsaRecoverEvmAddr(ethSignedMessageHash []byte, signature []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ComputeEthMessageHash(root []byte, validUntil uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	HashMetadataLeaf(metadata RootMetadata) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	HashOpLeaf(op Op) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	VerifyMerkleProof(proof [][]byte, root []byte, leaf []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TestRegisterObjectOwnerForNewCodeObject() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"mcms","module":"mcms","name":"execute","parameters":[{"name":"chain_id","type":"u256"},{"name":"multisig","type":"address"},{"name":"nonce","type":"u64"},{"name":"to","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"proof","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"mcms","module":"mcms","name":"set_config","parameters":[{"name":"signer_addresses","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"signer_groups","type":"vector\u003cu8\u003e"},{"name":"group_quorums","type":"vector\u003cu8\u003e"},{"name":"group_parents","type":"vector\u003cu8\u003e"},{"name":"clear_root","type":"bool"}]},{"package":"mcms","module":"mcms","name":"set_root","parameters":[{"name":"root","type":"vector\u003cu8\u003e"},{"name":"valid_until","type":"u64"},{"name":"chain_id","type":"u256"},{"name":"multisig","type":"address"},{"name":"pre_op_count","type":"u64"},{"name":"post_op_count","type":"u64"},{"name":"override_previous_root","type":"bool"},{"name":"metadata_proof","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"signatures","type":"vector\u003cvector\u003cu8\u003e\u003e"}]}]`
+const FunctionInfo = `[{"package":"mcms","module":"mcms","name":"compute_eth_message_hash","parameters":[{"name":"root","type":"vector\u003cu8\u003e"},{"name":"valid_until","type":"u64"}]},{"package":"mcms","module":"mcms","name":"dispatch","parameters":[{"name":"receiver","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function_name","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"dispatch_to_account","parameters":[{"name":"function_name_bytes","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"dispatch_to_deployer","parameters":[{"name":"function_name_bytes","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"dispatch_to_registry","parameters":[{"name":"function_name_bytes","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"dispatch_to_self","parameters":[{"name":"function_name_bytes","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"ecdsa_recover_evm_addr","parameters":[{"name":"eth_signed_message_hash","type":"vector\u003cu8\u003e"},{"name":"signature","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"execute","parameters":[{"name":"chain_id","type":"u256"},{"name":"multisig","type":"address"},{"name":"nonce","type":"u64"},{"name":"to","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"proof","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"mcms","module":"mcms","name":"hash_metadata_leaf","parameters":[{"name":"metadata","type":"RootMetadata"}]},{"package":"mcms","module":"mcms","name":"hash_op_leaf","parameters":[{"name":"op","type":"Op"}]},{"package":"mcms","module":"mcms","name":"set_config","parameters":[{"name":"signer_addresses","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"signer_groups","type":"vector\u003cu8\u003e"},{"name":"group_quorums","type":"vector\u003cu8\u003e"},{"name":"group_parents","type":"vector\u003cu8\u003e"},{"name":"clear_root","type":"bool"}]},{"package":"mcms","module":"mcms","name":"set_root","parameters":[{"name":"root","type":"vector\u003cu8\u003e"},{"name":"valid_until","type":"u64"},{"name":"chain_id","type":"u256"},{"name":"multisig","type":"address"},{"name":"pre_op_count","type":"u64"},{"name":"post_op_count","type":"u64"},{"name":"override_previous_root","type":"bool"},{"name":"metadata_proof","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"signatures","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"mcms","module":"mcms","name":"test_register_object_owner_for_new_code_object","parameters":null},{"package":"mcms","module":"mcms","name":"verify_merkle_proof","parameters":[{"name":"proof","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"root","type":"vector\u003cu8\u003e"},{"name":"leaf","type":"vector\u003cu8\u003e"}]}]`
 
 func NewMCMS(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMS {
 	contract := bind.NewBoundContract(address, "mcms", "mcms", client)
@@ -328,4 +339,110 @@ func (c mcmsEncoder) SetConfig(signerAddresses [][]byte, signerGroups []byte, gr
 		groupParents,
 		clearRoot,
 	})
+}
+
+func (c mcmsEncoder) Dispatch(receiver aptos.AccountAddress, moduleName string, functionName string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("dispatch", nil, []string{
+		"address",
+		"0x1::string::String",
+		"0x1::string::String",
+		"vector<u8>",
+	}, []any{
+		receiver,
+		moduleName,
+		functionName,
+		data,
+	})
+}
+
+func (c mcmsEncoder) DispatchToSelf(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("dispatch_to_self", nil, []string{
+		"vector<u8>",
+		"vector<u8>",
+	}, []any{
+		functionNameBytes,
+		data,
+	})
+}
+
+func (c mcmsEncoder) DispatchToAccount(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("dispatch_to_account", nil, []string{
+		"vector<u8>",
+		"vector<u8>",
+	}, []any{
+		functionNameBytes,
+		data,
+	})
+}
+
+func (c mcmsEncoder) DispatchToDeployer(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("dispatch_to_deployer", nil, []string{
+		"vector<u8>",
+		"vector<u8>",
+	}, []any{
+		functionNameBytes,
+		data,
+	})
+}
+
+func (c mcmsEncoder) DispatchToRegistry(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("dispatch_to_registry", nil, []string{
+		"vector<u8>",
+		"vector<u8>",
+	}, []any{
+		functionNameBytes,
+		data,
+	})
+}
+
+func (c mcmsEncoder) EcdsaRecoverEvmAddr(ethSignedMessageHash []byte, signature []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("ecdsa_recover_evm_addr", nil, []string{
+		"vector<u8>",
+		"vector<u8>",
+	}, []any{
+		ethSignedMessageHash,
+		signature,
+	})
+}
+
+func (c mcmsEncoder) ComputeEthMessageHash(root []byte, validUntil uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("compute_eth_message_hash", nil, []string{
+		"vector<u8>",
+		"u64",
+	}, []any{
+		root,
+		validUntil,
+	})
+}
+
+func (c mcmsEncoder) HashMetadataLeaf(metadata RootMetadata) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("hash_metadata_leaf", nil, []string{
+		"RootMetadata",
+	}, []any{
+		metadata,
+	})
+}
+
+func (c mcmsEncoder) HashOpLeaf(op Op) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("hash_op_leaf", nil, []string{
+		"Op",
+	}, []any{
+		op,
+	})
+}
+
+func (c mcmsEncoder) VerifyMerkleProof(proof [][]byte, root []byte, leaf []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("verify_merkle_proof", nil, []string{
+		"vector<vector<u8>>",
+		"vector<u8>",
+		"vector<u8>",
+	}, []any{
+		proof,
+		root,
+		leaf,
+	})
+}
+
+func (c mcmsEncoder) TestRegisterObjectOwnerForNewCodeObject() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("test_register_object_owner_for_new_code_object", nil, []string{}, []any{})
 }

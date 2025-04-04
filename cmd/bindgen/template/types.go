@@ -52,14 +52,14 @@ func createGoTypeFromMove(s string, localStructs map[string]parse.Struct, extern
 		}, nil
 	default:
 		// Vectors
-		if innerTypeName, moveType, ok := isGenericType(s, "vector"); ok {
+		if innerTypeName, _, ok := isGenericType(s, "vector"); ok {
 			innerType, err := createGoTypeFromMove(innerTypeName, localStructs, externalStructs)
 			if err != nil {
 				return tmplType{}, err
 			}
 			return tmplType{
 				GoType:   fmt.Sprintf("[]%s", innerType.GoType),
-				MoveType: moveType,
+				MoveType: fmt.Sprintf("vector<%s>", innerType.MoveType),
 			}, nil
 		}
 

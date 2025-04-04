@@ -32,9 +32,10 @@ type Ocr3BaseEncoder interface {
 	OcrPluginTypeCommit() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	OcrPluginTypeExecution() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	DeserializeSequenceBytes(sequenceBytes []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	HashReport(report []byte, configDigest []byte, sequenceBytes []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"ocr3_base","name":"deserialize_sequence_bytes","parameters":[{"name":"sequence_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"ocr3_base","name":"new","parameters":null},{"package":"ccip","module":"ocr3_base","name":"ocr_plugin_type_commit","parameters":null},{"package":"ccip","module":"ocr3_base","name":"ocr_plugin_type_execution","parameters":null}]`
+const FunctionInfo = `[{"package":"ccip","module":"ocr3_base","name":"deserialize_sequence_bytes","parameters":[{"name":"sequence_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"ocr3_base","name":"hash_report","parameters":[{"name":"report","type":"vector\u003cu8\u003e"},{"name":"config_digest","type":"vector\u003cu8\u003e"},{"name":"sequence_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"ocr3_base","name":"new","parameters":null},{"package":"ccip","module":"ocr3_base","name":"ocr_plugin_type_commit","parameters":null},{"package":"ccip","module":"ocr3_base","name":"ocr_plugin_type_execution","parameters":null}]`
 
 func NewOcr3Base(address aptos.AccountAddress, client aptos.AptosRpcClient) Ocr3Base {
 	contract := bind.NewBoundContract(address, "ccip", "ocr3_base", client)
@@ -118,6 +119,18 @@ func (c ocr3BaseEncoder) DeserializeSequenceBytes(sequenceBytes []byte) (bind.Mo
 	return c.BoundContract.Encode("deserialize_sequence_bytes", nil, []string{
 		"vector<u8>",
 	}, []any{
+		sequenceBytes,
+	})
+}
+
+func (c ocr3BaseEncoder) HashReport(report []byte, configDigest []byte, sequenceBytes []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("hash_report", nil, []string{
+		"vector<u8>",
+		"vector<u8>",
+		"vector<u8>",
+	}, []any{
+		report,
+		configDigest,
 		sequenceBytes,
 	})
 }
