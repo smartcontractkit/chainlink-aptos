@@ -613,6 +613,47 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 		require.Equal(t, uint64(1), event.SingleUintValue)
 	})
 
+	t.Run("Get events using timestamp filter", func(t *testing.T) {
+		allSeqs, err := chainReader.QueryKey(
+			context.Background(),
+			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
+			query.KeyFilter{Key: "SingleValueEvent"},
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, allSeqs)
+
+		midIdx := len(allSeqs) / 2
+		midTimestamp := allSeqs[midIdx].Head.Timestamp
+
+		tsComparator := &primitives.Comparator{
+			Name: "timestamp",
+			ValueComparators: []primitives.ValueComparator{{
+				Operator: primitives.Gte,
+				Value:    midTimestamp,
+			}},
+		}
+		filter := query.KeyFilter{
+			Key:         "SingleValueEvent",
+			Expressions: []query.Expression{{Primitive: tsComparator}},
+		}
+
+		filteredSeqs, err := chainReader.QueryKey(
+			context.Background(),
+			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
+			filter,
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, filteredSeqs)
+
+		for _, seq := range filteredSeqs {
+			require.GreaterOrEqual(t, seq.Head.Timestamp, midTimestamp)
+		}
+	})
+
 	t.Run("Get events sorted in desc", func(t *testing.T) {
 		sequences, err := chainReader.QueryKey(
 			context.Background(),
