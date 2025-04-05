@@ -312,26 +312,6 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		expressions = convertedExpressions
 	}
 
-	// TODO: parsing offset from queryFilter because limitAndSort doesn't support offset-based pagination
-	var eventOffset uint64 = 0
-	for _, expr := range expressions {
-		if expr.IsPrimitive() {
-			if comparator, ok := expr.Primitive.(*primitives.Comparator); ok && comparator.Name == "offset" {
-				for _, valueComparator := range comparator.ValueComparators {
-					if valueComparator.Operator == primitives.Eq {
-						if value, ok := valueComparator.Value.(uint64); ok {
-							eventOffset = value
-						} else {
-							return nil, fmt.Errorf("offset value is not an integer: %v", valueComparator.Value)
-						}
-					}
-				}
-			}
-		}
-	}
-
-	limit := limitAndSort.Limit.Count
-
 	moduleConfig, ok := a.config.Modules[contractName]
 	if !ok {
 		return nil, fmt.Errorf("no such module: %s", contractName)
@@ -414,6 +394,57 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	}
 
 	eventHandle := address.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
+
+	limit := limitAndSort.Limit.Count
+
+	offsetFilter, hasOffsetFilter := extractOffsetFilter(expressions)
+	tsFilter, hasTSFilter := extractTimestampFilter(expressions)
+	if hasOffsetFilter && hasTSFilter {
+		return nil, fmt.Errorf("cannot use both offset and timestamp filters")
+	}
+
+	var eventOffset uint64 = 0
+	if hasOffsetFilter {
+		eventOffset = offsetFilter
+	} else if hasTSFilter {
+		// We perform a binary search to determine the offset
+		// that satisfies the condition blockTs >= tsFilter
+		var one uint64 = 1
+		// API doesn't return the newest event on nil start as documented
+		// todo: uncomment and use high := events[0].SequenceNumber when fixed
+		// events, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventConfig.EventHandleFieldName, nil, &one)
+		// if err != nil {
+		// 	return nil, fmt.Errorf("failed to get newest event for binary search")
+		// }
+
+		// Set binary search range
+		low := uint64(0)
+		high := uint64(1000000)
+
+		for low < high {
+			mid := (low + high) / 2
+			events, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventConfig.EventHandleFieldName, &mid, &one)
+			if err != nil || len(events) == 0 {
+				high = mid
+				continue
+			}
+
+			block, err := a.client.BlockByVersion(events[0].Version, false)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch block for binary search at offset %d: %w", mid, err)
+			}
+
+			eventTS := block.BlockTimestamp / 1000000 // Convert microseconds to seconds
+			if eventTS < tsFilter {
+				// event is too old
+				low = mid + 1
+			} else {
+				// event meets or exceeds our filter
+				high = mid
+			}
+		}
+		eventOffset = low
+	}
 
 	events, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventConfig.EventHandleFieldName, &eventOffset, &limit)
 	if err != nil {
@@ -548,6 +579,40 @@ func unwrapSlice(value any) ([]any, bool) {
 		sliceValue = innerSliceValue
 	}
 	return sliceValue, true
+}
+
+func extractTimestampFilter(expressions []query.Expression) (uint64, bool) {
+	for _, expr := range expressions {
+		if expr.IsPrimitive() {
+			if cmp, ok := expr.Primitive.(*primitives.Comparator); ok && cmp.Name == "timestamp" {
+				for _, vc := range cmp.ValueComparators {
+					if vc.Operator == primitives.Gte {
+						if ts, ok := vc.Value.(uint64); ok {
+							return ts, true
+						}
+					}
+				}
+			}
+		}
+	}
+	return 0, false
+}
+
+func extractOffsetFilter(expressions []query.Expression) (uint64, bool) {
+	for _, expr := range expressions {
+		if expr.IsPrimitive() {
+			if cmp, ok := expr.Primitive.(*primitives.Comparator); ok && cmp.Name == "offset" {
+				for _, vc := range cmp.ValueComparators {
+					if vc.Operator == primitives.Eq {
+						if off, ok := vc.Value.(uint64); ok {
+							return off, true
+						}
+					}
+				}
+			}
+		}
+	}
+	return 0, false
 }
 
 func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContract) error {
