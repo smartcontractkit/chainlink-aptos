@@ -24,7 +24,7 @@ import (
 	rlclient "github.com/smartcontractkit/chainlink-aptos/relayer/client"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
-	"github.com/smartcontractkit/chainlink-common/pkg/beholder/monitor"
+	"github.com/smartcontractkit/chainlink-framework/capabilities/writetarget/beholder/monitor"
 
 	aptosacc "github.com/smartcontractkit/chainlink-aptos/relayer/account"
 )

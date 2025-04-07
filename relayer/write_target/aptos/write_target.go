@@ -16,11 +16,10 @@ import (
 	aptosconfig "github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/fees"
 
-	"github.com/smartcontractkit/chainlink-framework/capabilities/writetarget"
-
-	"github.com/smartcontractkit/chainlink-common/pkg/beholder/monitor"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
+	"github.com/smartcontractkit/chainlink-framework/capabilities/writetarget"
+	"github.com/smartcontractkit/chainlink-framework/capabilities/writetarget/beholder/monitor"
 )
 
 const version = "1.0.0"
