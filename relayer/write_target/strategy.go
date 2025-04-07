@@ -14,7 +14,7 @@ import (
 	"github.com/smartcontractkit/chainlink-framework/capabilities/writetarget"
 
 	aptosacc "github.com/smartcontractkit/chainlink-aptos/relayer/account"
-	"github.com/smartcontractkit/chainlink-common/pkg/utils/retry"
+	"github.com/smartcontractkit/chainlink-framework/capabilities/writetarget/retry"
 )
 
 // aptos specific consts
