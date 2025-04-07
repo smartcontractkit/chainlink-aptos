@@ -125,7 +125,7 @@ func (t *aptosTargetStrategy) QueryTransmissionState(ctx context.Context, report
 	}
 
 	// Fetch the transmission state, retry with a default backoff strategy
-	state, err := retry.WithRetry(ctx, t.lggr, query)
+	state, err := retry.With(ctx, t.lggr, query)
 
 	return state, err
 }

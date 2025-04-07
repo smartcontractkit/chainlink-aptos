@@ -49,7 +49,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	}
 
 	// Set up a specific Beholder client for the Aptos WT
-	beholder, err := writetarget.NewWriteTargetMonitor(ctx, lggr)
+	beholder, err := writetarget.NewMonitor(ctx, lggr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Aptos WT monitor client: %+w", err)
 	}

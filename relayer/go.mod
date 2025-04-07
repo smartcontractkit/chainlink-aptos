@@ -11,8 +11,8 @@ require (
 	github.com/hashicorp/go-plugin v1.6.2
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/pelletier/go-toml/v2 v2.2.3
-	github.com/smartcontractkit/chainlink-common v0.6.1-0.20250407190234-6aa49242696f
-	github.com/smartcontractkit/chainlink-framework/capabilities v0.0.0-20250407195047-3cdd888aff20
+	github.com/smartcontractkit/chainlink-common v0.6.1-0.20250407221007-b26aef17d389
+	github.com/smartcontractkit/chainlink-framework/capabilities v0.0.0-20250407221638-9e71b8427efb
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/crypto v0.36.0
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0
