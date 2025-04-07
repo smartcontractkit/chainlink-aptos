@@ -97,7 +97,7 @@ func (t *aptosTargetStrategy) QueryTransmissionState(ctx context.Context, report
 
 		// nil state means the report was not transmitted yet
 		if !transmitted {
-			return nil, nil
+			return &writetarget.TransmissionState{Status: writetarget.TransmissionStateNotAttempted}, nil
 		}
 
 		// Fetch the transmitter address from the chain (decode output type)
