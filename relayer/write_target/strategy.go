@@ -11,7 +11,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
-	"github.com/smartcontractkit/chainlink-framework/capabilities/writetarget"
+	"github.com/smartcontractkit/chainlink-evm/pkg/writetarget"
 
 	aptosacc "github.com/smartcontractkit/chainlink-aptos/relayer/account"
 	"github.com/smartcontractkit/chainlink-framework/capabilities/writetarget/retry"

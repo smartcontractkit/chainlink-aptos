@@ -18,8 +18,8 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
-	"github.com/smartcontractkit/chainlink-framework/capabilities/writetarget"
-	"github.com/smartcontractkit/chainlink-framework/capabilities/writetarget/beholder/monitor"
+	"github.com/smartcontractkit/chainlink-evm/pkg/report/monitor"
+	"github.com/smartcontractkit/chainlink-evm/pkg/writetarget"
 )
 
 const version = "1.0.0"
