@@ -1,5 +1,6 @@
 ## CCIP Core: 1xxx
 ccip = "0x1000"
+ccip_router = "0x1001"
 
 ## Token pools: 2xxx
 ccip_token_pool = "0x2000"
