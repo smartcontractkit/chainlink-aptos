@@ -14,14 +14,16 @@ module lock_release_token_pool::lock_release_token_pool {
     const STORE_OBJECT_SEED: vector<u8> = b"CcipLockReleaseTokenPool";
 
     struct LockReleaseTokenPoolDeployment has key {
-        store_signer_cap: SignerCapability
+        store_signer_cap: SignerCapability,
+        ownable_state: ownable::OwnableState,
+        token_pool_state: token_pool::TokenPoolState
     }
 
     struct LockReleaseTokenPool has key, store {
+        store_signer_cap: SignerCapability,
         ownable_state: ownable::OwnableState,
         token_pool_state: token_pool::TokenPoolState,
-        store_signer_address: address,
-        store_signer_cap: SignerCapability
+        store_signer_address: address
     }
 
     struct RemoteChainConfig has store, drop, copy {
@@ -37,6 +39,7 @@ module lock_release_token_pool::lock_release_token_pool {
     const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 6;
     const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 7;
     const E_INVALID_ENCODED_AMOUNT: u64 = 8;
+    const E_INVALID_ARGUMENTS: u64 = 9;
 
     // ================================================================
     // |                             Init                             |
@@ -79,13 +82,17 @@ module lock_release_token_pool::lock_release_token_pool {
 
         move_to(
             publisher,
-            LockReleaseTokenPoolDeployment { store_signer_cap }
+            LockReleaseTokenPoolDeployment {
+                store_signer_cap,
+                ownable_state: ownable::new(publisher, signer::address_of(publisher)),
+                token_pool_state: token_pool::initialize(
+                    publisher, @local_token, vector[]
+                )
+            }
         );
     }
 
-    public fun initialize(
-        caller: &signer, local_token: address, allowlist: vector<address>
-    ) acquires LockReleaseTokenPoolDeployment {
+    public fun initialize(caller: &signer) acquires LockReleaseTokenPoolDeployment {
         assert_can_initialize(signer::address_of(caller));
 
         assert!(
@@ -93,25 +100,20 @@ module lock_release_token_pool::lock_release_token_pool {
             error::invalid_argument(E_ALREADY_INITIALIZED)
         );
 
-        assert!(
-            @local_token == local_token,
-            error::invalid_argument(E_LOCAL_TOKEN_MISMATCH)
-        );
-
-        let LockReleaseTokenPoolDeployment { store_signer_cap } =
-            move_from<LockReleaseTokenPoolDeployment>(@lock_release_token_pool);
+        let LockReleaseTokenPoolDeployment {
+            store_signer_cap,
+            ownable_state,
+            token_pool_state
+        } = move_from<LockReleaseTokenPoolDeployment>(@lock_release_token_pool);
 
         let store_signer = account::create_signer_with_capability(&store_signer_cap);
 
-        let token_pool_state = token_pool::initialize(caller, local_token, allowlist);
-
         let pool = LockReleaseTokenPool {
-            ownable_state: ownable::new(caller, signer::address_of(caller)),
+            ownable_state,
             store_signer_address: signer::address_of(&store_signer),
             store_signer_cap,
             token_pool_state
         };
-
         move_to(&store_signer, pool);
     }
 
@@ -253,15 +255,20 @@ module lock_release_token_pool::lock_release_token_pool {
             );
 
         let pool = borrow_pool_mut();
+        let fa_amount = fungible_asset::amount(&fa);
 
         // This metod validates various aspects of the lock or burn operation. If any of the
         // validations fail, the transaction will abort.
         let dest_token_address =
-            token_pool::validate_lock_or_burn(&pool.token_pool_state, &fa, &input);
+            token_pool::validate_lock_or_burn(
+                &mut pool.token_pool_state,
+                &fa,
+                &input,
+                fa_amount
+            );
 
         // Construct lock_or_burn output before we lose access to fa
         let dest_pool_data = token_pool::encode_local_decimals(&fa);
-        let fa_amount = fungible_asset::amount(&fa);
 
         // Lock the funds in the pool
         primary_fungible_store::deposit(pool.store_signer_address, fa);
@@ -287,11 +294,12 @@ module lock_release_token_pool::lock_release_token_pool {
                 @lock_release_token_pool, CallbackProof {}
             );
         let pool = borrow_pool_mut();
-
-        token_pool::validate_release_or_mint(&pool.token_pool_state, &input);
-
         let local_amount =
             token_pool::calculate_release_or_mint_amount(&pool.token_pool_state, &input);
+
+        token_pool::validate_release_or_mint(
+            &mut pool.token_pool_state, &input, local_amount
+        );
 
         let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
         let fa_metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
@@ -315,6 +323,74 @@ module lock_release_token_pool::lock_release_token_pool {
 
         // return the withdrawn fungible asset.
         fa
+    }
+
+    // ================================================================
+    // |                    Rate limit config                         |
+    // ================================================================
+
+    public fun set_chain_rate_limiter_configs(
+        caller: &signer,
+        remote_chain_selectors: vector<u64>,
+        outbound_is_enableds: vector<bool>,
+        outbound_capacities: vector<u64>,
+        outbound_rates: vector<u64>,
+        inbound_is_enableds: vector<bool>,
+        inbound_capacities: vector<u64>,
+        inbound_rates: vector<u64>
+    ) acquires LockReleaseTokenPool {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+
+        let number_of_chains = remote_chain_selectors.length();
+
+        assert!(
+            number_of_chains == outbound_is_enableds.length()
+                && number_of_chains == outbound_capacities.length()
+                && number_of_chains == outbound_rates.length()
+                && number_of_chains == inbound_is_enableds.length()
+                && number_of_chains == inbound_capacities.length()
+                && number_of_chains == inbound_rates.length(),
+            error::invalid_argument(E_INVALID_ARGUMENTS)
+        );
+
+        for (i in 0..number_of_chains) {
+            token_pool::set_chain_rate_limiter_config(
+                &mut pool.token_pool_state,
+                remote_chain_selectors[i],
+                outbound_is_enableds[i],
+                outbound_capacities[i],
+                outbound_rates[i],
+                inbound_is_enableds[i],
+                inbound_capacities[i],
+                inbound_rates[i]
+            );
+        };
+    }
+
+    public fun set_chain_rate_limiter_config(
+        caller: &signer,
+        remote_chain_selector: u64,
+        outbound_is_enabled: bool,
+        outbound_capacity: u64,
+        outbound_rate: u64,
+        inbound_is_enabled: bool,
+        inbound_capacity: u64,
+        inbound_rate: u64
+    ) acquires LockReleaseTokenPool {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+
+        token_pool::set_chain_rate_limiter_config(
+            &mut pool.token_pool_state,
+            remote_chain_selector,
+            outbound_is_enabled,
+            outbound_capacity,
+            outbound_rate,
+            inbound_is_enabled,
+            inbound_capacity,
+            inbound_rate
+        );
     }
 
     // ================================================================
