@@ -11,9 +11,10 @@ module ccip_ping_pong_demo::ping_pong_demo {
 
     use ccip::client;
     use ccip::eth_abi;
-    use ccip::onramp;
     use ccip::ownable;
     use ccip::receiver_registry;
+
+    use ccip_router::router;
 
     const STORE_OBJECT_SEED: vector<u8> = b"CcipPingPongDemoStore";
 
@@ -167,8 +168,7 @@ module ccip_ping_pong_demo::ping_pong_demo {
                 signer::address_of(&caller), state.fee_token
             );
 
-        onramp::ccip_send(
-            &caller,
+        router::ccip_send(
             &caller,
             state.counterpart_chain_selector,
             state.counterpart_address,

@@ -40,9 +40,12 @@ type RouterEncoder interface {
 	GetFee(destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CCIPSend(destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CCIPSendWithMessageId(destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetOnRampVersions(destChainSelectors []uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	SetOnRampVersions(destChainSelectors []uint64, onRampVersions [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip_router","module":"router","name":"ccip_send","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_router","module":"router","name":"ccip_send_with_message_id","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]}]`
+const FunctionInfo = `[{"package":"ccip_router","module":"router","name":"ccip_send","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_router","module":"router","name":"ccip_send_with_message_id","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_router","module":"router","name":"get_on_ramp_versions","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"}]},{"package":"ccip_router","module":"router","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip_router","module":"router","name":"set_on_ramp_versions","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"on_ramp_versions","type":"vector\u003cvector\u003cu8\u003e\u003e"}]}]`
 
 func NewRouter(address aptos.AccountAddress, client aptos.AptosRpcClient) Router {
 	contract := bind.NewBoundContract(address, "ccip_router", "router", client)
@@ -55,6 +58,14 @@ func NewRouter(address aptos.AccountAddress, client aptos.AptosRpcClient) Router
 // Structs
 
 type RouterState struct {
+}
+
+type OnRampSet struct {
+	DestChainSelector uint64 `move:"u64"`
+	OnRampVersion     []byte `move:"vector<u8>"`
+}
+
+type McmsCallback struct {
 }
 
 type RouterContract struct {
@@ -255,5 +266,31 @@ func (c routerEncoder) CCIPSendWithMessageId(destChainSelector uint64, receiver 
 		feeToken,
 		feeTokenStore,
 		extraArgs,
+	})
+}
+
+func (c routerEncoder) GetOnRampVersions(destChainSelectors []uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_on_ramp_versions", nil, []string{
+		"vector<u64>",
+	}, []any{
+		destChainSelectors,
+	})
+}
+
+func (c routerEncoder) SetOnRampVersions(destChainSelectors []uint64, onRampVersions [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("set_on_ramp_versions", nil, []string{
+		"vector<u64>",
+		"vector<vector<u8>>",
+	}, []any{
+		destChainSelectors,
+		onRampVersions,
+	})
+}
+
+func (c routerEncoder) MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("mcms_entrypoint", nil, []string{
+		"address",
+	}, []any{
+		Metadata,
 	})
 }

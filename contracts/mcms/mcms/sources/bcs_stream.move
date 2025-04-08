@@ -236,7 +236,7 @@ module mcms::bcs_stream {
 
     /// Deserializes a `u256` value from the stream.
     public entry fun deserialize_u256_entry(data: vector<u8>, cursor: u64) {
-        let stream = BCSStream { data: data, cur: cursor };
+        let stream = BCSStream { data, cur: cursor };
         deserialize_u256(&mut stream);
     }
 
