@@ -466,6 +466,7 @@ module data_feeds::registry {
                     report_timestamp: observation_timestamp
                 }
             );
+            return;
         };
 
         feed.observation_timestamp = observation_timestamp;
