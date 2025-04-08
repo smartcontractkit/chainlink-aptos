@@ -138,7 +138,7 @@ func serializeSetConfig(role uint8, config SignerConfig) ([]byte, error) {
 
 func setupInitialConfigAsDeployer(
 	t *testing.T, logger logger.Logger, txm *AptosTxm, role uint8, signers []Signer, deployerAddress string, deployerPublicKeyHex string,
-	clearRoot bool,
+	clearRoot bool, mcmsAddress string,
 ) {
 	NUM_GROUPS := 32
 	signerAddresses := [][]byte{}
@@ -181,8 +181,7 @@ func setupInitialConfigAsDeployer(
 	waitForTxmId(t, txm, setConfigId, time.Second*30)
 }
 
-// transferOwnership transfers ownership to self
-func transferOwnership(t *testing.T, txm *AptosTxm, deployerAddress, deployerPublicKeyHex string) {
+func transferOwnership(t *testing.T, txm *AptosTxm, deployerAddress, deployerPublicKeyHex string, mcmsAddress string) {
 	transferOwnershipId := uuid.New().String()
 	err := txm.Enqueue(
 		transferOwnershipId,
