@@ -23,6 +23,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/loop"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
@@ -142,6 +143,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 								Type: "u64",
 							},
 						},
+						ResultTupleToStruct: []string{"first", "second"},
 					},
 					"echo_string": {
 						Params: []AptosFunctionParam{
@@ -237,6 +239,20 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 							},
 						},
 					},
+					"get_complex_struct_unwrapped": {
+						Name: "get_complex_struct",
+						Params: []AptosFunctionParam{
+							{
+								Name: "Val",
+								Type: "u64",
+							},
+							{
+								Name: "Text",
+								Type: "0x1::string::String",
+							},
+						},
+						ResultUnwrapStruct: []string{"nested"},
+					},
 				},
 			},
 		},
@@ -279,20 +295,6 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		)
 		require.NoError(t, err)
 		require.Equal(t, u256Val, retU256)
-
-		var retTuple []uint64
-		err = chainReader.GetLatestValue(
-			context.Background(),
-			fmt.Sprintf("%s-testContract-echo_u32_u64_tuple", accountAddress.String()),
-			confidenceLevel,
-			struct {
-				Value1 uint32
-				Value2 uint64
-			}{Value1: 11, Value2: 22},
-			&retTuple,
-		)
-		require.NoError(t, err)
-		require.Equal(t, []uint64{11, 22}, retTuple)
 
 		var retString string
 		err = chainReader.GetLatestValue(
@@ -380,7 +382,6 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 	t.Run("Batch reads", func(t *testing.T) {
 		var retUint64 uint64
 		var retU256 *big.Int
-		var retTuple []uint64
 		var retString string
 		var retBytes []byte
 		var retBytesSlice [][]byte
@@ -396,14 +397,6 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 					ReadName:  "echo_u256",
 					Params:    struct{ Value1 *big.Int }{Value1: u256Val},
 					ReturnVal: &retU256,
-				},
-				{
-					ReadName: "echo_u32_u64_tuple",
-					Params: struct {
-						Value1 uint32
-						Value2 uint64
-					}{Value1: 11, Value2: 22},
-					ReturnVal: &retTuple,
 				},
 				{
 					ReadName:  "echo_string",
@@ -427,14 +420,56 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		require.NoError(t, err)
 
 		batchResults := result[commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()}]
-		require.Len(t, batchResults, 6)
+		require.Len(t, batchResults, 5)
 
 		require.Equal(t, uint64(42), retUint64)
 		require.Equal(t, u256Val, retU256)
-		require.Equal(t, []uint64{11, 22}, retTuple)
 		require.Equal(t, testString, retString)
 		require.Equal(t, testBytes, retBytes)
 		require.Equal(t, testBytesSlice, retBytesSlice)
+	})
+
+	t.Run("Wrapped result read", func(t *testing.T) {
+		type WrappedTuple struct {
+			First  uint32 `json:"first"`
+			Second uint64 `json:"second"`
+		}
+		var ret WrappedTuple
+		err = chainReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-echo_u32_u64_tuple", accountAddress.String()),
+			confidenceLevel,
+			struct {
+				Value1 uint32
+				Value2 uint64
+			}{Value1: 11, Value2: 22},
+			&ret,
+		)
+		require.NoError(t, err)
+
+		require.Equal(t, uint32(11), ret.First)
+		require.Equal(t, uint64(22), ret.Second)
+	})
+
+	t.Run("Unwrapped result read", func(t *testing.T) {
+		type UnwrappedNested struct {
+			Id          uint64 `json:"id"`
+			Description string `json:"description"`
+		}
+		var ret UnwrappedNested
+		err = chainReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-get_complex_struct_unwrapped", accountAddress.String()),
+			confidenceLevel,
+			struct {
+				Val  uint64
+				Text string
+			}{Val: 150, Text: "test"},
+			&ret,
+		)
+		require.NoError(t, err)
+		require.Equal(t, uint64(150), ret.Id)
+		require.Equal(t, "test", ret.Description)
 	})
 }
 
@@ -652,6 +687,164 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 		require.True(t, success, "Failed to see concurrent events after multiple attempts")
 		require.Greater(t, len(seenSequences), initialCount, "Should see more than initial events")
 		require.LessOrEqual(t, len(seenSequences), initialCount+concurrentCount, "Should not see more events than emitted")
+	})
+}
+
+func TestLoopChainReaderLocal(t *testing.T) {
+	lg := logger.Test(t)
+	privKey, pubKey, acctAddr := setupTestAccount(t, lg)
+
+	err := testutils.StartAptosNode()
+	require.NoError(t, err)
+	rpcURL := "http://localhost:8080/v1"
+	client, err := aptos.NewNodeClient(rpcURL, 0)
+	require.NoError(t, err)
+	err = testutils.FundWithFaucet(lg, client, acctAddr, "http://localhost:8081")
+	require.NoError(t, err)
+	rlClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
+
+	compRes := testutils.CompileTestModule(t, acctAddr)
+	keystore := testutils.NewTestKeystore(t)
+	keystore.AddKey(privKey)
+	getClient := func() (aptos.AptosRpcClient, error) { return rlClient, nil }
+	txmgr, err := txm.New(lg, keystore, txm.DefaultConfigSet, getClient)
+	require.NoError(t, err)
+	err = txmgr.Start(context.Background())
+	require.NoError(t, err)
+
+	txID := uuid.New().String()
+	err = txmgr.Enqueue(
+		txID,
+		getSampleTxMetadata(),
+		acctAddr.String(),
+		hex.EncodeToString([]byte(pubKey)),
+		"0x1::code::publish_package_txn",
+		[]string{},
+		[]string{"vector<u8>", "vector<vector<u8>>"},
+		[]any{compRes.PackageMetadata, compRes.BytecodeModules},
+		true,
+	)
+	require.NoError(t, err)
+
+	confirmed := false
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
+		status, err := txmgr.GetStatus(txID)
+		require.NoError(t, err)
+		if status != commontypes.Unconfirmed {
+			confirmed = true
+			break
+		}
+	}
+	require.True(t, confirmed, "Contract deploy tx not confirmed")
+
+	config := ChainReaderConfig{
+		Modules: map[string]*ChainReaderModule{
+			"testContract": {
+				Name: "echo",
+				Functions: map[string]*ChainReaderFunction{
+					"echo_u64": {
+						Params: []AptosFunctionParam{
+							{Name: "Value1", Type: "u64"},
+						},
+					},
+					"echo_u32_u64_tuple": {
+						Params: []AptosFunctionParam{
+							{Name: "Value1", Type: "u32"},
+							{Name: "Value2", Type: "u64"},
+						},
+						ResultTupleToStruct: []string{"first", "second"},
+					},
+					"get_complex_struct_unwrapped": {
+						Name: "get_complex_struct",
+						Params: []AptosFunctionParam{
+							{Name: "Val", Type: "u64"},
+							{Name: "Text", Type: "0x1::string::String"},
+						},
+						ResultUnwrapStruct: []string{"nested"},
+					},
+				},
+				Events: map[string]*ChainReaderEvent{
+					"SingleValueEvent": {
+						EventHandleStructName: "EventStore",
+						EventHandleFieldName:  "single_value_events",
+						EventAccountAddress:   acctAddr.String() + "::echo::get_event_address",
+						EventFieldRenames: map[string]RenamedField{
+							"value": {NewName: "SingleUintValue"},
+						},
+					},
+				},
+			},
+		},
+		IsLoopPlugin: true,
+	}
+
+	chainReader := NewChainReader(lg, rlClient, config)
+	loopReader := loop.NewLoopChainReader(lg, chainReader)
+	binding := commontypes.BoundContract{
+		Name:    "testContract",
+		Address: acctAddr.String(),
+	}
+	err = loopReader.Bind(context.Background(), []commontypes.BoundContract{binding})
+	require.NoError(t, err)
+	confidenceLevel := primitives.Finalized
+
+	t.Run("GetLatestValue - Simple value read", func(t *testing.T) {
+		var ret uint64
+		params := struct{ Value1 uint64 }{Value1: 42}
+		err := loopReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-echo_u64", acctAddr.String()),
+			confidenceLevel,
+			params,
+			&ret,
+		)
+		require.NoError(t, err)
+		require.Equal(t, uint64(42), ret)
+	})
+
+	t.Run("GetLatestValue - Wrapped tuple", func(t *testing.T) {
+		type WrappedTuple struct {
+			First  uint32 `json:"first"`
+			Second uint64 `json:"second"`
+		}
+		var ret WrappedTuple
+		params := struct {
+			Value1 uint32
+			Value2 uint64
+		}{Value1: 11, Value2: 22}
+		err = loopReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-echo_u32_u64_tuple", acctAddr.String()),
+			confidenceLevel,
+			params,
+			&ret,
+		)
+		require.NoError(t, err)
+		require.Equal(t, uint32(11), ret.First)
+		require.Equal(t, uint64(22), ret.Second)
+	})
+
+	t.Run("GetLatestValue - Unwrapped complex struct", func(t *testing.T) {
+		type UnwrappedStruct struct {
+			Id          uint64 `json:"id"`
+			Description string `json:"description"`
+		}
+		var ret UnwrappedStruct
+		params := struct {
+			Val  uint64
+			Text string
+		}{Val: 150, Text: "test"}
+		err = loopReader.GetLatestValue(
+			context.Background(),
+			fmt.Sprintf("%s-testContract-get_complex_struct_unwrapped", acctAddr.String()),
+			confidenceLevel,
+			params,
+			&ret,
+		)
+		require.NoError(t, err)
+		require.Equal(t, uint64(150), ret.Id)
+		require.Equal(t, "test", ret.Description)
 	})
 }
 
