@@ -186,12 +186,12 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 	}
 
 	var finalResult any
-	if len(functionConfig.ResultWrap) > 0 {
-		if len(data) != len(functionConfig.ResultWrap) {
-			return fmt.Errorf("result wrap mismatch: expected %d elements, got %d", len(functionConfig.ResultWrap), len(data))
+	if len(functionConfig.ResultTupleToStruct) > 0 {
+		if len(data) != len(functionConfig.ResultTupleToStruct) {
+			return fmt.Errorf("result wrap mismatch: expected %d elements, got %d", len(functionConfig.ResultTupleToStruct), len(data))
 		}
 		wrappedResult := make(map[string]any)
-		for i, fieldName := range functionConfig.ResultWrap {
+		for i, fieldName := range functionConfig.ResultTupleToStruct {
 			wrappedResult[fieldName] = data[i]
 		}
 		finalResult = wrappedResult
@@ -203,9 +203,9 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		}
 	}
 
-	if len(functionConfig.ResultUnwrap) > 0 {
+	if len(functionConfig.ResultUnwrapStruct) > 0 {
 		unwrapped := finalResult
-		for _, key := range functionConfig.ResultUnwrap {
+		for _, key := range functionConfig.ResultUnwrapStruct {
 			m, ok := unwrapped.(map[string]any)
 			if !ok {
 				return fmt.Errorf("result unwrap error: expecting a map at key %s but got %T", key, unwrapped)

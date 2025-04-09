@@ -143,7 +143,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 								Type: "u64",
 							},
 						},
-						ResultWrap: []string{"first", "second"},
+						ResultTupleToStruct: []string{"first", "second"},
 					},
 					"echo_string": {
 						Params: []AptosFunctionParam{
@@ -251,7 +251,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 								Type: "0x1::string::String",
 							},
 						},
-						ResultUnwrap: []string{"nested"},
+						ResultUnwrapStruct: []string{"nested"},
 					},
 				},
 			},
@@ -753,7 +753,7 @@ func TestLoopChainReaderLocal(t *testing.T) {
 							{Name: "Value1", Type: "u32"},
 							{Name: "Value2", Type: "u64"},
 						},
-						ResultWrap: []string{"first", "second"},
+						ResultTupleToStruct: []string{"first", "second"},
 					},
 					"get_complex_struct_unwrapped": {
 						Name: "get_complex_struct",
@@ -761,7 +761,7 @@ func TestLoopChainReaderLocal(t *testing.T) {
 							{Name: "Val", Type: "u64"},
 							{Name: "Text", Type: "0x1::string::String"},
 						},
-						ResultUnwrap: []string{"nested"},
+						ResultUnwrapStruct: []string{"nested"},
 					},
 				},
 				Events: map[string]*ChainReaderEvent{
