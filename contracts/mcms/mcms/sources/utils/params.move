@@ -53,4 +53,20 @@ module mcms::params {
         // vectors are equal, a == b
         false
     }
+
+    public fun vector_starts_with(v: &vector<u8>, prefix: &vector<u8>): bool {
+        let prefix_len = prefix.length();
+
+        if (prefix_len > v.length()) {
+            return false
+        };
+
+        for (i in 0..prefix_len) {
+            if (v[i] != prefix[i]) {
+                return false
+            };
+        };
+
+        true
+    }
 }
