@@ -185,7 +185,7 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		return fmt.Errorf("failed to rename function return value fields: %+w", err)
 	}
 
-	var finalResult any
+	var transformedData any
 	if len(functionConfig.ResultTupleToStruct) > 0 {
 		if len(data) != len(functionConfig.ResultTupleToStruct) {
 			return fmt.Errorf("result wrap mismatch: expected %d elements, got %d", len(functionConfig.ResultTupleToStruct), len(data))
@@ -194,17 +194,24 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		for i, fieldName := range functionConfig.ResultTupleToStruct {
 			wrappedResult[fieldName] = data[i]
 		}
-		finalResult = wrappedResult
+		transformedData = wrappedResult
 	} else {
+		// In order to support multi-returns, all values are returned as []any
+		// However, vector or tuple return types are not necessary wrapped
+		// in an additional slice, eg:
+		//   u32 return type -> [1]
+		//   (u32, u64) tuple return type -> [1, 2]
+		//   vector<u8> return type -> ["0x12345678"]
+		//   vector<vector<u8>> return type -> ["0x1234", "0x5678"]
 		if len(data) == 1 {
-			finalResult = data[0]
+			transformedData = data[0]
 		} else {
-			finalResult = data
+			transformedData = data
 		}
 	}
 
 	if len(functionConfig.ResultUnwrapStruct) > 0 {
-		unwrapped := finalResult
+		unwrapped := transformedData
 		for _, key := range functionConfig.ResultUnwrapStruct {
 			m, ok := unwrapped.(map[string]any)
 			if !ok {
@@ -216,13 +223,13 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 			}
 			unwrapped = val
 		}
-		finalResult = unwrapped
+		transformedData = unwrapped
 	}
 
 	if a.config.IsLoopPlugin {
 		// immediately remarshal the data
 		// TODO: update aptos-go-sdk to allow returning the string directly
-		resultBytes, err := json.Marshal(finalResult)
+		resultBytes, err := json.Marshal(transformedData)
 		if err != nil {
 			return fmt.Errorf("failed to re-marshal data: %+w", err)
 		}
@@ -235,7 +242,7 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		return nil
 	}
 
-	return codec.DecodeAptosJsonValue(finalResult, returnVal)
+	return codec.DecodeAptosJsonValue(transformedData, returnVal)
 }
 
 func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request types.BatchGetLatestValuesRequest) (types.BatchGetLatestValuesResult, error) {
