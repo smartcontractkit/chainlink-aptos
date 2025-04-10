@@ -9,8 +9,8 @@ mcms = "_"
 mcms_owner = "_"
 
 [dev-addresses]
-# 0x248c47a86babdb39b73bf30fabb0af2f18beb4502722b31b8fb2250a0f5f0f06 must be the mcms address, as this is `multisig` address in the root metadata tests
-mcms = "0x248c47a86babdb39b73bf30fabb0af2f18beb4502722b31b8fb2250a0f5f0f06"
+# 0xa969156fce9a4f08bcdc07b90f338efc630bff8dfa8340500cb6414aca762a4e must be the mcms address, as this is `multisig` address in the root metadata tests
+mcms = "0xa969156fce9a4f08bcdc07b90f338efc630bff8dfa8340500cb6414aca762a4e"
 mcms_owner = "0x4010"
 
 [dependencies]

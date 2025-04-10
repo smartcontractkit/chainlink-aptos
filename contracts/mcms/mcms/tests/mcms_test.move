@@ -21,16 +21,17 @@ module mcms::mcms_tests {
     const MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP: vector<u8> = x"e5a6d1256b00d7ec22512b6b60a3f4d75c559745d2dbf309f77b8b756caabe14";
 
     const CHAIN_ID: u256 = 4;
-    const TIMESTAMP: u64 = 1724800000;
+    const TIMESTAMP: u64 = 1744315405;
 
     const MIN_DELAY: u64 = 3600; // 1 hour delay
     const TEST_TARGET_ADDRESS: address = @0xabc;
-    const TEST_SALT: vector<u8> = x"";
+    const TEST_SALT: vector<u8> = x"1234567890abcdef";
+    const TEST_PREDECESSOR: vector<u8> = x"";
 
-    // Bypasser signers from the logs (in ascending order)
-    const BYPASSER_ADDR1: vector<u8> = x"214a687c89a84431710abb3fe478951ee200fe5c";
-    const BYPASSER_ADDR2: vector<u8> = x"8a77eed1801e92d2c4f4f8d432fa6a011cba63fa";
-    const BYPASSER_ADDR3: vector<u8> = x"aca784ca11a29522a65b00775c51318b3689f908";
+    // Proposer signers from the logs (already in ascending order)
+    const PROPOSER_ADDR1: vector<u8> = x"5916431f0ea809587757df994233861e1271be55";
+    const PROPOSER_ADDR2: vector<u8> = x"8803c3ed076e57d51e28301933418094bd961cc5";
+    const PROPOSER_ADDR3: vector<u8> = x"8950e6c6832c9b0591801418684d27b2853b2c74";
 
     // test config: 2-of-3 multisig
     const SIGNER_GROUPS: vector<u8> = vector[0, 0, 0];
@@ -45,21 +46,19 @@ module mcms::mcms_tests {
         0, 0, 0, 0
     ];
 
-    const ROOT: vector<u8> = x"39b32f0824075adb5731ff70d0cadbd6c86433cbcabdc582f296c742f292c818";
+    const ROOT: vector<u8> = x"f7a8b0f28b2ae826313604377ecd0dd07dd4107e0777db5d251560aa2dbf760d";
     const POST_OP_COUNT: u64 = 4;
 
-    // For metadata (index 0), we need the sibling nodes to verify path to root
     const METADATA_PROOF: vector<vector<u8>> = vector[
-        x"caf92d609f1a92292c70c44881d8d9d526f058d98638d0322e98cb52d36701c1",
-        x"1264f4f2e41b5521f75345637d2fa2b2b880f121ad9fb66aa99e1a647b9ea87e",
-        x"87dafa34040ab8a5b45db393e2c2432b78b71cc31f9440f715b3cdaf2b0ede65"
+        x"66cf50cb9a50c740313fd0f889b676af60d35ef700711d94df6eeff3f1ba66c2",
+        x"951f1094081a858642cc6635f0885317828a7fddddd00668391c50f1e9e1bb66",
+        x"597116801e22b18150f2abc4ca2ecd63e147bb67e24e4b5f900d49b909e1919f"
     ];
 
-    // For operation (index 1), we need the sibling nodes to verify path to root
     const OP1_PROOF: vector<vector<u8>> = vector[
-        x"ffc53667407e67f978d4ef8517b6cda268bee7204e769cdd6c0f72ca24b417b1", // sibling at level 0 (metadata hash)
-        x"1264f4f2e41b5521f75345637d2fa2b2b880f121ad9fb66aa99e1a647b9ea87e", // sibling at level 1
-        x"87dafa34040ab8a5b45db393e2c2432b78b71cc31f9440f715b3cdaf2b0ede65" // sibling at level 2
+        x"a619565e90c1c564293b59b344ed0e12ed06eafb3c45b70baf6fdf299a046297", // metadata hash
+        x"951f1094081a858642cc6635f0885317828a7fddddd00668391c50f1e9e1bb66", // sibling at level 1
+        x"597116801e22b18150f2abc4ca2ecd63e147bb67e24e4b5f900d49b909e1919f" // sibling at level 2
     ];
 
     // The OPs contained are
@@ -100,26 +99,24 @@ module mcms::mcms_tests {
     // 			Salt:        []byte{},
     // 		},
     const LEAVES: vector<vector<u8>> = vector[
-        x"ffc53667407e67f978d4ef8517b6cda268bee7204e769cdd6c0f72ca24b417b1", // metadata hash
-        x"caf92d609f1a92292c70c44881d8d9d526f058d98638d0322e98cb52d36701c1", // op1 hash
-        x"dd80cdb1a08ff0794ae45da5f8abb57a39b8b8cd289e9ddaf89245a379b54061", // op2 hash
-        x"7c5cbf9e5ef919ab7fe219e6e5743d9e9340c532082191ed5663bf8195f48b20", // op3 hash
-        x"a3f0703a9e0ece498bab3f37cfd3ea2d31a5bcedbf1672b2aa1b2c9e14510d89" // op4 hash
+        x"a619565e90c1c564293b59b344ed0e12ed06eafb3c45b70baf6fdf299a046297", // metadata hash
+        x"66cf50cb9a50c740313fd0f889b676af60d35ef700711d94df6eeff3f1ba66c2", // op1 hash
+        x"2feec0e3a232c5c847874246203e62c43db473fe85245095122e166be9114e13", // op2 hash
+        x"411a4726f8a920fc0a814bd9897a06f3dd0f1c799a047deaa6469f105f5a6705", // op3 hash
+        x"cb4dffef33843b197cd33346d3339d8432b14789504167c63fb9f74a73baaea5" // op4 hash
     ];
 
-    const VALID_UNTIL: u64 = 1743974475;
+    const VALID_UNTIL: u64 = 1744315405;
     const PRE_OP_COUNT: u64 = 0;
 
-    // cannot generate secp256k1 signatures in Move for testing so need to hard code
     const SIGNATURES: vector<vector<u8>> = vector[
-        x"4d2a0606be4fa625bdb83ce25b4f98afcaa57580c729d347fb7b18e7a1bd4b021fecc0e2fdf97bf862dd43b9fdbda2355ffa69dfc8bd343f630741f54d3c32ee1b",
-        x"f647235b7259a964ba324496693946cc95b5587e1fb29723077464874c607b0f2682016d4307a2a12956b83030a4db69d067aff95e18aca93c694314a4e7a7871b",
-        x"4eaeaf594c8932c946a1a07aa20915717b5301c228f1b774283e457a5caa82974f30c068054eda71cb254f3f283c7b7b241e27ab9456f84c5bb1dac5b5aad5a11c"
+        x"72398e2f325e707217fa8108a08c126f49f4144c30c7e93896d139c9f1d9468c30424b060c19fa5c7820a17b57badb19375207c787878533834618688a4780581c",
+        x"9bb8ba839f9152cdc61556fcc70b0ebcb4d442654263a3d1c323e1eed85ebc6016e87c8e59f12d850b9d6b789ccafd93f19dcf65eb6fc75fd4351d5970214c1d1c",
+        x"225739c80de11d50f3dca8fbb8288881abad17439690abd8eee32d48ff2f6dd204c48aff2fac4dfe8ce7176fd12d2633d7892bfb3d3f3cfeb00352773fe55c8c1b"
     ];
 
     const OP1_NONCE: u64 = 0;
-    // mcms_account::accept_ownership data is OP 1
-    const OP1_DATA: vector<u8> = x"01248c47a86babdb39b73bf30fabb0af2f18beb4502722b31b8fb2250a0f5f0f06010c6d636d735f6163636f756e7401106163636570745f6f776e6572736869700100200000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+    const OP1_DATA: vector<u8> = x"01a969156fce9a4f08bcdc07b90f338efc630bff8dfa8340500cb6414aca762a4e010c6d636d735f6163636f756e7401106163636570745f6f776e6572736869700100200000000000000000000000000000000000000000000000000000000000000000000000000000000000";
 
     #[test_only]
     fun setup(deployer: &signer, _owner: &signer, framework: &signer): address {
@@ -159,7 +156,7 @@ module mcms::mcms_tests {
     #[test_only]
     fun default_execute_args(): ExecuteArgs {
         ExecuteArgs {
-            role: mcms::bypasser_role(),
+            role: mcms::proposer_role(),
             chain_id: CHAIN_ID,
             multisig: @mcms,
             nonce: OP1_NONCE,
@@ -172,7 +169,7 @@ module mcms::mcms_tests {
     }
 
     #[test_only]
-    fun call_execute(caller: &signer, args: ExecuteArgs) {
+    fun call_execute(args: ExecuteArgs) {
         mcms::execute(
             args.role,
             args.chain_id,
@@ -187,16 +184,18 @@ module mcms::mcms_tests {
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    /// 0xa969156fce9a4f08bcdc07b90f338efc630bff8dfa8340500cb6414aca762a4e must be the mcms address,
+    /// as this is `multisig` address in the root metadata tests
     public fun test_e2e(
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
 
-        let role = mcms::bypasser_role();
+        let role = mcms::proposer_role();
         mcms::set_config(
             owner,
             role,
-            vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3],
+            vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3],
             SIGNER_GROUPS,
             GROUP_QUORUMS,
             GROUP_PARENTS,
@@ -207,8 +206,8 @@ module mcms::mcms_tests {
         let signers = mcms::signers(multisig);
         assert!(simple_map::length(&signers) == 3, 0);
 
-        let set_root_args = default_set_root_args(true);
-        call_set_root(deployer, set_root_args);
+        let set_root_args = default_set_root_args(false);
+        call_set_root(set_root_args);
 
         let (root, valid_until, op_count) = mcms::expiring_root_and_op_count(multisig);
         assert!(root == ROOT, 1);
@@ -220,7 +219,7 @@ module mcms::mcms_tests {
 
         // Schedule this op via `mcms::execute`, we serialize schedule_batch data to @mcms
         let execute_args = default_execute_args();
-        call_execute(deployer, execute_args);
+        call_execute(execute_args);
 
         // Wait for delay (1)
         timestamp::update_global_time_for_test_secs(TIMESTAMP + 10);
@@ -264,7 +263,7 @@ module mcms::mcms_tests {
 
     fun default_set_root_args(override_previous_root: bool): SetRootArgs {
         SetRootArgs {
-            role: mcms::bypasser_role(),
+            role: mcms::proposer_role(),
             root: ROOT,
             valid_until: VALID_UNTIL,
             chain_id: CHAIN_ID,
@@ -277,7 +276,7 @@ module mcms::mcms_tests {
         }
     }
 
-    fun call_set_root(caller: &signer, args: SetRootArgs) {
+    fun call_set_root(args: SetRootArgs) {
         mcms::set_root(
             args.role,
             args.root,
@@ -299,11 +298,11 @@ module mcms::mcms_tests {
     ) {
         setup(deployer, owner, framework);
 
-        let role = mcms::bypasser_role();
+        let role = mcms::proposer_role();
         mcms::set_config(
             owner,
             role,
-            vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3],
+            vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3],
             SIGNER_GROUPS,
             GROUP_QUORUMS,
             GROUP_PARENTS,
@@ -311,12 +310,12 @@ module mcms::mcms_tests {
         );
 
         // first call success
-        let set_root_args = default_set_root_args(true);
-        call_set_root(deployer, set_root_args);
+        let set_root_args = default_set_root_args(false);
+        call_set_root(set_root_args);
 
         // second call should fail as the hash has already been seen
-        let set_root_args2 = default_set_root_args(true);
-        call_set_root(deployer, set_root_args2);
+        let set_root_args2 = default_set_root_args(false);
+        call_set_root(set_root_args2);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -327,9 +326,9 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let set_root_args = default_set_root_args(true);
+        let set_root_args = default_set_root_args(false);
         set_root_args.valid_until = TIMESTAMP - 1; // set valid_until to a time in the past
-        call_set_root(deployer, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -340,9 +339,9 @@ module mcms::mcms_tests {
         setup(deployer, owner, framework);
         let invalid_root =
             x"8ad6edb34398f637ca17e46b0b51ce50e18f56287aa0bf728ae3b5c4119c16";
-        let set_root_args = default_set_root_args(true);
+        let set_root_args = default_set_root_args(false);
         set_root_args.root = invalid_root;
-        call_set_root(deployer, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -351,9 +350,9 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let set_root_args = default_set_root_args(true);
+        let set_root_args = default_set_root_args(false);
         set_root_args.chain_id = 111; // wrong chain id
-        call_set_root(deployer, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -362,9 +361,9 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let set_root_args = default_set_root_args(true);
+        let set_root_args = default_set_root_args(false);
         set_root_args.multisig = @0x12345; // wrong multisig address
-        call_set_root(deployer, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -374,11 +373,11 @@ module mcms::mcms_tests {
     ) {
         setup(deployer, owner, framework);
 
-        let multisig = mcms::multisig_object(mcms::bypasser_role());
+        let multisig = mcms::multisig_object(mcms::proposer_role());
         mcms::test_set_expiring_root_and_op_count(multisig, ROOT, VALID_UNTIL, 1);
         mcms::test_set_root_metadata(
             multisig,
-            mcms::bypasser_role(),
+            mcms::proposer_role(),
             CHAIN_ID,
             object::object_address(&multisig),
             0,
@@ -386,7 +385,7 @@ module mcms::mcms_tests {
             false
         );
         let set_root_args = default_set_root_args(false);
-        call_set_root(deployer, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -401,17 +400,17 @@ module mcms::mcms_tests {
         setup(deployer, owner, framework);
         mcms::set_config(
             owner,
-            mcms::bypasser_role(),
-            vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3],
+            mcms::proposer_role(),
+            vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3],
             SIGNER_GROUPS,
             GROUP_QUORUMS,
             GROUP_PARENTS,
             false
         );
-        let set_root_args = default_set_root_args(true);
+        let set_root_args = default_set_root_args(false);
         // Change the post_op_count to a value that is not equal to the proof's post_op_count
         set_root_args.post_op_count = 20;
-        call_set_root(deployer, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -424,7 +423,7 @@ module mcms::mcms_tests {
         setup(deployer, owner, framework);
         let set_root_args = default_set_root_args(false);
         set_root_args.pre_op_count = 1; // wrong pre op count, should equal op count (0)
-        call_set_root(deployer, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -435,11 +434,11 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let multisig = mcms::multisig_object(mcms::bypasser_role());
+        let multisig = mcms::multisig_object(mcms::proposer_role());
         mcms::test_set_expiring_root_and_op_count(multisig, ROOT, VALID_UNTIL, 1);
         mcms::test_set_root_metadata(
             multisig,
-            mcms::bypasser_role(),
+            mcms::proposer_role(),
             CHAIN_ID,
             object::object_address(&multisig),
             0,
@@ -450,7 +449,7 @@ module mcms::mcms_tests {
         let set_root_args = default_set_root_args(false);
         set_root_args.pre_op_count = PRE_OP_COUNT + 1; // correct pre op count after state updates
         set_root_args.post_op_count = PRE_OP_COUNT; // post op count should be >= pre op count
-        call_set_root(deployer, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -465,7 +464,7 @@ module mcms::mcms_tests {
         setup(deployer, owner, framework);
         let set_root_args = default_set_root_args(false);
         set_root_args.metadata_proof = vector[]; // empty proof
-        call_set_root(deployer, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -480,7 +479,7 @@ module mcms::mcms_tests {
         setup(deployer, owner, framework);
         let set_root_args = default_set_root_args(false);
         set_root_args.post_op_count = POST_OP_COUNT + 1; // post op count modified
-        call_set_root(deployer, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -489,9 +488,9 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let set_root_args = default_set_root_args(true);
+        let set_root_args = default_set_root_args(false);
         set_root_args.signatures = vector[]; // no signatures
-        call_set_root(deployer, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -505,22 +504,22 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let role = mcms::bypasser_role();
+        let role = mcms::proposer_role();
         mcms::set_config(
             owner,
             role,
-            vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3],
+            vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3],
             SIGNER_GROUPS,
             GROUP_QUORUMS,
             GROUP_PARENTS,
             false
         );
-        let set_root_args = default_set_root_args(true);
+        let set_root_args = default_set_root_args(false);
         let sig0 = set_root_args.signatures.borrow(0);
         let sig1 = set_root_args.signatures.borrow(1);
         let sig2 = set_root_args.signatures.borrow(2);
         set_root_args.signatures = vector[*sig0, *sig2, *sig1]; // shuffle signature order
-        call_set_root(deployer, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -529,21 +528,21 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let role = mcms::bypasser_role();
+        let role = mcms::proposer_role();
         mcms::set_config(
             owner,
             role,
-            vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3],
+            vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3],
             SIGNER_GROUPS,
             GROUP_QUORUMS,
             GROUP_PARENTS,
             false
         );
-        let set_root_args = default_set_root_args(true);
+        let set_root_args = default_set_root_args(false);
         let invalid_signer_sig =
             x"bb7f7e44b8d9c8f978c255c7efd6abb64e8fa9a33dcb6db2e2203d8aacd51dd471113ca6c8d1ed56bb0395f0bef0daf2fae6ef2cb5c86c57d148c7de473383461B";
         set_root_args.signatures = vector[invalid_signer_sig]; // add signature from invalid signer
-        call_set_root(deployer, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -556,20 +555,20 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let role = mcms::bypasser_role();
+        let role = mcms::proposer_role();
         mcms::set_config(
             owner,
             role,
-            vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3],
+            vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3],
             SIGNER_GROUPS,
             GROUP_QUORUMS,
             GROUP_PARENTS,
             false
         );
-        let set_root_args = default_set_root_args(true);
+        let set_root_args = default_set_root_args(false);
         let signer1 = set_root_args.signatures[0];
         set_root_args.signatures = vector[signer1]; // only 1 signature, quorum is 2
-        call_set_root(deployer, set_root_args);
+        call_set_root(set_root_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -577,20 +576,20 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let expected_role = mcms::bypasser_role();
+        let expected_role = mcms::proposer_role();
         mcms::set_config(
             owner,
             expected_role,
-            vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3],
+            vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3],
             SIGNER_GROUPS,
             GROUP_QUORUMS,
             GROUP_PARENTS,
             false
         );
         let multisig = mcms::multisig_object(expected_role);
-        let set_root_args = default_set_root_args(true);
+        let set_root_args = default_set_root_args(false);
 
-        call_set_root(deployer, set_root_args);
+        call_set_root(set_root_args);
 
         let (root, valid_until, op_count) = mcms::expiring_root_and_op_count(multisig);
         assert!(root == ROOT, 0);
@@ -603,7 +602,7 @@ module mcms::mcms_tests {
         assert!(mcms::root_metadata_multisig(root_metadata) == @mcms, 4);
         assert!(mcms::pre_op_count(root_metadata) == PRE_OP_COUNT, 5);
         assert!(mcms::post_op_count(root_metadata) == POST_OP_COUNT, 6);
-        assert!(mcms::override_previous_root(root_metadata), 7);
+        assert!(mcms::override_previous_root(root_metadata) == false, 7);
     }
 
     //// set_config tests ////
@@ -617,8 +616,8 @@ module mcms::mcms_tests {
         let (not_owner, _) = account::create_resource_account(deployer, b"seed123");
         mcms::set_config(
             &not_owner,
-            mcms::bypasser_role(),
-            vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3],
+            mcms::proposer_role(),
+            vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3],
             SIGNER_GROUPS,
             GROUP_QUORUMS,
             GROUP_PARENTS,
@@ -639,7 +638,7 @@ module mcms::mcms_tests {
         let signer_group = vector[];
         mcms::set_config(
             owner,
-            mcms::bypasser_role(),
+            mcms::proposer_role(),
             signer_addr,
             signer_group,
             vector[],
@@ -660,10 +659,10 @@ module mcms::mcms_tests {
     ) {
         setup(deployer, owner, framework);
         // same signer address twice
-        let signer_addr = vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR2];
+        let signer_addr = vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR2];
         mcms::set_config(
             owner,
-            mcms::bypasser_role(),
+            mcms::proposer_role(),
             signer_addr,
             SIGNER_GROUPS,
             GROUP_QUORUMS,
@@ -684,10 +683,10 @@ module mcms::mcms_tests {
     ) {
         setup(deployer, owner, framework);
         // signer addresses out of order
-        let signer_addr = vector[BYPASSER_ADDR1, BYPASSER_ADDR3, BYPASSER_ADDR2];
+        let signer_addr = vector[PROPOSER_ADDR1, PROPOSER_ADDR3, PROPOSER_ADDR2];
         mcms::set_config(
             owner,
-            mcms::bypasser_role(),
+            mcms::proposer_role(),
             signer_addr,
             SIGNER_GROUPS,
             GROUP_QUORUMS,
@@ -708,10 +707,10 @@ module mcms::mcms_tests {
         setup(deployer, owner, framework);
         // signer address not 20 bytes
         let invalid_signer_addr = x"E37ca797F7fCCFbd9bb3bf8f812F19C3184df1";
-        let signer_addr = vector[BYPASSER_ADDR1, BYPASSER_ADDR2, invalid_signer_addr];
+        let signer_addr = vector[PROPOSER_ADDR1, PROPOSER_ADDR2, invalid_signer_addr];
         mcms::set_config(
             owner,
-            mcms::bypasser_role(),
+            mcms::proposer_role(),
             signer_addr,
             SIGNER_GROUPS,
             GROUP_QUORUMS,
@@ -728,12 +727,12 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let signer_addr = vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3];
+        let signer_addr = vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3];
         // signer group out of bounds
         let signer_groups: vector<u8> = vector[1, 2, mcms::num_groups() as u8];
         mcms::set_config(
             owner,
-            mcms::bypasser_role(),
+            mcms::proposer_role(),
             signer_addr,
             signer_groups,
             GROUP_QUORUMS,
@@ -752,13 +751,13 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let signer_addr = vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3];
+        let signer_addr = vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3];
         // group quorum out of bounds (greater than num signers)
         let group_quorums = vector[2, 1, 1, (mcms::max_num_signers() as u8) + 1];
         params::right_pad_vec(&mut group_quorums, mcms::num_groups());
         mcms::set_config(
             owner,
-            mcms::bypasser_role(),
+            mcms::proposer_role(),
             signer_addr,
             SIGNER_GROUPS,
             group_quorums,
@@ -777,13 +776,13 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let signer_addr = vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3];
+        let signer_addr = vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3];
         // group parent of root is group 1 (should be itself = group 0)
         let group_parents = vector[1];
         params::right_pad_vec(&mut group_parents, mcms::num_groups());
         mcms::set_config(
             owner,
-            mcms::bypasser_role(),
+            mcms::proposer_role(),
             signer_addr,
             SIGNER_GROUPS,
             GROUP_QUORUMS,
@@ -802,13 +801,13 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let signer_addr = vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3];
+        let signer_addr = vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3];
         // group parent of group 1 is itself (should be lower index group)
         let group_parents = vector[0, 1];
         params::right_pad_vec(&mut group_parents, mcms::num_groups());
         mcms::set_config(
             owner,
-            mcms::bypasser_role(),
+            mcms::proposer_role(),
             signer_addr,
             SIGNER_GROUPS,
             GROUP_QUORUMS,
@@ -827,13 +826,13 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let signer_addr = vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3];
+        let signer_addr = vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3];
         // group parent of group 1 is group 2 (should be lower index group)
         let group_parents = vector[0, 2];
         params::right_pad_vec(&mut group_parents, mcms::num_groups());
         mcms::set_config(
             owner,
-            mcms::bypasser_role(),
+            mcms::proposer_role(),
             signer_addr,
             SIGNER_GROUPS,
             GROUP_QUORUMS,
@@ -852,13 +851,13 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let signer_addr = vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3];
+        let signer_addr = vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3];
         // group quorum of group 0 (root) is 4, which can never be met because there are only three child groups
         let group_quorum = vector[4, 1, 1, 1];
         params::right_pad_vec(&mut group_quorum, mcms::num_groups());
         mcms::set_config(
             owner,
-            mcms::bypasser_role(),
+            mcms::proposer_role(),
             signer_addr,
             SIGNER_GROUPS,
             group_quorum,
@@ -877,12 +876,12 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let signer_addr = vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3];
+        let signer_addr = vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3];
         // group 31 is disabled (quorum = 0) but signer 3 is in group 31
         let signer_groups = vector[1, 2, 31];
         mcms::set_config(
             owner,
-            mcms::bypasser_role(),
+            mcms::proposer_role(),
             signer_addr,
             signer_groups,
             GROUP_QUORUMS,
@@ -901,12 +900,12 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let signer_addr = vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3];
+        let signer_addr = vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3];
         // len of signer groups does not match len of signers
         let signer_groups = vector[1, 2, 3, 3];
         mcms::set_config(
             owner,
-            mcms::bypasser_role(),
+            mcms::proposer_role(),
             signer_addr,
             signer_groups,
             GROUP_QUORUMS,
@@ -922,7 +921,7 @@ module mcms::mcms_tests {
         setup(deployer, owner, framework);
 
         // manually modify root state to check for modifications
-        let role = mcms::bypasser_role();
+        let role = mcms::proposer_role();
         let multisig = mcms::multisig_object(role);
         let new_op_count = 5;
         mcms::test_set_expiring_root_and_op_count(
@@ -939,10 +938,10 @@ module mcms::mcms_tests {
         );
 
         // test set config with clear_root=false
-        let signer_addr = vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3];
+        let signer_addr = vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3];
         mcms::set_config(
             owner,
-            mcms::bypasser_role(),
+            mcms::proposer_role(),
             signer_addr,
             SIGNER_GROUPS,
             GROUP_QUORUMS,
@@ -953,17 +952,17 @@ module mcms::mcms_tests {
         assert!(vector::length(&mcms::config_signers(&config)) == 3, 1);
         let (addr1, index1, group1) =
             mcms::signer_view(&mcms::config_signers(&config)[0]);
-        assert!(addr1 == BYPASSER_ADDR1, 2);
+        assert!(addr1 == PROPOSER_ADDR1, 2);
         assert!(index1 == 0, 3);
         assert!(group1 == 0, 4);
         let (addr2, index2, group2) =
             mcms::signer_view(&mcms::config_signers(&config)[1]);
-        assert!(addr2 == BYPASSER_ADDR2, 5);
+        assert!(addr2 == PROPOSER_ADDR2, 5);
         assert!(index2 == 1, 6);
         assert!(group2 == 0, 7);
         let (addr3, index3, group3) =
             mcms::signer_view(&mcms::config_signers(&config)[2]);
-        assert!(addr3 == BYPASSER_ADDR3, 8);
+        assert!(addr3 == PROPOSER_ADDR3, 8);
         assert!(index3 == 2, 9);
         assert!(group3 == 0, 10);
         assert!(mcms::config_group_quorums(&config) == GROUP_QUORUMS, 11);
@@ -983,7 +982,7 @@ module mcms::mcms_tests {
         assert!(!mcms::override_previous_root(root_metadata), 15);
 
         // test set config with clear_root=true, change to 1-of-2 multisig with a nested 2-of-2 multisig
-        let signer_addr = vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3];
+        let signer_addr = vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3];
         let signer_groups = vector[1, 3, 4];
         let group_quorums = vector[1, 1, 2, 1, 1];
         params::right_pad_vec(&mut group_quorums, mcms::num_groups());
@@ -991,7 +990,7 @@ module mcms::mcms_tests {
         params::right_pad_vec(&mut group_parents, mcms::num_groups());
         mcms::set_config(
             owner,
-            mcms::bypasser_role(),
+            mcms::proposer_role(),
             signer_addr,
             signer_groups,
             group_quorums,
@@ -1006,13 +1005,13 @@ module mcms::mcms_tests {
             mcms::signer_view(&mcms::config_signers(&config)[1]);
         let (addr3, index3, group3) =
             mcms::signer_view(&mcms::config_signers(&config)[2]);
-        assert!(addr1 == BYPASSER_ADDR1, 15);
+        assert!(addr1 == PROPOSER_ADDR1, 15);
         assert!(index1 == 0, 16);
         assert!(group1 == 1, 17);
-        assert!(addr2 == BYPASSER_ADDR2, 18);
+        assert!(addr2 == PROPOSER_ADDR2, 18);
         assert!(index2 == 1, 19);
         assert!(group2 == 3, 20);
-        assert!(addr3 == BYPASSER_ADDR3, 21);
+        assert!(addr3 == PROPOSER_ADDR3, 21);
         assert!(index3 == 2, 22);
         assert!(group3 == 4, 23);
         assert!(group_quorums == group_quorums, 24);
@@ -1046,7 +1045,7 @@ module mcms::mcms_tests {
         setup(deployer, owner, framework);
         // since root not set, post op count is 0 which is not greater than current op count (also 0)
         let execute_args = default_execute_args();
-        call_execute(deployer, execute_args);
+        call_execute(execute_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -1059,18 +1058,18 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let role = mcms::bypasser_role();
+        let role = mcms::proposer_role();
         mcms::set_config(
             owner,
             role,
-            vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3],
+            vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3],
             SIGNER_GROUPS,
             GROUP_QUORUMS,
             GROUP_PARENTS,
             false
         );
         let multisig = mcms::multisig_object(role);
-        call_set_root(deployer, default_set_root_args(true));
+        call_set_root(default_set_root_args(false));
         let root_metadata = mcms::root_metadata(multisig);
         let post_op_count = mcms::post_op_count(root_metadata);
         // set current op count to post op count
@@ -1078,7 +1077,7 @@ module mcms::mcms_tests {
             multisig, ROOT, VALID_UNTIL, post_op_count
         );
         let execute_args = default_execute_args();
-        call_execute(deployer, execute_args);
+        call_execute(execute_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -1087,20 +1086,20 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let role = mcms::bypasser_role();
+        let role = mcms::proposer_role();
         mcms::set_config(
             owner,
             role,
-            vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3],
+            vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3],
             SIGNER_GROUPS,
             GROUP_QUORUMS,
             GROUP_PARENTS,
             false
         );
-        call_set_root(deployer, default_set_root_args(true));
+        call_set_root(default_set_root_args(false));
         let execute_args = default_execute_args();
         execute_args.chain_id = 111; // wrong chain id
-        call_execute(deployer, execute_args);
+        call_execute(execute_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -1109,20 +1108,20 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let role = mcms::bypasser_role();
+        let role = mcms::proposer_role();
         mcms::set_config(
             owner,
             role,
-            vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3],
+            vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3],
             SIGNER_GROUPS,
             GROUP_QUORUMS,
             GROUP_PARENTS,
             false
         );
-        call_set_root(deployer, default_set_root_args(true));
+        call_set_root(default_set_root_args(false));
         let execute_args = default_execute_args();
         execute_args.multisig = @0x12345; // wrong multisig address
-        call_execute(deployer, execute_args);
+        call_execute(execute_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -1131,23 +1130,23 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let role = mcms::bypasser_role();
+        let role = mcms::proposer_role();
         mcms::set_config(
             owner,
             role,
-            vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3],
+            vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3],
             SIGNER_GROUPS,
             GROUP_QUORUMS,
             GROUP_PARENTS,
             true
         );
         let multisig = mcms::multisig_object(role);
-        call_set_root(deployer, default_set_root_args(true));
+        call_set_root(default_set_root_args(false));
 
         // modify valid until state directly - set valid_until to a time in the past
         mcms::test_set_expiring_root_and_op_count(multisig, ROOT, TIMESTAMP - 1, 0);
         let execute_args = default_execute_args();
-        call_execute(deployer, execute_args);
+        call_execute(execute_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -1156,20 +1155,20 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let role = mcms::bypasser_role();
+        let role = mcms::proposer_role();
         mcms::set_config(
             owner,
             role,
-            vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3],
+            vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3],
             SIGNER_GROUPS,
             GROUP_QUORUMS,
             GROUP_PARENTS,
             false
         );
-        call_set_root(deployer, default_set_root_args(true));
+        call_set_root(default_set_root_args(false));
         let execute_args = default_execute_args();
         execute_args.nonce += 1; // wrong nonce
-        call_execute(deployer, execute_args);
+        call_execute(execute_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -1182,20 +1181,20 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let role = mcms::bypasser_role();
+        let role = mcms::proposer_role();
         mcms::set_config(
             owner,
             role,
-            vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3],
+            vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3],
             SIGNER_GROUPS,
             GROUP_QUORUMS,
             GROUP_PARENTS,
             false
         );
-        call_set_root(deployer, default_set_root_args(false));
+        call_set_root(default_set_root_args(false));
         let execute_args = default_execute_args();
         execute_args.data = b"different data"; // modify op so proof verification should fail
-        call_execute(deployer, execute_args);
+        call_execute(execute_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -1208,20 +1207,20 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let role = mcms::bypasser_role();
+        let role = mcms::proposer_role();
         mcms::set_config(
             owner,
             role,
-            vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3],
+            vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3],
             SIGNER_GROUPS,
             GROUP_QUORUMS,
             GROUP_PARENTS,
             false
         );
-        call_set_root(deployer, default_set_root_args(true));
+        call_set_root(default_set_root_args(false));
         let execute_args = default_execute_args();
         execute_args.proof = vector[]; // empty proof
-        call_execute(deployer, execute_args);
+        call_execute(execute_args);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -1230,11 +1229,11 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        let role = mcms::bypasser_role();
+        let role = mcms::proposer_role();
         mcms::set_config(
             owner,
             role,
-            vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3],
+            vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3],
             SIGNER_GROUPS,
             GROUP_QUORUMS,
             GROUP_PARENTS,
@@ -1257,7 +1256,7 @@ module mcms::mcms_tests {
         );
 
         let execute_args = default_execute_args();
-        call_execute(deployer, execute_args);
+        call_execute(execute_args);
     }
 
     // // todo: test send values
@@ -1278,13 +1277,13 @@ module mcms::mcms_tests {
 
     #[test]
     public fun test_utils__hash_metadata_leaf() {
-        let role = 0;
+        let role = 2;
         let chain_id = 4;
         let multisig =
-            @0xb8dbbb1bded1e8675df392757a0f45ec5bfb3b8f4d38a34c4bc748bbe3dab68b;
+            @0x5c94246eff0f850c4622ea6987c2217e5ead39243f951a718671ad6c58a2c193;
         let pre_op_count = 0;
         let post_op_count = 4;
-        let override_previous_root = true;
+        let override_previous_root = false;
         let hash =
             mcms::test_hash_metadata_leaf(
                 role,
@@ -1296,7 +1295,7 @@ module mcms::mcms_tests {
             );
         // test output computed from equivalent solidity function: keccak256(abi.encode(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA, metadata))
         assert!(
-            hash == x"50d6378f6023b10e63d273cb52982412b15e8cb7b0411a9794cd43ef6a54eaa6",
+            hash == x"d41afb7a1c2061ff8f71863772a6be55fa09c6271463e6f3d6b5f25ffbc415f7",
             1
         );
     }
@@ -1307,7 +1306,7 @@ module mcms::mcms_tests {
     ) {
         setup(deployer, owner, framework);
 
-        let role = mcms::bypasser_role();
+        let role = mcms::proposer_role();
         // Create an Op similar to what we use in test_verify_merkle_proof_with_hash_op
         let chain_id = CHAIN_ID;
         let nonce = OP1_NONCE;
@@ -1338,7 +1337,7 @@ module mcms::mcms_tests {
     ) {
         setup(deployer, owner, framework);
 
-        let role = mcms::bypasser_role();
+        let role = mcms::proposer_role();
 
         let chain_id = CHAIN_ID;
         let nonce = OP1_NONCE;
@@ -1395,7 +1394,7 @@ module mcms::mcms_tests {
         // - OR any other valid combination meeting the 2-of-3 quorum at the root level
         // ============================================================
 
-        let signer_addresses = vector[BYPASSER_ADDR1, BYPASSER_ADDR2, BYPASSER_ADDR3];
+        let signer_addresses = vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3];
         let signer_groups = vector[3, 4, 2]; // Signer 1 in Group 3, Signer 2 in Group 4, Signer 3 in Group 2
 
         // Define quorum for each group (how many approvals needed)
@@ -1417,7 +1416,7 @@ module mcms::mcms_tests {
         params::right_pad_vec(&mut group_parents, mcms::num_groups());
 
         // Configure the multisig structure for a bypasser role
-        let role = mcms::bypasser_role();
+        let role = mcms::proposer_role();
         mcms::set_config(
             owner,
             role,
@@ -1472,7 +1471,7 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        mcms::test_timelock_update_min_delay(MIN_DELAY);
+        mcms::test_timelock_update_min_delay(mcms::timelock_role(), MIN_DELAY);
         assert!(mcms::timelock_min_delay() == MIN_DELAY, 0);
     }
 
@@ -1490,17 +1489,18 @@ module mcms::mcms_tests {
 
         // Schedule batch operation
         mcms::test_timelock_schedule_batch(
+            mcms::proposer_role(),
             targets,
             module_names,
             function_names,
             datas,
-            mcms::zero_hash(),
+            TEST_PREDECESSOR,
             TEST_SALT,
             MIN_DELAY
         );
 
         let calls = mcms::create_calls(targets, module_names, function_names, datas);
-        let id = mcms::hash_operation_batch(calls, mcms::zero_hash(), TEST_SALT);
+        let id = mcms::hash_operation_batch(calls, TEST_PREDECESSOR, TEST_SALT);
 
         // Verify operation is pending
         assert!(mcms::timelock_is_operation_pending(id), 0);
@@ -1523,24 +1523,25 @@ module mcms::mcms_tests {
         let datas = vector[data];
 
         mcms::test_timelock_schedule_batch(
+            mcms::proposer_role(),
             targets,
             module_names,
             function_names,
             datas,
-            mcms::zero_hash(),
+            TEST_PREDECESSOR,
             TEST_SALT,
             MIN_DELAY
         );
 
         // Calculate the operation ID
         let calls = mcms::create_calls(targets, module_names, function_names, datas);
-        let id = mcms::hash_operation_batch(calls, mcms::zero_hash(), TEST_SALT);
+        let id = mcms::hash_operation_batch(calls, TEST_PREDECESSOR, TEST_SALT);
 
         // Verify operation is pending
         assert!(mcms::timelock_is_operation_pending(id), 0);
 
         // Cancel the operation
-        mcms::test_timelock_cancel(id);
+        mcms::test_timelock_cancel(mcms::canceller_role(), id);
 
         // Verify operation is no longer pending
         assert!(!mcms::timelock_is_operation_pending(id), 1);
@@ -1561,7 +1562,11 @@ module mcms::mcms_tests {
         let datas = vector[bcs::to_bytes(&MIN_DELAY)];
 
         mcms::test_timelock_bypasser_execute_batch(
-            targets, module_names, function_names, datas
+            mcms::bypasser_role(),
+            targets,
+            module_names,
+            function_names,
+            datas
         );
 
         let updated_delay = mcms::timelock_min_delay();
@@ -1575,6 +1580,7 @@ module mcms::mcms_tests {
         setup(deployer, owner, framework);
 
         mcms::test_timelock_block_function(
+            mcms::timelock_role(),
             TEST_TARGET_ADDRESS,
             string::utf8(b"test_module"),
             string::utf8(b"test_function")
@@ -1593,6 +1599,7 @@ module mcms::mcms_tests {
         );
         // Unblock the function
         mcms::test_timelock_unblock_function(
+            mcms::timelock_role(),
             TEST_TARGET_ADDRESS,
             string::utf8(b"test_module"),
             string::utf8(b"test_function")
@@ -1614,6 +1621,7 @@ module mcms::mcms_tests {
 
         // Try to schedule with mismatched parameters length
         mcms::test_timelock_schedule_batch(
+            mcms::proposer_role(),
             vector[@mcms, @mcms], // 2 targets
             vector[string::utf8(b"test_module")], // But only 1 module name
             vector[string::utf8(b"test_function")],
@@ -1634,10 +1642,11 @@ module mcms::mcms_tests {
         setup(deployer, owner, framework);
 
         // First set a minimum delay
-        mcms::test_timelock_update_min_delay(MIN_DELAY);
+        mcms::test_timelock_update_min_delay(mcms::timelock_role(), MIN_DELAY);
 
         // Try to schedule with delay lower than minimum
         mcms::test_timelock_schedule_batch(
+            mcms::proposer_role(),
             vector[@mcms],
             vector[string::utf8(b"test_module")],
             vector[string::utf8(b"test_function")],
@@ -1663,10 +1672,11 @@ module mcms::mcms_tests {
         let module_names = vector[string::utf8(b"test_module")];
         let function_names = vector[string::utf8(b"test_function")];
         let datas = vector[vector[0u8]];
-        let predecessor = mcms::zero_hash();
+        let predecessor = vector[];
         let salt = vector[1u8];
 
         mcms::test_timelock_schedule_batch(
+            mcms::proposer_role(),
             targets,
             module_names,
             function_names,
@@ -1678,6 +1688,7 @@ module mcms::mcms_tests {
 
         // Try to schedule the same batch again
         mcms::test_timelock_schedule_batch(
+            mcms::proposer_role(),
             targets,
             module_names,
             function_names,
@@ -1696,12 +1707,14 @@ module mcms::mcms_tests {
         setup(deployer, owner, framework);
 
         mcms::test_timelock_block_function(
+            mcms::timelock_role(),
             TEST_TARGET_ADDRESS,
             string::utf8(b"test_module"),
             string::utf8(b"test_function")
         );
 
         mcms::test_timelock_schedule_batch(
+            mcms::proposer_role(),
             vector[TEST_TARGET_ADDRESS],
             vector[string::utf8(b"test_module")],
             vector[string::utf8(b"test_function")],
@@ -1725,13 +1738,14 @@ module mcms::mcms_tests {
         let module_names = vector[string::utf8(b"test_module")];
         let function_names = vector[string::utf8(b"test_function")];
         let datas = vector[vector[0u8]];
-        let predecessor = mcms::zero_hash();
+        let predecessor = vector[];
         let salt = vector[1u8];
 
         let delay = 100000;
-        mcms::test_timelock_update_min_delay(delay);
+        mcms::test_timelock_update_min_delay(mcms::timelock_role(), delay);
 
         mcms::test_timelock_schedule_batch(
+            mcms::proposer_role(),
             targets,
             module_names,
             function_names,
@@ -1762,7 +1776,7 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        mcms::test_timelock_cancel(vector[123u8]);
+        mcms::test_timelock_cancel(mcms::canceller_role(), vector[123u8]);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -1774,6 +1788,7 @@ module mcms::mcms_tests {
 
         // Block a function
         mcms::test_timelock_block_function(
+            mcms::timelock_role(),
             TEST_TARGET_ADDRESS,
             string::utf8(b"test_module"),
             string::utf8(b"test_function")
@@ -1791,6 +1806,7 @@ module mcms::mcms_tests {
 
         // Block a function
         mcms::test_timelock_block_function(
+            mcms::timelock_role(),
             TEST_TARGET_ADDRESS,
             string::utf8(b"test_module"),
             string::utf8(b"test_function")
@@ -1798,6 +1814,7 @@ module mcms::mcms_tests {
 
         // Block it again (should be idempotent)
         mcms::test_timelock_block_function(
+            mcms::timelock_role(),
             TEST_TARGET_ADDRESS,
             string::utf8(b"test_module"),
             string::utf8(b"test_function")
@@ -1827,6 +1844,7 @@ module mcms::mcms_tests {
 
         // First, schedule the first batch
         mcms::test_timelock_schedule_batch(
+            mcms::proposer_role(),
             targets1,
             module_names1,
             function_names1,
@@ -1847,6 +1865,7 @@ module mcms::mcms_tests {
         let datas2 = vector[vector[0u8]];
 
         mcms::test_timelock_schedule_batch(
+            mcms::proposer_role(),
             targets2,
             module_names2,
             function_names2,
@@ -1888,6 +1907,7 @@ module mcms::mcms_tests {
 
         // Schedule the batch with the non-existent function
         mcms::test_timelock_schedule_batch(
+            mcms::proposer_role(),
             targets,
             module_names,
             function_names,
@@ -1963,6 +1983,7 @@ module mcms::mcms_tests {
         let salt = vector[1u8];
 
         mcms::test_timelock_schedule_batch(
+            mcms::proposer_role(),
             targets,
             module_names,
             function_names,
@@ -2005,7 +2026,12 @@ module mcms::mcms_tests {
         let module_name = string::utf8(b"mcms");
         let function_name = string::utf8(b"timelock_update_min_delay");
 
-        mcms::test_timelock_block_function(target, module_name, function_name);
+        mcms::test_timelock_block_function(
+            mcms::timelock_role(),
+            target,
+            module_name,
+            function_name
+        );
 
         // Bypasser should be able to directly execute the blocked function
         let targets = vector[target];
@@ -2016,7 +2042,11 @@ module mcms::mcms_tests {
 
         // Should succeed since bypassers/owner can execute blocked functions
         mcms::test_timelock_bypasser_execute_batch(
-            targets, module_names, function_names, datas
+            mcms::bypasser_role(),
+            targets,
+            module_names,
+            function_names,
+            datas
         );
 
         // Verify the min delay was updated despite being blocked
@@ -2041,6 +2071,7 @@ module mcms::mcms_tests {
         let delay = 1; // Small delay for testing
 
         mcms::test_timelock_schedule_batch(
+            mcms::proposer_role(),
             targets_1,
             module_names_1,
             function_names_1,
@@ -2070,6 +2101,7 @@ module mcms::mcms_tests {
         let salt_2 = x"efab";
 
         mcms::test_timelock_schedule_batch(
+            mcms::proposer_role(),
             targets_2,
             module_names_2,
             function_names_2,
@@ -2115,7 +2147,7 @@ module mcms::mcms_tests {
     ) {
         setup(deployer, owner, framework);
         let delay = 1800;
-        mcms::test_timelock_update_min_delay(delay);
+        mcms::test_timelock_update_min_delay(mcms::timelock_role(), delay);
 
         mcms_account::transfer_ownership_to_self(owner);
         mcms_account::accept_ownership(deployer);
@@ -2123,6 +2155,7 @@ module mcms::mcms_tests {
         // This should succeed because bypassers are allowed to bypass the timelock
         let data = bcs::to_bytes(&delay);
         mcms::test_timelock_bypasser_execute_batch(
+            mcms::bypasser_role(),
             vector[@mcms],
             vector[string::utf8(b"mcms")],
             vector[string::utf8(b"timelock_update_min_delay")],
