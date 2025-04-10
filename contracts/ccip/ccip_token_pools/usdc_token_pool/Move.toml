@@ -1,0 +1,27 @@
+[package]
+name = "USDCTokenPool"
+version = "1.0.0"
+authors = []
+
+[addresses]
+ccip = "_"
+ccip_token_pool = "_"
+usdc_token_pool = "_"
+mcms = "_"
+mcms_register_entrypoints = "_"
+local_token = "_"
+
+[dev-addresses]
+ccip = "0x1000"
+ccip_token_pool = "0x2000"
+usdc_token_pool = "0x2003"
+mcms = "0x4000"
+mcms_register_entrypoints = "0x4001"
+local_token = "0x9000"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
+ChainlinkCCIP = { local = "../../ccip" }
+CCIPTokenPool = { local = "../token_pool" }
+
+[dev-dependencies]
