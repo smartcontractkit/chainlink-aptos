@@ -6,7 +6,7 @@ module ccip::receiver_dispatcher {
 
     friend ccip::offramp;
 
-    public(friend) fun dispatch_receive(
+    friend fun dispatch_receive(
         receiver_address: address, message: client::Any2AptosMessage
     ) {
         let dispatch_metadata =

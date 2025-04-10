@@ -97,11 +97,11 @@ module mcms::mcms_account {
         owner() == @mcms
     }
 
-    public(friend) fun get_signer(): signer acquires AccountState {
+    friend fun get_signer(): signer acquires AccountState {
         account::create_signer_with_capability(&borrow_state().signer_cap)
     }
 
-    public(friend) fun assert_is_owner(caller: &signer) acquires AccountState {
+    friend fun assert_is_owner(caller: &signer) acquires AccountState {
         assert_is_owner_internal(borrow_state(), caller);
     }
 

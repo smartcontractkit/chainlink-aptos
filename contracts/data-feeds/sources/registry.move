@@ -187,7 +187,7 @@ module data_feeds::registry {
         set_feeds_internal(registry, feed_ids, descriptions, config_id);
     }
 
-    public(friend) fun set_feeds_unchecked(
+    friend fun set_feeds_unchecked(
         feed_ids: vector<vector<u8>>,
         descriptions: vector<String>,
         config_id: vector<u8>
@@ -493,7 +493,7 @@ module data_feeds::registry {
         get_benchmarks_internal(registry, feed_ids)
     }
 
-    public(friend) fun get_benchmarks_unchecked(
+    friend fun get_benchmarks_unchecked(
         feed_ids: vector<vector<u8>>
     ): vector<Benchmark> acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());
@@ -527,7 +527,7 @@ module data_feeds::registry {
         get_reports_internal(registry, feed_ids)
     }
 
-    public(friend) fun get_reports_unchecked(
+    friend fun get_reports_unchecked(
         feed_ids: vector<vector<u8>>
     ): vector<Report> acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());

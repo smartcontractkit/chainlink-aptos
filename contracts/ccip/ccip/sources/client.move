@@ -48,7 +48,7 @@ module ccip::client {
         input.amount
     }
 
-    public(friend) fun new_any2aptos_message(
+    friend fun new_any2aptos_message(
         message_id: vector<u8>,
         source_chain_selector: u64,
         sender: vector<u8>,
@@ -64,7 +64,7 @@ module ccip::client {
         }
     }
 
-    public(friend) fun new_dest_token_amounts(
+    friend fun new_dest_token_amounts(
         token_addresses: vector<address>, token_amounts: vector<u64>
     ): vector<Any2AptosTokenAmount> {
         token_addresses.zip_map_ref(

@@ -7,7 +7,7 @@ module ccip::token_admin_dispatcher {
     friend ccip::onramp;
     friend ccip::offramp;
 
-    public(friend) fun dispatch_lock_or_burn(
+    friend fun dispatch_lock_or_burn(
         token_pool_address: address,
         fa: FungibleAsset,
         sender: address,
@@ -27,7 +27,7 @@ module ccip::token_admin_dispatcher {
         token_admin_registry::finish_lock_or_burn(token_pool_address)
     }
 
-    public(friend) fun dispatch_release_or_mint(
+    friend fun dispatch_release_or_mint(
         token_pool_address: address,
         sender: vector<u8>,
         receiver: address,

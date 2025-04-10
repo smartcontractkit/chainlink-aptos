@@ -432,7 +432,7 @@ module mcms::mcms_registry {
         }
     }
 
-    public(friend) fun create_owner_for_new_code_object(
+    friend fun create_owner_for_new_code_object(
         new_owner_seed: vector<u8>
     ): signer acquires RegistryState {
         let owner_seed = NEW_OBJECT_REGISTRATION_SEED;
@@ -456,7 +456,7 @@ module mcms::mcms_registry {
         owner_signer
     }
 
-    public(friend) fun get_signer_for_code_object_upgrade(
+    friend fun get_signer_for_code_object_upgrade(
         object_address: address
     ): signer acquires RegistryState, OwnerRegistration {
         assert!(
@@ -618,7 +618,7 @@ module mcms::mcms_registry {
         owner_address
     }
 
-    public(friend) fun start_dispatch(
+    friend fun start_dispatch(
         callback_address: address,
         callback_module_name: String,
         callback_function: String,
@@ -658,7 +658,7 @@ module mcms::mcms_registry {
         registered_module.dispatch_metadata
     }
 
-    public(friend) fun finish_dispatch(callback_address: address) acquires RegistryState {
+    friend fun finish_dispatch(callback_address: address) acquires RegistryState {
         let state = borrow_state();
 
         assert!(

@@ -138,7 +138,7 @@ module platform::storage {
 
     /// Insert into this module as the callback needs to retrieve and avoid a cyclical dependency:
     /// engine -> storage and then engine -> callback -> storage
-    public(friend) fun insert(
+    friend fun insert(
         receiver: address, callback_metadata: vector<u8>, callback_data: vector<u8>
     ): Object<Metadata> acquires Dispatcher, DispatcherV2 {
         // TODO: delete this clause after migration completes
@@ -171,7 +171,7 @@ module platform::storage {
         *asset_metadata
     }
 
-    public(friend) fun storage_exists(obj_address: address): bool {
+    friend fun storage_exists(obj_address: address): bool {
         object::object_exists<Storage>(obj_address)
     }
 

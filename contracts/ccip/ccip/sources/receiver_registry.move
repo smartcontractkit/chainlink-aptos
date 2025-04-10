@@ -148,7 +148,7 @@ module ccip::receiver_registry {
         option::extract(&mut registration.executing_input)
     }
 
-    public(friend) fun start_receive(
+    friend fun start_receive(
         receiver_address: address, message: client::Any2AptosMessage
     ): Object<Metadata> acquires CCIPReceiverRegistration {
         let registration = get_registration_mut(receiver_address);
@@ -163,7 +163,7 @@ module ccip::receiver_registry {
         registration.dispatch_metadata
     }
 
-    public(friend) fun finish_receive(receiver_address: address) acquires CCIPReceiverRegistration {
+    friend fun finish_receive(receiver_address: address) acquires CCIPReceiverRegistration {
         let registration = get_registration_mut(receiver_address);
 
         assert!(

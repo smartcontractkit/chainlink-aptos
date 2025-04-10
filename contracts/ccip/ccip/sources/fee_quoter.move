@@ -502,7 +502,7 @@ module ccip::fee_quoter {
         );
     }
 
-    public(friend) fun update_prices(
+    friend fun update_prices(
         source_tokens: vector<address>,
         source_usd_per_token: vector<u256>,
         gas_dest_chain_selectors: vector<u64>,

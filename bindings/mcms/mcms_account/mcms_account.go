@@ -38,10 +38,9 @@ type MCMSAccountEncoder interface {
 	TransferOwnership(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TransferOwnershipToSelf() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	AssertIsOwner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"mcms","module":"mcms_account","name":"accept_ownership","parameters":null},{"package":"mcms","module":"mcms_account","name":"assert_is_owner","parameters":null},{"package":"mcms","module":"mcms_account","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"mcms","module":"mcms_account","name":"transfer_ownership_to_self","parameters":null}]`
+const FunctionInfo = `[{"package":"mcms","module":"mcms_account","name":"accept_ownership","parameters":null},{"package":"mcms","module":"mcms_account","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"mcms","module":"mcms_account","name":"transfer_ownership_to_self","parameters":null}]`
 
 func NewMCMSAccount(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMSAccount {
 	contract := bind.NewBoundContract(address, "mcms", "mcms_account", client)
@@ -170,8 +169,4 @@ func (c mcmsAccountEncoder) TransferOwnershipToSelf() (bind.ModuleInformation, s
 
 func (c mcmsAccountEncoder) AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("accept_ownership", nil, []string{}, []any{})
-}
-
-func (c mcmsAccountEncoder) AssertIsOwner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("assert_is_owner", nil, []string{}, []any{})
 }

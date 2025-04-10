@@ -726,7 +726,7 @@ module ccip::token_admin_registry {
     // |                        Lock or Burn                          |
     // ================================================================
 
-    public(friend) fun start_lock_or_burn(
+    friend fun start_lock_or_burn(
         token_pool_address: address,
         sender: address,
         remote_chain_selector: u64,
@@ -763,7 +763,7 @@ module ccip::token_admin_registry {
         registration.dispatch_deposit_fungible_store
     }
 
-    public(friend) fun finish_lock_or_burn(
+    friend fun finish_lock_or_burn(
         token_pool_address: address
     ): (vector<u8>, vector<u8>) acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);
@@ -811,7 +811,7 @@ module ccip::token_admin_registry {
     // |                       Release or Mint                        |
     // ================================================================
 
-    public(friend) fun start_release_or_mint(
+    friend fun start_release_or_mint(
         token_pool_address: address,
         sender: vector<u8>,
         receiver: address,
@@ -865,7 +865,7 @@ module ccip::token_admin_registry {
         )
     }
 
-    public(friend) fun finish_release_or_mint(
+    friend fun finish_release_or_mint(
         token_pool_address: address
     ): u64 acquires TokenPoolRegistration {
         let registration = get_registration_mut(token_pool_address);

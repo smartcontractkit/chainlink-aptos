@@ -30,10 +30,9 @@ type ReceiverRegistry interface {
 
 type ReceiverRegistryEncoder interface {
 	TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	FinishReceive(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"receiver_registry","name":"finish_receive","parameters":[{"name":"receiver_address","type":"address"}]}]`
+const FunctionInfo = `null`
 
 func NewReceiverRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) ReceiverRegistry {
 	contract := bind.NewBoundContract(address, "ccip", "receiver_registry", client)
@@ -100,12 +99,4 @@ type receiverRegistryEncoder struct {
 
 func (c receiverRegistryEncoder) TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("type_and_version", nil, []string{}, []any{})
-}
-
-func (c receiverRegistryEncoder) FinishReceive(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("finish_receive", nil, []string{
-		"address",
-	}, []any{
-		receiverAddress,
-	})
 }
