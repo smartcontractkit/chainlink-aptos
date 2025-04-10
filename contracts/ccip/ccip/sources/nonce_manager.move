@@ -11,8 +11,6 @@ module ccip::nonce_manager {
         outbound_nonces: SmartTable<u64, SmartTable<address, u64>>
     }
 
-    const E_ALREADY_INITIALIZED: u64 = 1;
-
     #[view]
     public fun type_and_version(): String {
         string::utf8(b"NonceManager 1.6.0")
