@@ -61,12 +61,12 @@ module ccip::state_object {
         object_address()
     }
 
-    package inline fun object_address(): address {
+    public(package) inline fun object_address(): address {
         // hard code the object seed directly in order to keep the function inline.
         object::create_object_address(&@ccip, b"CCIPStateObject")
     }
 
-    package fun object_signer(): signer acquires StateObjectRefs {
+    public(package) fun object_signer(): signer acquires StateObjectRefs {
         let store = borrow_global<StateObjectRefs>(object_address());
         object::generate_signer_for_extending(&store.extend_ref)
     }
