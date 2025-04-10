@@ -14,14 +14,6 @@ module ccip::state_object {
     use std::object::{Self, ExtendRef, TransferRef};
     use std::signer;
 
-    friend ccip::auth;
-    friend ccip::fee_quoter;
-    friend ccip::offramp;
-    friend ccip::onramp;
-    friend ccip::receiver_registry;
-    friend ccip::rmn_remote;
-    friend ccip::token_admin_registry;
-
     struct StateObjectRefs has key {
         extend_ref: ExtendRef,
         transfer_ref: TransferRef
@@ -69,12 +61,12 @@ module ccip::state_object {
         object_address()
     }
 
-    public(friend) inline fun object_address(): address {
+    package inline fun object_address(): address {
         // hard code the object seed directly in order to keep the function inline.
         object::create_object_address(&@ccip, b"CCIPStateObject")
     }
 
-    public(friend) fun object_signer(): signer acquires StateObjectRefs {
+    package fun object_signer(): signer acquires StateObjectRefs {
         let store = borrow_global<StateObjectRefs>(object_address());
         object::generate_signer_for_extending(&store.extend_ref)
     }
