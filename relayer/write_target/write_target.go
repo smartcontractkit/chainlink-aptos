@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/aptos-labs/aptos-go-sdk"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
 
@@ -15,10 +16,14 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	aptosconfig "github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/fees"
+	aptosregistry "github.com/smartcontractkit/chainlink-aptos/relayer/monitroing/pb/data-feeds/on-chain/registry"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target/types"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-evm/pkg/report/monitor"
+	"github.com/smartcontractkit/chainlink-evm/pkg/report/pb/data-feeds/on-chain/registry"
+	wt "github.com/smartcontractkit/chainlink-evm/pkg/report/pb/platform"
 	"github.com/smartcontractkit/chainlink-evm/pkg/writetarget"
 )
 
@@ -26,6 +31,47 @@ const version = "1.0.0"
 
 type AptosConfig struct {
 	Address string
+}
+
+// EVM Data-Feeds specific processor decodes writes as 'data-feeds.registry.FeedUpdated' messages + metrics
+type dataFeedsProcessor struct {
+	emitter monitor.ProtoEmitter
+	metrics *registry.Metrics
+}
+
+func (p *dataFeedsProcessor) Process(ctx context.Context, m proto.Message, attrKVs ...any) error {
+	// Switch on the type of the proto.Message
+	switch msg := m.(type) {
+	case *wt.WriteConfirmed:
+		// TODO: fallthrough if not a write containing a DF report
+		// https://smartcontract-it.atlassian.net/browse/NONEVM-818
+		// Notice: we assume all writes are Data-Feeds (static schema) writes for now
+
+		// Decode as an array of 'data-feeds.registry.FeedUpdated' messages
+		updates, err := aptosregistry.DecodeAsFeedUpdated(msg)
+		if err != nil {
+			return fmt.Errorf("failed to decode as 'data-feeds.registry.FeedUpdated': %w", err)
+		}
+		// Emit the 'data-feeds.registry.FeedUpdated' messages
+		for _, update := range updates {
+			err = p.emitter.EmitWithLog(ctx, update, attrKVs...)
+			if err != nil {
+				return fmt.Errorf("failed to emit with log: %w", err)
+			}
+			// Process emit and derive metrics
+			err = p.metrics.OnFeedUpdated(ctx, update, attrKVs...)
+			if err != nil {
+				return fmt.Errorf("failed to publish feed updated metrics: %w", err)
+			}
+		}
+		return nil
+	default:
+		return nil // fallthrough
+	}
+}
+
+func (c *dataFeedsProcessor) SetEmitter(e monitor.ProtoEmitter) {
+	c.emitter = e
 }
 
 func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Logger) (capabilities.TargetCapability, error) {
@@ -49,7 +95,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	}
 
 	// Set up a specific Beholder client for the Aptos WT
-	beholder, err := writetarget.NewMonitor(ctx, lggr)
+	beholder, err := writetarget.NewMonitor(lggr, types.DecodeAsFeedUpdated)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Aptos WT monitor client: %+w", err)
 	}
