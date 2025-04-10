@@ -14,6 +14,7 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
+	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil"
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
@@ -27,9 +28,11 @@ import (
 type aptosChainReader struct {
 	types.UnimplementedContractReader
 
-	logger                logger.Logger
-	config                ChainReaderConfig
-	starter               utils.StartStopOnce
+	logger  logger.Logger
+	config  ChainReaderConfig
+	ds      sqlutil.DataSource
+	starter utils.StartStopOnce
+
 	moduleAddresses       map[string]aptos.AccountAddress
 	eventAccountAddresses map[string]aptos.AccountAddress
 
@@ -38,11 +41,12 @@ type aptosChainReader struct {
 
 var _ types.ContractTypeProvider = &aptosChainReader{}
 
-func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config ChainReaderConfig) types.ContractReader {
+func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config ChainReaderConfig, ds sqlutil.DataSource) types.ContractReader {
 	return &aptosChainReader{
 		logger:                logger.Named(lgr, "AptosChainReader"),
 		client:                client,
 		config:                config,
+		ds:                    ds,
 		moduleAddresses:       map[string]aptos.AccountAddress{},
 		eventAccountAddresses: map[string]aptos.AccountAddress{},
 	}

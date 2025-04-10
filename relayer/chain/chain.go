@@ -18,6 +18,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
+	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil"
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
@@ -32,6 +33,7 @@ type Chain interface {
 
 	ID() string
 	Config() *config.TOMLConfig
+	DataSource() sqlutil.DataSource
 
 	TxManager() *txm.AptosTxm
 	GetClient() (aptos.AptosRpcClient, error)
@@ -41,6 +43,7 @@ type ChainOpts struct {
 	Logger logger.Logger
 	// the implementation used here needs to be co-ordinated with the aptos transaction manager keystore adapter
 	KeyStore loop.Keystore
+	DS       sqlutil.DataSource
 }
 
 func (o *ChainOpts) Name() string {
@@ -57,6 +60,9 @@ func (o *ChainOpts) Validate() (err error) {
 	if o.KeyStore == nil {
 		err = errors.Join(err, required("KeyStore"))
 	}
+	if o.DS == nil {
+		err = errors.Join(err, required("DataSource"))
+	}
 	return
 }
 
@@ -68,6 +74,7 @@ type chain struct {
 	id   string
 	cfg  *config.TOMLConfig
 	lggr logger.Logger
+	ds   sqlutil.DataSource
 
 	// Sub-services
 	txm            *txm.AptosTxm
@@ -78,10 +85,10 @@ func NewChain(cfg *config.TOMLConfig, opts ChainOpts) (Chain, error) {
 	if !cfg.IsEnabled() {
 		return nil, fmt.Errorf("cannot create new chain with ID %s: chain is disabled", cfg.ChainID)
 	}
-	return newChain(cfg, opts.KeyStore, opts.Logger)
+	return newChain(cfg, opts.KeyStore, opts.Logger, opts.DS)
 }
 
-func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger) (*chain, error) {
+func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, ds sqlutil.DataSource) (*chain, error) {
 	lggr = logger.With(lggr, "chainID", cfg.ChainID)
 
 	// TEMP: fetch the first account in the store to use for transmissions to avoid having to specify it in TOML
@@ -106,6 +113,7 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger) 
 		id:   cfg.ChainID,
 		cfg:  cfg,
 		lggr: logger.Named(lggr, "Chain"),
+		ds:   ds,
 	}
 
 	getClient := func() (aptos.AptosRpcClient, error) {
@@ -151,6 +159,10 @@ func (c *chain) Config() *config.TOMLConfig {
 
 func (c *chain) TxManager() *txm.AptosTxm {
 	return c.txm
+}
+
+func (c *chain) DataSource() sqlutil.DataSource {
+	return c.ds
 }
 
 func (c *chain) ChainID() string {

@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/go-plugin"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
+	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer"
@@ -22,7 +23,7 @@ func main() {
 	s := loop.MustNewStartedServer(loggerName)
 	defer s.Stop()
 
-	p := &pluginRelayer{Plugin: loop.Plugin{Logger: s.Logger}}
+	p := &pluginRelayer{Plugin: loop.Plugin{Logger: s.Logger}, ds: s.DataSource}
 	defer s.Logger.ErrorIfFn(p.Close, "Failed to close")
 
 	s.MustRegister(p)
@@ -48,6 +49,7 @@ func main() {
 
 type pluginRelayer struct {
 	loop.Plugin
+	ds sqlutil.DataSource
 }
 
 // NewRelayer implements the Loopp factory method used by the Loopp server to instantiate a aptos relayer
@@ -63,6 +65,7 @@ func (p *pluginRelayer) NewRelayer(ctx context.Context, rawConfig string, loopKs
 	opts := chain.ChainOpts{
 		Logger:   p.Logger,
 		KeyStore: loopKs,
+		DS:       p.ds,
 	}
 	chain, err := chain.NewChain(cfg, opts)
 	if err != nil {
