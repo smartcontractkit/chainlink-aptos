@@ -19,6 +19,7 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
+	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil/sqltest"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
@@ -263,7 +264,8 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		Address: accountAddress.String(),
 	}
 
-	chainReader := NewChainReader(logger, rateLimitedClient, config)
+	db := sqltest.NewDB(t, sqltest.TestURL(t))
+	chainReader := NewChainReader(logger, rateLimitedClient, config, db)
 	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{binding})
 	require.NoError(t, err)
 
@@ -545,7 +547,8 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 		},
 	}
 
-	chainReader := NewChainReader(logger, rateLimitedClient, config)
+	db := sqltest.NewDB(t, sqltest.TestURL(t))
+	chainReader := NewChainReader(logger, rateLimitedClient, config, db)
 	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{
 		{Name: "testContract", Address: accountAddress.String()},
 	})
@@ -779,7 +782,8 @@ func TestLoopChainReaderLocal(t *testing.T) {
 		IsLoopPlugin: true,
 	}
 
-	chainReader := NewChainReader(lg, rlClient, config)
+	db := sqltest.NewDB(t, sqltest.TestURL(t))
+	chainReader := NewChainReader(lg, rlClient, config, db)
 	loopReader := loop.NewLoopChainReader(lg, chainReader)
 	binding := commontypes.BoundContract{
 		Name:    "testContract",
