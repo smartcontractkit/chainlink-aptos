@@ -11,6 +11,12 @@ mcms = "_"
 mcms_register_entrypoints = "_"
 local_token = "_"
 
+# Circle addresses
+message_transmitter = "_"
+token_messenger_minter = "_"
+aptos_extensions = "_"
+stablecoin = "_"
+
 [dev-addresses]
 ccip = "0x1000"
 ccip_token_pool = "0x2000"
@@ -19,9 +25,21 @@ mcms = "0x4000"
 mcms_register_entrypoints = "0x4001"
 local_token = "0x9000"
 
+# Circle addresses
+message_transmitter = "0x0990"
+token_messenger_minter = "0x0991"
+aptos_extensions = "0x0992"
+stablecoin = "0x0993"
+
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
 ChainlinkCCIP = { local = "../../ccip" }
 CCIPTokenPool = { local = "../token_pool" }
+
+# Circle imports
+AptosExtensions = { git = "https://github.com/circlefin/stablecoin-aptos.git", rev = "c5f24d06ad0aebd9f61456da0c036be911da97c4", subdir = "packages/aptos_extensions" }
+Stablecoin = { git = "https://github.com/circlefin/stablecoin-aptos.git", rev = "c5f24d06ad0aebd9f61456da0c036be911da97c4", subdir = "packages/stablecoin" }
+MessageTransmitter = { git = "https://github.com/circlefin/aptos-cctp.git", rev = "4741564f1e1a1c07c912ee3237fa59c5205dcc6a", subdir = "packages/message_transmitter" }
+TokenMessengerMinter = { git = "https://github.com/circlefin/aptos-cctp.git", rev = "4741564f1e1a1c07c912ee3237fa59c5205dcc6a", subdir = "packages/token_messenger_minter" }
 
 [dev-dependencies]
