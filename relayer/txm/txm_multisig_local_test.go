@@ -207,152 +207,40 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 			break
 		}
 		require.NotNil(t, resource)
+
+		pollEndTime = time.Now().Add(time.Second * 3)
+		for time.Now().Before(pollEndTime) {
+			resource, err = client.AccountResource(mcmsAccount, mcmsAddress+"::mcms::Timelock")
+			if err != nil {
+				time.Sleep(time.Second * 1)
+				continue
+			}
+			logger.Debugw("Got resource", "resource", resource)
+			break
+		}
+		require.NotNil(t, resource)
 	}
 
 	// Call set_config to set signers
-	{
-		NUM_GROUPS := 32
-		signerAddresses := [][]byte{}
-		signerGroups := []uint8{}
-		groupQuorums := make([]uint8, NUM_GROUPS)
-		groupParents := make([]uint8, NUM_GROUPS)
+	role := uint8(PROPOSER_ROLE)
+	setupInitialConfigAsDeployer(t, logger, txm, uint8(BYPASSER_ROLE), bypasserSigners, deployerAddress, deployerPublicKeyHex, false, mcmsAddress)
+	// Setup role for Proposer too
+	setupInitialConfigAsDeployer(t, logger, txm, role, proposerSigners, deployerAddress, deployerPublicKeyHex, false, mcmsAddress)
 
-		// Addresses are already sorted
-		for _, signer := range signers {
-			signerAddresses = append(signerAddresses, signer.address)
-			signerGroups = append(signerGroups, 0)
-		}
-		groupQuorums[0] = 2
-
-		setConfigId := uuid.New().String()
-		err := txm.Enqueue(
-			setConfigId,
-			getSampleTxMetadata(),
-			deployerAddress,
-			deployerPublicKeyHex,
-			mcmsAddress+"::mcms::set_config",
-			[]string{},
-			[]string{"vector<vector<u8>>", "vector<u8>", "vector<u8>", "vector<u8>", "bool"},
-			[]any{
-				signerAddresses,
-				signerGroups,
-				groupQuorums,
-				groupParents,
-				false,
-			},
-			/* simulateTx= */ true,
-		)
-		require.NoError(t, err)
-
-		waitForTxmId(t, txm, setConfigId, time.Second*30)
-	}
-
-	arg1 := "hello"
-	arg2 := []byte{5, 4, 3, 2, 1}
-	arg3 := deployer.accountAddress[:]
-	arg4 := big.NewInt(42)
+	functionOneArg1 := "hello"
+	functionOneArg2 := []byte{5, 4, 3, 2, 1}
+	functionTwoArg1 := deployer.accountAddress[:]
+	functionTwoArg2 := big.NewInt(42)
 
 	// function_one(arg1: String, arg2: vector<u8>)
-	functionOneParamBytes, err := bcs.SerializeSingle(func(ser *bcs.Serializer) {
-		ser.WriteString(arg1)
-		ser.WriteBytes(arg2)
-	})
-	require.NoError(t, err)
+	functionOneParamBytes := getFunctionOneParamBytes(t, functionOneArg1, functionOneArg2)
 
 	// function_two(arg1: address, arg2: u128)
-	functionTwoParamBytes, err := bcs.SerializeSingle(func(ser *bcs.Serializer) {
-		ser.FixedBytes(arg3)
-		ser.U128(*arg4)
-	})
-	require.NoError(t, err)
-
-	nextNonce := uint64(0)
-	getNextNonce := func() uint64 {
-		currentNonce := nextNonce
-		nextNonce++
-		return currentNonce
-	}
-
-	postOpCount := uint64(0)
-	getPreOpCount := func() uint64 {
-		return postOpCount
-	}
-	getCumulativePostOpCount := func(numOps uint64) uint64 {
-		postOpCount += numOps
-		return postOpCount
-	}
-
-	enqueueSetRoot := func(merkleTree MerkleTree, rootMetadata RootMetadata) string {
-		rootHash := merkleTree.getRoot()
-
-		// Set validUntil to be the current UTC timestamp + 1 week
-		validUntil := uint64(time.Now().UTC().Add(7 * 24 * time.Hour).Unix())
-
-		// Calculate signedHash
-		signedHash := calculateSignedHash(rootHash, validUntil)
-
-		// Generate signatures for each signer
-		signatures := generateSignatures(t, signers, signedHash)
-
-		// The first leaf is the metadata
-		metadataProof := merkleTree.getProof(0)
-
-		require.True(t, merkleTree.verifyProof(metadataProof, hashRootMetadata(rootMetadata)))
-
-		setRootId := uuid.New().String()
-
-		err = txm.Enqueue(
-			setRootId,
-			getSampleTxMetadata(),
-			deployerAddress,
-			deployerPublicKeyHex,
-			mcmsAddress+"::mcms::set_root",
-			[]string{},
-			[]string{
-				"vector<u8>",
-				"u64",
-				"u256",
-				"address",
-				"u64",
-				"u64",
-				"bool",
-				"vector<vector<u8>>",
-				"vector<vector<u8>>",
-			},
-			[]any{
-				rootHash,
-				validUntil,
-				rootMetadata.ChainID,
-				rootMetadata.MultiSig,
-				rootMetadata.PreOpCount,
-				rootMetadata.PostOpCount,
-				rootMetadata.OverridePreviousRoot,
-				metadataProof,
-				signatures,
-			},
-			/* simulateTx= */ true,
-		)
-		require.NoError(t, err)
-
-		return setRootId
-	}
+	functionTwoParamBytes := getFunctionTwoParamBytes(t, functionTwoArg1, functionTwoArg2)
 
 	t.Run("TransferOwnershipAndExecuteMCMSDeployedUserContract", func(t *testing.T) {
-
-		transferOwnershipId := uuid.New().String()
-		err := txm.Enqueue(
-			transferOwnershipId,
-			getSampleTxMetadata(),
-			deployerAddress,
-			deployerPublicKeyHex,
-			mcmsAddress+"::mcms_account::transfer_ownership_to_self",
-			[]string{},
-			[]string{},
-			[]any{},
-			/* simulateTx= */ true,
-		)
-		require.NoError(t, err)
-		waitForTxmId(t, txm, transferOwnershipId, time.Second*30)
+		role := uint8(PROPOSER_ROLE)
+		transferOwnership(t, txm, deployerAddress, deployerPublicKeyHex, mcmsAddress)
 
 		newOwnerSeed := []byte("mcms_user_contract")
 		codeObjectOwnerAccount := mcmsAccount.ResourceAccount(append([]byte("CHAINLINK_MCMS_NEW_OBJECT_REGISTRATION"), newOwnerSeed...))
@@ -388,125 +276,111 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 			ser.WriteBytes(newOwnerSeed)
 		})
 
-		ops := []Op{
+		// First schedule the timelock operations
+		scheduleTimelockOps := []TimelockOperation{
 			{
-				ChainID:    chainIdBig,
-				MultiSig:   mcmsAccount,
-				Nonce:      getNextNonce(),
-				To:         mcmsAccount,
-				ModuleName: "mcms_account",
-				Function:   "accept_ownership",
-				Data:       []byte{},
+				Target:       mcmsAccount,
+				ModuleName:   "mcms_account",
+				FunctionName: "accept_ownership",
+				Data:         []byte{},
 			},
 			{
-				ChainID:    chainIdBig,
-				MultiSig:   mcmsAccount,
-				Nonce:      getNextNonce(),
-				To:         mcmsAccount,
-				ModuleName: "mcms_deployer",
-				Function:   "stage_code_chunk_and_publish_to_object",
-				Data:       stageCodeChunkAndPublishToAccountBytes,
+				Target:       mcmsAccount,
+				ModuleName:   "mcms_deployer",
+				FunctionName: "stage_code_chunk_and_publish_to_object",
+				Data:         stageCodeChunkAndPublishToAccountBytes,
 			},
 			{
-				ChainID:    chainIdBig,
-				MultiSig:   mcmsAccount,
-				Nonce:      getNextNonce(),
-				To:         userModuleAccount,
-				ModuleName: "mcms_user",
-				Function:   "function_one",
-				Data:       functionOneParamBytes,
+				Target:       userModuleAccount,
+				ModuleName:   "mcms_user",
+				FunctionName: "function_one",
+				Data:         functionOneParamBytes,
 			},
 			{
-				ChainID:    chainIdBig,
-				MultiSig:   mcmsAccount,
-				Nonce:      getNextNonce(),
-				To:         userModuleAccount,
-				ModuleName: "mcms_user",
-				Function:   "function_two",
-				Data:       functionTwoParamBytes,
+				Target:       userModuleAccount,
+				ModuleName:   "mcms_user",
+				FunctionName: "function_two",
+				Data:         functionTwoParamBytes,
 			},
 		}
+		// ZERO_HASH (32 bytes of zeros)
+		predecessor := make([]byte, 32)
+		salt := []byte{}
+		delay := uint64(0)
 
 		rootMetadata := RootMetadata{
-			ChainID:     chainIdBig,
-			MultiSig:    mcmsAccount,
-			PreOpCount:  getPreOpCount(),
-			PostOpCount: getCumulativePostOpCount(uint64(len(ops))),
-			// TODO: add test to override previous root
+			Role:                 role,
+			ChainID:              chainIdBig,
+			MultiSig:             mcmsAccount,
+			PreOpCount:           getPreOpCount(),
+			PostOpCount:          getCumulativePostOpCount(uint64(len(scheduleTimelockOps))), // We execute each op individually
 			OverridePreviousRoot: false,
 		}
+
+		ops := timelockOpToMulitpleOps(scheduleTimelockOps, predecessor, salt, delay, role, chainIdBig)
+
+		// Log hashRootMetadata and contents
+		metadataHash := hashRootMetadata(rootMetadata)
+		logger.Debugw("hashRootMetadata", "value", hex.EncodeToString(metadataHash[:]))
+		logger.Debugw("ops", "value", ops)
 
 		merkleTree, err := generateMerkleTree(ops, rootMetadata)
 		require.NoError(t, err)
 
-		setRootId := enqueueSetRoot(merkleTree, rootMetadata)
-
+		setRootId := enqueueSetRoot(t, logger, merkleTree, txm, rootMetadata, proposerSigners, deployerAddress, deployerPublicKeyHex, mcmsAddress)
 		waitForTxmId(t, txm, setRootId, time.Second*30)
 
-		for {
-			queueLen, unconfirmedLen := txm.InflightCount()
-			logger.Debugw("Inflight count", "queued", queueLen, "unconfirmed", unconfirmedLen)
-			if queueLen == 0 && unconfirmedLen == 0 {
-				break
-			}
-			time.Sleep(500 * time.Millisecond)
-		}
-
-		executeOp := func(index int) {
-			logger.Debugw("Executing op", "index", index)
-
-			// offset +1 to account for the root metadata
-			proof := merkleTree.getProof(index + 1)
-			op := &ops[index]
-			require.True(t, merkleTree.verifyProof(proof, hashOp(op)))
-
-			txId := uuid.New().String()
-
-			err := txm.Enqueue(
-				txId,
-				getSampleTxMetadata(),
-				deployerAddress,
-				deployerPublicKeyHex,
-				mcmsAddress+"::mcms::execute",
-				[]string{},
-				[]string{
-					"u256",
-					"address",
-					"u64",
-					"address",
-					"0x1::string::String",
-					"0x1::string::String",
-					"vector<u8>",
-					"vector<vector<u8>>",
-				},
-				[]any{
-					op.ChainID,
-					op.MultiSig,
-					op.Nonce,
-					op.To,
-					op.ModuleName,
-					op.Function,
-					op.Data,
-					proof[:],
-				},
-				/* simulateTx= */ true,
-			)
-			require.NoError(t, err)
-
+		// Schedule operations through MCMS -> MCMS Timelock
+		for i, op := range scheduleTimelockOps {
+			proof := merkleTree.getProof(i + 1)
+			require.True(t, merkleTree.verifyProof(proof, hashOp(&ops[i])))
+			txId := scheduleSingleOperationAsDeployer(t, logger, txm, mcmsAccount, deployerAddress, deployerPublicKeyHex,
+				[]TimelockOperation{op}, predecessor, salt, delay, role, chainIdBig, ops[i].Nonce, proof)
 			waitForTxmId(t, txm, txId, time.Second*30)
 		}
 
-		logger.Infow("executing ops")
-		executeOp(0)
-		executeOp(1)
-		executeOp(2)
-		executeOp(3)
+		// Wait for timelock delay
+		time.Sleep(time.Duration(TEST_DELAY) * time.Second)
 
-		// check that user contract state was updated
+		// Execute initial operations through timelock
+		executeTimelockOps := []TimelockOperation{
+			{
+				Target:       mcmsAccount,
+				ModuleName:   "mcms_account",
+				FunctionName: "accept_ownership",
+				Data:         []byte{},
+			},
+			{
+				Target:       mcmsAccount,
+				ModuleName:   "mcms_deployer",
+				FunctionName: "stage_code_chunk_and_publish_to_object",
+				Data:         stageCodeChunkAndPublishToAccountBytes,
+			},
+			{
+				Target:       userModuleAccount,
+				ModuleName:   "mcms_user",
+				FunctionName: "function_one",
+				Data:         functionOneParamBytes,
+			},
+			{
+				Target:       userModuleAccount,
+				ModuleName:   "mcms_user",
+				FunctionName: "function_two",
+				Data:         functionTwoParamBytes,
+			},
+		}
+
+		// Here we execute each op one by one, to prevent EXECUTION_LIMIT_REACHED
+		for i := 0; i < len(executeTimelockOps); i++ {
+			txId := executeBatchOperations(t, txm, mcmsAddress, deployerAddress, deployerPublicKeyHex,
+				[]TimelockOperation{executeTimelockOps[i]}, predecessor, salt)
+			waitForTxmId(t, txm, txId, time.Second*30)
+		}
+
+		// Verify final state
 		{
 			pollEndTime := time.Now().Add(time.Second * 30)
 			var resource map[string]any
-
 			for time.Now().Before(pollEndTime) {
 				resource, err = client.AccountResource(userModuleAccount, userModuleAccount.String()+"::mcms_user::UserData")
 				if err != nil {
@@ -530,25 +404,25 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 			err = mapstructure.Decode(resource, &result)
 			require.NoError(t, err)
 
-			require.Equal(t, result.Data.A, arg1)
+			require.Equal(t, result.Data.A, functionOneArg1)
 
 			bBytes, err := hex.DecodeString(strings.TrimPrefix(result.Data.B, "0x"))
 			require.NoError(t, err)
-			require.Equal(t, bBytes, arg2)
+			require.Equal(t, bBytes, functionOneArg2)
 
-			// Have to use aptos.AccountAddress to parse the address as the response might be missing leading zeroes
-			addrC := aptos.AccountAddress{}
-			require.NoError(t, addrC.ParseStringRelaxed(result.Data.C))
-			require.Equal(t, arg3, addrC[:])
+			cBytes, err := hex.DecodeString(strings.TrimPrefix(result.Data.C, "0x"))
+			require.NoError(t, err)
+			require.Equal(t, cBytes, functionTwoArg1)
 
 			dInt, ok := new(big.Int).SetString(result.Data.D, 10)
 			require.True(t, ok)
-			require.Equal(t, dInt, arg4)
+			require.Equal(t, dInt, functionTwoArg2)
 		}
 	})
 
-	if !skipEOATest {
+	if skipEOATest {
 		t.Run("ExecuteEOADeployedUserContract", func(t *testing.T) {
+			role := uint8(PROPOSER_ROLE)
 			mcmsUserDeployer := accounts[1]
 			mcmsUserDeployerAddress := mcmsUserDeployer.accountAddress.String()
 			mcmsUserDeployerPublicKeyHex := hex.EncodeToString([]byte(mcmsUserDeployer.publicKey))
@@ -585,42 +459,56 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 				require.NotNil(t, resource)
 			}
 
-			ops := []Op{
+			// First schedule the timelock operations
+			scheduleTimelockOps := []TimelockOperation{
 				{
-					ChainID:    chainIdBig,
-					MultiSig:   mcmsAccount,
-					Nonce:      getNextNonce(),
-					To:         mcmsUserDeployer.accountAddress,
-					ModuleName: "mcms_user",
-					Function:   "function_one",
-					Data:       functionOneParamBytes,
+					Target:       mcmsUserDeployer.accountAddress,
+					ModuleName:   "mcms_user",
+					FunctionName: "function_one",
+					Data:         functionOneParamBytes,
 				},
 				{
-					ChainID:    chainIdBig,
-					MultiSig:   mcmsAccount,
-					Nonce:      getNextNonce(),
-					To:         mcmsUserDeployer.accountAddress,
-					ModuleName: "mcms_user",
-					Function:   "function_two",
-					Data:       functionTwoParamBytes,
+					Target:       mcmsUserDeployer.accountAddress,
+					ModuleName:   "mcms_user",
+					FunctionName: "function_two",
+					Data:         functionTwoParamBytes,
 				},
 			}
+			// ZERO_HASH (32 bytes of zeros)
+			predecessor := make([]byte, 32)
+			salt := []byte{}
+			delay := TEST_DELAY
 
 			rootMetadata := RootMetadata{
+				Role:                 role,
 				ChainID:              chainIdBig,
 				MultiSig:             mcmsAccount,
 				PreOpCount:           getPreOpCount(),
-				PostOpCount:          getCumulativePostOpCount(uint64(len(ops))),
+				PostOpCount:          getPreOpCount() + 1, // We execute this all in one OP
 				OverridePreviousRoot: false,
 			}
 
-			merkleTree, err := generateMerkleTree(ops, rootMetadata)
+			op := timelockOpsToOp(scheduleTimelockOps, predecessor, salt, delay, role, chainIdBig, mcmsAccount, getNextNonce)
+
+			merkleTree, err := generateMerkleTree([]Op{op}, rootMetadata)
 			require.NoError(t, err)
 
-			setRootId := enqueueSetRoot(merkleTree, rootMetadata)
-			require.NoError(t, err)
-
+			setRootId := enqueueSetRoot(t, logger, merkleTree, txm, rootMetadata, proposerSigners, deployerAddress, deployerPublicKeyHex, mcmsAddress)
 			waitForTxmId(t, txm, setRootId, time.Second*30)
+
+			proof := merkleTree.getProof(1)
+
+			// Calculate the hash of our single operation (for verification)
+			opHash := hashOp(&op)
+			logger.Debugw("Leaf hash for operation", "hash", hex.EncodeToString(opHash[:]))
+
+			// Verify that the proof is valid for our operation
+			require.True(t, merkleTree.verifyProof(proof, opHash), "Failed to verify merkle proof for the batched operation")
+
+			// Schedule all operations in a single execute call, passing the complete proof
+			txId := scheduleBatchOperationsAsDeployer(t, logger, txm, mcmsAccount, deployerAddress, deployerPublicKeyHex,
+				scheduleTimelockOps, predecessor, salt, delay, role, chainIdBig, op.Nonce, proof)
+			waitForTxmId(t, txm, txId, time.Second*30)
 
 			for {
 				queueLen, unconfirmedLen := txm.InflightCount()
@@ -631,53 +519,24 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 				time.Sleep(500 * time.Millisecond)
 			}
 
-			executeOp := func(index int) {
-				logger.Debugw("Executing op", "index", index)
-
-				// offset +1 to account for the root metadata
-				proof := merkleTree.getProof(index + 1)
-				op := &ops[index]
-				require.True(t, merkleTree.verifyProof(proof, hashOp(op)))
-
-				txId := uuid.New().String()
-
-				err := txm.Enqueue(
-					txId,
-					getSampleTxMetadata(),
-					deployerAddress,
-					deployerPublicKeyHex,
-					mcmsAddress+"::mcms::execute",
-					[]string{},
-					[]string{
-						"u256",
-						"address",
-						"u64",
-						"address",
-						"0x1::string::String",
-						"0x1::string::String",
-						"vector<u8>",
-						"vector<vector<u8>>",
-					},
-					[]any{
-						op.ChainID,
-						op.MultiSig,
-						op.Nonce,
-						op.To,
-						op.ModuleName,
-						op.Function,
-						op.Data,
-						proof[:],
-					},
-					/* simulateTx= */ true,
-				)
-				require.NoError(t, err)
-
-				waitForTxmId(t, txm, txId, time.Second*30)
+			// Execute initial operations through timelock
+			executeTimelockOps := []TimelockOperation{
+				{
+					Target:       mcmsUserDeployer.accountAddress,
+					ModuleName:   "mcms_user",
+					FunctionName: "function_one",
+					Data:         functionOneParamBytes,
+				},
+				{
+					Target:       mcmsUserDeployer.accountAddress,
+					ModuleName:   "mcms_user",
+					FunctionName: "function_two",
+					Data:         functionTwoParamBytes,
+				},
 			}
 
-			logger.Infow("executing ops")
-			executeOp(0)
-			executeOp(1)
+			txId = executeBatchOperations(t, txm, mcmsAddress, deployerAddress, deployerPublicKeyHex, executeTimelockOps, predecessor, salt)
+			waitForTxmId(t, txm, txId, time.Second*30)
 
 			// check that user contract state was updated
 			{
@@ -707,23 +566,159 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 				err = mapstructure.Decode(resource, &result)
 				require.NoError(t, err)
 
-				require.Equal(t, result.Data.A, arg1)
+				require.Equal(t, result.Data.A, functionOneArg1)
 
 				bBytes, err := hex.DecodeString(strings.TrimPrefix(result.Data.B, "0x"))
 				require.NoError(t, err)
-				require.Equal(t, bBytes, arg2)
+				require.Equal(t, bBytes, functionOneArg2)
 
-				// Have to use aptos.AccountAddress to parse the address as the response might be missing leading zeroes
-				addrC := aptos.AccountAddress{}
-				require.NoError(t, addrC.ParseStringRelaxed(result.Data.C))
-				require.Equal(t, arg3, addrC[:])
+				cBytes, err := hex.DecodeString(strings.TrimPrefix(result.Data.C, "0x"))
+				require.NoError(t, err)
+				require.Equal(t, cBytes, functionTwoArg1)
 
 				dInt, ok := new(big.Int).SetString(result.Data.D, 10)
 				require.True(t, ok)
-				require.Equal(t, dInt, arg4)
+				require.Equal(t, dInt, functionTwoArg2)
 			}
 		})
 	}
+
+	t.Run("TestMCMSSetConfig", func(t *testing.T) {
+		role := uint8(PROPOSER_ROLE)
+
+		NUM_GROUPS := 32
+		signerAddresses := [][]byte{}
+		signerGroups := []uint8{}
+		groupQuorums := make([]uint8, NUM_GROUPS)
+		groupParents := make([]uint8, NUM_GROUPS)
+
+		// Addresses are already sorted
+		for _, signer := range proposerSigners {
+			signerAddresses = append(signerAddresses, signer.address)
+			signerGroups = append(signerGroups, 0)
+		}
+		groupQuorums[0] = 2
+
+		updateMinDelayData, err := bcs.SerializeSingle(func(ser *bcs.Serializer) {
+			ser.U64(TEST_DELAY)
+		})
+		require.NoError(t, err)
+
+		proposerMultisig := getMultisigForRole(t, mcmsAddress, client, role)
+		logger.Debugw("Proposer multisig", "multisig", proposerMultisig.String())
+
+		paramValues := [][]byte{[]byte{role}}
+		viewPayload := createViewPayload(mcmsAddress, "mcms", "get_config", []aptos.TypeTag{}, paramValues)
+		data, err := client.View(viewPayload)
+		require.NoError(t, err)
+		logger.Debugw("Initial config data", "data", data)
+
+		// Assert we have the correct number of signers
+		configData := data[0].(map[string]interface{})
+		configSigners := configData["signers"].([]interface{})
+		require.Equal(t, len(proposerSigners), len(configSigners))
+
+		// Now to call mcms::set_config, we must schedule through `mcms::schedule_batch`
+		// We change config to remove a signer
+		setConfigData, err := serializeSetConfig(role, SignerConfig{
+			// Remove the last signer
+			Addresses:    signerAddresses[:len(signerAddresses)-1],
+			Groups:       signerGroups[:len(signerGroups)-1],
+			GroupQuorums: groupQuorums,
+			GroupParents: groupParents,
+		})
+		require.NoError(t, err)
+
+		scheduleTimelockOps := []TimelockOperation{
+			{
+				Target:       mcmsAccount,
+				ModuleName:   "mcms",
+				FunctionName: "timelock_update_min_delay",
+				Data:         updateMinDelayData,
+			},
+			{
+				Target:       mcmsAccount,
+				ModuleName:   "mcms",
+				FunctionName: "set_config",
+				Data:         setConfigData,
+			},
+		}
+		// ZERO_HASH (32 bytes of zeros)
+		predecessor := make([]byte, 32)
+		salt := []byte{}
+		delay := TEST_DELAY
+
+		rootMetadata := RootMetadata{
+			Role:                 role,
+			ChainID:              chainIdBig,
+			MultiSig:             mcmsAccount,
+			PreOpCount:           getPreOpCount(),
+			PostOpCount:          getPreOpCount() + 1, // We execute this all in one OP
+			OverridePreviousRoot: false,
+		}
+		op := timelockOpsToOp(scheduleTimelockOps, predecessor, salt, delay, role, chainIdBig, mcmsAccount, getNextNonce)
+
+		merkleTree, err := generateMerkleTree([]Op{op}, rootMetadata)
+		require.NoError(t, err)
+
+		setRootId := enqueueSetRoot(t, logger, merkleTree, txm, rootMetadata, proposerSigners, deployerAddress, deployerPublicKeyHex, mcmsAddress)
+		waitForTxmId(t, txm, setRootId, time.Second*30)
+
+		// The proper approach is to schedule all operations in a single execute call.
+		// Since timelockOpsToOps now creates a single Op that contains all operations,
+		// our merkle tree has just two leaves:
+		//   - Index 0: Root metadata hash
+		//   - Index 1: The single operation hash (containing all batched operations)
+
+		// Get the complete proof for leaf index 1 (our single operation containing all operations)
+		// This proof contains all sibling nodes needed to verify the path from leaf to root
+		proof := merkleTree.getProof(1)
+
+		// Calculate the hash of our single operation (for verification)
+		opHash := hashOp(&op)
+		logger.Debugw("Leaf hash for operation", "hash", hex.EncodeToString(opHash[:]))
+
+		// Verify that the proof is valid for our operation
+		require.True(t, merkleTree.verifyProof(proof, opHash), "Failed to verify merkle proof for the batched operation")
+
+		// Schedule all operations in a single execute call, passing the complete proof
+		txId := scheduleBatchOperationsAsDeployer(t, logger, txm, mcmsAccount, deployerAddress, deployerPublicKeyHex,
+			scheduleTimelockOps, predecessor, salt, delay, role, chainIdBig, op.Nonce, proof)
+		waitForTxmId(t, txm, txId, time.Second*30)
+
+		// Wait for test delay
+		time.Sleep(time.Duration(TEST_DELAY) * time.Second)
+
+		// Execute all operations in a single batch transaction
+		executeTimelockOps := []TimelockOperation{
+			{
+				Target:       mcmsAccount,
+				ModuleName:   "mcms",
+				FunctionName: "timelock_update_min_delay",
+				Data:         updateMinDelayData,
+			},
+			{
+				Target:       mcmsAccount,
+				ModuleName:   "mcms",
+				FunctionName: "set_config",
+				Data:         setConfigData,
+			},
+		}
+
+		// Execute all operations in a single batch call to execute_batch
+		txId = executeBatchOperations(t, txm, mcmsAddress, deployerAddress, deployerPublicKeyHex, executeTimelockOps, predecessor, salt)
+		waitForTxmId(t, txm, txId, time.Second*30)
+
+		// Get number of signers after set_config to 2 signers (3 initially)
+		postSetConfigData, postSetConfigErr := client.View(viewPayload)
+		require.NoError(t, postSetConfigErr)
+
+		// Assert that the removal of a signer was complete
+		configData = postSetConfigData[0].(map[string]interface{})
+		configSigners = configData["signers"].([]interface{})
+		require.Equal(t, len(proposerSigners)-1, len(configSigners))
+		logger.Debugw("postSetConfigData", "postSetConfigData", postSetConfigData)
+	})
 }
 
 func compileMcmsContract(t *testing.T, packageAddress aptos.AccountAddress, ownerAddress aptos.AccountAddress) ([]byte, [][]byte) {
@@ -732,6 +727,7 @@ func compileMcmsContract(t *testing.T, packageAddress aptos.AccountAddress, owne
 		"mcms_owner": ownerAddress,
 	}, []string{
 		"bcs_stream",
+		"params",
 		"mcms_account",
 		"mcms_registry",
 		"mcms_deployer",
@@ -753,6 +749,7 @@ func compileMcmsUserContract(t *testing.T, packageAddress, mcmsAddress aptos.Acc
 }
 
 type RootMetadata struct {
+	Role                 uint8
 	ChainID              *big.Int
 	MultiSig             aptos.AccountAddress
 	PreOpCount           uint64
@@ -761,13 +758,125 @@ type RootMetadata struct {
 }
 
 type Op struct {
-	ChainID    *big.Int
-	MultiSig   aptos.AccountAddress
-	Nonce      uint64
-	To         aptos.AccountAddress
-	ModuleName string
-	Function   string
-	Data       []byte
+	Role         uint8
+	ChainID      *big.Int
+	MultiSig     aptos.AccountAddress
+	Nonce        uint64
+	To           aptos.AccountAddress
+	ModuleName   string
+	FunctionName string
+	Data         []byte
+}
+
+func enqueueSetRoot(
+	t *testing.T, logger logger.Logger, merkleTree MerkleTree, txm *AptosTxm, rootMetadata RootMetadata,
+	signers []Signer, deployerAddress string, deployerPublicKeyHex string, mcmsAddress string,
+) string {
+	rootHash := merkleTree.getRoot()
+
+	// Set validUntil to be the current UTC timestamp + 1 day
+	validUntil := uint64(time.Now().UTC().Add(1 * 24 * time.Hour).Unix())
+
+	signedHash := calculateSignedHash(rootHash, validUntil)
+	signatures := generateSignatures(t, signers, signedHash)
+
+	// The first leaf is the metadata
+	metadataProof := merkleTree.getProof(0)
+
+	require.True(t, merkleTree.verifyProof(metadataProof, hashRootMetadata(rootMetadata)))
+	// log hashrootmetadata
+	logger.Debugw("rootMetadata", "rootMetadata", rootMetadata)
+	logger.Debugw("hashRootMetadata(rootMetadata)", "hashRootMetadata(rootMetadata)", hashRootMetadata(rootMetadata))
+
+	// Log all values needed for Move e2e test
+	logger.Debugw("============= BEGIN VALUES FOR MOVE E2E TEST =============")
+	logger.Debugw("Root Hash", "value", hex.EncodeToString(rootHash[:]))
+	logger.Debugw("Valid Until", "value", validUntil)
+	logger.Debugw("Signed Hash", "value", hex.EncodeToString(signedHash[:]))
+
+	signaturesHex := make([]string, len(signatures))
+	for i, sig := range signatures {
+		signaturesHex[i] = hex.EncodeToString(sig)
+	}
+	logger.Debugw("Signatures", "values", signaturesHex)
+
+	signerAddressesHex := make([]string, len(signers))
+	for i, signer := range signers {
+		signerAddressesHex[i] = hex.EncodeToString(signer.address)
+	}
+	logger.Debugw("Signer Addresses", "values", signerAddressesHex)
+
+	metadataProofHex := make([]string, len(metadataProof))
+	for i, p := range metadataProof {
+		metadataProofHex[i] = hex.EncodeToString(p[:])
+	}
+	logger.Debugw("Metadata Proof", "values", metadataProofHex)
+
+	// Log all leaves
+	leavesHex := make([]string, len(merkleTree))
+	for i := 0; i < len(merkleTree); i++ {
+		leavesHex[i] = hex.EncodeToString(merkleTree[i][:])
+	}
+	logger.Debugw("All Merkle Tree Nodes (including internal nodes)", "values", leavesHex)
+
+	// Log just the leaf nodes (metadata + ops)
+	leafNodesHex := make([]string, 0)
+	for i := 0; i < len(merkleTree) && i < int(rootMetadata.PostOpCount-rootMetadata.PreOpCount+1); i++ {
+		leafNodesHex = append(leafNodesHex, hex.EncodeToString(merkleTree[i][:]))
+	}
+	logger.Debugw("Leaf Nodes Only (metadata + ops)", "values", leafNodesHex)
+
+	// Log root metadata and its hash
+	metadataHash := hashRootMetadata(rootMetadata)
+	logger.Debugw("Root Metadata Hash", "value", hex.EncodeToString(metadataHash[:]))
+	logger.Debugw("Root Metadata Values",
+		"Role", rootMetadata.Role,
+		"ChainID", rootMetadata.ChainID,
+		"MultiSig", rootMetadata.MultiSig.String(),
+		"PreOpCount", rootMetadata.PreOpCount,
+		"PostOpCount", rootMetadata.PostOpCount,
+		"OverridePreviousRoot", rootMetadata.OverridePreviousRoot)
+
+	logger.Debugw("============= END VALUES FOR MOVE E2E TEST =============")
+
+	setRootId := uuid.New().String()
+
+	err := txm.Enqueue(
+		setRootId,
+		getSampleTxMetadata(),
+		deployerAddress,
+		deployerPublicKeyHex,
+		mcmsAddress+"::mcms::set_root",
+		[]string{},
+		[]string{
+			"u8",
+			"vector<u8>",
+			"u64",
+			"u256",
+			"address",
+			"u64",
+			"u64",
+			"bool",
+			"vector<vector<u8>>",
+			"vector<vector<u8>>",
+		},
+		[]any{
+			rootMetadata.Role,
+			rootHash,
+			validUntil,
+			rootMetadata.ChainID,
+			rootMetadata.MultiSig,
+			rootMetadata.PreOpCount,
+			rootMetadata.PostOpCount,
+			rootMetadata.OverridePreviousRoot,
+			metadataProof,
+			signatures,
+		},
+		/* simulateTx= */ true,
+	)
+	require.NoError(t, err)
+
+	return setRootId
 }
 
 func generateMerkleTree(ops []Op, rootMetadata RootMetadata) (MerkleTree, error) {
@@ -779,55 +888,34 @@ func generateMerkleTree(ops []Op, rootMetadata RootMetadata) (MerkleTree, error)
 	return newMerkleTree(leaves)
 }
 
-func hashRootMetadata(metadata RootMetadata) [32]byte {
+func hashRootMetadata(metadata RootMetadata) common.Hash {
 	MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA := crypto.Keccak256([]byte("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA_APTOS"))
+	ser := bcs.Serializer{}
+	ser.FixedBytes(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA)
+	ser.U8(metadata.Role)
+	ser.U256(*metadata.ChainID)
+	ser.Struct(&metadata.MultiSig)
+	ser.U64(metadata.PreOpCount)
+	ser.U64(metadata.PostOpCount)
+	ser.Bool(metadata.OverridePreviousRoot)
 
-	packed := []byte{}
-	packed = append(packed, MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA...)
-	packed = append(packed, common.LeftPadBytes(metadata.ChainID.Bytes(), 32)...)
-	packed = append(packed, metadata.MultiSig[:]...)
-	packed = append(packed, common.LeftPadBytes(new(big.Int).SetUint64(metadata.PreOpCount).Bytes(), 32)...)
-	packed = append(packed, common.LeftPadBytes(new(big.Int).SetUint64(metadata.PostOpCount).Bytes(), 32)...)
-	if metadata.OverridePreviousRoot {
-		packed = append(packed, common.LeftPadBytes([]byte{1}, 32)...)
-	} else {
-		packed = append(packed, common.LeftPadBytes([]byte{0}, 32)...)
-	}
-
-	hash := crypto.Keccak256(packed)
-	var result [32]byte
-	copy(result[:], hash)
-	return result
+	return crypto.Keccak256Hash(ser.ToBytes())
 }
 
-func hashOp(op *Op) [32]byte {
+func hashOp(op *Op) common.Hash {
 	MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP := crypto.Keccak256([]byte("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP_APTOS"))
+	ser := bcs.Serializer{}
+	ser.FixedBytes(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP)
+	ser.U8(op.Role)
+	ser.U256(*op.ChainID)
+	ser.Struct(&op.MultiSig)
+	ser.U64(op.Nonce)
+	ser.Struct(&op.To)
+	ser.WriteString(op.ModuleName)
+	ser.WriteString(op.FunctionName)
+	ser.WriteBytes(op.Data)
 
-	packed := []byte{}
-	packed = append(packed, MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP...)
-	packed = append(packed, common.LeftPadBytes(op.ChainID.Bytes(), 32)...)
-	packed = append(packed, op.MultiSig[:]...)
-	packed = append(packed, common.LeftPadBytes(new(big.Int).SetUint64(op.Nonce).Bytes(), 32)...)
-	packed = append(packed, op.To[:]...)
-
-	// Pack ModuleName with 64-byte left padding
-	moduleNamePadded := common.LeftPadBytes([]byte(op.ModuleName), 64)
-	packed = append(packed, moduleNamePadded...)
-
-	// Pack Function with 64-byte left padding
-	functionPadded := common.LeftPadBytes([]byte(op.Function), 64)
-	packed = append(packed, functionPadded...)
-
-	packed = append(packed, op.Data...)
-	padAmount := 32 - (len(op.Data) % 32)
-	for i := 0; i < padAmount; i++ {
-		packed = append(packed, 0)
-	}
-
-	hash := crypto.Keccak256(packed)
-	var result [32]byte
-	copy(result[:], hash)
-	return result
+	return crypto.Keccak256Hash(ser.ToBytes())
 }
 
 func hashPair(left, right [32]byte) [32]byte {
