@@ -7,7 +7,6 @@ module ccip::ocr3_base {
     use std::error;
     use std::event::{Self, EventHandle};
     use std::table::{Self, Table};
-    use std::vector;
 
     use ccip::auth;
 
@@ -205,20 +204,16 @@ module ccip::ocr3_base {
     ) {
         assert!(!has_duplicates(signers), error::invalid_argument(E_REPEATED_SIGNERS));
 
-        let validated_signers = vector::map_ref(
-            signers,
-            |signer| {
+        let validated_signers =
+            signers.map_ref(|signer| {
                 let maybe_validated_public_key =
                     ed25519::new_validated_public_key_from_bytes(*signer);
                 assert!(
                     maybe_validated_public_key.is_some(),
                     error::invalid_argument(E_COULD_NOT_VALIDATE_SIGNER_KEY)
                 );
-                ed25519::public_key_into_unvalidated(
-                    maybe_validated_public_key.extract()
-                )
-            }
-        );
+                ed25519::public_key_into_unvalidated(maybe_validated_public_key.extract())
+            });
 
         signer_oracles.upsert(ocr_plugin_type, validated_signers);
     }
@@ -338,25 +333,22 @@ module ccip::ocr3_base {
         hashed_report: vector<u8>,
         signatures: vector<vector<u8>>
     ) {
-        let seen = bit_vector::new(vector::length(signers));
-        vector::for_each_ref(
-            &signatures,
+        let seen = bit_vector::new(signers.length());
+        signatures.for_each_ref(
             |signature_bytes| {
                 let public_key =
                     ed25519::new_unvalidated_public_key_from_bytes(
-                        vector::slice(signature_bytes, 0, 32)
+                        signature_bytes.slice(0, 32)
                     );
-                let (exists, index) = vector::index_of(signers, &public_key);
+                let (exists, index) = signers.index_of(&public_key);
                 assert!(exists, error::invalid_argument(E_UNAUTHORIZED_SIGNER));
                 assert!(
-                    !bit_vector::is_index_set(&seen, index),
+                    !seen.is_index_set(index),
                     error::invalid_argument(E_NON_UNIQUE_SIGNATURES)
                 );
-                bit_vector::set(&mut seen, index);
+                seen.set(index);
                 let signature =
-                    ed25519::new_signature_from_bytes(
-                        vector::slice(signature_bytes, 32, 96)
-                    );
+                    ed25519::new_signature_from_bytes(signature_bytes.slice(32, 96));
 
                 let verified =
                     ed25519::signature_verify_strict(
@@ -386,6 +378,6 @@ module ccip::ocr3_base {
         let report_context_one =
             x"0000000000000000000000000000000000000000000000000000000000000009";
         let ocr_sequence_number = deserialize_sequence_bytes(report_context_one);
-        assert!(ocr_sequence_number == 9, 1);
+        assert!(ocr_sequence_number == 9);
     }
 }

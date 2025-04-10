@@ -1360,7 +1360,7 @@ module ccip::offramp {
             x"aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899";
 
         let message_hash = calculate_message_hash(&message, metadata_hash);
-        assert!(message_hash == expected_hash, 1);
+        assert!(message_hash == expected_hash);
     }
 
     #[test]
@@ -1381,8 +1381,8 @@ module ccip::offramp {
                 source_chain_selector + 1, dest_chain_selector, on_ramp
             );
 
-        assert!(metadata_hash == expected_hash, 1);
-        assert!(metadata_hash_alternate == expected_hash_alternate, 2);
+        assert!(metadata_hash == expected_hash);
+        assert!(metadata_hash_alternate == expected_hash_alternate);
     }
 
     #[test]

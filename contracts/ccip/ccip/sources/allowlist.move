@@ -125,11 +125,11 @@ module ccip::allowlist_test {
     fun init_empty_is_empty_and_disabled(owner: &signer) {
         let state = set_up_test(owner, vector::empty());
 
-        assert!(!allowlist::get_allowlist_enabled(&state), 1);
-        assert!(vector::is_empty(&allowlist::get_allowlist(&state)), 1);
+        assert!(!allowlist::get_allowlist_enabled(&state));
+        assert!(vector::is_empty(&allowlist::get_allowlist(&state)));
 
         // Any address is allowed when the allowlist is disabled
-        assert!(allowlist::is_allowed(&state, @0x1111111111111), 1);
+        assert!(allowlist::is_allowed(&state, @0x1111111111111));
 
         allowlist::destroy_allowlist(state);
     }
@@ -140,21 +140,15 @@ module ccip::allowlist_test {
 
         let state = set_up_test(owner, init_allowlist);
 
-        assert!(allowlist::get_allowlist_enabled(&state), 1);
-        assert!(vector::length(&allowlist::get_allowlist(&state)) == 2, 1);
+        assert!(allowlist::get_allowlist_enabled(&state));
+        assert!(vector::length(&allowlist::get_allowlist(&state)) == 2);
 
         // The given addresses are allowed
-        assert!(
-            allowlist::is_allowed(&state, init_allowlist[0]),
-            1
-        );
-        assert!(
-            allowlist::is_allowed(&state, init_allowlist[1]),
-            1
-        );
+        assert!(allowlist::is_allowed(&state, init_allowlist[0]));
+        assert!(allowlist::is_allowed(&state, init_allowlist[1]));
 
         // Other addresses are not allowed
-        assert!(!allowlist::is_allowed(&state, @0x3), 1);
+        assert!(!allowlist::is_allowed(&state, @0x3));
 
         allowlist::destroy_allowlist(state);
     }
@@ -176,11 +170,11 @@ module ccip::allowlist_test {
         let state = set_up_test(owner, vector::empty());
         allowlist::set_allowlist_enabled(&mut state, true);
 
-        assert!(vector::is_empty(&allowlist::get_allowlist(&state)), 1);
+        assert!(vector::is_empty(&allowlist::get_allowlist(&state)));
 
         allowlist::apply_allowlist_updates(&mut state, vector::empty(), vector::empty());
 
-        assert!(vector::is_empty(&allowlist::get_allowlist(&state)), 1);
+        assert!(vector::is_empty(&allowlist::get_allowlist(&state)));
 
         let adds = vector[@0x1, @0x2];
 
@@ -194,9 +188,9 @@ module ccip::allowlist_test {
 
         assert_remove_events_emitted(removes);
 
-        assert!(vector::length(&allowlist::get_allowlist(&state)) == 1, 1);
-        assert!(allowlist::is_allowed(&state, @0x2), 1);
-        assert!(!allowlist::is_allowed(&state, @0x1), 1);
+        assert!(vector::length(&allowlist::get_allowlist(&state)) == 1);
+        assert!(allowlist::is_allowed(&state, @0x2));
+        assert!(!allowlist::is_allowed(&state, @0x1));
 
         allowlist::destroy_allowlist(state);
     }
@@ -211,18 +205,18 @@ module ccip::allowlist_test {
 
         allowlist::apply_allowlist_updates(&mut state, vector::empty(), adds_and_removes);
 
-        assert!(vector::length(&allowlist::get_allowlist(&state)) == 1, 1);
-        assert!(allowlist::is_allowed(&state, account_to_allow), 1);
+        assert!(vector::length(&allowlist::get_allowlist(&state)) == 1);
+        assert!(allowlist::is_allowed(&state, account_to_allow));
 
         allowlist::apply_allowlist_updates(&mut state, adds_and_removes, adds_and_removes);
 
         // Since removes happen before adds, the account should still be allowed
-        assert!(allowlist::is_allowed(&state, account_to_allow), 1);
+        assert!(allowlist::is_allowed(&state, account_to_allow));
 
         assert_remove_events_emitted(adds_and_removes);
         // Events don't get purged after calling event::emitted_events so we'll have
         // both the first and the second add event in the emitted events
-        vector::push_back(&mut adds_and_removes, account_to_allow);
+        adds_and_removes.push_back(account_to_allow);
         assert_add_events_emitted(adds_and_removes);
 
         allowlist::destroy_allowlist(state);
@@ -239,14 +233,11 @@ module ccip::allowlist_test {
         let number_of_adds = vector::length(&expected);
 
         // Assert that exactly one event was emitted for each add
-        assert!(vector::length(&got) == number_of_adds, 1);
+        assert!(vector::length(&got) == number_of_adds);
 
         // Assert that the emitted events match the expected events
         for (i in 0..number_of_adds) {
-            assert!(
-                vector::borrow(&expected, i) == vector::borrow(&got, i),
-                1
-            );
+            assert!(vector::borrow(&expected, i) == vector::borrow(&got, i));
         }
     }
 
@@ -261,14 +252,11 @@ module ccip::allowlist_test {
         let number_of_adds = vector::length(&expected);
 
         // Assert that exactly one event was emitted for each add
-        assert!(vector::length(&got) == number_of_adds, 1);
+        assert!(vector::length(&got) == number_of_adds);
 
         // Assert that the emitted events match the expected events
         for (i in 0..number_of_adds) {
-            assert!(
-                vector::borrow(&expected, i) == vector::borrow(&got, i),
-                1
-            );
+            assert!(vector::borrow(&expected, i) == vector::borrow(&got, i));
         }
     }
 
