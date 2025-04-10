@@ -26,7 +26,7 @@ type TokenAdminRegistryInterface interface {
 	GetPools(opts *bind.CallOpts, localTokens []aptos.AccountAddress) ([]aptos.AccountAddress, error)
 	GetPool(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, error)
 	GetTokenConfig(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, aptos.AccountAddress, aptos.AccountAddress, error)
-	GetAllConfiguredTokens(opts *bind.CallOpts, startingBucketIndex uint64, startingVectorIndex uint64, maxCount uint64) ([]aptos.AccountAddress, *uint64, *uint64, error)
+	GetAllConfiguredTokens(opts *bind.CallOpts, startKey aptos.AccountAddress, maxCount uint64) ([]aptos.AccountAddress, aptos.AccountAddress, bool, error)
 	IsAdministrator(opts *bind.CallOpts, localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bool, error)
 
 	SetPool(opts *bind.TransactOpts, localToken aptos.AccountAddress, tokenPoolAddress aptos.AccountAddress) (*api.PendingTransaction, error)
@@ -42,7 +42,7 @@ type TokenAdminRegistryEncoder interface {
 	GetPools(localTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetPool(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetTokenConfig(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	GetAllConfiguredTokens(startingBucketIndex uint64, startingVectorIndex uint64, maxCount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetAllConfiguredTokens(startKey aptos.AccountAddress, maxCount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	IsAdministrator(localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	SetPool(localToken aptos.AccountAddress, tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TransferAdminRole(localToken aptos.AccountAddress, newAdmin aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -230,27 +230,27 @@ func (c TokenAdminRegistryContract) GetTokenConfig(opts *bind.CallOpts, localTok
 	return r0, r1, r2, nil
 }
 
-func (c TokenAdminRegistryContract) GetAllConfiguredTokens(opts *bind.CallOpts, startingBucketIndex uint64, startingVectorIndex uint64, maxCount uint64) ([]aptos.AccountAddress, *uint64, *uint64, error) {
-	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.GetAllConfiguredTokens(startingBucketIndex, startingVectorIndex, maxCount)
+func (c TokenAdminRegistryContract) GetAllConfiguredTokens(opts *bind.CallOpts, startKey aptos.AccountAddress, maxCount uint64) ([]aptos.AccountAddress, aptos.AccountAddress, bool, error) {
+	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.GetAllConfiguredTokens(startKey, maxCount)
 	if err != nil {
-		return *new([]aptos.AccountAddress), *new(*uint64), *new(*uint64), err
+		return *new([]aptos.AccountAddress), *new(aptos.AccountAddress), *new(bool), err
 	}
 
 	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return *new([]aptos.AccountAddress), *new(*uint64), *new(*uint64), err
+		return *new([]aptos.AccountAddress), *new(aptos.AccountAddress), *new(bool), err
 	}
 
 	var (
 		r0 []aptos.AccountAddress
-		r1 bind.StdOption[uint64]
-		r2 bind.StdOption[uint64]
+		r1 aptos.AccountAddress
+		r2 bool
 	)
 
 	if err := codec.DecodeAptosJsonArray(callData, &r0, &r1, &r2); err != nil {
-		return *new([]aptos.AccountAddress), *new(*uint64), *new(*uint64), err
+		return *new([]aptos.AccountAddress), *new(aptos.AccountAddress), *new(bool), err
 	}
-	return r0, r1.Value(), r2.Value(), nil
+	return r0, r1, r2, nil
 }
 
 func (c TokenAdminRegistryContract) IsAdministrator(opts *bind.CallOpts, localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bool, error) {
@@ -336,14 +336,12 @@ func (c tokenAdminRegistryEncoder) GetTokenConfig(localToken aptos.AccountAddres
 	})
 }
 
-func (c tokenAdminRegistryEncoder) GetAllConfiguredTokens(startingBucketIndex uint64, startingVectorIndex uint64, maxCount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c tokenAdminRegistryEncoder) GetAllConfiguredTokens(startKey aptos.AccountAddress, maxCount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("get_all_configured_tokens", nil, []string{
-		"u64",
-		"u64",
+		"address",
 		"u64",
 	}, []any{
-		startingBucketIndex,
-		startingVectorIndex,
+		startKey,
 		maxCount,
 	})
 }
