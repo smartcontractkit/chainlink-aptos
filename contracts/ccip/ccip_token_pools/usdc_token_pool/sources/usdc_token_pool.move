@@ -1,6 +1,7 @@
 module usdc_token_pool::usdc_token_pool {
     use std::account::{Self, SignerCapability};
     use std::error;
+    use std::from_bcs;
     use std::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef};
     use std::primary_fungible_store;
     use std::object::{Self, Object, ObjectCore};
@@ -300,8 +301,8 @@ module usdc_token_pool::usdc_token_pool {
         );
 
         let mint_recipient_bytes =
-            token_admin_registry::get_lock_or_burn_receiver(&input); // TODO mint_recipient
-        let mint_recipient = @0x404; // TODO mint_recipient
+            token_admin_registry::get_lock_or_burn_receiver(&input);
+        let mint_recipient = from_bcs::to_address(mint_recipient_bytes);
         let nonce =
             token_messenger::deposit_for_burn_with_caller(
                 &store_signer,
