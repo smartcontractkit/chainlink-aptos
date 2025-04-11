@@ -13,8 +13,9 @@ module usdc_token_pool::usdc_token_pool {
     use ccip::token_admin_registry;
     use ccip_token_pool::token_pool;
 
-    use token_messenger_minter::token_messenger;
+    use message_transmitter::message;
     use message_transmitter::message_transmitter;
+    use token_messenger_minter::token_messenger;
 
     const STORE_OBJECT_SEED: vector<u8> = b"CcipUSDCTokenPool";
 
@@ -309,11 +310,8 @@ module usdc_token_pool::usdc_token_pool {
                 mint_recipient,
                 remote_domain_info.allow_caller
             );
-        
-        let dest_pool_data = encode_dest_pool_data(
-            pool.local_domain_identifier,
-            nonce
-        );
+
+        let dest_pool_data = encode_dest_pool_data(pool.local_domain_identifier, nonce);
 
         // set the output for this lock or burn operation.
         token_admin_registry::set_lock_or_burn_output_v1(
@@ -345,10 +343,22 @@ module usdc_token_pool::usdc_token_pool {
 
         let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
 
-        let source_pool_data = token_admin_registry::get_release_or_mint_source_pool_data(&input);
-        let offchain_token_data = token_admin_registry::get_release_or_mint_offchain_token_data(&input);
+        let (source_domain_identifier, nonce) =
+            decode_dest_pool_data(
+                token_admin_registry::get_release_or_mint_source_pool_data(&input)
+            );
+        let offchain_token_data =
+            token_admin_registry::get_release_or_mint_offchain_token_data(&input);
 
-        let (message_bytes, attestation) = parse_message_and_attestation(offchain_token_data);
+        let (message_bytes, attestation) =
+            parse_message_and_attestation(offchain_token_data);
+
+        validate_message(
+            &message_bytes,
+            source_domain_identifier,
+            nonce,
+            pool.local_domain_identifier
+        );
 
         let receipt =
             message_transmitter::receive_message(
@@ -381,12 +391,51 @@ module usdc_token_pool::usdc_token_pool {
         (message, attestation)
     }
 
-    inline fun encode_dest_pool_data(local_domain_identifier: u32, nonce: u64): vector<u8> {
+    inline fun encode_dest_pool_data(
+        local_domain_identifier: u32, nonce: u64
+    ): vector<u8> {
         // This manually packs the values into a single slot, which mirrors EVM struct packing.
         let abi_encoded_data = ((nonce as u256) << 32) + (local_domain_identifier as u256);
         let dest_pool_data = vector[];
         eth_abi::encode_u256(&mut dest_pool_data, abi_encoded_data);
         dest_pool_data
+    }
+
+    inline fun decode_dest_pool_data(dest_pool_data: vector<u8>): (u32, u64) {
+        let stream = eth_abi::new_stream(dest_pool_data);
+        let abi_encoded_data = eth_abi::decode_u256(&mut stream);
+
+        let local_domain_identifier = abi_encoded_data as u32;
+        let nonce = (abi_encoded_data >> 32) as u64;
+
+        (local_domain_identifier, nonce)
+    }
+
+    inline fun validate_message(
+        usdc_message: &vector<u8>,
+        expected_source_domain: u32,
+        expected_nonce: u64,
+        expected_local_domain: u32
+    ) {
+        message::validate_message(usdc_message);
+        let source_domain = message::get_src_domain_id(usdc_message);
+        let nonce = message::get_nonce(usdc_message);
+        let destination_domain = message::get_destination_domain_id(usdc_message);
+
+        assert!(
+            source_domain == expected_source_domain,
+            error::invalid_argument(E_INVALID_ARGUMENTS)
+        );
+
+        assert!(
+            nonce == expected_nonce,
+            error::invalid_argument(E_INVALID_ARGUMENTS)
+        );
+
+        assert!(
+            destination_domain == expected_local_domain,
+            error::invalid_argument(E_INVALID_ARGUMENTS)
+        );
     }
 
     // ================================================================
