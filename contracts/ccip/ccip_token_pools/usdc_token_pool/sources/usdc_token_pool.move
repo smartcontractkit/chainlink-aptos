@@ -1,6 +1,7 @@
 module usdc_token_pool::usdc_token_pool {
     use std::account::{Self, SignerCapability};
     use std::error;
+    use std::event::{Self, EventHandle};
     use std::from_bcs;
     use std::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef};
     use std::primary_fungible_store;
@@ -23,7 +24,8 @@ module usdc_token_pool::usdc_token_pool {
     struct USDCTokenPoolDeployment has key {
         store_signer_cap: SignerCapability,
         ownable_state: ownable::OwnableState,
-        token_pool_state: token_pool::TokenPoolState
+        token_pool_state: token_pool::TokenPoolState,
+        domain_set_events: EventHandle<DomainsSet>
     }
 
     struct USDCTokenPool has key, store {
@@ -32,7 +34,8 @@ module usdc_token_pool::usdc_token_pool {
         token_pool_state: token_pool::TokenPoolState,
         chain_to_domain: SmartTable<u64, Domain>,
         local_domain_identifier: u32,
-        store_signer_address: address
+        store_signer_address: address,
+        domain_set_events: EventHandle<DomainsSet>
     }
 
     /// A domain is a USDC representation of a destination chain.
@@ -42,8 +45,16 @@ module usdc_token_pool::usdc_token_pool {
     /// For EVM dest pool version 1.6.1, this is the MessageTransmitterProxy of the destination chain.
     /// For EVM dest pool version 1.5.1, this is the destination chain's token pool.
     struct Domain has key, store, drop {
-        allow_caller: address, //  Address allowed to mint on the domain
+        allowed_caller: vector<u8>, //  Address allowed to mint on the domain
         domain_identifier: u32, // Unique domain ID
+        enabled: bool
+    }
+
+    #[event]
+    struct DomainsSet has store, drop {
+        allowed_caller: vector<u8>,
+        domain_identifier: u32,
+        remote_chain_selector: u64,
         enabled: bool
     }
 
@@ -101,7 +112,8 @@ module usdc_token_pool::usdc_token_pool {
                 ownable_state: ownable::new(publisher, signer::address_of(publisher)),
                 token_pool_state: token_pool::initialize(
                     publisher, @local_token, vector[]
-                )
+                ),
+                domain_set_events: account::new_event_handle(publisher),
             }
         );
     }
@@ -119,7 +131,7 @@ module usdc_token_pool::usdc_token_pool {
             error::invalid_argument(E_LOCAL_TOKEN_MISMATCH)
         );
 
-        let USDCTokenPoolDeployment { store_signer_cap, ownable_state, token_pool_state } =
+        let USDCTokenPoolDeployment { store_signer_cap, ownable_state, token_pool_state, domain_set_events } =
             move_from<USDCTokenPoolDeployment>(@usdc_token_pool);
 
         let store_signer = account::create_signer_with_capability(&store_signer_cap);
@@ -130,7 +142,8 @@ module usdc_token_pool::usdc_token_pool {
             chain_to_domain: smart_table::new(),
             local_domain_identifier: message_transmitter::local_domain(),
             store_signer_cap,
-            token_pool_state
+            token_pool_state,
+            domain_set_events
         };
 
         move_to(&store_signer, pool);
@@ -309,7 +322,7 @@ module usdc_token_pool::usdc_token_pool {
                 fa,
                 remote_domain_info.domain_identifier,
                 mint_recipient,
-                remote_domain_info.allow_caller
+                from_bcs::to_address(remote_domain_info.allowed_caller),
             );
 
         let dest_pool_data = encode_dest_pool_data(pool.local_domain_identifier, nonce);
@@ -447,7 +460,57 @@ module usdc_token_pool::usdc_token_pool {
     // |                      USDC Domains                            |
     // ================================================================
 
-    // TODO - add a function to add/remove a domain
+    public fun set_domains(
+        caller: &signer,
+        remote_chain_selectors: vector<u64>,
+        remote_domain_identifiers: vector<u32>,
+        allowed_remote_callers: vector<vector<u8>>,
+        enableds: vector<bool>
+    ) acquires USDCTokenPool {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+
+        let number_of_chains = remote_chain_selectors.length();
+
+        assert!(
+            number_of_chains == remote_domain_identifiers.length()
+                && number_of_chains == allowed_remote_callers.length()
+                && number_of_chains == enableds.length(),
+            error::invalid_argument(E_INVALID_ARGUMENTS)
+        );
+
+        for (i in 0..number_of_chains) {
+            let allowed_caller = allowed_remote_callers[i];
+            let domain_identifier = remote_domain_identifiers[i];
+            let remote_chain_selector = remote_chain_selectors[i];
+            let enabled = enableds[i];
+
+            assert!(
+                remote_chain_selector != 0,
+                error::invalid_argument(E_DOMAIN_ENABLED)
+            );
+
+            assert!(
+                allowed_caller.length() != 0,
+                error::invalid_argument(E_DOMAIN_NOT_FOUND)
+            );
+
+            pool.chain_to_domain.upsert(
+                remote_chain_selector,
+                Domain {
+                    allowed_caller,
+                    domain_identifier,
+                    enabled
+                }
+            );
+
+            event::emit(DomainsSet { allowed_caller, domain_identifier, remote_chain_selector, enabled });
+            event::emit_event(
+                &mut pool.domain_set_events,
+                DomainsSet { allowed_caller, domain_identifier, remote_chain_selector, enabled }
+            );
+        };
+    }
 
     // ================================================================
     // |                    Rate limit config                         |
