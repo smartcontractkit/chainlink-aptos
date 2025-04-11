@@ -67,11 +67,10 @@ module burn_mint_token_pool::burn_mint_token_pool {
         );
         let metadata = object::address_to_object<Metadata>(@local_token);
 
-
         // the name of this module. if incorrect, callbacks will fail to be registered and
         // register_pool will revert.
         let token_pool_module_name = b"burn_mint_token_pool";
-        
+
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints != @0x0) {
             mcms_registry::register_entrypoint(
