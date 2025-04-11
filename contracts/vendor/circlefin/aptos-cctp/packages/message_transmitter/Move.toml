@@ -1,0 +1,24 @@
+[package]
+name = "MessageTransmitter"
+version = "1.0.0"
+upgrade_policy = "compatible"
+
+[addresses]
+message_transmitter = "_"
+aptos_extensions = "_"
+deployer = "_"
+
+[dev-addresses]
+message_transmitter = "0xebe6e5b8db973b4c8f5c3fbe7f5802e7a823b7ae4b70e5b6b1ce978418e5dad5"
+aptos_extensions = "5ba1674a3ffa843ed88aa4a0a051b9a52f76459a8853e5cd62b22bcc488d2765"
+deployer = "c06c5aa31d28c27be8345770a83b48314b829039ec5a33b79265216c13c66071"
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-core.git"
+rev = "mainnet"
+subdir = "aptos-move/framework/aptos-framework"
+
+[dependencies.AptosExtensions]
+local = "../../../stablecoin-aptos/packages/aptos_extensions"
+
+[dev-dependencies]

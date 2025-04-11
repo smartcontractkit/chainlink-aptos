@@ -1,0 +1,34 @@
+[package]
+name = "TokenMessengerMinter"
+version = "1.0.0"
+upgrade_policy = "compatible"
+
+[addresses]
+message_transmitter = "_"
+token_messenger_minter = "_"
+aptos_extensions = "_"
+stablecoin = "_"
+deployer = "_"
+
+[dev-addresses]
+message_transmitter = "0xebe6e5b8db973b4c8f5c3fbe7f5802e7a823b7ae4b70e5b6b1ce978418e5dad5"
+token_messenger_minter = "0x4e0d4a160a8490565c7f61cd21531a320ccda0f55b9c7d20131b3717650db043"
+aptos_extensions = "5ba1674a3ffa843ed88aa4a0a051b9a52f76459a8853e5cd62b22bcc488d2765"
+stablecoin = "0xd59e6aa0af32155459919e5ed2792eecd8fedcac70f2bf59840431446ed36973"
+deployer = "c06c5aa31d28c27be8345770a83b48314b829039ec5a33b79265216c13c66071"
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-core.git"
+rev = "mainnet"
+subdir = "aptos-move/framework/aptos-framework"
+
+[dependencies.AptosExtensions]
+local = "../../../stablecoin-aptos/packages/aptos_extensions"
+
+[dependencies.MessageTransmitter]
+local = "../message_transmitter"
+
+[dependencies.Stablecoin]
+local = "../../../stablecoin-aptos/packages/stablecoin"
+
+[dev-dependencies]
