@@ -5,6 +5,7 @@ module usdc_token_pool::usdc_token_pool {
     use std::primary_fungible_store;
     use std::object::{Self, Object, ObjectCore};
     use std::signer;
+    use std::smart_table::{Self, SmartTable};
     use std::string::{Self, String};
     use aptos_framework::fungible_asset::{BurnRef, MintRef};
 
@@ -27,9 +28,22 @@ module usdc_token_pool::usdc_token_pool {
         store_signer_cap: SignerCapability,
         ownable_state: ownable::OwnableState,
         token_pool_state: token_pool::TokenPoolState,
+        chain_to_domain: SmartTable<u64, Domain>,
         store_signer_address: address,
         burn_ref: BurnRef,
         mint_ref: MintRef
+    }
+
+    /// A domain is a USDC representation of a destination chain.
+    /// @dev Zero is a valid domain identifier.
+    /// @dev The address to mint on the destination chain is the corresponding USDC pool.
+    /// @dev The allowedCaller represents the contract authorized to call receiveMessage on the destination CCTP message transmitter.
+    /// For EVM dest pool version 1.6.1, this is the MessageTransmitterProxy of the destination chain.
+    /// For EVM dest pool version 1.5.1, this is the destination chain's token pool.
+    struct Domain has key, store, drop {
+        allow_caller: address, //  Address allowed to mint on the domain
+        domain_identifier: u32, // Unique domain ID
+        enabled: bool
     }
 
     const E_NOT_PUBLISHER: u64 = 1;
@@ -37,6 +51,8 @@ module usdc_token_pool::usdc_token_pool {
     const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
     const E_LOCAL_TOKEN_MISMATCH: u64 = 4;
     const E_INVALID_ARGUMENTS: u64 = 5;
+    const E_DOMAIN_NOT_FOUND: u64 = 6;
+    const E_DOMAIN_ENABLED: u64 = 6;
 
     // ================================================================
     // |                             Init                             |
@@ -107,17 +123,15 @@ module usdc_token_pool::usdc_token_pool {
             error::invalid_argument(E_LOCAL_TOKEN_MISMATCH)
         );
 
-        let USDCTokenPoolDeployment {
-            store_signer_cap,
-            ownable_state,
-            token_pool_state
-        } = move_from<USDCTokenPoolDeployment>(@usdc_token_pool);
+        let USDCTokenPoolDeployment { store_signer_cap, ownable_state, token_pool_state } =
+            move_from<USDCTokenPoolDeployment>(@usdc_token_pool);
 
         let store_signer = account::create_signer_with_capability(&store_signer_cap);
 
         let pool = USDCTokenPool {
             ownable_state,
             store_signer_address: signer::address_of(&store_signer),
+            chain_to_domain: smart_table::new(),
             store_signer_cap,
             token_pool_state,
             burn_ref,
@@ -277,12 +291,31 @@ module usdc_token_pool::usdc_token_pool {
 
         let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
 
+        let remote_chain_selector =
+            token_admin_registry::get_lock_or_burn_remote_chain_selector(&input);
+        assert!(
+            smart_table::contains(&pool.chain_to_domain, remote_chain_selector),
+            error::invalid_argument(E_DOMAIN_NOT_FOUND)
+        );
 
-        let domain :u32 = 12; // TODO domains
-        let _mint_recipient =
+        let remote_domain_info = pool.chain_to_domain.borrow(remote_chain_selector);
+
+        assert!(
+            remote_domain_info.enabled,
+            error::invalid_argument(E_DOMAIN_ENABLED)
+        );
+
+        let mint_recipient_bytes =
             token_admin_registry::get_lock_or_burn_receiver(&input); // TODO mint_recipient
-        let destination_caller = @0x003; // TODO Remote pool
-        let nonce = token_messenger::deposit_for_burn_with_caller(&store_signer, fa, domain, @0x002, destination_caller);
+        let mint_recipient = @0x404; // TODO mint_recipient
+        let nonce =
+            token_messenger::deposit_for_burn_with_caller(
+                &store_signer,
+                fa,
+                remote_domain_info.domain_identifier,
+                mint_recipient,
+                remote_domain_info.allow_caller
+            );
 
         // USDC Pools use the nonce as dest pool data
         let dest_pool_data = vector[];
@@ -350,6 +383,10 @@ module usdc_token_pool::usdc_token_pool {
         // return the withdrawn fungible asset.
         fa
     }
+
+    // ================================================================
+    // |                      USDC Domains                            |
+    // ================================================================
 
     // ================================================================
     // |                    Rate limit config                         |
@@ -440,9 +477,7 @@ module usdc_token_pool::usdc_token_pool {
             let usdc_token_pool_object =
                 object::address_to_object<ObjectCore>(@usdc_token_pool);
             if (caller_address == object::owner(usdc_token_pool_object)
-                || caller_address == object::root_owner(usdc_token_pool_object)) {
-                return
-            };
+                || caller_address == object::root_owner(usdc_token_pool_object)) { return };
         };
 
         abort error::permission_denied(E_NOT_PUBLISHER)
