@@ -39,8 +39,6 @@ ChainlinkCCIP = { local = "../../ccip" }
 CCIPTokenPool = { local = "../token_pool" }
 
 # Circle imports
-#AptosExtensions = { local = "../../../vendor/circlefin/stablecoin-aptos/packages/aptos_extensions" }
-#Stablecoin = { local = "../../../vendor/circlefin/stablecoin-aptos/packages/stablecoin" }
 MessageTransmitter = { local = "../../../vendor/circlefin/aptos-cctp/packages/message_transmitter" }
 TokenMessengerMinter = { local = "../../../vendor/circlefin/aptos-cctp/packages/token_messenger_minter" }
 

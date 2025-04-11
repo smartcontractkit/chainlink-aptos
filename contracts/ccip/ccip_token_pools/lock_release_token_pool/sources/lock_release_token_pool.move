@@ -26,20 +26,10 @@ module lock_release_token_pool::lock_release_token_pool {
         store_signer_address: address
     }
 
-    struct RemoteChainConfig has store, drop, copy {
-        remote_token_address: vector<u8>,
-        remote_pools: vector<vector<u8>>
-    }
-
     const E_NOT_PUBLISHER: u64 = 1;
     const E_ALREADY_INITIALIZED: u64 = 2;
     const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
-    const E_UNKNOWN_FUNGIBLE_ASSET: u64 = 4;
-    const E_LOCAL_TOKEN_MISMATCH: u64 = 5;
-    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 6;
-    const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 7;
-    const E_INVALID_ENCODED_AMOUNT: u64 = 8;
-    const E_INVALID_ARGUMENTS: u64 = 9;
+    const E_INVALID_ARGUMENTS: u64 = 4;
 
     // ================================================================
     // |                             Init                             |
