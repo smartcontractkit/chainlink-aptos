@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type ReceiverRegistry interface {
+type ReceiverRegistryInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 
 	// Encoder returns the encoder implementation of this module.
@@ -35,7 +35,7 @@ type ReceiverRegistryEncoder interface {
 
 const FunctionInfo = `[{"package":"ccip","module":"receiver_registry","name":"finish_receive","parameters":[{"name":"receiver_address","type":"address"}]}]`
 
-func NewReceiverRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) ReceiverRegistry {
+func NewReceiverRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) ReceiverRegistryInterface {
 	contract := bind.NewBoundContract(address, "ccip", "receiver_registry", client)
 	return ReceiverRegistryContract{
 		BoundContract:           contract,
@@ -62,7 +62,7 @@ type ReceiverRegistryContract struct {
 	receiverRegistryEncoder
 }
 
-var _ ReceiverRegistry = ReceiverRegistryContract{}
+var _ ReceiverRegistryInterface = ReceiverRegistryContract{}
 
 func (c ReceiverRegistryContract) Encoder() ReceiverRegistryEncoder {
 	return c.receiverRegistryEncoder

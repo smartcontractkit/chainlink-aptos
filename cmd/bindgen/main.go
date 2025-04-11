@@ -68,12 +68,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	pkg, mod, err := parse.PackageModule(fileBytes)
+	pkg, mod, moduleContent, err := parse.PackageModule(fileBytes)
 	if err != nil {
 		panic(err)
 	}
 
-	funcs, err := parse.Functions(fileBytes)
+	funcs, err := parse.Functions([]byte(moduleContent))
 	if err != nil {
 		panic(err)
 	}
@@ -82,7 +82,7 @@ func main() {
 		log.Println(i, viewFunc)
 	}
 	log.Println("----")
-	structs, err := parse.Structs(fileBytes)
+	structs, err := parse.Structs([]byte(moduleContent))
 	if err != nil {
 		panic(err)
 	}

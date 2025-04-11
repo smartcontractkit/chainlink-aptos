@@ -13,7 +13,7 @@ import (
 type CCIPDummyReceiver interface {
 	Address() aptos.AccountAddress
 
-	DummyReceiver() module_dummy_receiver.DummyReceiver
+	DummyReceiver() module_dummy_receiver.DummyReceiverInterface
 }
 
 var _ CCIPDummyReceiver = CCIPDummyReceiverContract{}
@@ -21,14 +21,14 @@ var _ CCIPDummyReceiver = CCIPDummyReceiverContract{}
 type CCIPDummyReceiverContract struct {
 	address aptos.AccountAddress
 
-	dummyReceiver module_dummy_receiver.DummyReceiver
+	dummyReceiver module_dummy_receiver.DummyReceiverInterface
 }
 
 func (C CCIPDummyReceiverContract) Address() aptos.AccountAddress {
 	return C.address
 }
 
-func (C CCIPDummyReceiverContract) DummyReceiver() module_dummy_receiver.DummyReceiver {
+func (C CCIPDummyReceiverContract) DummyReceiver() module_dummy_receiver.DummyReceiverInterface {
 	return C.dummyReceiver
 }
 
@@ -59,7 +59,7 @@ func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIPDummyRe
 func DeployToObject(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
-	ccipAddress aptos.AccountAddress,
+	ccipAddress,
 	mcmsAddress aptos.AccountAddress,
 ) (aptos.AccountAddress, *api.PendingTransaction, CCIPDummyReceiver, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
@@ -69,7 +69,7 @@ func DeployToObject(
 	}
 	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.CCIPDummyReceiver, namedAddresses)
 	if err != nil {
-		return aptos.AccountAddress{}, nil, CCIPDummyReceiverContract{}, err
+		return aptos.AccountAddress{}, nil, nil, err
 	}
 	return address, tx, Bind(address, client), nil
 }

@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type TokenAdminRegistry interface {
+type TokenAdminRegistryInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	GetPools(opts *bind.CallOpts, localTokens []aptos.AccountAddress) ([]aptos.AccountAddress, error)
 	GetPool(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, error)
@@ -56,7 +56,7 @@ type TokenAdminRegistryEncoder interface {
 
 const FunctionInfo = `[{"package":"ccip","module":"token_admin_registry","name":"accept_admin_role","parameters":[{"name":"local_token","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"assert_can_register","parameters":[{"name":"registry_owner_address","type":"address"},{"name":"token_pool_address","type":"address"},{"name":"fungible_asset_metadata","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"finish_lock_or_burn","parameters":[{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"finish_release_or_mint","parameters":[{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"set_pool","parameters":[{"name":"local_token","type":"address"},{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"start_lock_or_burn","parameters":[{"name":"token_pool_address","type":"address"},{"name":"sender","type":"address"},{"name":"remote_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"token_admin_registry","name":"transfer_admin_role","parameters":[{"name":"local_token","type":"address"},{"name":"new_admin","type":"address"}]}]`
 
-func NewTokenAdminRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) TokenAdminRegistry {
+func NewTokenAdminRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) TokenAdminRegistryInterface {
 	contract := bind.NewBoundContract(address, "ccip", "token_admin_registry", client)
 	return TokenAdminRegistryContract{
 		BoundContract:             contract,
@@ -136,7 +136,7 @@ type TokenAdminRegistryContract struct {
 	tokenAdminRegistryEncoder
 }
 
-var _ TokenAdminRegistry = TokenAdminRegistryContract{}
+var _ TokenAdminRegistryInterface = TokenAdminRegistryContract{}
 
 func (c TokenAdminRegistryContract) Encoder() TokenAdminRegistryEncoder {
 	return c.tokenAdminRegistryEncoder

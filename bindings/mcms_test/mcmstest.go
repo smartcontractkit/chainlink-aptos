@@ -13,7 +13,7 @@ import (
 type MCMSTest interface {
 	Address() aptos.AccountAddress
 
-	MCMSUser() module_mcms_user.MCMSUser
+	MCMSUser() module_mcms_user.MCMSUserInterface
 }
 
 var _ MCMSTest = MCMSTestContract{}
@@ -21,14 +21,14 @@ var _ MCMSTest = MCMSTestContract{}
 type MCMSTestContract struct {
 	address aptos.AccountAddress
 
-	mcmsUser module_mcms_user.MCMSUser
+	mcmsUser module_mcms_user.MCMSUserInterface
 }
 
 func (M MCMSTestContract) Address() aptos.AccountAddress {
 	return M.address
 }
 
-func (M MCMSTestContract) MCMSUser() module_mcms_user.MCMSUser {
+func (M MCMSTestContract) MCMSUser() module_mcms_user.MCMSUserInterface {
 	return M.mcmsUser
 }
 

@@ -4,12 +4,16 @@ module lock_release_token_pool::lock_release_token_pool {
     use std::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef};
     use std::primary_fungible_store;
     use std::object::{Self, Object, ObjectCore};
+    use std::option;
     use std::signer;
     use std::string::{Self, String};
 
     use ccip::ownable;
     use ccip::token_admin_registry;
     use ccip_token_pool::token_pool;
+
+    use mcms::mcms_registry;
+    use mcms::bcs_stream;
 
     const STORE_OBJECT_SEED: vector<u8> = b"CcipLockReleaseTokenPool";
 
@@ -40,6 +44,7 @@ module lock_release_token_pool::lock_release_token_pool {
     const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 7;
     const E_INVALID_ENCODED_AMOUNT: u64 = 8;
     const E_INVALID_ARGUMENTS: u64 = 9;
+    const E_UNKNOWN_FUNCTION: u64 = 10;
 
     // ================================================================
     // |                             Init                             |
@@ -62,6 +67,13 @@ module lock_release_token_pool::lock_release_token_pool {
         // the name of this module. if incorrect, callbacks will fail to be registered and
         // register_pool will revert.
         let token_pool_module_name = b"lock_release_token_pool";
+
+        // Register the entrypoint with mcms
+        if (@mcms_register_entrypoints != @0x0) {
+            mcms_registry::register_entrypoint(
+                publisher, string::utf8(token_pool_module_name), McmsCallback {}
+            );
+        };
 
         token_admin_registry::register_pool(
             publisher,
@@ -450,5 +462,134 @@ module lock_release_token_pool::lock_release_token_pool {
     public entry fun accept_ownership(caller: &signer) acquires LockReleaseTokenPool {
         let pool = borrow_pool_mut();
         ownable::accept_ownership(signer::address_of(caller), &mut pool.ownable_state)
+    }
+
+    // ================================================================
+    // |                      MCMS entrypoint                         |
+    // ================================================================
+
+    struct McmsCallback has drop {}
+
+    public fun mcms_entrypoint<T: key>(
+        _metadata: object::Object<T>
+    ): option::Option<u128> acquires LockReleaseTokenPool {
+        let (caller, function, data) =
+            mcms_registry::get_callback_params(@lock_release_token_pool, McmsCallback {});
+
+        let function_bytes = *function.bytes();
+        let stream = bcs_stream::new(data);
+
+        if (function_bytes == b"add_remote_pool") {
+            let remote_chain_selector = bcs_stream::deserialize_u64(&mut stream);
+            let remote_pool_address = bcs_stream::deserialize_vector_u8(&mut stream);
+            add_remote_pool(&caller, remote_chain_selector, remote_pool_address);
+        } else if (function_bytes == b"remove_remote_pool") {
+            let remote_chain_selector = bcs_stream::deserialize_u64(&mut stream);
+            let remote_pool_address = bcs_stream::deserialize_vector_u8(&mut stream);
+            remove_remote_pool(&caller, remote_chain_selector, remote_pool_address);
+        } else if (function_bytes == b"apply_chain_updates") {
+            let remote_chain_selectors_to_remove =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let remote_chain_selectors_to_add =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let remote_pool_addresses_to_add =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_vector(
+                        stream, |stream| bcs_stream::deserialize_vector_u8(stream)
+                    )
+                );
+            let remote_token_addresses_to_add =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
+                );
+            apply_chain_updates(
+                &caller,
+                remote_chain_selectors_to_remove,
+                remote_chain_selectors_to_add,
+                remote_pool_addresses_to_add,
+                remote_token_addresses_to_add
+            );
+        } else if (function_bytes == b"apply_allowlist_updates") {
+            let removes =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
+                );
+            let adds =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
+                );
+            apply_allowlist_updates(&caller, removes, adds);
+        } else if (function_bytes == b"set_chain_rate_limiter_configs") {
+            let remote_chain_selectors =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let outbound_is_enableds =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_bool(stream)
+                );
+            let outbound_capacities =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let outbound_rates =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let inbound_is_enableds =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_bool(stream)
+                );
+            let inbound_capacities =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let inbound_rates =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            set_chain_rate_limiter_configs(
+                &caller,
+                remote_chain_selectors,
+                outbound_is_enableds,
+                outbound_capacities,
+                outbound_rates,
+                inbound_is_enableds,
+                inbound_capacities,
+                inbound_rates
+            );
+        } else if (function_bytes == b"set_chain_rate_limiter_config") {
+            let remote_chain_selector = bcs_stream::deserialize_u64(&mut stream);
+            let outbound_is_enabled = bcs_stream::deserialize_bool(&mut stream);
+            let outbound_capacity = bcs_stream::deserialize_u64(&mut stream);
+            let outbound_rate = bcs_stream::deserialize_u64(&mut stream);
+            let inbound_is_enabled = bcs_stream::deserialize_bool(&mut stream);
+            let inbound_capacity = bcs_stream::deserialize_u64(&mut stream);
+            let inbound_rate = bcs_stream::deserialize_u64(&mut stream);
+            set_chain_rate_limiter_config(
+                &caller,
+                remote_chain_selector,
+                outbound_is_enabled,
+                outbound_capacity,
+                outbound_rate,
+                inbound_is_enabled,
+                inbound_capacity,
+                inbound_rate
+            );
+        } else if (function_bytes == b"transfer_ownership") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            transfer_ownership(&caller, to);
+        } else if (function_bytes == b"accept_ownership") {
+            accept_ownership(&caller);
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_FUNCTION)
+        };
+
+        option::none()
     }
 }

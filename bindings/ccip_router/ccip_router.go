@@ -13,7 +13,7 @@ import (
 type CCIPRouter interface {
 	Address() aptos.AccountAddress
 
-	Router() module_router.Router
+	Router() module_router.RouterInterface
 }
 
 var _ CCIPRouter = CCIPRouterContract{}
@@ -21,14 +21,14 @@ var _ CCIPRouter = CCIPRouterContract{}
 type CCIPRouterContract struct {
 	address aptos.AccountAddress
 
-	router module_router.Router
+	router module_router.RouterInterface
 }
 
 func (C CCIPRouterContract) Address() aptos.AccountAddress {
 	return C.address
 }
 
-func (C CCIPRouterContract) Router() module_router.Router {
+func (C CCIPRouterContract) Router() module_router.RouterInterface {
 	return C.router
 }
 
@@ -40,12 +40,15 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 	module_router.FunctionInfo,
 )
 
-func Compile(ccipAddress, mcmsAddress aptos.AccountAddress) (compile.CompiledPackage, error) {
+func Compile(ccipAddress, mcmsAddress aptos.AccountAddress, registerMCMSEntrypoints bool) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
 		"ccip_router":               ccipAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
+	}
+	if registerMCMSEntrypoints {
+		namedAddresses["mcms_register_entrypoints"] = ccipAddress
 	}
 	// Compile using CLI
 	return compile.CompilePackage(contracts.CCIPRouter, namedAddresses)
@@ -65,7 +68,6 @@ func DeployToExistingObject(
 	client aptos.AptosRpcClient,
 	objectAddress, ccipAddress, mcmsAddress aptos.AccountAddress,
 ) (*api.PendingTransaction, CCIPRouter, error) {
-	// no need for mcms addresses since the router does not interact with mcms directly.
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
 		"mcms":                      mcmsAddress,
@@ -73,7 +75,7 @@ func DeployToExistingObject(
 	}
 	tx, err := bind.UpgradePackageToObject(auth, client, contracts.CCIPRouter, namedAddresses, objectAddress)
 	if err != nil {
-		return nil, CCIPRouterContract{}, err
+		return nil, nil, err
 	}
 	return tx, Bind(objectAddress, client), nil
 }

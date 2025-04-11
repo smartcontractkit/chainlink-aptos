@@ -16,11 +16,11 @@ import (
 
 type MCMS interface {
 	Address() aptos.AccountAddress
-	MCMS() module_mcms.MCMS
-	MCMSAccount() module_mcms_account.MCMSAccount
-	MCMSDeployer() module_mcms_deployer.MCMSDeployer
-	MCMSExecutor() module_mcms_executor.MCMSExecutor
-	MCMSRegistry() module_mcms_registry.MCMSRegistry
+	MCMS() module_mcms.MCMSInterface
+	MCMSAccount() module_mcms_account.MCMSAccountInterface
+	MCMSDeployer() module_mcms_deployer.MCMSDeployerInterface
+	MCMSExecutor() module_mcms_executor.MCMSExecutorInterface
+	MCMSRegistry() module_mcms_registry.MCMSRegistryInterface
 }
 
 var _ MCMS = MCMSContract{}
@@ -28,34 +28,34 @@ var _ MCMS = MCMSContract{}
 type MCMSContract struct {
 	address aptos.AccountAddress
 
-	mcms         module_mcms.MCMS
-	mcmsAccount  module_mcms_account.MCMSAccount
-	mcmsDeployer module_mcms_deployer.MCMSDeployer
-	mcmsExecutor module_mcms_executor.MCMSExecutor
-	mcmsRegistry module_mcms_registry.MCMSRegistry
+	mcms         module_mcms.MCMSInterface
+	mcmsAccount  module_mcms_account.MCMSAccountInterface
+	mcmsDeployer module_mcms_deployer.MCMSDeployerInterface
+	mcmsExecutor module_mcms_executor.MCMSExecutorInterface
+	mcmsRegistry module_mcms_registry.MCMSRegistryInterface
 }
 
 func (M MCMSContract) Address() aptos.AccountAddress {
 	return M.address
 }
 
-func (M MCMSContract) MCMS() module_mcms.MCMS {
+func (M MCMSContract) MCMS() module_mcms.MCMSInterface {
 	return M.mcms
 }
 
-func (M MCMSContract) MCMSAccount() module_mcms_account.MCMSAccount {
+func (M MCMSContract) MCMSAccount() module_mcms_account.MCMSAccountInterface {
 	return M.mcmsAccount
 }
 
-func (M MCMSContract) MCMSDeployer() module_mcms_deployer.MCMSDeployer {
+func (M MCMSContract) MCMSDeployer() module_mcms_deployer.MCMSDeployerInterface {
 	return M.mcmsDeployer
 }
 
-func (M MCMSContract) MCMSExecutor() module_mcms_executor.MCMSExecutor {
+func (M MCMSContract) MCMSExecutor() module_mcms_executor.MCMSExecutorInterface {
 	return M.mcmsExecutor
 }
 
-func (M MCMSContract) MCMSRegistry() module_mcms_registry.MCMSRegistry {
+func (M MCMSContract) MCMSRegistry() module_mcms_registry.MCMSRegistryInterface {
 	return M.mcmsRegistry
 }
 

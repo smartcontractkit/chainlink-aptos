@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type Auth interface {
+type AuthInterface interface {
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
 
 	TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
@@ -45,7 +45,7 @@ type AuthEncoder interface {
 
 const FunctionInfo = `[{"package":"ccip","module":"auth","name":"accept_ownership","parameters":null},{"package":"ccip","module":"auth","name":"assert_is_router","parameters":[{"name":"caller","type":"address"}]},{"package":"ccip","module":"auth","name":"assert_only_owner","parameters":[{"name":"caller","type":"address"}]},{"package":"ccip","module":"auth","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"ccip","module":"auth","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"auth","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
 
-func NewAuth(address aptos.AccountAddress, client aptos.AptosRpcClient) Auth {
+func NewAuth(address aptos.AccountAddress, client aptos.AptosRpcClient) AuthInterface {
 	contract := bind.NewBoundContract(address, "ccip", "auth", client)
 	return AuthContract{
 		BoundContract: contract,
@@ -67,7 +67,7 @@ type AuthContract struct {
 	authEncoder
 }
 
-var _ Auth = AuthContract{}
+var _ AuthInterface = AuthContract{}
 
 func (c AuthContract) Encoder() AuthEncoder {
 	return c.authEncoder
