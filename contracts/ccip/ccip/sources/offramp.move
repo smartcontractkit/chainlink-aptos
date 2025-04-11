@@ -3,7 +3,7 @@ module ccip::offramp {
     use std::aptos_hash;
     use std::error;
     use std::event::{Self, EventHandle};
-    use std::fungible_asset;
+    use std::fungible_asset::{Self, Metadata};
     use std::object;
     use std::option::{Self, Option};
     use std::primary_fungible_store;
@@ -221,10 +221,11 @@ module ccip::offramp {
     const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 18;
     const E_INVALID_ENCODED_AMOUNT: u64 = 19;
     const E_CURSED_BY_RMN: u64 = 20;
-    const E_FUNGIBLE_ASSET_AMOUNT_MISMATCH: u64 = 21;
-    const E_SIGNATURE_VERIFICATION_REQUIRED_IN_COMMIT_PLUGIN: u64 = 22;
-    const E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN: u64 = 23;
-    const E_UNKNOWN_FUNCTION: u64 = 24;
+    const E_FUNGIBLE_ASSET_TYPE_MISMATCH: u64 = 21;
+    const E_FUNGIBLE_ASSET_AMOUNT_MISMATCH: u64 = 22;
+    const E_SIGNATURE_VERIFICATION_REQUIRED_IN_COMMIT_PLUGIN: u64 = 23;
+    const E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN: u64 = 24;
+    const E_UNKNOWN_FUNCTION: u64 = 25;
 
     #[view]
     public fun type_and_version(): String {
@@ -841,6 +842,10 @@ module ccip::offramp {
         let source_amount = token_transfer.amount;
         let source_pool_data = token_transfer.extra_data;
 
+        let local_token_metadata = object::address_to_object<Metadata>(local_token);
+        let before_balance =
+            primary_fungible_store::balance(receiver, local_token_metadata);
+
         let (fa, local_amount) =
             token_admin_dispatcher::dispatch_release_or_mint(
                 token_pool_address,
@@ -854,13 +859,23 @@ module ccip::offramp {
                 *current_offchain_token_data
             );
 
-        // check that the returned amount in the fungible asset is exactly `local_amount`.
+        let fa_metadata = fungible_asset::asset_metadata(&fa);
         assert!(
-            fungible_asset::amount(&fa) == local_amount,
-            error::invalid_state(E_FUNGIBLE_ASSET_AMOUNT_MISMATCH)
+            local_token_metadata == fa_metadata,
+            error::invalid_state(E_FUNGIBLE_ASSET_TYPE_MISMATCH)
         );
 
         primary_fungible_store::deposit(receiver, fa);
+
+        let after_balance =
+            primary_fungible_store::balance(receiver, local_token_metadata);
+
+        // check that the amount deposited to the user's primary fungible store is exactly `local_amount`
+        assert!(
+            after_balance > before_balance
+                && (after_balance - before_balance) == local_amount,
+            error::invalid_state(E_FUNGIBLE_ASSET_AMOUNT_MISMATCH)
+        );
 
         (local_token, local_amount)
     }
