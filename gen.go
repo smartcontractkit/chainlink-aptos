@@ -19,3 +19,7 @@ package aptos
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/mcms/mcms/sources/mcms_registry.move --output ./bindings/mcms/mcms_registry
 
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/mcms/mcms_test/sources/mcms_user.move --output ./bindings/mcms_test/mcms_user
+
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip_token_pools/burn_mint_token_pool/sources/burn_mint_token_pool.move --output ./bindings/ccip/burn_mint_token_pool
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip_token_pools/lock_release_token_pool/sources/lock_release_token_pool.move --output ./bindings/ccip/lock_release_token_pool
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip_token_pools/usdc_token_pool/sources/usdc_token_pool.move --output ./bindings/ccip/usdc_token_pool
