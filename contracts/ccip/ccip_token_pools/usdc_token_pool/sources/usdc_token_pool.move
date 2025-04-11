@@ -113,7 +113,7 @@ module usdc_token_pool::usdc_token_pool {
                 token_pool_state: token_pool::initialize(
                     publisher, @local_token, vector[]
                 ),
-                domain_set_events: account::new_event_handle(publisher),
+                domain_set_events: account::new_event_handle(publisher)
             }
         );
     }
@@ -131,8 +131,12 @@ module usdc_token_pool::usdc_token_pool {
             error::invalid_argument(E_LOCAL_TOKEN_MISMATCH)
         );
 
-        let USDCTokenPoolDeployment { store_signer_cap, ownable_state, token_pool_state, domain_set_events } =
-            move_from<USDCTokenPoolDeployment>(@usdc_token_pool);
+        let USDCTokenPoolDeployment {
+            store_signer_cap,
+            ownable_state,
+            token_pool_state,
+            domain_set_events
+        } = move_from<USDCTokenPoolDeployment>(@usdc_token_pool);
 
         let store_signer = account::create_signer_with_capability(&store_signer_cap);
 
@@ -322,7 +326,7 @@ module usdc_token_pool::usdc_token_pool {
                 fa,
                 remote_domain_info.domain_identifier,
                 mint_recipient,
-                from_bcs::to_address(remote_domain_info.allowed_caller),
+                from_bcs::to_address(remote_domain_info.allowed_caller)
             );
 
         let dest_pool_data = encode_dest_pool_data(pool.local_domain_identifier, nonce);
@@ -497,17 +501,25 @@ module usdc_token_pool::usdc_token_pool {
 
             pool.chain_to_domain.upsert(
                 remote_chain_selector,
-                Domain {
+                Domain { allowed_caller, domain_identifier, enabled }
+            );
+
+            event::emit(
+                DomainsSet {
                     allowed_caller,
                     domain_identifier,
+                    remote_chain_selector,
                     enabled
                 }
             );
-
-            event::emit(DomainsSet { allowed_caller, domain_identifier, remote_chain_selector, enabled });
             event::emit_event(
                 &mut pool.domain_set_events,
-                DomainsSet { allowed_caller, domain_identifier, remote_chain_selector, enabled }
+                DomainsSet {
+                    allowed_caller,
+                    domain_identifier,
+                    remote_chain_selector,
+                    enabled
+                }
             );
         };
     }
