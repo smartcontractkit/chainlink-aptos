@@ -8,9 +8,12 @@ module usdc_token_pool::usdc_token_pool {
     use std::string::{Self, String};
     use aptos_framework::fungible_asset::{BurnRef, MintRef};
 
+    use ccip::eth_abi;
     use ccip::ownable;
     use ccip::token_admin_registry;
     use ccip_token_pool::token_pool;
+
+    use token_messenger_minter::token_messenger;
 
     const STORE_OBJECT_SEED: vector<u8> = b"CcipUSDCTokenPool";
 
@@ -29,20 +32,11 @@ module usdc_token_pool::usdc_token_pool {
         mint_ref: MintRef
     }
 
-    struct RemoteChainConfig has store, drop, copy {
-        remote_token_address: vector<u8>,
-        remote_pools: vector<vector<u8>>
-    }
-
     const E_NOT_PUBLISHER: u64 = 1;
     const E_ALREADY_INITIALIZED: u64 = 2;
     const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
-    const E_UNKNOWN_FUNGIBLE_ASSET: u64 = 4;
-    const E_LOCAL_TOKEN_MISMATCH: u64 = 5;
-    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 6;
-    const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 7;
-    const E_INVALID_ENCODED_AMOUNT: u64 = 8;
-    const E_INVALID_ARGUMENTS: u64 = 9;
+    const E_LOCAL_TOKEN_MISMATCH: u64 = 4;
+    const E_INVALID_ARGUMENTS: u64 = 5;
 
     // ================================================================
     // |                             Init                             |
@@ -281,14 +275,18 @@ module usdc_token_pool::usdc_token_pool {
                 fa_amount
             );
 
-        // Construct lock_or_burn output before we lose access to fa
-        let dest_pool_data = token_pool::encode_local_decimals(&fa);
+        let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
 
-        // Burn the funds in the pool
-        primary_fungible_store::deposit(pool.store_signer_address, fa);
-        primary_fungible_store::burn(
-            &pool.burn_ref, pool.store_signer_address, fa_amount
-        );
+
+        let domain :u32 = 12; // TODO domains
+        let _mint_recipient =
+            token_admin_registry::get_lock_or_burn_receiver(&input); // TODO mint_recipient
+        let destination_caller = @0x003; // TODO Remote pool
+        let nonce = token_messenger::deposit_for_burn_with_caller(&store_signer, fa, domain, @0x002, destination_caller);
+
+        // USDC Pools use the nonce as dest pool data
+        let dest_pool_data = vector[];
+        eth_abi::encode_u64(&mut dest_pool_data, nonce);
 
         // set the output for this lock or burn operation.
         token_admin_registry::set_lock_or_burn_output_v1(
@@ -299,6 +297,14 @@ module usdc_token_pool::usdc_token_pool {
         );
 
         token_pool::emit_locked_or_burned(&mut pool.token_pool_state, fa_amount);
+    }
+
+    public fun encode_local_decimals(fa: &FungibleAsset): vector<u8> {
+        let fa_metadata = fungible_asset::metadata_from_asset(fa);
+        let fa_decimals = fungible_asset::decimals(fa_metadata);
+        let ret = vector[];
+        eth_abi::encode_u8(&mut ret, fa_decimals);
+        ret
     }
 
     public fun release_or_mint<T: key>(
