@@ -29,6 +29,7 @@ module usdc_token_pool::usdc_token_pool {
         ownable_state: ownable::OwnableState,
         token_pool_state: token_pool::TokenPoolState,
         chain_to_domain: SmartTable<u64, Domain>,
+        local_domain_identifier: u32,
         store_signer_address: address
     }
 
@@ -125,6 +126,7 @@ module usdc_token_pool::usdc_token_pool {
             ownable_state,
             store_signer_address: signer::address_of(&store_signer),
             chain_to_domain: smart_table::new(),
+            local_domain_identifier: message_transmitter::local_domain(),
             store_signer_cap,
             token_pool_state
         };
@@ -258,7 +260,7 @@ module usdc_token_pool::usdc_token_pool {
     struct CallbackProof has drop {}
 
     public fun lock_or_burn<T: key>(
-        _store: Object<T>, fa: FungibleAsset, _transfer_ref: &BurnRef
+        _store: Object<T>, fa: FungibleAsset, _transfer_ref: &TransferRef
     ) acquires USDCTokenPool {
         // retrieve the input for this lock or burn operation. if this function is invoked
         // outside of ccip::token_admin_registry, the transaction will abort.
@@ -307,10 +309,11 @@ module usdc_token_pool::usdc_token_pool {
                 mint_recipient,
                 remote_domain_info.allow_caller
             );
-
-        // USDC Pools use the nonce as dest pool data
-        let dest_pool_data = vector[];
-        eth_abi::encode_u64(&mut dest_pool_data, nonce);
+        
+        let dest_pool_data = encode_dest_pool_data(
+            pool.local_domain_identifier,
+            nonce
+        );
 
         // set the output for this lock or burn operation.
         token_admin_registry::set_lock_or_burn_output_v1(
@@ -341,14 +344,16 @@ module usdc_token_pool::usdc_token_pool {
         );
 
         let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
-        let store_address =
-            account::get_signer_capability_address(&pool.store_signer_cap);
-        let fa_metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
-        // Mint and withdraw the amount from the store for release. this will revert if the store has insufficient balance.
-        primary_fungible_store::mint(&pool.mint_ref, store_address, local_amount);
-        let fa = primary_fungible_store::withdraw(
-            &store_signer, fa_metadata, local_amount
-        );
+
+        let source_pool_data = token_admin_registry::get_release_or_mint_source_pool_data(&input);
+        let offchain_token_data = token_admin_registry::get_release_or_mint_offchain_token_data(&input);
+
+        let (message_bytes, attestation) = parse_message_and_attestation(offchain_token_data);
+
+        let receipt =
+            message_transmitter::receive_message(
+                &store_signer, &message_bytes, &attestation
+            );
 
         // set the output for this release or mint operation.
         token_admin_registry::set_release_or_mint_output_v1(
@@ -365,6 +370,23 @@ module usdc_token_pool::usdc_token_pool {
 
         // return the withdrawn fungible asset.
         fa
+    }
+
+    inline fun parse_message_and_attestation(payload: vector<u8>): (vector<u8>, vector<u8>) {
+        let stream = eth_abi::new_stream(payload);
+
+        let message = eth_abi::decode_bytes(&mut stream);
+        let attestation = eth_abi::decode_bytes(&mut stream);
+
+        (message, attestation)
+    }
+
+    inline fun encode_dest_pool_data(local_domain_identifier: u32, nonce: u64): vector<u8> {
+        // This manually packs the values into a single slot, which mirrors EVM struct packing.
+        let abi_encoded_data = ((nonce as u256) << 32) + (local_domain_identifier as u256);
+        let dest_pool_data = vector[];
+        eth_abi::encode_u256(&mut dest_pool_data, abi_encoded_data);
+        dest_pool_data
     }
 
     // ================================================================
