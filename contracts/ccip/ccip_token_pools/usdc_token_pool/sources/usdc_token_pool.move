@@ -7,7 +7,6 @@ module usdc_token_pool::usdc_token_pool {
     use std::signer;
     use std::smart_table::{Self, SmartTable};
     use std::string::{Self, String};
-    use aptos_framework::fungible_asset::{BurnRef, MintRef};
 
     use ccip::eth_abi;
     use ccip::ownable;
@@ -15,6 +14,7 @@ module usdc_token_pool::usdc_token_pool {
     use ccip_token_pool::token_pool;
 
     use token_messenger_minter::token_messenger;
+    use message_transmitter::message_transmitter;
 
     const STORE_OBJECT_SEED: vector<u8> = b"CcipUSDCTokenPool";
 
@@ -29,9 +29,7 @@ module usdc_token_pool::usdc_token_pool {
         ownable_state: ownable::OwnableState,
         token_pool_state: token_pool::TokenPoolState,
         chain_to_domain: SmartTable<u64, Domain>,
-        store_signer_address: address,
-        burn_ref: BurnRef,
-        mint_ref: MintRef
+        store_signer_address: address
     }
 
     /// A domain is a USDC representation of a destination chain.
@@ -105,12 +103,7 @@ module usdc_token_pool::usdc_token_pool {
         );
     }
 
-    public fun initialize(
-        caller: &signer,
-        local_token: address,
-        burn_ref: BurnRef,
-        mint_ref: MintRef
-    ) acquires USDCTokenPoolDeployment {
+    public fun initialize(caller: &signer, local_token: address) acquires USDCTokenPoolDeployment {
         assert_can_initialize(signer::address_of(caller));
 
         assert!(
@@ -133,9 +126,7 @@ module usdc_token_pool::usdc_token_pool {
             store_signer_address: signer::address_of(&store_signer),
             chain_to_domain: smart_table::new(),
             store_signer_cap,
-            token_pool_state,
-            burn_ref,
-            mint_ref
+            token_pool_state
         };
 
         move_to(&store_signer, pool);
@@ -332,14 +323,6 @@ module usdc_token_pool::usdc_token_pool {
         token_pool::emit_locked_or_burned(&mut pool.token_pool_state, fa_amount);
     }
 
-    public fun encode_local_decimals(fa: &FungibleAsset): vector<u8> {
-        let fa_metadata = fungible_asset::metadata_from_asset(fa);
-        let fa_decimals = fungible_asset::decimals(fa_metadata);
-        let ret = vector[];
-        eth_abi::encode_u8(&mut ret, fa_decimals);
-        ret
-    }
-
     public fun release_or_mint<T: key>(
         _store: Object<T>, _amount: u64, _transfer_ref: &TransferRef
     ): FungibleAsset acquires USDCTokenPool {
@@ -351,7 +334,7 @@ module usdc_token_pool::usdc_token_pool {
             );
         let pool = borrow_pool_mut();
         let local_amount =
-            token_pool::calculate_release_or_mint_amount(&pool.token_pool_state, &input);
+            token_admin_registry::get_release_or_mint_source_amount(&input) as u64;
 
         token_pool::validate_release_or_mint(
             &mut pool.token_pool_state, &input, local_amount
@@ -387,6 +370,8 @@ module usdc_token_pool::usdc_token_pool {
     // ================================================================
     // |                      USDC Domains                            |
     // ================================================================
+
+    // TODO - add a function to add/remove a domain
 
     // ================================================================
     // |                    Rate limit config                         |
