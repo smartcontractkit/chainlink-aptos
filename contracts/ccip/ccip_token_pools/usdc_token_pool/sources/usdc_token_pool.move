@@ -365,6 +365,8 @@ module usdc_token_pool::usdc_token_pool {
                 &store_signer, &message_bytes, &attestation
             );
 
+        assert!(token_messenger::handle_receive_message(receipt));
+
         // set the output for this release or mint operation.
         token_admin_registry::set_release_or_mint_output_v1(
             @usdc_token_pool, CallbackProof {}, local_amount
@@ -378,8 +380,10 @@ module usdc_token_pool::usdc_token_pool {
             local_amount
         );
 
+        let fa_metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
+
         // return the withdrawn fungible asset.
-        fa
+        fungible_asset::zero(fa_metadata)
     }
 
     inline fun parse_message_and_attestation(payload: vector<u8>): (vector<u8>, vector<u8>) {
