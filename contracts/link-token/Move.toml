@@ -1,0 +1,21 @@
+[package]
+name = "ChainlinkToken"
+version = "1.0.0"
+authors = []
+
+[addresses]
+link = "_"
+mcms = "_"
+mcms_register_entrypoints = "_"
+
+[dev-addresses]
+# Calculated from mcms with object_code_deployment code address
+link = "0x987b9c2b4c0bd4401ed56f7751d5f647d26db7698f94cf5316c795bec960ba6b"
+mcms = "0x4001"
+mcms_register_entrypoints = "0x9999"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }
+ChainlinkManyChainMultisig = { local = "../mcms/mcms", addr_subst = { 'mcms_owner' = '0x0' } }
+
+[dev-dependencies]
