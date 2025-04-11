@@ -18,6 +18,7 @@ module ccip::onramp {
     use ccip::fee_quoter;
     use ccip::internal;
     use ccip::merkle_proof;
+    use ccip::nonce_manager;
     use ccip::rmn_remote;
     use ccip::state_object;
     use ccip::token_admin_dispatcher;
@@ -33,8 +34,6 @@ module ccip::onramp {
         // TODO: consider a single smart table of dest chain selector -> all data
         // dest chain selector -> config
         dest_chain_configs: SmartTable<u64, DestChainConfig>,
-        // dest chain selector -> sender -> nonce
-        outbound_nonces: SmartTable<u64, SmartTable<address, u64>>,
         config_set_events: EventHandle<ConfigSet>,
         dest_chain_config_set_events: EventHandle<DestChainConfigSet>,
         ccip_message_sent_events: EventHandle<CCIPMessageSent>,
@@ -175,7 +174,6 @@ module ccip::onramp {
             chain_selector,
             allowlist_admin: @0x0,
             dest_chain_configs: smart_table::new(),
-            outbound_nonces: smart_table::new(),
             config_set_events: account::new_event_handle(&state_object_signer),
             dest_chain_config_set_events: account::new_event_handle(&state_object_signer),
             ccip_message_sent_events: account::new_event_handle(&state_object_signer),
@@ -439,7 +437,9 @@ module ccip::onramp {
         let nonce =
             if (is_out_of_order_execution) { 0 }
             else {
-                get_incremented_outbound_nonce(state, dest_chain_selector, sender)
+                nonce_manager::get_incremented_outbound_nonce(
+                    dest_chain_selector, sender
+                )
             };
 
         let message = Aptos2AnyRampMessage {
@@ -639,14 +639,8 @@ module ccip::onramp {
     #[view]
     public fun get_outbound_nonce(
         dest_chain_selector: u64, sender: address
-    ): u64 acquires OnRampState {
-        let state = borrow_state();
-        assert!(
-            state.outbound_nonces.contains(dest_chain_selector),
-            error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
-        );
-        let dest_chain_nonces = state.outbound_nonces.borrow(dest_chain_selector);
-        *dest_chain_nonces.borrow_with_default(sender, &0)
+    ): u64 {
+        nonce_manager::get_outbound_nonce(dest_chain_selector, sender)
     }
 
     #[view]
@@ -765,7 +759,6 @@ module ccip::onramp {
                         allowed_senders: vector[]
                     }
                 );
-                state.outbound_nonces.add(dest_chain_selector, smart_table::new());
             };
 
             let dest_chain_config =
@@ -792,20 +785,6 @@ module ccip::onramp {
                 }
             );
         };
-    }
-
-    inline fun get_incremented_outbound_nonce(
-        state: &mut OnRampState, dest_chain_selector: u64, sender: address
-    ): u64 {
-        assert!(
-            state.outbound_nonces.contains(dest_chain_selector),
-            error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
-        );
-        let dest_chain_nonces = state.outbound_nonces.borrow_mut(dest_chain_selector);
-        let nonce_ref = dest_chain_nonces.borrow_mut_with_default(sender, 0);
-        let incremented_nonce = *nonce_ref + 1;
-        *nonce_ref = incremented_nonce;
-        incremented_nonce
     }
 
     inline fun borrow_state(): &OnRampState {
