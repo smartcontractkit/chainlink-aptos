@@ -88,7 +88,7 @@ func NewBurnMintTokenPool(address aptos.AccountAddress, client aptos.AptosRpcCli
 type BurnMintTokenPoolDeployment struct {
 }
 
-type BurnMintTokenPool struct {
+type BurnMintTokenPoolState struct {
 	StoreSignerAddress aptos.AccountAddress `move:"address"`
 }
 

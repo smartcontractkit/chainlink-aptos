@@ -20,7 +20,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
         token_pool_state: token_pool::TokenPoolState
     }
 
-    struct BurnMintTokenPool has key, store {
+    struct BurnMintTokenPoolState has key, store {
         store_signer_cap: SignerCapability,
         ownable_state: ownable::OwnableState,
         token_pool_state: token_pool::TokenPoolState,
@@ -112,7 +112,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
 
         let store_signer = account::create_signer_with_capability(&store_signer_cap);
 
-        let pool = BurnMintTokenPool {
+        let pool = BurnMintTokenPoolState {
             ownable_state,
             store_signer_address: signer::address_of(&store_signer),
             store_signer_cap,
@@ -129,7 +129,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
     // ================================================================
 
     #[view]
-    public fun get_token(): address acquires BurnMintTokenPool {
+    public fun get_token(): address acquires BurnMintTokenPoolState {
         token_pool::get_token(&borrow_pool().token_pool_state)
     }
 
@@ -139,14 +139,14 @@ module burn_mint_token_pool::burn_mint_token_pool {
     }
 
     #[view]
-    public fun get_token_decimals(): u8 acquires BurnMintTokenPool {
+    public fun get_token_decimals(): u8 acquires BurnMintTokenPoolState {
         token_pool::get_token_decimals(&borrow_pool().token_pool_state)
     }
 
     #[view]
     public fun get_remote_pools(
         remote_chain_selector: u64
-    ): vector<vector<u8>> acquires BurnMintTokenPool {
+    ): vector<vector<u8>> acquires BurnMintTokenPoolState {
         token_pool::get_remote_pools(
             &borrow_pool().token_pool_state, remote_chain_selector
         )
@@ -155,7 +155,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
     #[view]
     public fun is_remote_pool(
         remote_chain_selector: u64, remote_pool_address: vector<u8>
-    ): bool acquires BurnMintTokenPool {
+    ): bool acquires BurnMintTokenPoolState {
         token_pool::is_remote_pool(
             &borrow_pool().token_pool_state,
             remote_chain_selector,
@@ -164,14 +164,16 @@ module burn_mint_token_pool::burn_mint_token_pool {
     }
 
     #[view]
-    public fun get_remote_token(remote_chain_selector: u64): vector<u8> acquires BurnMintTokenPool {
+    public fun get_remote_token(
+        remote_chain_selector: u64
+    ): vector<u8> acquires BurnMintTokenPoolState {
         let pool = borrow_pool();
         token_pool::get_remote_token(&pool.token_pool_state, remote_chain_selector)
     }
 
     public entry fun add_remote_pool(
         caller: &signer, remote_chain_selector: u64, remote_pool_address: vector<u8>
-    ) acquires BurnMintTokenPool {
+    ) acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -182,7 +184,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
 
     public entry fun remove_remote_pool(
         caller: &signer, remote_chain_selector: u64, remote_pool_address: vector<u8>
-    ) acquires BurnMintTokenPool {
+    ) acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -192,13 +194,13 @@ module burn_mint_token_pool::burn_mint_token_pool {
     }
 
     #[view]
-    public fun is_supported_chain(remote_chain_selector: u64): bool acquires BurnMintTokenPool {
+    public fun is_supported_chain(remote_chain_selector: u64): bool acquires BurnMintTokenPoolState {
         let pool = borrow_pool();
         token_pool::is_supported_chain(&pool.token_pool_state, remote_chain_selector)
     }
 
     #[view]
-    public fun get_supported_chains(): vector<u64> acquires BurnMintTokenPool {
+    public fun get_supported_chains(): vector<u64> acquires BurnMintTokenPoolState {
         let pool = borrow_pool();
         token_pool::get_supported_chains(&pool.token_pool_state)
     }
@@ -209,7 +211,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
         remote_chain_selectors_to_add: vector<u64>,
         remote_pool_addresses_to_add: vector<vector<vector<u8>>>,
         remote_token_addresses_to_add: vector<vector<u8>>
-    ) acquires BurnMintTokenPool {
+    ) acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -223,20 +225,20 @@ module burn_mint_token_pool::burn_mint_token_pool {
     }
 
     #[view]
-    public fun get_allowlist_enabled(): bool acquires BurnMintTokenPool {
+    public fun get_allowlist_enabled(): bool acquires BurnMintTokenPoolState {
         let pool = borrow_pool();
         token_pool::get_allowlist_enabled(&pool.token_pool_state)
     }
 
     #[view]
-    public fun get_allowlist(): vector<address> acquires BurnMintTokenPool {
+    public fun get_allowlist(): vector<address> acquires BurnMintTokenPoolState {
         let pool = borrow_pool();
         token_pool::get_allowlist(&pool.token_pool_state)
     }
 
     public entry fun apply_allowlist_updates(
         caller: &signer, removes: vector<address>, adds: vector<address>
-    ) acquires BurnMintTokenPool {
+    ) acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
         token_pool::apply_allowlist_updates(&mut pool.token_pool_state, removes, adds);
@@ -251,7 +253,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
 
     public fun lock_or_burn<T: key>(
         _store: Object<T>, fa: FungibleAsset, _transfer_ref: &BurnRef
-    ) acquires BurnMintTokenPool {
+    ) acquires BurnMintTokenPoolState {
         // retrieve the input for this lock or burn operation. if this function is invoked
         // outside of ccip::token_admin_registry, the transaction will abort.
         let input =
@@ -294,7 +296,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
 
     public fun release_or_mint<T: key>(
         _store: Object<T>, _amount: u64, _transfer_ref: &TransferRef
-    ): FungibleAsset acquires BurnMintTokenPool {
+    ): FungibleAsset acquires BurnMintTokenPoolState {
         // retrieve the input for this release or mint operation. if this function is invoked
         // outside of ccip::token_admin_registry, the transaction will abort.
         let input =
@@ -349,7 +351,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
         inbound_is_enableds: vector<bool>,
         inbound_capacities: vector<u64>,
         inbound_rates: vector<u64>
-    ) acquires BurnMintTokenPool {
+    ) acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -388,7 +390,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
         inbound_is_enabled: bool,
         inbound_capacity: u64,
         inbound_rate: u64
-    ) acquires BurnMintTokenPool {
+    ) acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -433,12 +435,12 @@ module burn_mint_token_pool::burn_mint_token_pool {
         abort error::permission_denied(E_NOT_PUBLISHER)
     }
 
-    inline fun borrow_pool(): &BurnMintTokenPool {
-        borrow_global<BurnMintTokenPool>(store_address())
+    inline fun borrow_pool(): &BurnMintTokenPoolState {
+        borrow_global<BurnMintTokenPoolState>(store_address())
     }
 
-    inline fun borrow_pool_mut(): &mut BurnMintTokenPool {
-        borrow_global_mut<BurnMintTokenPool>(store_address())
+    inline fun borrow_pool_mut(): &mut BurnMintTokenPoolState {
+        borrow_global_mut<BurnMintTokenPoolState>(store_address())
     }
 
     // ================================================================
@@ -446,19 +448,19 @@ module burn_mint_token_pool::burn_mint_token_pool {
     // ================================================================
 
     #[view]
-    public fun owner(): address acquires BurnMintTokenPool {
+    public fun owner(): address acquires BurnMintTokenPoolState {
         let pool = borrow_pool();
         ownable::owner(&pool.ownable_state)
     }
 
-    public entry fun transfer_ownership(caller: &signer, to: address) acquires BurnMintTokenPool {
+    public entry fun transfer_ownership(caller: &signer, to: address) acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::transfer_ownership(
             signer::address_of(caller), &mut pool.ownable_state, to
         )
     }
 
-    public entry fun accept_ownership(caller: &signer) acquires BurnMintTokenPool {
+    public entry fun accept_ownership(caller: &signer) acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::accept_ownership(signer::address_of(caller), &mut pool.ownable_state)
     }

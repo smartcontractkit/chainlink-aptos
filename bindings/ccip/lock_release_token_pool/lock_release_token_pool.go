@@ -89,7 +89,7 @@ func NewLockReleaseTokenPool(address aptos.AccountAddress, client aptos.AptosRpc
 type LockReleaseTokenPoolDeployment struct {
 }
 
-type LockReleaseTokenPool struct {
+type LockReleaseTokenPoolState struct {
 	StoreSignerAddress aptos.AccountAddress `move:"address"`
 }
 

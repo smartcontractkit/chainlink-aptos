@@ -28,7 +28,7 @@ module usdc_token_pool::usdc_token_pool {
         domain_set_events: EventHandle<DomainsSet>
     }
 
-    struct USDCTokenPool has key, store {
+    struct USDCTokenPoolState has key, store {
         store_signer_cap: SignerCapability,
         ownable_state: ownable::OwnableState,
         token_pool_state: token_pool::TokenPoolState,
@@ -44,7 +44,7 @@ module usdc_token_pool::usdc_token_pool {
     /// @dev The allowedCaller represents the contract authorized to call receiveMessage on the destination CCTP message transmitter.
     /// For EVM dest pool version 1.6.1, this is the MessageTransmitterProxy of the destination chain.
     /// For EVM dest pool version 1.5.1, this is the destination chain's token pool.
-    struct Domain has key, store, drop {
+    struct Domain has key, store, drop, copy {
         allowed_caller: vector<u8>, //  Address allowed to mint on the domain
         domain_identifier: u32, // Unique domain ID
         enabled: bool
@@ -140,7 +140,7 @@ module usdc_token_pool::usdc_token_pool {
 
         let store_signer = account::create_signer_with_capability(&store_signer_cap);
 
-        let pool = USDCTokenPool {
+        let pool = USDCTokenPoolState {
             ownable_state,
             store_signer_address: signer::address_of(&store_signer),
             chain_to_domain: smart_table::new(),
@@ -158,7 +158,7 @@ module usdc_token_pool::usdc_token_pool {
     // ================================================================
 
     #[view]
-    public fun get_token(): address acquires USDCTokenPool {
+    public fun get_token(): address acquires USDCTokenPoolState {
         token_pool::get_token(&borrow_pool().token_pool_state)
     }
 
@@ -168,14 +168,14 @@ module usdc_token_pool::usdc_token_pool {
     }
 
     #[view]
-    public fun get_token_decimals(): u8 acquires USDCTokenPool {
+    public fun get_token_decimals(): u8 acquires USDCTokenPoolState {
         token_pool::get_token_decimals(&borrow_pool().token_pool_state)
     }
 
     #[view]
     public fun get_remote_pools(
         remote_chain_selector: u64
-    ): vector<vector<u8>> acquires USDCTokenPool {
+    ): vector<vector<u8>> acquires USDCTokenPoolState {
         token_pool::get_remote_pools(
             &borrow_pool().token_pool_state, remote_chain_selector
         )
@@ -184,7 +184,7 @@ module usdc_token_pool::usdc_token_pool {
     #[view]
     public fun is_remote_pool(
         remote_chain_selector: u64, remote_pool_address: vector<u8>
-    ): bool acquires USDCTokenPool {
+    ): bool acquires USDCTokenPoolState {
         token_pool::is_remote_pool(
             &borrow_pool().token_pool_state,
             remote_chain_selector,
@@ -193,14 +193,14 @@ module usdc_token_pool::usdc_token_pool {
     }
 
     #[view]
-    public fun get_remote_token(remote_chain_selector: u64): vector<u8> acquires USDCTokenPool {
+    public fun get_remote_token(remote_chain_selector: u64): vector<u8> acquires USDCTokenPoolState {
         let pool = borrow_pool();
         token_pool::get_remote_token(&pool.token_pool_state, remote_chain_selector)
     }
 
     public entry fun add_remote_pool(
         caller: &signer, remote_chain_selector: u64, remote_pool_address: vector<u8>
-    ) acquires USDCTokenPool {
+    ) acquires USDCTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -211,7 +211,7 @@ module usdc_token_pool::usdc_token_pool {
 
     public entry fun remove_remote_pool(
         caller: &signer, remote_chain_selector: u64, remote_pool_address: vector<u8>
-    ) acquires USDCTokenPool {
+    ) acquires USDCTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -221,13 +221,13 @@ module usdc_token_pool::usdc_token_pool {
     }
 
     #[view]
-    public fun is_supported_chain(remote_chain_selector: u64): bool acquires USDCTokenPool {
+    public fun is_supported_chain(remote_chain_selector: u64): bool acquires USDCTokenPoolState {
         let pool = borrow_pool();
         token_pool::is_supported_chain(&pool.token_pool_state, remote_chain_selector)
     }
 
     #[view]
-    public fun get_supported_chains(): vector<u64> acquires USDCTokenPool {
+    public fun get_supported_chains(): vector<u64> acquires USDCTokenPoolState {
         let pool = borrow_pool();
         token_pool::get_supported_chains(&pool.token_pool_state)
     }
@@ -238,7 +238,7 @@ module usdc_token_pool::usdc_token_pool {
         remote_chain_selectors_to_add: vector<u64>,
         remote_pool_addresses_to_add: vector<vector<vector<u8>>>,
         remote_token_addresses_to_add: vector<vector<u8>>
-    ) acquires USDCTokenPool {
+    ) acquires USDCTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -252,20 +252,20 @@ module usdc_token_pool::usdc_token_pool {
     }
 
     #[view]
-    public fun get_allowlist_enabled(): bool acquires USDCTokenPool {
+    public fun get_allowlist_enabled(): bool acquires USDCTokenPoolState {
         let pool = borrow_pool();
         token_pool::get_allowlist_enabled(&pool.token_pool_state)
     }
 
     #[view]
-    public fun get_allowlist(): vector<address> acquires USDCTokenPool {
+    public fun get_allowlist(): vector<address> acquires USDCTokenPoolState {
         let pool = borrow_pool();
         token_pool::get_allowlist(&pool.token_pool_state)
     }
 
     public entry fun apply_allowlist_updates(
         caller: &signer, removes: vector<address>, adds: vector<address>
-    ) acquires USDCTokenPool {
+    ) acquires USDCTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
         token_pool::apply_allowlist_updates(&mut pool.token_pool_state, removes, adds);
@@ -280,7 +280,7 @@ module usdc_token_pool::usdc_token_pool {
 
     public fun lock_or_burn<T: key>(
         _store: Object<T>, fa: FungibleAsset, _transfer_ref: &TransferRef
-    ) acquires USDCTokenPool {
+    ) acquires USDCTokenPoolState {
         // retrieve the input for this lock or burn operation. if this function is invoked
         // outside of ccip::token_admin_registry, the transaction will abort.
         let input =
@@ -344,7 +344,7 @@ module usdc_token_pool::usdc_token_pool {
 
     public fun release_or_mint<T: key>(
         _store: Object<T>, _amount: u64, _transfer_ref: &TransferRef
-    ): FungibleAsset acquires USDCTokenPool {
+    ): FungibleAsset acquires USDCTokenPoolState {
         // retrieve the input for this release or mint operation. if this function is invoked
         // outside of ccip::token_admin_registry, the transaction will abort.
         let input =
@@ -464,13 +464,19 @@ module usdc_token_pool::usdc_token_pool {
     // |                      USDC Domains                            |
     // ================================================================
 
+    #[view]
+    public fun get_domain(chain_selector: u64): Domain acquires USDCTokenPoolState {
+        let pool = borrow_pool();
+        *pool.chain_to_domain.borrow(chain_selector)
+    }
+
     public fun set_domains(
         caller: &signer,
         remote_chain_selectors: vector<u64>,
         remote_domain_identifiers: vector<u32>,
         allowed_remote_callers: vector<vector<u8>>,
         enableds: vector<bool>
-    ) acquires USDCTokenPool {
+    ) acquires USDCTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -537,7 +543,7 @@ module usdc_token_pool::usdc_token_pool {
         inbound_is_enableds: vector<bool>,
         inbound_capacities: vector<u64>,
         inbound_rates: vector<u64>
-    ) acquires USDCTokenPool {
+    ) acquires USDCTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -576,7 +582,7 @@ module usdc_token_pool::usdc_token_pool {
         inbound_is_enabled: bool,
         inbound_capacity: u64,
         inbound_rate: u64
-    ) acquires USDCTokenPool {
+    ) acquires USDCTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -619,12 +625,12 @@ module usdc_token_pool::usdc_token_pool {
         abort error::permission_denied(E_NOT_PUBLISHER)
     }
 
-    inline fun borrow_pool(): &USDCTokenPool {
-        borrow_global<USDCTokenPool>(store_address())
+    inline fun borrow_pool(): &USDCTokenPoolState {
+        borrow_global<USDCTokenPoolState>(store_address())
     }
 
-    inline fun borrow_pool_mut(): &mut USDCTokenPool {
-        borrow_global_mut<USDCTokenPool>(store_address())
+    inline fun borrow_pool_mut(): &mut USDCTokenPoolState {
+        borrow_global_mut<USDCTokenPoolState>(store_address())
     }
 
     // ================================================================
@@ -632,19 +638,19 @@ module usdc_token_pool::usdc_token_pool {
     // ================================================================
 
     #[view]
-    public fun owner(): address acquires USDCTokenPool {
+    public fun owner(): address acquires USDCTokenPoolState {
         let pool = borrow_pool();
         ownable::owner(&pool.ownable_state)
     }
 
-    public entry fun transfer_ownership(caller: &signer, to: address) acquires USDCTokenPool {
+    public entry fun transfer_ownership(caller: &signer, to: address) acquires USDCTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::transfer_ownership(
             signer::address_of(caller), &mut pool.ownable_state, to
         )
     }
 
-    public entry fun accept_ownership(caller: &signer) acquires USDCTokenPool {
+    public entry fun accept_ownership(caller: &signer) acquires USDCTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::accept_ownership(signer::address_of(caller), &mut pool.ownable_state)
     }

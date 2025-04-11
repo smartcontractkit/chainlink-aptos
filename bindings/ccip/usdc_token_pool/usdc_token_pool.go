@@ -33,6 +33,7 @@ type UsdcTokenPool interface {
 	GetSupportedChains(opts *bind.CallOpts) ([]uint64, error)
 	GetAllowlistEnabled(opts *bind.CallOpts) (bool, error)
 	GetAllowlist(opts *bind.CallOpts) ([]aptos.AccountAddress, error)
+	GetDomain(opts *bind.CallOpts, chainSelector uint64) (Domain, error)
 	GetStoreAddress(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
 
@@ -59,6 +60,7 @@ type UsdcTokenPoolEncoder interface {
 	GetSupportedChains() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetAllowlistEnabled() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetAllowlist() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetDomain(chainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStoreAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AddRemotePool(remoteChainSelector uint64, remotePoolAddress []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -93,7 +95,7 @@ func NewUsdcTokenPool(address aptos.AccountAddress, client aptos.AptosRpcClient)
 type USDCTokenPoolDeployment struct {
 }
 
-type USDCTokenPool struct {
+type USDCTokenPoolState struct {
 	LocalDomainIdentifier uint32               `move:"u32"`
 	StoreSignerAddress    aptos.AccountAddress `move:"address"`
 }
@@ -358,6 +360,27 @@ func (c UsdcTokenPoolContract) GetAllowlist(opts *bind.CallOpts) ([]aptos.Accoun
 	return r0, nil
 }
 
+func (c UsdcTokenPoolContract) GetDomain(opts *bind.CallOpts, chainSelector uint64) (Domain, error) {
+	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.GetDomain(chainSelector)
+	if err != nil {
+		return *new(Domain), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(Domain), err
+	}
+
+	var (
+		r0 Domain
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(Domain), err
+	}
+	return r0, nil
+}
+
 func (c UsdcTokenPoolContract) GetStoreAddress(opts *bind.CallOpts) (aptos.AccountAddress, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.GetStoreAddress()
 	if err != nil {
@@ -521,6 +544,14 @@ func (c usdcTokenPoolEncoder) GetAllowlistEnabled() (bind.ModuleInformation, str
 
 func (c usdcTokenPoolEncoder) GetAllowlist() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("get_allowlist", nil, []string{}, []any{})
+}
+
+func (c usdcTokenPoolEncoder) GetDomain(chainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_domain", nil, []string{
+		"u64",
+	}, []any{
+		chainSelector,
+	})
 }
 
 func (c usdcTokenPoolEncoder) GetStoreAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
