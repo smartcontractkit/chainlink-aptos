@@ -1,10 +1,5 @@
 /// This module defines messages for end users to interact with Aptos CCIP.
-/// TODO: having this in the ccip package means that ccip_receive user modules
-/// will need to know the address of @ccip ontop of @ccip_router. consider
-/// moving this, or not using structs at all
 module ccip::client {
-    friend ccip::offramp;
-
     struct Any2AptosMessage has store, drop, copy {
         message_id: vector<u8>,
         source_chain_selector: u64,
@@ -48,7 +43,7 @@ module ccip::client {
         input.amount
     }
 
-    public(friend) fun new_any2aptos_message(
+    public fun new_any2aptos_message(
         message_id: vector<u8>,
         source_chain_selector: u64,
         sender: vector<u8>,
@@ -64,7 +59,7 @@ module ccip::client {
         }
     }
 
-    public(friend) fun new_dest_token_amounts(
+    public fun new_dest_token_amounts(
         token_addresses: vector<address>, token_amounts: vector<u64>
     ): vector<Any2AptosTokenAmount> {
         token_addresses.zip_map_ref(
