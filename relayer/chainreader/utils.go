@@ -158,3 +158,8 @@ func compareValue(fieldValue, compareValue any, operator primitives.ComparisonOp
 
 	return result
 }
+
+func isNumeric(value any) bool {
+	_, ok := value.(uint64)
+	return ok
+}
