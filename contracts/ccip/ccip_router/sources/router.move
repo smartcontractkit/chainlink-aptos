@@ -9,7 +9,7 @@ module ccip_router::router {
     use std::event::EventHandle;
 
     use ccip::auth;
-    use ccip::onramp;
+    use ccip_onramp::onramp;
 
     use mcms::mcms_registry;
     use mcms::bcs_stream;

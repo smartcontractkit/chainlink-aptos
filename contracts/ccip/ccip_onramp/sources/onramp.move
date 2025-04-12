@@ -1,5 +1,5 @@
-module ccip::onramp {
-    use std::account;
+module ccip_onramp::onramp {
+    use std::account::{Self, SignerCapability};
     use std::aptos_hash;
     use std::error;
     use std::event::{Self, EventHandle};
@@ -13,42 +13,53 @@ module ccip::onramp {
     use std::smart_table::{Self, SmartTable};
     use std::vector;
 
-    use ccip::auth;
     use ccip::eth_abi;
     use ccip::fee_quoter;
     use ccip::internal;
     use ccip::merkle_proof;
     use ccip::nonce_manager;
+    use ccip::ownable;
     use ccip::rmn_remote;
-    use ccip::state_object;
     use ccip::token_admin_dispatcher;
     use ccip::token_admin_registry;
 
     use mcms::bcs_stream;
     use mcms::mcms_registry;
 
+    const STATE_SEED: vector<u8> = b"CHAINLINK_CCIP_ONRAMP";
+
+    struct OnRampDeployment has key, store {
+        state_signer_cap: SignerCapability,
+        ownable_state: ownable::OwnableState,
+        config_set_events: EventHandle<ConfigSet>,
+        dest_chain_config_set_events: EventHandle<DestChainConfigSet>,
+        ccip_message_sent_events: EventHandle<CCIPMessageSent>,
+        allowlist_senders_added_events: EventHandle<AllowlistSendersAdded>,
+        allowlist_senders_removed_events: EventHandle<AllowlistSendersRemoved>,
+        fee_token_withdrawn_events: EventHandle<FeeTokenWithdrawn>
+    }
+
     struct OnRampState has key, store {
+        state_signer_cap: SignerCapability,
+        ownable_state: ownable::OwnableState,
         chain_selector: u64,
+        fee_aggregator: address,
         allowlist_admin: address,
 
-        // TODO: consider a single smart table of dest chain selector -> all data
         // dest chain selector -> config
         dest_chain_configs: SmartTable<u64, DestChainConfig>,
         config_set_events: EventHandle<ConfigSet>,
         dest_chain_config_set_events: EventHandle<DestChainConfigSet>,
         ccip_message_sent_events: EventHandle<CCIPMessageSent>,
         allowlist_senders_added_events: EventHandle<AllowlistSendersAdded>,
-        allowlist_senders_removed_events: EventHandle<AllowlistSendersRemoved>
+        allowlist_senders_removed_events: EventHandle<AllowlistSendersRemoved>,
+        fee_token_withdrawn_events: EventHandle<FeeTokenWithdrawn>
     }
 
     struct DestChainConfig has store, drop {
-        // on EVM, transfers can be stopped by zeroing the router address,
-        // since we don't have a router address here, we add an is_enabled flag.
-        // ref: https://github.com/smartcontractkit/chainlink/blob/62a9b78e1c32174ccec11f1ed487edf3b0b4e8fd/contracts/src/v0.8/ccip/onRamp/OnRamp.sol#L181
-        is_enabled: bool,
         sequence_number: u64,
         allowlist_enabled: bool,
-        // TODO: should we use a Table/SmartTable here?
+        router: address,
         allowed_senders: vector<address>
     }
 
@@ -80,25 +91,26 @@ module ccip::onramp {
         dest_exec_data: vector<u8>
     }
 
-    struct StaticConfig has store, drop {
+    struct StaticConfig has store, drop, copy {
         chain_selector: u64
     }
 
-    struct DynamicConfig has store, drop {
+    struct DynamicConfig has store, drop, copy {
+        fee_aggregator: address,
         allowlist_admin: address
     }
 
     #[event]
     struct ConfigSet has store, drop {
-        chain_selector: u64,
-        allowlist_admin: address
+        static_config: StaticConfig,
+        dynamic_config: DynamicConfig
     }
 
     #[event]
     struct DestChainConfigSet has store, drop {
         dest_chain_selector: u64,
-        is_enabled: bool,
         sequence_number: u64,
+        router: address,
         allowlist_enabled: bool
     }
 
@@ -121,6 +133,13 @@ module ccip::onramp {
         senders: vector<address>
     }
 
+    #[event]
+    struct FeeTokenWithdrawn has store, drop {
+        fee_aggregator: address,
+        fee_token: address,
+        amount: u64
+    }
+
     const E_ALREADY_INITIALIZED: u64 = 1;
     const E_DEST_CHAIN_ARGUMENT_MISMATCH: u64 = 2;
     const E_INVALID_DEST_CHAIN_SELECTOR: u64 = 3;
@@ -138,7 +157,9 @@ module ccip::onramp {
     const E_INVALID_TOKEN_STORE: u64 = 15;
     const E_UNEXPECTED_WITHDRAW_AMOUNT: u64 = 16;
     const E_UNEXPECTED_FUNGIBLE_ASSET: u64 = 17;
-    const E_UNKNOWN_FUNCTION: u64 = 18;
+    const E_FEE_AGGREGATOR_NOT_SET: u64 = 18;
+    const E_MUST_BE_CALLED_BY_ROUTER: u64 = 19;
+    const E_UNKNOWN_FUNCTION: u64 = 20;
 
     #[view]
     public fun type_and_version(): String {
@@ -146,6 +167,23 @@ module ccip::onramp {
     }
 
     fun init_module(publisher: &signer) {
+        let (_, state_signer_cap) =
+            account::create_resource_account(publisher, STATE_SEED);
+
+        move_to(
+            publisher,
+            OnRampDeployment {
+                state_signer_cap,
+                ownable_state: ownable::new(publisher, @ccip_onramp),
+                config_set_events: account::new_event_handle(publisher),
+                dest_chain_config_set_events: account::new_event_handle(publisher),
+                ccip_message_sent_events: account::new_event_handle(publisher),
+                allowlist_senders_added_events: account::new_event_handle(publisher),
+                allowlist_senders_removed_events: account::new_event_handle(publisher),
+                fee_token_withdrawn_events: account::new_event_handle(publisher)
+            }
+        );
+
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints != @0x0) {
             mcms_registry::register_entrypoint(
@@ -154,46 +192,65 @@ module ccip::onramp {
         };
     }
 
+    #[view]
+    public fun get_state_address(): address {
+        get_state_address_internal()
+    }
+
     public entry fun initialize(
         caller: &signer,
         chain_selector: u64,
+        fee_aggregator: address,
         allowlist_admin: address,
         dest_chain_selectors: vector<u64>,
-        dest_chain_enabled: vector<bool>,
+        dest_chain_routers: vector<address>,
         dest_chain_allowlist_enabled: vector<bool>
-    ) {
-        auth::assert_only_owner(signer::address_of(caller));
-
+    ) acquires OnRampDeployment {
         assert!(
-            !exists<OnRampState>(state_object::object_address()),
-            error::invalid_argument(E_ALREADY_INITIALIZED)
+            exists<OnRampDeployment>(@ccip_onramp),
+            error::invalid_state(E_ALREADY_INITIALIZED)
         );
 
-        let state_object_signer = state_object::object_signer();
+        let OnRampDeployment {
+            state_signer_cap,
+            ownable_state,
+            config_set_events,
+            dest_chain_config_set_events,
+            ccip_message_sent_events,
+            allowlist_senders_added_events,
+            allowlist_senders_removed_events,
+            fee_token_withdrawn_events
+        } = move_from<OnRampDeployment>(@ccip_onramp);
+
+        ownable::assert_only_owner(signer::address_of(caller), &ownable_state);
+
+        let state_signer = account::create_signer_with_capability(&state_signer_cap);
 
         let state = OnRampState {
+            state_signer_cap,
+            ownable_state,
             chain_selector,
+            fee_aggregator: @0x0,
             allowlist_admin: @0x0,
             dest_chain_configs: smart_table::new(),
-            config_set_events: account::new_event_handle(&state_object_signer),
-            dest_chain_config_set_events: account::new_event_handle(&state_object_signer),
-            ccip_message_sent_events: account::new_event_handle(&state_object_signer),
-            allowlist_senders_added_events: account::new_event_handle(&state_object_signer),
-            allowlist_senders_removed_events: account::new_event_handle(
-                &state_object_signer
-            )
+            config_set_events,
+            dest_chain_config_set_events,
+            ccip_message_sent_events,
+            allowlist_senders_added_events,
+            allowlist_senders_removed_events,
+            fee_token_withdrawn_events
         };
 
-        set_dynamic_config_internal(&mut state, allowlist_admin);
+        set_dynamic_config_internal(&mut state, fee_aggregator, allowlist_admin);
 
         apply_dest_chain_config_updates_internal(
             &mut state,
             dest_chain_selectors,
-            dest_chain_enabled,
+            dest_chain_routers,
             dest_chain_allowlist_enabled
         );
 
-        move_to(&state_object_signer, state);
+        move_to(&state_signer, state);
     }
 
     #[view]
@@ -286,8 +343,6 @@ module ccip::onramp {
         fee_token_store: address,
         extra_args: vector<u8>
     ): vector<u8> acquires OnRampState {
-        auth::assert_is_router(signer::address_of(router));
-
         assert!(
             !rmn_remote::is_cursed_global(),
             error::permission_denied(E_BAD_RMN_SIGNAL)
@@ -328,7 +383,7 @@ module ccip::onramp {
                 error::invalid_state(E_UNEXPECTED_WITHDRAW_AMOUNT)
             );
 
-            primary_fungible_store::deposit(state_object::object_address(), fa);
+            primary_fungible_store::deposit(get_state_address_internal(), fa);
         };
 
         let state = borrow_state_mut();
@@ -338,10 +393,6 @@ module ccip::onramp {
         );
 
         let dest_chain_config = state.dest_chain_configs.borrow_mut(dest_chain_selector);
-        assert!(
-            dest_chain_config.is_enabled,
-            error::permission_denied(E_DEST_CHAIN_NOT_ENABLED)
-        );
 
         if (dest_chain_config.allowlist_enabled) {
             assert!(
@@ -350,10 +401,18 @@ module ccip::onramp {
             );
         };
 
+        assert!(
+            dest_chain_config.router == signer::address_of(router),
+            error::invalid_argument(E_MUST_BE_CALLED_BY_ROUTER)
+        );
+
         let sender = signer::address_of(caller);
 
         let dest_token_addresses = vector[];
         let dest_pool_datas = vector[];
+
+        let state_signer =
+            account::create_signer_with_capability(&state.state_signer_cap);
 
         let tokens_len = token_addresses.length();
         let token_transfers = vector[];
@@ -387,6 +446,7 @@ module ccip::onramp {
 
             let (dest_token_address, dest_pool_data) =
                 token_admin_dispatcher::dispatch_lock_or_burn(
+                    &state_signer,
                     token_pool_address,
                     fa,
                     sender,
@@ -439,7 +499,7 @@ module ccip::onramp {
             if (is_out_of_order_execution) { 0 }
             else {
                 nonce_manager::get_incremented_outbound_nonce(
-                    dest_chain_selector, sender
+                    &state_signer, dest_chain_selector, sender
                 )
             };
 
@@ -477,31 +537,34 @@ module ccip::onramp {
     }
 
     public entry fun set_dynamic_config(
-        caller: &signer, allowlist_admin: address
+        caller: &signer, fee_aggregator: address, allowlist_admin: address
     ) acquires OnRampState {
-        auth::assert_only_owner(signer::address_of(caller));
-
-        set_dynamic_config_internal(borrow_state_mut(), allowlist_admin)
+        let state = borrow_state_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+        set_dynamic_config_internal(state, fee_aggregator, allowlist_admin)
     }
 
     public entry fun apply_dest_chain_config_updates(
         caller: &signer,
         dest_chain_selectors: vector<u64>,
-        dest_chain_enabled: vector<bool>,
+        dest_chain_routers: vector<address>,
         dest_chain_allowlist_enabled: vector<bool>
     ) acquires OnRampState {
-        auth::assert_only_owner(signer::address_of(caller));
+        let state = borrow_state_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
         apply_dest_chain_config_updates_internal(
-            borrow_state_mut(),
+            state,
             dest_chain_selectors,
-            dest_chain_enabled,
+            dest_chain_routers,
             dest_chain_allowlist_enabled
         )
     }
 
     #[view]
-    public fun get_dest_chain_config(dest_chain_selector: u64): (bool, u64, bool) acquires OnRampState {
+    public fun get_dest_chain_config(
+        dest_chain_selector: u64
+    ): (u64, bool, address) acquires OnRampState {
         let state = borrow_state();
 
         assert!(
@@ -512,9 +575,9 @@ module ccip::onramp {
         let dest_chain_config = state.dest_chain_configs.borrow(dest_chain_selector);
 
         (
-            dest_chain_config.is_enabled,
             dest_chain_config.sequence_number,
-            dest_chain_config.allowlist_enabled
+            dest_chain_config.allowlist_enabled,
+            dest_chain_config.router
         )
     }
 
@@ -543,7 +606,7 @@ module ccip::onramp {
     ) acquires OnRampState {
         let state = borrow_state_mut();
         assert!(
-            signer::address_of(caller) == auth::owner()
+            signer::address_of(caller) == ownable::owner(&state.ownable_state)
                 || signer::address_of(caller) == state.allowlist_admin,
             error::permission_denied(E_ONLY_CALLABLE_BY_OWNER_OR_ALLOWLIST_ADMIN)
         );
@@ -653,18 +716,79 @@ module ccip::onramp {
     #[view]
     public fun get_dynamic_config(): DynamicConfig acquires OnRampState {
         let state = borrow_state();
-        DynamicConfig { allowlist_admin: state.allowlist_admin }
+        DynamicConfig {
+            fee_aggregator: state.fee_aggregator,
+            allowlist_admin: state.allowlist_admin
+        }
+    }
+
+    public entry fun withdraw_fee_tokens(fee_tokens: vector<address>) acquires OnRampState {
+        let state = borrow_state_mut();
+
+        assert!(
+            state.fee_aggregator != @0x0,
+            error::invalid_state(E_FEE_AGGREGATOR_NOT_SET)
+        );
+
+        let state_address = get_state_address_internal();
+        let state_signer =
+            &account::create_signer_with_capability(&state.state_signer_cap);
+
+        for (i in 0..fee_tokens.length()) {
+            let fee_token = fee_tokens[i];
+
+            assert!(
+                object::object_exists<Metadata>(fee_token),
+                error::invalid_argument(E_INVALID_FEE_TOKEN)
+            );
+
+            let fee_token_metadata = object::address_to_object<Metadata>(fee_token);
+
+            let balance =
+                primary_fungible_store::balance(state_address, fee_token_metadata);
+            if (balance == 0) {
+                continue;
+            };
+
+            primary_fungible_store::transfer(
+                state_signer,
+                fee_token_metadata,
+                state.fee_aggregator,
+                balance
+            );
+
+            event::emit(
+                FeeTokenWithdrawn {
+                    fee_aggregator: state.fee_aggregator,
+                    fee_token,
+                    amount: balance
+                }
+            );
+            event::emit_event(
+                &mut state.fee_token_withdrawn_events,
+                FeeTokenWithdrawn {
+                    fee_aggregator: state.fee_aggregator,
+                    fee_token,
+                    amount: balance
+                }
+            );
+        };
     }
 
     inline fun set_dynamic_config_internal(
-        state: &mut OnRampState, allowlist_admin: address
+        state: &mut OnRampState, fee_aggregator: address, allowlist_admin: address
     ) {
+        state.fee_aggregator = fee_aggregator;
         state.allowlist_admin = allowlist_admin;
 
-        event::emit(ConfigSet { chain_selector: state.chain_selector, allowlist_admin });
+        let static_config = StaticConfig { chain_selector: state.chain_selector };
+
+        let dynamic_config = DynamicConfig { fee_aggregator, allowlist_admin };
+
+        event::emit(ConfigSet { static_config, dynamic_config });
         event::emit_event(
             &mut state.config_set_events,
-            ConfigSet { chain_selector: state.chain_selector, allowlist_admin }
+            ConfigSet { static_config, dynamic_config }
         );
     }
 
@@ -727,12 +851,12 @@ module ccip::onramp {
     inline fun apply_dest_chain_config_updates_internal(
         state: &mut OnRampState,
         dest_chain_selectors: vector<u64>,
-        dest_chain_enabled: vector<bool>,
+        dest_chain_routers: vector<address>,
         dest_chain_allowlist_enabled: vector<bool>
     ) {
         let dest_chains_len = dest_chain_selectors.length();
         assert!(
-            dest_chains_len == dest_chain_enabled.length(),
+            dest_chains_len == dest_chain_routers.length(),
             error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
         );
         assert!(
@@ -747,15 +871,15 @@ module ccip::onramp {
                 error::invalid_argument(E_INVALID_DEST_CHAIN_SELECTOR)
             );
 
-            let is_enabled = dest_chain_enabled[i];
+            let router = dest_chain_routers[i];
             let allowlist_enabled = dest_chain_allowlist_enabled[i];
 
             if (!state.dest_chain_configs.contains(dest_chain_selector)) {
                 state.dest_chain_configs.add(
                     dest_chain_selector,
                     DestChainConfig {
-                        is_enabled: false,
                         sequence_number: 0,
+                        router: @0x0,
                         allowlist_enabled: false,
                         allowed_senders: vector[]
                     }
@@ -765,13 +889,13 @@ module ccip::onramp {
             let dest_chain_config =
                 state.dest_chain_configs.borrow_mut(dest_chain_selector);
 
-            dest_chain_config.is_enabled = is_enabled;
+            dest_chain_config.router = router;
             dest_chain_config.allowlist_enabled = allowlist_enabled;
 
             event::emit(
                 DestChainConfigSet {
                     dest_chain_selector,
-                    is_enabled,
+                    router,
                     sequence_number: dest_chain_config.sequence_number,
                     allowlist_enabled: dest_chain_config.allowlist_enabled
                 }
@@ -780,7 +904,7 @@ module ccip::onramp {
                 &mut state.dest_chain_config_set_events,
                 DestChainConfigSet {
                     dest_chain_selector,
-                    is_enabled,
+                    router,
                     sequence_number: dest_chain_config.sequence_number,
                     allowlist_enabled: dest_chain_config.allowlist_enabled
                 }
@@ -788,12 +912,44 @@ module ccip::onramp {
         };
     }
 
+    inline fun get_state_address_internal(): address {
+        account::create_resource_address(&@ccip_onramp, STATE_SEED)
+    }
+
     inline fun borrow_state(): &OnRampState {
-        borrow_global<OnRampState>(state_object::object_address())
+        borrow_global<OnRampState>(get_state_address_internal())
     }
 
     inline fun borrow_state_mut(): &mut OnRampState {
-        borrow_global_mut<OnRampState>(state_object::object_address())
+        borrow_global_mut<OnRampState>(get_state_address_internal())
+    }
+
+    //
+    // ccip::ownable functions
+    //
+
+    #[view]
+    public fun owner(): address acquires OnRampState {
+        ownable::owner(&borrow_state().ownable_state)
+    }
+
+    public entry fun transfer_ownership(caller: &signer, to: address) acquires OnRampState {
+        let state = borrow_state_mut();
+        ownable::transfer_ownership(
+            signer::address_of(caller), &mut state.ownable_state, to
+        )
+    }
+
+    public entry fun accept_ownership(caller: &signer) acquires OnRampState {
+        let state = borrow_state_mut();
+        ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
+    }
+
+    public entry fun execute_ownership_transfer(
+        caller: &signer, to: address
+    ) acquires OnRampState {
+        let state = borrow_state_mut();
+        ownable::execute_ownership_transfer(caller, &mut state.ownable_state, to)
     }
 
     // ================================================================
@@ -804,7 +960,7 @@ module ccip::onramp {
 
     public fun mcms_entrypoint<T: key>(
         _metadata: Object<T>
-    ): option::Option<u128> acquires OnRampState {
+    ): option::Option<u128> acquires OnRampDeployment, OnRampState {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip, McmsCallback {});
 
@@ -813,16 +969,17 @@ module ccip::onramp {
 
         if (function_bytes == b"initialize") {
             let chain_selector = bcs_stream::deserialize_u64(&mut stream);
+            let fee_aggregator = bcs_stream::deserialize_address(&mut stream);
             let allowlist_admin = bcs_stream::deserialize_address(&mut stream);
             let dest_chain_selectors =
                 bcs_stream::deserialize_vector(
                     &mut stream,
                     |stream| bcs_stream::deserialize_u64(stream)
                 );
-            let dest_chain_enabled =
+            let dest_chain_routers =
                 bcs_stream::deserialize_vector(
                     &mut stream,
-                    |stream| bcs_stream::deserialize_bool(stream)
+                    |stream| bcs_stream::deserialize_address(stream)
                 );
             let dest_chain_allowlist_enabled =
                 bcs_stream::deserialize_vector(
@@ -833,25 +990,27 @@ module ccip::onramp {
             initialize(
                 &caller,
                 chain_selector,
+                fee_aggregator,
                 allowlist_admin,
                 dest_chain_selectors,
-                dest_chain_enabled,
+                dest_chain_routers,
                 dest_chain_allowlist_enabled
             );
         } else if (function_bytes == b"set_dynamic_config") {
+            let fee_aggregator = bcs_stream::deserialize_address(&mut stream);
             let allowlist_admin = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            set_dynamic_config(&caller, allowlist_admin);
+            set_dynamic_config(&caller, fee_aggregator, allowlist_admin);
         } else if (function_bytes == b"apply_dest_chain_config_updates") {
             let dest_chain_selectors =
                 bcs_stream::deserialize_vector(
                     &mut stream,
                     |stream| bcs_stream::deserialize_u64(stream)
                 );
-            let dest_chain_enabled =
+            let dest_chain_routers =
                 bcs_stream::deserialize_vector(
                     &mut stream,
-                    |stream| bcs_stream::deserialize_bool(stream)
+                    |stream| bcs_stream::deserialize_address(stream)
                 );
             let dest_chain_allowlist_enabled =
                 bcs_stream::deserialize_vector(
@@ -862,7 +1021,7 @@ module ccip::onramp {
             apply_dest_chain_config_updates(
                 &caller,
                 dest_chain_selectors,
-                dest_chain_enabled,
+                dest_chain_routers,
                 dest_chain_allowlist_enabled
             );
         } else if (function_bytes == b"apply_allowlist_updates") {
@@ -900,6 +1059,17 @@ module ccip::onramp {
                 dest_chain_add_allowed_senders,
                 dest_chain_remove_allowed_senders
             );
+        } else if (function_bytes == b"transfer_ownership") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            transfer_ownership(&caller, to)
+        } else if (function_bytes == b"accept_ownership") {
+            bcs_stream::assert_is_consumed(&stream);
+            accept_ownership(&caller)
+        } else if (function_bytes == b"execute_ownership_transfer") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            execute_ownership_transfer(&caller, to)
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };

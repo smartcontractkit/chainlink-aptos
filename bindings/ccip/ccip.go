@@ -8,7 +8,6 @@ import (
 	module_auth "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/auth"
 	module_fee_quoter "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/fee_quoter"
 	module_offramp "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/offramp"
-	module_onramp "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/onramp"
 	module_receiver_registry "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/receiver_registry"
 	module_rmn_remote "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/rmn_remote"
 	module_token_admin_registry "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/token_admin_registry"
@@ -22,7 +21,6 @@ type CCIP interface {
 	Auth() module_auth.AuthInterface
 	FeeQuoter() module_fee_quoter.FeeQuoterInterface
 	Offramp() module_offramp.OfframpInterface
-	Onramp() module_onramp.OnrampInterface
 	ReceiverRegistry() module_receiver_registry.ReceiverRegistryInterface
 	RMNRemote() module_rmn_remote.RMNRemoteInterface
 	TokenAdminRegistry() module_token_admin_registry.TokenAdminRegistryInterface
@@ -36,7 +34,6 @@ type CCIPContract struct {
 	auth               module_auth.AuthInterface
 	feeQuoter          module_fee_quoter.FeeQuoterInterface
 	offramp            module_offramp.OfframpInterface
-	onramp             module_onramp.OnrampInterface
 	receiverRegistry   module_receiver_registry.ReceiverRegistryInterface
 	rmnRemote          module_rmn_remote.RMNRemoteInterface
 	tokenAdminRegistry module_token_admin_registry.TokenAdminRegistryInterface
@@ -56,10 +53,6 @@ func (C CCIPContract) FeeQuoter() module_fee_quoter.FeeQuoterInterface {
 
 func (C CCIPContract) Offramp() module_offramp.OfframpInterface {
 	return C.offramp
-}
-
-func (C CCIPContract) Onramp() module_onramp.OnrampInterface {
-	return C.onramp
 }
 
 func (C CCIPContract) ReceiverRegistry() module_receiver_registry.ReceiverRegistryInterface {
@@ -82,7 +75,6 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 	module_auth.FunctionInfo,
 	module_fee_quoter.FunctionInfo,
 	module_offramp.FunctionInfo,
-	module_onramp.FunctionInfo,
 	module_receiver_registry.FunctionInfo,
 	module_rmn_remote.FunctionInfo,
 	module_token_admin_registry.FunctionInfo,
@@ -107,7 +99,6 @@ func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIP {
 		auth:               module_auth.NewAuth(address, client),
 		feeQuoter:          module_fee_quoter.NewFeeQuoter(address, client),
 		offramp:            module_offramp.NewOfframp(address, client),
-		onramp:             module_onramp.NewOnramp(address, client),
 		receiverRegistry:   module_receiver_registry.NewReceiverRegistry(address, client),
 		rmnRemote:          module_rmn_remote.NewRMNRemote(address, client),
 		tokenAdminRegistry: module_token_admin_registry.NewTokenAdminRegistry(address, client),

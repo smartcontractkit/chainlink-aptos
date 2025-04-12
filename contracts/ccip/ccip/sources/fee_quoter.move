@@ -36,7 +36,6 @@ module ccip::fee_quoter {
     use mcms::mcms_registry;
 
     friend ccip::offramp;
-    friend ccip::onramp;
 
     const CHAIN_FAMILY_SELECTOR_EVM: vector<u8> = x"2812d52c";
     const CHAIN_FAMILY_SELECTOR_SVM: vector<u8> = x"1e10bdc4";
