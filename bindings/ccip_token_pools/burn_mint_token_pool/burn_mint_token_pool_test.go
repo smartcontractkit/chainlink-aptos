@@ -1,4 +1,4 @@
-package ccip_router
+package burn_mint_token_pool
 
 import (
 	"testing"
@@ -9,7 +9,7 @@ import (
 
 func TestCompile(t *testing.T) {
 	t.Parallel()
-	output, err := Compile(aptos.AccountOne, aptos.AccountOne, false)
+	output, err := Compile(aptos.AccountOne, aptos.AccountOne, aptos.AccountOne, aptos.AccountOne, aptos.AccountOne, false)
 	require.NoError(t, err)
 	require.NotZero(t, output.Metadata, "Compilation resulted in no metadata")
 	require.NotZero(t, output.Bytecode, "Compilation resulted in no bytecode")

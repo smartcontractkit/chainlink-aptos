@@ -37,17 +37,25 @@ type ExternalStruct struct {
 	Name    string
 }
 
-func PackageModule(module []byte) (pkg string, mod string, err error) {
+// PackageModule parses the input file and returns the first module it finds.
+// `#[test_only]` modules will be filtered out
+func PackageModule(module []byte) (pkg string, mod string, moduleContent string, err error) {
 	lang := tree_sitter.NewLanguage(tree_sitter_move_on_aptos.Language())
 	n, err := tree_sitter.ParseCtx(context.Background(), module, lang)
 	if err != nil {
-		return "", "", fmt.Errorf("parsing AST: %w", err)
+		return "", "", "", fmt.Errorf("parsing AST: %w", err)
 	}
 
 	query, err := tree_sitter.NewQuery([]byte(`
-(module
-  path: (identifier) @package
-  name: (identifier) @module
+(source_file
+    (attributes
+    	(attribute) @attr
+    )*
+    (#not-eq? @attr "test_only")
+	(module
+ 		path: (identifier) @packageName
+		name: (identifier) @moduleName
+	) @moduleContent
 )
 	`), lang)
 
@@ -59,14 +67,23 @@ func PackageModule(module []byte) (pkg string, mod string, err error) {
 		if !ok {
 			break
 		}
+
+		m = queryCursor.FilterPredicates(m, module)
+		if len(m.Captures) == 0 {
+			continue
+		}
+
 		for _, capture := range m.Captures {
 			switch capture.Index {
-			case 0:
-				// @package
-				pkg = capture.Node.Content(module)
 			case 1:
-				// @module
+				// @packageName
+				pkg = capture.Node.Content(module)
+			case 2:
+				// @moduleName
 				mod = capture.Node.Content(module)
+			case 3:
+				// @moduleContent
+				moduleContent = capture.Node.Content(module)
 			}
 		}
 	}
@@ -124,7 +141,6 @@ func Functions(module []byte) ([]Func, error) {
 		}
 		m = functionCursor.FilterPredicates(m, module)
 		if len(m.Captures) == 0 {
-			fmt.Println("Filtered out")
 			continue
 		}
 		f := Func{}

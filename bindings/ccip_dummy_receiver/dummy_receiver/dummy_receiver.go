@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type DummyReceiver interface {
+type DummyReceiverInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 
 	// Encoder returns the encoder implementation of this module.
@@ -35,7 +35,7 @@ type DummyReceiverEncoder interface {
 
 const FunctionInfo = `[{"package":"ccip_dummy_receiver","module":"dummy_receiver","name":"ccip_receive","parameters":[{"name":"_metadata","type":"address"}]}]`
 
-func NewDummyReceiver(address aptos.AccountAddress, client aptos.AptosRpcClient) DummyReceiver {
+func NewDummyReceiver(address aptos.AccountAddress, client aptos.AptosRpcClient) DummyReceiverInterface {
 	contract := bind.NewBoundContract(address, "ccip_dummy_receiver", "dummy_receiver", client)
 	return DummyReceiverContract{
 		BoundContract:        contract,
@@ -57,7 +57,7 @@ type DummyReceiverContract struct {
 	dummyReceiverEncoder
 }
 
-var _ DummyReceiver = DummyReceiverContract{}
+var _ DummyReceiverInterface = DummyReceiverContract{}
 
 func (c DummyReceiverContract) Encoder() DummyReceiverEncoder {
 	return c.dummyReceiverEncoder

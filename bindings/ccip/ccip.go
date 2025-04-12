@@ -19,13 +19,13 @@ import (
 type CCIP interface {
 	Address() aptos.AccountAddress
 
-	Auth() module_auth.Auth
-	FeeQuoter() module_fee_quoter.FeeQuoter
-	Offramp() module_offramp.Offramp
-	Onramp() module_onramp.Onramp
-	ReceiverRegistry() module_receiver_registry.ReceiverRegistry
-	RMNRemote() module_rmn_remote.RMNRemote
-	TokenAdminRegistry() module_token_admin_registry.TokenAdminRegistry
+	Auth() module_auth.AuthInterface
+	FeeQuoter() module_fee_quoter.FeeQuoterInterface
+	Offramp() module_offramp.OfframpInterface
+	Onramp() module_onramp.OnrampInterface
+	ReceiverRegistry() module_receiver_registry.ReceiverRegistryInterface
+	RMNRemote() module_rmn_remote.RMNRemoteInterface
+	TokenAdminRegistry() module_token_admin_registry.TokenAdminRegistryInterface
 }
 
 var _ CCIP = CCIPContract{}
@@ -33,44 +33,44 @@ var _ CCIP = CCIPContract{}
 type CCIPContract struct {
 	address aptos.AccountAddress
 
-	auth               module_auth.Auth
-	feeQuoter          module_fee_quoter.FeeQuoter
-	offramp            module_offramp.Offramp
-	onramp             module_onramp.Onramp
-	receiverRegistry   module_receiver_registry.ReceiverRegistry
-	rmnRemote          module_rmn_remote.RMNRemote
-	tokenAdminRegistry module_token_admin_registry.TokenAdminRegistry
+	auth               module_auth.AuthInterface
+	feeQuoter          module_fee_quoter.FeeQuoterInterface
+	offramp            module_offramp.OfframpInterface
+	onramp             module_onramp.OnrampInterface
+	receiverRegistry   module_receiver_registry.ReceiverRegistryInterface
+	rmnRemote          module_rmn_remote.RMNRemoteInterface
+	tokenAdminRegistry module_token_admin_registry.TokenAdminRegistryInterface
 }
 
 func (C CCIPContract) Address() aptos.AccountAddress {
 	return C.address
 }
 
-func (C CCIPContract) Auth() module_auth.Auth {
+func (C CCIPContract) Auth() module_auth.AuthInterface {
 	return C.auth
 }
 
-func (C CCIPContract) FeeQuoter() module_fee_quoter.FeeQuoter {
+func (C CCIPContract) FeeQuoter() module_fee_quoter.FeeQuoterInterface {
 	return C.feeQuoter
 }
 
-func (C CCIPContract) Offramp() module_offramp.Offramp {
+func (C CCIPContract) Offramp() module_offramp.OfframpInterface {
 	return C.offramp
 }
 
-func (C CCIPContract) Onramp() module_onramp.Onramp {
+func (C CCIPContract) Onramp() module_onramp.OnrampInterface {
 	return C.onramp
 }
 
-func (C CCIPContract) ReceiverRegistry() module_receiver_registry.ReceiverRegistry {
+func (C CCIPContract) ReceiverRegistry() module_receiver_registry.ReceiverRegistryInterface {
 	return C.receiverRegistry
 }
 
-func (C CCIPContract) RMNRemote() module_rmn_remote.RMNRemote {
+func (C CCIPContract) RMNRemote() module_rmn_remote.RMNRemoteInterface {
 	return C.rmnRemote
 }
 
-func (C CCIPContract) TokenAdminRegistry() module_token_admin_registry.TokenAdminRegistry {
+func (C CCIPContract) TokenAdminRegistry() module_token_admin_registry.TokenAdminRegistryInterface {
 	return C.tokenAdminRegistry
 }
 

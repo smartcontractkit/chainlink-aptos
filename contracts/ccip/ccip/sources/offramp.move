@@ -232,6 +232,7 @@ module ccip::offramp {
     }
 
     fun init_module(publisher: &signer) {
+        // Register the entrypoint with mcms
         if (@mcms_register_entrypoints != @0x0) {
             mcms_registry::register_entrypoint(
                 publisher, string::utf8(b"offramp"), McmsCallback {}
@@ -1222,7 +1223,7 @@ module ccip::offramp {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip, McmsCallback {});
 
-        let function_bytes = *string::bytes(&function);
+        let function_bytes = *function.bytes();
         let stream = bcs_stream::new(data);
 
         if (function_bytes == b"initialize") {

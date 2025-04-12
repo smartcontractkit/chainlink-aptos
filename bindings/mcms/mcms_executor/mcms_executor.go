@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type MCMSExecutor interface {
+type MCMSExecutorInterface interface {
 	StageData(opts *bind.TransactOpts, dataChunk []byte, partialProofs [][]byte) (*api.PendingTransaction, error)
 	StageDataAndExecute(opts *bind.TransactOpts, chainId *big.Int, multisig aptos.AccountAddress, nonce uint64, to aptos.AccountAddress, moduleName string, function string, dataChunk []byte, partialProofs [][]byte) (*api.PendingTransaction, error)
 	ClearStagedData(opts *bind.TransactOpts) (*api.PendingTransaction, error)
@@ -38,7 +38,7 @@ type MCMSExecutorEncoder interface {
 
 const FunctionInfo = `[{"package":"mcms","module":"mcms_executor","name":"clear_staged_data","parameters":null},{"package":"mcms","module":"mcms_executor","name":"stage_data","parameters":[{"name":"data_chunk","type":"vector\u003cu8\u003e"},{"name":"partial_proofs","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"mcms","module":"mcms_executor","name":"stage_data_and_execute","parameters":[{"name":"chain_id","type":"u256"},{"name":"multisig","type":"address"},{"name":"nonce","type":"u64"},{"name":"to","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function","type":"0x1::string::String"},{"name":"data_chunk","type":"vector\u003cu8\u003e"},{"name":"partial_proofs","type":"vector\u003cvector\u003cu8\u003e\u003e"}]}]`
 
-func NewMCMSExecutor(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMSExecutor {
+func NewMCMSExecutor(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMSExecutorInterface {
 	contract := bind.NewBoundContract(address, "mcms", "mcms_executor", client)
 	return MCMSExecutorContract{
 		BoundContract:       contract,
@@ -58,7 +58,7 @@ type MCMSExecutorContract struct {
 	mcmsExecutorEncoder
 }
 
-var _ MCMSExecutor = MCMSExecutorContract{}
+var _ MCMSExecutorInterface = MCMSExecutorContract{}
 
 func (c MCMSExecutorContract) Encoder() MCMSExecutorEncoder {
 	return c.mcmsExecutorEncoder

@@ -22,7 +22,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type Offramp interface {
+type OfframpInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	GetExecutionState(opts *bind.CallOpts, sourceChainSelector uint64, sequenceNumber uint64) (byte, error)
 	GetLatestPriceSequenceNumber(opts *bind.CallOpts) (uint64, error)
@@ -73,7 +73,7 @@ type OfframpEncoder interface {
 
 const FunctionInfo = `[{"package":"ccip","module":"offramp","name":"apply_source_chain_config_updates","parameters":[{"name":"source_chains_selector","type":"vector\u003cu64\u003e"},{"name":"source_chains_is_enabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_is_rmn_verification_disabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_on_ramp","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"offramp","name":"calculate_metadata_hash","parameters":[{"name":"source_chain_selector","type":"u64"},{"name":"dest_chain_selector","type":"u64"},{"name":"on_ramp","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"commit","parameters":[{"name":"report_context","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"report","type":"vector\u003cu8\u003e"},{"name":"signatures","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"offramp","name":"create_dynamic_config","parameters":[{"name":"permissionless_execution_threshold_seconds","type":"u32"}]},{"package":"ccip","module":"offramp","name":"create_static_config","parameters":[{"name":"chain_selector","type":"u64"}]},{"package":"ccip","module":"offramp","name":"deserialize_commit_report","parameters":[{"name":"report_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"deserialize_execution_report","parameters":[{"name":"report_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"deserialize_execution_reports","parameters":[{"name":"reports_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"execute","parameters":[{"name":"report_context","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"report","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"initialize","parameters":[{"name":"chain_selector","type":"u64"},{"name":"permissionless_execution_threshold_seconds","type":"u32"},{"name":"source_chains_selector","type":"vector\u003cu64\u003e"},{"name":"source_chains_is_enabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_is_rmn_verification_disabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_on_ramp","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"offramp","name":"manually_execute","parameters":[{"name":"report_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"offramp","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"offramp","name":"set_dynamic_config","parameters":[{"name":"permissionless_execution_threshold_seconds","type":"u32"}]},{"package":"ccip","module":"offramp","name":"set_ocr3_config","parameters":[{"name":"config_digest","type":"vector\u003cu8\u003e"},{"name":"ocr_plugin_type","type":"u8"},{"name":"big_f","type":"u8"},{"name":"is_signature_verification_enabled","type":"bool"},{"name":"signers","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"transmitters","type":"vector\u003caddress\u003e"}]}]`
 
-func NewOfframp(address aptos.AccountAddress, client aptos.AptosRpcClient) Offramp {
+func NewOfframp(address aptos.AccountAddress, client aptos.AptosRpcClient) OfframpInterface {
 	contract := bind.NewBoundContract(address, "ccip", "offramp", client)
 	return OfframpContract{
 		BoundContract:  contract,
@@ -220,7 +220,7 @@ type OfframpContract struct {
 	offrampEncoder
 }
 
-var _ Offramp = OfframpContract{}
+var _ OfframpInterface = OfframpContract{}
 
 func (c OfframpContract) Encoder() OfframpEncoder {
 	return c.offrampEncoder

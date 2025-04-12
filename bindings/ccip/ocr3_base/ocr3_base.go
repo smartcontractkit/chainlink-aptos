@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type Ocr3Base interface {
+type Ocr3BaseInterface interface {
 
 	// Encoder returns the encoder implementation of this module.
 	Encoder() Ocr3BaseEncoder
@@ -37,7 +37,7 @@ type Ocr3BaseEncoder interface {
 
 const FunctionInfo = `[{"package":"ccip","module":"ocr3_base","name":"deserialize_sequence_bytes","parameters":[{"name":"sequence_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"ocr3_base","name":"hash_report","parameters":[{"name":"report","type":"vector\u003cu8\u003e"},{"name":"config_digest","type":"vector\u003cu8\u003e"},{"name":"sequence_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"ocr3_base","name":"new","parameters":null},{"package":"ccip","module":"ocr3_base","name":"ocr_plugin_type_commit","parameters":null},{"package":"ccip","module":"ocr3_base","name":"ocr_plugin_type_execution","parameters":null}]`
 
-func NewOcr3Base(address aptos.AccountAddress, client aptos.AptosRpcClient) Ocr3Base {
+func NewOcr3Base(address aptos.AccountAddress, client aptos.AptosRpcClient) Ocr3BaseInterface {
 	contract := bind.NewBoundContract(address, "ccip", "ocr3_base", client)
 	return Ocr3BaseContract{
 		BoundContract:   contract,
@@ -88,7 +88,7 @@ type Ocr3BaseContract struct {
 	ocr3BaseEncoder
 }
 
-var _ Ocr3Base = Ocr3BaseContract{}
+var _ Ocr3BaseInterface = Ocr3BaseContract{}
 
 func (c Ocr3BaseContract) Encoder() Ocr3BaseEncoder {
 	return c.ocr3BaseEncoder

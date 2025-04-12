@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type Router interface {
+type RouterInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	GetStateAddress(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	IsChainSupported(opts *bind.CallOpts, destChainSelector uint64) (bool, error)
@@ -47,7 +47,7 @@ type RouterEncoder interface {
 
 const FunctionInfo = `[{"package":"ccip_router","module":"router","name":"ccip_send","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_router","module":"router","name":"ccip_send_with_message_id","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_router","module":"router","name":"get_on_ramp_versions","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"}]},{"package":"ccip_router","module":"router","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip_router","module":"router","name":"set_on_ramp_versions","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"on_ramp_versions","type":"vector\u003cvector\u003cu8\u003e\u003e"}]}]`
 
-func NewRouter(address aptos.AccountAddress, client aptos.AptosRpcClient) Router {
+func NewRouter(address aptos.AccountAddress, client aptos.AptosRpcClient) RouterInterface {
 	contract := bind.NewBoundContract(address, "ccip_router", "router", client)
 	return RouterContract{
 		BoundContract: contract,
@@ -73,7 +73,7 @@ type RouterContract struct {
 	routerEncoder
 }
 
-var _ Router = RouterContract{}
+var _ RouterInterface = RouterContract{}
 
 func (c RouterContract) Encoder() RouterEncoder {
 	return c.routerEncoder

@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type RMNRemote interface {
+type RMNRemoteInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error)
 	GetArm(opts *bind.CallOpts) (aptos.AccountAddress, error)
@@ -66,7 +66,7 @@ type RMNRemoteEncoder interface {
 
 const FunctionInfo = `[{"package":"ccip","module":"rmn_remote","name":"curse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"curse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"initialize","parameters":[{"name":"local_chain_selector","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"rmn_remote","name":"set_config","parameters":[{"name":"rmn_home_contract_config_digest","type":"vector\u003cu8\u003e"},{"name":"signer_onchain_public_keys","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"node_indexes","type":"vector\u003cu64\u003e"},{"name":"f_sign","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]}]`
 
-func NewRMNRemote(address aptos.AccountAddress, client aptos.AptosRpcClient) RMNRemote {
+func NewRMNRemote(address aptos.AccountAddress, client aptos.AptosRpcClient) RMNRemoteInterface {
 	contract := bind.NewBoundContract(address, "ccip", "rmn_remote", client)
 	return RMNRemoteContract{
 		BoundContract:    contract,
@@ -135,7 +135,7 @@ type RMNRemoteContract struct {
 	rmnRemoteEncoder
 }
 
-var _ RMNRemote = RMNRemoteContract{}
+var _ RMNRemoteInterface = RMNRemoteContract{}
 
 func (c RMNRemoteContract) Encoder() RMNRemoteEncoder {
 	return c.rmnRemoteEncoder

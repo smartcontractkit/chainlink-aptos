@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type MCMSAccount interface {
+type MCMSAccountInterface interface {
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	IsSelfOwned(opts *bind.CallOpts) (bool, error)
 
@@ -43,7 +43,7 @@ type MCMSAccountEncoder interface {
 
 const FunctionInfo = `[{"package":"mcms","module":"mcms_account","name":"accept_ownership","parameters":null},{"package":"mcms","module":"mcms_account","name":"assert_is_owner","parameters":null},{"package":"mcms","module":"mcms_account","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"mcms","module":"mcms_account","name":"transfer_ownership_to_self","parameters":null}]`
 
-func NewMCMSAccount(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMSAccount {
+func NewMCMSAccount(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMSAccountInterface {
 	contract := bind.NewBoundContract(address, "mcms", "mcms_account", client)
 	return MCMSAccountContract{
 		BoundContract:      contract,
@@ -73,7 +73,7 @@ type MCMSAccountContract struct {
 	mcmsAccountEncoder
 }
 
-var _ MCMSAccount = MCMSAccountContract{}
+var _ MCMSAccountInterface = MCMSAccountContract{}
 
 func (c MCMSAccountContract) Encoder() MCMSAccountEncoder {
 	return c.mcmsAccountEncoder
