@@ -214,7 +214,7 @@ module ccip_router::router {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip, McmsCallback {});
 
-        let function_bytes = *string::bytes(&function);
+        let function_bytes = *function.bytes();
         let stream = bcs_stream::new(data);
 
         if (function_bytes == b"set_on_ramp_versions") {

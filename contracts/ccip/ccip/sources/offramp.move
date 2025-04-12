@@ -525,12 +525,8 @@ module ccip::offramp {
                 commit_report.price_updates.token_price_updates.for_each_ref(
                     |token_price_update| {
                         let token_price_update: &TokenPriceUpdate = token_price_update;
-                        vector::push_back(
-                            &mut source_tokens, token_price_update.source_token
-                        );
-                        vector::push_back(
-                            &mut source_usd_per_token, token_price_update.usd_per_token
-                        );
+                        source_tokens.push_back(token_price_update.source_token);
+                        source_usd_per_token.push_back(token_price_update.usd_per_token);
                     }
                 );
 
@@ -539,13 +535,10 @@ module ccip::offramp {
                 commit_report.price_updates.gas_price_updates.for_each_ref(
                     |gas_price_update| {
                         let gas_price_update: &GasPriceUpdate = gas_price_update;
-                        vector::push_back(
-                            &mut gas_dest_chain_selectors,
+                        gas_dest_chain_selectors.push_back(
                             gas_price_update.dest_chain_selector
                         );
-                        vector::push_back(
-                            &mut gas_usd_per_unit_gas, gas_price_update.usd_per_unit_gas
-                        );
+                        gas_usd_per_unit_gas.push_back(gas_price_update.usd_per_unit_gas);
                     }
                 );
 
@@ -599,18 +592,13 @@ module ccip::offramp {
         let merkle_root_min_seq_nrs = vector[];
         let merkle_root_max_seq_nrs = vector[];
         let merkle_root_values = vector[];
-        blessed_merkle_roots.for_each_ref(
-            |merkle_root| {
-                let merkle_root: &MerkleRoot = merkle_root;
-                vector::push_back(
-                    &mut merkle_root_source_chains_selector,
-                    merkle_root.source_chain_selector
-                );
-                vector::push_back(&mut merkle_root_min_seq_nrs, merkle_root.min_seq_nr);
-                vector::push_back(&mut merkle_root_max_seq_nrs, merkle_root.max_seq_nr);
-                vector::push_back(&mut merkle_root_values, merkle_root.merkle_root);
-            }
-        );
+        blessed_merkle_roots.for_each_ref(|merkle_root| {
+            let merkle_root: &MerkleRoot = merkle_root;
+            merkle_root_source_chains_selector.push_back(merkle_root.source_chain_selector);
+            merkle_root_min_seq_nrs.push_back(merkle_root.min_seq_nr);
+            merkle_root_max_seq_nrs.push_back(merkle_root.max_seq_nr);
+            merkle_root_values.push_back(merkle_root.merkle_root);
+        });
 
         rmn_remote::verify(
             merkle_root_source_chains_selector,

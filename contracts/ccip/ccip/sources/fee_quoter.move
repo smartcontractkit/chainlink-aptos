@@ -25,7 +25,6 @@ module ccip::fee_quoter {
     use std::string::{Self, String};
     use std::smart_table::{Self, SmartTable};
     use std::timestamp;
-    use std::vector;
 
     use ccip::auth;
     use ccip::eth_abi;
@@ -601,8 +600,8 @@ module ccip::fee_quoter {
 
         let chain_family_selector = dest_chain_config.chain_family_selector;
 
-        let data_len = vector::length(&data);
-        let tokens_len = vector::length(&local_token_addresses);
+        let data_len = data.length();
+        let tokens_len = local_token_addresses.length();
         validate_message(dest_chain_config, data_len, tokens_len);
 
         let gas_limit =
@@ -1112,7 +1111,7 @@ module ccip::fee_quoter {
 
             let dest_exec_data = vector[];
             eth_abi::encode_u32(&mut dest_exec_data, dest_gas_amount);
-            vector::push_back(&mut dest_exec_data_per_token, dest_exec_data);
+            dest_exec_data_per_token.push_back(dest_exec_data);
         };
 
         dest_exec_data_per_token
@@ -1352,7 +1351,7 @@ module ccip::fee_quoter {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip, McmsCallback {});
 
-        let function_bytes = *string::bytes(&function);
+        let function_bytes = *function.bytes();
         let stream = bcs_stream::new(data);
 
         if (function_bytes == b"initialize") {

@@ -11,7 +11,6 @@ module ccip::onramp {
     use std::signer;
     use std::string::{Self, String};
     use std::smart_table::{Self, SmartTable};
-    use std::vector;
 
     use ccip::auth;
     use ccip::eth_abi;
@@ -394,8 +393,8 @@ module ccip::onramp {
                     receiver
                 );
 
-            vector::push_back(&mut dest_token_addresses, dest_token_address);
-            vector::push_back(&mut dest_pool_datas, dest_pool_data);
+            dest_token_addresses.push_back(dest_token_address);
+            dest_pool_datas.push_back(dest_pool_data);
 
             token_transfers.push_back(
                 Aptos2AnyTokenTransfer {
@@ -808,7 +807,7 @@ module ccip::onramp {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip, McmsCallback {});
 
-        let function_bytes = *string::bytes(&function);
+        let function_bytes = *function.bytes();
         let stream = bcs_stream::new(data);
 
         if (function_bytes == b"initialize") {
