@@ -1,5 +1,4 @@
 module ccip::auth {
-    use std::account::{Self, SignerCapability};
     use std::error;
     use std::object;
     use std::option;
@@ -15,13 +14,8 @@ module ccip::auth {
 
     struct AuthState has key {
         ownable_state: ownable::OwnableState,
-        router_address: address,
         allowed_onramps: allowlist::AllowlistState,
         allowed_offramps: allowlist::AllowlistState
-    }
-
-    struct PendingRouterSignerCapability has key {
-        signer_capability: SignerCapability
     }
 
     const E_UNKNOWN_FUNCTION: u64 = 1;
@@ -33,11 +27,6 @@ module ccip::auth {
 
     fun init_module(publisher: &signer) {
         let state_object_signer = &state_object::object_signer();
-
-        let (router_signer, signer_capability) =
-            account::create_resource_account(
-                state_object_signer, b"CHAINLINK_CCIP_ROUTER"
-            );
 
         let allowed_onramps =
             allowlist::new_with_name(publisher, vector[], string::utf8(b"onramps"));
@@ -55,13 +44,10 @@ module ccip::auth {
             state_object_signer,
             AuthState {
                 ownable_state: ownable::new(state_object_signer, @ccip),
-                router_address: signer::address_of(&router_signer),
                 allowed_onramps,
                 allowed_offramps
             }
         );
-
-        move_to(publisher, PendingRouterSignerCapability { signer_capability });
 
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints != @0x0) {
@@ -69,22 +55,6 @@ module ccip::auth {
                 publisher, string::utf8(b"auth"), McmsCallback {}
             );
         };
-    }
-
-    public fun retrieve_router_signer_cap(
-        caller: &signer
-    ): SignerCapability acquires PendingRouterSignerCapability {
-        assert!(
-            signer::address_of(caller) == @ccip, error::permission_denied(E_NOT_CCIP)
-        );
-        assert!(
-            exists<PendingRouterSignerCapability>(@ccip),
-            error::not_found(E_SIGNER_CAP_NOT_FOUND)
-        );
-
-        let PendingRouterSignerCapability { signer_capability } =
-            move_from<PendingRouterSignerCapability>(@ccip);
-        signer_capability
     }
 
     #[view]
