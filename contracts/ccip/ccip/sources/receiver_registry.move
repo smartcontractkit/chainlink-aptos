@@ -130,6 +130,11 @@ module ccip::receiver_registry {
         );
     }
 
+    #[view]
+    public fun is_registered_receiver(receiver_address: address): bool {
+        exists<CCIPReceiverRegistration>(receiver_address)
+    }
+
     public fun get_receiver_input<ProofType: drop>(
         receiver_address: address, _proof: ProofType
     ): client::Any2AptosMessage acquires CCIPReceiverRegistration {
