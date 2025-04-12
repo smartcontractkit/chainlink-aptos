@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/aptos-labs/aptos-go-sdk"
@@ -398,19 +399,10 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	}
 
 	eventHandle := address.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
-
-	limit := limitAndSort.Limit.Count
-
-	offsetFilter, hasOffsetFilter := extractOffsetFilter(expressions)
 	tsFilter, hasTSFilter := extractTimestampFilter(expressions)
-	if hasOffsetFilter && hasTSFilter {
-		return nil, fmt.Errorf("cannot use both offset and timestamp filters")
-	}
-
 	var eventOffset uint64 = 0
-	if hasOffsetFilter {
-		eventOffset = offsetFilter
-	} else if hasTSFilter {
+
+	if hasTSFilter {
 		// We perform a binary search to determine the offset
 		// that satisfies the condition blockTs >= tsFilter
 		var one uint64 = 1
@@ -450,173 +442,140 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		eventOffset = low
 	}
 
-	events, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventConfig.EventHandleFieldName, &eventOffset, &limit)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get events: %+w", err)
+	// Note: we only support primitive filters for now
+	// All comparators are combined using the AND boolean operator
+	var comparators []*primitives.Comparator
+	for _, expr := range expressions {
+		if expr.IsPrimitive() {
+			if cmp, ok := expr.Primitive.(*primitives.Comparator); ok {
+				comparators = append(comparators, cmp)
+			}
+		}
+	}
+
+	var batchSize uint64 = 25
+	var sequences []types.Sequence
+	headCache := map[uint64]types.Head{}
+	limit := limitAndSort.Limit.Count
+
+	for {
+		events, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventConfig.EventHandleFieldName, &eventOffset, &batchSize)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get events: %+w", err)
+		}
+
+		if len(events) == 0 {
+			break
+		}
+
+		eventOffset += uint64(len(events))
+
+		shouldBreak := false
+		for _, event := range events {
+			jsonData := event.Data
+
+			if err := renameMapFields(jsonData, eventConfig.EventFieldRenames); err != nil {
+				return nil, fmt.Errorf("failed to rename event fields: %+w", err)
+			}
+
+			passesFilters := true
+			for _, cmp := range comparators {
+				// Only top level fields
+				fieldValue, ok := jsonData[cmp.Name]
+				if !ok {
+					// Field doesn't exist, filter fails
+					passesFilters = false
+					break
+				}
+
+				for _, valueCmp := range cmp.ValueComparators {
+					if !compareValue(fieldValue, valueCmp.Value, valueCmp.Operator) {
+						passesFilters = false
+						break
+					}
+				}
+
+				if !passesFilters {
+					break
+				}
+			}
+
+			if !passesFilters {
+				continue
+			}
+
+			var eventData any
+			if a.config.IsLoopPlugin {
+				// immediately remarshal the data
+				// TODO: update aptos-go-sdk to allow returning the string directly
+				resultBytes, err := json.Marshal(jsonData)
+				if err != nil {
+					return nil, fmt.Errorf("failed to re-marshal event for seqNum %d: %w", event.SequenceNumber, err)
+				}
+				eventData = resultBytes
+			} else {
+				// create new instance of eventData for each event
+				eventData = reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
+
+				err := codec.DecodeAptosJsonValue(jsonData, &eventData)
+				if err != nil {
+					return nil, fmt.Errorf("failed to decode event data: %+w", err)
+				}
+			}
+
+			head, ok := headCache[event.Version]
+			if !ok {
+				block, err := a.client.BlockByVersion(event.Version, false)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get block by version: %w", err)
+				}
+				hexBytes, err := hex.DecodeString(strings.TrimPrefix(block.BlockHash, "0x"))
+				if err != nil {
+					return nil, fmt.Errorf("failed to decode block hash: %w", err)
+				}
+				head = types.Head{
+					Height: fmt.Sprintf("%d", block.BlockHeight),
+					Hash:   hexBytes,
+					// microseconds to seconds
+					Timestamp: block.BlockTimestamp / 1000000,
+				}
+				headCache[event.Version] = head
+			}
+
+			sequence := types.Sequence{
+				Cursor: fmt.Sprintf("%d", event.SequenceNumber),
+				Head:   head,
+				Data:   eventData,
+			}
+			sequences = append(sequences, sequence)
+
+			// Check if we've reached the limit
+			if limit > 0 && uint64(len(sequences)) >= limit {
+				shouldBreak = true
+				break
+			}
+		}
+
+		if shouldBreak {
+			break
+		}
 	}
 
 	for _, sortBy := range limitAndSort.SortBy {
 		if seqSort, ok := sortBy.(query.SortBySequence); ok {
-			sort.Slice(events, func(i, j int) bool {
+			sort.Slice(sequences, func(i, j int) bool {
+				iSeq, _ := strconv.ParseUint(sequences[i].Cursor, 10, 64)
+				jSeq, _ := strconv.ParseUint(sequences[j].Cursor, 10, 64)
+
 				if seqSort.GetDirection() == query.Desc {
-					return events[i].SequenceNumber > events[j].SequenceNumber
+					return iSeq > jSeq
 				}
-				return events[i].SequenceNumber < events[j].SequenceNumber
+				return iSeq < jSeq
 			})
 		}
 	}
 
-	sequences := []types.Sequence{}
-	headCache := map[uint64]types.Head{}
-	for _, event := range events {
-		jsonData := event.Data
-
-		if err := renameMapFields(jsonData, eventConfig.EventFieldRenames); err != nil {
-			return nil, fmt.Errorf("failed to rename event fields: %+w", err)
-		}
-
-		var eventData any
-		if a.config.IsLoopPlugin {
-			// immediately remarshal the data
-			// TODO: update aptos-go-sdk to allow returning the string directly
-			resultBytes, err := json.Marshal(jsonData)
-			if err != nil {
-				return nil, fmt.Errorf("failed to re-marshal event for seqNum %d: %w", event.SequenceNumber, err)
-			}
-			eventData = resultBytes
-		} else {
-			// create new instance of eventData for each event
-			eventData = reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
-
-			err := codec.DecodeAptosJsonValue(jsonData, &eventData)
-			if err != nil {
-				return nil, fmt.Errorf("failed to decode event data: %+w", err)
-			}
-		}
-
-		head, ok := headCache[event.Version]
-		if !ok {
-			block, err := a.client.BlockByVersion(event.Version, false)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get block by version: %w", err)
-			}
-			hexBytes, err := hex.DecodeString(strings.TrimPrefix(block.BlockHash, "0x"))
-			if err != nil {
-				return nil, fmt.Errorf("failed to decode block hash: %w", err)
-			}
-			head = types.Head{
-				Height: fmt.Sprintf("%d", block.BlockHeight),
-				Hash:   hexBytes,
-				// microseconds to seconds
-				Timestamp: block.BlockTimestamp / 1000000,
-			}
-			headCache[event.Version] = head
-		}
-		sequence := types.Sequence{
-			Cursor: fmt.Sprintf("%d", event.SequenceNumber),
-			Head:   head,
-			Data:   eventData,
-		}
-		sequences = append(sequences, sequence)
-	}
-
 	return sequences, nil
-}
-
-func renameMapFields(jsonData map[string]any, renames map[string]RenamedField) error {
-	for origName, rename := range renames {
-		subValue, ok := jsonData[origName]
-		if !ok {
-			return fmt.Errorf("no such field: %s", origName)
-		}
-
-		// it's possible we don't want to rename this field, but only want the sub fields to be renamed.
-		if rename.NewName != "" {
-			jsonData[rename.NewName] = subValue
-			delete(jsonData, origName)
-		}
-
-		if err := maybeRenameFields(subValue, rename.SubFieldRenames); err != nil {
-			return fmt.Errorf("sub field renames failed for field %s: %+w", origName, err)
-		}
-	}
-	return nil
-}
-
-func maybeRenameFields(jsonValue any, renames map[string]RenamedField) error {
-	// no renames are provided, we don't put any constraint on jsonValue
-	if len(renames) == 0 {
-		return nil
-	}
-
-	if jsonMap, ok := jsonValue.(map[string]any); ok {
-		if err := renameMapFields(jsonMap, renames); err != nil {
-			return err
-		}
-	} else if jsonSlice, ok := unwrapSlice(jsonValue); ok {
-		for i, elem := range jsonSlice {
-			if elemMap, ok := elem.(map[string]any); ok {
-				if err := renameMapFields(elemMap, renames); err != nil {
-					return err
-				}
-			} else {
-				return fmt.Errorf("sub field renames provided but array element at index %d is not a map: %T", i, elem)
-			}
-		}
-	} else {
-		return fmt.Errorf("sub field renames provided but value is not a map or slice of maps: %T", jsonValue)
-	}
-
-	return nil
-}
-
-func unwrapSlice(value any) ([]any, bool) {
-	sliceValue, ok := value.([]any)
-	if !ok {
-		return nil, false
-	}
-	for len(sliceValue) == 1 {
-		innerSliceValue, ok := sliceValue[0].([]any)
-		if !ok {
-			break
-		}
-		sliceValue = innerSliceValue
-	}
-	return sliceValue, true
-}
-
-func extractTimestampFilter(expressions []query.Expression) (uint64, bool) {
-	for _, expr := range expressions {
-		if expr.IsPrimitive() {
-			if cmp, ok := expr.Primitive.(*primitives.Comparator); ok && cmp.Name == "timestamp" {
-				for _, vc := range cmp.ValueComparators {
-					if vc.Operator == primitives.Gte {
-						if ts, ok := vc.Value.(uint64); ok {
-							return ts, true
-						}
-					}
-				}
-			}
-		}
-	}
-	return 0, false
-}
-
-func extractOffsetFilter(expressions []query.Expression) (uint64, bool) {
-	for _, expr := range expressions {
-		if expr.IsPrimitive() {
-			if cmp, ok := expr.Primitive.(*primitives.Comparator); ok && cmp.Name == "offset" {
-				for _, vc := range cmp.ValueComparators {
-					if vc.Operator == primitives.Eq {
-						if off, ok := vc.Value.(uint64); ok {
-							return off, true
-						}
-					}
-				}
-			}
-		}
-	}
-	return 0, false
 }
 
 func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContract) error {
