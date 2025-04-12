@@ -194,8 +194,7 @@ module ccip::auth {
     // |                      MCMS Entrypoint                         |
     // ================================================================
 
-    struct McmsCallback {}
-    has drop;
+    struct McmsCallback has drop {}
 
     public fun mcms_entrypoint<T: key>(
         _metadata: object::Object<T>
