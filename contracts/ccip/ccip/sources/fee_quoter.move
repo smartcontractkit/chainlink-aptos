@@ -34,9 +34,6 @@ module ccip::fee_quoter {
     use mcms::bcs_stream;
     use mcms::mcms_registry;
 
-    friend ccip::offramp;
-    friend ccip::onramp;
-
     const CHAIN_FAMILY_SELECTOR_EVM: vector<u8> = x"2812d52c";
     const CHAIN_FAMILY_SELECTOR_SVM: vector<u8> = x"1e10bdc4";
     const CHAIN_FAMILY_SELECTOR_APTOS: vector<u8> = x"ac77ffec";
@@ -502,12 +499,15 @@ module ccip::fee_quoter {
         );
     }
 
-    public(friend) fun update_prices(
+    public fun update_prices(
+        caller: &signer,
         source_tokens: vector<address>,
         source_usd_per_token: vector<u256>,
         gas_dest_chain_selectors: vector<u64>,
         gas_usd_per_unit_gas: vector<u256>
     ) acquires FeeQuoterState {
+        auth::assert_is_allowed_offramp(signer::address_of(caller));
+
         assert!(
             source_tokens.length() == source_usd_per_token.length(),
             error::invalid_argument(E_TOKEN_UPDATE_MISMATCH)

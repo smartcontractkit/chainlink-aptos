@@ -59,7 +59,7 @@ module lock_release_token_pool::lock_release_token_pool {
         // register the pool on deployment, because in the case of object code deployment,
         // this is the only time we have a signer ref to @ccip_lock_release_pool.
         assert!(
-            !object::object_exists<Metadata>(@local_token),
+            object::object_exists<Metadata>(@local_token),
             error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
         );
         let metadata = object::address_to_object<Metadata>(@local_token);

@@ -1,5 +1,5 @@
-module ccip::offramp {
-    use std::account;
+module ccip_offramp::offramp {
+    use std::account::{Self, SignerCapability};
     use std::aptos_hash;
     use std::error;
     use std::event::{Self, EventHandle};
@@ -13,21 +13,22 @@ module ccip::offramp {
     use std::timestamp;
     use std::vector;
 
-    use ccip::auth;
     use ccip::client;
     use ccip::eth_abi;
     use ccip::fee_quoter;
     use ccip::merkle_proof;
     use ccip::ocr3_base;
+    use ccip::ownable;
     use ccip::receiver_dispatcher;
     use ccip::receiver_registry;
     use ccip::rmn_remote;
-    use ccip::state_object;
     use ccip::token_admin_dispatcher;
     use ccip::token_admin_registry;
 
     use mcms::bcs_stream::{Self, BCSStream};
     use mcms::mcms_registry;
+
+    const STATE_SEED: vector<u8> = b"CHAINLINK_CCIP_OFFRAMP";
 
     // These have to match the EVM states
     const EXECUTION_STATE_UNTOUCHED: u8 = 0;
@@ -38,7 +39,22 @@ module ccip::offramp {
         0, 0, 0, 0
     ];
 
+    struct OffRampDeployment has key, store {
+        state_signer_cap: SignerCapability,
+        ownable_state: ownable::OwnableState,
+        ocr3_base_state: ocr3_base::OCR3BaseState,
+        static_config_set_events: EventHandle<StaticConfigSet>,
+        dynamic_config_set_events: EventHandle<DynamicConfigSet>,
+        source_chain_config_set_events: EventHandle<SourceChainConfigSet>,
+        skipped_already_executed_events: EventHandle<SkippedAlreadyExecuted>,
+        execution_state_changed_events: EventHandle<ExecutionStateChanged>,
+        commit_report_accepted_events: EventHandle<CommitReportAccepted>,
+        skipped_report_execution_events: EventHandle<SkippedReportExecution>
+    }
+
     struct OffRampState has key, store {
+        state_signer_cap: SignerCapability,
+        ownable_state: ownable::OwnableState,
         ocr3_base_state: ocr3_base::OCR3BaseState,
 
         // static config
@@ -234,12 +250,36 @@ module ccip::offramp {
     }
 
     fun init_module(publisher: &signer) {
+        let (_, state_signer_cap) =
+            account::create_resource_account(publisher, STATE_SEED);
+
+        move_to(
+            publisher,
+            OffRampDeployment {
+                state_signer_cap,
+                ownable_state: ownable::new(publisher, @ccip_offramp),
+                ocr3_base_state: ocr3_base::new(publisher),
+                static_config_set_events: account::new_event_handle(publisher),
+                dynamic_config_set_events: account::new_event_handle(publisher),
+                source_chain_config_set_events: account::new_event_handle(publisher),
+                skipped_already_executed_events: account::new_event_handle(publisher),
+                execution_state_changed_events: account::new_event_handle(publisher),
+                commit_report_accepted_events: account::new_event_handle(publisher),
+                skipped_report_execution_events: account::new_event_handle(publisher)
+            }
+        );
+
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints != @0x0) {
             mcms_registry::register_entrypoint(
                 publisher, string::utf8(b"offramp"), McmsCallback {}
             );
         };
+    }
+
+    #[view]
+    public fun get_state_address(): address {
+        get_state_address_internal()
     }
 
     public entry fun initialize(
@@ -250,39 +290,51 @@ module ccip::offramp {
         source_chains_is_enabled: vector<bool>,
         source_chains_is_rmn_verification_disabled: vector<bool>,
         source_chains_on_ramp: vector<vector<u8>>
-    ) {
-        auth::assert_only_owner(signer::address_of(caller));
-
+    ) acquires OffRampDeployment {
         assert!(
-            !exists<OffRampState>(state_object::object_address()),
+            exists<OffRampDeployment>(@ccip_offramp),
             error::invalid_argument(E_ALREADY_INITIALIZED)
         );
+
+        let OffRampDeployment {
+            state_signer_cap,
+            ownable_state,
+            ocr3_base_state,
+            static_config_set_events,
+            dynamic_config_set_events,
+            source_chain_config_set_events,
+            skipped_already_executed_events,
+            execution_state_changed_events,
+            commit_report_accepted_events,
+            skipped_report_execution_events
+        } = move_from<OffRampDeployment>(@ccip_offramp);
+
+        ownable::assert_only_owner(signer::address_of(caller), &ownable_state);
+
         assert!(
             source_chains_selector.length() == source_chains_is_enabled.length(),
             error::invalid_argument(E_SOURCE_CHAIN_SELECTORS_MISMATCH)
         );
 
-        let state_object_signer = state_object::object_signer();
+        let state_signer = account::create_signer_with_capability(&state_signer_cap);
 
         let state = OffRampState {
-            ocr3_base_state: ocr3_base::new(&state_object_signer),
+            state_signer_cap,
+            ownable_state,
+            ocr3_base_state,
             chain_selector,
             permissionless_execution_threshold_seconds: 0,
             source_chain_configs: smart_table::new(),
             execution_states: smart_table::new(),
             roots: smart_table::new(),
             latest_price_sequence_number: 0,
-            static_config_set_events: account::new_event_handle(&state_object_signer),
-            dynamic_config_set_events: account::new_event_handle(&state_object_signer),
-            source_chain_config_set_events: account::new_event_handle(&state_object_signer),
-            skipped_already_executed_events: account::new_event_handle(
-                &state_object_signer
-            ),
-            execution_state_changed_events: account::new_event_handle(&state_object_signer),
-            commit_report_accepted_events: account::new_event_handle(&state_object_signer),
-            skipped_report_execution_events: account::new_event_handle(
-                &state_object_signer
-            )
+            static_config_set_events,
+            dynamic_config_set_events,
+            source_chain_config_set_events,
+            skipped_already_executed_events,
+            execution_state_changed_events,
+            commit_report_accepted_events,
+            skipped_report_execution_events
         };
 
         let static_config = create_static_config(chain_selector);
@@ -304,7 +356,7 @@ module ccip::offramp {
             source_chains_on_ramp
         );
 
-        move_to(&state_object_signer, state);
+        move_to(&state_signer, state);
     }
 
     public fun assert_source_chain_enabled(
@@ -453,7 +505,7 @@ module ccip::offramp {
         );
 
         // Execute the message
-        execute_single_message(message, &execution_report.offchain_token_data);
+        execute_single_message(state, message, &execution_report.offchain_token_data);
 
         // Since Aptos only supports success of reverts, when it reaches this it has succeeded.
         *execution_state_ref = EXECUTION_STATE_SUCCESS;
@@ -542,7 +594,11 @@ module ccip::offramp {
                     }
                 );
 
+                let state_signer =
+                    account::create_signer_with_capability(&state.state_signer_cap);
+
                 fee_quoter::update_prices(
+                    &state_signer,
                     source_tokens,
                     source_usd_per_token,
                     gas_dest_chain_selectors,
@@ -719,10 +775,11 @@ module ccip::offramp {
     public entry fun set_dynamic_config(
         caller: &signer, permissionless_execution_threshold_seconds: u32
     ) acquires OffRampState {
-        auth::assert_only_owner(signer::address_of(caller));
+        let state = borrow_state_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
         set_dynamic_config_internal(
-            borrow_state_mut(),
+            state,
             permissionless_execution_threshold_seconds
         )
     }
@@ -734,10 +791,11 @@ module ccip::offramp {
         source_chains_is_rmn_verification_disabled: vector<bool>,
         source_chains_on_ramp: vector<vector<u8>>
     ) acquires OffRampState {
-        auth::assert_only_owner(signer::address_of(caller));
+        let state = borrow_state_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
         apply_source_chain_config_updates_internal(
-            borrow_state_mut(),
+            state,
             source_chains_selector,
             source_chains_is_enabled,
             source_chains_is_rmn_verification_disabled,
@@ -745,19 +803,26 @@ module ccip::offramp {
         )
     }
 
+    inline fun get_state_address_internal(): address {
+        account::create_resource_address(&@ccip_offramp, STATE_SEED)
+    }
+
     inline fun borrow_state(): &OffRampState {
-        borrow_global<OffRampState>(state_object::object_address())
+        borrow_global<OffRampState>(get_state_address_internal())
     }
 
     inline fun borrow_state_mut(): &mut OffRampState {
-        borrow_global_mut<OffRampState>(state_object::object_address())
+        borrow_global_mut<OffRampState>(get_state_address_internal())
     }
 
     inline fun execute_single_message(
-        message: &Any2AptosRampMessage, message_offchain_token_data: &vector<vector<u8>>
+        state: &mut OffRampState,
+        message: &Any2AptosRampMessage,
+        message_offchain_token_data: &vector<vector<u8>>
     ) {
         let (local_token_addresses, local_token_amounts) =
             release_or_mint_tokens(
+                state,
                 &message.token_amounts,
                 message_offchain_token_data,
                 message.sender,
@@ -772,6 +837,9 @@ module ccip::offramp {
 
         if ((!message.data.is_empty() || message.gas_limit != 0)
             && receiver_registry::is_registered_receiver(message.receiver)) {
+            let state_signer =
+                account::create_signer_with_capability(&state.state_signer_cap);
+
             let dest_token_amounts =
                 client::new_dest_token_amounts(
                     local_token_addresses, local_token_amounts
@@ -786,7 +854,9 @@ module ccip::offramp {
                     dest_token_amounts
                 );
 
-            receiver_dispatcher::dispatch_receive(message.receiver, any2aptos_message)
+            receiver_dispatcher::dispatch_receive(
+                &state_signer, message.receiver, any2aptos_message
+            )
         };
 
     }
@@ -796,6 +866,7 @@ module ccip::offramp {
     // ================================================================
 
     inline fun release_or_mint_tokens(
+        state: &mut OffRampState,
         token_amounts: &vector<Any2AptosTokenTransfer>,
         message_offchain_token_data: &vector<vector<u8>>,
         sender: vector<u8>,
@@ -811,6 +882,7 @@ module ccip::offramp {
             |token_transfer, current_offchain_token_data| {
                 let (token_address, token_amount) =
                     release_or_mint_single_token(
+                        state,
                         token_transfer,
                         current_offchain_token_data,
                         sender,
@@ -826,6 +898,7 @@ module ccip::offramp {
     }
 
     inline fun release_or_mint_single_token(
+        state: &mut OffRampState,
         token_transfer: &Any2AptosTokenTransfer,
         current_offchain_token_data: &vector<u8>,
         sender: vector<u8>,
@@ -846,8 +919,12 @@ module ccip::offramp {
         let before_balance =
             primary_fungible_store::balance(receiver, local_token_metadata);
 
+        let state_signer =
+            account::create_signer_with_capability(&state.state_signer_cap);
+
         let (fa, local_amount) =
             token_admin_dispatcher::dispatch_release_or_mint(
+                &state_signer,
                 token_pool_address,
                 sender,
                 receiver,
@@ -1168,6 +1245,34 @@ module ccip::offramp {
         DynamicConfig { fee_quoter: @ccip, permissionless_execution_threshold_seconds }
     }
 
+    //
+    // ccip::ownable functions
+    //
+
+    #[view]
+    public fun owner(): address acquires OffRampState {
+        ownable::owner(&borrow_state().ownable_state)
+    }
+
+    public entry fun transfer_ownership(caller: &signer, to: address) acquires OffRampState {
+        let state = borrow_state_mut();
+        ownable::transfer_ownership(
+            signer::address_of(caller), &mut state.ownable_state, to
+        )
+    }
+
+    public entry fun accept_ownership(caller: &signer) acquires OffRampState {
+        let state = borrow_state_mut();
+        ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
+    }
+
+    public entry fun execute_ownership_transfer(
+        caller: &signer, to: address
+    ) acquires OffRampState {
+        let state = borrow_state_mut();
+        ownable::execute_ownership_transfer(caller, &mut state.ownable_state, to)
+    }
+
     // ================================================================
     // |                             OCR                              |
     // ================================================================
@@ -1234,7 +1339,7 @@ module ccip::offramp {
 
     public fun mcms_entrypoint<T: key>(
         _metadata: object::Object<T>
-    ): Option<u128> acquires OffRampState {
+    ): Option<u128> acquires OffRampDeployment, OffRampState {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip, McmsCallback {});
 
@@ -1328,6 +1433,17 @@ module ccip::offramp {
                 signers,
                 transmitters
             )
+        } else if (function_bytes == b"transfer_ownership") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            transfer_ownership(&caller, to)
+        } else if (function_bytes == b"accept_ownership") {
+            bcs_stream::assert_is_consumed(&stream);
+            accept_ownership(&caller)
+        } else if (function_bytes == b"execute_ownership_transfer") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            execute_ownership_transfer(&caller, to)
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };

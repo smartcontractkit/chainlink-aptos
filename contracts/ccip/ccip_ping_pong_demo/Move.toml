@@ -6,6 +6,7 @@ authors = []
 [addresses]
 ccip = "_"
 ccip_router = "_"
+ccip_onramp = "_"
 ccip_ping_pong_demo = "_"
 mcms = "_"
 mcms_register_entrypoints = "_"
@@ -13,6 +14,7 @@ mcms_register_entrypoints = "_"
 [dev-addresses]
 ccip = "0x1000"
 ccip_router = "0x1001"
+ccip_onramp = "0x1002"
 ccip_ping_pong_demo = "0x3010"
 mcms = "0x4000"
 mcms_register_entrypoints = "0x4001"
