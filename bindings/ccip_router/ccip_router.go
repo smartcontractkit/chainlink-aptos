@@ -43,6 +43,7 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 func Compile(ccipAddress, mcmsAddress aptos.AccountAddress, registerMCMSEntrypoints bool) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
+		"ccip_onramp":               ccipAddress,
 		"ccip_router":               ccipAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
@@ -70,6 +71,7 @@ func DeployToExistingObject(
 ) (*api.PendingTransaction, CCIPRouter, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
+		"ccip_onramp":               ccipAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
