@@ -6,8 +6,6 @@ module ccip::token_admin_dispatcher {
     use ccip::auth;
     use ccip::token_admin_registry;
 
-    friend ccip::offramp;
-
     public fun dispatch_lock_or_burn(
         caller: &signer,
         token_pool_address: address,
@@ -31,7 +29,8 @@ module ccip::token_admin_dispatcher {
         token_admin_registry::finish_lock_or_burn(token_pool_address)
     }
 
-    public(friend) fun dispatch_release_or_mint(
+    public fun dispatch_release_or_mint(
+        caller: &signer,
         token_pool_address: address,
         sender: vector<u8>,
         receiver: address,
@@ -42,6 +41,8 @@ module ccip::token_admin_dispatcher {
         source_pool_data: vector<u8>,
         offchain_token_data: vector<u8>
     ): (FungibleAsset, u64) {
+        auth::assert_is_allowed_offramp(signer::address_of(caller));
+
         let (dispatch_owner, dispatch_fungible_store) =
             token_admin_registry::start_release_or_mint(
                 token_pool_address,
