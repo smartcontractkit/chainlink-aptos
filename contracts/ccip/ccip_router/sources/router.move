@@ -1,6 +1,7 @@
 module ccip_router::router {
     use std::account::{Self, SignerCapability};
     use std::error;
+    use std::event;
     use std::object;
     use std::option::{Self, Option};
     use std::signer;
@@ -8,14 +9,17 @@ module ccip_router::router {
     use std::smart_table::{Self, SmartTable};
     use std::event::EventHandle;
 
-    use ccip::auth;
+    use ccip::ownable;
     use ccip_onramp::onramp;
 
     use mcms::mcms_registry;
     use mcms::bcs_stream;
 
+    const STATE_SEED: vector<u8> = b"CHAINLINK_CCIP_ROUTER";
+
     struct RouterState has key {
-        signer_capability: SignerCapability,
+        state_signer_cap: SignerCapability,
+        ownable_state: ownable::OwnableState,
         on_ramp_versions: SmartTable<u64, vector<u8>>,
         on_ramp_set_events: EventHandle<OnRampSet>
     }
@@ -37,28 +41,30 @@ module ccip_router::router {
     }
 
     fun init_module(publisher: &signer) {
+        let (state_signer, state_signer_cap) =
+            account::create_resource_account(publisher, STATE_SEED);
+
+        move_to(
+            &state_signer,
+            RouterState {
+                state_signer_cap,
+                ownable_state: ownable::new(publisher, @ccip_router),
+                on_ramp_versions: smart_table::new(),
+                on_ramp_set_events: account::new_event_handle(publisher)
+            }
+        );
+
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints != @0x0) {
             mcms_registry::register_entrypoint(
                 publisher, string::utf8(b"router"), McmsCallback {}
             );
         };
-
-        let signer_capability = auth::retrieve_router_signer_cap(publisher);
-
-        move_to(
-            publisher,
-            RouterState {
-                signer_capability,
-                on_ramp_versions: smart_table::new(),
-                on_ramp_set_events: account::new_event_handle(publisher)
-            }
-        );
     }
 
     #[view]
-    public fun get_state_address(): address acquires RouterState {
-        signer::address_of(&get_signer())
+    public fun get_state_address(): address {
+        get_state_address_internal()
     }
 
     #[view]
@@ -130,15 +136,20 @@ module ccip_router::router {
         extra_args: vector<u8>
     ): vector<u8> acquires RouterState {
         let state = borrow_state();
-        if (!state.on_ramp_versions.contains(dest_chain_selector)) {
-            abort error::invalid_argument(E_UNKNOWN_CHAIN)
-        };
+
+        assert!(
+            state.on_ramp_versions.contains(dest_chain_selector),
+            error::invalid_argument(E_UNKNOWN_CHAIN)
+        );
 
         let on_ramp_version = *state.on_ramp_versions.borrow(dest_chain_selector);
 
+        let state_signer =
+            account::create_signer_with_capability(&state.state_signer_cap);
+
         if (on_ramp_version == vector[1, 6, 0]) {
             onramp::ccip_send(
-                &get_signer(),
+                &state_signer,
                 caller,
                 dest_chain_selector,
                 receiver,
@@ -155,22 +166,23 @@ module ccip_router::router {
         }
     }
 
-    inline fun get_signer(): signer {
-        account::create_signer_with_capability(&borrow_state().signer_capability)
+    inline fun get_state_address_internal(): address {
+        account::create_resource_address(&@ccip_router, STATE_SEED)
     }
 
     inline fun borrow_state(): &RouterState {
-        borrow_global<RouterState>(@ccip_router)
+        borrow_global<RouterState>(get_state_address_internal())
     }
 
     inline fun borrow_state_mut(): &mut RouterState {
-        borrow_global_mut<RouterState>(@ccip)
+        borrow_global_mut<RouterState>(get_state_address_internal())
     }
 
     // ================================================================
     // |                       OnRamp Routing                         |
     // ================================================================
 
+    #[view]
     public fun get_on_ramp_versions(
         dest_chain_selectors: vector<u64>
     ): vector<vector<u8>> acquires RouterState {
@@ -180,26 +192,59 @@ module ccip_router::router {
         }))
     }
 
-    public fun set_on_ramp_versions(
+    public entry fun set_on_ramp_versions(
         caller: &signer,
         dest_chain_selectors: vector<u64>,
         on_ramp_versions: vector<vector<u8>>
     ) acquires RouterState {
-        auth::assert_only_owner(signer::address_of(caller));
-
         let state = borrow_state_mut();
+
+        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
         dest_chain_selectors.zip(
             on_ramp_versions,
             |dest_chain_selector, on_ramp_version| {
-                assert!(
-                    on_ramp_version.length() == 3,
-                    error::invalid_argument(E_INVALID_ON_RAMP_VERSION)
-                );
+                let version_len = on_ramp_version.length();
+                if (version_len == 0) {
+                    if (state.on_ramp_versions.contains(dest_chain_selector)) {
+                        state.on_ramp_versions.remove(dest_chain_selector);
+                    };
+                } else {
+                    assert!(
+                        version_len == 3,
+                        error::invalid_argument(E_INVALID_ON_RAMP_VERSION)
+                    );
+                    state.on_ramp_versions.upsert(dest_chain_selector, on_ramp_version);
+                };
 
-                state.on_ramp_versions.upsert(dest_chain_selector, on_ramp_version);
+                event::emit_event(
+                    &mut state.on_ramp_set_events,
+                    OnRampSet { dest_chain_selector, on_ramp_version }
+                );
+                event::emit(OnRampSet { dest_chain_selector, on_ramp_version });
             }
         );
+    }
+
+    //
+    // ccip::ownable functions
+    //
+
+    #[view]
+    public fun owner(): address acquires RouterState {
+        ownable::owner(&borrow_state().ownable_state)
+    }
+
+    public entry fun transfer_ownership(caller: &signer, to: address) acquires RouterState {
+        let state = borrow_state_mut();
+        ownable::transfer_ownership(
+            signer::address_of(caller), &mut state.ownable_state, to
+        )
+    }
+
+    public entry fun accept_ownership(caller: &signer) acquires RouterState {
+        let state = borrow_state_mut();
+        ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
     }
 
     // ================================================================
