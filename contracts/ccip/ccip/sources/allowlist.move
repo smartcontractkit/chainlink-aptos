@@ -237,7 +237,7 @@ module ccip::allowlist_test {
 
         // Assert that the emitted events match the expected events
         for (i in 0..number_of_adds) {
-            assert!(expected.borrow(i) == got.borrow(i));
+            assert!(expected[i] == got[i]);
         }
     }
 
@@ -256,7 +256,7 @@ module ccip::allowlist_test {
 
         // Assert that the emitted events match the expected events
         for (i in 0..number_of_adds) {
-            assert!(expected.borrow(i) == got.borrow(i));
+            assert!(expected[i] == got[i]);
         }
     }
 
