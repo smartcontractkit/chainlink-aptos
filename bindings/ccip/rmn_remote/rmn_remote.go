@@ -25,7 +25,7 @@ type RMNRemoteInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error)
 	GetArm(opts *bind.CallOpts) (aptos.AccountAddress, error)
-	GetVersionedConfig(opts *bind.CallOpts) (VersionedConfig, error)
+	GetVersionedConfig(opts *bind.CallOpts) (uint32, Config, error)
 	GetLocalChainSelector(opts *bind.CallOpts) (uint64, error)
 	GetReportDigestHeader(opts *bind.CallOpts) ([]byte, error)
 	GetCursedSubjects(opts *bind.CallOpts) ([][]byte, error)
@@ -107,11 +107,6 @@ type MerkleRoot struct {
 	MinSeqNr            uint64 `move:"u64"`
 	MaxSeqNr            uint64 `move:"u64"`
 	MerkleRoot          []byte `move:"vector<u8>"`
-}
-
-type VersionedConfig struct {
-	Version uint32 `move:"u32"`
-	Config  Config `move:"Config"`
 }
 
 type ConfigSet struct {
@@ -206,25 +201,26 @@ func (c RMNRemoteContract) GetArm(opts *bind.CallOpts) (aptos.AccountAddress, er
 	return r0, nil
 }
 
-func (c RMNRemoteContract) GetVersionedConfig(opts *bind.CallOpts) (VersionedConfig, error) {
+func (c RMNRemoteContract) GetVersionedConfig(opts *bind.CallOpts) (uint32, Config, error) {
 	module, function, typeTags, args, err := c.rmnRemoteEncoder.GetVersionedConfig()
 	if err != nil {
-		return *new(VersionedConfig), err
+		return *new(uint32), *new(Config), err
 	}
 
 	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return *new(VersionedConfig), err
+		return *new(uint32), *new(Config), err
 	}
 
 	var (
-		r0 VersionedConfig
+		r0 uint32
+		r1 Config
 	)
 
-	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
-		return *new(VersionedConfig), err
+	if err := codec.DecodeAptosJsonArray(callData, &r0, &r1); err != nil {
+		return *new(uint32), *new(Config), err
 	}
-	return r0, nil
+	return r0, r1, nil
 }
 
 func (c RMNRemoteContract) GetLocalChainSelector(opts *bind.CallOpts) (uint64, error) {
