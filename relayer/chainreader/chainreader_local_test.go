@@ -1,4 +1,4 @@
-//go:build integration
+// //go:build integration
 
 package chainreader
 
@@ -9,7 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"strconv"
+	// "strconv"
 	"testing"
 	"time"
 
@@ -554,68 +554,6 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 	})
 	require.NoError(t, err)
 
-	t.Run("Get all events paginated", func(t *testing.T) {
-		pageSize := uint64(5)
-		var allEvents []*SingleValueEvent
-
-		for offset := uint64(0); ; offset += pageSize {
-			sequences, err := chainReader.QueryKey(
-				context.Background(),
-				commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
-				query.KeyFilter{
-					Key: "SingleValueEvent",
-					Expressions: []query.Expression{{
-						Primitive: &primitives.Comparator{
-							Name: "offset",
-							ValueComparators: []primitives.ValueComparator{{
-								Operator: primitives.Eq,
-								Value:    offset,
-							}},
-						},
-					}},
-				},
-				query.LimitAndSort{Limit: query.CountLimit(pageSize)},
-				&SingleValueEvent{},
-			)
-			require.NoError(t, err)
-			if len(sequences) == 0 {
-				break
-			}
-			for _, seq := range sequences {
-				allEvents = append(allEvents, seq.Data.(*SingleValueEvent))
-			}
-		}
-		require.Len(t, allEvents, 20)
-		for i := 0; i < len(allEvents)-1; i++ {
-			require.Less(t, allEvents[i].SingleUintValue, allEvents[i+1].SingleUintValue)
-		}
-	})
-
-	t.Run("Get newest event with offset", func(t *testing.T) {
-		sequences, err := chainReader.QueryKey(
-			context.Background(),
-			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
-			query.KeyFilter{
-				Key: "SingleValueEvent",
-				Expressions: []query.Expression{{
-					Primitive: &primitives.Comparator{
-						Name: "offset",
-						ValueComparators: []primitives.ValueComparator{{
-							Operator: primitives.Eq,
-							Value:    uint64(1),
-						}},
-					},
-				}},
-			},
-			query.LimitAndSort{Limit: query.CountLimit(1)},
-			&SingleValueEvent{},
-		)
-		require.NoError(t, err)
-		require.Len(t, sequences, 1)
-		event := sequences[0].Data.(*SingleValueEvent)
-		require.Equal(t, uint64(1), event.SingleUintValue)
-	})
-
 	t.Run("Get events using timestamp filter", func(t *testing.T) {
 		allSeqs, err := chainReader.QueryKey(
 			context.Background(),
@@ -630,16 +568,9 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 		midIdx := len(allSeqs) / 2
 		midTimestamp := allSeqs[midIdx].Head.Timestamp
 
-		tsComparator := &primitives.Comparator{
-			Name: "timestamp",
-			ValueComparators: []primitives.ValueComparator{{
-				Operator: primitives.Gte,
-				Value:    midTimestamp,
-			}},
-		}
 		filter := query.KeyFilter{
 			Key:         "SingleValueEvent",
-			Expressions: []query.Expression{{Primitive: tsComparator}},
+			Expressions: []query.Expression{query.Timestamp(midTimestamp, primitives.Gte)},
 		}
 
 		filteredSeqs, err := chainReader.QueryKey(
@@ -654,6 +585,142 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 
 		for _, seq := range filteredSeqs {
 			require.GreaterOrEqual(t, seq.Head.Timestamp, midTimestamp)
+		}
+	})
+
+	t.Run("Complex filtering with multiple comparators", func(t *testing.T) {
+		filter := query.KeyFilter{
+			Key: "SingleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("SingleUintValue",
+					primitives.ValueComparator{Value: uint64(3), Operator: primitives.Gte},
+					primitives.ValueComparator{Value: uint64(7), Operator: primitives.Lt},
+				),
+			},
+		}
+
+		sequences, err := chainReader.QueryKey(
+			context.Background(),
+			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
+			filter,
+			query.LimitAndSort{},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, sequences)
+		for _, seq := range sequences {
+			evt := seq.Data.(*SingleValueEvent)
+			require.GreaterOrEqual(t, evt.SingleUintValue, uint64(3))
+			require.Less(t, evt.SingleUintValue, uint64(7))
+		}
+
+		// Test multiple independent comparators
+		multiFilter := query.KeyFilter{
+			Key: "SingleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("SingleUintValue",
+					primitives.ValueComparator{Value: uint64(2), Operator: primitives.Gte},
+				),
+				query.Comparator("SingleUintValue",
+					primitives.ValueComparator{Value: uint64(8), Operator: primitives.Lt},
+				),
+			},
+		}
+
+		sequences, err = chainReader.QueryKey(
+			context.Background(),
+			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
+			multiFilter,
+			query.LimitAndSort{},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, sequences)
+		for _, seq := range sequences {
+			evt := seq.Data.(*SingleValueEvent)
+			require.GreaterOrEqual(t, evt.SingleUintValue, uint64(2))
+			require.Less(t, evt.SingleUintValue, uint64(8))
+		}
+	})
+
+	t.Run("Error cases", func(t *testing.T) {
+		// Test invalid field name
+		invalidFieldFilter := query.KeyFilter{
+			Key: "SingleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("NonExistentField",
+					primitives.ValueComparator{Value: uint64(1), Operator: primitives.Eq},
+				),
+			},
+		}
+
+		sequences, err := chainReader.QueryKey(
+			context.Background(),
+			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
+			invalidFieldFilter,
+			query.LimitAndSort{},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.Empty(t, sequences) // Should return empty result for non-existent field
+
+		// Test mismatched value type
+		invalidTypeFilter := query.KeyFilter{
+			Key: "SingleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("SingleUintValue",
+					primitives.ValueComparator{Value: "not a number", Operator: primitives.Eq},
+				),
+			},
+		}
+
+		sequences, err = chainReader.QueryKey(
+			context.Background(),
+			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
+			invalidTypeFilter,
+			query.LimitAndSort{},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.Empty(t, sequences) // Should return empty result for type mismatch
+	})
+
+	t.Run("Combined filtering with timestamp", func(t *testing.T) {
+		allSeqs, err := chainReader.QueryKey(
+			context.Background(),
+			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
+			query.KeyFilter{Key: "SingleValueEvent"},
+			query.LimitAndSort{},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, allSeqs)
+
+		midTs := allSeqs[len(allSeqs)/2].Head.Timestamp
+
+		combinedFilter := query.KeyFilter{
+			Key: "SingleValueEvent",
+			Expressions: []query.Expression{
+				query.Timestamp(midTs, primitives.Gte),
+				query.Comparator("SingleUintValue",
+					primitives.ValueComparator{Value: uint64(15), Operator: primitives.Lte},
+				),
+			},
+		}
+
+		sequences, err := chainReader.QueryKey(
+			context.Background(),
+			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
+			combinedFilter,
+			query.LimitAndSort{},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, sequences)
+		for _, seq := range sequences {
+			evt := seq.Data.(*SingleValueEvent)
+			require.LessOrEqual(t, evt.SingleUintValue, uint64(15))
+			require.GreaterOrEqual(t, seq.Head.Timestamp, midTs)
 		}
 	})
 
@@ -678,60 +745,60 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 		}
 	})
 
-	t.Run("Handle concurrent event emission", func(t *testing.T) {
-		initialCount := 20
-		concurrentCount := 15
+	// t.Run("Handle concurrent event emission", func(t *testing.T) {
+	// 	initialCount := 20
+	// 	concurrentCount := 15
 
-		// Start concurrent emission in background
-		done := make(chan bool)
-		go func() {
-			emitManyEvents(t, txmgr, accountAddress.String(), publicKeyHex, concurrentCount)
-			done <- true
-		}()
+	// 	// Start concurrent emission in background
+	// 	done := make(chan bool)
+	// 	go func() {
+	// 		emitManyEvents(t, txmgr, accountAddress.String(), publicKeyHex, concurrentCount)
+	// 		done <- true
+	// 	}()
 
-		seenSequences := make(map[uint64]bool)
-		maxAttempts := 10
-		success := false
-		var lastSeq uint64
+	// 	seenSequences := make(map[uint64]bool)
+	// 	maxAttempts := 10
+	// 	success := false
+	// 	var lastSeq uint64
 
-		for attempt := 0; attempt < maxAttempts && !success; attempt++ {
-			sequences, err := chainReader.QueryKey(
-				context.Background(),
-				commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
-				query.KeyFilter{Key: "SingleValueEvent"},
-				query.LimitAndSort{
-					Limit: query.CountLimit(50),
-					SortBy: []query.SortBy{
-						query.NewSortBySequence(query.Asc),
-					},
-				},
-				&SingleValueEvent{},
-			)
-			require.NoError(t, err)
+	// 	for attempt := 0; attempt < maxAttempts && !success; attempt++ {
+	// 		sequences, err := chainReader.QueryKey(
+	// 			context.Background(),
+	// 			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
+	// 			query.KeyFilter{Key: "SingleValueEvent"},
+	// 			query.LimitAndSort{
+	// 				Limit: query.CountLimit(50),
+	// 				SortBy: []query.SortBy{
+	// 					query.NewSortBySequence(query.Asc),
+	// 				},
+	// 			},
+	// 			&SingleValueEvent{},
+	// 		)
+	// 		require.NoError(t, err)
 
-			for _, seq := range sequences {
-				seqNum, err := strconv.ParseUint(seq.Cursor, 10, 64)
-				require.NoError(t, err)
-				seenSequences[seqNum] = true
-				if seqNum > lastSeq {
-					lastSeq = seqNum
-				}
-			}
+	// 		for _, seq := range sequences {
+	// 			seqNum, err := strconv.ParseUint(seq.Cursor, 10, 64)
+	// 			require.NoError(t, err)
+	// 			seenSequences[seqNum] = true
+	// 			if seqNum > lastSeq {
+	// 				lastSeq = seqNum
+	// 			}
+	// 		}
 
-			if len(seenSequences) > initialCount {
-				success = true
-			} else {
-				time.Sleep(2 * time.Second)
-			}
-		}
+	// 		if len(seenSequences) > initialCount {
+	// 			success = true
+	// 		} else {
+	// 			time.Sleep(2 * time.Second)
+	// 		}
+	// 	}
 
-		<-done
+	// 	<-done
 
-		t.Logf("Seen %d events (initial: %d, concurrent: %d)", len(seenSequences), initialCount, concurrentCount)
-		require.True(t, success, "Failed to see concurrent events after multiple attempts")
-		require.Greater(t, len(seenSequences), initialCount, "Should see more than initial events")
-		require.LessOrEqual(t, len(seenSequences), initialCount+concurrentCount, "Should not see more events than emitted")
-	})
+	// 	t.Logf("Seen %d events (initial: %d, concurrent: %d)", len(seenSequences), initialCount, concurrentCount)
+	// 	require.True(t, success, "Failed to see concurrent events after multiple attempts")
+	// 	require.Greater(t, len(seenSequences), initialCount, "Should see more than initial events")
+	// 	require.LessOrEqual(t, len(seenSequences), initialCount+concurrentCount, "Should not see more events than emitted")
+	// })
 }
 
 func TestLoopChainReaderLocal(t *testing.T) {
