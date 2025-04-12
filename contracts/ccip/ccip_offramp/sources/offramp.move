@@ -13,6 +13,7 @@ module ccip_offramp::offramp {
     use std::timestamp;
     use std::vector;
 
+    use ccip::auth;
     use ccip::client;
     use ccip::eth_abi;
     use ccip::fee_quoter;
@@ -250,7 +251,7 @@ module ccip_offramp::offramp {
     }
 
     fun init_module(publisher: &signer) {
-        let (_, state_signer_cap) =
+        let (state_signer, state_signer_cap) =
             account::create_resource_account(publisher, STATE_SEED);
 
         move_to(
@@ -268,6 +269,15 @@ module ccip_offramp::offramp {
                 skipped_report_execution_events: account::new_event_handle(publisher)
             }
         );
+
+        if (@ccip_offramp == @ccip) {
+            // if we're deployed on the same code object, self-register as an allowed offramp.
+            auth::apply_allowed_offramp_updates(
+                publisher,
+                vector[signer::address_of(&state_signer)],
+                vector[]
+            );
+        };
 
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints != @0x0) {
