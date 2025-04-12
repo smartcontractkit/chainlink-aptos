@@ -34,6 +34,9 @@ type aptosChainReader struct {
 	ds      sqlutil.DataSource
 	starter utils.StartStopOnce
 
+	isPersistentMode bool
+	dbStore          *DBStore
+
 	moduleAddresses       map[string]aptos.AccountAddress
 	eventAccountAddresses map[string]aptos.AccountAddress
 
@@ -43,7 +46,7 @@ type aptosChainReader struct {
 var _ types.ContractTypeProvider = &aptosChainReader{}
 
 func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config ChainReaderConfig, ds sqlutil.DataSource) types.ContractReader {
-	return &aptosChainReader{
+	reader := &aptosChainReader{
 		logger:                logger.Named(lgr, "AptosChainReader"),
 		client:                client,
 		config:                config,
@@ -51,6 +54,12 @@ func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config Chain
 		moduleAddresses:       map[string]aptos.AccountAddress{},
 		eventAccountAddresses: map[string]aptos.AccountAddress{},
 	}
+	// If a DataSource is provided, enable persistent mode.
+	if ds != nil {
+		reader.dbStore = NewDBStore(ds)
+		reader.isPersistentMode = true
+	}
+	return reader
 }
 
 func (a *aptosChainReader) Name() string {
@@ -75,6 +84,92 @@ func (a *aptosChainReader) Close() error {
 	return a.starter.StopOnce(a.Name(), func() error {
 		return nil
 	})
+}
+
+func (a *aptosChainReader) syncEvent(ctx context.Context, boundAddress aptos.AccountAddress, eventConfig *ChainReaderEvent, eventModuleName string) error {
+	if err := a.dbStore.EnsureSchema(ctx); err != nil {
+		return fmt.Errorf("syncEvent: failed to ensure schema: %w", err)
+	}
+
+	eventAccountAddress, err := a.computeEventAccountAddress(boundAddress, eventConfig)
+	if err != nil {
+		return fmt.Errorf("syncEvent: %w", err)
+	}
+
+	eventHandle := boundAddress.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
+
+	latestOffset, err := a.dbStore.GetLatestOffset(ctx, eventAccountAddress.String(), eventHandle)
+	if err != nil {
+		return fmt.Errorf("syncEvent: failed to get latest offset: %w", err)
+	}
+
+	var batchSize uint64 = 25
+	newEvents, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventConfig.EventHandleFieldName, &latestOffset, &batchSize)
+	if err != nil {
+		a.logger.Errorw("syncEvent: failed to fetch new events", "error", err)
+		// If fetching fails, we continue with what is already in the DB
+		return nil
+	}
+
+	if len(newEvents) == 0 {
+		return nil
+	}
+
+	var records []EventRecord
+	for _, event := range newEvents {
+		head, err := a.getBlockHead(event.Version)
+		if err != nil {
+			a.logger.Errorw("syncEvent: failed to fetch block metadata", "version", event.Version, "error", err)
+			continue
+		}
+
+		record := EventRecord{
+			EventAccountAddress: eventAccountAddress.String(),
+			EventHandle:         eventHandle,
+			EventOffset:         event.SequenceNumber,
+			BlockVersion:        event.Version,
+			BlockHeight:         head.Height,
+			BlockHash:           head.Hash,
+			BlockTimestamp:      head.Timestamp,
+			Data:                event.Data,
+		}
+		records = append(records, record)
+	}
+
+	if err := a.dbStore.InsertEvents(ctx, records); err != nil {
+		return fmt.Errorf("syncEvent: failed to insert new events: %w", err)
+	}
+
+	return nil
+}
+
+func (a *aptosChainReader) InitEvents(ctx context.Context) error {
+	for moduleKey, moduleConfig := range a.config.Modules {
+		if moduleConfig.Events == nil {
+			continue
+		}
+
+		boundAddress, ok := a.moduleAddresses[moduleKey]
+		if !ok {
+			a.logger.Warnw("InitEvents: no bound address for module", "module", moduleKey)
+			continue
+		}
+
+		var eventModuleName string
+		if moduleConfig.Name != "" {
+			eventModuleName = moduleConfig.Name
+		} else {
+			eventModuleName = moduleKey
+		}
+
+		for eventKey, eventConfig := range moduleConfig.Events {
+			if err := a.syncEvent(ctx, boundAddress, eventConfig, eventModuleName); err != nil {
+				return fmt.Errorf("InitEvents: module %s event %s: %w", moduleKey, eventKey, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier string, confidenceLevel primitives.ConfidenceLevel, params, returnVal any) error {
@@ -341,64 +436,59 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		eventModuleName = contractName
 	}
 
-	if len(eventConfig.EventAccountAddress) == 0 {
-		eventAccountAddress = address
-	} else {
-		components := strings.Split(eventConfig.EventAccountAddress, "::")
-
-		if len(components) == 1 {
-			err := eventAccountAddress.ParseStringRelaxed(components[0])
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse event account address: %+w", err)
-			}
-		} else {
-			var addressFunctionAddress aptos.AccountAddress
-			var addressFunctionModuleName string
-			var addressFunctionFunctionName string
-			if len(components) == 3 {
-				err := addressFunctionAddress.ParseStringRelaxed(components[0])
-				if err != nil {
-					return nil, fmt.Errorf("failed to parse event account address function address: %+w", err)
-				}
-				addressFunctionModuleName = components[1]
-				addressFunctionFunctionName = components[2]
-			} else if len(components) == 2 {
-				addressFunctionAddress = address
-				addressFunctionModuleName = components[0]
-				addressFunctionFunctionName = components[1]
-			} else {
-				return nil, fmt.Errorf("invalid event account address definition: %s", eventConfig.EventAccountAddress)
-			}
-
-			cacheKey := addressFunctionAddress.String() + "::" + addressFunctionModuleName + "::" + addressFunctionFunctionName
-			if cachedAddress, ok := a.eventAccountAddresses[cacheKey]; ok {
-				eventAccountAddress = cachedAddress
-			} else {
-				viewPayload := &aptos.ViewPayload{
-					Module: aptos.ModuleId{
-						Address: addressFunctionAddress,
-						Name:    addressFunctionModuleName,
-					},
-					Function: addressFunctionFunctionName,
-					ArgTypes: []aptos.TypeTag{},
-					Args:     [][]byte{},
-				}
-
-				data, err := a.client.View(viewPayload)
-				if err != nil {
-					return nil, fmt.Errorf("failed to call view function: %+w", err)
-				}
-
-				err = codec.DecodeAptosJsonValue(data[0], &eventAccountAddress)
-				if err != nil {
-					return nil, fmt.Errorf("failed to decode event account address function output: %+w", err)
-				}
-				a.eventAccountAddresses[cacheKey] = eventAccountAddress
-			}
-		}
+	eventAccountAddress, err := a.computeEventAccountAddress(address, eventConfig)
+	if err != nil {
+		return nil, err
 	}
 
 	eventHandle := address.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
+
+	if a.isPersistentMode {
+		if err := a.syncEvent(ctx, address, eventConfig, eventModuleName); err != nil {
+			a.logger.Errorw("persistent mode: syncEvent error", "error", err)
+			// Proceed even if sync fails
+		}
+
+		dbRecords, err := a.dbStore.QueryEvents(ctx, eventAccountAddress.String(), eventHandle, filter, limitAndSort)
+		if err != nil {
+			return nil, fmt.Errorf("persistent mode: failed to query events: %w", err)
+		}
+
+		var sequences []types.Sequence
+		for _, rec := range dbRecords {
+			var eventData any
+			if a.config.IsLoopPlugin {
+				// For loop plugin mode, re-marshal the data just like the non-persistent branch.
+				resultBytes, err := json.Marshal(rec.Data)
+				if err != nil {
+					return nil, fmt.Errorf("persistent mode: failed to re-marshal event data: %w", err)
+				}
+
+				eventData = resultBytes
+			} else {
+				decoded := reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
+				if err := codec.DecodeAptosJsonValue(rec.Data, &decoded); err != nil {
+					return nil, fmt.Errorf("persistent mode: failed to decode event data: %w", err)
+				}
+
+				eventData = decoded
+			}
+
+			sequence := types.Sequence{
+				Cursor: fmt.Sprintf("%d", rec.EventOffset),
+				Head: types.Head{
+					Height:    rec.BlockHeight,
+					Hash:      rec.BlockHash,
+					Timestamp: rec.BlockTimestamp,
+				},
+				Data: eventData,
+			}
+			sequences = append(sequences, sequence)
+		}
+		
+		return sequences, nil
+	}
+
 	tsFilter, hasTSFilter := extractTimestampFilter(expressions)
 	var eventOffset uint64 = 0
 
@@ -525,19 +615,9 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 
 			head, ok := headCache[event.Version]
 			if !ok {
-				block, err := a.client.BlockByVersion(event.Version, false)
+				head, err = a.getBlockHead(event.Version)
 				if err != nil {
-					return nil, fmt.Errorf("failed to get block by version: %w", err)
-				}
-				hexBytes, err := hex.DecodeString(strings.TrimPrefix(block.BlockHash, "0x"))
-				if err != nil {
-					return nil, fmt.Errorf("failed to decode block hash: %w", err)
-				}
-				head = types.Head{
-					Height: fmt.Sprintf("%d", block.BlockHeight),
-					Hash:   hexBytes,
-					// microseconds to seconds
-					Timestamp: block.BlockTimestamp / 1000000,
+					return nil, err
 				}
 				headCache[event.Version] = head
 			}
@@ -612,4 +692,76 @@ func (a *aptosChainReader) Unbind(ctx context.Context, bindings []types.BoundCon
 func (a *aptosChainReader) CreateContractType(readName string, forEncoding bool) (any, error) {
 	// only called when LOOP plugin
 	return &[]byte{}, nil
+}
+
+func (a *aptosChainReader) computeEventAccountAddress(boundAddress aptos.AccountAddress, eventConfig *ChainReaderEvent) (aptos.AccountAddress, error) {
+	var eventAccountAddress aptos.AccountAddress
+	if len(eventConfig.EventAccountAddress) == 0 {
+		return boundAddress, nil
+	}
+	components := strings.Split(eventConfig.EventAccountAddress, "::")
+	if len(components) == 1 {
+		err := eventAccountAddress.ParseStringRelaxed(components[0])
+		if err != nil {
+			return eventAccountAddress, fmt.Errorf("failed to parse event account address: %+w", err)
+		}
+		return eventAccountAddress, nil
+	} else {
+		var addressFunctionAddress aptos.AccountAddress
+		var addressFunctionModuleName, addressFunctionFunctionName string
+		if len(components) == 3 {
+			err := addressFunctionAddress.ParseStringRelaxed(components[0])
+			if err != nil {
+				return eventAccountAddress, fmt.Errorf("failed to parse event account address function address: %+w", err)
+			}
+			addressFunctionModuleName = components[1]
+			addressFunctionFunctionName = components[2]
+		} else if len(components) == 2 {
+			addressFunctionAddress = boundAddress
+			addressFunctionModuleName = components[0]
+			addressFunctionFunctionName = components[1]
+		} else {
+			return eventAccountAddress, fmt.Errorf("invalid event account address definition: %s", eventConfig.EventAccountAddress)
+		}
+		cacheKey := addressFunctionAddress.String() + "::" + addressFunctionModuleName + "::" + addressFunctionFunctionName
+		if cached, ok := a.eventAccountAddresses[cacheKey]; ok {
+			return cached, nil
+		}
+		viewPayload := &aptos.ViewPayload{
+			Module: aptos.ModuleId{
+				Address: addressFunctionAddress,
+				Name:    addressFunctionModuleName,
+			},
+			Function: addressFunctionFunctionName,
+			ArgTypes: []aptos.TypeTag{},
+			Args:     [][]byte{},
+		}
+		data, err := a.client.View(viewPayload)
+		if err != nil {
+			return eventAccountAddress, fmt.Errorf("failed to call view function: %+w", err)
+		}
+		err = codec.DecodeAptosJsonValue(data[0], &eventAccountAddress)
+		if err != nil {
+			return eventAccountAddress, fmt.Errorf("failed to decode event account address function output: %+w", err)
+		}
+		a.eventAccountAddresses[cacheKey] = eventAccountAddress
+		return eventAccountAddress, nil
+	}
+}
+
+func (a *aptosChainReader) getBlockHead(version uint64) (types.Head, error) {
+	block, err := a.client.BlockByVersion(version, false)
+	if err != nil {
+		return types.Head{}, fmt.Errorf("failed to get block by version: %w", err)
+	}
+	hexBytes, err := hex.DecodeString(strings.TrimPrefix(block.BlockHash, "0x"))
+	if err != nil {
+		return types.Head{}, fmt.Errorf("failed to decode block hash: %w", err)
+	}
+	head := types.Head{
+		Height:    fmt.Sprintf("%d", block.BlockHeight),
+		Hash:      hexBytes,
+		Timestamp: block.BlockTimestamp / 1000000, // microseconds to seconds conversion
+	}
+	return head, nil
 }
