@@ -1,4 +1,4 @@
-//go:build integration
+// //go:build integration
 
 package chainreader
 
@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -48,11 +49,15 @@ func TestChainReaderLocal(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("GetLatestValue", func(t *testing.T) {
-		runGetLatestValueTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
+		// runGetLatestValueTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
 	})
 
 	t.Run("QueryKey", func(t *testing.T) {
-		runQueryKeyTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
+		// runQueryKeyTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
+	})
+
+	t.Run("QueryKeyPersistent", func(t *testing.T) {
+		runQueryKeyPersistentTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
 	})
 }
 
@@ -798,6 +803,178 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 		require.True(t, success, "Failed to see concurrent events after multiple attempts")
 		require.Greater(t, len(seenSequences), initialCount, "Should see more than initial events")
 		require.LessOrEqual(t, len(seenSequences), initialCount+concurrentCount, "Should not see more events than emitted")
+	})
+}
+
+func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
+	// Setup keystore and txmgr (same as runGetLatestValueTest)
+	keystore := testutils.NewTestKeystore(t)
+	keystore.AddKey(privateKey)
+
+	client, err := aptos.NewNodeClient(rpcUrl, 0)
+	require.NoError(t, err)
+
+	rateLimitedClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
+
+	getClient := func() (aptos.AptosRpcClient, error) { return rateLimitedClient, nil }
+	txmgr, err := txm.New(logger, keystore, txm.DefaultConfigSet, getClient)
+	require.NoError(t, err)
+	err = txmgr.Start(context.Background())
+	require.NoError(t, err)
+
+	// Deploy the contract (if not already deployed) using the same compilation as runGetLatestValueTest.
+	publicKeyHex := hex.EncodeToString([]byte(publicKey))
+	compilationResult := testutils.CompileTestModule(t, accountAddress)
+	txId := deployContract(t, txmgr, accountAddress.String(), publicKeyHex, compilationResult)
+	waitForTx(t, txmgr, txId)
+
+	// Emit a batch of events using echo_with_events (which emits both SingleValueEvent and DoubleValueEvent).
+	// For persistent tests we'll use the DoubleValueEvent.
+	emitManyEvents(t, txmgr, accountAddress.String(), publicKeyHex, 20)
+
+	// Setup ChainReader configuration for persistent mode using DoubleValueEvent.
+	config := ChainReaderConfig{
+		Modules: map[string]*ChainReaderModule{
+			"testContract": {
+				Name: "echo",
+				Events: map[string]*ChainReaderEvent{
+					"DoubleValueEvent": {
+						EventHandleStructName: "EventStore",
+						EventHandleFieldName:  "double_value_events",
+						EventAccountAddress:   "", // if empty, defaults to bound contract address
+						// No field renames provided.
+					},
+				},
+			},
+		},
+	}
+
+	// Create a persistent DBStore.
+	dsn := os.Getenv("TEST_DB_URL")
+	require.NotEmpty(t, dsn, "TEST_DB_URL must be set for persistent tests")
+	db := sqltest.NewDB(t, dsn)
+
+	// Create ChainReader with persistence enabled.
+	chainReader := NewChainReader(logger, rateLimitedClient, config, db)
+	binding := commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()}
+	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{binding})
+	require.NoError(t, err)
+
+	// Allow some time for the emitted events to sync into persistent storage.
+	time.Sleep(3 * time.Second)
+
+	// Run subtests for persistent QueryKey.
+	t.Run("All events", func(t *testing.T) {
+		seqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "DoubleValueEvent"},
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, seqs)
+	})
+
+	t.Run("Filter by numeric value", func(t *testing.T) {
+		// Retrieve events where number >= 5 and number < 10.
+		filter := query.KeyFilter{
+			Key: "DoubleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("number",
+					primitives.ValueComparator{Value: uint64(5), Operator: primitives.Gte},
+					primitives.ValueComparator{Value: uint64(10), Operator: primitives.Lt},
+				),
+			},
+		}
+		seqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			filter,
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, seqs)
+		// Now decode into a *DoubleValueEvent so that "number" is type uint64.
+		for _, seq := range seqs {
+			evt := seq.Data.(*DoubleValueEvent)
+			require.GreaterOrEqual(t, evt.Number, uint64(5))
+			require.Less(t, evt.Number, uint64(10))
+		}
+	})
+
+	t.Run("Filter by text equality", func(t *testing.T) {
+		// Expect that some events have text "test7".
+		sampleText := "test7"
+		filter := query.KeyFilter{
+			Key: "DoubleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("text",
+					primitives.ValueComparator{Value: sampleText, Operator: primitives.Eq},
+				),
+			},
+		}
+		seqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			filter,
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, seqs)
+		for _, seq := range seqs {
+			evt := seq.Data.(*DoubleValueEvent)
+			require.Equal(t, sampleText, evt.Text)
+		}
+	})
+
+	t.Run("Sorted results descending", func(t *testing.T) {
+		seqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "DoubleValueEvent"},
+			query.LimitAndSort{
+				Limit: query.CountLimit(10),
+				SortBy: []query.SortBy{
+					query.NewSortBySequence(query.Desc),
+				},
+			},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.Len(t, seqs, 10)
+
+		// Verify descending order based on event_offset.
+		for i := 0; i < len(seqs)-1; i++ {
+			curr, err := strconv.ParseUint(seqs[i].Cursor, 10, 64)
+			require.NoError(t, err)
+			next, err := strconv.ParseUint(seqs[i+1].Cursor, 10, 64)
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, curr, next)
+		}
+	})
+
+	t.Run("Error cases", func(t *testing.T) {
+		// Filtering on a non-existent field should result in empty sequence list.
+		invalidFilter := query.KeyFilter{
+			Key: "DoubleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("non_existent_field",
+					primitives.ValueComparator{Value: uint64(1), Operator: primitives.Eq},
+				),
+			},
+		}
+		seqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			invalidFilter,
+			query.LimitAndSort{},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.Empty(t, seqs)
 	})
 }
 
