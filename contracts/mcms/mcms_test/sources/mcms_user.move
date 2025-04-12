@@ -20,14 +20,14 @@ module mcms_test::mcms_user {
 
     public fun function_one(arg1: String, arg2: vector<u8>) acquires UserData {
         let user_data = borrow_global_mut<UserData>(@mcms_test);
-        user_data.invocations = user_data.invocations + 1;
+        user_data.invocations += 1;
         user_data.a = arg1;
         user_data.b = arg2;
     }
 
     public fun function_two(arg1: address, arg2: u128) acquires UserData {
         let user_data = borrow_global_mut<UserData>(@mcms_test);
-        user_data.invocations = user_data.invocations + 1;
+        user_data.invocations += 1;
         user_data.c = arg1;
         user_data.d = arg2;
     }
@@ -59,7 +59,7 @@ module mcms_test::mcms_user {
         let (_signer, function, data) =
             mcms_registry::get_callback_params(@mcms_test, SampleMcmsCallback {});
 
-        let function_bytes = *string::bytes(&function);
+        let function_bytes = *function.bytes();
         let stream = bcs_stream::new(data);
 
         if (function_bytes == b"function_one") {

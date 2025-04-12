@@ -644,8 +644,7 @@ module ccip_token_pool::token_pool_test {
             1
         );
         assert!(
-            vector::length(&token_pool::get_remote_pools(&state, DefaultRemoteChain))
-                == 1,
+            token_pool::get_remote_pools(&state, DefaultRemoteChain).length() == 1,
             1
         );
 
@@ -656,8 +655,7 @@ module ccip_token_pool::token_pool_test {
             1
         );
         assert!(
-            vector::length(&token_pool::get_remote_pools(&state, DefaultRemoteChain))
-                == 2,
+            token_pool::get_remote_pools(&state, DefaultRemoteChain).length() == 2,
             1
         );
 

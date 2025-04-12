@@ -141,7 +141,7 @@ module mcms::mcms_registry {
         new_owner_seed: vector<u8>
     ): address {
         let owner_seed = NEW_OBJECT_REGISTRATION_SEED;
-        vector::append(&mut owner_seed, new_owner_seed);
+        owner_seed.append(new_owner_seed);
         account::create_resource_address(&@mcms, owner_seed)
     }
 
@@ -151,7 +151,7 @@ module mcms::mcms_registry {
         let object_owner_address = get_new_code_object_owner_address(new_owner_seed);
         let object_code_deployment_seed =
             bcs::to_bytes(&OBJECT_CODE_DEPLOYMENT_DOMAIN_SEPARATOR);
-        vector::append(&mut object_code_deployment_seed, bcs::to_bytes(&1u64));
+        object_code_deployment_seed.append(bcs::to_bytes(&1u64));
         object::create_object_address(
             &object_owner_address, object_code_deployment_seed
         )
@@ -163,7 +163,7 @@ module mcms::mcms_registry {
         object_address: address
     ): address {
         let owner_seed = EXISTING_OBJECT_REGISTRATION_SEED;
-        vector::append(&mut owner_seed, bcs::to_bytes(&object_address));
+        owner_seed.append(bcs::to_bytes(&object_address));
         account::create_resource_address(&@mcms, owner_seed)
     }
 
