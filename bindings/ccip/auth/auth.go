@@ -74,6 +74,9 @@ type AuthState struct {
 type PendingRouterSignerCapability struct {
 }
 
+type McmsCallback struct {
+}
+
 type AuthContract struct {
 	*bind.BoundContract
 	authEncoder
