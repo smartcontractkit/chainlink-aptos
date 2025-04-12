@@ -2,7 +2,6 @@ module ccip::internal {
     use std::error;
 
     friend ccip::fee_quoter;
-    friend ccip::onramp;
 
     const E_TOKEN_ARGUMENTS_MISMATCH: u64 = 1;
 
@@ -21,7 +20,7 @@ module ccip::internal {
         token_store: address
     }
 
-    public(friend) fun new_aptos2any_message(
+    public fun new_aptos2any_message(
         receiver: vector<u8>,
         data: vector<u8>,
         token_addresses: vector<address>,
@@ -60,7 +59,7 @@ module ccip::internal {
     }
 
     /// Returns all fields except for FungibleAsset
-    public(friend) fun get_aptos2any_fields(
+    public fun get_aptos2any_fields(
         message: &Aptos2AnyMessage
     ): (vector<u8>, vector<u8>, address, address, vector<u8>) {
         (
@@ -72,7 +71,7 @@ module ccip::internal {
         )
     }
 
-    public(friend) fun get_aptos2any_token_transfers(
+    public fun get_aptos2any_token_transfers(
         message: &Aptos2AnyMessage
     ): (vector<address>, vector<u64>) {
         let token_addresses = vector[];
