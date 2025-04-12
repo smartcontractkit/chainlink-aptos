@@ -29,6 +29,7 @@ module ccip::auth {
     const E_SIGNER_CAP_NOT_FOUND: u64 = 3;
     const E_NOT_ALLOWED_ONRAMP: u64 = 4;
     const E_NOT_ALLOWED_OFFRAMP: u64 = 5;
+    const E_NOT_OWNER_OR_CCIP: u64 = 6;
 
     fun init_module(publisher: &signer) {
         let state_object_signer = &state_object::object_signer();
@@ -112,7 +113,8 @@ module ccip::auth {
         onramps_to_remove: vector<address>
     ) acquires AuthState {
         let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+
+        assert_is_owner_or_ccip(signer::address_of(caller), &state.ownable_state);
 
         allowlist::apply_allowlist_updates(
             &mut state.allowed_onramps,
@@ -127,7 +129,8 @@ module ccip::auth {
         offramps_to_remove: vector<address>
     ) acquires AuthState {
         let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+
+        assert_is_owner_or_ccip(signer::address_of(caller), &state.ownable_state);
 
         allowlist::apply_allowlist_updates(
             &mut state.allowed_offramps,
@@ -142,6 +145,15 @@ module ccip::auth {
 
     inline fun borrow_state_mut(): &mut AuthState {
         borrow_global_mut<AuthState>(state_object::object_address())
+    }
+
+    inline fun assert_is_owner_or_ccip(
+        caller: address, ownable_state: &ownable::OwnableState
+    ) {
+        assert!(
+            caller == @ccip || caller == ownable::owner(ownable_state),
+            error::permission_denied(E_NOT_OWNER_OR_CCIP)
+        );
     }
 
     public fun assert_is_allowed_onramp(caller: address) acquires AuthState {
