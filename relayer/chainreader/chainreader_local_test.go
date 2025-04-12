@@ -1,4 +1,4 @@
-// //go:build integration
+//go:build integration
 
 package chainreader
 
@@ -9,7 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	// "strconv"
+	"strconv"
 	"testing"
 	"time"
 
@@ -745,60 +745,60 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 		}
 	})
 
-	// t.Run("Handle concurrent event emission", func(t *testing.T) {
-	// 	initialCount := 20
-	// 	concurrentCount := 15
+	t.Run("Handle concurrent event emission", func(t *testing.T) {
+		initialCount := 20
+		concurrentCount := 15
 
-	// 	// Start concurrent emission in background
-	// 	done := make(chan bool)
-	// 	go func() {
-	// 		emitManyEvents(t, txmgr, accountAddress.String(), publicKeyHex, concurrentCount)
-	// 		done <- true
-	// 	}()
+		// Start concurrent emission in background
+		done := make(chan bool)
+		go func() {
+			emitManyEvents(t, txmgr, accountAddress.String(), publicKeyHex, concurrentCount)
+			done <- true
+		}()
 
-	// 	seenSequences := make(map[uint64]bool)
-	// 	maxAttempts := 10
-	// 	success := false
-	// 	var lastSeq uint64
+		seenSequences := make(map[uint64]bool)
+		maxAttempts := 10
+		success := false
+		var lastSeq uint64
 
-	// 	for attempt := 0; attempt < maxAttempts && !success; attempt++ {
-	// 		sequences, err := chainReader.QueryKey(
-	// 			context.Background(),
-	// 			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
-	// 			query.KeyFilter{Key: "SingleValueEvent"},
-	// 			query.LimitAndSort{
-	// 				Limit: query.CountLimit(50),
-	// 				SortBy: []query.SortBy{
-	// 					query.NewSortBySequence(query.Asc),
-	// 				},
-	// 			},
-	// 			&SingleValueEvent{},
-	// 		)
-	// 		require.NoError(t, err)
+		for attempt := 0; attempt < maxAttempts && !success; attempt++ {
+			sequences, err := chainReader.QueryKey(
+				context.Background(),
+				commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
+				query.KeyFilter{Key: "SingleValueEvent"},
+				query.LimitAndSort{
+					Limit: query.CountLimit(50),
+					SortBy: []query.SortBy{
+						query.NewSortBySequence(query.Asc),
+					},
+				},
+				&SingleValueEvent{},
+			)
+			require.NoError(t, err)
 
-	// 		for _, seq := range sequences {
-	// 			seqNum, err := strconv.ParseUint(seq.Cursor, 10, 64)
-	// 			require.NoError(t, err)
-	// 			seenSequences[seqNum] = true
-	// 			if seqNum > lastSeq {
-	// 				lastSeq = seqNum
-	// 			}
-	// 		}
+			for _, seq := range sequences {
+				seqNum, err := strconv.ParseUint(seq.Cursor, 10, 64)
+				require.NoError(t, err)
+				seenSequences[seqNum] = true
+				if seqNum > lastSeq {
+					lastSeq = seqNum
+				}
+			}
 
-	// 		if len(seenSequences) > initialCount {
-	// 			success = true
-	// 		} else {
-	// 			time.Sleep(2 * time.Second)
-	// 		}
-	// 	}
+			if len(seenSequences) > initialCount {
+				success = true
+			} else {
+				time.Sleep(2 * time.Second)
+			}
+		}
 
-	// 	<-done
+		<-done
 
-	// 	t.Logf("Seen %d events (initial: %d, concurrent: %d)", len(seenSequences), initialCount, concurrentCount)
-	// 	require.True(t, success, "Failed to see concurrent events after multiple attempts")
-	// 	require.Greater(t, len(seenSequences), initialCount, "Should see more than initial events")
-	// 	require.LessOrEqual(t, len(seenSequences), initialCount+concurrentCount, "Should not see more events than emitted")
-	// })
+		t.Logf("Seen %d events (initial: %d, concurrent: %d)", len(seenSequences), initialCount, concurrentCount)
+		require.True(t, success, "Failed to see concurrent events after multiple attempts")
+		require.Greater(t, len(seenSequences), initialCount, "Should see more than initial events")
+		require.LessOrEqual(t, len(seenSequences), initialCount+concurrentCount, "Should not see more events than emitted")
+	})
 }
 
 func TestLoopChainReaderLocal(t *testing.T) {
