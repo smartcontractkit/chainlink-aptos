@@ -20,6 +20,7 @@ module ccip::offramp {
     use ccip::merkle_proof;
     use ccip::ocr3_base;
     use ccip::receiver_dispatcher;
+    use ccip::receiver_registry;
     use ccip::rmn_remote;
     use ccip::state_object;
     use ccip::token_admin_dispatcher;
@@ -776,19 +777,30 @@ module ccip::offramp {
                 message.header.source_chain_selector
             );
 
-        let dest_token_amounts =
-            client::new_dest_token_amounts(local_token_addresses, local_token_amounts);
+        // Similar to EVM, we skip calling the receiver if the message data is empty and
+        // the gas limit is 0, or if the receiver does not contain a registered receiver
+        // module.
+        // ref: https://github.com/smartcontractkit/chainlink-ccip/blob/875e982e6437dc126710d8224dd7c792a197bea6/chains/evm/contracts/offRamp/OffRamp.sol#L633
 
-        let any2aptos_message =
-            client::new_any2aptos_message(
-                message.header.message_id,
-                message.header.source_chain_selector,
-                message.sender,
-                message.data,
-                dest_token_amounts
-            );
+        if ((!message.data.is_empty() || message.gas_limit != 0)
+            && receiver_registry::is_registered_receiver(message.receiver)) {
+            let dest_token_amounts =
+                client::new_dest_token_amounts(
+                    local_token_addresses, local_token_amounts
+                );
 
-        receiver_dispatcher::dispatch_receive(message.receiver, any2aptos_message)
+            let any2aptos_message =
+                client::new_any2aptos_message(
+                    message.header.message_id,
+                    message.header.source_chain_selector,
+                    message.sender,
+                    message.data,
+                    dest_token_amounts
+                );
+
+            receiver_dispatcher::dispatch_receive(message.receiver, any2aptos_message)
+        };
+
     }
 
     // ================================================================
