@@ -68,10 +68,6 @@ func NewAuth(address aptos.AccountAddress, client aptos.AptosRpcClient) AuthInte
 // Structs
 
 type AuthState struct {
-	RouterAddress aptos.AccountAddress `move:"address"`
-}
-
-type PendingRouterSignerCapability struct {
 }
 
 type McmsCallback struct {
