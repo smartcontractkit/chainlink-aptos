@@ -188,8 +188,8 @@ module ccip_onramp::onramp {
             // if we're deployed on the same code object, self-register as an allowed onramp.
             auth::apply_allowed_onramp_updates(
                 publisher,
-                vector[signer::address_of(&state_signer)],
-                vector[]
+                vector[],
+                vector[signer::address_of(&state_signer)]
             );
         };
 
