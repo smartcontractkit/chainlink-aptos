@@ -29,14 +29,7 @@ module ccip_onramp::onramp {
     const STATE_SEED: vector<u8> = b"CHAINLINK_CCIP_ONRAMP";
 
     struct OnRampDeployment has key, store {
-        state_signer_cap: SignerCapability,
-        ownable_state: ownable::OwnableState,
-        config_set_events: EventHandle<ConfigSet>,
-        dest_chain_config_set_events: EventHandle<DestChainConfigSet>,
-        ccip_message_sent_events: EventHandle<CCIPMessageSent>,
-        allowlist_senders_added_events: EventHandle<AllowlistSendersAdded>,
-        allowlist_senders_removed_events: EventHandle<AllowlistSendersRemoved>,
-        fee_token_withdrawn_events: EventHandle<FeeTokenWithdrawn>
+        state_signer_cap: SignerCapability
     }
 
     struct OnRampState has key, store {
@@ -172,16 +165,7 @@ module ccip_onramp::onramp {
 
         move_to(
             publisher,
-            OnRampDeployment {
-                state_signer_cap,
-                ownable_state: ownable::new(publisher, @ccip_onramp),
-                config_set_events: account::new_event_handle(publisher),
-                dest_chain_config_set_events: account::new_event_handle(publisher),
-                ccip_message_sent_events: account::new_event_handle(publisher),
-                allowlist_senders_added_events: account::new_event_handle(publisher),
-                allowlist_senders_removed_events: account::new_event_handle(publisher),
-                fee_token_withdrawn_events: account::new_event_handle(publisher)
-            }
+            OnRampDeployment { state_signer_cap }
         );
 
         if (@ccip_onramp == @ccip) {
@@ -220,20 +204,14 @@ module ccip_onramp::onramp {
             error::invalid_state(E_ALREADY_INITIALIZED)
         );
 
-        let OnRampDeployment {
-            state_signer_cap,
-            ownable_state,
-            config_set_events,
-            dest_chain_config_set_events,
-            ccip_message_sent_events,
-            allowlist_senders_added_events,
-            allowlist_senders_removed_events,
-            fee_token_withdrawn_events
-        } = move_from<OnRampDeployment>(@ccip_onramp);
+        let OnRampDeployment { state_signer_cap } =
+            move_from<OnRampDeployment>(@ccip_onramp);
+
+        let state_signer = &account::create_signer_with_capability(&state_signer_cap);
+
+        let ownable_state = ownable::new(state_signer, @ccip_onramp);
 
         ownable::assert_only_owner(signer::address_of(caller), &ownable_state);
-
-        let state_signer = account::create_signer_with_capability(&state_signer_cap);
 
         let state = OnRampState {
             state_signer_cap,
@@ -242,12 +220,12 @@ module ccip_onramp::onramp {
             fee_aggregator: @0x0,
             allowlist_admin: @0x0,
             dest_chain_configs: smart_table::new(),
-            config_set_events,
-            dest_chain_config_set_events,
-            ccip_message_sent_events,
-            allowlist_senders_added_events,
-            allowlist_senders_removed_events,
-            fee_token_withdrawn_events
+            config_set_events: account::new_event_handle(state_signer),
+            dest_chain_config_set_events: account::new_event_handle(state_signer),
+            ccip_message_sent_events: account::new_event_handle(state_signer),
+            allowlist_senders_added_events: account::new_event_handle(state_signer),
+            allowlist_senders_removed_events: account::new_event_handle(state_signer),
+            fee_token_withdrawn_events: account::new_event_handle(state_signer)
         };
 
         set_dynamic_config_internal(&mut state, fee_aggregator, allowlist_admin);
@@ -259,7 +237,7 @@ module ccip_onramp::onramp {
             dest_chain_allowlist_enabled
         );
 
-        move_to(&state_signer, state);
+        move_to(state_signer, state);
     }
 
     #[view]
