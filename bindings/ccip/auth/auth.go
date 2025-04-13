@@ -28,8 +28,8 @@ type AuthInterface interface {
 	IsOfframpAllowed(opts *bind.CallOpts, offrampAddress aptos.AccountAddress) (bool, error)
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
 
-	ApplyAllowedOnrampUpdates(opts *bind.TransactOpts, onrampsToAdd []aptos.AccountAddress, onrampsToRemove []aptos.AccountAddress) (*api.PendingTransaction, error)
-	ApplyAllowedOfframpUpdates(opts *bind.TransactOpts, offrampsToAdd []aptos.AccountAddress, offrampsToRemove []aptos.AccountAddress) (*api.PendingTransaction, error)
+	ApplyAllowedOnrampUpdates(opts *bind.TransactOpts, onrampsToRemove []aptos.AccountAddress, onrampsToAdd []aptos.AccountAddress) (*api.PendingTransaction, error)
+	ApplyAllowedOfframpUpdates(opts *bind.TransactOpts, offrampsToRemove []aptos.AccountAddress, offrampsToAdd []aptos.AccountAddress) (*api.PendingTransaction, error)
 	TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
 	AcceptOwnership(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 	ExecuteOwnershipTransfer(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
@@ -44,8 +44,8 @@ type AuthEncoder interface {
 	IsOnrampAllowed(onrampAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	IsOfframpAllowed(offrampAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	ApplyAllowedOnrampUpdates(onrampsToAdd []aptos.AccountAddress, onrampsToRemove []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	ApplyAllowedOfframpUpdates(offrampsToAdd []aptos.AccountAddress, offrampsToRemove []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ApplyAllowedOnrampUpdates(onrampsToRemove []aptos.AccountAddress, onrampsToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ApplyAllowedOfframpUpdates(offrampsToRemove []aptos.AccountAddress, offrampsToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TransferOwnership(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -55,7 +55,7 @@ type AuthEncoder interface {
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"auth","name":"accept_ownership","parameters":null},{"package":"ccip","module":"auth","name":"apply_allowed_offramp_updates","parameters":[{"name":"offramps_to_add","type":"vector\u003caddress\u003e"},{"name":"offramps_to_remove","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"auth","name":"apply_allowed_onramp_updates","parameters":[{"name":"onramps_to_add","type":"vector\u003caddress\u003e"},{"name":"onramps_to_remove","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"auth","name":"assert_is_allowed_offramp","parameters":[{"name":"caller","type":"address"}]},{"package":"ccip","module":"auth","name":"assert_is_allowed_onramp","parameters":[{"name":"caller","type":"address"}]},{"package":"ccip","module":"auth","name":"assert_only_owner","parameters":[{"name":"caller","type":"address"}]},{"package":"ccip","module":"auth","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"ccip","module":"auth","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"auth","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
+const FunctionInfo = `[{"package":"ccip","module":"auth","name":"accept_ownership","parameters":null},{"package":"ccip","module":"auth","name":"apply_allowed_offramp_updates","parameters":[{"name":"offramps_to_remove","type":"vector\u003caddress\u003e"},{"name":"offramps_to_add","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"auth","name":"apply_allowed_onramp_updates","parameters":[{"name":"onramps_to_remove","type":"vector\u003caddress\u003e"},{"name":"onramps_to_add","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"auth","name":"assert_is_allowed_offramp","parameters":[{"name":"caller","type":"address"}]},{"package":"ccip","module":"auth","name":"assert_is_allowed_onramp","parameters":[{"name":"caller","type":"address"}]},{"package":"ccip","module":"auth","name":"assert_only_owner","parameters":[{"name":"caller","type":"address"}]},{"package":"ccip","module":"auth","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"ccip","module":"auth","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"auth","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
 
 func NewAuth(address aptos.AccountAddress, client aptos.AptosRpcClient) AuthInterface {
 	contract := bind.NewBoundContract(address, "ccip", "auth", client)
@@ -193,8 +193,8 @@ func (c AuthContract) Owner(opts *bind.CallOpts) (aptos.AccountAddress, error) {
 
 // Entry Functions
 
-func (c AuthContract) ApplyAllowedOnrampUpdates(opts *bind.TransactOpts, onrampsToAdd []aptos.AccountAddress, onrampsToRemove []aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.authEncoder.ApplyAllowedOnrampUpdates(onrampsToAdd, onrampsToRemove)
+func (c AuthContract) ApplyAllowedOnrampUpdates(opts *bind.TransactOpts, onrampsToRemove []aptos.AccountAddress, onrampsToAdd []aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.authEncoder.ApplyAllowedOnrampUpdates(onrampsToRemove, onrampsToAdd)
 	if err != nil {
 		return nil, err
 	}
@@ -202,8 +202,8 @@ func (c AuthContract) ApplyAllowedOnrampUpdates(opts *bind.TransactOpts, onramps
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (c AuthContract) ApplyAllowedOfframpUpdates(opts *bind.TransactOpts, offrampsToAdd []aptos.AccountAddress, offrampsToRemove []aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.authEncoder.ApplyAllowedOfframpUpdates(offrampsToAdd, offrampsToRemove)
+func (c AuthContract) ApplyAllowedOfframpUpdates(opts *bind.TransactOpts, offrampsToRemove []aptos.AccountAddress, offrampsToAdd []aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.authEncoder.ApplyAllowedOfframpUpdates(offrampsToRemove, offrampsToAdd)
 	if err != nil {
 		return nil, err
 	}
@@ -271,23 +271,23 @@ func (c authEncoder) Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [
 	return c.BoundContract.Encode("owner", nil, []string{}, []any{})
 }
 
-func (c authEncoder) ApplyAllowedOnrampUpdates(onrampsToAdd []aptos.AccountAddress, onrampsToRemove []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c authEncoder) ApplyAllowedOnrampUpdates(onrampsToRemove []aptos.AccountAddress, onrampsToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("apply_allowed_onramp_updates", nil, []string{
 		"vector<address>",
 		"vector<address>",
 	}, []any{
-		onrampsToAdd,
 		onrampsToRemove,
+		onrampsToAdd,
 	})
 }
 
-func (c authEncoder) ApplyAllowedOfframpUpdates(offrampsToAdd []aptos.AccountAddress, offrampsToRemove []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c authEncoder) ApplyAllowedOfframpUpdates(offrampsToRemove []aptos.AccountAddress, offrampsToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("apply_allowed_offramp_updates", nil, []string{
 		"vector<address>",
 		"vector<address>",
 	}, []any{
-		offrampsToAdd,
 		offrampsToRemove,
+		offrampsToAdd,
 	})
 }
 
