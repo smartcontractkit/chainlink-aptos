@@ -48,9 +48,9 @@ module ccip_router::router {
             &state_signer,
             RouterState {
                 state_signer_cap,
-                ownable_state: ownable::new(publisher, @ccip_router),
+                ownable_state: ownable::new(&state_signer, @ccip_router),
                 on_ramp_versions: smart_table::new(),
-                on_ramp_set_events: account::new_event_handle(publisher)
+                on_ramp_set_events: account::new_event_handle(&state_signer)
             }
         );
 
@@ -247,6 +247,13 @@ module ccip_router::router {
         ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
     }
 
+    public entry fun execute_ownership_transfer(
+        caller: &signer, to: address
+    ) acquires RouterState {
+        let state = borrow_state_mut();
+        ownable::execute_ownership_transfer(caller, &mut state.ownable_state, to)
+    }
+
     // ================================================================
     // |                      MCMS entrypoint                         |
     // ================================================================
@@ -273,6 +280,17 @@ module ccip_router::router {
                 );
 
             set_on_ramp_versions(&caller, dest_chain_selectors, ramps_to_use);
+        } else if (function_bytes == b"transfer_ownership") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            transfer_ownership(&caller, to)
+        } else if (function_bytes == b"accept_ownership") {
+            bcs_stream::assert_is_consumed(&stream);
+            accept_ownership(&caller)
+        } else if (function_bytes == b"execute_ownership_transfer") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            execute_ownership_transfer(&caller, to)
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };
