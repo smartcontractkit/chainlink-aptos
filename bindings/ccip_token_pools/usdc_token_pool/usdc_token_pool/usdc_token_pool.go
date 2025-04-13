@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type UsdcTokenPool interface {
+type UsdcTokenPoolInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	GetToken(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	GetRouter(opts *bind.CallOpts) (aptos.AccountAddress, error)
@@ -82,7 +82,7 @@ type UsdcTokenPoolEncoder interface {
 
 const FunctionInfo = `[{"package":"usdc_token_pool","module":"usdc_token_pool","name":"accept_ownership","parameters":null},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"add_remote_pool","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"remote_pool_address","type":"vector\u003cu8\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"apply_allowlist_updates","parameters":[{"name":"removes","type":"vector\u003caddress\u003e"},{"name":"adds","type":"vector\u003caddress\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"apply_chain_updates","parameters":[{"name":"remote_chain_selectors_to_remove","type":"vector\u003cu64\u003e"},{"name":"remote_chain_selectors_to_add","type":"vector\u003cu64\u003e"},{"name":"remote_pool_addresses_to_add","type":"vector\u003cvector\u003cvector\u003cu8\u003e\u003e\u003e"},{"name":"remote_token_addresses_to_add","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"assert_can_initialize","parameters":[{"name":"caller_address","type":"address"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"decode_dest_pool_data","parameters":[{"name":"dest_pool_data","type":"vector\u003cu8\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"encode_dest_pool_data","parameters":[{"name":"local_domain_identifier","type":"u32"},{"name":"nonce","type":"u64"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"initialize","parameters":[{"name":"local_token","type":"address"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"parse_message_and_attestation","parameters":[{"name":"payload","type":"vector\u003cu8\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"remove_remote_pool","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"remote_pool_address","type":"vector\u003cu8\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"set_chain_rate_limiter_config","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"outbound_is_enabled","type":"bool"},{"name":"outbound_capacity","type":"u64"},{"name":"outbound_rate","type":"u64"},{"name":"inbound_is_enabled","type":"bool"},{"name":"inbound_capacity","type":"u64"},{"name":"inbound_rate","type":"u64"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"set_chain_rate_limiter_configs","parameters":[{"name":"remote_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"outbound_is_enableds","type":"vector\u003cbool\u003e"},{"name":"outbound_capacities","type":"vector\u003cu64\u003e"},{"name":"outbound_rates","type":"vector\u003cu64\u003e"},{"name":"inbound_is_enableds","type":"vector\u003cbool\u003e"},{"name":"inbound_capacities","type":"vector\u003cu64\u003e"},{"name":"inbound_rates","type":"vector\u003cu64\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"set_domains","parameters":[{"name":"remote_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"remote_domain_identifiers","type":"vector\u003cu32\u003e"},{"name":"allowed_remote_callers","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"enableds","type":"vector\u003cbool\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"store_address","parameters":null},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
 
-func NewUsdcTokenPool(address aptos.AccountAddress, client aptos.AptosRpcClient) UsdcTokenPool {
+func NewUsdcTokenPool(address aptos.AccountAddress, client aptos.AptosRpcClient) UsdcTokenPoolInterface {
 	contract := bind.NewBoundContract(address, "usdc_token_pool", "usdc_token_pool", client)
 	return UsdcTokenPoolContract{
 		BoundContract:        contract,
@@ -121,7 +121,7 @@ type UsdcTokenPoolContract struct {
 	usdcTokenPoolEncoder
 }
 
-var _ UsdcTokenPool = UsdcTokenPoolContract{}
+var _ UsdcTokenPoolInterface = UsdcTokenPoolContract{}
 
 func (c UsdcTokenPoolContract) Encoder() UsdcTokenPoolEncoder {
 	return c.usdcTokenPoolEncoder
