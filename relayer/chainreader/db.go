@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS aptos.events (
     event_handle TEXT NOT NULL,
     event_offset BIGINT NOT NULL,
     block_version BIGINT NOT NULL,
-    block_height BIGINT NOT NULL,
+    block_height TEXT NOT NULL,
     block_hash BYTEA NOT NULL,
     block_timestamp BIGINT NOT NULL,
     data JSONB NOT NULL,
@@ -55,7 +55,7 @@ type EventRecord struct {
 	BlockHeight         string
 	BlockHash           []byte
 	BlockTimestamp      uint64
-	Data                any
+	Data                map[string]any
 }
 
 func (store *DBStore) InsertEvents(ctx context.Context, records []EventRecord) error {
@@ -78,20 +78,12 @@ ON CONFLICT DO NOTHING;
 `
 
 	for _, record := range records {
-		// Marshal Data to JSON if it's not already a byte slice
-		var data any
-		switch v := record.Data.(type) {
-		case []byte:
-			data = v
-		default:
-			marshaled, err := json.Marshal(v)
-			if err != nil {
-				return fmt.Errorf("failed to marshal event data for handle %s at offset %d: %w", record.EventHandle, record.EventOffset, err)
-			}
-			data = marshaled
+		data, err := json.Marshal(record.Data)
+		if err != nil {
+			return fmt.Errorf("failed to marshal event data for handle %s at offset %d: %w", record.EventHandle, record.EventOffset, err)
 		}
 
-		_, err := store.ds.ExecContext(ctx, insertSQL,
+		_, err = store.ds.ExecContext(ctx, insertSQL,
 			record.EventAccountAddress,
 			record.EventHandle,
 			record.EventOffset,
@@ -116,6 +108,7 @@ SELECT event_account_address, event_handle, event_offset, block_version, block_h
 FROM aptos.events
 WHERE event_account_address = $1 AND event_handle = $2
 `
+
 	args := []interface{}{eventAccountAddress, eventHandle}
 	argCount := 3
 
@@ -172,14 +165,14 @@ WHERE event_account_address = $1 AND event_handle = $2
 			return nil, fmt.Errorf("failed to scan event record: %w", err)
 		}
 
-		var data any
+		var data map[string]any
 		if err := json.Unmarshal(dataBytes, &data); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal event data: %w", err)
 		}
-
 		record.Data = data
 		records = append(records, record)
 	}
+
 	return records, nil
 }
 

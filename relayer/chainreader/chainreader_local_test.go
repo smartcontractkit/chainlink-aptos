@@ -1,4 +1,4 @@
-// //go:build integration
+//go:build integration
 
 package chainreader
 
@@ -49,11 +49,11 @@ func TestChainReaderLocal(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("GetLatestValue", func(t *testing.T) {
-		// runGetLatestValueTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
+		runGetLatestValueTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
 	})
 
 	t.Run("QueryKey", func(t *testing.T) {
-		// runQueryKeyTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
+		runQueryKeyTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
 	})
 
 	t.Run("QueryKeyPersistent", func(t *testing.T) {
@@ -269,8 +269,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		Address: accountAddress.String(),
 	}
 
-	db := sqltest.NewDB(t, sqltest.TestURL(t))
-	chainReader := NewChainReader(logger, rateLimitedClient, config, db)
+	chainReader := NewChainReader(logger, rateLimitedClient, config, nil)
 	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{binding})
 	require.NoError(t, err)
 
@@ -552,8 +551,7 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 		},
 	}
 
-	db := sqltest.NewDB(t, sqltest.TestURL(t))
-	chainReader := NewChainReader(logger, rateLimitedClient, config, db)
+	chainReader := NewChainReader(logger, rateLimitedClient, config, nil)
 	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{
 		{Name: "testContract", Address: accountAddress.String()},
 	})
@@ -851,7 +849,10 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 
 	// Create a persistent DBStore.
 	dsn := os.Getenv("TEST_DB_URL")
-	require.NotEmpty(t, dsn, "TEST_DB_URL must be set for persistent tests")
+	if dsn == "" {
+		// todo: make test run in CI
+		t.Skip("Skipping persistent tests as TEST_DB_URL is not set in CI")
+	}
 	db := sqltest.NewDB(t, dsn)
 
 	// Create ChainReader with persistence enabled.
@@ -975,6 +976,71 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 		)
 		require.NoError(t, err)
 		require.Empty(t, seqs)
+	})
+
+	t.Run("Filter by renamed numeric value", func(t *testing.T) {
+		// Create a new configuration that renames "number" to "RenamedNumber"
+		configRenamed := ChainReaderConfig{
+			Modules: map[string]*ChainReaderModule{
+				"testContract": {
+					Name: "echo",
+					Events: map[string]*ChainReaderEvent{
+						"DoubleValueEvent": {
+							EventHandleStructName: "EventStore",
+							EventHandleFieldName:  "double_value_events",
+							EventAccountAddress:   "", // defaults to bound contract address
+							EventFieldRenames: map[string]RenamedField{
+								"number": {NewName: "RenamedNumber"},
+							},
+						},
+					},
+				},
+			},
+		}
+		chainReaderRenamed := NewChainReader(logger, rateLimitedClient, configRenamed, db)
+		bindingRenamed := commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()}
+		err := chainReaderRenamed.Bind(context.Background(), []commontypes.BoundContract{bindingRenamed})
+		require.NoError(t, err)
+
+		// Emit exactly one event with value 7.
+		txId := uuid.New().String()
+		err = txmgr.Enqueue(
+			txId,
+			getSampleTxMetadata(),
+			accountAddress.String(),
+			publicKeyHex,
+			fmt.Sprintf("%s::echo::echo_with_events", accountAddress.String()),
+			[]string{},
+			[]string{"u64", "0x1::string::String", "vector<u8>"},
+			[]any{uint64(7), "test7", []byte{7}},
+			true,
+		)
+		require.NoError(t, err)
+		waitForTx(t, txmgr, txId)
+		time.Sleep(3 * time.Second) // ensure the event is synced
+
+		// Filter on the renamed field "RenamedNumber"
+		filter := query.KeyFilter{
+			Key: "DoubleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("RenamedNumber",
+					primitives.ValueComparator{Value: uint64(5), Operator: primitives.Gte},
+					primitives.ValueComparator{Value: uint64(10), Operator: primitives.Lt},
+				),
+			},
+		}
+		seqs, err := chainReaderRenamed.QueryKey(
+			context.Background(),
+			bindingRenamed,
+			filter,
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&DoubleValueEventRenamed{}, // decode into the struct with renamed field
+		)
+		require.NoError(t, err)
+		// Expect exactly one event (the one we just emitted).
+		require.Len(t, seqs, 1)
+		evt := seqs[0].Data.(*DoubleValueEventRenamed)
+		require.Equal(t, uint64(7), evt.RenamedNumber)
 	})
 }
 
@@ -1206,4 +1272,9 @@ type ComplexStruct struct {
 	RenamedFlag   bool     `json:"RenamedFlag"`
 	RenamedNested Nested   `json:"RenamedNested"`
 	RenamedValues []uint64 `json:"RenamedValues"`
+}
+
+type DoubleValueEventRenamed struct {
+	RenamedNumber uint64 `json:"RenamedNumber"`
+	Text          string `json:"text"`
 }

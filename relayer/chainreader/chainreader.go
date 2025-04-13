@@ -54,11 +54,12 @@ func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config Chain
 		moduleAddresses:       map[string]aptos.AccountAddress{},
 		eventAccountAddresses: map[string]aptos.AccountAddress{},
 	}
-	// If a DataSource is provided, enable persistent mode.
+
 	if ds != nil {
 		reader.dbStore = NewDBStore(ds)
 		reader.isPersistentMode = true
 	}
+
 	return reader
 }
 
@@ -108,6 +109,7 @@ func (a *aptosChainReader) syncEvent(ctx context.Context, boundAddress aptos.Acc
 	if err != nil {
 		a.logger.Errorw("syncEvent: failed to fetch new events", "error", err)
 		// If fetching fails, we continue with what is already in the DB
+		// todo: should we rather error out?
 		return nil
 	}
 
@@ -120,6 +122,11 @@ func (a *aptosChainReader) syncEvent(ctx context.Context, boundAddress aptos.Acc
 		head, err := a.getBlockHead(event.Version)
 		if err != nil {
 			a.logger.Errorw("syncEvent: failed to fetch block metadata", "version", event.Version, "error", err)
+			continue
+		}
+
+		if err := renameMapFields(event.Data, eventConfig.EventFieldRenames); err != nil {
+			a.logger.Errorw("syncEvent: failed to rename event fields", "error", err)
 			continue
 		}
 
@@ -445,8 +452,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 
 	if a.isPersistentMode {
 		if err := a.syncEvent(ctx, address, eventConfig, eventModuleName); err != nil {
-			a.logger.Errorw("persistent mode: syncEvent error", "error", err)
-			// Proceed even if sync fails
+			return nil, fmt.Errorf("persistent mode: syncEvent error: %w", err)
 		}
 
 		dbRecords, err := a.dbStore.QueryEvents(ctx, eventAccountAddress.String(), eventHandle, filter, limitAndSort)
@@ -467,6 +473,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 				eventData = resultBytes
 			} else {
 				decoded := reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
+
 				if err := codec.DecodeAptosJsonValue(rec.Data, &decoded); err != nil {
 					return nil, fmt.Errorf("persistent mode: failed to decode event data: %w", err)
 				}
@@ -485,13 +492,13 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 			}
 			sequences = append(sequences, sequence)
 		}
-		
+
 		return sequences, nil
 	}
 
+	// Non-persistent mode
 	tsFilter, hasTSFilter := extractTimestampFilter(expressions)
 	var eventOffset uint64 = 0
-
 	if hasTSFilter {
 		// We perform a binary search to determine the offset
 		// that satisfies the condition blockTs >= tsFilter
@@ -533,7 +540,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	}
 
 	// Note: we only support primitive filters for now
-	// All comparators are combined using the AND boolean operator
+	// All comparators are combined using AND boolean operator
 	var comparators []*primitives.Comparator
 	for _, expr := range expressions {
 		if expr.IsPrimitive() {
@@ -573,7 +580,6 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 				// Only top level fields
 				fieldValue, ok := jsonData[cmp.Name]
 				if !ok {
-					// Field doesn't exist, filter fails
 					passesFilters = false
 					break
 				}
