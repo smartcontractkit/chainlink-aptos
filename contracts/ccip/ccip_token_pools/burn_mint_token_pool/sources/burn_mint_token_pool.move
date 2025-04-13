@@ -485,7 +485,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
 
     public fun mcms_entrypoint<T: key>(
         _metadata: object::Object<T>
-    ): option::Option<u128> acquires BurnMintTokenPool {
+    ): option::Option<u128> acquires BurnMintTokenPoolState {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@burn_mint_token_pool, McmsCallback {});
 

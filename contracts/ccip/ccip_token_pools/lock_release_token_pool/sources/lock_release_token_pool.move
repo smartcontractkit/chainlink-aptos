@@ -466,7 +466,7 @@ module lock_release_token_pool::lock_release_token_pool {
 
     public fun mcms_entrypoint<T: key>(
         _metadata: object::Object<T>
-    ): option::Option<u128> acquires LockReleaseTokenPool {
+    ): option::Option<u128> acquires LockReleaseTokenPoolState {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@lock_release_token_pool, McmsCallback {});
 
