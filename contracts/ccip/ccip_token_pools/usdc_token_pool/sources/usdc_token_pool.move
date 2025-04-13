@@ -109,7 +109,7 @@ module usdc_token_pool::usdc_token_pool {
             publisher,
             USDCTokenPoolDeployment {
                 store_signer_cap,
-                ownable_state: ownable::new(publisher, signer::address_of(publisher)),
+                ownable_state: ownable::new(publisher, @usdc_token_pool),
                 token_pool_state: token_pool::initialize(
                     publisher, @local_token, vector[]
                 ),
