@@ -574,15 +574,18 @@ module ccip::fee_quoter {
         );
     }
 
+    #[view]
     public fun get_validated_fee(
-        dest_chain_selector: u64, message: &client::Aptos2AnyMessage
+        dest_chain_selector: u64,
+        receiver: vector<u8>,
+        data: vector<u8>,
+        local_token_addresses: vector<address>,
+        local_token_amounts: vector<u64>,
+        _token_store_addresses: vector<address>,
+        fee_token: address,
+        fee_token_store: address,
+        extra_args: vector<u8>
     ): u64 acquires FeeQuoterState {
-        let (receiver, data, fee_token, _fee_token_store, extra_args) =
-            client::get_aptos2any_fields(message);
-
-        let (local_token_addresses, local_token_amounts) =
-            client::get_aptos2any_token_transfers(message);
-
         let state = borrow_state_mut();
 
         let dest_chain_config = get_dest_chain_config_internal(
