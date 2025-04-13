@@ -13,7 +13,6 @@ module ccip_onramp::onramp {
     use std::smart_table::{Self, SmartTable};
 
     use ccip::auth;
-    use ccip::client;
     use ccip::eth_abi;
     use ccip::fee_quoter;
     use ccip::merkle_proof;
@@ -269,28 +268,45 @@ module ccip_onramp::onramp {
         fee_token_store: address,
         extra_args: vector<u8>
     ): u64 {
-        let message =
-            client::new_aptos2any_message(
-                receiver,
-                data,
-                token_addresses,
-                token_amounts,
-                token_store_addresses,
-                fee_token,
-                fee_token_store,
-                extra_args
-            );
-        get_fee_internal(dest_chain_selector, &message)
+        get_fee_internal(
+            dest_chain_selector,
+            receiver,
+            data,
+            token_addresses,
+            token_amounts,
+            token_store_addresses,
+            fee_token,
+            fee_token_store,
+            extra_args
+        )
     }
 
     inline fun get_fee_internal(
-        dest_chain_selector: u64, message: &client::Aptos2AnyMessage
+        dest_chain_selector: u64,
+        receiver: vector<u8>,
+        data: vector<u8>,
+        token_addresses: vector<address>,
+        token_amounts: vector<u64>,
+        token_store_addresses: vector<address>,
+        fee_token: address,
+        fee_token_store: address,
+        extra_args: vector<u8>
     ): u64 {
         assert!(
             !rmn_remote::is_cursed_u128(dest_chain_selector as u128),
             error::permission_denied(E_CURSED_BY_RMN)
         );
-        fee_quoter::get_validated_fee(dest_chain_selector, message)
+        fee_quoter::get_validated_fee(
+            dest_chain_selector,
+            receiver,
+            data,
+            token_addresses,
+            token_amounts,
+            token_store_addresses,
+            fee_token,
+            fee_token_store,
+            extra_args
+        )
     }
 
     inline fun resolve_fungible_asset(token: address): Object<Metadata> {
@@ -335,8 +351,9 @@ module ccip_onramp::onramp {
             error::permission_denied(E_BAD_RMN_SIGNAL)
         );
 
-        let message =
-            client::new_aptos2any_message(
+        let fee_token_amount =
+            get_fee_internal(
+                dest_chain_selector,
                 receiver,
                 data,
                 token_addresses,
@@ -346,8 +363,6 @@ module ccip_onramp::onramp {
                 fee_token_store,
                 extra_args
             );
-
-        let fee_token_amount = get_fee_internal(dest_chain_selector, &message);
         if (fee_token_amount != 0) {
             // deposit the fee in the state object's primary fungible store.
             let fa_metadata = resolve_fungible_asset(fee_token);
