@@ -77,7 +77,7 @@ module usdc_token_pool::usdc_token_pool {
 
     fun init_module(publisher: &signer) {
         // register the pool on deployment, because in the case of object code deployment,
-        // this is the only time we have a signer ref to @ccip_usdc_pool.
+        // this is the only time we have a signer ref to @usdc_token_pool.
         assert!(
             object::object_exists<Metadata>(@local_token),
             error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
