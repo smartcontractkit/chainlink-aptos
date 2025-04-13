@@ -31,8 +31,8 @@ module ccip_router::router {
     }
 
     const E_UNKNOWN_FUNCTION: u64 = 1;
-    const E_UNKNOWN_CHAIN: u64 = 2;
-    const E_UNKNOWN_ON_RAMP: u64 = 3;
+    const E_UNSUPPORTED_DESTINATION_CHAIN: u64 = 2;
+    const E_UNSUPPORTED_ON_RAMP_VERSION: u64 = 3;
     const E_INVALID_ON_RAMP_VERSION: u64 = 4;
 
     #[view]
@@ -68,8 +68,25 @@ module ccip_router::router {
     }
 
     #[view]
-    public fun is_chain_supported(dest_chain_selector: u64): bool {
-        onramp::is_chain_supported(dest_chain_selector)
+    public fun is_chain_supported(dest_chain_selector: u64): bool acquires RouterState {
+        let state = borrow_state();
+        state.on_ramp_versions.contains(dest_chain_selector)
+    }
+
+    #[view]
+    public fun get_on_ramp(dest_chain_selector: u64): address acquires RouterState {
+        let state = borrow_state();
+
+        assert!(
+            state.on_ramp_versions.contains(dest_chain_selector),
+            error::invalid_argument(E_UNSUPPORTED_DESTINATION_CHAIN)
+        );
+
+        let on_ramp_version = *state.on_ramp_versions.borrow(dest_chain_selector);
+
+        if (on_ramp_version == vector[1, 6, 0]) {
+            @ccip_onramp
+        } else { @0x0 }
     }
 
     #[view]
@@ -83,18 +100,31 @@ module ccip_router::router {
         fee_token: address,
         fee_token_store: address,
         extra_args: vector<u8>
-    ): u64 {
-        onramp::get_fee(
-            dest_chain_selector,
-            receiver,
-            data,
-            token_addresses,
-            token_amounts,
-            token_store_addresses,
-            fee_token,
-            fee_token_store,
-            extra_args
-        )
+    ): u64 acquires RouterState {
+        let state = borrow_state();
+
+        assert!(
+            state.on_ramp_versions.contains(dest_chain_selector),
+            error::invalid_argument(E_UNSUPPORTED_DESTINATION_CHAIN)
+        );
+
+        let on_ramp_version = *state.on_ramp_versions.borrow(dest_chain_selector);
+
+        if (on_ramp_version == vector[1, 6, 0]) {
+            onramp::get_fee(
+                dest_chain_selector,
+                receiver,
+                data,
+                token_addresses,
+                token_amounts,
+                token_store_addresses,
+                fee_token,
+                fee_token_store,
+                extra_args
+            )
+        } else {
+            abort error::invalid_state(E_UNSUPPORTED_ON_RAMP_VERSION)
+        }
     }
 
     public entry fun ccip_send(
@@ -139,7 +169,7 @@ module ccip_router::router {
 
         assert!(
             state.on_ramp_versions.contains(dest_chain_selector),
-            error::invalid_argument(E_UNKNOWN_CHAIN)
+            error::invalid_argument(E_UNSUPPORTED_DESTINATION_CHAIN)
         );
 
         let on_ramp_version = *state.on_ramp_versions.borrow(dest_chain_selector);
@@ -162,7 +192,7 @@ module ccip_router::router {
                 extra_args
             )
         } else {
-            abort error::invalid_argument(E_UNKNOWN_ON_RAMP)
+            abort error::invalid_state(E_UNSUPPORTED_ON_RAMP_VERSION)
         }
     }
 
