@@ -2,7 +2,7 @@ module link::link_token {
     use std::code::PackageRegistry;
     use std::event;
     use std::fungible_asset::{Self, BurnRef, Metadata, MintRef, TransferRef};
-    use std::object::{Self, ExtendRef, Object};
+    use std::object::{Self, ExtendRef, Object, TransferRef as ObjectTransferRef};
     use std::option::{Self, Option};
     use std::primary_fungible_store;
     use std::signer;
@@ -13,19 +13,28 @@ module link::link_token {
     use mcms::bcs_stream;
     use mcms::mcms_registry;
 
-    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
-    struct ManagementRefs has key {
-        extend_ref: ExtendRef,
-        mint_ref: MintRef,
-        burn_ref: BurnRef,
-        transfer_ref: TransferRef
-    }
+    const TOKEN_STATE_SEED: vector<u8> = b"link::link_token::token_state";
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct TokenState has key {
         ownable_state: OwnableState,
         allowed_minters: AllowlistState,
-        allowed_burners: AllowlistState
+        allowed_burners: AllowlistState,
+        token: Option<Object<Metadata>>
+    }
+
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+    struct TokenStateRefs has key {
+        extend_ref: ExtendRef,
+        transfer_ref: ObjectTransferRef
+    }
+
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+    struct MetadataRefs has key {
+        extend_ref: ExtendRef,
+        mint_ref: MintRef,
+        burn_ref: BurnRef,
+        transfer_ref: TransferRef
     }
 
     #[event]
@@ -58,9 +67,40 @@ module link::link_token {
     const E_NOT_ALLOWED_MINTER: u64 = 3;
     const E_NOT_ALLOWED_BURNER: u64 = 4;
     const E_TOKEN_NOT_INITIALIZED: u64 = 5;
+    const E_TOKEN_ALREADY_INITIALIZED: u64 = 6;
 
+    /// `publisher` is the code object, deployed through object_code_deployment
     fun init_module(publisher: &signer) {
         assert!(object::object_exists<PackageRegistry>(@link), E_NOT_PUBLISHER);
+
+        // Create object owned by code object
+        let constructor_ref = &object::create_named_object(publisher, TOKEN_STATE_SEED);
+        let extend_ref = object::generate_extend_ref(constructor_ref);
+        let object_transfer_ref = object::generate_transfer_ref(constructor_ref);
+        let token_state_signer = &object::generate_signer(constructor_ref);
+
+        move_to(
+            token_state_signer,
+            TokenStateRefs { extend_ref, transfer_ref: object_transfer_ref }
+        );
+
+        let allowed_minters =
+            allowlist::new_with_name(publisher, vector[], string::utf8(b"minters"));
+        allowlist::set_allowlist_enabled(&mut allowed_minters, true);
+
+        let allowed_burners =
+            allowlist::new_with_name(publisher, vector[], string::utf8(b"burners"));
+        allowlist::set_allowlist_enabled(&mut allowed_burners, true);
+
+        move_to(
+            token_state_signer,
+            TokenState {
+                ownable_state: ownable::new(publisher, @link),
+                allowed_minters,
+                allowed_burners,
+                token: option::none()
+            }
+        );
 
         if (@mcms_register_entrypoints != @0x0) {
             mcms_registry::register_entrypoint(
@@ -75,49 +115,44 @@ module link::link_token {
     }
 
     #[view]
-    public fun get_allowed_minters(
-        token_state: Object<TokenState>
-    ): vector<address> acquires TokenState {
-        allowlist::get_allowlist(
-            &TokenState[object::object_address(&token_state)].allowed_minters
-        )
+    public fun token_state_address(): address {
+        object::create_object_address(&@link, TOKEN_STATE_SEED)
     }
 
     #[view]
-    public fun get_allowed_burners(
-        token_state: Object<TokenState>
-    ): vector<address> acquires TokenState {
-        allowlist::get_allowlist(
-            &TokenState[object::object_address(&token_state)].allowed_burners
-        )
+    public fun get_allowed_minters(): vector<address> acquires TokenState {
+        allowlist::get_allowlist(&TokenState[token_state_address()].allowed_minters)
     }
 
     #[view]
-    public fun is_minter_allowed(
-        token_state: Object<TokenState>, minter_address: address
-    ): bool acquires TokenState {
+    public fun get_allowed_burners(): vector<address> acquires TokenState {
+        allowlist::get_allowlist(&TokenState[token_state_address()].allowed_burners)
+    }
+
+    #[view]
+    public fun is_minter_allowed(minter_address: address): bool acquires TokenState {
         allowlist::is_allowed(
-            &TokenState[object::object_address(&token_state)].allowed_minters,
+            &TokenState[token_state_address()].allowed_minters,
             minter_address
         )
     }
 
     #[view]
-    public fun is_burner_allowed(
-        token_state: Object<TokenState>, burner_address: address
-    ): bool acquires TokenState {
+    public fun is_burner_allowed(burner_address: address): bool acquires TokenState {
         allowlist::is_allowed(
-            &TokenState[object::object_address(&token_state)].allowed_burners,
+            &TokenState[token_state_address()].allowed_burners,
             burner_address
         )
     }
 
     #[view]
-    public fun token_address(
-        token_state: Object<TokenState>, symbol: String
-    ): address {
-        let owner = object::owner(token_state);
-        object::create_object_address(&owner, *symbol.bytes())
+    public fun token_address(symbol: String): address {
+        object::create_object_address(&token_state_address(), *symbol.bytes())
+    }
+
+    #[view]
+    public fun metadata(): Option<Object<Metadata>> acquires TokenState {
+        TokenState[token_state_address()].token
     }
 
     // ================================================================
@@ -133,12 +168,15 @@ module link::link_token {
         decimals: u8,
         icon: String,
         project: String
-    ) {
-        let code_object = object::address_to_object<PackageRegistry>(@link);
+    ) acquires TokenState, TokenStateRefs {
         let publisher_addr = signer::address_of(publisher);
-        assert!(object::owns(code_object, publisher_addr), E_NOT_OWNER);
+        // `authorized_token_state_signer` asserts `publisher` is the owner of the code object
+        let token_state_signer = authorized_token_state_signer(publisher);
 
-        let constructor_ref = &object::create_named_object(publisher, *symbol.bytes());
+        // Code object owns token state, which owns the fungible asset
+        // Code object => token state => fungible asset
+        let constructor_ref =
+            &object::create_named_object(&token_state_signer, *symbol.bytes());
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
             constructor_ref,
             max_supply,
@@ -152,7 +190,7 @@ module link::link_token {
         let metadata_object_signer = &object::generate_signer(constructor_ref);
         move_to(
             metadata_object_signer,
-            ManagementRefs {
+            MetadataRefs {
                 extend_ref: object::generate_extend_ref(constructor_ref),
                 mint_ref: fungible_asset::generate_mint_ref(constructor_ref),
                 burn_ref: fungible_asset::generate_burn_ref(constructor_ref),
@@ -160,28 +198,13 @@ module link::link_token {
             }
         );
 
-        let allowed_minters =
-            allowlist::new_with_name(publisher, vector[], string::utf8(b"minters"));
-        allowlist::set_allowlist_enabled(&mut allowed_minters, true);
-
-        let allowed_burners =
-            allowlist::new_with_name(publisher, vector[], string::utf8(b"burners"));
-        allowlist::set_allowlist_enabled(&mut allowed_burners, true);
-
-        // Move the token state to the metadata object
-        move_to(
-            metadata_object_signer,
-            TokenState {
-                ownable_state: ownable::new(publisher, @link),
-                allowed_minters,
-                allowed_burners
-            }
-        );
+        let token = object::object_from_constructor_ref(constructor_ref);
+        TokenState[token_state_address()].token = option::some(token);
 
         event::emit(
             Initialize {
                 publisher: publisher_addr,
-                token: object::object_from_constructor_ref(constructor_ref),
+                token,
                 max_supply,
                 decimals,
                 icon,
@@ -190,16 +213,23 @@ module link::link_token {
         );
     }
 
+    inline fun authorized_token_state_signer(owner: &signer): signer {
+        assert_only_owner(signer::address_of(owner));
+
+        object::generate_signer_for_extending(
+            &TokenStateRefs[token_state_address()].extend_ref
+        )
+    }
+
     public entry fun apply_allowed_minter_updates(
         caller: &signer,
-        token_state: Object<TokenState>,
         minters_to_remove: vector<address>,
         minters_to_add: vector<address>
     ) acquires TokenState {
-        assert_only_owner(signer::address_of(caller), token_state);
+        assert_only_owner(signer::address_of(caller));
 
         allowlist::apply_allowlist_updates(
-            &mut TokenState[object::object_address(&token_state)].allowed_minters,
+            &mut TokenState[token_state_address()].allowed_minters,
             minters_to_remove,
             minters_to_add
         );
@@ -207,14 +237,13 @@ module link::link_token {
 
     public entry fun apply_allowed_burner_updates(
         caller: &signer,
-        token_state: Object<TokenState>,
         burners_to_remove: vector<address>,
         burners_to_add: vector<address>
     ) acquires TokenState {
-        assert_only_owner(signer::address_of(caller), token_state);
+        assert_only_owner(signer::address_of(caller));
 
         allowlist::apply_allowlist_updates(
-            &mut TokenState[object::object_address(&token_state)].allowed_burners,
+            &mut TokenState[token_state_address()].allowed_burners,
             burners_to_remove,
             burners_to_add
         );
@@ -224,68 +253,55 @@ module link::link_token {
     // |                      Mint/Burn Functions                      |
     // ================================================================
 
-    public entry fun mint(
-        minter: &signer,
-        token_state: Object<TokenState>,
-        to: address,
-        amount: u64
-    ) acquires ManagementRefs, TokenState {
-        let token_state_addr = object::object_address(&token_state);
+    public entry fun mint(minter: &signer, to: address, amount: u64) acquires MetadataRefs, TokenState {
         let minter_addr = signer::address_of(minter);
-        assert_is_allowed_minter(minter_addr, token_state_addr);
+        assert_is_allowed_minter(minter_addr);
 
         if (amount == 0) { return };
 
-        let refs = borrow_refs(token_state_addr);
-        primary_fungible_store::mint(&refs.mint_ref, to, amount);
+        primary_fungible_store::mint(&borrow_metadata_refs().mint_ref, to, amount);
 
         event::emit(Mint { minter: minter_addr, to, amount });
     }
 
-    public entry fun burn(
-        burner: &signer,
-        token_state: Object<TokenState>,
-        from: address,
-        amount: u64
-    ) acquires ManagementRefs, TokenState {
-        let token_state_addr = object::object_address(&token_state);
+    public entry fun burn(burner: &signer, from: address, amount: u64) acquires MetadataRefs, TokenState {
         let burner_addr = signer::address_of(burner);
-        assert_is_allowed_burner(burner_addr, token_state_addr);
+        assert_is_allowed_burner(burner_addr);
 
         if (amount == 0) { return };
 
-        let refs = borrow_refs(token_state_addr);
-        primary_fungible_store::burn(&refs.burn_ref, from, amount);
+        primary_fungible_store::burn(&borrow_metadata_refs().burn_ref, from, amount);
 
         event::emit(Burn { burner: burner_addr, from, amount });
     }
 
-    inline fun assert_is_allowed_minter(
-        caller: address, token_state_addr: address
-    ) {
-        let token_state = &TokenState[token_state_addr];
+    inline fun assert_is_allowed_minter(caller: address) acquires TokenState {
         assert!(
-            allowlist::is_allowed(&token_state.allowed_minters, caller),
+            caller == owner()
+                || allowlist::is_allowed(
+                    &TokenState[token_state_address()].allowed_minters, caller
+                ),
             E_NOT_ALLOWED_MINTER
         );
     }
 
-    inline fun assert_is_allowed_burner(
-        caller: address, token_state_addr: address
-    ) {
-        let token_state = &TokenState[token_state_addr];
+    inline fun assert_is_allowed_burner(caller: address) acquires TokenState {
         assert!(
-            allowlist::is_allowed(&token_state.allowed_burners, caller),
+            caller == owner()
+                || allowlist::is_allowed(
+                    &TokenState[token_state_address()].allowed_burners, caller
+                ),
             E_NOT_ALLOWED_BURNER
         );
     }
 
-    inline fun borrow_refs(token_state_addr: address): &ManagementRefs {
+    inline fun borrow_metadata_refs(): &MetadataRefs {
         assert!(
-            exists<ManagementRefs>(token_state_addr),
+            option::is_some(&TokenState[token_state_address()].token),
             E_TOKEN_NOT_INITIALIZED
         );
-        &ManagementRefs[token_state_addr]
+        let metadata = option::borrow(&TokenState[token_state_address()].token);
+        &MetadataRefs[object::object_address(metadata)]
     }
 
     // ================================================================
@@ -293,49 +309,43 @@ module link::link_token {
     // ================================================================
 
     #[view]
-    public fun owner(token_state: Object<TokenState>): address acquires TokenState {
-        ownable::owner(&TokenState[object::object_address(&token_state)].ownable_state)
+    public fun owner(): address acquires TokenState {
+        ownable::owner(&TokenState[token_state_address()].ownable_state)
     }
 
-    fun assert_only_owner(
-        caller: address, token_state: Object<TokenState>
-    ) acquires TokenState {
+    fun assert_only_owner(caller: address) acquires TokenState {
         ownable::assert_only_owner(
-            caller, &TokenState[object::object_address(&token_state)].ownable_state
+            caller, &TokenState[token_state_address()].ownable_state
         )
     }
 
     /// ownable::transfer_ownership checks if the caller is the owner
     /// So we only extract the ownable state from the token state
-    public entry fun transfer_ownership(
-        caller: &signer, token_state: Object<TokenState>, to: address
-    ) acquires TokenState {
+    public entry fun transfer_ownership(caller: &signer, to: address) acquires TokenState {
         ownable::transfer_ownership(
             signer::address_of(caller),
-            &mut TokenState[object::object_address(&token_state)].ownable_state,
+            &mut TokenState[token_state_address()].ownable_state,
             to
         )
     }
 
     /// Anyone can call this as `ownable::accept_ownership` verifies
     /// that the caller is the pending owner
-    public entry fun accept_ownership(
-        caller: &signer, token_state: Object<TokenState>
-    ) acquires TokenState {
+    public entry fun accept_ownership(caller: &signer) acquires TokenState {
         ownable::accept_ownership(
             signer::address_of(caller),
-            &mut TokenState[object::object_address(&token_state)].ownable_state
+            &mut TokenState[token_state_address()].ownable_state
         )
     }
 
     /// ownable::execute_ownership_transfer checks if the caller is the owner
     /// So we only extract the ownable state from the token state
     public entry fun execute_ownership_transfer(
-        caller: &signer, token_state: Object<TokenState>, to: address
+        caller: &signer, to: address
     ) acquires TokenState {
         ownable::execute_ownership_transfer(
             caller,
-            &mut TokenState[object::object_address(&token_state)].ownable_state,
+            &mut TokenState[token_state_address()].ownable_state,
             to
         )
     }
@@ -348,7 +358,7 @@ module link::link_token {
 
     public fun mcms_entrypoint<T: key>(
         _metadata: object::Object<T>
-    ): Option<u128> acquires ManagementRefs, TokenState {
+    ): Option<u128> acquires MetadataRefs, TokenState, TokenStateRefs {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@link, McmsCallback {});
 
@@ -377,31 +387,18 @@ module link::link_token {
                 project
             )
         } else if (function_bytes == b"mint") {
-            let token_state_addr = bcs_stream::deserialize_address(&mut stream);
             let to = bcs_stream::deserialize_address(&mut stream);
             let amount = bcs_stream::deserialize_u64(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
 
-            mint(
-                &caller,
-                token_state_obj(token_state_addr),
-                to,
-                amount
-            )
+            mint(&caller, to, amount)
         } else if (function_bytes == b"burn") {
-            let token_state_addr = bcs_stream::deserialize_address(&mut stream);
             let from = bcs_stream::deserialize_address(&mut stream);
             let amount = bcs_stream::deserialize_u64(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
 
-            burn(
-                &caller,
-                token_state_obj(token_state_addr),
-                from,
-                amount
-            )
+            burn(&caller, from, amount)
         } else if (function_bytes == b"apply_allowed_minter_updates") {
-            let token_state_addr = bcs_stream::deserialize_address(&mut stream);
             let minters_to_remove =
                 bcs_stream::deserialize_vector(
                     &mut stream, |stream| bcs_stream::deserialize_address(stream)
@@ -412,14 +409,8 @@ module link::link_token {
                 );
             bcs_stream::assert_is_consumed(&stream);
 
-            apply_allowed_minter_updates(
-                &caller,
-                token_state_obj(token_state_addr),
-                minters_to_remove,
-                minters_to_add
-            )
+            apply_allowed_minter_updates(&caller, minters_to_remove, minters_to_add)
         } else if (function_bytes == b"apply_allowed_burner_updates") {
-            let token_state_addr = bcs_stream::deserialize_address(&mut stream);
             let burners_to_remove =
                 bcs_stream::deserialize_vector(
                     &mut stream, |stream| bcs_stream::deserialize_address(stream)
@@ -430,38 +421,26 @@ module link::link_token {
                 );
             bcs_stream::assert_is_consumed(&stream);
 
-            apply_allowed_burner_updates(
-                &caller,
-                token_state_obj(token_state_addr),
-                burners_to_remove,
-                burners_to_add
-            )
+            apply_allowed_burner_updates(&caller, burners_to_remove, burners_to_add)
         } else if (function_bytes == b"transfer_ownership") {
-            let token_state_addr = bcs_stream::deserialize_address(&mut stream);
             let to = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
 
-            transfer_ownership(&caller, token_state_obj(token_state_addr), to)
+            transfer_ownership(&caller, to)
         } else if (function_bytes == b"accept_ownership") {
-            let token_state_addr = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
 
-            accept_ownership(&caller, token_state_obj(token_state_addr))
+            accept_ownership(&caller)
         } else if (function_bytes == b"execute_ownership_transfer") {
-            let token_state_addr = bcs_stream::deserialize_address(&mut stream);
             let to = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
 
-            execute_ownership_transfer(&caller, token_state_obj(token_state_addr), to)
+            execute_ownership_transfer(&caller, to)
         } else {
             abort E_UNKNOWN_FUNCTION
         };
 
         option::none()
-    }
-
-    fun token_state_obj(token_state_addr: address): Object<TokenState> {
-        object::address_to_object<TokenState>(token_state_addr)
     }
 
     #[test_only]

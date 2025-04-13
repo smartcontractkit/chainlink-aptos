@@ -2,14 +2,13 @@
 module link::link_tests {
     use std::account;
     use std::fungible_asset::Self;
-    use std::object::{Self, Object};
     use std::object_code_deployment;
     use std::option::{Self, Option};
     use std::primary_fungible_store;
     use std::signer;
     use std::string::Self;
 
-    use link::link_token::{Self, TokenState};
+    use link::link_token::Self;
     use mcms::mcms_account;
     use mcms::mcms_registry;
 
@@ -36,20 +35,15 @@ module link::link_tests {
 
     #[test_only]
     public fun setup_minters_burners(
-        owner: &signer,
-        token_state_obj: Object<TokenState>,
-        minter: &signer,
-        burner: &signer
+        owner: &signer, minter: &signer, burner: &signer
     ) {
         link_token::apply_allowed_minter_updates(
             owner,
-            token_state_obj,
             vector[],
             vector[signer::address_of(minter)]
         );
         link_token::apply_allowed_burner_updates(
             owner,
-            token_state_obj,
             vector[],
             vector[signer::address_of(burner)]
         );
@@ -74,7 +68,7 @@ module link::link_tests {
 
         initialize_link(owner, option::some(MAX_SUPPLY));
 
-        let metadata_obj = token_state_object(owner);
+        let metadata_obj = *option::borrow(&link_token::metadata());
         assert!(fungible_asset::name(metadata_obj) == string::utf8(NAME));
         assert!(fungible_asset::symbol(metadata_obj) == string::utf8(SYMBOL));
         assert!(fungible_asset::decimals(metadata_obj) == DECIMALS);
@@ -89,20 +83,13 @@ module link::link_tests {
         initialize_link(owner, option::some(MAX_SUPPLY));
 
         let recipient_addr = signer::address_of(recipient);
-        let metadata_obj = token_state_object(owner);
 
         let mint_amount: u64 = 100;
-        let token_state_obj = token_state_object(owner);
+        setup_minters_burners(owner, owner, owner);
 
-        setup_minters_burners(owner, token_state_obj, owner, owner);
+        link_token::mint(owner, recipient_addr, mint_amount);
 
-        link_token::mint(
-            owner,
-            token_state_obj,
-            recipient_addr,
-            mint_amount
-        );
-
+        let metadata_obj = *option::borrow(&link_token::metadata());
         assert!(fungible_asset::supply(metadata_obj)
             == option::some(mint_amount as u128));
         assert!(
@@ -117,44 +104,34 @@ module link::link_tests {
         // Setup env and mint link first, mint 100 to recipient
         test_mint_link(owner, recipient, link);
 
-        let token_state_obj = token_state_object(owner);
-
         let recipient_addr = signer::address_of(recipient);
         let burn_amount: u64 = 50;
 
-        link_token::burn(
-            owner,
-            token_state_obj,
-            recipient_addr,
-            burn_amount
-        );
+        link_token::burn(owner, recipient_addr, burn_amount);
 
+        let metadata_obj = *option::borrow(&link_token::metadata());
         // 100 is the mint amount, 50 is the burn amount
         let mint_amount: u64 = 100;
         assert!(
-            primary_fungible_store::balance(recipient_addr, token_state_obj)
+            primary_fungible_store::balance(recipient_addr, metadata_obj)
                 == mint_amount - burn_amount
         );
 
         // Assert tokens are burned from existing supply
         assert!(
-            fungible_asset::supply(token_state_obj)
+            fungible_asset::supply(metadata_obj)
                 == option::some((mint_amount - burn_amount) as u128)
         );
     }
 
     #[test(owner = @mcms, user = @0xface, link = @link)]
-    #[
-        expected_failure(
-            abort_code = link::link_token::E_NOT_OWNER, location = link::link_token
-        )
-    ]
+    #[expected_failure(abort_code = 327683, location = ccip::ownable)]
     public fun test_unauthorized_initialize(
         owner: &signer, user: &signer, link: &signer
     ) {
         setup(owner, link);
 
-        // Attempt unauthorized initialize (should fail)
+        // Attempt unauthorized initialize (should fail) E_ONLY_CALLABLE_BY_OWNER
         initialize_link(user, option::some(MAX_SUPPLY));
     }
 
@@ -172,15 +149,8 @@ module link::link_tests {
 
         initialize_link(owner, option::some(MAX_SUPPLY));
 
-        let token_state_obj = token_state_object(owner);
-
         // Attempt unauthorized mint (should fail)
-        link_token::mint(
-            user,
-            token_state_obj,
-            signer::address_of(user),
-            1000000
-        );
+        link_token::mint(user, signer::address_of(user), 1000000);
     }
 
     #[test(owner = @mcms, user = @0xface, link = @link)]
@@ -197,15 +167,8 @@ module link::link_tests {
 
         initialize_link(owner, option::some(MAX_SUPPLY));
 
-        let token_state_obj = token_state_object(owner);
-
         // Attempt unauthorized burn (should fail)
-        link_token::burn(
-            user,
-            token_state_obj,
-            signer::address_of(user),
-            1000000
-        );
+        link_token::burn(user, signer::address_of(user), 1000000);
     }
 
     #[test(
@@ -225,24 +188,19 @@ module link::link_tests {
         let recipient2_addr = signer::address_of(recipient2);
 
         let mint_amount = 1000000;
-        let token_state_obj = token_state_object(owner);
+        setup_minters_burners(owner, owner, owner);
 
-        setup_minters_burners(owner, token_state_obj, owner, owner);
+        link_token::mint(owner, recipient1_addr, mint_amount);
 
-        link_token::mint(
-            owner,
-            token_state_obj,
-            recipient1_addr,
-            mint_amount
-        );
+        let metadata_obj = *option::borrow(&link_token::metadata());
 
         let sender_store =
             primary_fungible_store::ensure_primary_store_exists(
-                recipient1_addr, token_state_obj
+                recipient1_addr, metadata_obj
             );
         let receiver_store =
             primary_fungible_store::ensure_primary_store_exists(
-                recipient2_addr, token_state_obj
+                recipient2_addr, metadata_obj
             );
 
         let transfer_amount = 500000;
@@ -254,11 +212,11 @@ module link::link_tests {
         );
 
         assert!(
-            primary_fungible_store::balance(recipient1_addr, token_state_obj)
+            primary_fungible_store::balance(recipient1_addr, metadata_obj)
                 == mint_amount - transfer_amount
         );
         assert!(
-            primary_fungible_store::balance(recipient2_addr, token_state_obj)
+            primary_fungible_store::balance(recipient2_addr, metadata_obj)
                 == transfer_amount
         );
     }
@@ -271,7 +229,7 @@ module link::link_tests {
 
         initialize_link(owner, option::some(MAX_SUPPLY));
 
-        let metadata_obj = token_state_object(owner);
+        let metadata_obj = *option::borrow(&link_token::metadata());
         assert!(fungible_asset::maximum(metadata_obj) == option::some(MAX_SUPPLY));
     }
 
@@ -314,31 +272,30 @@ module link::link_tests {
     ) {
         setup(owner, link);
         initialize_link(owner, option::some(MAX_SUPPLY));
-        let token_state_obj = token_state_object(owner);
 
         let owner_addr = signer::address_of(owner);
         let new_owner_addr = signer::address_of(new_owner);
 
         // Verify initial owner
-        assert!(link_token::owner(token_state_obj) == owner_addr, 0);
+        assert!(link_token::owner() == owner_addr);
 
         // Step 1: Owner requests transfer of ownership to new_owner
-        link_token::transfer_ownership(owner, token_state_obj, new_owner_addr);
+        link_token::transfer_ownership(owner, new_owner_addr);
 
         // Ownership should still be with the original owner
-        assert!(link_token::owner(token_state_obj) == owner_addr, 0);
+        assert!(link_token::owner() == owner_addr);
 
         // Step 2: New owner accepts the ownership
-        link_token::accept_ownership(new_owner, token_state_obj);
+        link_token::accept_ownership(new_owner);
 
         // Ownership should still be with the original owner until execution
-        assert!(link_token::owner(token_state_obj) == owner_addr, 0);
+        assert!(link_token::owner() == owner_addr);
 
         // Step 3: Original owner executes the transfer
-        link_token::execute_ownership_transfer(owner, token_state_obj, new_owner_addr);
+        link_token::execute_ownership_transfer(owner, new_owner_addr);
 
         // Verify that ownership has been transferred
-        assert!(link_token::owner(token_state_obj) == new_owner_addr, 0);
+        assert!(link_token::owner() == new_owner_addr);
     }
 
     #[test(owner = @mcms, user = @0xface, link = @link)]
@@ -348,10 +305,9 @@ module link::link_tests {
     ) {
         setup(owner, link);
         initialize_link(owner, option::some(MAX_SUPPLY));
-        let token_state_obj = token_state_object(owner);
 
         // User attempts to transfer ownership (should fail) E_ONLY_CALLABLE_BY_OWNER
-        link_token::transfer_ownership(user, token_state_obj, @0xbeef);
+        link_token::transfer_ownership(user, @0xbeef);
     }
 
     #[test(
@@ -366,13 +322,12 @@ module link::link_tests {
     ) {
         setup(owner, link);
         initialize_link(owner, option::some(MAX_SUPPLY));
-        let token_state_obj = token_state_object(owner);
 
         // Owner requests transfer to user
-        link_token::transfer_ownership(owner, token_state_obj, signer::address_of(user));
+        link_token::transfer_ownership(owner, signer::address_of(user));
 
         // Other account tries to accept (should fail) E_MUST_BE_PROPOSED_OWNER
-        link_token::accept_ownership(other, token_state_obj);
+        link_token::accept_ownership(other);
     }
 
     #[test(owner = @mcms, user = @0xface, link = @link)]
@@ -382,10 +337,9 @@ module link::link_tests {
     ) {
         setup(owner, link);
         initialize_link(owner, option::some(MAX_SUPPLY));
-        let token_state_obj = token_state_object(owner);
 
         // User tries to accept ownership without a pending transfer (should fail) E_NO_PENDING_TRANSFER
-        link_token::accept_ownership(user, token_state_obj);
+        link_token::accept_ownership(user);
     }
 
     #[test(owner = @mcms, user = @0xface, link = @link)]
@@ -395,14 +349,13 @@ module link::link_tests {
     ) {
         setup(owner, link);
         initialize_link(owner, option::some(MAX_SUPPLY));
-        let token_state_obj = token_state_object(owner);
 
         // Owner initiates transfer
         let user_addr = signer::address_of(user);
-        link_token::transfer_ownership(owner, token_state_obj, user_addr);
+        link_token::transfer_ownership(owner, user_addr);
 
         // Owner tries to execute transfer before user accepts (should fail) E_TRANSFER_NOT_ACCEPTED
-        link_token::execute_ownership_transfer(owner, token_state_obj, user_addr);
+        link_token::execute_ownership_transfer(owner, user_addr);
     }
 
     #[test(
@@ -417,19 +370,16 @@ module link::link_tests {
     ) {
         setup(owner, link);
         initialize_link(owner, option::some(MAX_SUPPLY));
-        let token_state_obj = token_state_object(owner);
 
         // Owner initiates transfer to user
         let user_addr = signer::address_of(user);
-        link_token::transfer_ownership(owner, token_state_obj, user_addr);
+        link_token::transfer_ownership(owner, user_addr);
 
         // User accepts
-        link_token::accept_ownership(user, token_state_obj);
+        link_token::accept_ownership(user);
 
         // Owner tries to execute transfer to a different address (should fail) E_PROPOSED_OWNER_MISMATCH
-        link_token::execute_ownership_transfer(
-            owner, token_state_obj, signer::address_of(other)
-        );
+        link_token::execute_ownership_transfer(owner, signer::address_of(other));
     }
 
     #[test(owner = @mcms, user = @0xface, link = @link)]
@@ -439,28 +389,27 @@ module link::link_tests {
     ) {
         setup(owner, link);
         initialize_link(owner, option::some(MAX_SUPPLY));
-        let token_state_obj = token_state_object(owner);
 
         // Owner initiates transfer
         let user_addr = signer::address_of(user);
-        link_token::transfer_ownership(owner, token_state_obj, user_addr);
+        link_token::transfer_ownership(owner, user_addr);
 
         // User accepts
-        link_token::accept_ownership(user, token_state_obj);
+        link_token::accept_ownership(user);
 
         // User tries to execute the transfer (should fail, only owner can execute) E_ONLY_CALLABLE_BY_OWNER
-        link_token::execute_ownership_transfer(user, token_state_obj, user_addr);
+        link_token::execute_ownership_transfer(user, user_addr);
     }
 
-    #[test_only]
-    public fun metadata_addr(owner: &signer): address {
-        object::create_object_address(&signer::address_of(owner), SYMBOL)
-    }
+    // #[test_only]
+    // public fun metadata_addr(owner: &signer): address {
+    //     object::create_object_address(&signer::address_of(owner), SYMBOL)
+    // }
 
-    #[test_only]
-    public fun token_state_object(owner: &signer): Object<TokenState> {
-        object::address_to_object<TokenState>(metadata_addr(owner))
-    }
+    // #[test_only]
+    // public fun token_state_object(owner: &signer): Object<TokenState> {
+    //     object::address_to_object<TokenState>(metadata_addr(owner))
+    // }
 
     #[test_only]
     /// Mock metadata and code for testing
