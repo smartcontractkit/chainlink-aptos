@@ -274,8 +274,8 @@ module ccip_offramp::offramp {
             // if we're deployed on the same code object, self-register as an allowed offramp.
             auth::apply_allowed_offramp_updates(
                 publisher,
-                vector[signer::address_of(&state_signer)],
-                vector[]
+                vector[],
+                vector[signer::address_of(&state_signer)]
             );
         };
 
