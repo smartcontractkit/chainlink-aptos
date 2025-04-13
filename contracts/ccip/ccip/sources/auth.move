@@ -29,12 +29,14 @@ module ccip::auth {
         let state_object_signer = &state_object::object_signer();
 
         let allowed_onramps =
-            allowlist::new_with_name(publisher, vector[], string::utf8(b"onramps"));
+            allowlist::new_with_name(
+                state_object_signer, vector[], string::utf8(b"onramps")
+            );
         allowlist::set_allowlist_enabled(&mut allowed_onramps, true);
 
         let allowed_offramps =
             allowlist::new_with_name(
-                publisher,
+                state_object_signer,
                 vector[],
                 string::utf8(b"offramps")
             );
