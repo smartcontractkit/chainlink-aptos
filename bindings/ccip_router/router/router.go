@@ -25,6 +25,7 @@ type RouterInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	GetStateAddress(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	IsChainSupported(opts *bind.CallOpts, destChainSelector uint64) (bool, error)
+	GetOnRamp(opts *bind.CallOpts, destChainSelector uint64) (aptos.AccountAddress, error)
 	GetFee(opts *bind.CallOpts, destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (uint64, error)
 	GetOnRampVersions(opts *bind.CallOpts, destChainSelectors []uint64) ([][]byte, error)
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
@@ -43,6 +44,7 @@ type RouterEncoder interface {
 	TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStateAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	IsChainSupported(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetOnRamp(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetFee(destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetOnRampVersions(destChainSelectors []uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -151,6 +153,27 @@ func (c RouterContract) IsChainSupported(opts *bind.CallOpts, destChainSelector 
 
 	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
 		return *new(bool), err
+	}
+	return r0, nil
+}
+
+func (c RouterContract) GetOnRamp(opts *bind.CallOpts, destChainSelector uint64) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.routerEncoder.GetOnRamp(destChainSelector)
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	var (
+		r0 aptos.AccountAddress
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(aptos.AccountAddress), err
 	}
 	return r0, nil
 }
@@ -280,6 +303,14 @@ func (c routerEncoder) GetStateAddress() (bind.ModuleInformation, string, []apto
 
 func (c routerEncoder) IsChainSupported(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("is_chain_supported", nil, []string{
+		"u64",
+	}, []any{
+		destChainSelector,
+	})
+}
+
+func (c routerEncoder) GetOnRamp(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_on_ramp", nil, []string{
 		"u64",
 	}, []any{
 		destChainSelector,
