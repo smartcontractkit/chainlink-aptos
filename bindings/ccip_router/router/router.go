@@ -33,6 +33,7 @@ type RouterInterface interface {
 	SetOnRampVersions(opts *bind.TransactOpts, destChainSelectors []uint64, onRampVersions [][]byte) (*api.PendingTransaction, error)
 	TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
 	AcceptOwnership(opts *bind.TransactOpts) (*api.PendingTransaction, error)
+	ExecuteOwnershipTransfer(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
 
 	// Encoder returns the encoder implementation of this module.
 	Encoder() RouterEncoder
@@ -49,12 +50,13 @@ type RouterEncoder interface {
 	SetOnRampVersions(destChainSelectors []uint64, onRampVersions [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TransferOwnership(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CCIPSendWithMessageId(destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStateAddressInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip_router","module":"router","name":"accept_ownership","parameters":null},{"package":"ccip_router","module":"router","name":"ccip_send","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_router","module":"router","name":"ccip_send_with_message_id","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_router","module":"router","name":"get_state_address_internal","parameters":null},{"package":"ccip_router","module":"router","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip_router","module":"router","name":"set_on_ramp_versions","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"on_ramp_versions","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip_router","module":"router","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
+const FunctionInfo = `[{"package":"ccip_router","module":"router","name":"accept_ownership","parameters":null},{"package":"ccip_router","module":"router","name":"ccip_send","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_router","module":"router","name":"ccip_send_with_message_id","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_router","module":"router","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"ccip_router","module":"router","name":"get_state_address_internal","parameters":null},{"package":"ccip_router","module":"router","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip_router","module":"router","name":"set_on_ramp_versions","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"on_ramp_versions","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip_router","module":"router","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
 
 func NewRouter(address aptos.AccountAddress, client aptos.AptosRpcClient) RouterInterface {
 	contract := bind.NewBoundContract(address, "ccip_router", "router", client)
@@ -254,6 +256,15 @@ func (c RouterContract) AcceptOwnership(opts *bind.TransactOpts) (*api.PendingTr
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
+func (c RouterContract) ExecuteOwnershipTransfer(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.routerEncoder.ExecuteOwnershipTransfer(to)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
 // Encoder
 type routerEncoder struct {
 	*bind.BoundContract
@@ -355,6 +366,14 @@ func (c routerEncoder) TransferOwnership(to aptos.AccountAddress) (bind.ModuleIn
 
 func (c routerEncoder) AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("accept_ownership", nil, []string{}, []any{})
+}
+
+func (c routerEncoder) ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("execute_ownership_transfer", nil, []string{
+		"address",
+	}, []any{
+		to,
+	})
 }
 
 func (c routerEncoder) CCIPSendWithMessageId(destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
