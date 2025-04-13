@@ -12,7 +12,7 @@ require (
 	github.com/jpillora/backoff v1.0.0
 	github.com/pelletier/go-toml/v2 v2.2.3
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
-	github.com/smartcontractkit/chainlink-common v0.5.1-0.20250314131019-e227d4e2dc2f
+	github.com/smartcontractkit/chainlink-common v0.6.1-0.20250329081313-84ec641e0758
 	github.com/stretchr/testify v1.10.0
 	github.com/valyala/fastjson v1.6.4
 	go.opentelemetry.io/otel v1.35.0

@@ -21,11 +21,11 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type RMNRemote interface {
+type RMNRemoteInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error)
 	GetArm(opts *bind.CallOpts) (aptos.AccountAddress, error)
-	GetVersionedConfig(opts *bind.CallOpts) (VersionedConfig, error)
+	GetVersionedConfig(opts *bind.CallOpts) (uint32, Config, error)
 	GetLocalChainSelector(opts *bind.CallOpts) (uint64, error)
 	GetReportDigestHeader(opts *bind.CallOpts) ([]byte, error)
 	GetCursedSubjects(opts *bind.CallOpts) ([][]byte, error)
@@ -66,7 +66,7 @@ type RMNRemoteEncoder interface {
 
 const FunctionInfo = `[{"package":"ccip","module":"rmn_remote","name":"curse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"curse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"initialize","parameters":[{"name":"local_chain_selector","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"rmn_remote","name":"set_config","parameters":[{"name":"rmn_home_contract_config_digest","type":"vector\u003cu8\u003e"},{"name":"signer_onchain_public_keys","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"node_indexes","type":"vector\u003cu64\u003e"},{"name":"f_sign","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]}]`
 
-func NewRMNRemote(address aptos.AccountAddress, client aptos.AptosRpcClient) RMNRemote {
+func NewRMNRemote(address aptos.AccountAddress, client aptos.AptosRpcClient) RMNRemoteInterface {
 	contract := bind.NewBoundContract(address, "ccip", "rmn_remote", client)
 	return RMNRemoteContract{
 		BoundContract:    contract,
@@ -109,11 +109,6 @@ type MerkleRoot struct {
 	MerkleRoot          []byte `move:"vector<u8>"`
 }
 
-type VersionedConfig struct {
-	Version uint32 `move:"u32"`
-	Config  Config `move:"Config"`
-}
-
 type ConfigSet struct {
 	Version uint32 `move:"u32"`
 	Config  Config `move:"Config"`
@@ -135,7 +130,7 @@ type RMNRemoteContract struct {
 	rmnRemoteEncoder
 }
 
-var _ RMNRemote = RMNRemoteContract{}
+var _ RMNRemoteInterface = RMNRemoteContract{}
 
 func (c RMNRemoteContract) Encoder() RMNRemoteEncoder {
 	return c.rmnRemoteEncoder
@@ -206,25 +201,26 @@ func (c RMNRemoteContract) GetArm(opts *bind.CallOpts) (aptos.AccountAddress, er
 	return r0, nil
 }
 
-func (c RMNRemoteContract) GetVersionedConfig(opts *bind.CallOpts) (VersionedConfig, error) {
+func (c RMNRemoteContract) GetVersionedConfig(opts *bind.CallOpts) (uint32, Config, error) {
 	module, function, typeTags, args, err := c.rmnRemoteEncoder.GetVersionedConfig()
 	if err != nil {
-		return *new(VersionedConfig), err
+		return *new(uint32), *new(Config), err
 	}
 
 	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return *new(VersionedConfig), err
+		return *new(uint32), *new(Config), err
 	}
 
 	var (
-		r0 VersionedConfig
+		r0 uint32
+		r1 Config
 	)
 
-	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
-		return *new(VersionedConfig), err
+	if err := codec.DecodeAptosJsonArray(callData, &r0, &r1); err != nil {
+		return *new(uint32), *new(Config), err
 	}
-	return r0, nil
+	return r0, r1, nil
 }
 
 func (c RMNRemoteContract) GetLocalChainSelector(opts *bind.CallOpts) (uint64, error) {

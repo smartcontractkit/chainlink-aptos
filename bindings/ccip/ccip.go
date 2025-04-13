@@ -7,8 +7,6 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
 	module_auth "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/auth"
 	module_fee_quoter "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/fee_quoter"
-	module_offramp "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/offramp"
-	module_onramp "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/onramp"
 	module_receiver_registry "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/receiver_registry"
 	module_rmn_remote "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/rmn_remote"
 	module_token_admin_registry "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/token_admin_registry"
@@ -19,13 +17,11 @@ import (
 type CCIP interface {
 	Address() aptos.AccountAddress
 
-	Auth() module_auth.Auth
-	FeeQuoter() module_fee_quoter.FeeQuoter
-	Offramp() module_offramp.Offramp
-	Onramp() module_onramp.Onramp
-	ReceiverRegistry() module_receiver_registry.ReceiverRegistry
-	RMNRemote() module_rmn_remote.RMNRemote
-	TokenAdminRegistry() module_token_admin_registry.TokenAdminRegistry
+	Auth() module_auth.AuthInterface
+	FeeQuoter() module_fee_quoter.FeeQuoterInterface
+	ReceiverRegistry() module_receiver_registry.ReceiverRegistryInterface
+	RMNRemote() module_rmn_remote.RMNRemoteInterface
+	TokenAdminRegistry() module_token_admin_registry.TokenAdminRegistryInterface
 }
 
 var _ CCIP = CCIPContract{}
@@ -33,44 +29,34 @@ var _ CCIP = CCIPContract{}
 type CCIPContract struct {
 	address aptos.AccountAddress
 
-	auth               module_auth.Auth
-	feeQuoter          module_fee_quoter.FeeQuoter
-	offramp            module_offramp.Offramp
-	onramp             module_onramp.Onramp
-	receiverRegistry   module_receiver_registry.ReceiverRegistry
-	rmnRemote          module_rmn_remote.RMNRemote
-	tokenAdminRegistry module_token_admin_registry.TokenAdminRegistry
+	auth               module_auth.AuthInterface
+	feeQuoter          module_fee_quoter.FeeQuoterInterface
+	receiverRegistry   module_receiver_registry.ReceiverRegistryInterface
+	rmnRemote          module_rmn_remote.RMNRemoteInterface
+	tokenAdminRegistry module_token_admin_registry.TokenAdminRegistryInterface
 }
 
 func (C CCIPContract) Address() aptos.AccountAddress {
 	return C.address
 }
 
-func (C CCIPContract) Auth() module_auth.Auth {
+func (C CCIPContract) Auth() module_auth.AuthInterface {
 	return C.auth
 }
 
-func (C CCIPContract) FeeQuoter() module_fee_quoter.FeeQuoter {
+func (C CCIPContract) FeeQuoter() module_fee_quoter.FeeQuoterInterface {
 	return C.feeQuoter
 }
 
-func (C CCIPContract) Offramp() module_offramp.Offramp {
-	return C.offramp
-}
-
-func (C CCIPContract) Onramp() module_onramp.Onramp {
-	return C.onramp
-}
-
-func (C CCIPContract) ReceiverRegistry() module_receiver_registry.ReceiverRegistry {
+func (C CCIPContract) ReceiverRegistry() module_receiver_registry.ReceiverRegistryInterface {
 	return C.receiverRegistry
 }
 
-func (C CCIPContract) RMNRemote() module_rmn_remote.RMNRemote {
+func (C CCIPContract) RMNRemote() module_rmn_remote.RMNRemoteInterface {
 	return C.rmnRemote
 }
 
-func (C CCIPContract) TokenAdminRegistry() module_token_admin_registry.TokenAdminRegistry {
+func (C CCIPContract) TokenAdminRegistry() module_token_admin_registry.TokenAdminRegistryInterface {
 	return C.tokenAdminRegistry
 }
 
@@ -81,8 +67,6 @@ const (
 var FunctionInfo = bind.MustParseFunctionInfo(
 	module_auth.FunctionInfo,
 	module_fee_quoter.FunctionInfo,
-	module_offramp.FunctionInfo,
-	module_onramp.FunctionInfo,
 	module_receiver_registry.FunctionInfo,
 	module_rmn_remote.FunctionInfo,
 	module_token_admin_registry.FunctionInfo,
@@ -106,8 +90,6 @@ func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIP {
 		address:            address,
 		auth:               module_auth.NewAuth(address, client),
 		feeQuoter:          module_fee_quoter.NewFeeQuoter(address, client),
-		offramp:            module_offramp.NewOfframp(address, client),
-		onramp:             module_onramp.NewOnramp(address, client),
 		receiverRegistry:   module_receiver_registry.NewReceiverRegistry(address, client),
 		rmnRemote:          module_rmn_remote.NewRMNRemote(address, client),
 		tokenAdminRegistry: module_token_admin_registry.NewTokenAdminRegistry(address, client),

@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type MCMSUser interface {
+type MCMSUserInterface interface {
 
 	// Encoder returns the encoder implementation of this module.
 	Encoder() MCMSUserEncoder
@@ -35,7 +35,7 @@ type MCMSUserEncoder interface {
 
 const FunctionInfo = `[{"package":"mcms_test","module":"mcms_user","name":"function_one","parameters":[{"name":"arg1","type":"0x1::string::String"},{"name":"arg2","type":"vector\u003cu8\u003e"}]},{"package":"mcms_test","module":"mcms_user","name":"function_two","parameters":[{"name":"arg1","type":"address"},{"name":"arg2","type":"u128"}]},{"package":"mcms_test","module":"mcms_user","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]}]`
 
-func NewMCMSUser(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMSUser {
+func NewMCMSUser(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMSUserInterface {
 	contract := bind.NewBoundContract(address, "mcms_test", "mcms_user", client)
 	return MCMSUserContract{
 		BoundContract:   contract,
@@ -61,7 +61,7 @@ type MCMSUserContract struct {
 	mcmsUserEncoder
 }
 
-var _ MCMSUser = MCMSUserContract{}
+var _ MCMSUserInterface = MCMSUserContract{}
 
 func (c MCMSUserContract) Encoder() MCMSUserEncoder {
 	return c.mcmsUserEncoder

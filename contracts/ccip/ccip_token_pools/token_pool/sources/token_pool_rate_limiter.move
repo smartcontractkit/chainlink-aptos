@@ -72,11 +72,11 @@ module ccip_token_pool::token_pool_rate_limiter {
         requested_tokens: u64
     ) {
         assert!(
-            smart_table::contains(rate_limiter, dest_chain_selector),
+            rate_limiter.contains(dest_chain_selector),
             error::invalid_argument(E_BUCKET_NOT_FOUND)
         );
 
-        let bucket = smart_table::borrow_mut(rate_limiter, dest_chain_selector);
+        let bucket = rate_limiter.borrow_mut(dest_chain_selector);
         rate_limiter::consume(bucket, requested_tokens);
 
         event::emit(
@@ -105,10 +105,8 @@ module ccip_token_pool::token_pool_rate_limiter {
         inbound_rate: u64
     ) {
         let outbound_config =
-            smart_table::borrow_mut_with_default(
-                &mut state.outbound_rate_limiter_config,
-                remote_chain_selector,
-                rate_limiter::new(false, 0, 0)
+            state.outbound_rate_limiter_config.borrow_mut_with_default(
+                remote_chain_selector, rate_limiter::new(false, 0, 0)
             );
         rate_limiter::set_token_bucket_config(
             outbound_config,
@@ -118,10 +116,8 @@ module ccip_token_pool::token_pool_rate_limiter {
         );
 
         let inbound_config =
-            smart_table::borrow_mut_with_default(
-                &mut state.inbound_rate_limiter_config,
-                remote_chain_selector,
-                rate_limiter::new(false, 0, 0)
+            state.inbound_rate_limiter_config.borrow_mut_with_default(
+                remote_chain_selector, rate_limiter::new(false, 0, 0)
             );
         rate_limiter::set_token_bucket_config(
             inbound_config,
@@ -163,8 +159,8 @@ module ccip_token_pool::token_pool_rate_limiter {
             config_changed_events
         } = state;
 
-        smart_table::destroy(outbound_rate_limiter_config);
-        smart_table::destroy(inbound_rate_limiter_config);
+        outbound_rate_limiter_config.destroy();
+        inbound_rate_limiter_config.destroy();
         event::destroy_handle(tokens_consumed_events);
         event::destroy_handle(config_changed_events);
     }

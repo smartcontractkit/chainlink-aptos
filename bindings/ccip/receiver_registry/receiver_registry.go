@@ -21,8 +21,9 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type ReceiverRegistry interface {
+type ReceiverRegistryInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
+	IsRegisteredReceiver(opts *bind.CallOpts, receiverAddress aptos.AccountAddress) (bool, error)
 
 	// Encoder returns the encoder implementation of this module.
 	Encoder() ReceiverRegistryEncoder
@@ -30,12 +31,13 @@ type ReceiverRegistry interface {
 
 type ReceiverRegistryEncoder interface {
 	TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	IsRegisteredReceiver(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	FinishReceive(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
 const FunctionInfo = `[{"package":"ccip","module":"receiver_registry","name":"finish_receive","parameters":[{"name":"receiver_address","type":"address"}]}]`
 
-func NewReceiverRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) ReceiverRegistry {
+func NewReceiverRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) ReceiverRegistryInterface {
 	contract := bind.NewBoundContract(address, "ccip", "receiver_registry", client)
 	return ReceiverRegistryContract{
 		BoundContract:           contract,
@@ -62,7 +64,7 @@ type ReceiverRegistryContract struct {
 	receiverRegistryEncoder
 }
 
-var _ ReceiverRegistry = ReceiverRegistryContract{}
+var _ ReceiverRegistryInterface = ReceiverRegistryContract{}
 
 func (c ReceiverRegistryContract) Encoder() ReceiverRegistryEncoder {
 	return c.receiverRegistryEncoder
@@ -91,6 +93,27 @@ func (c ReceiverRegistryContract) TypeAndVersion(opts *bind.CallOpts) (string, e
 	return r0, nil
 }
 
+func (c ReceiverRegistryContract) IsRegisteredReceiver(opts *bind.CallOpts, receiverAddress aptos.AccountAddress) (bool, error) {
+	module, function, typeTags, args, err := c.receiverRegistryEncoder.IsRegisteredReceiver(receiverAddress)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	var (
+		r0 bool
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(bool), err
+	}
+	return r0, nil
+}
+
 // Entry Functions
 
 // Encoder
@@ -100,6 +123,14 @@ type receiverRegistryEncoder struct {
 
 func (c receiverRegistryEncoder) TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("type_and_version", nil, []string{}, []any{})
+}
+
+func (c receiverRegistryEncoder) IsRegisteredReceiver(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("is_registered_receiver", nil, []string{
+		"address",
+	}, []any{
+		receiverAddress,
+	})
 }
 
 func (c receiverRegistryEncoder) FinishReceive(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {

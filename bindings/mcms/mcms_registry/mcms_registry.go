@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type MCMSRegistry interface {
+type MCMSRegistryInterface interface {
 	GetNewCodeObjectOwnerAddress(opts *bind.CallOpts, newOwnerSeed []byte) (aptos.AccountAddress, error)
 	GetNewCodeObjectAddress(opts *bind.CallOpts, newOwnerSeed []byte) (aptos.AccountAddress, error)
 	GetPreexistingCodeObjectOwnerAddress(opts *bind.CallOpts, objectAddress aptos.AccountAddress) (aptos.AccountAddress, error)
@@ -53,7 +53,7 @@ type MCMSRegistryEncoder interface {
 
 const FunctionInfo = `[{"package":"mcms","module":"mcms_registry","name":"accept_code_object","parameters":[{"name":"object_address","type":"address"}]},{"package":"mcms","module":"mcms_registry","name":"create_owner_for_preexisting_code_object","parameters":[{"name":"object_address","type":"address"}]},{"package":"mcms","module":"mcms_registry","name":"execute_code_object_transfer","parameters":[{"name":"object_address","type":"address"},{"name":"new_owner_address","type":"address"}]},{"package":"mcms","module":"mcms_registry","name":"finish_dispatch","parameters":[{"name":"callback_address","type":"address"}]},{"package":"mcms","module":"mcms_registry","name":"start_dispatch","parameters":[{"name":"callback_address","type":"address"},{"name":"callback_module_name","type":"0x1::string::String"},{"name":"callback_function","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms_registry","name":"transfer_code_object","parameters":[{"name":"object_address","type":"address"},{"name":"new_owner_address","type":"address"}]}]`
 
-func NewMCMSRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMSRegistry {
+func NewMCMSRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMSRegistryInterface {
 	contract := bind.NewBoundContract(address, "mcms", "mcms_registry", client)
 	return MCMSRegistryContract{
 		BoundContract:       contract,
@@ -132,7 +132,7 @@ type MCMSRegistryContract struct {
 	mcmsRegistryEncoder
 }
 
-var _ MCMSRegistry = MCMSRegistryContract{}
+var _ MCMSRegistryInterface = MCMSRegistryContract{}
 
 func (c MCMSRegistryContract) Encoder() MCMSRegistryEncoder {
 	return c.mcmsRegistryEncoder

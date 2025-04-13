@@ -130,6 +130,11 @@ module ccip::receiver_registry {
         );
     }
 
+    #[view]
+    public fun is_registered_receiver(receiver_address: address): bool {
+        exists<CCIPReceiverRegistration>(receiver_address)
+    }
+
     public fun get_receiver_input<ProofType: drop>(
         receiver_address: address, _proof: ProofType
     ): client::Any2AptosMessage acquires CCIPReceiverRegistration {
@@ -141,11 +146,11 @@ module ccip::receiver_registry {
         );
 
         assert!(
-            option::is_some(&registration.executing_input),
+            registration.executing_input.is_some(),
             error::invalid_state(E_MISSING_INPUT)
         );
 
-        option::extract(&mut registration.executing_input)
+        registration.executing_input.extract()
     }
 
     public(friend) fun start_receive(
@@ -154,11 +159,11 @@ module ccip::receiver_registry {
         let registration = get_registration_mut(receiver_address);
 
         assert!(
-            option::is_none(&registration.executing_input),
+            registration.executing_input.is_none(),
             error::invalid_state(E_NON_EMPTY_INPUT)
         );
 
-        option::fill(&mut registration.executing_input, message);
+        registration.executing_input.fill(message);
 
         registration.dispatch_metadata
     }
@@ -167,7 +172,7 @@ module ccip::receiver_registry {
         let registration = get_registration_mut(receiver_address);
 
         assert!(
-            option::is_none(&registration.executing_input),
+            registration.executing_input.is_none(),
             error::invalid_state(E_NON_EMPTY_INPUT)
         );
     }

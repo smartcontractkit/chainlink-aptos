@@ -25,18 +25,14 @@ module ccip::fee_quoter {
     use std::string::{Self, String};
     use std::smart_table::{Self, SmartTable};
     use std::timestamp;
-    use std::vector;
 
     use ccip::auth;
+    use ccip::client;
     use ccip::eth_abi;
-    use ccip::internal;
     use ccip::state_object;
 
     use mcms::bcs_stream;
     use mcms::mcms_registry;
-
-    friend ccip::offramp;
-    friend ccip::onramp;
 
     const CHAIN_FAMILY_SELECTOR_EVM: vector<u8> = x"2812d52c";
     const CHAIN_FAMILY_SELECTOR_SVM: vector<u8> = x"1e10bdc4";
@@ -222,6 +218,7 @@ module ccip::fee_quoter {
     }
 
     fun init_module(publisher: &signer) {
+        // Register the entrypoint with mcms
         if (@mcms_register_entrypoints != @0x0) {
             mcms_registry::register_entrypoint(
                 publisher, string::utf8(b"fee_quoter"), McmsCallback {}
@@ -502,12 +499,15 @@ module ccip::fee_quoter {
         );
     }
 
-    public(friend) fun update_prices(
+    public fun update_prices(
+        caller: &signer,
         source_tokens: vector<address>,
         source_usd_per_token: vector<u256>,
         gas_dest_chain_selectors: vector<u64>,
         gas_usd_per_unit_gas: vector<u256>
     ) acquires FeeQuoterState {
+        auth::assert_is_allowed_offramp(signer::address_of(caller));
+
         assert!(
             source_tokens.length() == source_usd_per_token.length(),
             error::invalid_argument(E_TOKEN_UPDATE_MISMATCH)
@@ -575,13 +575,13 @@ module ccip::fee_quoter {
     }
 
     public fun get_validated_fee(
-        dest_chain_selector: u64, message: &internal::Aptos2AnyMessage
+        dest_chain_selector: u64, message: &client::Aptos2AnyMessage
     ): u64 acquires FeeQuoterState {
         let (receiver, data, fee_token, _fee_token_store, extra_args) =
-            internal::get_aptos2any_fields(message);
+            client::get_aptos2any_fields(message);
 
         let (local_token_addresses, local_token_amounts) =
-            internal::get_aptos2any_token_transfers(message);
+            client::get_aptos2any_token_transfers(message);
 
         let state = borrow_state_mut();
 
@@ -600,8 +600,8 @@ module ccip::fee_quoter {
 
         let chain_family_selector = dest_chain_config.chain_family_selector;
 
-        let data_len = vector::length(&data);
-        let tokens_len = vector::length(&local_token_addresses);
+        let data_len = data.length();
+        let tokens_len = local_token_addresses.length();
         validate_message(dest_chain_config, data_len, tokens_len);
 
         let gas_limit =
@@ -1111,7 +1111,7 @@ module ccip::fee_quoter {
 
             let dest_exec_data = vector[];
             eth_abi::encode_u32(&mut dest_exec_data, dest_gas_amount);
-            vector::push_back(&mut dest_exec_data_per_token, dest_exec_data);
+            dest_exec_data_per_token.push_back(dest_exec_data);
         };
 
         dest_exec_data_per_token
@@ -1351,7 +1351,7 @@ module ccip::fee_quoter {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip, McmsCallback {});
 
-        let function_bytes = *string::bytes(&function);
+        let function_bytes = *function.bytes();
         let stream = bcs_stream::new(data);
 
         if (function_bytes == b"initialize") {
