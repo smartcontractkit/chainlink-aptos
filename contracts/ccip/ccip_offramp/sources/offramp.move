@@ -41,16 +41,7 @@ module ccip_offramp::offramp {
     ];
 
     struct OffRampDeployment has key, store {
-        state_signer_cap: SignerCapability,
-        ownable_state: ownable::OwnableState,
-        ocr3_base_state: ocr3_base::OCR3BaseState,
-        static_config_set_events: EventHandle<StaticConfigSet>,
-        dynamic_config_set_events: EventHandle<DynamicConfigSet>,
-        source_chain_config_set_events: EventHandle<SourceChainConfigSet>,
-        skipped_already_executed_events: EventHandle<SkippedAlreadyExecuted>,
-        execution_state_changed_events: EventHandle<ExecutionStateChanged>,
-        commit_report_accepted_events: EventHandle<CommitReportAccepted>,
-        skipped_report_execution_events: EventHandle<SkippedReportExecution>
+        state_signer_cap: SignerCapability
     }
 
     struct OffRampState has key, store {
@@ -256,26 +247,15 @@ module ccip_offramp::offramp {
 
         move_to(
             publisher,
-            OffRampDeployment {
-                state_signer_cap,
-                ownable_state: ownable::new(publisher, @ccip_offramp),
-                ocr3_base_state: ocr3_base::new(publisher),
-                static_config_set_events: account::new_event_handle(publisher),
-                dynamic_config_set_events: account::new_event_handle(publisher),
-                source_chain_config_set_events: account::new_event_handle(publisher),
-                skipped_already_executed_events: account::new_event_handle(publisher),
-                execution_state_changed_events: account::new_event_handle(publisher),
-                commit_report_accepted_events: account::new_event_handle(publisher),
-                skipped_report_execution_events: account::new_event_handle(publisher)
-            }
+            OffRampDeployment { state_signer_cap }
         );
 
         if (@ccip_offramp == @ccip) {
             // if we're deployed on the same code object, self-register as an allowed offramp.
             auth::apply_allowed_offramp_updates(
                 publisher,
-                vector[signer::address_of(&state_signer)],
-                vector[]
+                vector[],
+                vector[signer::address_of(&state_signer)]
             );
         };
 
@@ -306,18 +286,12 @@ module ccip_offramp::offramp {
             error::invalid_argument(E_ALREADY_INITIALIZED)
         );
 
-        let OffRampDeployment {
-            state_signer_cap,
-            ownable_state,
-            ocr3_base_state,
-            static_config_set_events,
-            dynamic_config_set_events,
-            source_chain_config_set_events,
-            skipped_already_executed_events,
-            execution_state_changed_events,
-            commit_report_accepted_events,
-            skipped_report_execution_events
-        } = move_from<OffRampDeployment>(@ccip_offramp);
+        let OffRampDeployment { state_signer_cap } =
+            move_from<OffRampDeployment>(@ccip_offramp);
+
+        let state_signer = &account::create_signer_with_capability(&state_signer_cap);
+
+        let ownable_state = ownable::new(state_signer, @ccip_offramp);
 
         ownable::assert_only_owner(signer::address_of(caller), &ownable_state);
 
@@ -326,25 +300,23 @@ module ccip_offramp::offramp {
             error::invalid_argument(E_SOURCE_CHAIN_SELECTORS_MISMATCH)
         );
 
-        let state_signer = account::create_signer_with_capability(&state_signer_cap);
-
         let state = OffRampState {
             state_signer_cap,
             ownable_state,
-            ocr3_base_state,
+            ocr3_base_state: ocr3_base::new(state_signer),
             chain_selector,
             permissionless_execution_threshold_seconds: 0,
             source_chain_configs: smart_table::new(),
             execution_states: smart_table::new(),
             roots: smart_table::new(),
             latest_price_sequence_number: 0,
-            static_config_set_events,
-            dynamic_config_set_events,
-            source_chain_config_set_events,
-            skipped_already_executed_events,
-            execution_state_changed_events,
-            commit_report_accepted_events,
-            skipped_report_execution_events
+            static_config_set_events: account::new_event_handle(state_signer),
+            dynamic_config_set_events: account::new_event_handle(state_signer),
+            source_chain_config_set_events: account::new_event_handle(state_signer),
+            skipped_already_executed_events: account::new_event_handle(state_signer),
+            execution_state_changed_events: account::new_event_handle(state_signer),
+            commit_report_accepted_events: account::new_event_handle(state_signer),
+            skipped_report_execution_events: account::new_event_handle(state_signer)
         };
 
         let static_config = create_static_config(chain_selector);
@@ -366,7 +338,7 @@ module ccip_offramp::offramp {
             source_chains_on_ramp
         );
 
-        move_to(&state_signer, state);
+        move_to(state_signer, state);
     }
 
     public fun assert_source_chain_enabled(

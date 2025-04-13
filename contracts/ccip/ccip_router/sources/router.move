@@ -31,8 +31,8 @@ module ccip_router::router {
     }
 
     const E_UNKNOWN_FUNCTION: u64 = 1;
-    const E_UNKNOWN_CHAIN: u64 = 2;
-    const E_UNKNOWN_ON_RAMP: u64 = 3;
+    const E_UNSUPPORTED_DESTINATION_CHAIN: u64 = 2;
+    const E_UNSUPPORTED_ON_RAMP_VERSION: u64 = 3;
     const E_INVALID_ON_RAMP_VERSION: u64 = 4;
 
     #[view]
@@ -48,9 +48,9 @@ module ccip_router::router {
             &state_signer,
             RouterState {
                 state_signer_cap,
-                ownable_state: ownable::new(publisher, @ccip_router),
+                ownable_state: ownable::new(&state_signer, @ccip_router),
                 on_ramp_versions: smart_table::new(),
-                on_ramp_set_events: account::new_event_handle(publisher)
+                on_ramp_set_events: account::new_event_handle(&state_signer)
             }
         );
 
@@ -68,8 +68,25 @@ module ccip_router::router {
     }
 
     #[view]
-    public fun is_chain_supported(dest_chain_selector: u64): bool {
-        onramp::is_chain_supported(dest_chain_selector)
+    public fun is_chain_supported(dest_chain_selector: u64): bool acquires RouterState {
+        let state = borrow_state();
+        state.on_ramp_versions.contains(dest_chain_selector)
+    }
+
+    #[view]
+    public fun get_on_ramp(dest_chain_selector: u64): address acquires RouterState {
+        let state = borrow_state();
+
+        assert!(
+            state.on_ramp_versions.contains(dest_chain_selector),
+            error::invalid_argument(E_UNSUPPORTED_DESTINATION_CHAIN)
+        );
+
+        let on_ramp_version = *state.on_ramp_versions.borrow(dest_chain_selector);
+
+        if (on_ramp_version == vector[1, 6, 0]) {
+            @ccip_onramp
+        } else { @0x0 }
     }
 
     #[view]
@@ -83,18 +100,31 @@ module ccip_router::router {
         fee_token: address,
         fee_token_store: address,
         extra_args: vector<u8>
-    ): u64 {
-        onramp::get_fee(
-            dest_chain_selector,
-            receiver,
-            data,
-            token_addresses,
-            token_amounts,
-            token_store_addresses,
-            fee_token,
-            fee_token_store,
-            extra_args
-        )
+    ): u64 acquires RouterState {
+        let state = borrow_state();
+
+        assert!(
+            state.on_ramp_versions.contains(dest_chain_selector),
+            error::invalid_argument(E_UNSUPPORTED_DESTINATION_CHAIN)
+        );
+
+        let on_ramp_version = *state.on_ramp_versions.borrow(dest_chain_selector);
+
+        if (on_ramp_version == vector[1, 6, 0]) {
+            onramp::get_fee(
+                dest_chain_selector,
+                receiver,
+                data,
+                token_addresses,
+                token_amounts,
+                token_store_addresses,
+                fee_token,
+                fee_token_store,
+                extra_args
+            )
+        } else {
+            abort error::invalid_state(E_UNSUPPORTED_ON_RAMP_VERSION)
+        }
     }
 
     public entry fun ccip_send(
@@ -139,7 +169,7 @@ module ccip_router::router {
 
         assert!(
             state.on_ramp_versions.contains(dest_chain_selector),
-            error::invalid_argument(E_UNKNOWN_CHAIN)
+            error::invalid_argument(E_UNSUPPORTED_DESTINATION_CHAIN)
         );
 
         let on_ramp_version = *state.on_ramp_versions.borrow(dest_chain_selector);
@@ -162,7 +192,7 @@ module ccip_router::router {
                 extra_args
             )
         } else {
-            abort error::invalid_argument(E_UNKNOWN_ON_RAMP)
+            abort error::invalid_state(E_UNSUPPORTED_ON_RAMP_VERSION)
         }
     }
 
@@ -247,6 +277,13 @@ module ccip_router::router {
         ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
     }
 
+    public entry fun execute_ownership_transfer(
+        caller: &signer, to: address
+    ) acquires RouterState {
+        let state = borrow_state_mut();
+        ownable::execute_ownership_transfer(caller, &mut state.ownable_state, to)
+    }
+
     // ================================================================
     // |                      MCMS entrypoint                         |
     // ================================================================
@@ -273,6 +310,17 @@ module ccip_router::router {
                 );
 
             set_on_ramp_versions(&caller, dest_chain_selectors, ramps_to_use);
+        } else if (function_bytes == b"transfer_ownership") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            transfer_ownership(&caller, to)
+        } else if (function_bytes == b"accept_ownership") {
+            bcs_stream::assert_is_consumed(&stream);
+            accept_ownership(&caller)
+        } else if (function_bytes == b"execute_ownership_transfer") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            execute_ownership_transfer(&caller, to)
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };

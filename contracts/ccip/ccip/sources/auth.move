@@ -29,12 +29,14 @@ module ccip::auth {
         let state_object_signer = &state_object::object_signer();
 
         let allowed_onramps =
-            allowlist::new_with_name(publisher, vector[], string::utf8(b"onramps"));
+            allowlist::new_with_name(
+                state_object_signer, vector[], string::utf8(b"onramps")
+            );
         allowlist::set_allowlist_enabled(&mut allowed_onramps, true);
 
         let allowed_offramps =
             allowlist::new_with_name(
-                publisher,
+                state_object_signer,
                 vector[],
                 string::utf8(b"offramps")
             );
@@ -79,8 +81,8 @@ module ccip::auth {
 
     public entry fun apply_allowed_onramp_updates(
         caller: &signer,
-        onramps_to_add: vector<address>,
-        onramps_to_remove: vector<address>
+        onramps_to_remove: vector<address>,
+        onramps_to_add: vector<address>
     ) acquires AuthState {
         let state = borrow_state_mut();
 
@@ -88,15 +90,15 @@ module ccip::auth {
 
         allowlist::apply_allowlist_updates(
             &mut state.allowed_onramps,
-            onramps_to_add,
-            onramps_to_remove
+            onramps_to_remove,
+            onramps_to_add
         );
     }
 
     public entry fun apply_allowed_offramp_updates(
         caller: &signer,
-        offramps_to_add: vector<address>,
-        offramps_to_remove: vector<address>
+        offramps_to_remove: vector<address>,
+        offramps_to_add: vector<address>
     ) acquires AuthState {
         let state = borrow_state_mut();
 
@@ -104,8 +106,8 @@ module ccip::auth {
 
         allowlist::apply_allowlist_updates(
             &mut state.allowed_offramps,
-            offramps_to_add,
-            offramps_to_remove
+            offramps_to_remove,
+            offramps_to_add
         );
     }
 

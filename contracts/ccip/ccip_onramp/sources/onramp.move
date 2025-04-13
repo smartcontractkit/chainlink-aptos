@@ -13,7 +13,6 @@ module ccip_onramp::onramp {
     use std::smart_table::{Self, SmartTable};
 
     use ccip::auth;
-    use ccip::client;
     use ccip::eth_abi;
     use ccip::fee_quoter;
     use ccip::merkle_proof;
@@ -29,14 +28,7 @@ module ccip_onramp::onramp {
     const STATE_SEED: vector<u8> = b"CHAINLINK_CCIP_ONRAMP";
 
     struct OnRampDeployment has key, store {
-        state_signer_cap: SignerCapability,
-        ownable_state: ownable::OwnableState,
-        config_set_events: EventHandle<ConfigSet>,
-        dest_chain_config_set_events: EventHandle<DestChainConfigSet>,
-        ccip_message_sent_events: EventHandle<CCIPMessageSent>,
-        allowlist_senders_added_events: EventHandle<AllowlistSendersAdded>,
-        allowlist_senders_removed_events: EventHandle<AllowlistSendersRemoved>,
-        fee_token_withdrawn_events: EventHandle<FeeTokenWithdrawn>
+        state_signer_cap: SignerCapability
     }
 
     struct OnRampState has key, store {
@@ -172,24 +164,15 @@ module ccip_onramp::onramp {
 
         move_to(
             publisher,
-            OnRampDeployment {
-                state_signer_cap,
-                ownable_state: ownable::new(publisher, @ccip_onramp),
-                config_set_events: account::new_event_handle(publisher),
-                dest_chain_config_set_events: account::new_event_handle(publisher),
-                ccip_message_sent_events: account::new_event_handle(publisher),
-                allowlist_senders_added_events: account::new_event_handle(publisher),
-                allowlist_senders_removed_events: account::new_event_handle(publisher),
-                fee_token_withdrawn_events: account::new_event_handle(publisher)
-            }
+            OnRampDeployment { state_signer_cap }
         );
 
         if (@ccip_onramp == @ccip) {
             // if we're deployed on the same code object, self-register as an allowed onramp.
             auth::apply_allowed_onramp_updates(
                 publisher,
-                vector[signer::address_of(&state_signer)],
-                vector[]
+                vector[],
+                vector[signer::address_of(&state_signer)]
             );
         };
 
@@ -220,20 +203,14 @@ module ccip_onramp::onramp {
             error::invalid_state(E_ALREADY_INITIALIZED)
         );
 
-        let OnRampDeployment {
-            state_signer_cap,
-            ownable_state,
-            config_set_events,
-            dest_chain_config_set_events,
-            ccip_message_sent_events,
-            allowlist_senders_added_events,
-            allowlist_senders_removed_events,
-            fee_token_withdrawn_events
-        } = move_from<OnRampDeployment>(@ccip_onramp);
+        let OnRampDeployment { state_signer_cap } =
+            move_from<OnRampDeployment>(@ccip_onramp);
+
+        let state_signer = &account::create_signer_with_capability(&state_signer_cap);
+
+        let ownable_state = ownable::new(state_signer, @ccip_onramp);
 
         ownable::assert_only_owner(signer::address_of(caller), &ownable_state);
-
-        let state_signer = account::create_signer_with_capability(&state_signer_cap);
 
         let state = OnRampState {
             state_signer_cap,
@@ -242,12 +219,12 @@ module ccip_onramp::onramp {
             fee_aggregator: @0x0,
             allowlist_admin: @0x0,
             dest_chain_configs: smart_table::new(),
-            config_set_events,
-            dest_chain_config_set_events,
-            ccip_message_sent_events,
-            allowlist_senders_added_events,
-            allowlist_senders_removed_events,
-            fee_token_withdrawn_events
+            config_set_events: account::new_event_handle(state_signer),
+            dest_chain_config_set_events: account::new_event_handle(state_signer),
+            ccip_message_sent_events: account::new_event_handle(state_signer),
+            allowlist_senders_added_events: account::new_event_handle(state_signer),
+            allowlist_senders_removed_events: account::new_event_handle(state_signer),
+            fee_token_withdrawn_events: account::new_event_handle(state_signer)
         };
 
         set_dynamic_config_internal(&mut state, fee_aggregator, allowlist_admin);
@@ -259,7 +236,7 @@ module ccip_onramp::onramp {
             dest_chain_allowlist_enabled
         );
 
-        move_to(&state_signer, state);
+        move_to(state_signer, state);
     }
 
     #[view]
@@ -291,28 +268,45 @@ module ccip_onramp::onramp {
         fee_token_store: address,
         extra_args: vector<u8>
     ): u64 {
-        let message =
-            client::new_aptos2any_message(
-                receiver,
-                data,
-                token_addresses,
-                token_amounts,
-                token_store_addresses,
-                fee_token,
-                fee_token_store,
-                extra_args
-            );
-        get_fee_internal(dest_chain_selector, &message)
+        get_fee_internal(
+            dest_chain_selector,
+            receiver,
+            data,
+            token_addresses,
+            token_amounts,
+            token_store_addresses,
+            fee_token,
+            fee_token_store,
+            extra_args
+        )
     }
 
     inline fun get_fee_internal(
-        dest_chain_selector: u64, message: &client::Aptos2AnyMessage
+        dest_chain_selector: u64,
+        receiver: vector<u8>,
+        data: vector<u8>,
+        token_addresses: vector<address>,
+        token_amounts: vector<u64>,
+        token_store_addresses: vector<address>,
+        fee_token: address,
+        fee_token_store: address,
+        extra_args: vector<u8>
     ): u64 {
         assert!(
             !rmn_remote::is_cursed_u128(dest_chain_selector as u128),
             error::permission_denied(E_CURSED_BY_RMN)
         );
-        fee_quoter::get_validated_fee(dest_chain_selector, message)
+        fee_quoter::get_validated_fee(
+            dest_chain_selector,
+            receiver,
+            data,
+            token_addresses,
+            token_amounts,
+            token_store_addresses,
+            fee_token,
+            fee_token_store,
+            extra_args
+        )
     }
 
     inline fun resolve_fungible_asset(token: address): Object<Metadata> {
@@ -357,8 +351,9 @@ module ccip_onramp::onramp {
             error::permission_denied(E_BAD_RMN_SIGNAL)
         );
 
-        let message =
-            client::new_aptos2any_message(
+        let fee_token_amount =
+            get_fee_internal(
+                dest_chain_selector,
                 receiver,
                 data,
                 token_addresses,
@@ -368,8 +363,6 @@ module ccip_onramp::onramp {
                 fee_token_store,
                 extra_args
             );
-
-        let fee_token_amount = get_fee_internal(dest_chain_selector, &message);
         if (fee_token_amount != 0) {
             // deposit the fee in the state object's primary fungible store.
             let fa_metadata = resolve_fungible_asset(fee_token);
