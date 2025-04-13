@@ -16,7 +16,7 @@ module ccip::nonce_manager {
         string::utf8(b"NonceManager 1.6.0")
     }
 
-    fun init_module() {
+    fun init_module(_publisher: &signer) {
         let state_object_signer = state_object::object_signer();
 
         move_to(
