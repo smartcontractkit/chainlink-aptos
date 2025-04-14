@@ -496,7 +496,7 @@ func GetNamedAddressesAndModules(ccipObjectAddress, deployMcmsAccount aptos.Acco
 
 	modules := []string{
 		"ownable", "merkle_proof", "allowlist", "client", "eth_abi", "state_object",
-		"auth", "nonce_manager", "fee_quoter", "ocr3_base", "receiver_registry", "receiver_dispatcher", "rmn_remote",
+		"auth", "nonce_manager", "fee_quoter", "receiver_registry", "receiver_dispatcher", "rmn_remote",
 		"token_admin_registry", "token_admin_dispatcher",
 	}
 
