@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/aptos-labs/aptos-go-sdk"
+	"github.com/go-viper/mapstructure/v2"
 )
 
 type CompilationResult struct {
@@ -22,13 +24,14 @@ func CompileMovePackage(
 	t *testing.T,
 	contractsDir string,
 	namedAddresses map[string]aptos.AccountAddress,
-	moduleOrder []string,
 ) CompilationResult {
 	outputDir, err := os.MkdirTemp("", "aptos_compile")
 	if err != nil {
 		t.Fatalf("Failed to create temporary directory: %v", err)
 	}
 	defer os.RemoveAll(outputDir)
+
+	outputJsonPath := filepath.Join(outputDir, "compiled.json")
 
 	gitRoot, err := FindGitRoot()
 	if err != nil {
@@ -45,12 +48,12 @@ func CompileMovePackage(
 
 	args := []string{
 		"aptos",
-		"move", "compile",
+		"move", "build-publish-payload",
+		"--override-size-check",
 		"--package-dir", packageDir,
 		"--named-addresses", namedAddressesArg,
 		"--included-artifacts=sparse",
-		"--save-metadata",
-		"--output-dir", outputDir,
+		"--json-output-file", outputJsonPath,
 	}
 
 	cmd := exec.Command(args[0], args[1:]...)
@@ -68,64 +71,60 @@ func CompileMovePackage(
 		t.Logf("Stderr output: %s", stderr.String())
 	}
 
-	var result struct {
-		Result []string `json:"Result"`
-	}
-	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
-		t.Fatalf("Failed to parse compile output: %v", err)
-	}
-
-	if len(result.Result) == 0 {
-		t.Fatalf("No modules compiled")
-	}
-
-	// Read package metadata
-	// This is a bug, the package metadata file is still saved in the default output directory (packageDir/build), rather than in the specified output dir.
-	// ref: https://github.com/aptos-labs/aptos-core/issues/14285
-	packageBuildDir := findBuildDir(t, packageDir)
-	metadataFile := filepath.Join(packageBuildDir, "package-metadata.bcs")
-	metadata, err := os.ReadFile(metadataFile)
+	jsonStr, err := os.ReadFile(outputJsonPath)
 	if err != nil {
-		t.Fatalf("Failed to read package metadata file: %v", err)
+		t.Fatalf("Failed to read %s: %v", outputJsonPath, err)
 	}
 
-	buildDir := findBuildDir(t, outputDir)
-	bytecodeModules := [][]byte{}
-	bytecodeDir := filepath.Join(buildDir, "bytecode_modules")
+	var publishPayload struct {
+		FunctionId string           `json:"function_id"`
+		TypeArgs   []string         `json:"type_args"`
+		Args       []map[string]any `json:"args"`
+	}
 
-	// allow providing the module order, because deployment will fail if modules
-	// depend on each other and the dependency does not appear first in the list
-	// of module bytecode.
-	if len(moduleOrder) > 0 {
-		for _, moduleName := range moduleOrder {
-			expectedPath := filepath.Join(bytecodeDir, moduleName+".mv")
-			bytecode, err := os.ReadFile(expectedPath)
-			if err != nil {
-				t.Fatalf("Failed to read expected bytecode file %s: %v", expectedPath, err)
-			}
-			bytecodeModules = append(bytecodeModules, bytecode)
-		}
-	} else {
-		files, err := os.ReadDir(bytecodeDir)
+	if err := json.Unmarshal(jsonStr, &publishPayload); err != nil {
+		t.Fatalf("Failed to parse publish payload: %v", err)
+	}
+
+	if len(publishPayload.Args) != 2 {
+		t.Fatalf("Expected 2 args, got %d", len(publishPayload.Args))
+	}
+
+	// Parse metadata hex string from Args[0]
+	var metadataArg struct {
+		Value string `mapstructure:"value"`
+	}
+	if err := mapstructure.Decode(publishPayload.Args[0], &metadataArg); err != nil {
+		t.Fatalf("Failed to decode metadata arg: %v", err)
+	}
+	metadataHexStr := metadataArg.Value
+
+	// Parse bytecodes hex strings from Args[1]
+	var bytecodesArg struct {
+		Value []string `mapstructure:"value"`
+	}
+	if err := mapstructure.Decode(publishPayload.Args[1], &bytecodesArg); err != nil {
+		t.Fatalf("Failed to decode bytecodes arg: %v", err)
+	}
+	bytecodesHexStr := bytecodesArg.Value
+
+	metadata, err := hex.DecodeString(strings.TrimPrefix(metadataHexStr, "0x"))
+	if err != nil {
+		t.Fatalf("Failed to decode metadata hex string: %v", err)
+	}
+
+	bytecodes := [][]byte{}
+	for _, bytecodeHexStr := range bytecodesHexStr {
+		bytecode, err := hex.DecodeString(strings.TrimPrefix(bytecodeHexStr, "0x"))
 		if err != nil {
-			t.Fatalf("Failed to read bytecode directory: %v", err)
+			t.Fatalf("Failed to decode bytecode hex string: %v", err)
 		}
-
-		for _, file := range files {
-			if !file.IsDir() && strings.HasSuffix(file.Name(), ".mv") {
-				path := filepath.Join(bytecodeDir, file.Name())
-				bytecode, err := os.ReadFile(path)
-				if err != nil {
-					t.Fatalf("Failed to read bytecode file %s: %v", path, err)
-				}
-				bytecodeModules = append(bytecodeModules, bytecode)
-			}
-		}
+		bytecodes = append(bytecodes, bytecode)
 	}
 
 	return CompilationResult{
 		PackageMetadata: metadata,
-		BytecodeModules: bytecodeModules,
+		BytecodeModules: bytecodes,
 	}
 }
 
