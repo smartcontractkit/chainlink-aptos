@@ -10,7 +10,7 @@ module ccip_router::router {
     use std::event::EventHandle;
 
     use ccip::ownable;
-    use ccip_onramp::onramp;
+    use ccip_onramp::onramp as onramp_1_6_0;
 
     use mcms::mcms_registry;
     use mcms::bcs_stream;
@@ -68,12 +68,19 @@ module ccip_router::router {
     }
 
     #[view]
+    /// Returns whether the chain is supported.
+    /// @param dest_chain_selector The destination chain selector.
+    /// @return True if the chain is supported, false otherwise.
     public fun is_chain_supported(dest_chain_selector: u64): bool acquires RouterState {
         let state = borrow_state();
         state.on_ramp_versions.contains(dest_chain_selector)
     }
 
     #[view]
+    /// Returns the address of the onRamp contract for the given destination chain.
+    /// Multiple destination chains can share the same onRamp contract.
+    /// @param dest_chain_selector The destination chain selector.
+    /// @return The address of the onRamp contract.
     public fun get_on_ramp(dest_chain_selector: u64): address acquires RouterState {
         let state = borrow_state();
 
@@ -86,10 +93,14 @@ module ccip_router::router {
 
         if (on_ramp_version == vector[1, 6, 0]) {
             @ccip_onramp
-        } else { @0x0 }
+        } else {
+            // If the onRamp version is not supported, we abort.
+            abort error::invalid_state(E_UNSUPPORTED_ON_RAMP_VERSION)
+        }
     }
 
     #[view]
+    /// Returns the fee to send a message with the given parameters, quoted in the given fee token.
     public fun get_fee(
         dest_chain_selector: u64,
         receiver: vector<u8>,
@@ -111,7 +122,7 @@ module ccip_router::router {
         let on_ramp_version = *state.on_ramp_versions.borrow(dest_chain_selector);
 
         if (on_ramp_version == vector[1, 6, 0]) {
-            onramp::get_fee(
+            onramp_1_6_0::get_fee(
                 dest_chain_selector,
                 receiver,
                 data,
@@ -123,10 +134,13 @@ module ccip_router::router {
                 extra_args
             )
         } else {
+            // If the onRamp version is not supported, we abort.
             abort error::invalid_state(E_UNSUPPORTED_ON_RAMP_VERSION)
         }
     }
 
+    /// Sends a message to the given destination chain.
+    /// This entry function does not return any value to make it compatible with EOA calls.
     public entry fun ccip_send(
         caller: &signer,
         dest_chain_selector: u64,
@@ -153,6 +167,8 @@ module ccip_router::router {
         );
     }
 
+    /// Sends a message to the given destination chain.
+    /// This entry function returns a message ID for calls from other programs.
     public fun ccip_send_with_message_id(
         caller: &signer,
         dest_chain_selector: u64,
@@ -178,7 +194,7 @@ module ccip_router::router {
             account::create_signer_with_capability(&state.state_signer_cap);
 
         if (on_ramp_version == vector[1, 6, 0]) {
-            onramp::ccip_send(
+            onramp_1_6_0::ccip_send(
                 &state_signer,
                 caller,
                 dest_chain_selector,
@@ -192,6 +208,7 @@ module ccip_router::router {
                 extra_args
             )
         } else {
+            // If the onRamp version is not supported, we abort.
             abort error::invalid_state(E_UNSUPPORTED_ON_RAMP_VERSION)
         }
     }
@@ -212,6 +229,7 @@ module ccip_router::router {
     // |                       OnRamp Routing                         |
     // ================================================================
 
+    /// Returns the onRamp versions for the given destination chains.
     #[view]
     public fun get_on_ramp_versions(
         dest_chain_selectors: vector<u64>
@@ -222,6 +240,12 @@ module ccip_router::router {
         }))
     }
 
+    /// Sets the onRamp versions for the given destination chains.
+    /// This function will overwrite the existing versions.
+    /// This function can only be called by the owner of the contract.
+    /// @param dest_chain_selectors The destination chain selectors.
+    /// @param on_ramp_versions The onRamp versions, the inner vector must be of length 0 or 3. 0 indicates
+    /// the destination chain is no longer supported. Length 3 encodes the version of the onRamp contract.
     public entry fun set_on_ramp_versions(
         caller: &signer,
         dest_chain_selectors: vector<u64>,
@@ -256,9 +280,9 @@ module ccip_router::router {
         );
     }
 
-    //
-    // ccip::ownable functions
-    //
+    // ================================================================
+    // |                          Ownable                             |
+    // ================================================================
 
     #[view]
     public fun owner(): address acquires RouterState {
