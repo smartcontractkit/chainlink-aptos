@@ -1,0 +1,45 @@
+[package]
+name = "USDCTokenPool"
+version = "1.0.0"
+authors = []
+
+[addresses]
+ccip = "_"
+ccip_token_pool = "_"
+usdc_token_pool = "_"
+mcms = "_"
+mcms_register_entrypoints = "_"
+local_token = "_"
+
+# Circle addresses
+message_transmitter = "_"
+token_messenger_minter = "_"
+aptos_extensions = "_"
+stablecoin = "_"
+deployer = "_"
+
+[dev-addresses]
+ccip = "0x1000"
+ccip_token_pool = "0x2000"
+usdc_token_pool = "0x2003"
+mcms = "0x4000"
+mcms_register_entrypoints = "0x4001"
+local_token = "0x9000"
+
+# Circle addresses
+message_transmitter = "0x0990"
+token_messenger_minter = "0x0991"
+aptos_extensions = "0x0992"
+stablecoin = "0x0993"
+deployer = "0x0994"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
+ChainlinkCCIP = { local = "../../ccip" }
+CCIPTokenPool = { local = "../token_pool" }
+
+# Circle imports
+MessageTransmitter = { local = "../../../vendor/circlefin/aptos-cctp/packages/message_transmitter" }
+TokenMessengerMinter = { local = "../../../vendor/circlefin/aptos-cctp/packages/token_messenger_minter" }
+
+[dev-dependencies]

@@ -1,0 +1,19 @@
+[package]
+name = "AptosExtensions"
+version = "1.0.0"
+upgrade_policy = "immutable"
+
+[addresses]
+aptos_extensions = "_"
+deployer = "_"
+
+[dev-addresses]
+aptos_extensions = "0x87899b097b766da6838867c873185c90d7d5661ebfe2ce0e985b53a2b0ed9e28"
+deployer = "0xaa03675e2e13043f3d591804b0d8a8ffb775d14b11ca0831866ecdf48df26713"
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-core.git"
+rev = "mainnet"
+subdir = "aptos-move/framework/aptos-framework"
+
+[dev-dependencies]

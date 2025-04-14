@@ -21,4 +21,4 @@ jobs:
         CLI_VERSION: 7.2.0
 
     - name: Run tests
-      run: contracts/scripts/test.sh
+      run: make move-test
