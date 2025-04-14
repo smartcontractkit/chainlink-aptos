@@ -13,10 +13,10 @@ import (
 
 const (
 	// ChunkSizeInBytes is the default maximum size of a chunk in bytes
-	// 55k is the value used in aptos-core. We're using 50k to leave some room as deployments
+	// 55k is the value used in aptos-core. We're using 30k to leave some room as deployments
 	// will be done via mcms proposals
 	// https://github.com/aptos-labs/aptos-core/blob/e0002dd4ca29d1b65fe10c555ac730a773a54b2f/aptos-move/framework/src/chunked_publish.rs#L13-L13
-	ChunkSizeInBytes = 50_000
+	ChunkSizeInBytes = 30_000
 )
 
 // DeployPackageToObject deploys a package to a new named object address
