@@ -1,0 +1,127 @@
+module link::mcms_link_token {
+    use std::object::{Self, Object};
+    use std::option::{Self, Option};
+    use std::string::{Self, String};
+
+    use mcms::bcs_stream;
+    use mcms::mcms_registry;
+    use link::link_token;
+
+    const E_UNKNOWN_FUNCTION: u64 = 1;
+    const E_NOT_PUBLISHER: u64 = 2;
+
+    #[view]
+    public fun type_and_version(): String {
+        string::utf8(b"MCMS LinkToken 1.0.0")
+    }
+
+    fun init_module(publisher: &signer) {
+        assert!(object::is_object(@link), E_NOT_PUBLISHER);
+
+        if (@mcms_register_entrypoints != @0x0) {
+            mcms_registry::register_entrypoint(
+                publisher, string::utf8(b"mcms_link_token"), McmsCallback {}
+            );
+        };
+    }
+
+    // ================================================================
+    // |                      MCMS Entrypoint                         |
+    // ================================================================
+
+    struct McmsCallback has drop {}
+
+    public fun mcms_entrypoint<T: key>(_metadata: Object<T>): Option<u128> {
+        let (caller, function, data) =
+            mcms_registry::get_callback_params(@link, McmsCallback {});
+
+        let function_bytes = *string::bytes(&function);
+        let stream = bcs_stream::new(data);
+
+        if (function_bytes == b"initialize") {
+            let max_supply =
+                bcs_stream::deserialize_option(
+                    &mut stream, |stream| bcs_stream::deserialize_u128(stream)
+                );
+            let name = bcs_stream::deserialize_string(&mut stream);
+            let symbol = bcs_stream::deserialize_string(&mut stream);
+            let decimals = bcs_stream::deserialize_u8(&mut stream);
+            let icon = bcs_stream::deserialize_string(&mut stream);
+            let project = bcs_stream::deserialize_string(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+
+            link_token::initialize(
+                &caller,
+                max_supply,
+                name,
+                symbol,
+                decimals,
+                icon,
+                project
+            )
+        } else if (function_bytes == b"mint") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            let amount = bcs_stream::deserialize_u64(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+
+            link_token::mint(&caller, to, amount)
+        } else if (function_bytes == b"burn") {
+            let from = bcs_stream::deserialize_address(&mut stream);
+            let amount = bcs_stream::deserialize_u64(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+
+            link_token::burn(&caller, from, amount)
+        } else if (function_bytes == b"apply_allowed_minter_updates") {
+            let minters_to_remove =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
+                );
+            let minters_to_add =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+
+            link_token::apply_allowed_minter_updates(
+                &caller, minters_to_remove, minters_to_add
+            )
+        } else if (function_bytes == b"apply_allowed_burner_updates") {
+            let burners_to_remove =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
+                );
+            let burners_to_add =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+
+            link_token::apply_allowed_burner_updates(
+                &caller, burners_to_remove, burners_to_add
+            )
+        } else if (function_bytes == b"transfer_ownership") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+
+            link_token::transfer_ownership(&caller, to)
+        } else if (function_bytes == b"accept_ownership") {
+            bcs_stream::assert_is_consumed(&stream);
+
+            link_token::accept_ownership(&caller)
+        } else if (function_bytes == b"execute_ownership_transfer") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+
+            link_token::execute_ownership_transfer(&caller, to)
+        } else {
+            abort E_UNKNOWN_FUNCTION
+        };
+
+        option::none()
+    }
+
+    #[test_only]
+    public fun init_module_for_testing(publisher: &signer) {
+        init_module(publisher);
+    }
+}
