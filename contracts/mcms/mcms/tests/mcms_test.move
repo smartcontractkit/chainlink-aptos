@@ -1471,7 +1471,7 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        mcms::test_timelock_update_min_delay(mcms::timelock_role(), MIN_DELAY);
+        mcms::test_timelock_update_min_delay(MIN_DELAY);
         assert!(mcms::timelock_min_delay() == MIN_DELAY, 0);
     }
 
@@ -1489,7 +1489,6 @@ module mcms::mcms_tests {
 
         // Schedule batch operation
         mcms::test_timelock_schedule_batch(
-            mcms::proposer_role(),
             targets,
             module_names,
             function_names,
@@ -1523,7 +1522,6 @@ module mcms::mcms_tests {
         let datas = vector[data];
 
         mcms::test_timelock_schedule_batch(
-            mcms::proposer_role(),
             targets,
             module_names,
             function_names,
@@ -1541,7 +1539,7 @@ module mcms::mcms_tests {
         assert!(mcms::timelock_is_operation_pending(id), 0);
 
         // Cancel the operation
-        mcms::test_timelock_cancel(mcms::canceller_role(), id);
+        mcms::test_timelock_cancel(id);
 
         // Verify operation is no longer pending
         assert!(!mcms::timelock_is_operation_pending(id), 1);
@@ -1562,11 +1560,7 @@ module mcms::mcms_tests {
         let datas = vector[bcs::to_bytes(&MIN_DELAY)];
 
         mcms::test_timelock_bypasser_execute_batch(
-            mcms::bypasser_role(),
-            targets,
-            module_names,
-            function_names,
-            datas
+            targets, module_names, function_names, datas
         );
 
         let updated_delay = mcms::timelock_min_delay();
@@ -1580,7 +1574,6 @@ module mcms::mcms_tests {
         setup(deployer, owner, framework);
 
         mcms::test_timelock_block_function(
-            mcms::timelock_role(),
             TEST_TARGET_ADDRESS,
             string::utf8(b"test_module"),
             string::utf8(b"test_function")
@@ -1599,7 +1592,6 @@ module mcms::mcms_tests {
         );
         // Unblock the function
         mcms::test_timelock_unblock_function(
-            mcms::timelock_role(),
             TEST_TARGET_ADDRESS,
             string::utf8(b"test_module"),
             string::utf8(b"test_function")
@@ -1621,7 +1613,6 @@ module mcms::mcms_tests {
 
         // Try to schedule with mismatched parameters length
         mcms::test_timelock_schedule_batch(
-            mcms::proposer_role(),
             vector[@mcms, @mcms], // 2 targets
             vector[string::utf8(b"test_module")], // But only 1 module name
             vector[string::utf8(b"test_function")],
@@ -1642,11 +1633,10 @@ module mcms::mcms_tests {
         setup(deployer, owner, framework);
 
         // First set a minimum delay
-        mcms::test_timelock_update_min_delay(mcms::timelock_role(), MIN_DELAY);
+        mcms::test_timelock_update_min_delay(MIN_DELAY);
 
         // Try to schedule with delay lower than minimum
         mcms::test_timelock_schedule_batch(
-            mcms::proposer_role(),
             vector[@mcms],
             vector[string::utf8(b"test_module")],
             vector[string::utf8(b"test_function")],
@@ -1676,7 +1666,6 @@ module mcms::mcms_tests {
         let salt = vector[1u8];
 
         mcms::test_timelock_schedule_batch(
-            mcms::proposer_role(),
             targets,
             module_names,
             function_names,
@@ -1688,7 +1677,6 @@ module mcms::mcms_tests {
 
         // Try to schedule the same batch again
         mcms::test_timelock_schedule_batch(
-            mcms::proposer_role(),
             targets,
             module_names,
             function_names,
@@ -1707,14 +1695,12 @@ module mcms::mcms_tests {
         setup(deployer, owner, framework);
 
         mcms::test_timelock_block_function(
-            mcms::timelock_role(),
             TEST_TARGET_ADDRESS,
             string::utf8(b"test_module"),
             string::utf8(b"test_function")
         );
 
         mcms::test_timelock_schedule_batch(
-            mcms::proposer_role(),
             vector[TEST_TARGET_ADDRESS],
             vector[string::utf8(b"test_module")],
             vector[string::utf8(b"test_function")],
@@ -1742,10 +1728,9 @@ module mcms::mcms_tests {
         let salt = vector[1u8];
 
         let delay = 100000;
-        mcms::test_timelock_update_min_delay(mcms::timelock_role(), delay);
+        mcms::test_timelock_update_min_delay(delay);
 
         mcms::test_timelock_schedule_batch(
-            mcms::proposer_role(),
             targets,
             module_names,
             function_names,
@@ -1776,7 +1761,7 @@ module mcms::mcms_tests {
         deployer: &signer, owner: &signer, framework: &signer
     ) {
         setup(deployer, owner, framework);
-        mcms::test_timelock_cancel(mcms::canceller_role(), vector[123u8]);
+        mcms::test_timelock_cancel(vector[123u8]);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -1788,7 +1773,6 @@ module mcms::mcms_tests {
 
         // Block a function
         mcms::test_timelock_block_function(
-            mcms::timelock_role(),
             TEST_TARGET_ADDRESS,
             string::utf8(b"test_module"),
             string::utf8(b"test_function")
@@ -1806,7 +1790,6 @@ module mcms::mcms_tests {
 
         // Block a function
         mcms::test_timelock_block_function(
-            mcms::timelock_role(),
             TEST_TARGET_ADDRESS,
             string::utf8(b"test_module"),
             string::utf8(b"test_function")
@@ -1814,7 +1797,6 @@ module mcms::mcms_tests {
 
         // Block it again (should be idempotent)
         mcms::test_timelock_block_function(
-            mcms::timelock_role(),
             TEST_TARGET_ADDRESS,
             string::utf8(b"test_module"),
             string::utf8(b"test_function")
@@ -1844,7 +1826,6 @@ module mcms::mcms_tests {
 
         // First, schedule the first batch
         mcms::test_timelock_schedule_batch(
-            mcms::proposer_role(),
             targets1,
             module_names1,
             function_names1,
@@ -1865,7 +1846,6 @@ module mcms::mcms_tests {
         let datas2 = vector[vector[0u8]];
 
         mcms::test_timelock_schedule_batch(
-            mcms::proposer_role(),
             targets2,
             module_names2,
             function_names2,
@@ -1907,7 +1887,6 @@ module mcms::mcms_tests {
 
         // Schedule the batch with the non-existent function
         mcms::test_timelock_schedule_batch(
-            mcms::proposer_role(),
             targets,
             module_names,
             function_names,
@@ -1983,7 +1962,6 @@ module mcms::mcms_tests {
         let salt = vector[1u8];
 
         mcms::test_timelock_schedule_batch(
-            mcms::proposer_role(),
             targets,
             module_names,
             function_names,
@@ -2026,12 +2004,7 @@ module mcms::mcms_tests {
         let module_name = string::utf8(b"mcms");
         let function_name = string::utf8(b"timelock_update_min_delay");
 
-        mcms::test_timelock_block_function(
-            mcms::timelock_role(),
-            target,
-            module_name,
-            function_name
-        );
+        mcms::test_timelock_block_function(target, module_name, function_name);
 
         // Bypasser should be able to directly execute the blocked function
         let targets = vector[target];
@@ -2042,11 +2015,7 @@ module mcms::mcms_tests {
 
         // Should succeed since bypassers/owner can execute blocked functions
         mcms::test_timelock_bypasser_execute_batch(
-            mcms::bypasser_role(),
-            targets,
-            module_names,
-            function_names,
-            datas
+            targets, module_names, function_names, datas
         );
 
         // Verify the min delay was updated despite being blocked
@@ -2071,7 +2040,6 @@ module mcms::mcms_tests {
         let delay = 1; // Small delay for testing
 
         mcms::test_timelock_schedule_batch(
-            mcms::proposer_role(),
             targets_1,
             module_names_1,
             function_names_1,
@@ -2101,7 +2069,6 @@ module mcms::mcms_tests {
         let salt_2 = x"efab";
 
         mcms::test_timelock_schedule_batch(
-            mcms::proposer_role(),
             targets_2,
             module_names_2,
             function_names_2,
@@ -2147,7 +2114,7 @@ module mcms::mcms_tests {
     ) {
         setup(deployer, owner, framework);
         let delay = 1800;
-        mcms::test_timelock_update_min_delay(mcms::timelock_role(), delay);
+        mcms::test_timelock_update_min_delay(delay);
 
         mcms_account::transfer_ownership_to_self(owner);
         mcms_account::accept_ownership(deployer);
@@ -2155,7 +2122,6 @@ module mcms::mcms_tests {
         // This should succeed because bypassers are allowed to bypass the timelock
         let data = bcs::to_bytes(&delay);
         mcms::test_timelock_bypasser_execute_batch(
-            mcms::bypasser_role(),
             vector[@mcms],
             vector[string::utf8(b"mcms")],
             vector[string::utf8(b"timelock_update_min_delay")],

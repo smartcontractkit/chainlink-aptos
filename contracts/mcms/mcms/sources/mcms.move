@@ -504,7 +504,7 @@ module mcms::mcms {
         );
     }
 
-    // Only callable from `execute`, the role that was validated is passed down to the timelock functions
+    /// Only callable from `execute`, the role that was validated is passed down to the timelock functions
     inline fun dispatch_to_timelock(
         role: u8, function_name: String, data: vector<u8>
     ) {
@@ -512,27 +512,33 @@ module mcms::mcms {
         let stream = bcs_stream::new(data);
 
         if (function_name_bytes == b"timelock_schedule_batch") {
-            deserialize_and_timelock_schedule_batch(role, &mut stream)
+            dispatch_timelock_schedule_batch(role, &mut stream)
         } else if (function_name_bytes == b"timelock_bypasser_execute_batch") {
-            deserialize_and_timelock_bypasser_execute_batch(role, &mut stream)
+            dispatch_timelock_bypasser_execute_batch(role, &mut stream)
         } else if (function_name_bytes == b"timelock_execute_batch") {
-            deserialize_and_timelock_execute_batch(&mut stream)
+            dispatch_timelock_execute_batch(&mut stream)
         } else if (function_name_bytes == b"timelock_cancel") {
-            deserialize_and_timelock_cancel(role, &mut stream)
+            dispatch_timelock_cancel(role, &mut stream)
         } else if (function_name_bytes == b"timelock_update_min_delay") {
-            deserialize_and_timelock_update_min_delay(role, &mut stream)
+            dispatch_timelock_update_min_delay(role, &mut stream)
         } else if (function_name_bytes == b"timelock_block_function") {
-            deserialize_and_timelock_block_function(role, &mut stream)
+            dispatch_timelock_block_function(role, &mut stream)
         } else if (function_name_bytes == b"timelock_unblock_function") {
-            deserialize_and_timelock_unblock_function(role, &mut stream)
+            dispatch_timelock_unblock_function(role, &mut stream)
         } else {
             abort E_UNKNOWN_MCMS_TIMELOCK_FUNCTION
         }
     }
 
-    inline fun deserialize_and_timelock_schedule_batch(
+    /// `dispatch_timelock_` functions should only be called from dispatch functions
+    inline fun dispatch_timelock_schedule_batch(
         role: u8, stream: &mut BCSStream
     ) {
+        assert!(
+            role == PROPOSER_ROLE || role == TIMELOCK_ROLE,
+            E_NOT_AUTHORIZED_ROLE
+        );
+
         let targets =
             bcs_stream::deserialize_vector(
                 stream, |stream| bcs_stream::deserialize_address(stream)
@@ -555,7 +561,6 @@ module mcms::mcms {
         bcs_stream::assert_is_consumed(stream);
 
         timelock_schedule_batch(
-            role,
             targets,
             module_names,
             function_names,
@@ -566,9 +571,14 @@ module mcms::mcms {
         )
     }
 
-    inline fun deserialize_and_timelock_bypasser_execute_batch(
+    inline fun dispatch_timelock_bypasser_execute_batch(
         role: u8, stream: &mut BCSStream
     ) {
+        assert!(
+            role == BYPASSER_ROLE || role == TIMELOCK_ROLE,
+            E_NOT_AUTHORIZED_ROLE
+        );
+
         let targets =
             bcs_stream::deserialize_vector(
                 stream, |stream| bcs_stream::deserialize_address(stream)
@@ -587,18 +597,10 @@ module mcms::mcms {
             );
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_bypasser_execute_batch(
-            role,
-            targets,
-            module_names,
-            function_names,
-            datas
-        )
+        timelock_bypasser_execute_batch(targets, module_names, function_names, datas)
     }
 
-    inline fun deserialize_and_timelock_execute_batch(
-        stream: &mut BCSStream
-    ) {
+    inline fun dispatch_timelock_execute_batch(stream: &mut BCSStream) {
         let targets =
             bcs_stream::deserialize_vector(
                 stream, |stream| bcs_stream::deserialize_address(stream)
@@ -629,44 +631,53 @@ module mcms::mcms {
         )
     }
 
-    inline fun deserialize_and_timelock_cancel(
-        role: u8, stream: &mut BCSStream
-    ) {
+    inline fun dispatch_timelock_cancel(role: u8, stream: &mut BCSStream) {
+        assert!(
+            role == CANCELLER_ROLE || role == TIMELOCK_ROLE,
+            E_NOT_AUTHORIZED_ROLE
+        );
+
         let id = bcs_stream::deserialize_vector_u8(stream);
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_cancel(role, id)
+        timelock_cancel(id)
     }
 
-    inline fun deserialize_and_timelock_update_min_delay(
+    inline fun dispatch_timelock_update_min_delay(
         role: u8, stream: &mut BCSStream
     ) {
+        assert!(role == TIMELOCK_ROLE, E_NOT_TIMELOCK_ROLE);
+
         let new_min_delay = bcs_stream::deserialize_u64(stream);
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_update_min_delay(role, new_min_delay)
+        timelock_update_min_delay(new_min_delay)
     }
 
-    inline fun deserialize_and_timelock_block_function(
+    inline fun dispatch_timelock_block_function(
         role: u8, stream: &mut BCSStream
     ) {
+        assert!(role == TIMELOCK_ROLE, E_NOT_TIMELOCK_ROLE);
+
         let target = bcs_stream::deserialize_address(stream);
         let module_name = bcs_stream::deserialize_string(stream);
         let function_name = bcs_stream::deserialize_string(stream);
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_block_function(role, target, module_name, function_name)
+        timelock_block_function(target, module_name, function_name)
     }
 
-    inline fun deserialize_and_timelock_unblock_function(
+    inline fun dispatch_timelock_unblock_function(
         role: u8, stream: &mut BCSStream
     ) {
+        assert!(role == TIMELOCK_ROLE, E_NOT_TIMELOCK_ROLE);
+
         let target = bcs_stream::deserialize_address(stream);
         let module_name = bcs_stream::deserialize_string(stream);
         let function_name = bcs_stream::deserialize_string(stream);
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_unblock_function(role, target, module_name, function_name)
+        timelock_unblock_function(target, module_name, function_name)
     }
 
     /// Updates the multisig configuration, including signer addresses and group settings.
@@ -1117,7 +1128,6 @@ module mcms::mcms {
     /// Schedule a batch of calls to be executed after a delay.
     /// This function can only be called by PROPOSER or ADMIN role.
     inline fun timelock_schedule_batch(
-        role: u8,
         targets: vector<address>,
         module_names: vector<String>,
         function_names: vector<String>,
@@ -1126,11 +1136,6 @@ module mcms::mcms {
         salt: vector<u8>,
         delay: u64
     ) {
-        assert!(
-            role == PROPOSER_ROLE || role == TIMELOCK_ROLE,
-            E_NOT_AUTHORIZED_ROLE
-        );
-
         let calls = create_calls(targets, module_names, function_names, datas);
         let id = hash_operation_batch(calls, predecessor, salt);
         let timelock = borrow_mut_timelock();
@@ -1216,17 +1221,11 @@ module mcms::mcms {
     }
 
     fun timelock_bypasser_execute_batch(
-        role: u8,
         targets: vector<address>,
         module_names: vector<String>,
         function_names: vector<String>,
         datas: vector<vector<u8>>
     ) acquires Multisig, MultisigState, Timelock {
-        assert!(
-            role == BYPASSER_ROLE || role == TIMELOCK_ROLE,
-            E_NOT_AUTHORIZED_ROLE
-        );
-
         for (i in 0..targets.length()) {
             let target = targets[i];
             let module_name = module_names[i];
@@ -1426,21 +1425,14 @@ module mcms::mcms {
         }
     }
 
-    inline fun timelock_cancel(role: u8, id: vector<u8>) {
-        assert!(
-            role == CANCELLER_ROLE || role == TIMELOCK_ROLE,
-            E_NOT_AUTHORIZED_ROLE
-        );
-
+    inline fun timelock_cancel(id: vector<u8>) {
         assert!(timelock_is_operation_pending(id), E_OPERATION_CANNOT_BE_CANCELLED);
 
         borrow_mut_timelock().timestamps.remove(id);
         event::emit(Cancelled { id });
     }
 
-    inline fun timelock_update_min_delay(role: u8, new_min_delay: u64) {
-        assert!(role == TIMELOCK_ROLE, E_NOT_TIMELOCK_ROLE);
-
+    inline fun timelock_update_min_delay(new_min_delay: u64) {
         let timelock = borrow_mut_timelock();
         let old_min_delay = timelock.min_delay;
         timelock.min_delay = new_min_delay;
@@ -1449,13 +1441,8 @@ module mcms::mcms {
     }
 
     inline fun timelock_block_function(
-        role: u8,
-        target: address,
-        module_name: String,
-        function_name: String
+        target: address, module_name: String, function_name: String
     ) {
-        assert!(role == TIMELOCK_ROLE, E_NOT_TIMELOCK_ROLE);
-
         let already_blocked = false;
         let new_function = Function { target, module_name, function_name };
         let timelock = borrow_mut_timelock();
@@ -1475,13 +1462,8 @@ module mcms::mcms {
     }
 
     inline fun timelock_unblock_function(
-        role: u8,
-        target: address,
-        module_name: String,
-        function_name: String
+        target: address, module_name: String, function_name: String
     ) {
-        assert!(role == TIMELOCK_ROLE, E_NOT_TIMELOCK_ROLE);
-
         let function_to_unblock = Function { target, module_name, function_name };
         let timelock = borrow_mut_timelock();
 
@@ -1717,7 +1699,6 @@ module mcms::mcms {
 
     #[test_only]
     public fun test_timelock_schedule_batch(
-        role: u8,
         targets: vector<address>,
         module_names: vector<String>,
         function_names: vector<String>,
@@ -1727,7 +1708,6 @@ module mcms::mcms {
         delay: u64
     ) acquires Timelock {
         timelock_schedule_batch(
-            role,
             targets,
             module_names,
             function_names,
@@ -1739,50 +1719,37 @@ module mcms::mcms {
     }
 
     #[test_only]
-    public fun test_timelock_update_min_delay(role: u8, delay: u64) acquires Timelock {
-        timelock_update_min_delay(role, delay);
+    public fun test_timelock_update_min_delay(delay: u64) acquires Timelock {
+        timelock_update_min_delay(delay);
     }
 
     #[test_only]
-    public fun test_timelock_cancel(role: u8, id: vector<u8>) acquires Timelock {
-        timelock_cancel(role, id);
+    public fun test_timelock_cancel(id: vector<u8>) acquires Timelock {
+        timelock_cancel(id);
     }
 
     #[test_only]
     public fun test_timelock_bypasser_execute_batch(
-        role: u8,
         targets: vector<address>,
         module_names: vector<String>,
         function_names: vector<String>,
         datas: vector<vector<u8>>
     ) acquires Multisig, MultisigState, Timelock {
-        timelock_bypasser_execute_batch(
-            role,
-            targets,
-            module_names,
-            function_names,
-            datas
-        );
+        timelock_bypasser_execute_batch(targets, module_names, function_names, datas);
     }
 
     #[test_only]
     public fun test_timelock_block_function(
-        role: u8,
-        target: address,
-        module_name: String,
-        function_name: String
+        target: address, module_name: String, function_name: String
     ) acquires Timelock {
-        timelock_block_function(role, target, module_name, function_name);
+        timelock_block_function(target, module_name, function_name);
     }
 
     #[test_only]
     public fun test_timelock_unblock_function(
-        role: u8,
-        target: address,
-        module_name: String,
-        function_name: String
+        target: address, module_name: String, function_name: String
     ) acquires Timelock {
-        timelock_unblock_function(role, target, module_name, function_name);
+        timelock_unblock_function(target, module_name, function_name);
     }
 
     #[test_only]
