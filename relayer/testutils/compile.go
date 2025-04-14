@@ -2,7 +2,6 @@ package testutils
 
 import (
 	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -13,6 +12,8 @@ import (
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/go-viper/mapstructure/v2"
+
+	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
 type CompilationResult struct {
@@ -108,14 +109,14 @@ func CompileMovePackage(
 	}
 	bytecodesHexStr := bytecodesArg.Value
 
-	metadata, err := hex.DecodeString(strings.TrimPrefix(metadataHexStr, "0x"))
+	metadata, err := utils.DecodeHexRelaxed(metadataHexStr)
 	if err != nil {
 		t.Fatalf("Failed to decode metadata hex string: %v", err)
 	}
 
 	bytecodes := [][]byte{}
 	for _, bytecodeHexStr := range bytecodesHexStr {
-		bytecode, err := hex.DecodeString(strings.TrimPrefix(bytecodeHexStr, "0x"))
+		bytecode, err := utils.DecodeHexRelaxed(bytecodeHexStr)
 		if err != nil {
 			t.Fatalf("Failed to decode bytecode hex string: %v", err)
 		}

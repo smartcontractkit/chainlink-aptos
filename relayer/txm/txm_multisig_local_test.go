@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"math/big"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -29,6 +28,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
 type Account struct {
@@ -386,11 +386,11 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 
 			require.Equal(t, result.Data.A, functionOneArg1)
 
-			bBytes, err := hex.DecodeString(strings.TrimPrefix(result.Data.B, "0x"))
+			bBytes, err := utils.DecodeHexRelaxed(result.Data.B)
 			require.NoError(t, err)
 			require.Equal(t, bBytes, functionOneArg2)
 
-			cBytes, err := hex.DecodeString(strings.TrimPrefix(result.Data.C, "0x"))
+			cBytes, err := utils.DecodeHexRelaxed(result.Data.C)
 			require.NoError(t, err)
 			require.Equal(t, cBytes, functionTwoArg1)
 
@@ -548,11 +548,11 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 
 				require.Equal(t, result.Data.A, functionOneArg1)
 
-				bBytes, err := hex.DecodeString(strings.TrimPrefix(result.Data.B, "0x"))
+				bBytes, err := utils.DecodeHexRelaxed(result.Data.B)
 				require.NoError(t, err)
 				require.Equal(t, bBytes, functionOneArg2)
 
-				cBytes, err := hex.DecodeString(strings.TrimPrefix(result.Data.C, "0x"))
+				cBytes, err := utils.DecodeHexRelaxed(result.Data.C)
 				require.NoError(t, err)
 				require.Equal(t, cBytes, functionTwoArg1)
 
