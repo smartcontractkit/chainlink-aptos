@@ -112,7 +112,7 @@ module ccip::token_admin_registry {
     const E_NOT_FUNGIBLE_ASSET_OWNER: u64 = 2;
     const E_INVALID_TOKEN_POOL: u64 = 3;
     const E_ALREADY_REGISTERED: u64 = 4;
-    const E_DUPLICATE_PROOF_TYPES: u64 = 5;
+    const E_UNKNOWN_FUNCTION: u64 = 5;
     const E_PROOF_NOT_IN_TOKEN_POOL_MODULE: u64 = 6;
     const E_PROOF_NOT_AT_TOKEN_POOL_ADDRESS: u64 = 7;
     const E_UNKNOWN_PROOF_TYPE: u64 = 8;
@@ -132,7 +132,6 @@ module ccip::token_admin_registry {
     const E_FUNGIBLE_ASSET_NOT_REGISTERED: u64 = 22;
     const E_NOT_ADMINISTRATOR: u64 = 23;
     const E_NOT_PENDING_ADMINISTRATOR: u64 = 24;
-    const E_UNKNOWN_FUNCTION: u64 = 25;
 
     #[view]
     public fun type_and_version(): String {

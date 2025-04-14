@@ -43,7 +43,6 @@ module ccip::receiver_registry {
     const E_UNKNOWN_PROOF_TYPE: u64 = 3;
     const E_MISSING_INPUT: u64 = 4;
     const E_NON_EMPTY_INPUT: u64 = 5;
-    const E_UNKNOWN_FUNCTION: u64 = 6;
 
     #[view]
     public fun type_and_version(): String {

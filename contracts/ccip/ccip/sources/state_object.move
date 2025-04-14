@@ -27,7 +27,6 @@ module ccip::state_object {
     }
 
     const E_NOT_OBJECT_DEPLOYMENT: u64 = 1;
-    const E_NOT_CCIP_OBJECT_OWNER: u64 = 2;
 
     fun init_module(publisher: &signer) {
         assert!(

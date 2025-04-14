@@ -15,11 +15,10 @@ module ccip::eth_abi {
     ];
 
     const E_OUT_OF_BYTES: u64 = 1;
-    const E_INVALID_BYTES32: u64 = 2;
-    const E_INVALID_ADDRESS: u64 = 3;
-    const E_INVALID_BOOL: u64 = 4;
-    const E_INVALID_SELECTOR: u64 = 5;
-    const E_INVALID_U256_LENGTH: u64 = 6;
+    const E_INVALID_ADDRESS: u64 = 2;
+    const E_INVALID_BOOL: u64 = 3;
+    const E_INVALID_SELECTOR: u64 = 4;
+    const E_INVALID_U256_LENGTH: u64 = 5;
 
     public inline fun encode_address(out: &mut vector<u8>, value: address) {
         out.append(bcs::to_bytes(&value))
