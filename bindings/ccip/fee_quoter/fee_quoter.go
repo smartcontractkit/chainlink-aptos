@@ -30,7 +30,7 @@ type FeeQuoterInterface interface {
 	ConvertTokenAmount(opts *bind.CallOpts, fromToken aptos.AccountAddress, fromTokenAmount uint64, toToken aptos.AccountAddress) (uint64, error)
 	GetFeeTokens(opts *bind.CallOpts) ([]aptos.AccountAddress, error)
 	GetTokenTransferFeeConfig(opts *bind.CallOpts, destChainSelector uint64, token aptos.AccountAddress) (TokenTransferFeeConfig, error)
-	GetValidatedFee(opts *bind.CallOpts, destChainSelector uint64, receiver []byte, data []byte, localTokenAddresses []aptos.AccountAddress, localTokenAmounts []uint64, TokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (uint64, error)
+	GetValidatedFee(opts *bind.CallOpts, destChainSelector uint64, receiver []byte, data []byte, localTokenAddresses []aptos.AccountAddress, localTokenAmounts []uint64, TokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, FeeTokenStore aptos.AccountAddress, extraArgs []byte) (uint64, error)
 	GetPremiumMultiplierWeiPerEth(opts *bind.CallOpts, token aptos.AccountAddress) (uint64, error)
 	ProcessMessageArgs(opts *bind.CallOpts, destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, destTokenAddresses [][]byte, destPoolDatas [][]byte) (uint64, bool, []byte, [][]byte, error)
 	GetDestChainConfig(opts *bind.CallOpts, destChainSelector uint64) (DestChainConfig, error)
@@ -55,7 +55,7 @@ type FeeQuoterEncoder interface {
 	ConvertTokenAmount(fromToken aptos.AccountAddress, fromTokenAmount uint64, toToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetFeeTokens() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetTokenTransferFeeConfig(destChainSelector uint64, token aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	GetValidatedFee(destChainSelector uint64, receiver []byte, data []byte, localTokenAddresses []aptos.AccountAddress, localTokenAmounts []uint64, TokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetValidatedFee(destChainSelector uint64, receiver []byte, data []byte, localTokenAddresses []aptos.AccountAddress, localTokenAmounts []uint64, TokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, FeeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetPremiumMultiplierWeiPerEth(token aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ProcessMessageArgs(destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, destTokenAddresses [][]byte, destPoolDatas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetDestChainConfig(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -369,8 +369,8 @@ func (c FeeQuoterContract) GetTokenTransferFeeConfig(opts *bind.CallOpts, destCh
 	return r0, nil
 }
 
-func (c FeeQuoterContract) GetValidatedFee(opts *bind.CallOpts, destChainSelector uint64, receiver []byte, data []byte, localTokenAddresses []aptos.AccountAddress, localTokenAmounts []uint64, TokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (uint64, error) {
-	module, function, typeTags, args, err := c.feeQuoterEncoder.GetValidatedFee(destChainSelector, receiver, data, localTokenAddresses, localTokenAmounts, TokenStoreAddresses, feeToken, feeTokenStore, extraArgs)
+func (c FeeQuoterContract) GetValidatedFee(opts *bind.CallOpts, destChainSelector uint64, receiver []byte, data []byte, localTokenAddresses []aptos.AccountAddress, localTokenAmounts []uint64, TokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, FeeTokenStore aptos.AccountAddress, extraArgs []byte) (uint64, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.GetValidatedFee(destChainSelector, receiver, data, localTokenAddresses, localTokenAmounts, TokenStoreAddresses, feeToken, FeeTokenStore, extraArgs)
 	if err != nil {
 		return *new(uint64), err
 	}
@@ -593,7 +593,7 @@ func (c feeQuoterEncoder) GetTokenTransferFeeConfig(destChainSelector uint64, to
 	})
 }
 
-func (c feeQuoterEncoder) GetValidatedFee(destChainSelector uint64, receiver []byte, data []byte, localTokenAddresses []aptos.AccountAddress, localTokenAmounts []uint64, TokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c feeQuoterEncoder) GetValidatedFee(destChainSelector uint64, receiver []byte, data []byte, localTokenAddresses []aptos.AccountAddress, localTokenAmounts []uint64, TokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, FeeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("get_validated_fee", nil, []string{
 		"u64",
 		"vector<u8>",
@@ -612,7 +612,7 @@ func (c feeQuoterEncoder) GetValidatedFee(destChainSelector uint64, receiver []b
 		localTokenAmounts,
 		TokenStoreAddresses,
 		feeToken,
-		feeTokenStore,
+		FeeTokenStore,
 		extraArgs,
 	})
 }
