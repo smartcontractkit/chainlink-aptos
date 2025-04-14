@@ -107,15 +107,15 @@ func deserializeExpressionValues(expr query.Expression) (query.Expression, error
 					continue
 				}
 
-				jsonData, ok := vc.Value.(*[]byte)
+				jsonData, ok := vc.Value.([]byte)
 				if !ok {
 					return expr, fmt.Errorf("failed to deserialize value in comparator '%s': expected []byte, got %T", comp.Name, vc.Value)
 				}
 
 				var targetValue any
-				err = json.Unmarshal(*jsonData, &targetValue)
+				err = json.Unmarshal(jsonData, &targetValue)
 				if err != nil {
-					return expr, fmt.Errorf("failed to unmarshal value in comparator '%s' from JSON '%s': %w", comp.Name, string(*jsonData), err)
+					return expr, fmt.Errorf("failed to unmarshal value in comparator '%s' from JSON '%s': %w", comp.Name, string(jsonData), err)
 				}
 				newComp.ValueComparators[i] = primitives.ValueComparator{
 					Value:    targetValue,

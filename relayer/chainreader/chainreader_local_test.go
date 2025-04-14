@@ -1203,6 +1203,254 @@ func TestLoopChainReaderLocal(t *testing.T) {
 	})
 }
 
+func TestLoopChainReaderPersistent(t *testing.T) {
+	lg := logger.Test(t)
+	privKey, pubKey, acctAddr := setupTestAccount(t, lg)
+
+	// Start node and fund account.
+	err := testutils.StartAptosNode()
+	require.NoError(t, err)
+	rpcURL := "http://localhost:8080/v1"
+	client, err := aptos.NewNodeClient(rpcURL, 0)
+	require.NoError(t, err)
+	err = testutils.FundWithFaucet(lg, client, acctAddr, "http://localhost:8081")
+	require.NoError(t, err)
+	rlClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
+
+	// Compile and deploy the contract.
+	compRes := testutils.CompileTestModule(t, acctAddr)
+	keystore := testutils.NewTestKeystore(t)
+	keystore.AddKey(privKey)
+	getClient := func() (aptos.AptosRpcClient, error) { return rlClient, nil }
+	txmgr, err := txm.New(lg, keystore, txm.DefaultConfigSet, getClient)
+	require.NoError(t, err)
+	err = txmgr.Start(context.Background())
+	require.NoError(t, err)
+
+	publicKeyHex := hex.EncodeToString([]byte(pubKey))
+	txID := uuid.New().String()
+	err = txmgr.Enqueue(
+		txID,
+		getSampleTxMetadata(),
+		acctAddr.String(),
+		publicKeyHex,
+		"0x1::code::publish_package_txn",
+		[]string{},
+		[]string{"vector<u8>", "vector<vector<u8>>"},
+		[]any{compRes.PackageMetadata, compRes.BytecodeModules},
+		true,
+	)
+	require.NoError(t, err)
+	confirmed := false
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
+		status, err := txmgr.GetStatus(txID)
+		require.NoError(t, err)
+		if status != commontypes.Unconfirmed {
+			confirmed = true
+			break
+		}
+	}
+	require.True(t, confirmed, "Contract deploy tx not confirmed")
+
+	emitManyEvents(t, txmgr, acctAddr.String(), publicKeyHex, 20)
+
+	// Setup ChainReader configuration using the same event details as other tests.
+	config := ChainReaderConfig{
+		Modules: map[string]*ChainReaderModule{
+			"testContract": {
+				Name: "echo",
+				Events: map[string]*ChainReaderEvent{
+					"SingleValueEvent": {
+						EventHandleStructName: "EventStore",
+						EventHandleFieldName:  "single_value_events",
+						// Use the contract address with the function that returns the event address.
+						EventAccountAddress: acctAddr.String() + "::echo::get_event_address",
+						EventFieldRenames: map[string]RenamedField{
+							"value": {NewName: "SingleUintValue"},
+						},
+					},
+				},
+			},
+		},
+		IsLoopPlugin: true,
+	}
+
+	dsn := os.Getenv("TEST_DB_URL")
+	if dsn == "" {
+		t.Skip("Skipping persistent tests as TEST_DB_URL is not set")
+	}
+	db := sqltest.NewDB(t, dsn)
+
+	// Create ChainReader with persistence enabled.
+	chainReader := NewChainReader(lg, rlClient, config, db)
+	binding := commontypes.BoundContract{Name: "testContract", Address: acctAddr.String()}
+	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{binding})
+	require.NoError(t, err)
+
+	loopReader := loop.NewLoopChainReader(lg, chainReader)
+	// Re-bind using the loop reader
+	err = loopReader.Bind(context.Background(), []commontypes.BoundContract{binding})
+	require.NoError(t, err)
+
+	t.Run("QueryKey - Filter by SingleUintValue", func(t *testing.T) {
+		filter := query.KeyFilter{
+			Key: "SingleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("SingleUintValue",
+					primitives.ValueComparator{Value: uint64(2), Operator: primitives.Gte},
+					primitives.ValueComparator{Value: uint64(4), Operator: primitives.Lt},
+				),
+			},
+		}
+		// Now call QueryKey on the loopReader, not the chainReader.
+		seqs, err := loopReader.QueryKey(
+			context.Background(),
+			binding,
+			filter,
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, seqs, "Expected non-empty event results")
+
+		for _, seq := range seqs {
+			event := seq.Data.(*SingleValueEvent)
+			require.GreaterOrEqual(t, event.SingleUintValue, uint64(2))
+			require.Less(t, event.SingleUintValue, uint64(4))
+		}
+	})
+
+	t.Run("QueryKey - Sorted Results Descending", func(t *testing.T) {
+		// Fetch 10 events sorted descending by SingleUintValue
+		seqs, err := loopReader.QueryKey(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "SingleValueEvent"},
+			query.LimitAndSort{
+				Limit: query.CountLimit(10),
+				SortBy: []query.SortBy{
+					query.NewSortBySequence(query.Desc),
+				},
+			},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.Len(t, seqs, 10)
+		for i := 0; i < len(seqs)-1; i++ {
+			evtCurrent := seqs[i].Data.(*SingleValueEvent)
+			evtNext := seqs[i+1].Data.(*SingleValueEvent)
+			require.GreaterOrEqual(t, evtCurrent.SingleUintValue, evtNext.SingleUintValue)
+		}
+	})
+
+	t.Run("QueryKey - Combined Filtering with Timestamp", func(t *testing.T) {
+		// First, fetch all events to pick a mid timestamp.
+		allSeqs, err := loopReader.QueryKey(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "SingleValueEvent"},
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, allSeqs)
+		midTimestamp := allSeqs[len(allSeqs)/2].Head.Timestamp
+
+		filter := query.KeyFilter{
+			Key: "SingleValueEvent",
+			Expressions: []query.Expression{
+				query.Timestamp(midTimestamp, primitives.Gte),
+				query.Comparator("SingleUintValue",
+					primitives.ValueComparator{Value: uint64(10), Operator: primitives.Gte},
+				),
+			},
+		}
+		seqs, err := loopReader.QueryKey(
+			context.Background(),
+			binding,
+			filter,
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, seqs)
+		for _, seq := range seqs {
+			require.GreaterOrEqual(t, seq.Head.Timestamp, midTimestamp)
+			evt := seq.Data.(*SingleValueEvent)
+			require.GreaterOrEqual(t, evt.SingleUintValue, uint64(10))
+		}
+	})
+
+	t.Run("QueryKey - Multiple Independent Comparators", func(t *testing.T) {
+		multiFilter := query.KeyFilter{
+			Key: "SingleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("SingleUintValue",
+					primitives.ValueComparator{Value: uint64(3), Operator: primitives.Gte},
+				),
+				query.Comparator("SingleUintValue",
+					primitives.ValueComparator{Value: uint64(7), Operator: primitives.Lt},
+				),
+			},
+		}
+		seqs, err := loopReader.QueryKey(
+			context.Background(),
+			binding,
+			multiFilter,
+			query.LimitAndSort{},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, seqs)
+		for _, seq := range seqs {
+			evt := seq.Data.(*SingleValueEvent)
+			require.GreaterOrEqual(t, evt.SingleUintValue, uint64(3))
+			require.Less(t, evt.SingleUintValue, uint64(7))
+		}
+	})
+
+	t.Run("QueryKey - Error Cases", func(t *testing.T) {
+		// Filtering on a non-existent field returns empty results.
+		invalidFilter := query.KeyFilter{
+			Key: "SingleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("NonExistentField",
+					primitives.ValueComparator{Value: uint64(1), Operator: primitives.Eq},
+				),
+			},
+		}
+		seqs, err := loopReader.QueryKey(
+			context.Background(),
+			binding,
+			invalidFilter,
+			query.LimitAndSort{},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.Empty(t, seqs)
+
+		// Mismatched type should yield empty results.
+		invalidTypeFilter := query.KeyFilter{
+			Key: "SingleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("SingleUintValue",
+					primitives.ValueComparator{Value: "not a number", Operator: primitives.Eq},
+				),
+			},
+		}
+		seqs, err = loopReader.QueryKey(
+			context.Background(),
+			binding,
+			invalidTypeFilter,
+			query.LimitAndSort{},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.Empty(t, seqs)
+	})
+}
+
 func initTxManager(t *testing.T, logger logger.Logger, keystore *testutils.TestKeystore, client aptos.AptosRpcClient) *txm.AptosTxm {
 	getClient := func() (aptos.AptosRpcClient, error) { return client, nil }
 	txmgr, err := txm.New(logger, keystore, txm.DefaultConfigSet, getClient)
