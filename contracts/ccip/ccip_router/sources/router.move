@@ -102,8 +102,8 @@ module ccip_router::router {
         if (on_ramp_version == vector[1, 6, 0]) {
             @ccip_onramp
         } else {
-            // If the onRamp version is not supported, we abort.
-            abort error::invalid_state(E_UNSUPPORTED_ON_RAMP_VERSION)
+            // Returning 0x0 is inconsistent with the rest of the code but required for the offchain logic.
+            @0x0
         }
     }
 
@@ -237,8 +237,8 @@ module ccip_router::router {
     // |                       OnRamp Routing                         |
     // ================================================================
 
-    /// Returns the onRamp versions for the given destination chains.
     #[view]
+    /// Returns the onRamp versions for the given destination chains.
     public fun get_on_ramp_versions(
         dest_chain_selectors: vector<u64>
     ): vector<vector<u8>> acquires RouterState {
