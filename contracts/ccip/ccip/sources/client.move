@@ -1,7 +1,5 @@
 /// This module defines messages for end users to interact with Aptos CCIP.
 module ccip::client {
-    use std::error;
-
     struct Any2AptosMessage has store, drop, copy {
         message_id: vector<u8>,
         source_chain_selector: u64,

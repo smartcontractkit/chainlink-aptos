@@ -27,7 +27,6 @@ module ccip::fee_quoter {
     use std::timestamp;
 
     use ccip::auth;
-    use ccip::client;
     use ccip::eth_abi;
     use ccip::state_object;
 
@@ -583,7 +582,7 @@ module ccip::fee_quoter {
         local_token_amounts: vector<u64>,
         _token_store_addresses: vector<address>,
         fee_token: address,
-        fee_token_store: address,
+        _fee_token_store: address,
         extra_args: vector<u8>
     ): u64 acquires FeeQuoterState {
         let state = borrow_state_mut();

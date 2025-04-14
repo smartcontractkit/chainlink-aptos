@@ -15,13 +15,13 @@ module ccip::allowlist {
     #[event]
     struct AllowlistRemove has store, drop {
         allowlist_name: String,
-        sender: address
+        removed_address: address
     }
 
     #[event]
     struct AllowlistAdd has store, drop {
         allowlist_name: String,
-        sender: address
+        added_address: address
     }
 
     const E_ALLOWLIST_NOT_ENABLED: u64 = 1;
@@ -68,21 +68,22 @@ module ccip::allowlist {
         state: &mut AllowlistState, removes: vector<address>, adds: vector<address>
     ) {
         removes.for_each_ref(
-            |remove_address| {
-                let (found, i) = state.allowlist.index_of(remove_address);
+            |removed_address| {
+                let removed_address: address = *removed_address;
+                let (found, i) = state.allowlist.index_of(&removed_address);
                 if (found) {
                     state.allowlist.swap_remove(i);
                     event::emit(
                         AllowlistRemove {
                             allowlist_name: state.allowlist_name,
-                            sender: *remove_address
+                            removed_address
                         }
                     );
                     event::emit_event(
                         &mut state.allowlist_remove_events,
                         AllowlistRemove {
                             allowlist_name: state.allowlist_name,
-                            sender: *remove_address
+                            removed_address
                         }
                     );
                 }
@@ -96,22 +97,22 @@ module ccip::allowlist {
             );
 
             adds.for_each_ref(
-                |add_address| {
-                    let add_address: address = *add_address;
-                    let (found, _) = state.allowlist.index_of(&add_address);
-                    if (add_address != @0x0 && !found) {
-                        state.allowlist.push_back(add_address);
+                |added_address| {
+                    let added_address: address = *added_address;
+                    if (added_address != @0x0
+                        && !state.allowlist.contains(&added_address)) {
+                        state.allowlist.push_back(added_address);
                         event::emit(
                             AllowlistAdd {
                                 allowlist_name: state.allowlist_name,
-                                sender: add_address
+                                added_address
                             }
                         );
                         event::emit_event(
                             &mut state.allowlist_add_events,
                             AllowlistAdd {
                                 allowlist_name: state.allowlist_name,
-                                sender: add_address
+                                added_address
                             }
                         );
                     }
@@ -135,12 +136,15 @@ module ccip::allowlist {
 
     #[test_only]
     public fun new_add_event(add: address): AllowlistAdd {
-        AllowlistAdd { sender: add, allowlist_name: string::utf8(b"default") }
+        AllowlistAdd { added_address: add, allowlist_name: string::utf8(b"default") }
     }
 
     #[test_only]
     public fun new_remove_event(remove: address): AllowlistRemove {
-        AllowlistRemove { sender: remove, allowlist_name: string::utf8(b"default") }
+        AllowlistRemove {
+            removed_address: remove,
+            allowlist_name: string::utf8(b"default")
+        }
     }
 }
 
