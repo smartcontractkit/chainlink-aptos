@@ -1,3 +1,6 @@
+/// The OffRamp package handles merkle root commitments and message execution.
+/// Future versions of this contract will be deployed as a separate package to avoid any unwanted side effects
+/// during upgrades.
 module ccip_offramp::offramp {
     use std::account::{Self, SignerCapability};
     use std::aptos_hash;
@@ -13,12 +16,13 @@ module ccip_offramp::offramp {
     use std::timestamp;
     use std::vector;
 
+    use ccip_offramp::ocr3_base;
+
     use ccip::auth;
     use ccip::client;
     use ccip::eth_abi;
     use ccip::fee_quoter;
     use ccip::merkle_proof;
-    use ccip::ocr3_base;
     use ccip::ownable;
     use ccip::receiver_dispatcher;
     use ccip::receiver_registry;
@@ -63,6 +67,7 @@ module ccip_offramp::offramp {
 
         // merkle root -> timestamp,
         roots: SmartTable<vector<u8>, u64>,
+        // This is the OCR sequence number, not to be confused with the CCIP message sequence number.
         latest_price_sequence_number: u64,
 
         // Events
@@ -106,24 +111,22 @@ module ccip_offramp::offramp {
         dest_token_address: address,
         dest_gas_amount: u32,
         extra_data: vector<u8>,
-
-        // This is the amount to transfer, as set on the source chain.
-        amount: u256
+        amount: u256 // This is the amount to transfer, as set on the source chain.
     }
 
     struct ExecutionReport has drop {
         source_chain_selector: u64,
         message: Any2AptosRampMessage,
         offchain_token_data: vector<vector<u8>>,
-        proofs: vector<vector<u8>>
+        proofs: vector<vector<u8>> // Proofs used to construct the merkle root
     }
 
     // Matches the EVM struct
     struct CommitReport has store, drop, copy {
-        price_updates: PriceUpdates,
-        blessed_merkle_roots: vector<MerkleRoot>,
-        unblessed_merkle_roots: vector<MerkleRoot>,
-        rmn_signatures: vector<vector<u8>>
+        price_updates: PriceUpdates, // Price updates for the fee_quoter
+        blessed_merkle_roots: vector<MerkleRoot>, // Merkle roots that have been blessed by RMN
+        unblessed_merkle_roots: vector<MerkleRoot>, // Merkle roots that don't require RMN blessing
+        rmn_signatures: vector<vector<u8>> // The signatures for the blessed merkle roots
     }
 
     struct PriceUpdates has store, drop, copy {
@@ -157,8 +160,10 @@ module ccip_offramp::offramp {
     }
 
     struct DynamicConfig has store, drop, copy {
+        // On EVM, the feeQuoter is a dynamic address but due to the Aptos implementation using a static
+        // upgradable FeeQuoter, this value is actually static. For compatibility reasons, we keep it as a dynamic config.
         fee_quoter: address,
-        permissionless_execution_threshold_seconds: u32
+        permissionless_execution_threshold_seconds: u32 // The delay before manual exec is enabled
     }
 
     #[event]
@@ -227,14 +232,12 @@ module ccip_offramp::offramp {
     const E_ROOT_ALREADY_COMMITTED: u64 = 15;
     const E_STALE_COMMIT_REPORT: u64 = 16;
     const E_UNSUPPORTED_TOKEN: u64 = 17;
-    const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 18;
-    const E_INVALID_ENCODED_AMOUNT: u64 = 19;
-    const E_CURSED_BY_RMN: u64 = 20;
-    const E_FUNGIBLE_ASSET_TYPE_MISMATCH: u64 = 21;
-    const E_FUNGIBLE_ASSET_AMOUNT_MISMATCH: u64 = 22;
-    const E_SIGNATURE_VERIFICATION_REQUIRED_IN_COMMIT_PLUGIN: u64 = 23;
-    const E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN: u64 = 24;
-    const E_UNKNOWN_FUNCTION: u64 = 25;
+    const E_UNKNOWN_FUNCTION: u64 = 18;
+    const E_CURSED_BY_RMN: u64 = 19;
+    const E_FUNGIBLE_ASSET_TYPE_MISMATCH: u64 = 20;
+    const E_FUNGIBLE_ASSET_AMOUNT_MISMATCH: u64 = 21;
+    const E_SIGNATURE_VERIFICATION_REQUIRED_IN_COMMIT_PLUGIN: u64 = 22;
+    const E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN: u64 = 23;
 
     #[view]
     public fun type_and_version(): String {
@@ -1227,9 +1230,9 @@ module ccip_offramp::offramp {
         DynamicConfig { fee_quoter: @ccip, permissionless_execution_threshold_seconds }
     }
 
-    //
-    // ccip::ownable functions
-    //
+    // ================================================================
+    // |                          Ownable                             |
+    // ================================================================
 
     #[view]
     public fun owner(): address acquires OffRampState {
@@ -1521,26 +1524,23 @@ module ccip_offramp::offramp {
         let execution_report = deserialize_execution_report(report_bytes);
         std::debug::print(&execution_report);
 
-        assert!(execution_report.message.sender == expected_sender, 5);
-        assert!(execution_report.message.data == expected_data, 6);
-        assert!(execution_report.message.receiver == expected_receiver, 7);
-        assert!(execution_report.message.gas_limit == expected_gas_limit, 8);
-        assert!(execution_report.message.header.message_id == expected_message_id, 9);
+        assert!(execution_report.message.sender == expected_sender);
+        assert!(execution_report.message.data == expected_data);
+        assert!(execution_report.message.receiver == expected_receiver);
+        assert!(execution_report.message.gas_limit == expected_gas_limit);
+        assert!(execution_report.message.header.message_id == expected_message_id);
         assert!(
             execution_report.message.header.source_chain_selector
-                == expected_source_chain_selector,
-            1
+                == expected_source_chain_selector
         );
         assert!(
             execution_report.message.header.dest_chain_selector
-                == expected_dest_chain_selector,
-            2
+                == expected_dest_chain_selector
         );
         assert!(
-            execution_report.message.header.sequence_number == expected_sequence_number,
-            3
+            execution_report.message.header.sequence_number == expected_sequence_number
         );
-        assert!(execution_report.message.header.nonce == expected_nonce, 4);
+        assert!(execution_report.message.header.nonce == expected_nonce);
 
         let metadata_hash =
             calculate_metadata_hash(
@@ -1552,6 +1552,6 @@ module ccip_offramp::offramp {
             &execution_report.message, metadata_hash
         );
 
-        assert!(expected_leaf_bytes == hashed_leaf, 1);
+        assert!(expected_leaf_bytes == hashed_leaf);
     }
 }
