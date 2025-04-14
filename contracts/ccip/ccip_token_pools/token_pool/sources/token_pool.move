@@ -78,19 +78,15 @@ module ccip_token_pool::token_pool {
     }
 
     const E_NOT_PUBLISHER: u64 = 1;
-    const E_ALREADY_INITIALIZED: u64 = 2;
-    const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
-    const E_UNKNOWN_FUNGIBLE_ASSET: u64 = 4;
-    const E_ALLOWLIST_NOT_ENABLED: u64 = 5;
-    const E_LOCAL_TOKEN_MISMATCH: u64 = 6;
-    const E_UNKNOWN_REMOTE_CHAIN_SELECTOR: u64 = 7;
-    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 8;
-    const E_REMOTE_POOL_ALREADY_ADDED: u64 = 9;
-    const E_UNKNOWN_REMOTE_POOL: u64 = 10;
-    const E_REMOTE_CHAIN_TO_ADD_MISMATCH: u64 = 11;
-    const E_REMOTE_CHAIN_ALREADY_EXISTS: u64 = 12;
-    const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 13;
-    const E_INVALID_ENCODED_AMOUNT: u64 = 14;
+    const E_UNKNOWN_FUNGIBLE_ASSET: u64 = 2;
+    const E_UNKNOWN_REMOTE_CHAIN_SELECTOR: u64 = 3;
+    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 4;
+    const E_REMOTE_POOL_ALREADY_ADDED: u64 = 5;
+    const E_UNKNOWN_REMOTE_POOL: u64 = 6;
+    const E_REMOTE_CHAIN_TO_ADD_MISMATCH: u64 = 7;
+    const E_REMOTE_CHAIN_ALREADY_EXISTS: u64 = 8;
+    const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 9;
+    const E_INVALID_ENCODED_AMOUNT: u64 = 10;
 
     // ================================================================
     // |                    Initialize and state                      |

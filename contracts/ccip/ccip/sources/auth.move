@@ -19,11 +19,9 @@ module ccip::auth {
     }
 
     const E_UNKNOWN_FUNCTION: u64 = 1;
-    const E_NOT_CCIP: u64 = 2;
-    const E_SIGNER_CAP_NOT_FOUND: u64 = 3;
-    const E_NOT_ALLOWED_ONRAMP: u64 = 4;
-    const E_NOT_ALLOWED_OFFRAMP: u64 = 5;
-    const E_NOT_OWNER_OR_CCIP: u64 = 6;
+    const E_NOT_ALLOWED_ONRAMP: u64 = 2;
+    const E_NOT_ALLOWED_OFFRAMP: u64 = 3;
+    const E_NOT_OWNER_OR_CCIP: u64 = 4;
 
     fun init_module(publisher: &signer) {
         let state_object_signer = &state_object::object_signer();

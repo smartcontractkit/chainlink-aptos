@@ -136,7 +136,7 @@ module ccip_onramp::onramp {
     const E_DEST_CHAIN_ARGUMENT_MISMATCH: u64 = 2;
     const E_INVALID_DEST_CHAIN_SELECTOR: u64 = 3;
     const E_UNKNOWN_DEST_CHAIN_SELECTOR: u64 = 4;
-    const E_DEST_CHAIN_NOT_ENABLED: u64 = 5;
+    const E_UNKNOWN_FUNCTION: u64 = 5;
     const E_SENDER_NOT_ALLOWED: u64 = 6;
     const E_ONLY_CALLABLE_BY_OWNER_OR_ALLOWLIST_ADMIN: u64 = 7;
     const E_INVALID_ALLOWLIST_REQUEST: u64 = 8;
@@ -151,7 +151,6 @@ module ccip_onramp::onramp {
     const E_UNEXPECTED_FUNGIBLE_ASSET: u64 = 17;
     const E_FEE_AGGREGATOR_NOT_SET: u64 = 18;
     const E_MUST_BE_CALLED_BY_ROUTER: u64 = 19;
-    const E_UNKNOWN_FUNCTION: u64 = 20;
 
     #[view]
     public fun type_and_version(): String {
