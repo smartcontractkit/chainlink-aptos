@@ -12,18 +12,8 @@ jobs:
           CLI_VERSION: 7.2.0
       - name: Update movefmt
         run: aptos update movefmt --target-version 1.0.7 # Fix version to prevent accidentally breaking the CI
-      - name: Run movefmt ccip
-        working-directory: contracts/ccip
-        run: movefmt
-      - name: Run movefmt large_packages
-        working-directory: contracts/large_packages
-        run: movefmt
-      - name: Run movefmt mcms
-        working-directory: contracts/mcms
-        run: movefmt
-      - name: Run movefmt platform
-        working-directory: contracts/platform
-        run: movefmt
+      - name: Run movefmt
+        run: make fmt
       - name: Check if any files have been changed
         run: |
           if ! git diff --quiet HEAD; then
