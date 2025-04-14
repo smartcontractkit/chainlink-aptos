@@ -14,7 +14,6 @@ module mcms::mcms_registry {
     use std::smart_table::{Self, SmartTable};
     use std::string::{Self, String};
     use std::type_info::{Self, TypeInfo};
-    use std::vector;
 
     use mcms::mcms_account;
 
