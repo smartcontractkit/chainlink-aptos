@@ -79,7 +79,7 @@ func Compile(address aptos.AccountAddress, mcmsAddress aptos.AccountAddress, reg
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
 	if registerMCMSEntrypoints {
-		namedAddresses["mcms_register_entrypoints"] = address
+		namedAddresses["mcms_register_entrypoints"] = aptos.AccountOne
 	}
 	// Compile using CLI
 	return compile.CompilePackage(contracts.CCIP, namedAddresses)
@@ -110,7 +110,7 @@ func DeployToObject(
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
 	if registerMCMSEntrypoints {
-		namedAddresses["mcms_register_entrypoints"] = mcmsAddress
+		namedAddresses["mcms_register_entrypoints"] = aptos.AccountOne
 	}
 	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.CCIP, namedAddresses)
 	if err != nil {

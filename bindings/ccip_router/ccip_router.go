@@ -45,7 +45,7 @@ func Compile(ccipAddress, mcmsAddress aptos.AccountAddress, registerMCMSEntrypoi
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
 	if registerMCMSEntrypoints {
-		namedAddresses["mcms_register_entrypoints"] = ccipAddress
+		namedAddresses["mcms_register_entrypoints"] = aptos.AccountOne
 	}
 	// Compile using CLI
 	return compile.CompilePackage(contracts.CCIPRouter, namedAddresses)
