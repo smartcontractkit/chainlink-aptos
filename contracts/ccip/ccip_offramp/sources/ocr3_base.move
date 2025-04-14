@@ -1,4 +1,4 @@
-module ccip::ocr3_base {
+module ccip_offramp::ocr3_base {
     use std::account;
     use std::aptos_hash;
     use std::bit_vector;
@@ -69,7 +69,7 @@ module ccip::ocr3_base {
     const E_NO_TRANSMITTERS: u64 = 6;
     const E_REPEATED_SIGNERS: u64 = 7;
     const E_REPEATED_TRANSMITTERS: u64 = 8;
-    const E_ORACLE_CANNOT_BE_ZERO_ADDRESS: u64 = 9;
+    const E_FORKED_CHAIN: u64 = 9;
     const E_CONFIG_DIGEST_MISMATCH: u64 = 10;
     const E_UNAUTHORIZED_TRANSMITTER: u64 = 11;
     const E_WRONG_NUMBER_OF_SIGNATURES: u64 = 12;
@@ -80,9 +80,6 @@ module ccip::ocr3_base {
     const E_UNAUTHORIZED_SIGNER: u64 = 17;
     const E_NON_UNIQUE_SIGNATURES: u64 = 18;
     const E_INVALID_SIGNATURE: u64 = 19;
-    const E_FORKED_CHAIN: u64 = 20;
-    const E_INVALID_V_SIGNATURE: u64 = 21;
-    const E_UNKNOWN_PLUGIN_TYPE: u64 = 22;
 
     public fun new(event_account: &signer): OCR3BaseState {
         OCR3BaseState {

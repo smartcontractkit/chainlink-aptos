@@ -2,13 +2,13 @@ package aptos
 
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/auth.move --output ./bindings/ccip/auth
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/fee_quoter.move --output ./bindings/ccip/fee_quoter
-//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/ocr3_base.move --output ./bindings/ccip/ocr3_base
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/receiver_registry.move --output ./bindings/ccip/receiver_registry
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/rmn_remote.move --output ./bindings/ccip/rmn_remote
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip/sources/token_admin_registry.move --output ./bindings/ccip/token_admin_registry
 
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip_onramp/sources/onramp.move --output ./bindings/ccip_onramp/onramp
-//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip_offramp/sources/offramp.move --output ./bindings/ccip_offramp/offramp --externalStructs ccip::ocr3_base::OCRConfig=github.com/smartcontractkit/chainlink-aptos/bindings/ccip/ocr3_base
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip_offramp/sources/offramp.move --output ./bindings/ccip_offramp/offramp --externalStructs ccip_offramp::ocr3_base::OCRConfig=github.com/smartcontractkit/chainlink-aptos/bindings/ccip_offramp/ocr3_base
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,RMN --input ./contracts/ccip/ccip_offramp/sources/ocr3_base.move --output ./bindings/ccip_offramp/ocr3_base
 
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/ccip/ccip_router/sources/router.move --output ./bindings/ccip_router/router
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/ccip/ccip_dummy_receiver/sources/dummy_receiver.move --output ./bindings/ccip_dummy_receiver/dummy_receiver
