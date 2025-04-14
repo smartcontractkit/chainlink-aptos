@@ -14,7 +14,6 @@ module mcms::mcms_registry {
     use std::smart_table::{Self, SmartTable};
     use std::string::{Self, String};
     use std::type_info::{Self, TypeInfo};
-    use std::vector;
 
     use mcms::mcms_account;
 
@@ -732,32 +731,5 @@ module mcms::mcms_registry {
     #[test_only]
     public fun init_module_for_testing(publisher: &signer) {
         init_module(publisher);
-    }
-
-    #[test_only]
-    public fun test_start_dispatch(
-        callback_address: address,
-        callback_module_name: String,
-        callback_function: String,
-        data: vector<u8>
-    ): Object<Metadata> acquires RegistryState, OwnerRegistration {
-        start_dispatch(
-            callback_address,
-            callback_module_name,
-            callback_function,
-            data
-        )
-    }
-
-    #[test_only]
-    public fun test_finish_dispatch(callback_address: address) acquires RegistryState {
-        finish_dispatch(callback_address);
-    }
-
-    #[test_only]
-    public fun test_create_owner_for_new_code_object(
-        new_owner_seed: vector<u8>
-    ): signer acquires RegistryState {
-        create_owner_for_new_code_object(new_owner_seed)
     }
 }

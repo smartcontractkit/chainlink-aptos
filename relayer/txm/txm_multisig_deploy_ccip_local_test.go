@@ -343,14 +343,14 @@ func runDeployMCMSAndCCIPInChunks(t *testing.T, logger logger.Logger, rpcURL str
 	scheduleAndExecuteOperations(t, logger, txm, allOperations, proposerSigners, deployerAddress, deployerPublicKeyHex, role, deployChainIdBig, delay, salt)
 
 	// Verify deployment was successful
-	onrampTypeAndVersionPayload := CreateViewPayload(ccipObjectAddress.String(), "onramp", "type_and_version",
+	receiverRegistryTypeAndVersionPayload := CreateViewPayload(ccipObjectAddress.String(), "receiver_registry", "type_and_version",
 		[]aptos.TypeTag{}, [][]byte{})
-	result, err := deployClient.View(onrampTypeAndVersionPayload)
+	result, err := deployClient.View(receiverRegistryTypeAndVersionPayload)
 	require.NoError(t, err)
 
 	version := result[0].(string)
-	require.Equal(t, version, "OnRamp 1.6.0")
-	logger.Debugw("Successfully deployed onramp module via chunks", "version", result)
+	require.Equal(t, version, "ReceiverRegistry 1.6.0")
+	logger.Debugw("Successfully deployed receiver_registry module via chunks", "version", result)
 
 	// ---------------------------------------------
 	// Now test upgrading the contract with a new version
@@ -360,16 +360,16 @@ func runDeployMCMSAndCCIPInChunks(t *testing.T, logger logger.Logger, rpcURL str
 	projectRoot, err := filepath.Abs("../..")
 	require.NoError(t, err)
 
-	// Directly modify the existing onramp.move file
-	onrampFilePath := filepath.Join(projectRoot, "contracts", "ccip", "ccip", "sources", "onramp.move")
-	logger.Debugw("Using absolute path for onramp.move", "path", onrampFilePath)
+	// Directly modify the existing receiver_registry.move file
+	receiverRegistryFilePath := filepath.Join(projectRoot, "contracts", "ccip", "ccip", "sources", "receiver_registry.move")
+	logger.Debugw("Using absolute path for receiver_registry.move", "path", receiverRegistryFilePath)
 
 	// Read and backup the original content
-	originalContent, err := os.ReadFile(onrampFilePath)
+	originalContent, err := os.ReadFile(receiverRegistryFilePath)
 	require.NoError(t, err)
 
 	// Create backup file
-	backupFilePath := onrampFilePath + ".bak"
+	backupFilePath := receiverRegistryFilePath + ".bak"
 	err = os.WriteFile(backupFilePath, originalContent, 0644)
 	require.NoError(t, err)
 
@@ -377,29 +377,29 @@ func runDeployMCMSAndCCIPInChunks(t *testing.T, logger logger.Logger, rpcURL str
 	modifiedContent := bytes.Replace(
 		originalContent,
 		[]byte(version),
-		[]byte("OnRamp 2.0"),
+		[]byte("ReceiverRegistry 2.0"),
 		1,
 	)
 
 	// Write the modified content
-	err = os.WriteFile(onrampFilePath, modifiedContent, 0644)
+	err = os.WriteFile(receiverRegistryFilePath, modifiedContent, 0644)
 	require.NoError(t, err)
 
 	// Make sure to restore the original file at the end of the test
 	defer func() {
 		// Restore the original file content
-		err := os.WriteFile(onrampFilePath, originalContent, 0644)
+		err := os.WriteFile(receiverRegistryFilePath, originalContent, 0644)
 		if err != nil {
-			logger.Errorw("Failed to restore original onramp.move file", "error", err)
+			logger.Errorw("Failed to restore original receiver_registry.move file", "error", err)
 		} else {
-			logger.Debugw("Successfully restored original onramp.move file")
+			logger.Debugw("Successfully restored original receiver_registry.move file")
 		}
 
 		// Remove the backup file
 		_ = os.Remove(backupFilePath)
 	}()
 
-	logger.Debugw("Modified existing onramp.move file for upgrade test", "path", onrampFilePath)
+	logger.Debugw("Modified existing receiver_registry.move file for upgrade test", "path", receiverRegistryFilePath)
 
 	upgradeCompileResult := testutils.CompileMovePackage(t, filepath.Join("ccip", "ccip"), namedAddresses, modules)
 
@@ -429,14 +429,14 @@ func runDeployMCMSAndCCIPInChunks(t *testing.T, logger logger.Logger, rpcURL str
 		deployerAddress, deployerPublicKeyHex, role, deployChainIdBig, delay, upgradeSalt)
 
 	// Verify upgrade was successful
-	updatedVersionPayload := CreateViewPayload(ccipObjectAddress.String(), "onramp", "type_and_version",
+	updatedVersionPayload := CreateViewPayload(ccipObjectAddress.String(), "receiver_registry", "type_and_version",
 		[]aptos.TypeTag{}, [][]byte{})
 	updatedResult, err := deployClient.View(updatedVersionPayload)
 	require.NoError(t, err)
 
 	updatedVersion := updatedResult[0].(string)
-	require.Equal(t, "OnRamp 2.0", updatedVersion)
-	logger.Infow("Successfully upgraded onramp module", "previousVersion", version, "newVersion", updatedVersion)
+	require.Equal(t, "ReceiverRegistry 2.0", updatedVersion)
+	logger.Infow("Successfully upgraded receiver_registry module", "previousVersion", version, "newVersion", updatedVersion)
 }
 
 // serializeStageCodeChunkAndUpgradeObjectCodeParams serializes parameters for mcms_deployer::stage_code_chunk_and_upgrade_object_code
@@ -495,9 +495,9 @@ func GetNamedAddressesAndModules(ccipObjectAddress, deployMcmsAccount aptos.Acco
 	}
 
 	modules := []string{
-		"ownable", "merkle_proof", "allowlist", "client", "eth_abi", "state_object", "internal",
-		"auth", "fee_quoter", "ocr3_base", "receiver_registry", "receiver_dispatcher", "rmn_remote",
-		"token_admin_registry", "token_admin_dispatcher", "onramp", "offramp",
+		"ownable", "merkle_proof", "allowlist", "client", "eth_abi", "state_object",
+		"auth", "nonce_manager", "fee_quoter", "ocr3_base", "receiver_registry", "receiver_dispatcher", "rmn_remote",
+		"token_admin_registry", "token_admin_dispatcher",
 	}
 
 	return namedAddresses, modules
