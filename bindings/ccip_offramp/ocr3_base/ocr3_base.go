@@ -35,10 +35,10 @@ type Ocr3BaseEncoder interface {
 	HashReport(report []byte, configDigest []byte, sequenceBytes []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"ocr3_base","name":"deserialize_sequence_bytes","parameters":[{"name":"sequence_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"ocr3_base","name":"hash_report","parameters":[{"name":"report","type":"vector\u003cu8\u003e"},{"name":"config_digest","type":"vector\u003cu8\u003e"},{"name":"sequence_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"ocr3_base","name":"new","parameters":null},{"package":"ccip","module":"ocr3_base","name":"ocr_plugin_type_commit","parameters":null},{"package":"ccip","module":"ocr3_base","name":"ocr_plugin_type_execution","parameters":null}]`
+const FunctionInfo = `[{"package":"ccip_offramp","module":"ocr3_base","name":"deserialize_sequence_bytes","parameters":[{"name":"sequence_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip_offramp","module":"ocr3_base","name":"hash_report","parameters":[{"name":"report","type":"vector\u003cu8\u003e"},{"name":"config_digest","type":"vector\u003cu8\u003e"},{"name":"sequence_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip_offramp","module":"ocr3_base","name":"new","parameters":null},{"package":"ccip_offramp","module":"ocr3_base","name":"ocr_plugin_type_commit","parameters":null},{"package":"ccip_offramp","module":"ocr3_base","name":"ocr_plugin_type_execution","parameters":null}]`
 
 func NewOcr3Base(address aptos.AccountAddress, client aptos.AptosRpcClient) Ocr3BaseInterface {
-	contract := bind.NewBoundContract(address, "ccip", "ocr3_base", client)
+	contract := bind.NewBoundContract(address, "ccip_offramp", "ocr3_base", client)
 	return Ocr3BaseContract{
 		BoundContract:   contract,
 		ocr3BaseEncoder: ocr3BaseEncoder{BoundContract: contract},

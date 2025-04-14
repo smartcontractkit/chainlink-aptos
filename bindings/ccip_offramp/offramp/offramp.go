@@ -10,7 +10,7 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk/api"
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
-	module_ocr3_base "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/ocr3_base"
+	module_ocr3_base "github.com/smartcontractkit/chainlink-aptos/bindings/ccip_offramp/ocr3_base"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 )
 
