@@ -241,12 +241,12 @@ module ccip::token_admin_registry {
 
         let current_key_opt = token_configs.next_key(&start_key);
         if (max_count == 0 || current_key_opt.is_none()) {
-            return (result, start_key, false)
+            return (result, start_key, current_key_opt.is_some())
         };
 
         let current_key = *current_key_opt.borrow();
 
-        for (i in 0..max_count) {
+        for (i in 0..(max_count - 1)) {
             result.push_back(current_key);
 
             let next_key_opt = token_configs.next_key(&current_key);
@@ -255,15 +255,11 @@ module ccip::token_admin_registry {
             };
 
             current_key = *next_key_opt.borrow();
-
-            // Check if there are more tokens after this batch
-            if (i == max_count - 1) {
-                let has_more = token_configs.next_key(&current_key).is_some();
-                return (result, current_key, has_more)
-            }
         };
 
-        (result, current_key, true)
+        // Check if there are more tokens for final max count
+        let has_more = token_configs.next_key(&current_key).is_some();
+        (result, current_key, has_more)
     }
 
     // ================================================================
