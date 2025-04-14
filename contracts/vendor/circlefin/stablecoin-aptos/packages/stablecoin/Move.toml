@@ -1,0 +1,24 @@
+[package]
+name = "Stablecoin"
+version = "1.0.0"
+upgrade_policy = "compatible"
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-core.git"
+rev = "mainnet"
+subdir = "aptos-move/framework/aptos-framework"
+
+[dependencies.AptosExtensions]
+local = "../aptos_extensions"
+
+[addresses]
+stablecoin = "_"
+aptos_extensions = "_"
+deployer = "_"
+
+[dev-addresses]
+stablecoin = "0x94ae22c4ecec81b458095a7ae2a5de2ac81d2bff9c8633e029194424e422db3b"
+aptos_extensions = "0x87899b097b766da6838867c873185c90d7d5661ebfe2ce0e985b53a2b0ed9e28"
+deployer = "0xaa03675e2e13043f3d591804b0d8a8ffb775d14b11ca0831866ecdf48df26713"
+
+[dev-dependencies]

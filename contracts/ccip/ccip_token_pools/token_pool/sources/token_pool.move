@@ -610,7 +610,6 @@ module ccip_token_pool::token_pool_test {
     use std::string;
     use std::primary_fungible_store;
     use std::fungible_asset;
-    use std::vector;
     use ccip_token_pool::token_pool::TokenPoolState;
 
     use ccip_token_pool::token_pool;
@@ -628,8 +627,8 @@ module ccip_token_pool::token_pool_test {
     fun initialize_correctly_sets_state(owner: &signer) {
         let state = set_up_test(owner);
 
-        assert!(token_pool::get_token_decimals(&state) == Decimals, 1);
-        assert!(token_pool::is_supported_chain(&state, DefaultRemoteChain), 1);
+        assert!(token_pool::get_token_decimals(&state) == Decimals);
+        assert!(token_pool::is_supported_chain(&state, DefaultRemoteChain));
 
         token_pool::destroy_token_pool(state);
     }
@@ -640,24 +639,14 @@ module ccip_token_pool::token_pool_test {
         let new_remote_pool = b"new_pool";
 
         assert!(
-            !token_pool::is_remote_pool(&state, DefaultRemoteChain, new_remote_pool),
-            1
+            !token_pool::is_remote_pool(&state, DefaultRemoteChain, new_remote_pool)
         );
-        assert!(
-            token_pool::get_remote_pools(&state, DefaultRemoteChain).length() == 1,
-            1
-        );
+        assert!(token_pool::get_remote_pools(&state, DefaultRemoteChain).length() == 1);
 
         token_pool::add_remote_pool(&mut state, DefaultRemoteChain, new_remote_pool);
 
-        assert!(
-            token_pool::is_remote_pool(&state, DefaultRemoteChain, new_remote_pool),
-            1
-        );
-        assert!(
-            token_pool::get_remote_pools(&state, DefaultRemoteChain).length() == 2,
-            1
-        );
+        assert!(token_pool::is_remote_pool(&state, DefaultRemoteChain, new_remote_pool));
+        assert!(token_pool::get_remote_pools(&state, DefaultRemoteChain).length() == 2);
 
         token_pool::destroy_token_pool(state);
     }
