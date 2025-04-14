@@ -36,7 +36,9 @@ type MCMS interface {
 	BypasserRole(opts *bind.CallOpts) (byte, error)
 	CancellerRole(opts *bind.CallOpts) (byte, error)
 	ProposerRole(opts *bind.CallOpts) (byte, error)
+	TimelockRole(opts *bind.CallOpts) (byte, error)
 	IsValidRole(opts *bind.CallOpts, role byte) (bool, error)
+	ZeroHash(opts *bind.CallOpts) ([]byte, error)
 	TimelockGetBlockedFunction(opts *bind.CallOpts, index uint64) (Function, error)
 	TimelockIsOperation(opts *bind.CallOpts, id []byte) (bool, error)
 	TimelockIsOperationPending(opts *bind.CallOpts, id []byte) (bool, error)
@@ -71,7 +73,9 @@ type MCMSEncoder interface {
 	BypasserRole() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CancellerRole() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ProposerRole() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockRole() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	IsValidRole(role byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ZeroHash() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TimelockGetBlockedFunction(index uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TimelockIsOperation(id []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TimelockIsOperationPending(id []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -88,32 +92,29 @@ type MCMSEncoder interface {
 	CreateMultisig(role byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	EcdsaRecoverEvmAddr(ethSignedMessageHash []byte, signature []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	DispatchToTimelock(role byte, functionName string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	Dispatch(target aptos.AccountAddress, moduleName string, functionName string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	DispatchToSelf(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	DispatchToAccount(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	DispatchToDeployer(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	DispatchToRegistry(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	VerifyMerkleProof(proof [][]byte, root []byte, leaf []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ComputeEthMessageHash(root []byte, validUntil uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	HashOpLeaf(domainSeparator []byte, op Op) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	HashMetadataLeaf(metadata RootMetadata) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	AssertBypasserRole(role byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	AssertBypasserOrProposerRole(role byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	AssertBypasserOrCancellerRole(role byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Role(rootMetadata RootMetadata) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ChainId(rootMetadata RootMetadata) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	RootMetadataMultisig(rootMetadata RootMetadata) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	PreOpCount(rootMetadata RootMetadata) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	PostOpCount(rootMetadata RootMetadata) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	OverridePreviousRoot(rootMetadata RootMetadata) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	TimelockScheduleBatch(targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte, predecessor []byte, salt []byte, delay uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockScheduleBatch(role byte, targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte, predecessor []byte, salt []byte, delay uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TimelockBeforeCall(id []byte, predecessor []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TimelockAfterCall(id []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	TimelockBypasserExecuteBatch(targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	TimelockCancel(id []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	TimelockUpdateMinDelay(newMinDelay uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	TimelockBlockFunction(target aptos.AccountAddress, moduleName string, functionName string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	TimelockUnblockFunction(target aptos.AccountAddress, moduleName string, functionName string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockBypasserExecuteBatch(role byte, targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockDispatch(target aptos.AccountAddress, moduleName string, functionName string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockDispatchToSelf(functionName string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockDispatchToAccount(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockDispatchToDeployer(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockDispatchToRegistry(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockCancel(role byte, id []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockUpdateMinDelay(role byte, newMinDelay uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockBlockFunction(role byte, target aptos.AccountAddress, moduleName string, functionName string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockUnblockFunction(role byte, target aptos.AccountAddress, moduleName string, functionName string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CreateCalls(targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	HashOperationBatch(calls []Call, predecessor []byte, salt []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	FunctionName(function Function) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -122,7 +123,7 @@ type MCMSEncoder interface {
 	Data(call Call) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"mcms","module":"mcms","name":"assert_bypasser_or_canceller_role","parameters":[{"name":"role","type":"u8"}]},{"package":"mcms","module":"mcms","name":"assert_bypasser_or_proposer_role","parameters":[{"name":"role","type":"u8"}]},{"package":"mcms","module":"mcms","name":"assert_bypasser_role","parameters":[{"name":"role","type":"u8"}]},{"package":"mcms","module":"mcms","name":"chain_id","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"mcms","module":"mcms","name":"compute_eth_message_hash","parameters":[{"name":"root","type":"vector\u003cu8\u003e"},{"name":"valid_until","type":"u64"}]},{"package":"mcms","module":"mcms","name":"create_calls","parameters":[{"name":"targets","type":"vector\u003caddress\u003e"},{"name":"module_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"function_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"datas","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"mcms","module":"mcms","name":"create_multisig","parameters":[{"name":"role","type":"u8"}]},{"package":"mcms","module":"mcms","name":"data","parameters":[{"name":"call","type":"Call"}]},{"package":"mcms","module":"mcms","name":"dispatch","parameters":[{"name":"target","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function_name","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"dispatch_to_account","parameters":[{"name":"function_name_bytes","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"dispatch_to_deployer","parameters":[{"name":"function_name_bytes","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"dispatch_to_registry","parameters":[{"name":"function_name_bytes","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"dispatch_to_self","parameters":[{"name":"function_name_bytes","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"dispatch_to_timelock","parameters":[{"name":"role","type":"u8"},{"name":"function_name","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"ecdsa_recover_evm_addr","parameters":[{"name":"eth_signed_message_hash","type":"vector\u003cu8\u003e"},{"name":"signature","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"execute","parameters":[{"name":"role","type":"u8"},{"name":"chain_id","type":"u256"},{"name":"multisig_addr","type":"address"},{"name":"nonce","type":"u64"},{"name":"to","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function_name","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"proof","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"mcms","module":"mcms","name":"function_name","parameters":[{"name":"function","type":"Function"}]},{"package":"mcms","module":"mcms","name":"hash_metadata_leaf","parameters":[{"name":"metadata","type":"RootMetadata"}]},{"package":"mcms","module":"mcms","name":"hash_op_leaf","parameters":[{"name":"domain_separator","type":"vector\u003cu8\u003e"},{"name":"op","type":"Op"}]},{"package":"mcms","module":"mcms","name":"hash_operation_batch","parameters":[{"name":"calls","type":"vector\u003cCall\u003e"},{"name":"predecessor","type":"vector\u003cu8\u003e"},{"name":"salt","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"module_name","parameters":[{"name":"function","type":"Function"}]},{"package":"mcms","module":"mcms","name":"override_previous_root","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"mcms","module":"mcms","name":"post_op_count","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"mcms","module":"mcms","name":"pre_op_count","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"mcms","module":"mcms","name":"role","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"mcms","module":"mcms","name":"root_metadata_multisig","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"mcms","module":"mcms","name":"set_config","parameters":[{"name":"role","type":"u8"},{"name":"signer_addresses","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"signer_groups","type":"vector\u003cu8\u003e"},{"name":"group_quorums","type":"vector\u003cu8\u003e"},{"name":"group_parents","type":"vector\u003cu8\u003e"},{"name":"clear_root","type":"bool"}]},{"package":"mcms","module":"mcms","name":"set_root","parameters":[{"name":"role","type":"u8"},{"name":"root","type":"vector\u003cu8\u003e"},{"name":"valid_until","type":"u64"},{"name":"chain_id","type":"u256"},{"name":"multisig_addr","type":"address"},{"name":"pre_op_count","type":"u64"},{"name":"post_op_count","type":"u64"},{"name":"override_previous_root","type":"bool"},{"name":"metadata_proof","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"signatures","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"mcms","module":"mcms","name":"target","parameters":[{"name":"function","type":"Function"}]},{"package":"mcms","module":"mcms","name":"timelock_after_call","parameters":[{"name":"id","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"timelock_before_call","parameters":[{"name":"id","type":"vector\u003cu8\u003e"},{"name":"predecessor","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"timelock_block_function","parameters":[{"name":"target","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function_name","type":"0x1::string::String"}]},{"package":"mcms","module":"mcms","name":"timelock_bypasser_execute_batch","parameters":[{"name":"targets","type":"vector\u003caddress\u003e"},{"name":"module_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"function_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"datas","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"mcms","module":"mcms","name":"timelock_cancel","parameters":[{"name":"id","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"timelock_execute_batch","parameters":[{"name":"targets","type":"vector\u003caddress\u003e"},{"name":"module_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"function_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"datas","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"predecessor","type":"vector\u003cu8\u003e"},{"name":"salt","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"timelock_schedule_batch","parameters":[{"name":"targets","type":"vector\u003caddress\u003e"},{"name":"module_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"function_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"datas","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"predecessor","type":"vector\u003cu8\u003e"},{"name":"salt","type":"vector\u003cu8\u003e"},{"name":"delay","type":"u64"}]},{"package":"mcms","module":"mcms","name":"timelock_unblock_function","parameters":[{"name":"target","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function_name","type":"0x1::string::String"}]},{"package":"mcms","module":"mcms","name":"timelock_update_min_delay","parameters":[{"name":"new_min_delay","type":"u64"}]},{"package":"mcms","module":"mcms","name":"verify_merkle_proof","parameters":[{"name":"proof","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"root","type":"vector\u003cu8\u003e"},{"name":"leaf","type":"vector\u003cu8\u003e"}]}]`
+const FunctionInfo = `[{"package":"mcms","module":"mcms","name":"chain_id","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"mcms","module":"mcms","name":"compute_eth_message_hash","parameters":[{"name":"root","type":"vector\u003cu8\u003e"},{"name":"valid_until","type":"u64"}]},{"package":"mcms","module":"mcms","name":"create_calls","parameters":[{"name":"targets","type":"vector\u003caddress\u003e"},{"name":"module_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"function_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"datas","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"mcms","module":"mcms","name":"create_multisig","parameters":[{"name":"role","type":"u8"}]},{"package":"mcms","module":"mcms","name":"data","parameters":[{"name":"call","type":"Call"}]},{"package":"mcms","module":"mcms","name":"dispatch_to_timelock","parameters":[{"name":"role","type":"u8"},{"name":"function_name","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"ecdsa_recover_evm_addr","parameters":[{"name":"eth_signed_message_hash","type":"vector\u003cu8\u003e"},{"name":"signature","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"execute","parameters":[{"name":"role","type":"u8"},{"name":"chain_id","type":"u256"},{"name":"multisig_addr","type":"address"},{"name":"nonce","type":"u64"},{"name":"to","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function_name","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"proof","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"mcms","module":"mcms","name":"function_name","parameters":[{"name":"function","type":"Function"}]},{"package":"mcms","module":"mcms","name":"hash_metadata_leaf","parameters":[{"name":"metadata","type":"RootMetadata"}]},{"package":"mcms","module":"mcms","name":"hash_op_leaf","parameters":[{"name":"domain_separator","type":"vector\u003cu8\u003e"},{"name":"op","type":"Op"}]},{"package":"mcms","module":"mcms","name":"hash_operation_batch","parameters":[{"name":"calls","type":"vector\u003cCall\u003e"},{"name":"predecessor","type":"vector\u003cu8\u003e"},{"name":"salt","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"module_name","parameters":[{"name":"function","type":"Function"}]},{"package":"mcms","module":"mcms","name":"override_previous_root","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"mcms","module":"mcms","name":"post_op_count","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"mcms","module":"mcms","name":"pre_op_count","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"mcms","module":"mcms","name":"role","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"mcms","module":"mcms","name":"root_metadata_multisig","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"mcms","module":"mcms","name":"set_config","parameters":[{"name":"role","type":"u8"},{"name":"signer_addresses","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"signer_groups","type":"vector\u003cu8\u003e"},{"name":"group_quorums","type":"vector\u003cu8\u003e"},{"name":"group_parents","type":"vector\u003cu8\u003e"},{"name":"clear_root","type":"bool"}]},{"package":"mcms","module":"mcms","name":"set_root","parameters":[{"name":"role","type":"u8"},{"name":"root","type":"vector\u003cu8\u003e"},{"name":"valid_until","type":"u64"},{"name":"chain_id","type":"u256"},{"name":"multisig_addr","type":"address"},{"name":"pre_op_count","type":"u64"},{"name":"post_op_count","type":"u64"},{"name":"override_previous_root","type":"bool"},{"name":"metadata_proof","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"signatures","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"mcms","module":"mcms","name":"target","parameters":[{"name":"function","type":"Function"}]},{"package":"mcms","module":"mcms","name":"timelock_after_call","parameters":[{"name":"id","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"timelock_before_call","parameters":[{"name":"id","type":"vector\u003cu8\u003e"},{"name":"predecessor","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"timelock_block_function","parameters":[{"name":"role","type":"u8"},{"name":"target","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function_name","type":"0x1::string::String"}]},{"package":"mcms","module":"mcms","name":"timelock_bypasser_execute_batch","parameters":[{"name":"role","type":"u8"},{"name":"targets","type":"vector\u003caddress\u003e"},{"name":"module_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"function_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"datas","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"mcms","module":"mcms","name":"timelock_cancel","parameters":[{"name":"role","type":"u8"},{"name":"id","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"timelock_dispatch","parameters":[{"name":"target","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function_name","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"timelock_dispatch_to_account","parameters":[{"name":"function_name_bytes","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"timelock_dispatch_to_deployer","parameters":[{"name":"function_name_bytes","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"timelock_dispatch_to_registry","parameters":[{"name":"function_name_bytes","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"timelock_dispatch_to_self","parameters":[{"name":"function_name","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"timelock_execute_batch","parameters":[{"name":"targets","type":"vector\u003caddress\u003e"},{"name":"module_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"function_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"datas","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"predecessor","type":"vector\u003cu8\u003e"},{"name":"salt","type":"vector\u003cu8\u003e"}]},{"package":"mcms","module":"mcms","name":"timelock_schedule_batch","parameters":[{"name":"role","type":"u8"},{"name":"targets","type":"vector\u003caddress\u003e"},{"name":"module_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"function_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"datas","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"predecessor","type":"vector\u003cu8\u003e"},{"name":"salt","type":"vector\u003cu8\u003e"},{"name":"delay","type":"u64"}]},{"package":"mcms","module":"mcms","name":"timelock_unblock_function","parameters":[{"name":"role","type":"u8"},{"name":"target","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function_name","type":"0x1::string::String"}]},{"package":"mcms","module":"mcms","name":"timelock_update_min_delay","parameters":[{"name":"role","type":"u8"},{"name":"new_min_delay","type":"u64"}]},{"package":"mcms","module":"mcms","name":"verify_merkle_proof","parameters":[{"name":"proof","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"root","type":"vector\u003cu8\u003e"},{"name":"leaf","type":"vector\u003cu8\u003e"}]}]`
 
 func NewMCMS(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMS {
 	contract := bind.NewBoundContract(address, "mcms", "mcms", client)
@@ -595,6 +596,27 @@ func (c MCMSContract) ProposerRole(opts *bind.CallOpts) (byte, error) {
 	return r0, nil
 }
 
+func (c MCMSContract) TimelockRole(opts *bind.CallOpts) (byte, error) {
+	module, function, typeTags, args, err := c.mcmsEncoder.TimelockRole()
+	if err != nil {
+		return *new(byte), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(byte), err
+	}
+
+	var (
+		r0 byte
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(byte), err
+	}
+	return r0, nil
+}
+
 func (c MCMSContract) IsValidRole(opts *bind.CallOpts, role byte) (bool, error) {
 	module, function, typeTags, args, err := c.mcmsEncoder.IsValidRole(role)
 	if err != nil {
@@ -612,6 +634,27 @@ func (c MCMSContract) IsValidRole(opts *bind.CallOpts, role byte) (bool, error) 
 
 	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
 		return *new(bool), err
+	}
+	return r0, nil
+}
+
+func (c MCMSContract) ZeroHash(opts *bind.CallOpts) ([]byte, error) {
+	module, function, typeTags, args, err := c.mcmsEncoder.ZeroHash()
+	if err != nil {
+		return *new([]byte), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new([]byte), err
+	}
+
+	var (
+		r0 []byte
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new([]byte), err
 	}
 	return r0, nil
 }
@@ -940,12 +983,20 @@ func (c mcmsEncoder) ProposerRole() (bind.ModuleInformation, string, []aptos.Typ
 	return c.BoundContract.Encode("proposer_role", nil, []string{}, []any{})
 }
 
+func (c mcmsEncoder) TimelockRole() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("timelock_role", nil, []string{}, []any{})
+}
+
 func (c mcmsEncoder) IsValidRole(role byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("is_valid_role", nil, []string{
 		"u8",
 	}, []any{
 		role,
 	})
+}
+
+func (c mcmsEncoder) ZeroHash() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("zero_hash", nil, []string{}, []any{})
 }
 
 func (c mcmsEncoder) TimelockGetBlockedFunction(index uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
@@ -1124,60 +1175,6 @@ func (c mcmsEncoder) DispatchToTimelock(role byte, functionName string, data []b
 	})
 }
 
-func (c mcmsEncoder) Dispatch(target aptos.AccountAddress, moduleName string, functionName string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("dispatch", nil, []string{
-		"address",
-		"0x1::string::String",
-		"0x1::string::String",
-		"vector<u8>",
-	}, []any{
-		target,
-		moduleName,
-		functionName,
-		data,
-	})
-}
-
-func (c mcmsEncoder) DispatchToSelf(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("dispatch_to_self", nil, []string{
-		"vector<u8>",
-		"vector<u8>",
-	}, []any{
-		functionNameBytes,
-		data,
-	})
-}
-
-func (c mcmsEncoder) DispatchToAccount(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("dispatch_to_account", nil, []string{
-		"vector<u8>",
-		"vector<u8>",
-	}, []any{
-		functionNameBytes,
-		data,
-	})
-}
-
-func (c mcmsEncoder) DispatchToDeployer(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("dispatch_to_deployer", nil, []string{
-		"vector<u8>",
-		"vector<u8>",
-	}, []any{
-		functionNameBytes,
-		data,
-	})
-}
-
-func (c mcmsEncoder) DispatchToRegistry(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("dispatch_to_registry", nil, []string{
-		"vector<u8>",
-		"vector<u8>",
-	}, []any{
-		functionNameBytes,
-		data,
-	})
-}
-
 func (c mcmsEncoder) VerifyMerkleProof(proof [][]byte, root []byte, leaf []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("verify_merkle_proof", nil, []string{
 		"vector<vector<u8>>",
@@ -1215,30 +1212,6 @@ func (c mcmsEncoder) HashMetadataLeaf(metadata RootMetadata) (bind.ModuleInforma
 		"RootMetadata",
 	}, []any{
 		metadata,
-	})
-}
-
-func (c mcmsEncoder) AssertBypasserRole(role byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("assert_bypasser_role", nil, []string{
-		"u8",
-	}, []any{
-		role,
-	})
-}
-
-func (c mcmsEncoder) AssertBypasserOrProposerRole(role byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("assert_bypasser_or_proposer_role", nil, []string{
-		"u8",
-	}, []any{
-		role,
-	})
-}
-
-func (c mcmsEncoder) AssertBypasserOrCancellerRole(role byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("assert_bypasser_or_canceller_role", nil, []string{
-		"u8",
-	}, []any{
-		role,
 	})
 }
 
@@ -1290,8 +1263,9 @@ func (c mcmsEncoder) OverridePreviousRoot(rootMetadata RootMetadata) (bind.Modul
 	})
 }
 
-func (c mcmsEncoder) TimelockScheduleBatch(targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte, predecessor []byte, salt []byte, delay uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsEncoder) TimelockScheduleBatch(role byte, targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte, predecessor []byte, salt []byte, delay uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("timelock_schedule_batch", nil, []string{
+		"u8",
 		"vector<address>",
 		"vector<0x1::string::String>",
 		"vector<0x1::string::String>",
@@ -1300,6 +1274,7 @@ func (c mcmsEncoder) TimelockScheduleBatch(targets []aptos.AccountAddress, modul
 		"vector<u8>",
 		"u64",
 	}, []any{
+		role,
 		targets,
 		moduleNames,
 		functionNames,
@@ -1328,13 +1303,15 @@ func (c mcmsEncoder) TimelockAfterCall(id []byte) (bind.ModuleInformation, strin
 	})
 }
 
-func (c mcmsEncoder) TimelockBypasserExecuteBatch(targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsEncoder) TimelockBypasserExecuteBatch(role byte, targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("timelock_bypasser_execute_batch", nil, []string{
+		"u8",
 		"vector<address>",
 		"vector<0x1::string::String>",
 		"vector<0x1::string::String>",
 		"vector<vector<u8>>",
 	}, []any{
+		role,
 		targets,
 		moduleNames,
 		functionNames,
@@ -1342,40 +1319,102 @@ func (c mcmsEncoder) TimelockBypasserExecuteBatch(targets []aptos.AccountAddress
 	})
 }
 
-func (c mcmsEncoder) TimelockCancel(id []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("timelock_cancel", nil, []string{
+func (c mcmsEncoder) TimelockDispatch(target aptos.AccountAddress, moduleName string, functionName string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("timelock_dispatch", nil, []string{
+		"address",
+		"0x1::string::String",
+		"0x1::string::String",
 		"vector<u8>",
 	}, []any{
+		target,
+		moduleName,
+		functionName,
+		data,
+	})
+}
+
+func (c mcmsEncoder) TimelockDispatchToSelf(functionName string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("timelock_dispatch_to_self", nil, []string{
+		"0x1::string::String",
+		"vector<u8>",
+	}, []any{
+		functionName,
+		data,
+	})
+}
+
+func (c mcmsEncoder) TimelockDispatchToAccount(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("timelock_dispatch_to_account", nil, []string{
+		"vector<u8>",
+		"vector<u8>",
+	}, []any{
+		functionNameBytes,
+		data,
+	})
+}
+
+func (c mcmsEncoder) TimelockDispatchToDeployer(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("timelock_dispatch_to_deployer", nil, []string{
+		"vector<u8>",
+		"vector<u8>",
+	}, []any{
+		functionNameBytes,
+		data,
+	})
+}
+
+func (c mcmsEncoder) TimelockDispatchToRegistry(functionNameBytes []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("timelock_dispatch_to_registry", nil, []string{
+		"vector<u8>",
+		"vector<u8>",
+	}, []any{
+		functionNameBytes,
+		data,
+	})
+}
+
+func (c mcmsEncoder) TimelockCancel(role byte, id []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("timelock_cancel", nil, []string{
+		"u8",
+		"vector<u8>",
+	}, []any{
+		role,
 		id,
 	})
 }
 
-func (c mcmsEncoder) TimelockUpdateMinDelay(newMinDelay uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsEncoder) TimelockUpdateMinDelay(role byte, newMinDelay uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("timelock_update_min_delay", nil, []string{
+		"u8",
 		"u64",
 	}, []any{
+		role,
 		newMinDelay,
 	})
 }
 
-func (c mcmsEncoder) TimelockBlockFunction(target aptos.AccountAddress, moduleName string, functionName string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsEncoder) TimelockBlockFunction(role byte, target aptos.AccountAddress, moduleName string, functionName string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("timelock_block_function", nil, []string{
+		"u8",
 		"address",
 		"0x1::string::String",
 		"0x1::string::String",
 	}, []any{
+		role,
 		target,
 		moduleName,
 		functionName,
 	})
 }
 
-func (c mcmsEncoder) TimelockUnblockFunction(target aptos.AccountAddress, moduleName string, functionName string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c mcmsEncoder) TimelockUnblockFunction(role byte, target aptos.AccountAddress, moduleName string, functionName string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("timelock_unblock_function", nil, []string{
+		"u8",
 		"address",
 		"0x1::string::String",
 		"0x1::string::String",
 	}, []any{
+		role,
 		target,
 		moduleName,
 		functionName,
