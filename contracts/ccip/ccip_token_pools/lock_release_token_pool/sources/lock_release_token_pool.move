@@ -476,10 +476,12 @@ module lock_release_token_pool::lock_release_token_pool {
         if (function_bytes == b"add_remote_pool") {
             let remote_chain_selector = bcs_stream::deserialize_u64(&mut stream);
             let remote_pool_address = bcs_stream::deserialize_vector_u8(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
             add_remote_pool(&caller, remote_chain_selector, remote_pool_address);
         } else if (function_bytes == b"remove_remote_pool") {
             let remote_chain_selector = bcs_stream::deserialize_u64(&mut stream);
             let remote_pool_address = bcs_stream::deserialize_vector_u8(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
             remove_remote_pool(&caller, remote_chain_selector, remote_pool_address);
         } else if (function_bytes == b"apply_chain_updates") {
             let remote_chain_selectors_to_remove =
@@ -501,6 +503,7 @@ module lock_release_token_pool::lock_release_token_pool {
                 bcs_stream::deserialize_vector(
                     &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
                 );
+            bcs_stream::assert_is_consumed(&stream);
             apply_chain_updates(
                 &caller,
                 remote_chain_selectors_to_remove,
@@ -517,6 +520,7 @@ module lock_release_token_pool::lock_release_token_pool {
                 bcs_stream::deserialize_vector(
                     &mut stream, |stream| bcs_stream::deserialize_address(stream)
                 );
+            bcs_stream::assert_is_consumed(&stream);
             apply_allowlist_updates(&caller, removes, adds);
         } else if (function_bytes == b"set_chain_rate_limiter_configs") {
             let remote_chain_selectors =
@@ -547,6 +551,7 @@ module lock_release_token_pool::lock_release_token_pool {
                 bcs_stream::deserialize_vector(
                     &mut stream, |stream| bcs_stream::deserialize_u64(stream)
                 );
+            bcs_stream::assert_is_consumed(&stream);
             set_chain_rate_limiter_configs(
                 &caller,
                 remote_chain_selectors,
@@ -565,6 +570,7 @@ module lock_release_token_pool::lock_release_token_pool {
             let inbound_is_enabled = bcs_stream::deserialize_bool(&mut stream);
             let inbound_capacity = bcs_stream::deserialize_u64(&mut stream);
             let inbound_rate = bcs_stream::deserialize_u64(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
             set_chain_rate_limiter_config(
                 &caller,
                 remote_chain_selector,
@@ -577,8 +583,10 @@ module lock_release_token_pool::lock_release_token_pool {
             );
         } else if (function_bytes == b"transfer_ownership") {
             let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
             transfer_ownership(&caller, to);
         } else if (function_bytes == b"accept_ownership") {
+            bcs_stream::assert_is_consumed(&stream);
             accept_ownership(&caller);
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)

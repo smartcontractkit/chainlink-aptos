@@ -340,7 +340,7 @@ module ccip_router::router {
                 bcs_stream::deserialize_vector(
                     &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
                 );
-
+            bcs_stream::assert_is_consumed(&stream);
             set_on_ramp_versions(&caller, dest_chain_selectors, ramps_to_use);
         } else if (function_bytes == b"transfer_ownership") {
             let to = bcs_stream::deserialize_address(&mut stream);
