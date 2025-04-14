@@ -1,3 +1,11 @@
+/// The CCIP Router is the entrypoint for all CCIP messages.
+/// To add support for a new onRamp version, the following steps are required:
+/// 1. Develop and deploy a new OnRamp contract.
+/// 2. Upgrade the Router contract in place to add support for the new OnRamp version with a hard coded address.
+/// 3. Call the `set_on_ramp_versions` function to set the new OnRamp version for the destination chain.
+/// The Router will now route messages to the new OnRamp contract for the given destination chain(s). This method
+/// allows for lane-by-lane, config-based upgrades and even supports rollbacks to previous onRamp versions if needed.
+/// Customers are unaware of the onRamp versions being used.
 module ccip_router::router {
     use std::account::{Self, SignerCapability};
     use std::error;
