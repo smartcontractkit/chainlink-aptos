@@ -34,6 +34,10 @@ module ccip::state_object {
             error::invalid_state(E_NOT_OBJECT_DEPLOYMENT)
         );
 
+        init_module_internal(publisher);
+    }
+
+    inline fun init_module_internal(publisher: &signer) {
         let constructor_ref = object::create_named_object(publisher, b"CCIPStateObject");
 
         let extend_ref = object::generate_extend_ref(&constructor_ref);
@@ -75,5 +79,10 @@ module ccip::state_object {
     public(friend) fun object_signer(): signer acquires StateObjectRefs {
         let store = borrow_global<StateObjectRefs>(object_address());
         object::generate_signer_for_extending(&store.extend_ref)
+    }
+
+    #[test_only]
+    public fun init_module_for_testing(publisher: &signer) {
+        init_module_internal(publisher);
     }
 }

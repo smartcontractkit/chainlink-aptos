@@ -988,4 +988,43 @@ module ccip::token_admin_registry {
 
         option::none()
     }
+
+
+    #[test_only]
+    public fun init_module_for_testing(publisher: &signer) {
+        init_module(publisher);
+    }
+
+    #[test_only]
+    fun insert_token_addresses_for_test(token_addresses: vector<address>) acquires TokenAdminRegistryState {
+        let state = borrow_state_mut();
+
+        token_addresses.for_each(|token_address| {
+            state.token_configs.add(token_address, TokenConfig {
+                token_pool_address: @0x0,
+                administrator: @0x0,
+                pending_administrator: @0x0
+            });
+        });
+    }
+
+
+    #[test(publisher = @ccip)]
+    public fun test_get_all_configured_tokens(publisher: &signer) acquires TokenAdminRegistryState {
+        state_object::init_module_for_testing(publisher);
+        init_module_for_testing(publisher);
+
+        insert_token_addresses_for_test(vector[@0x1, @0x2, @0x3]);
+
+        let (res, next_key, has_more) = get_all_configured_tokens(@0x0, 0);
+        assert!(res.length() == 0);
+        assert!(next_key == @0x0);
+        assert!(has_more);
+
+        let (res, next_key, has_more) = get_all_configured_tokens(@0x0, 3);
+        std::debug::print(&res);
+        assert!(res.length() == 3);
+        assert!(next_key == @0x3);
+        assert!(!has_more);
+    }
 }
