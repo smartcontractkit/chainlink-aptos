@@ -39,7 +39,7 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 func Compile(ccipAddress, mcmsAddress aptos.AccountAddress, registerMCMSEntrypoints bool) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
-		"ccip_onramp":              ccipAddress,
+		"ccip_onramp":               ccipAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
@@ -53,7 +53,7 @@ func Compile(ccipAddress, mcmsAddress aptos.AccountAddress, registerMCMSEntrypoi
 func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIPOnramp {
 	return CCIPOnrampContract{
 		address: address,
-		onramp: module_onramp.NewOnramp(address, client),
+		onramp:  module_onramp.NewOnramp(address, client),
 	}
 }
 

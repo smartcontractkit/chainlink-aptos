@@ -1438,6 +1438,31 @@ module ccip::fee_quoter {
                 add_is_enabled,
                 remove_tokens
             )
+        } else if (function_bytes == b"update_prices") {
+            let source_tokens =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
+                );
+            let source_usd_per_token =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u256(stream)
+                );
+            let gas_dest_chain_selectors =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let gas_usd_per_unit_gas =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u256(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            update_prices(
+                &caller,
+                source_tokens,
+                source_usd_per_token,
+                gas_dest_chain_selectors,
+                gas_usd_per_unit_gas
+            )
         } else if (function_bytes == b"apply_premium_multiplier_wei_per_eth_updates") {
             let tokens =
                 bcs_stream::deserialize_vector(
