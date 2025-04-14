@@ -390,7 +390,8 @@ func GenerateMerkleTree(ops []Op, rootMetadata RootMetadata) (MerkleTree, error)
 
 func ExecuteBatchOperations(
 	t *testing.T, txm *AptosTxm, mcmsAddress string, deployerAddress string, deployerPublicKeyHex string,
-	ops []TimelockOperation, predecessor []byte, salt []byte) string {
+	ops []TimelockOperation, predecessor []byte, salt []byte, simulateTx bool,
+) string {
 
 	// Serialize vectors separately
 	targets := make([]aptos.AccountAddress, len(ops))
@@ -429,7 +430,7 @@ func ExecuteBatchOperations(
 			predecessor,
 			salt,
 		},
-		true,
+		simulateTx,
 	)
 	require.NoError(t, err)
 	return txId
@@ -541,7 +542,7 @@ func EnqueueSetRoot(
 func ScheduleSingleOperationAsDeployer(
 	t *testing.T, logger logger.Logger, txm *AptosTxm, mcmsAccount aptos.AccountAddress, deployerAddress string,
 	deployerPublicKeyHex string, ops []TimelockOperation, predecessor []byte, salt []byte, delay uint64,
-	role uint8, chainId *big.Int, nonce uint64, proof [][32]byte,
+	role uint8, chainId *big.Int, nonce uint64, proof [][32]byte, simulateTx bool,
 ) string {
 	if len(ops) != 1 {
 		panic("ScheduleSingleOperationAsDeployer expects exactly one operation")
@@ -620,7 +621,7 @@ func ScheduleSingleOperationAsDeployer(
 			op.Data,
 			proof[:],
 		},
-		true,
+		simulateTx,
 	)
 	require.NoError(t, err)
 
@@ -632,7 +633,8 @@ func ScheduleSingleOperationAsDeployer(
 func ScheduleBatchOperationsAsDeployer(
 	t *testing.T, logger logger.Logger, txm *AptosTxm, mcmsAccount aptos.AccountAddress, deployerAddress string,
 	deployerPublicKeyHex string, ops []TimelockOperation, predecessor []byte, salt []byte, delay uint64,
-	role uint8, chainId *big.Int, nonce uint64, proof [][32]byte) string {
+	role uint8, chainId *big.Int, nonce uint64, proof [][32]byte, simulateTx bool,
+) string {
 
 	// Serialize all operations into a single schedule_batch call
 	serializedData, err := SerializeScheduleBatchParams(ops, predecessor, salt, delay)
@@ -705,7 +707,7 @@ func ScheduleBatchOperationsAsDeployer(
 			op.Data,
 			proof[:],
 		},
-		true,
+		simulateTx,
 	)
 	require.NoError(t, err)
 
@@ -741,7 +743,7 @@ func HashOperationBatch(targets []aptos.AccountAddress, moduleNames, functionNam
 // Setup initial config for a role
 func SetupInitialConfigAsDeployer(
 	t *testing.T, logger logger.Logger, txm *AptosTxm, role uint8, signers []Signer, deployerAddress string, deployerPublicKeyHex string,
-	clearRoot bool, mcmsAddress string,
+	clearRoot bool, mcmsAddress string, simulateTx bool,
 ) {
 	NUM_GROUPS := 32
 	signerAddresses := [][]byte{}
@@ -776,7 +778,7 @@ func SetupInitialConfigAsDeployer(
 			groupParents,
 			clearRoot,
 		},
-		/* simulateTx= */ true,
+		simulateTx,
 	)
 	require.NoError(t, err)
 
@@ -785,7 +787,7 @@ func SetupInitialConfigAsDeployer(
 }
 
 // Transfer ownership of the mcms account
-func TransferOwnership(t *testing.T, txm *AptosTxm, deployerAddress, deployerPublicKeyHex string, mcmsAddress string) {
+func TransferOwnership(t *testing.T, txm *AptosTxm, deployerAddress, deployerPublicKeyHex string, mcmsAddress string, simulateTx bool) {
 	transferOwnershipId := uuid.New().String()
 	err := txm.Enqueue(
 		transferOwnershipId,
@@ -796,7 +798,7 @@ func TransferOwnership(t *testing.T, txm *AptosTxm, deployerAddress, deployerPub
 		[]string{},
 		[]string{},
 		[]any{},
-		true,
+		simulateTx,
 	)
 	require.NoError(t, err)
 	WaitForTxmId(t, txm, transferOwnershipId, time.Second*30)

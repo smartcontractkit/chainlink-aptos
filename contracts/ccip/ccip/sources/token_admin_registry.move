@@ -1021,7 +1021,7 @@ module ccip::token_admin_registry {
     }
 
     #[test(publisher = @ccip)]
-    public fun test_get_all_configured_tokens(publisher: &signer) acquires TokenAdminRegistryState {
+    fun test_get_all_configured_tokens(publisher: &signer) acquires TokenAdminRegistryState {
         state_object::init_module_for_testing(publisher);
         init_module_for_testing(publisher);
 
@@ -1040,7 +1040,7 @@ module ccip::token_admin_registry {
     }
 
     #[test(publisher = @ccip)]
-    public fun test_get_all_configured_tokens_edge_cases(
+    fun test_get_all_configured_tokens_edge_cases(
         publisher: &signer
     ) acquires TokenAdminRegistryState {
         state_object::init_module_for_testing(publisher);
@@ -1077,7 +1077,7 @@ module ccip::token_admin_registry {
     }
 
     #[test(publisher = @ccip)]
-    public fun test_get_all_configured_tokens_pagination(
+    fun test_get_all_configured_tokens_pagination(
         publisher: &signer
     ) acquires TokenAdminRegistryState {
         state_object::init_module_for_testing(publisher);
@@ -1124,7 +1124,7 @@ module ccip::token_admin_registry {
     }
 
     #[test(publisher = @ccip)]
-    public fun test_get_all_configured_tokens_non_existent(
+    fun test_get_all_configured_tokens_non_existent(
         publisher: &signer
     ) acquires TokenAdminRegistryState {
         state_object::init_module_for_testing(publisher);

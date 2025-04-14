@@ -170,6 +170,7 @@ func scheduleAndExecuteOperations(
 	chainID *big.Int,
 	delay uint64,
 	salt []byte,
+	simulateTx bool,
 ) {
 	predecessor := make([]byte, 32) // ZERO_HASH
 
@@ -202,7 +203,7 @@ func scheduleAndExecuteOperations(
 		require.True(t, merkleTree.VerifyProof(proof, HashOp(&ops[i])))
 		txId := ScheduleSingleOperationAsDeployer(t, logger, txm, deployMcmsAccount,
 			deployerAddress, deployerPublicKeyHex, []TimelockOperation{op},
-			predecessor, salt, delay, role, chainID, ops[i].Nonce, proof)
+			predecessor, salt, delay, role, chainID, ops[i].Nonce, proof, simulateTx)
 		waitForTxmId(t, txm, txId, time.Second*30)
 	}
 
@@ -212,7 +213,7 @@ func scheduleAndExecuteOperations(
 	// Execute each operation
 	for i := 0; i < len(operations); i++ {
 		txId := ExecuteBatchOperations(t, txm, deployMcmsAddress, deployerAddress,
-			deployerPublicKeyHex, []TimelockOperation{operations[i]}, predecessor, salt)
+			deployerPublicKeyHex, []TimelockOperation{operations[i]}, predecessor, salt, simulateTx)
 		waitForTxmId(t, txm, txId, time.Second*30)
 	}
 }
@@ -273,14 +274,14 @@ func runDeployMCMSAndCCIPInChunks(t *testing.T, logger logger.Logger, rpcURL str
 		/* typeArgs= */ []string{},
 		/* paramTypes= */ []string{"vector<u8>", "vector<u8>", "vector<vector<u8>>"},
 		/* paramValues= */ []any{mcmsSeed, mcmsPackageMetadataBytes, mcmsModuleBytecodeBytes},
-		/* simulateTx= */ true,
+		/* simulateTx= */ false,
 	)
 	require.NoError(t, err)
 	waitForTxmId(t, txm, deployId, time.Second*30)
 
 	role := uint8(PROPOSER_ROLE)
-	SetupInitialConfigAsDeployer(t, logger, txm, role, proposerSigners, deployerAddress, deployerPublicKeyHex, true, deployMcmsAddress)
-	TransferOwnership(t, txm, deployerAddress, deployerPublicKeyHex, deployMcmsAddress)
+	SetupInitialConfigAsDeployer(t, logger, txm, role, proposerSigners, deployerAddress, deployerPublicKeyHex, true, deployMcmsAddress, false)
+	TransferOwnership(t, txm, deployerAddress, deployerPublicKeyHex, deployMcmsAddress, false)
 
 	// Create a unique seed for the new object owner
 	newOwnerSeed := make([]byte, 32)
@@ -340,7 +341,7 @@ func runDeployMCMSAndCCIPInChunks(t *testing.T, logger logger.Logger, rpcURL str
 	// Schedule and execute operations
 	delay := uint64(TEST_DELAY)
 	salt := []byte{} // Empty salt for initial deployment
-	scheduleAndExecuteOperations(t, logger, txm, allOperations, proposerSigners, deployerAddress, deployerPublicKeyHex, role, deployChainIdBig, delay, salt)
+	scheduleAndExecuteOperations(t, logger, txm, allOperations, proposerSigners, deployerAddress, deployerPublicKeyHex, role, deployChainIdBig, delay, salt, false)
 
 	// Verify deployment was successful
 	receiverRegistryTypeAndVersionPayload := CreateViewPayload(ccipObjectAddress.String(), "receiver_registry", "type_and_version",
@@ -426,7 +427,7 @@ func runDeployMCMSAndCCIPInChunks(t *testing.T, logger logger.Logger, rpcURL str
 	// Schedule and execute upgrade operations (with unique salt)
 	upgradeSalt := []byte("upgrade") // Use a different salt for the upgrade
 	scheduleAndExecuteOperations(t, logger, txm, allUpgradeOps, proposerSigners,
-		deployerAddress, deployerPublicKeyHex, role, deployChainIdBig, delay, upgradeSalt)
+		deployerAddress, deployerPublicKeyHex, role, deployChainIdBig, delay, upgradeSalt, false)
 
 	// Verify upgrade was successful
 	updatedVersionPayload := CreateViewPayload(ccipObjectAddress.String(), "receiver_registry", "type_and_version",
