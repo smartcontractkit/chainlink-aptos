@@ -705,14 +705,6 @@ func compileMcmsContract(t *testing.T, packageAddress aptos.AccountAddress, owne
 	compileResult := testutils.CompileMovePackage(t, filepath.Join("mcms", "mcms"), map[string]aptos.AccountAddress{
 		"mcms":       packageAddress,
 		"mcms_owner": ownerAddress,
-	}, []string{
-		"bcs_stream",
-		"params",
-		"mcms_account",
-		"mcms_registry",
-		"mcms_deployer",
-		"mcms",
-		"mcms_executor",
 	})
 
 	return compileResult.PackageMetadata, compileResult.BytecodeModules
@@ -722,7 +714,7 @@ func compileMcmsUserContract(t *testing.T, packageAddress, mcmsAddress aptos.Acc
 	compileResult := testutils.CompileMovePackage(t, filepath.Join("mcms", "mcms_test"), map[string]aptos.AccountAddress{
 		"mcms_test": packageAddress,
 		"mcms":      mcmsAddress,
-	}, nil)
+	})
 
 	require.Equal(t, 1, len(compileResult.BytecodeModules))
 	return compileResult.PackageMetadata, compileResult.BytecodeModules[0]

@@ -304,8 +304,8 @@ func runDeployMCMSAndCCIPInChunks(t *testing.T, logger logger.Logger, rpcURL str
 	require.NoError(t, err, "Failed to parse address returned by view function")
 	logger.Debugw("ccipObjectAddress", "ccipObjectAddress", ccipObjectAddress.String())
 
-	namedAddresses, modules := GetNamedAddressesAndModules(ccipObjectAddress, deployMcmsAccount)
-	compileResult := testutils.CompileMovePackage(t, filepath.Join("ccip", "ccip"), namedAddresses, modules)
+	namedAddresses := GetNamedAddresses(ccipObjectAddress, deployMcmsAccount)
+	compileResult := testutils.CompileMovePackage(t, filepath.Join("ccip", "ccip"), namedAddresses)
 
 	// 1. Create accept ownership operation
 	acceptOwnershipOp := TimelockOperation{
@@ -401,7 +401,7 @@ func runDeployMCMSAndCCIPInChunks(t *testing.T, logger logger.Logger, rpcURL str
 
 	logger.Debugw("Modified existing receiver_registry.move file for upgrade test", "path", receiverRegistryFilePath)
 
-	upgradeCompileResult := testutils.CompileMovePackage(t, filepath.Join("ccip", "ccip"), namedAddresses, modules)
+	upgradeCompileResult := testutils.CompileMovePackage(t, filepath.Join("ccip", "ccip"), namedAddresses)
 
 	// Create upgrade operations
 	upgradeMetadataOps := chunkMetadata(upgradeCompileResult.PackageMetadata, CHUNK_SIZE)
@@ -487,18 +487,12 @@ func deployTimelockOpToMultipleOps(tlOps []TimelockOperation, predecessor []byte
 	return ops
 }
 
-func GetNamedAddressesAndModules(ccipObjectAddress, deployMcmsAccount aptos.AccountAddress) (map[string]aptos.AccountAddress, []string) {
+func GetNamedAddresses(ccipObjectAddress, deployMcmsAccount aptos.AccountAddress) map[string]aptos.AccountAddress {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipObjectAddress,
 		"mcms":                      deployMcmsAccount,
 		"mcms_register_entrypoints": deployMcmsAccount,
 	}
 
-	modules := []string{
-		"ownable", "merkle_proof", "allowlist", "client", "eth_abi", "state_object",
-		"auth", "nonce_manager", "fee_quoter", "receiver_registry", "receiver_dispatcher", "rmn_remote",
-		"token_admin_registry", "token_admin_dispatcher",
-	}
-
-	return namedAddresses, modules
+	return namedAddresses
 }
