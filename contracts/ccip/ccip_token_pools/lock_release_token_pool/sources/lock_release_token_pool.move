@@ -59,7 +59,7 @@ module lock_release_token_pool::lock_release_token_pool {
         let token_pool_module_name = b"lock_release_token_pool";
 
         // Register the entrypoint with mcms
-        if (@mcms_register_entrypoints != @0x0) {
+        if (@mcms_register_entrypoints == @0x1) {
             mcms_registry::register_entrypoint(
                 publisher, string::utf8(token_pool_module_name), McmsCallback {}
             );

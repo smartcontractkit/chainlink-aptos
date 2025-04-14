@@ -50,7 +50,7 @@ module ccip::auth {
         );
 
         // Register the entrypoint with mcms
-        if (@mcms_register_entrypoints != @0x0) {
+        if (@mcms_register_entrypoints == @0x1) {
             mcms_registry::register_entrypoint(
                 publisher, string::utf8(b"auth"), McmsCallback {}
             );
