@@ -11,6 +11,8 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
+
+	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
 // Loads an account, assuming no key rotation has taken place.
@@ -28,7 +30,7 @@ func LoadAccountFromEnv(t *testing.T, logger logger.Logger) (ed25519.PrivateKey,
 		t.Fatalf("PRIVATE_KEY must be a hex string of length 128, representing a 64-byte ed25519 key (private key + public key)")
 	}
 
-	privateKeyBytes, err := hex.DecodeString(privateKeyHex)
+	privateKeyBytes, err := utils.DecodeHexRelaxed(privateKeyHex)
 	require.NoError(t, err)
 	privateKey := ed25519.PrivateKey(privateKeyBytes)
 
