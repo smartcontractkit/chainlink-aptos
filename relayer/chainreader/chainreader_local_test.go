@@ -1048,6 +1048,7 @@ func TestLoopChainReaderLocal(t *testing.T) {
 	lg := logger.Test(t)
 	privKey, pubKey, acctAddr := setupTestAccount(t, lg)
 
+	// Start node, fund account, compile, deploy contract, etc.
 	err := testutils.StartAptosNode()
 	require.NoError(t, err)
 	rpcURL := "http://localhost:8080/v1"
@@ -1066,6 +1067,7 @@ func TestLoopChainReaderLocal(t *testing.T) {
 	err = txmgr.Start(context.Background())
 	require.NoError(t, err)
 
+	// Deploy the contract.
 	txID := uuid.New().String()
 	err = txmgr.Enqueue(
 		txID,
@@ -1092,6 +1094,7 @@ func TestLoopChainReaderLocal(t *testing.T) {
 	}
 	require.True(t, confirmed, "Contract deploy tx not confirmed")
 
+	// Configuration defined once at the top.
 	config := ChainReaderConfig{
 		Modules: map[string]*ChainReaderModule{
 			"testContract": {
@@ -1127,14 +1130,30 @@ func TestLoopChainReaderLocal(t *testing.T) {
 							"value": {NewName: "SingleUintValue"},
 						},
 					},
+					// The ComplexStruct event binding uses existing renames.
+					"ComplexStructEvent": {
+						EventHandleStructName: "EventStore",
+						EventHandleFieldName:  "complex_struct_events",
+						EventAccountAddress:   acctAddr.String() + "::echo::get_event_address",
+						EventFieldRenames: map[string]RenamedField{
+							"flag": {NewName: "RenamedFlag"},
+							"nested": {
+								NewName: "RenamedNested",
+								SubFieldRenames: map[string]RenamedField{
+									"id":          {NewName: "RenamedId"},
+									"description": {NewName: "RenamedDescription"},
+								},
+							},
+							"values": {NewName: "RenamedValues"},
+						},
+					},
 				},
 			},
 		},
 		IsLoopPlugin: true,
 	}
 
-	db := sqltest.NewDB(t, sqltest.TestURL(t))
-	chainReader := NewChainReader(lg, rlClient, config, db)
+	chainReader := NewChainReader(lg, rlClient, config, nil)
 	loopReader := loop.NewLoopChainReader(lg, chainReader)
 	binding := commontypes.BoundContract{
 		Name:    "testContract",
@@ -1144,6 +1163,7 @@ func TestLoopChainReaderLocal(t *testing.T) {
 	require.NoError(t, err)
 	confidenceLevel := primitives.Finalized
 
+	// Subtests for GetLatestValue.
 	t.Run("GetLatestValue - Simple value read", func(t *testing.T) {
 		var ret uint64
 		params := struct{ Value1 uint64 }{Value1: 42}
@@ -1181,11 +1201,7 @@ func TestLoopChainReaderLocal(t *testing.T) {
 	})
 
 	t.Run("GetLatestValue - Unwrapped complex struct", func(t *testing.T) {
-		type UnwrappedStruct struct {
-			Id          uint64 `json:"id"`
-			Description string `json:"description"`
-		}
-		var ret UnwrappedStruct
+		var ret ComplexStruct
 		params := struct {
 			Val  uint64
 			Text string
@@ -1198,8 +1214,76 @@ func TestLoopChainReaderLocal(t *testing.T) {
 			&ret,
 		)
 		require.NoError(t, err)
-		require.Equal(t, uint64(150), ret.Id)
-		require.Equal(t, "test", ret.Description)
+		require.True(t, ret.RenamedFlag, "expected flag to be true")
+		require.Equal(t, uint64(150), ret.RenamedNested.RenamedId)
+		require.Equal(t, "test", ret.RenamedNested.RenamedDescription)
+		require.Equal(t, []uint64{150, 151}, ret.RenamedValues)
+	})
+
+	// QueryKey tests in non-persistent mode.
+	t.Run("QueryKey - non-persistent mode", func(t *testing.T) {
+		// Prepare a new keystore and tx manager for emitting events.
+		ks := testutils.NewTestKeystore(t)
+		ks.AddKey(privKey)
+		pubKeyHex := hex.EncodeToString([]byte(pubKey))
+		txmgr := initTxManager(t, lg, ks, rlClient)
+
+		// Emit only 5 events for faster testing.
+		emitManyEvents(t, txmgr, acctAddr.String(), pubKeyHex, 5)
+
+		t.Run("Filter by SingleUintValue", func(t *testing.T) {
+			filter := query.KeyFilter{
+				Key: "SingleValueEvent",
+				Expressions: []query.Expression{
+					query.Comparator("SingleUintValue",
+						primitives.ValueComparator{Value: uint64(0), Operator: primitives.Gte},
+					),
+				},
+			}
+			limit := query.LimitAndSort{Limit: query.CountLimit(10)}
+			seqs, err := loopReader.QueryKey(context.Background(), binding, filter, limit, &SingleValueEvent{})
+			require.NoError(t, err)
+			require.NotEmpty(t, seqs)
+			for _, seq := range seqs {
+				evt := seq.Data.(*SingleValueEvent)
+				require.GreaterOrEqual(t, evt.SingleUintValue, uint64(0))
+			}
+		})
+
+		t.Run("Sorted Descending", func(t *testing.T) {
+			limit := query.LimitAndSort{
+				Limit: query.CountLimit(10),
+				SortBy: []query.SortBy{
+					query.NewSortBySequence(query.Desc),
+				},
+			}
+			seqs, err := loopReader.QueryKey(context.Background(), binding, query.KeyFilter{Key: "SingleValueEvent"}, limit, &SingleValueEvent{})
+			require.NoError(t, err)
+			require.Len(t, seqs, 10)
+			for i := 0; i < len(seqs)-1; i++ {
+				curr := seqs[i].Data.(*SingleValueEvent).SingleUintValue
+				next := seqs[i+1].Data.(*SingleValueEvent).SingleUintValue
+				require.GreaterOrEqual(t, curr, next)
+			}
+		})
+
+		t.Run("ComplexStruct Event", func(t *testing.T) {
+			seqs, err := loopReader.QueryKey(
+				context.Background(),
+				binding,
+				query.KeyFilter{Key: "ComplexStructEvent"},
+				query.LimitAndSort{Limit: query.CountLimit(1)},
+				&ComplexStruct{},
+			)
+			require.NoError(t, err)
+			require.NotEmpty(t, seqs)
+
+			cs := seqs[0].Data.(*ComplexStruct)
+			require.True(t, cs.RenamedFlag, "expected flag to be true")
+			require.Equal(t, uint64(999), cs.RenamedNested.RenamedId)
+			require.Equal(t, "complex", cs.RenamedNested.RenamedDescription)
+			require.Equal(t, []uint64{999, 1000}, cs.RenamedValues)
+		})
 	})
 }
 
