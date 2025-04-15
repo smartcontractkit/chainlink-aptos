@@ -671,8 +671,6 @@ module usdc_token_pool::usdc_token_pool {
     // |                      MCMS entrypoint                         |
     // ================================================================
 
-    // TODO add USDC specific calls
-
     struct McmsCallback has drop {}
 
     public fun mcms_entrypoint<T: key>(
@@ -733,6 +731,31 @@ module usdc_token_pool::usdc_token_pool {
                 );
             bcs_stream::assert_is_consumed(&stream);
             apply_allowlist_updates(&caller, removes, adds);
+        } else if (function_bytes == b"set_domains") {
+            let remote_chain_selectors =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let remote_domain_identifiers =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u32(stream)
+                );
+            let allowed_remote_callers =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
+                );
+            let enableds =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_bool(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            set_domains(
+                &caller,
+                remote_chain_selectors,
+                remote_domain_identifiers,
+                allowed_remote_callers,
+                enableds
+            );
         } else if (function_bytes == b"set_chain_rate_limiter_configs") {
             let remote_chain_selectors =
                 bcs_stream::deserialize_vector(
