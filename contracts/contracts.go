@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 )
 
-//go:embed ccip large_packages mcms
+//go:embed ccip large_packages mcms vendor
 var Embed embed.FS
 
 type Package string
@@ -15,6 +15,7 @@ const (
 	CCIPPingPongDemo    = Package("ccip_ping_pong_demo")
 	CCIPBurnMintPool    = Package("burn_mint_token_pool")
 	CCIPLockReleasePool = Package("lock_release_token_pool")
+	CCIPUSDCTokenPool   = Package("usdc_token_pool")
 	CCIPTokenPool       = Package("ccip_token_pool")
 	CCIPRouter          = Package("ccip_router")
 	CCIPDummyReceiver   = Package("ccip_dummy_receiver")
@@ -33,6 +34,7 @@ var Contracts map[Package]string = map[Package]string{
 	CCIPPingPongDemo:    filepath.Join("ccip", "ccip_ping_pong_demo"),
 	CCIPBurnMintPool:    filepath.Join("ccip", "ccip_token_pools", "burn_mint_token_pool"),
 	CCIPLockReleasePool: filepath.Join("ccip", "ccip_token_pools", "lock_release_token_pool"),
+	CCIPUSDCTokenPool:   filepath.Join("ccip", "ccip_token_pools", "usdc_token_pool"),
 	CCIPTokenPool:       filepath.Join("ccip", "ccip_token_pools", "token_pool"),
 	CCIPRouter:          filepath.Join("ccip", "ccip_router"),
 	CCIPDummyReceiver:   filepath.Join("ccip", "ccip_dummy_receiver"),

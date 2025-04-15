@@ -671,6 +671,8 @@ module usdc_token_pool::usdc_token_pool {
     // |                      MCMS entrypoint                         |
     // ================================================================
 
+    // TODO add USDC specific calls
+
     struct McmsCallback has drop {}
 
     public fun mcms_entrypoint<T: key>(
