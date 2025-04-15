@@ -36,7 +36,17 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 	module_usdc_token_pool.FunctionInfo,
 )
 
-func Compile(address, ccipAddress, mcmsAddress, ccipTokenPoolAddress, localTokenAddress, messageTransmitter, tokenMessengerMinter, aptosExtensions, stablecoin, deployer aptos.AccountAddress, registerMCMSEntrypoints bool) (compile.CompiledPackage, error) {
+func Compile(address,
+	ccipAddress,
+	mcmsAddress,
+	ccipTokenPoolAddress,
+	localTokenAddress,
+	messageTransmitter,
+	tokenMessengerMinter,
+	aptosExtensions,
+	stablecoin,
+	deployer aptos.AccountAddress,
+	registerMCMSEntrypoints bool) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"usdc_token_pool":           address,
 		"ccip":                      ccipAddress,
@@ -71,7 +81,12 @@ func DeployToObject(
 	ccipAddress,
 	mcmsAddress,
 	ccipTokenPoolAddress,
-	localTokenAddress aptos.AccountAddress,
+	localTokenAddress,
+	messageTransmitter,
+	tokenMessengerMinter,
+	aptosExtensions,
+	stablecoin,
+	deployer aptos.AccountAddress,
 ) (aptos.AccountAddress, *api.PendingTransaction, UsdcTokenPool, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
@@ -79,6 +94,11 @@ func DeployToObject(
 		"local_token":               localTokenAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
+		"message_transmitter":       messageTransmitter,
+		"token_messenger_minter":    tokenMessengerMinter,
+		"aptos_extensions":          aptosExtensions,
+		"stablecoin":                stablecoin,
+		"deployer":                  deployer,
 	}
 	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.CCIPUSDCTokenPool, namedAddresses)
 	if err != nil {
