@@ -1259,6 +1259,26 @@ func TestLoopChainReaderLocal(t *testing.T) {
 			require.Equal(t, "test4", cs.RenamedNested.RenamedDescription)
 			require.Equal(t, []uint64{4, 5}, cs.RenamedValues)
 		})
+
+		t.Run("Complex filtering with multiple comparators", func(t *testing.T) {
+			filter := query.KeyFilter{
+				Key: "SingleValueEvent",
+				Expressions: []query.Expression{
+					query.Comparator("SingleUintValue",
+						primitives.ValueComparator{Value: uint64(3), Operator: primitives.Gte},
+						primitives.ValueComparator{Value: uint64(7), Operator: primitives.Lt},
+					),
+				},
+			}
+			seqs, err := loopReader.QueryKey(context.Background(), binding, filter, query.LimitAndSort{}, &SingleValueEvent{})
+			require.NoError(t, err)
+			require.Len(t, seqs, 2)
+			for _, seq := range seqs {
+				evt := seq.Data.(*SingleValueEvent)
+				require.GreaterOrEqual(t, evt.SingleUintValue, uint64(3))
+				require.Less(t, evt.SingleUintValue, uint64(7))
+			}
+		})
 	})
 }
 
