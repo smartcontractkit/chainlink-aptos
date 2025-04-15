@@ -9,7 +9,7 @@ module ccip::token_admin_registry {
     use std::object::{Self, Object, ObjectCore, ExtendRef, TransferRef};
     use std::option::{Self, Option};
     use std::signer;
-    use std::smart_table::{Self, SmartTable};
+    use std::big_ordered_map::{Self, BigOrderedMap};
     use std::string::{Self, String};
     use std::type_info::{Self, TypeInfo};
 
@@ -30,10 +30,7 @@ module ccip::token_admin_registry {
         transfer_ref: TransferRef,
 
         // fungible asset metadata address -> TokenConfig
-        // TODO: there were previously raised concerns during an audit that a user could maliciously calculate the bucket for a key and
-        // cause repeated splitting, but we need to retrieve all the keys, which isn't available in Table.
-        // consider other solutions.
-        token_configs: SmartTable<address, TokenConfig>,
+        token_configs: BigOrderedMap<address, TokenConfig>,
         pool_set_events: EventHandle<PoolSet>,
         administrator_transfer_requested_events: EventHandle<AdministratorTransferRequested>,
         administrator_transferred_events: EventHandle<AdministratorTransferred>
@@ -158,7 +155,7 @@ module ccip::token_admin_registry {
         let state = TokenAdminRegistryState {
             extend_ref,
             transfer_ref,
-            token_configs: smart_table::new(),
+            token_configs: big_ordered_map::new(),
             pool_set_events: account::new_event_handle(&state_object_signer),
             administrator_transfer_requested_events: account::new_event_handle(
                 &state_object_signer
@@ -180,8 +177,8 @@ module ccip::token_admin_registry {
         local_tokens.map_ref(
             |local_token| {
                 let local_token: address = *local_token;
-                if (state.token_configs.contains(local_token)) {
-                    let token_config = state.token_configs.borrow(local_token);
+                if (state.token_configs.contains(&local_token)) {
+                    let token_config = state.token_configs.borrow(&local_token);
                     token_config.token_pool_address
                 } else {
                     // returns @0x0 for assets without token pools.
@@ -195,8 +192,8 @@ module ccip::token_admin_registry {
     // returns the token pool address for the given local token, or @0x0 if the token is not registered.
     public fun get_pool(local_token: address): address acquires TokenAdminRegistryState {
         let state = borrow_state();
-        if (state.token_configs.contains(local_token)) {
-            let token_config = state.token_configs.borrow(local_token);
+        if (state.token_configs.contains(&local_token)) {
+            let token_config = state.token_configs.borrow(&local_token);
             token_config.token_pool_address
         } else {
             // returns @0x0 for assets without token pools.
@@ -210,8 +207,8 @@ module ccip::token_admin_registry {
         local_token: address
     ): (address, address, address) acquires TokenAdminRegistryState {
         let state = borrow_state();
-        if (state.token_configs.contains(local_token)) {
-            let token_config = state.token_configs.borrow(local_token);
+        if (state.token_configs.contains(&local_token)) {
+            let token_config = state.token_configs.borrow(&local_token);
             (
                 token_config.token_pool_address,
                 token_config.administrator,
@@ -223,16 +220,52 @@ module ccip::token_admin_registry {
     }
 
     #[view]
+    /// Get configured tokens paginated using a start key and limit.
+    /// Caller should call this on a certain block to ensure you the same state for every call.
+    ///
+    /// This function retrieves a batch of token addresses from the registry, starting from
+    /// the token address that comes after the provided start_key.
+    ///
+    /// @param start_key - Address to start pagination from (returns tokens AFTER this address)
+    /// @param max_count - Maximum number of tokens to return
+    ///
+    /// @return:
+    ///   - vector<address>: List of token addresses (up to max_count)
+    ///   - address: Next key to use for pagination (pass this as start_key in next call)
+    ///   - bool: Whether there are more tokens after this batch
     public fun get_all_configured_tokens(
-        starting_bucket_index: u64, starting_vector_index: u64, max_count: u64
-    ): (vector<address>, Option<u64>, Option<u64>) acquires TokenAdminRegistryState {
-        // see the SmartTable documentation for descriptions of the function paramters and return values.
-        // ref: https://github.com/aptos-labs/aptos-core/blob/6593fb81261f25490ffddc2252a861c994234c2a/aptos-move/framework/aptos-stdlib/sources/data_structures/smart_table.move#L212
+        start_key: address, max_count: u64
+    ): (vector<address>, address, bool) acquires TokenAdminRegistryState {
+        let token_configs = &borrow_state().token_configs;
+        let result = vector[];
 
-        let state = borrow_state();
-        state.token_configs.keys_paginated(
-            starting_bucket_index, starting_vector_index, max_count
-        )
+        let current_key_opt = token_configs.next_key(&start_key);
+        if (max_count == 0 || current_key_opt.is_none()) {
+            return (result, start_key, current_key_opt.is_some())
+        };
+
+        let current_key = *current_key_opt.borrow();
+
+        result.push_back(current_key);
+
+        if (max_count == 1) {
+            let has_more = token_configs.next_key(&current_key).is_some();
+            return (result, current_key, has_more);
+        };
+
+        for (i in 1..max_count) {
+            let next_key_opt = token_configs.next_key(&current_key);
+            if (next_key_opt.is_none()) {
+                return (result, current_key, false)
+            };
+
+            current_key = *next_key_opt.borrow();
+            result.push_back(current_key);
+        };
+
+        // Check if there are more tokens after the last key
+        let has_more = token_configs.next_key(&current_key).is_some();
+        (result, current_key, has_more)
     }
 
     // ================================================================
@@ -265,7 +298,7 @@ module ccip::token_admin_registry {
         );
 
         assert!(
-            !state.token_configs.contains(local_token),
+            !state.token_configs.contains(&local_token),
             error::invalid_argument(E_FUNGIBLE_ASSET_ALREADY_REGISTERED)
         );
 
@@ -402,11 +435,11 @@ module ccip::token_admin_registry {
         let state = borrow_state_mut();
 
         assert!(
-            state.token_configs.contains(local_token),
+            state.token_configs.contains(&local_token),
             error::invalid_argument(E_FUNGIBLE_ASSET_NOT_REGISTERED)
         );
 
-        let token_config = state.token_configs.borrow_mut(local_token);
+        let token_config = state.token_configs.borrow_mut(&local_token);
 
         assert!(
             token_config.administrator == signer::address_of(caller),
@@ -441,11 +474,11 @@ module ccip::token_admin_registry {
         let state = borrow_state_mut();
 
         assert!(
-            state.token_configs.contains(local_token),
+            state.token_configs.contains(&local_token),
             error::invalid_argument(E_FUNGIBLE_ASSET_NOT_REGISTERED)
         );
 
-        let token_config = state.token_configs.borrow_mut(local_token);
+        let token_config = state.token_configs.borrow_mut(&local_token);
 
         assert!(
             token_config.administrator == signer::address_of(caller),
@@ -478,11 +511,11 @@ module ccip::token_admin_registry {
         let state = borrow_state_mut();
 
         assert!(
-            state.token_configs.contains(local_token),
+            state.token_configs.contains(&local_token),
             error::invalid_argument(E_FUNGIBLE_ASSET_NOT_REGISTERED)
         );
 
-        let token_config = state.token_configs.borrow_mut(local_token);
+        let token_config = state.token_configs.borrow_mut(&local_token);
 
         assert!(
             token_config.pending_administrator == signer::address_of(caller),
@@ -507,11 +540,11 @@ module ccip::token_admin_registry {
     ): bool acquires TokenAdminRegistryState {
         let state = borrow_state();
         assert!(
-            state.token_configs.contains(local_token),
+            state.token_configs.contains(&local_token),
             error::invalid_argument(E_FUNGIBLE_ASSET_NOT_REGISTERED)
         );
 
-        let token_config = state.token_configs.borrow(local_token);
+        let token_config = state.token_configs.borrow(&local_token);
         token_config.administrator == administrator
     }
 
@@ -960,5 +993,155 @@ module ccip::token_admin_registry {
         };
 
         option::none()
+    }
+
+    #[test_only]
+    public fun init_module_for_testing(publisher: &signer) {
+        init_module(publisher);
+    }
+
+    #[test_only]
+    fun insert_token_addresses_for_test(
+        token_addresses: vector<address>
+    ) acquires TokenAdminRegistryState {
+        let state = borrow_state_mut();
+
+        token_addresses.for_each(
+            |token_address| {
+                state.token_configs.add(
+                    token_address,
+                    TokenConfig {
+                        token_pool_address: @0x0,
+                        administrator: @0x0,
+                        pending_administrator: @0x0
+                    }
+                );
+            }
+        );
+    }
+
+    #[test(publisher = @ccip)]
+    fun test_get_all_configured_tokens(publisher: &signer) acquires TokenAdminRegistryState {
+        state_object::init_module_for_testing(publisher);
+        init_module_for_testing(publisher);
+
+        insert_token_addresses_for_test(vector[@0x1, @0x2, @0x3]);
+
+        let (res, next_key, has_more) = get_all_configured_tokens(@0x0, 0);
+        assert!(res.length() == 0);
+        assert!(next_key == @0x0);
+        assert!(has_more);
+
+        let (res, next_key, has_more) = get_all_configured_tokens(@0x0, 3);
+        assert!(res.length() == 3);
+        assert!(vector[@0x1, @0x2, @0x3] == res);
+        assert!(next_key == @0x3);
+        assert!(!has_more);
+    }
+
+    #[test(publisher = @ccip)]
+    fun test_get_all_configured_tokens_edge_cases(
+        publisher: &signer
+    ) acquires TokenAdminRegistryState {
+        state_object::init_module_for_testing(publisher);
+        init_module_for_testing(publisher);
+
+        // Test case 1: Empty state
+        let (res, next_key, has_more) = get_all_configured_tokens(@0x0, 1);
+        assert!(res.length() == 0);
+        assert!(next_key == @0x0);
+        assert!(!has_more);
+
+        // Test case 2: Single token
+        insert_token_addresses_for_test(vector[@0x1]);
+        let (res, _next_key, has_more) = get_all_configured_tokens(@0x0, 1);
+        assert!(res.length() == 1);
+        assert!(res[0] == @0x1);
+        assert!(!has_more);
+
+        // Test case 3: Start from middle
+        insert_token_addresses_for_test(vector[@0x2, @0x3]);
+        let (res, _next_key, has_more) = get_all_configured_tokens(@0x1, 2);
+        assert!(res.length() == 2);
+        assert!(res[0] == @0x2);
+        assert!(res[1] == @0x3);
+        assert!(!has_more);
+
+        // Test case 4: Request more than available
+        let (res, _next_key, has_more) = get_all_configured_tokens(@0x0, 5);
+        assert!(res.length() == 3);
+        assert!(res[0] == @0x1);
+        assert!(res[1] == @0x2);
+        assert!(res[2] == @0x3);
+        assert!(!has_more);
+    }
+
+    #[test(publisher = @ccip)]
+    fun test_get_all_configured_tokens_pagination(
+        publisher: &signer
+    ) acquires TokenAdminRegistryState {
+        state_object::init_module_for_testing(publisher);
+        init_module_for_testing(publisher);
+
+        insert_token_addresses_for_test(vector[@0x1, @0x2, @0x3, @0x4, @0x5]);
+
+        // Test pagination with different chunk sizes
+        let current_key = @0x0;
+        let total_tokens = vector[];
+
+        // First page: get 2 tokens
+        let (res, next_key, more) = get_all_configured_tokens(current_key, 2);
+        assert!(res.length() == 2);
+        assert!(res[0] == @0x1);
+        assert!(res[1] == @0x2);
+        assert!(more);
+        current_key = next_key;
+        total_tokens.append(res);
+
+        // Second page: get 2 more tokens
+        let (res, next_key, more) = get_all_configured_tokens(current_key, 2);
+        assert!(res.length() == 2);
+        assert!(res[0] == @0x3);
+        assert!(res[1] == @0x4);
+        assert!(more);
+        current_key = next_key;
+        total_tokens.append(res);
+
+        // Last page: get remaining token
+        let (res, _next_key, more) = get_all_configured_tokens(current_key, 2);
+        assert!(res.length() == 1);
+        assert!(res[0] == @0x5);
+        assert!(!more);
+        total_tokens.append(res);
+
+        // Verify we got all tokens in order
+        assert!(total_tokens.length() == 5);
+        assert!(total_tokens[0] == @0x1);
+        assert!(total_tokens[1] == @0x2);
+        assert!(total_tokens[2] == @0x3);
+        assert!(total_tokens[3] == @0x4);
+        assert!(total_tokens[4] == @0x5);
+    }
+
+    #[test(publisher = @ccip)]
+    fun test_get_all_configured_tokens_non_existent(
+        publisher: &signer
+    ) acquires TokenAdminRegistryState {
+        state_object::init_module_for_testing(publisher);
+        init_module_for_testing(publisher);
+
+        insert_token_addresses_for_test(vector[@0x1, @0x2, @0x3]);
+
+        // Test starting from non-existent key
+        let (res, next_key, has_more) = get_all_configured_tokens(@0x4, 1);
+        assert!(res.length() == 0);
+        assert!(next_key == @0x4);
+        assert!(!has_more);
+
+        // Test starting from key between existing tokens
+        let (res, _next_key, has_more) = get_all_configured_tokens(@0x1, 1);
+        assert!(res.length() == 1);
+        assert!(res[0] == @0x2);
+        assert!(has_more);
     }
 }

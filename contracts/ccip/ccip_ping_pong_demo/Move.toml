@@ -20,7 +20,7 @@ mcms = "0x4000"
 mcms_register_entrypoints = "0x4001"
 
 [dependencies]
-AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }
 ChainlinkCCIP = { local = "../ccip" }
 ChainlinkCCIPRouter = { local = "../ccip_router" }
 

@@ -166,7 +166,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		/* typeArgs= */ []string{},
 		/* paramTypes= */ []string{"vector<u8>", "vector<u8>", "vector<vector<u8>>"},
 		/* paramValues= */ []any{mcmsSeed, mcmsPackageMetadataBytes, mcmsModuleBytecodeBytes},
-		/* simulateTx= */ true,
+		/* simulateTx= */ false,
 	)
 	require.NoError(t, err)
 	WaitForTxmId(t, txm, deployId, time.Second*30)
@@ -203,9 +203,9 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 
 	// Call set_config to set signers
 	role := uint8(PROPOSER_ROLE)
-	SetupInitialConfigAsDeployer(t, logger, txm, uint8(BYPASSER_ROLE), bypasserSigners, deployerAddress, deployerPublicKeyHex, false, mcmsAddress)
+	SetupInitialConfigAsDeployer(t, logger, txm, uint8(BYPASSER_ROLE), bypasserSigners, deployerAddress, deployerPublicKeyHex, false, mcmsAddress, false)
 	// Setup role for Proposer too
-	SetupInitialConfigAsDeployer(t, logger, txm, role, proposerSigners, deployerAddress, deployerPublicKeyHex, false, mcmsAddress)
+	SetupInitialConfigAsDeployer(t, logger, txm, role, proposerSigners, deployerAddress, deployerPublicKeyHex, false, mcmsAddress, false)
 
 	functionOneArg1 := "hello"
 	functionOneArg2 := []byte{5, 4, 3, 2, 1}
@@ -220,7 +220,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 
 	t.Run("TransferOwnershipAndExecuteMCMSDeployedUserContract", func(t *testing.T) {
 		role := uint8(PROPOSER_ROLE)
-		TransferOwnership(t, txm, deployerAddress, deployerPublicKeyHex, mcmsAddress)
+		TransferOwnership(t, txm, deployerAddress, deployerPublicKeyHex, mcmsAddress, false)
 
 		newOwnerSeed := []byte("mcms_user_contract")
 		codeObjectOwnerAccount := mcmsAccount.ResourceAccount(append([]byte("CHAINLINK_MCMS_NEW_OBJECT_REGISTRATION"), newOwnerSeed...))
@@ -315,7 +315,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 			proof := merkleTree.GetProof(i + 1)
 			require.True(t, merkleTree.VerifyProof(proof, HashOp(&ops[i])))
 			txId := ScheduleSingleOperationAsDeployer(t, logger, txm, mcmsAccount, deployerAddress, deployerPublicKeyHex,
-				[]TimelockOperation{op}, predecessor, salt, delay, role, chainIdBig, ops[i].Nonce, proof)
+				[]TimelockOperation{op}, predecessor, salt, delay, role, chainIdBig, ops[i].Nonce, proof, false)
 			WaitForTxmId(t, txm, txId, time.Second*30)
 		}
 
@@ -353,7 +353,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		// Here we execute each op one by one, to prevent EXECUTION_LIMIT_REACHED
 		for i := 0; i < len(executeTimelockOps); i++ {
 			txId := ExecuteBatchOperations(t, txm, mcmsAddress, deployerAddress, deployerPublicKeyHex,
-				[]TimelockOperation{executeTimelockOps[i]}, predecessor, salt)
+				[]TimelockOperation{executeTimelockOps[i]}, predecessor, salt, false)
 			WaitForTxmId(t, txm, txId, time.Second*30)
 		}
 
@@ -487,7 +487,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 
 			// Schedule all operations in a single execute call, passing the complete proof
 			txId := ScheduleBatchOperationsAsDeployer(t, logger, txm, mcmsAccount, deployerAddress, deployerPublicKeyHex,
-				scheduleTimelockOps, predecessor, salt, delay, role, chainIdBig, op.Nonce, proof)
+				scheduleTimelockOps, predecessor, salt, delay, role, chainIdBig, op.Nonce, proof, true)
 			WaitForTxmId(t, txm, txId, time.Second*30)
 
 			for {
@@ -515,7 +515,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 				},
 			}
 
-			txId = ExecuteBatchOperations(t, txm, mcmsAddress, deployerAddress, deployerPublicKeyHex, executeTimelockOps, predecessor, salt)
+			txId = ExecuteBatchOperations(t, txm, mcmsAddress, deployerAddress, deployerPublicKeyHex, executeTimelockOps, predecessor, salt, true)
 			WaitForTxmId(t, txm, txId, time.Second*30)
 
 			// check that user contract state was updated
@@ -663,7 +663,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 
 		// Schedule all operations in a single execute call, passing the complete proof
 		txId := ScheduleBatchOperationsAsDeployer(t, logger, txm, mcmsAccount, deployerAddress, deployerPublicKeyHex,
-			scheduleTimelockOps, predecessor, salt, delay, role, chainIdBig, op.Nonce, proof)
+			scheduleTimelockOps, predecessor, salt, delay, role, chainIdBig, op.Nonce, proof, true)
 		WaitForTxmId(t, txm, txId, time.Second*30)
 
 		// Wait for test delay
@@ -686,7 +686,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		}
 
 		// Execute all operations in a single batch call to execute_batch
-		txId = ExecuteBatchOperations(t, txm, mcmsAddress, deployerAddress, deployerPublicKeyHex, executeTimelockOps, predecessor, salt)
+		txId = ExecuteBatchOperations(t, txm, mcmsAddress, deployerAddress, deployerPublicKeyHex, executeTimelockOps, predecessor, salt, true)
 		WaitForTxmId(t, txm, txId, time.Second*30)
 
 		// Get number of signers after set_config to 2 signers (3 initially)
