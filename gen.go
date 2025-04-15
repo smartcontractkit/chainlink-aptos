@@ -15,7 +15,7 @@ package aptos
 
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/ccip/ccip_token_pools/burn_mint_token_pool/sources/burn_mint_token_pool.move --output ./bindings/ccip_token_pools/burn_mint_token_pool/burn_mint_token_pool
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/ccip/ccip_token_pools/lock_release_token_pool/sources/lock_release_token_pool.move --output ./bindings/ccip_token_pools/lock_release_token_pool/lock_release_token_pool
-//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/ccip/ccip_token_pools/usdc_token_pool/sources/usdc_token_pool.move --output ./bindings/ccip_token_pools/usdc_token_pool/usdc_token_pool
+//go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS,USDC --input ./contracts/ccip/ccip_token_pools/usdc_token_pool/sources/usdc_token_pool.move --output ./bindings/ccip_token_pools/usdc_token_pool/usdc_token_pool
 
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/ccip/ccip_token_pools/token_pool/sources/rate_limiter.move --output ./bindings/ccip_token_pools/token_pool/rate_limiter
 //go:generate go run ./cmd/bindgen --uppercase CCIP,MCMS --input ./contracts/ccip/ccip_token_pools/token_pool/sources/token_pool.move --output ./bindings/ccip_token_pools/token_pool/token_pool
