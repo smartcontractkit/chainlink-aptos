@@ -1,4 +1,4 @@
-module link::mcms_link_token {
+module link::mcms_token_registrar {
     use std::object::{Self, Object};
     use std::option::{Self, Option};
     use std::string::{Self, String};

@@ -7,8 +7,8 @@ authors = []
 link = "_"
 
 [dev-addresses]
-# Calculated with object_code_deployment code address
-link = "0x8e1c980369b736c76f18e37320e42ba8387afcec18e513e46ef46c7599c02787"
+# Calculated with object::create_named_object()
+link = "0xec027d053a48066c79c442d3215e1b775c47f832ac18f8e0539bbd6667f76e85"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }

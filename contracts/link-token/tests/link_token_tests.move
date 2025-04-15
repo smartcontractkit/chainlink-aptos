@@ -3,7 +3,6 @@ module link::link_tests {
     use std::account;
     use std::debug;
     use std::fungible_asset::{Self, Metadata};
-    use std::object_code_deployment;
     use std::option::{Self, Option};
     use std::primary_fungible_store;
     use std::signer;
@@ -11,7 +10,6 @@ module link::link_tests {
     use std::object::{Self};
 
     use link::link_token::Self;
-    use link::object_code_deployment_util;
 
     const MAX_SUPPLY: u128 = 1000000;
     const DECIMALS: u8 = 8;
@@ -25,19 +23,20 @@ module link::link_tests {
         account::create_account_for_test(signer::address_of(owner));
         account::create_account_for_test(signer::address_of(link));
 
-        let (metadata, code) = object_code_deployment_util::test_metadata_and_code();
-        // Calculate object address
+        let constructor_ref = &object::create_named_object(owner, b"link_token_tests");
+
         let object_address =
             object::create_object_address(
-                &signer::address_of(owner),
-                object_code_deployment_util::object_seed(signer::address_of(owner))
+                &signer::address_of(owner), b"link_token_tests"
             );
-        // For debugging, use this as `link` address in Move.toml
+        // For debugging, use this as `@link` address in Move.toml
         debug::print(&object_address);
 
-        object_code_deployment::publish(owner, metadata, code);
+        let object_signer = object::generate_signer(constructor_ref);
+        // Creates the Account to use for `@link`
+        account::create_account_for_test(signer::address_of(&object_signer));
 
-        link_token::init_module_for_testing(link);
+        link_token::init_module_for_testing(&object_signer);
     }
 
     #[test_only]
