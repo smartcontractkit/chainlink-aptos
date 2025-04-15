@@ -154,6 +154,7 @@ func (l LargePackagesTransactor) StageCodeChunkAndUpgradeObjectCode(opts *Transa
 			metadataChunk,
 			codeIndices,
 			codeChunks,
+			objectAddress,
 		})
 	if err != nil {
 		return nil, err
