@@ -1048,7 +1048,6 @@ func TestLoopChainReaderLocal(t *testing.T) {
 	lg := logger.Test(t)
 	privKey, pubKey, acctAddr := setupTestAccount(t, lg)
 
-	// Start node, fund account, compile, deploy contract, etc.
 	err := testutils.StartAptosNode()
 	require.NoError(t, err)
 	rpcURL := "http://localhost:8080/v1"
@@ -1067,7 +1066,6 @@ func TestLoopChainReaderLocal(t *testing.T) {
 	err = txmgr.Start(context.Background())
 	require.NoError(t, err)
 
-	// Deploy the contract.
 	txID := uuid.New().String()
 	err = txmgr.Enqueue(
 		txID,
@@ -1094,7 +1092,6 @@ func TestLoopChainReaderLocal(t *testing.T) {
 	}
 	require.True(t, confirmed, "Contract deploy tx not confirmed")
 
-	// Configuration defined once at the top.
 	config := ChainReaderConfig{
 		Modules: map[string]*ChainReaderModule{
 			"testContract": {
@@ -1130,7 +1127,6 @@ func TestLoopChainReaderLocal(t *testing.T) {
 							"value": {NewName: "SingleUintValue"},
 						},
 					},
-					// The ComplexStruct event binding uses existing renames.
 					"ComplexStructEvent": {
 						EventHandleStructName: "EventStore",
 						EventHandleFieldName:  "complex_struct_events",
@@ -1163,7 +1159,6 @@ func TestLoopChainReaderLocal(t *testing.T) {
 	require.NoError(t, err)
 	confidenceLevel := primitives.Finalized
 
-	// Subtests for GetLatestValue.
 	t.Run("GetLatestValue - Simple value read", func(t *testing.T) {
 		var ret uint64
 		params := struct{ Value1 uint64 }{Value1: 42}
@@ -1220,15 +1215,11 @@ func TestLoopChainReaderLocal(t *testing.T) {
 		require.Equal(t, []uint64{150, 151}, ret.RenamedValues)
 	})
 
-	// QueryKey tests in non-persistent mode.
 	t.Run("QueryKey - non-persistent mode", func(t *testing.T) {
-		// Prepare a new keystore and tx manager for emitting events.
 		ks := testutils.NewTestKeystore(t)
 		ks.AddKey(privKey)
 		pubKeyHex := hex.EncodeToString([]byte(pubKey))
 		txmgr := initTxManager(t, lg, ks, rlClient)
-
-		// Emit only 5 events for faster testing.
 		emitManyEvents(t, txmgr, acctAddr.String(), pubKeyHex, 5)
 
 		t.Run("Filter by SingleUintValue", func(t *testing.T) {
@@ -1240,7 +1231,7 @@ func TestLoopChainReaderLocal(t *testing.T) {
 					),
 				},
 			}
-			limit := query.LimitAndSort{Limit: query.CountLimit(10)}
+			limit := query.LimitAndSort{Limit: query.CountLimit(5)}
 			seqs, err := loopReader.QueryKey(context.Background(), binding, filter, limit, &SingleValueEvent{})
 			require.NoError(t, err)
 			require.NotEmpty(t, seqs)
@@ -1252,14 +1243,14 @@ func TestLoopChainReaderLocal(t *testing.T) {
 
 		t.Run("Sorted Descending", func(t *testing.T) {
 			limit := query.LimitAndSort{
-				Limit: query.CountLimit(10),
+				Limit: query.CountLimit(5),
 				SortBy: []query.SortBy{
 					query.NewSortBySequence(query.Desc),
 				},
 			}
 			seqs, err := loopReader.QueryKey(context.Background(), binding, query.KeyFilter{Key: "SingleValueEvent"}, limit, &SingleValueEvent{})
 			require.NoError(t, err)
-			require.Len(t, seqs, 10)
+			require.Len(t, seqs, 5)
 			for i := 0; i < len(seqs)-1; i++ {
 				curr := seqs[i].Data.(*SingleValueEvent).SingleUintValue
 				next := seqs[i+1].Data.(*SingleValueEvent).SingleUintValue
@@ -1268,21 +1259,20 @@ func TestLoopChainReaderLocal(t *testing.T) {
 		})
 
 		t.Run("ComplexStruct Event", func(t *testing.T) {
-			seqs, err := loopReader.QueryKey(
-				context.Background(),
-				binding,
-				query.KeyFilter{Key: "ComplexStructEvent"},
-				query.LimitAndSort{Limit: query.CountLimit(1)},
-				&ComplexStruct{},
-			)
+			limit := query.LimitAndSort{
+				Limit: query.CountLimit(5),
+				SortBy: []query.SortBy{
+					query.NewSortBySequence(query.Desc),
+				},
+			}
+			seqs, err := loopReader.QueryKey(context.Background(), binding, query.KeyFilter{Key: "ComplexStructEvent"}, limit, &ComplexStruct{})
 			require.NoError(t, err)
 			require.NotEmpty(t, seqs)
-
 			cs := seqs[0].Data.(*ComplexStruct)
 			require.True(t, cs.RenamedFlag, "expected flag to be true")
-			require.Equal(t, uint64(999), cs.RenamedNested.RenamedId)
-			require.Equal(t, "complex", cs.RenamedNested.RenamedDescription)
-			require.Equal(t, []uint64{999, 1000}, cs.RenamedValues)
+			require.Equal(t, uint64(4), cs.RenamedNested.RenamedId)
+			require.Equal(t, "test4", cs.RenamedNested.RenamedDescription)
+			require.Equal(t, []uint64{4, 5}, cs.RenamedValues)
 		})
 	})
 }
