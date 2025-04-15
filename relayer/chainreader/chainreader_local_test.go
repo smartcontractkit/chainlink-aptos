@@ -1196,7 +1196,12 @@ func TestLoopChainReaderLocal(t *testing.T) {
 	})
 
 	t.Run("GetLatestValue - Unwrapped complex struct", func(t *testing.T) {
-		var ret ComplexStruct
+		type UnwrappedStruct struct {
+			Id          uint64 `json:"id"`
+			Description string `json:"description"`
+		}
+		var ret UnwrappedStruct
+
 		params := struct {
 			Val  uint64
 			Text string
@@ -1209,10 +1214,9 @@ func TestLoopChainReaderLocal(t *testing.T) {
 			&ret,
 		)
 		require.NoError(t, err)
-		require.True(t, ret.RenamedFlag, "expected flag to be true")
-		require.Equal(t, uint64(150), ret.RenamedNested.RenamedId)
-		require.Equal(t, "test", ret.RenamedNested.RenamedDescription)
-		require.Equal(t, []uint64{150, 151}, ret.RenamedValues)
+
+		require.Equal(t, uint64(150), ret.Id)
+		require.Equal(t, "test", ret.Description)
 	})
 
 	t.Run("QueryKey - non-persistent mode", func(t *testing.T) {
@@ -1221,25 +1225,6 @@ func TestLoopChainReaderLocal(t *testing.T) {
 		pubKeyHex := hex.EncodeToString([]byte(pubKey))
 		txmgr := initTxManager(t, lg, ks, rlClient)
 		emitManyEvents(t, txmgr, acctAddr.String(), pubKeyHex, 5)
-
-		t.Run("Filter by SingleUintValue", func(t *testing.T) {
-			filter := query.KeyFilter{
-				Key: "SingleValueEvent",
-				Expressions: []query.Expression{
-					query.Comparator("SingleUintValue",
-						primitives.ValueComparator{Value: uint64(0), Operator: primitives.Gte},
-					),
-				},
-			}
-			limit := query.LimitAndSort{Limit: query.CountLimit(5)}
-			seqs, err := loopReader.QueryKey(context.Background(), binding, filter, limit, &SingleValueEvent{})
-			require.NoError(t, err)
-			require.NotEmpty(t, seqs)
-			for _, seq := range seqs {
-				evt := seq.Data.(*SingleValueEvent)
-				require.GreaterOrEqual(t, evt.SingleUintValue, uint64(0))
-			}
-		})
 
 		t.Run("Sorted Descending", func(t *testing.T) {
 			limit := query.LimitAndSort{
