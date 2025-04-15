@@ -10,25 +10,25 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/contracts"
 )
 
-type UsdcTokenPool interface {
+type USDCTokenPool interface {
 	Address() aptos.AccountAddress
 
-	UsdcTokenPool() module_usdc_token_pool.UsdcTokenPoolInterface
+	UsdcTokenPool() module_usdc_token_pool.USDCTokenPoolInterface
 }
 
-var _ UsdcTokenPool = UsdcTokenPoolContract{}
+var _ USDCTokenPool = USDCTokenPoolContract{}
 
-type UsdcTokenPoolContract struct {
+type USDCTokenPoolContract struct {
 	address aptos.AccountAddress
 
-	usdcTokenPool module_usdc_token_pool.UsdcTokenPoolInterface
+	usdcTokenPool module_usdc_token_pool.USDCTokenPoolInterface
 }
 
-func (c UsdcTokenPoolContract) Address() aptos.AccountAddress {
+func (c USDCTokenPoolContract) Address() aptos.AccountAddress {
 	return c.address
 }
 
-func (c UsdcTokenPoolContract) UsdcTokenPool() module_usdc_token_pool.UsdcTokenPoolInterface {
+func (c USDCTokenPoolContract) UsdcTokenPool() module_usdc_token_pool.USDCTokenPoolInterface {
 	return c.usdcTokenPool
 }
 
@@ -67,14 +67,14 @@ func Compile(address,
 	return compile.CompilePackage(contracts.CCIPUSDCTokenPool, namedAddresses)
 }
 
-func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) UsdcTokenPool {
-	return UsdcTokenPoolContract{
+func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) USDCTokenPool {
+	return USDCTokenPoolContract{
 		address:       address,
-		usdcTokenPool: module_usdc_token_pool.NewUsdcTokenPool(address, client),
+		usdcTokenPool: module_usdc_token_pool.NewUSDCTokenPool(address, client),
 	}
 }
 
-// DeployToObject deploys the UsdcTokenPool to a new named object.
+// DeployToObject deploys the USDCTokenPool to a new named object.
 func DeployToObject(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
@@ -87,7 +87,7 @@ func DeployToObject(
 	aptosExtensions,
 	stablecoin,
 	deployer aptos.AccountAddress,
-) (aptos.AccountAddress, *api.PendingTransaction, UsdcTokenPool, error) {
+) (aptos.AccountAddress, *api.PendingTransaction, USDCTokenPool, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
 		"ccip_token_pool":           ccipTokenPoolAddress,

@@ -21,7 +21,7 @@ var (
 	_ = codec.DecodeAptosJsonValue
 )
 
-type UsdcTokenPoolInterface interface {
+type USDCTokenPoolInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	GetToken(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	GetRouter(opts *bind.CallOpts) (aptos.AccountAddress, error)
@@ -45,10 +45,10 @@ type UsdcTokenPoolInterface interface {
 	AcceptOwnership(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 
 	// Encoder returns the encoder implementation of this module.
-	Encoder() UsdcTokenPoolEncoder
+	Encoder() USDCTokenPoolEncoder
 }
 
-type UsdcTokenPoolEncoder interface {
+type USDCTokenPoolEncoder interface {
 	TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetToken() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetRouter() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -83,9 +83,9 @@ type UsdcTokenPoolEncoder interface {
 
 const FunctionInfo = `[{"package":"usdc_token_pool","module":"usdc_token_pool","name":"accept_ownership","parameters":null},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"add_remote_pool","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"remote_pool_address","type":"vector\u003cu8\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"apply_allowlist_updates","parameters":[{"name":"removes","type":"vector\u003caddress\u003e"},{"name":"adds","type":"vector\u003caddress\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"apply_chain_updates","parameters":[{"name":"remote_chain_selectors_to_remove","type":"vector\u003cu64\u003e"},{"name":"remote_chain_selectors_to_add","type":"vector\u003cu64\u003e"},{"name":"remote_pool_addresses_to_add","type":"vector\u003cvector\u003cvector\u003cu8\u003e\u003e\u003e"},{"name":"remote_token_addresses_to_add","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"assert_can_initialize","parameters":[{"name":"caller_address","type":"address"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"decode_dest_pool_data","parameters":[{"name":"dest_pool_data","type":"vector\u003cu8\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"encode_dest_pool_data","parameters":[{"name":"local_domain_identifier","type":"u32"},{"name":"nonce","type":"u64"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"initialize","parameters":[{"name":"local_token","type":"address"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"parse_message_and_attestation","parameters":[{"name":"payload","type":"vector\u003cu8\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"remove_remote_pool","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"remote_pool_address","type":"vector\u003cu8\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"set_chain_rate_limiter_config","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"outbound_is_enabled","type":"bool"},{"name":"outbound_capacity","type":"u64"},{"name":"outbound_rate","type":"u64"},{"name":"inbound_is_enabled","type":"bool"},{"name":"inbound_capacity","type":"u64"},{"name":"inbound_rate","type":"u64"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"set_chain_rate_limiter_configs","parameters":[{"name":"remote_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"outbound_is_enableds","type":"vector\u003cbool\u003e"},{"name":"outbound_capacities","type":"vector\u003cu64\u003e"},{"name":"outbound_rates","type":"vector\u003cu64\u003e"},{"name":"inbound_is_enableds","type":"vector\u003cbool\u003e"},{"name":"inbound_capacities","type":"vector\u003cu64\u003e"},{"name":"inbound_rates","type":"vector\u003cu64\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"set_domains","parameters":[{"name":"remote_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"remote_domain_identifiers","type":"vector\u003cu32\u003e"},{"name":"allowed_remote_callers","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"enableds","type":"vector\u003cbool\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"store_address","parameters":null},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
 
-func NewUsdcTokenPool(address aptos.AccountAddress, client aptos.AptosRpcClient) UsdcTokenPoolInterface {
+func NewUSDCTokenPool(address aptos.AccountAddress, client aptos.AptosRpcClient) USDCTokenPoolInterface {
 	contract := bind.NewBoundContract(address, "usdc_token_pool", "usdc_token_pool", client)
-	return UsdcTokenPoolContract{
+	return USDCTokenPoolContract{
 		BoundContract:        contract,
 		usdcTokenPoolEncoder: usdcTokenPoolEncoder{BoundContract: contract},
 	}
@@ -120,20 +120,20 @@ type CallbackProof struct {
 type McmsCallback struct {
 }
 
-type UsdcTokenPoolContract struct {
+type USDCTokenPoolContract struct {
 	*bind.BoundContract
 	usdcTokenPoolEncoder
 }
 
-var _ UsdcTokenPoolInterface = UsdcTokenPoolContract{}
+var _ USDCTokenPoolInterface = USDCTokenPoolContract{}
 
-func (c UsdcTokenPoolContract) Encoder() UsdcTokenPoolEncoder {
+func (c USDCTokenPoolContract) Encoder() USDCTokenPoolEncoder {
 	return c.usdcTokenPoolEncoder
 }
 
 // View Functions
 
-func (c UsdcTokenPoolContract) TypeAndVersion(opts *bind.CallOpts) (string, error) {
+func (c USDCTokenPoolContract) TypeAndVersion(opts *bind.CallOpts) (string, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.TypeAndVersion()
 	if err != nil {
 		return *new(string), err
@@ -154,7 +154,7 @@ func (c UsdcTokenPoolContract) TypeAndVersion(opts *bind.CallOpts) (string, erro
 	return r0, nil
 }
 
-func (c UsdcTokenPoolContract) GetToken(opts *bind.CallOpts) (aptos.AccountAddress, error) {
+func (c USDCTokenPoolContract) GetToken(opts *bind.CallOpts) (aptos.AccountAddress, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.GetToken()
 	if err != nil {
 		return *new(aptos.AccountAddress), err
@@ -175,7 +175,7 @@ func (c UsdcTokenPoolContract) GetToken(opts *bind.CallOpts) (aptos.AccountAddre
 	return r0, nil
 }
 
-func (c UsdcTokenPoolContract) GetRouter(opts *bind.CallOpts) (aptos.AccountAddress, error) {
+func (c USDCTokenPoolContract) GetRouter(opts *bind.CallOpts) (aptos.AccountAddress, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.GetRouter()
 	if err != nil {
 		return *new(aptos.AccountAddress), err
@@ -196,7 +196,7 @@ func (c UsdcTokenPoolContract) GetRouter(opts *bind.CallOpts) (aptos.AccountAddr
 	return r0, nil
 }
 
-func (c UsdcTokenPoolContract) GetTokenDecimals(opts *bind.CallOpts) (byte, error) {
+func (c USDCTokenPoolContract) GetTokenDecimals(opts *bind.CallOpts) (byte, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.GetTokenDecimals()
 	if err != nil {
 		return *new(byte), err
@@ -217,7 +217,7 @@ func (c UsdcTokenPoolContract) GetTokenDecimals(opts *bind.CallOpts) (byte, erro
 	return r0, nil
 }
 
-func (c UsdcTokenPoolContract) GetRemotePools(opts *bind.CallOpts, remoteChainSelector uint64) ([][]byte, error) {
+func (c USDCTokenPoolContract) GetRemotePools(opts *bind.CallOpts, remoteChainSelector uint64) ([][]byte, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.GetRemotePools(remoteChainSelector)
 	if err != nil {
 		return *new([][]byte), err
@@ -238,7 +238,7 @@ func (c UsdcTokenPoolContract) GetRemotePools(opts *bind.CallOpts, remoteChainSe
 	return r0, nil
 }
 
-func (c UsdcTokenPoolContract) IsRemotePool(opts *bind.CallOpts, remoteChainSelector uint64, remotePoolAddress []byte) (bool, error) {
+func (c USDCTokenPoolContract) IsRemotePool(opts *bind.CallOpts, remoteChainSelector uint64, remotePoolAddress []byte) (bool, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.IsRemotePool(remoteChainSelector, remotePoolAddress)
 	if err != nil {
 		return *new(bool), err
@@ -259,7 +259,7 @@ func (c UsdcTokenPoolContract) IsRemotePool(opts *bind.CallOpts, remoteChainSele
 	return r0, nil
 }
 
-func (c UsdcTokenPoolContract) GetRemoteToken(opts *bind.CallOpts, remoteChainSelector uint64) ([]byte, error) {
+func (c USDCTokenPoolContract) GetRemoteToken(opts *bind.CallOpts, remoteChainSelector uint64) ([]byte, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.GetRemoteToken(remoteChainSelector)
 	if err != nil {
 		return *new([]byte), err
@@ -280,7 +280,7 @@ func (c UsdcTokenPoolContract) GetRemoteToken(opts *bind.CallOpts, remoteChainSe
 	return r0, nil
 }
 
-func (c UsdcTokenPoolContract) IsSupportedChain(opts *bind.CallOpts, remoteChainSelector uint64) (bool, error) {
+func (c USDCTokenPoolContract) IsSupportedChain(opts *bind.CallOpts, remoteChainSelector uint64) (bool, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.IsSupportedChain(remoteChainSelector)
 	if err != nil {
 		return *new(bool), err
@@ -301,7 +301,7 @@ func (c UsdcTokenPoolContract) IsSupportedChain(opts *bind.CallOpts, remoteChain
 	return r0, nil
 }
 
-func (c UsdcTokenPoolContract) GetSupportedChains(opts *bind.CallOpts) ([]uint64, error) {
+func (c USDCTokenPoolContract) GetSupportedChains(opts *bind.CallOpts) ([]uint64, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.GetSupportedChains()
 	if err != nil {
 		return *new([]uint64), err
@@ -322,7 +322,7 @@ func (c UsdcTokenPoolContract) GetSupportedChains(opts *bind.CallOpts) ([]uint64
 	return r0, nil
 }
 
-func (c UsdcTokenPoolContract) GetAllowlistEnabled(opts *bind.CallOpts) (bool, error) {
+func (c USDCTokenPoolContract) GetAllowlistEnabled(opts *bind.CallOpts) (bool, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.GetAllowlistEnabled()
 	if err != nil {
 		return *new(bool), err
@@ -343,7 +343,7 @@ func (c UsdcTokenPoolContract) GetAllowlistEnabled(opts *bind.CallOpts) (bool, e
 	return r0, nil
 }
 
-func (c UsdcTokenPoolContract) GetAllowlist(opts *bind.CallOpts) ([]aptos.AccountAddress, error) {
+func (c USDCTokenPoolContract) GetAllowlist(opts *bind.CallOpts) ([]aptos.AccountAddress, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.GetAllowlist()
 	if err != nil {
 		return *new([]aptos.AccountAddress), err
@@ -364,7 +364,7 @@ func (c UsdcTokenPoolContract) GetAllowlist(opts *bind.CallOpts) ([]aptos.Accoun
 	return r0, nil
 }
 
-func (c UsdcTokenPoolContract) GetDomain(opts *bind.CallOpts, chainSelector uint64) (Domain, error) {
+func (c USDCTokenPoolContract) GetDomain(opts *bind.CallOpts, chainSelector uint64) (Domain, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.GetDomain(chainSelector)
 	if err != nil {
 		return *new(Domain), err
@@ -385,7 +385,7 @@ func (c UsdcTokenPoolContract) GetDomain(opts *bind.CallOpts, chainSelector uint
 	return r0, nil
 }
 
-func (c UsdcTokenPoolContract) GetStoreAddress(opts *bind.CallOpts) (aptos.AccountAddress, error) {
+func (c USDCTokenPoolContract) GetStoreAddress(opts *bind.CallOpts) (aptos.AccountAddress, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.GetStoreAddress()
 	if err != nil {
 		return *new(aptos.AccountAddress), err
@@ -406,7 +406,7 @@ func (c UsdcTokenPoolContract) GetStoreAddress(opts *bind.CallOpts) (aptos.Accou
 	return r0, nil
 }
 
-func (c UsdcTokenPoolContract) Owner(opts *bind.CallOpts) (aptos.AccountAddress, error) {
+func (c USDCTokenPoolContract) Owner(opts *bind.CallOpts) (aptos.AccountAddress, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.Owner()
 	if err != nil {
 		return *new(aptos.AccountAddress), err
@@ -429,7 +429,7 @@ func (c UsdcTokenPoolContract) Owner(opts *bind.CallOpts) (aptos.AccountAddress,
 
 // Entry Functions
 
-func (c UsdcTokenPoolContract) AddRemotePool(opts *bind.TransactOpts, remoteChainSelector uint64, remotePoolAddress []byte) (*api.PendingTransaction, error) {
+func (c USDCTokenPoolContract) AddRemotePool(opts *bind.TransactOpts, remoteChainSelector uint64, remotePoolAddress []byte) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.AddRemotePool(remoteChainSelector, remotePoolAddress)
 	if err != nil {
 		return nil, err
@@ -438,7 +438,7 @@ func (c UsdcTokenPoolContract) AddRemotePool(opts *bind.TransactOpts, remoteChai
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (c UsdcTokenPoolContract) RemoveRemotePool(opts *bind.TransactOpts, remoteChainSelector uint64, remotePoolAddress []byte) (*api.PendingTransaction, error) {
+func (c USDCTokenPoolContract) RemoveRemotePool(opts *bind.TransactOpts, remoteChainSelector uint64, remotePoolAddress []byte) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.RemoveRemotePool(remoteChainSelector, remotePoolAddress)
 	if err != nil {
 		return nil, err
@@ -447,7 +447,7 @@ func (c UsdcTokenPoolContract) RemoveRemotePool(opts *bind.TransactOpts, remoteC
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (c UsdcTokenPoolContract) ApplyChainUpdates(opts *bind.TransactOpts, remoteChainSelectorsToRemove []uint64, remoteChainSelectorsToAdd []uint64, remotePoolAddressesToAdd [][][]byte, remoteTokenAddressesToAdd [][]byte) (*api.PendingTransaction, error) {
+func (c USDCTokenPoolContract) ApplyChainUpdates(opts *bind.TransactOpts, remoteChainSelectorsToRemove []uint64, remoteChainSelectorsToAdd []uint64, remotePoolAddressesToAdd [][][]byte, remoteTokenAddressesToAdd [][]byte) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.ApplyChainUpdates(remoteChainSelectorsToRemove, remoteChainSelectorsToAdd, remotePoolAddressesToAdd, remoteTokenAddressesToAdd)
 	if err != nil {
 		return nil, err
@@ -456,7 +456,7 @@ func (c UsdcTokenPoolContract) ApplyChainUpdates(opts *bind.TransactOpts, remote
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (c UsdcTokenPoolContract) ApplyAllowlistUpdates(opts *bind.TransactOpts, removes []aptos.AccountAddress, adds []aptos.AccountAddress) (*api.PendingTransaction, error) {
+func (c USDCTokenPoolContract) ApplyAllowlistUpdates(opts *bind.TransactOpts, removes []aptos.AccountAddress, adds []aptos.AccountAddress) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.ApplyAllowlistUpdates(removes, adds)
 	if err != nil {
 		return nil, err
@@ -465,7 +465,7 @@ func (c UsdcTokenPoolContract) ApplyAllowlistUpdates(opts *bind.TransactOpts, re
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (c UsdcTokenPoolContract) TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error) {
+func (c USDCTokenPoolContract) TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.TransferOwnership(to)
 	if err != nil {
 		return nil, err
@@ -474,7 +474,7 @@ func (c UsdcTokenPoolContract) TransferOwnership(opts *bind.TransactOpts, to apt
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (c UsdcTokenPoolContract) AcceptOwnership(opts *bind.TransactOpts) (*api.PendingTransaction, error) {
+func (c USDCTokenPoolContract) AcceptOwnership(opts *bind.TransactOpts) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.AcceptOwnership()
 	if err != nil {
 		return nil, err
