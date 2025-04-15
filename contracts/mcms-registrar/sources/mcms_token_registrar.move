@@ -12,15 +12,15 @@ module link::mcms_token_registrar {
 
     #[view]
     public fun type_and_version(): String {
-        string::utf8(b"MCMS LinkToken 1.0.0")
+        string::utf8(b"MCMS Registrar 1.0.0")
     }
 
     fun init_module(publisher: &signer) {
         assert!(object::is_object(@link), E_NOT_PUBLISHER);
 
-        if (@mcms_register_entrypoints != @0x0) {
+        if (@mcms_register_entrypoints == @0x1) {
             mcms_registry::register_entrypoint(
-                publisher, string::utf8(b"mcms_link_token"), McmsCallback {}
+                publisher, string::utf8(b"mcms_token_registrar"), McmsCallback {}
             );
         };
     }
