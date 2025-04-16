@@ -31,7 +31,6 @@ type aptosChainReader struct {
 
 	logger  logger.Logger
 	config  ChainReaderConfig
-	ds      sqlutil.DataSource
 	starter utils.StartStopOnce
 
 	isPersistentMode bool
@@ -50,7 +49,6 @@ func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config Chain
 		logger:                logger.Named(lgr, "AptosChainReader"),
 		client:                client,
 		config:                config,
-		ds:                    ds,
 		moduleAddresses:       map[string]aptos.AccountAddress{},
 		eventAccountAddresses: map[string]aptos.AccountAddress{},
 	}
