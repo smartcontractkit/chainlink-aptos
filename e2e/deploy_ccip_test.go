@@ -114,7 +114,6 @@ func Test_DeployCCIP(t *testing.T) {
 			ChainSelector: chainSelector,
 			Transactions:  []mcmstypes.Transaction{transaction},
 		})
-		fmt.Println("Added call to module: ", module.ModuleName)
 	}
 
 	// Accept ownership of MCMS
@@ -197,18 +196,6 @@ func Test_DeployCCIP(t *testing.T) {
 	proposal, _, err := timelockProposal.Convert(t.Context(), convertersMap)
 	require.NoError(t, err)
 
-	for i, operation := range proposal.Operations {
-		decoder := aptossdk.NewDecoder()
-		decodedOp, err := decoder.Decode(operation.Transaction, module_mcms.FunctionInfo)
-		require.NoError(t, err)
-		fmt.Printf("Operation %d:\n", i)
-		method, args, err := decodedOp.String()
-		require.NoError(t, err)
-		fmt.Printf("Method: %v\n", method)
-		fmt.Println("Args")
-		fmt.Println(args)
-	}
-
 	inspector := aptossdk.NewInspector(client, aptossdk.TimelockRoleBypasser)
 	inspectorsMap := map[mcmstypes.ChainSelector]mcmssdk.Inspector{
 		chainSelector: inspector,
@@ -251,6 +238,7 @@ func Test_DeployCCIP(t *testing.T) {
 		require.NoError(t, err)
 		waitForTransaction(result.Hash)
 	}
+	fmt.Println("🚀 All executed successfully")
 }
 
 func Test_CCIPSend(t *testing.T) {
