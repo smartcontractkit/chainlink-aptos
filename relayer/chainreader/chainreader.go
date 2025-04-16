@@ -464,13 +464,12 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		for _, rec := range dbRecords {
 			var eventData any
 			if a.config.IsLoopPlugin {
-				// For loop plugin mode, re-marshal the data just like the non-persistent branch.
 				resultBytes, err := json.Marshal(rec.Data)
 				if err != nil {
 					return nil, fmt.Errorf("persistent mode: failed to re-marshal event data: %w", err)
 				}
 
-				eventData = resultBytes
+				eventData = &resultBytes
 			} else {
 				decoded := reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
 
@@ -608,7 +607,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 				if err != nil {
 					return nil, fmt.Errorf("failed to re-marshal event for seqNum %d: %w", event.SequenceNumber, err)
 				}
-				eventData = resultBytes
+				eventData = &resultBytes
 			} else {
 				// create new instance of eventData for each event
 				eventData = reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()

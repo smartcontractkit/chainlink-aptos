@@ -161,17 +161,17 @@ func (a *loopChainReader) QueryKey(ctx context.Context, contract types.BoundCont
 	}
 
 	for i, sequence := range sequences {
-		jsonBytes := sequence.Data.([]byte)
+		jsonBytes := sequence.Data.(*[]byte)
 		jsonData := map[string]any{}
-		err := json.Unmarshal(jsonBytes, &jsonData)
+		err := json.Unmarshal(*jsonBytes, &jsonData)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal LOOP sourced JSON event data (`%s`): %w", string(jsonBytes), err)
+			return nil, fmt.Errorf("failed to unmarshal LOOP sourced JSON event data (`%s`): %w", string(*jsonBytes), err)
 		}
 
 		eventData := reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
 		err = codec.DecodeAptosJsonValue(jsonData, &eventData)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode LOOP sourced event data (`%s`) into an Aptos value: %+w", string(jsonBytes), err)
+			return nil, fmt.Errorf("failed to decode LOOP sourced event data (`%s`) into an Aptos value: %+w", string(*jsonBytes), err)
 		}
 
 		sequences[i].Data = eventData

@@ -1509,7 +1509,7 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, seqs)
 
-		// Mismatched type should yield empty results.
+		// Mismatched type should yield an error.
 		invalidTypeFilter := query.KeyFilter{
 			Key: "SingleValueEvent",
 			Expressions: []query.Expression{
@@ -1525,8 +1525,8 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 			query.LimitAndSort{},
 			&SingleValueEvent{},
 		)
-		require.NoError(t, err)
-		require.Empty(t, seqs)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "cannot unmarshal string into Go value")
 	})
 }
 
