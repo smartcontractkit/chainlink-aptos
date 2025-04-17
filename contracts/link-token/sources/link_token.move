@@ -137,7 +137,7 @@ module link::link_token {
         let token_state_signer = &object::generate_signer(constructor_ref);
 
         // create an Account on the object for event handles.
-        account::create_account_if_does_not_exist(signer::address_of(publisher));
+        account::create_account_if_does_not_exist(@link);
         
         let allowed_minters =
             allowlist::new_with_name(publisher, vector[], string::utf8(b"minters"));
