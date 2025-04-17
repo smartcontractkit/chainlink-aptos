@@ -202,6 +202,7 @@ module mcms::mcms {
     const E_INVALID_ROOT_LEN: u64 = 49;
     const E_NOT_CANCELLER_ROLE: u64 = 50;
     const E_NOT_TIMELOCK_ROLE: u64 = 51;
+    const E_UNKNOWN_MCMS_MODULE: u64 = 52;
 
     fun init_module(publisher: &signer) {
         let bypasser = create_multisig(publisher, BYPASSER_ROLE);
@@ -1264,6 +1265,8 @@ module mcms::mcms {
             } else if (module_name_bytes == b"mcms_registry") {
                 // dispatch to the registry module's functions for code object management.
                 timelock_dispatch_to_registry(function_name_bytes, data);
+            } else {
+                abort E_UNKNOWN_MCMS_MODULE;
             }
         } else {
             // If role is present, it must be a bypasser (calling from `execute`).
