@@ -1,4 +1,5 @@
 module link::link_token {
+    use std::account;
     use std::event;
     use std::fungible_asset::{Self, BurnRef, Metadata, MintRef, TransferRef};
     use std::object::{Self, ExtendRef, Object, TransferRef as ObjectTransferRef};
@@ -135,6 +136,9 @@ module link::link_token {
         let extend_ref = object::generate_extend_ref(constructor_ref);
         let token_state_signer = &object::generate_signer(constructor_ref);
 
+        // create an Account on the object for event handles.
+        account::create_account_if_does_not_exist(@link);
+        
         let allowed_minters =
             allowlist::new_with_name(publisher, vector[], string::utf8(b"minters"));
         allowlist::set_allowlist_enabled(&mut allowed_minters, true);
@@ -183,7 +187,7 @@ module link::link_token {
             ownable_state,
             allowed_minters,
             allowed_burners
-        } = move_from(token_state_address);
+        } = move_from<TokenStateDeployment>(token_state_address);
 
         assert_only_owner(signer::address_of(publisher), &ownable_state);
 
