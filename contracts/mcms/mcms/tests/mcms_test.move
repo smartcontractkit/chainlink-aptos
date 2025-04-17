@@ -2132,6 +2132,42 @@ module mcms::mcms_tests {
         assert!(mcms::timelock_min_delay() == delay, 0);
     }
 
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    #[expected_failure(
+        abort_code = mcms::mcms::E_UNKNOWN_MCMS_MODULE, location = mcms::mcms
+    )]
+    public fun test_unknown_mcms_module(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) {
+        setup(deployer, owner, framework);
+
+        let targets = vector[@mcms];
+        let module_names = vector[string::utf8(b"unknown_module")];
+        let function_names = vector[string::utf8(b"timelock_update_min_delay")];
+        let datas = vector[bcs::to_bytes(&MIN_DELAY)];
+        let predecessor = mcms::zero_hash();
+        let salt = vector[1u8];
+
+        mcms::test_timelock_schedule_batch(
+            targets,
+            module_names,
+            function_names,
+            datas,
+            predecessor,
+            salt,
+            0
+        );
+
+        mcms::timelock_execute_batch(
+            targets,
+            module_names,
+            function_names,
+            datas,
+            predecessor,
+            salt
+        );
+    }
+
     #[test]
     public fun test_merkle__ecdsa_recover_evm_addr() {
         let eth_signed_message_hash =
