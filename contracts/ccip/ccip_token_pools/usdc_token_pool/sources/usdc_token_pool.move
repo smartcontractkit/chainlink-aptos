@@ -89,6 +89,9 @@ module usdc_token_pool::usdc_token_pool {
         );
         let metadata = object::address_to_object<Metadata>(@local_token);
 
+        // create an Account on the object for event handles.
+        account::create_account_if_does_not_exist(@usdc_token_pool);
+
         // the name of this module. if incorrect, callbacks will fail to be registered and
         // register_pool will revert.
         let token_pool_module_name = b"usdc_token_pool";

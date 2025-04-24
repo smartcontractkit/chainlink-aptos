@@ -56,6 +56,9 @@ module lock_release_token_pool::lock_release_token_pool {
         );
         let metadata = object::address_to_object<Metadata>(@lock_release_local_token);
 
+        // create an Account on the object for event handles.
+        account::create_account_if_does_not_exist(@lock_release_token_pool);
+
         // the name of this module. if incorrect, callbacks will fail to be registered and
         // register_pool will revert.
         let token_pool_module_name = b"lock_release_token_pool";
