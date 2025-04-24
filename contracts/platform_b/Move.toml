@@ -1,17 +1,13 @@
 [package]
-name = "ChainlinkDataFeeds"
+name = "ChainlinkPlatformB"
 version = "1.0.0"
 authors = []
 
 [addresses]
-data_feeds = "0x300"
-owner = "0xcafe"
-platform_a = "0x100"
-platform_b = "0x200"
-owner_a = "0x11"
-owner_b = "0x22"
+platform_b = "_"
+owner_b = "_"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
-ChainlinkPlatformA = { local = "../platform_a" }
-ChainlinkPlatformB = { local = "../platform_b" }
+
+[dev-dependencies]
