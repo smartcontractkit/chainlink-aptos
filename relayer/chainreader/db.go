@@ -102,7 +102,7 @@ ON CONFLICT DO NOTHING;
 	return nil
 }
 
-func (store *DBStore) QueryEvents(ctx context.Context, eventAccountAddress, eventHandle string, filter query.KeyFilter, limitAndSort query.LimitAndSort) ([]EventRecord, error) {
+func (store *DBStore) QueryEvents(ctx context.Context, eventAccountAddress, eventHandle string, expressions []query.Expression, limitAndSort query.LimitAndSort) ([]EventRecord, error) {
 	baseSQL := `
 SELECT event_account_address, event_handle, event_offset, block_version, block_height, block_hash, block_timestamp, data
 FROM aptos.events
@@ -112,14 +112,14 @@ WHERE event_account_address = $1 AND event_handle = $2
 	args := []interface{}{eventAccountAddress, eventHandle}
 	argCount := 3
 
-	tsFilter, hasTSFilter := extractTimestampFilter(filter.Expressions)
+	tsFilter, hasTSFilter := extractTimestampFilter(expressions)
 	if hasTSFilter {
 		baseSQL += fmt.Sprintf(" AND block_timestamp >= $%d", argCount)
 		args = append(args, tsFilter)
 		argCount++
 	}
 
-	for _, expr := range filter.Expressions {
+	for _, expr := range expressions {
 		if expr.IsPrimitive() {
 			switch v := expr.Primitive.(type) {
 			case *primitives.Comparator:

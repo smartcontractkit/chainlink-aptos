@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/aptos-labs/aptos-go-sdk"
@@ -31,11 +29,8 @@ type aptosChainReader struct {
 
 	logger  logger.Logger
 	config  ChainReaderConfig
-	ds      sqlutil.DataSource
+	dbStore *DBStore
 	starter utils.StartStopOnce
-
-	isPersistentMode bool
-	dbStore          *DBStore
 
 	moduleAddresses       map[string]aptos.AccountAddress
 	eventAccountAddresses map[string]aptos.AccountAddress
@@ -50,14 +45,12 @@ func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config Chain
 		logger:                logger.Named(lgr, "AptosChainReader"),
 		client:                client,
 		config:                config,
-		ds:                    ds,
 		moduleAddresses:       map[string]aptos.AccountAddress{},
 		eventAccountAddresses: map[string]aptos.AccountAddress{},
 	}
 
 	if ds != nil {
 		reader.dbStore = NewDBStore(ds)
-		reader.isPersistentMode = true
 	}
 
 	return reader
@@ -98,53 +91,58 @@ func (a *aptosChainReader) syncEvent(ctx context.Context, boundAddress aptos.Acc
 	}
 
 	eventHandle := boundAddress.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
-
 	latestOffset, err := a.dbStore.GetLatestOffset(ctx, eventAccountAddress.String(), eventHandle)
 	if err != nil {
 		return fmt.Errorf("syncEvent: failed to get latest offset: %w", err)
 	}
 
 	var batchSize uint64 = 25
-	newEvents, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventConfig.EventHandleFieldName, &latestOffset, &batchSize)
-	if err != nil {
-		a.logger.Errorw("syncEvent: failed to fetch new events", "error", err)
-		// If fetching fails, we continue with what is already in the DB
-		// todo: should we rather error out?
-		return nil
-	}
-
-	if len(newEvents) == 0 {
-		return nil
-	}
-
 	var records []EventRecord
-	for _, event := range newEvents {
-		head, err := a.getBlockHead(event.Version)
+	for {
+		newEvents, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventConfig.EventHandleFieldName, &latestOffset, &batchSize)
 		if err != nil {
-			a.logger.Errorw("syncEvent: failed to fetch block metadata", "version", event.Version, "error", err)
-			continue
+			a.logger.Errorw("syncEvent: failed to fetch new events", "error", err)
+			// If fetching fails, we continue with what is already in the DB
+			// todo: should we rather error out?
+			break
 		}
 
-		if err := renameMapFields(event.Data, eventConfig.EventFieldRenames); err != nil {
-			a.logger.Errorw("syncEvent: failed to rename event fields", "error", err)
-			continue
+		if len(newEvents) == 0 {
+			break
 		}
 
-		record := EventRecord{
-			EventAccountAddress: eventAccountAddress.String(),
-			EventHandle:         eventHandle,
-			EventOffset:         event.SequenceNumber,
-			BlockVersion:        event.Version,
-			BlockHeight:         head.Height,
-			BlockHash:           head.Hash,
-			BlockTimestamp:      head.Timestamp,
-			Data:                event.Data,
+		for _, event := range newEvents {
+			head, err := a.getBlockHead(event.Version)
+			if err != nil {
+				a.logger.Errorw("syncEvent: failed to fetch block metadata", "version", event.Version, "error", err)
+				continue
+			}
+
+			if err := renameMapFields(event.Data, eventConfig.EventFieldRenames); err != nil {
+				a.logger.Errorw("syncEvent: failed to rename event fields", "error", err)
+				continue
+			}
+
+			record := EventRecord{
+				EventAccountAddress: eventAccountAddress.String(),
+				EventHandle:         eventHandle,
+				EventOffset:         event.SequenceNumber,
+				BlockVersion:        event.Version,
+				BlockHeight:         head.Height,
+				BlockHash:           head.Hash,
+				BlockTimestamp:      head.Timestamp,
+				Data:                event.Data,
+			}
+			records = append(records, record)
 		}
-		records = append(records, record)
+
+		latestOffset = newEvents[len(newEvents)-1].SequenceNumber + 1
 	}
 
-	if err := a.dbStore.InsertEvents(ctx, records); err != nil {
-		return fmt.Errorf("syncEvent: failed to insert new events: %w", err)
+	if len(records) > 0 {
+		if err := a.dbStore.InsertEvents(ctx, records); err != nil {
+			return fmt.Errorf("syncEvent: failed to insert new events: %w", err)
+		}
 	}
 
 	return nil
@@ -396,8 +394,11 @@ func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request typ
 }
 
 func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]types.Sequence, error) {
-	contractName := contract.Name
+	if a.dbStore == nil {
+		return nil, fmt.Errorf("QueryKey only operates in persistent mode")
+	}
 
+	contractName := contract.Name
 	address, ok := a.moduleAddresses[contractName]
 
 	if !ok {
@@ -449,215 +450,45 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	}
 
 	eventHandle := address.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
-
-	if a.isPersistentMode {
-		if err := a.syncEvent(ctx, address, eventConfig, eventModuleName); err != nil {
-			return nil, fmt.Errorf("persistent mode: syncEvent error: %w", err)
-		}
-
-		dbRecords, err := a.dbStore.QueryEvents(ctx, eventAccountAddress.String(), eventHandle, filter, limitAndSort)
-		if err != nil {
-			return nil, fmt.Errorf("persistent mode: failed to query events: %w", err)
-		}
-
-		var sequences []types.Sequence
-		for _, rec := range dbRecords {
-			var eventData any
-			if a.config.IsLoopPlugin {
-				resultBytes, err := json.Marshal(rec.Data)
-				if err != nil {
-					return nil, fmt.Errorf("persistent mode: failed to re-marshal event data: %w", err)
-				}
-
-				eventData = &resultBytes
-			} else {
-				decoded := reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
-
-				if err := codec.DecodeAptosJsonValue(rec.Data, &decoded); err != nil {
-					return nil, fmt.Errorf("persistent mode: failed to decode event data: %w", err)
-				}
-
-				eventData = decoded
-			}
-
-			sequence := types.Sequence{
-				Cursor: fmt.Sprintf("%d", rec.EventOffset),
-				Head: types.Head{
-					Height:    rec.BlockHeight,
-					Hash:      rec.BlockHash,
-					Timestamp: rec.BlockTimestamp,
-				},
-				Data: eventData,
-			}
-			sequences = append(sequences, sequence)
-		}
-
-		return sequences, nil
+	if err := a.syncEvent(ctx, address, eventConfig, eventModuleName); err != nil {
+		return nil, fmt.Errorf("syncEvent error: %w", err)
 	}
 
-	// Non-persistent mode
-	tsFilter, hasTSFilter := extractTimestampFilter(expressions)
-	var eventOffset uint64 = 0
-	if hasTSFilter {
-		// We perform a binary search to determine the offset
-		// that satisfies the condition blockTs >= tsFilter
-		var one uint64 = 1
-		// API doesn't return the newest event on nil start as documented
-		// todo: uncomment and use high := events[0].SequenceNumber when fixed
-		// events, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventConfig.EventHandleFieldName, nil, &one)
-		// if err != nil {
-		// 	return nil, fmt.Errorf("failed to get newest event for binary search")
-		// }
-
-		// Set binary search range
-		low := uint64(0)
-		high := uint64(1000000)
-
-		for low < high {
-			mid := (low + high) / 2
-			events, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventConfig.EventHandleFieldName, &mid, &one)
-			if err != nil || len(events) == 0 {
-				high = mid
-				continue
-			}
-
-			block, err := a.client.BlockByVersion(events[0].Version, false)
-			if err != nil {
-				return nil, fmt.Errorf("failed to fetch block for binary search at offset %d: %w", mid, err)
-			}
-
-			eventTS := block.BlockTimestamp / 1000000 // Convert microseconds to seconds
-			if eventTS < tsFilter {
-				// event is too old
-				low = mid + 1
-			} else {
-				// event meets or exceeds our filter
-				high = mid
-			}
-		}
-		eventOffset = low
+	dbRecords, err := a.dbStore.QueryEvents(ctx, eventAccountAddress.String(), eventHandle, expressions, limitAndSort)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query events from db: %w", err)
 	}
 
-	// Note: we only support primitive filters for now
-	// All comparators are combined using AND boolean operator
-	var comparators []*primitives.Comparator
-	for _, expr := range expressions {
-		if expr.IsPrimitive() {
-			if cmp, ok := expr.Primitive.(*primitives.Comparator); ok {
-				comparators = append(comparators, cmp)
-			}
-		}
-	}
-
-	var batchSize uint64 = 25
 	var sequences []types.Sequence
-	headCache := map[uint64]types.Head{}
-	limit := limitAndSort.Limit.Count
+	for _, rec := range dbRecords {
+		var eventData any
+		if a.config.IsLoopPlugin {
+			resultBytes, err := json.Marshal(rec.Data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to re-marshal event data: %w", err)
+			}
 
-	for {
-		events, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventConfig.EventHandleFieldName, &eventOffset, &batchSize)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get events: %+w", err)
+			eventData = &resultBytes
+		} else {
+			decoded := reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
+
+			if err := codec.DecodeAptosJsonValue(rec.Data, &decoded); err != nil {
+				return nil, fmt.Errorf("failed to decode event data: %w", err)
+			}
+
+			eventData = decoded
 		}
 
-		if len(events) == 0 {
-			break
+		sequence := types.Sequence{
+			Cursor: fmt.Sprintf("%d", rec.EventOffset),
+			Head: types.Head{
+				Height:    rec.BlockHeight,
+				Hash:      rec.BlockHash,
+				Timestamp: rec.BlockTimestamp,
+			},
+			Data: eventData,
 		}
-
-		eventOffset += uint64(len(events))
-
-		shouldBreak := false
-		for _, event := range events {
-			jsonData := event.Data
-
-			if err := renameMapFields(jsonData, eventConfig.EventFieldRenames); err != nil {
-				return nil, fmt.Errorf("failed to rename event fields: %+w", err)
-			}
-
-			passesFilters := true
-			for _, cmp := range comparators {
-				// Only top level fields
-				fieldValue, ok := jsonData[cmp.Name]
-				if !ok {
-					passesFilters = false
-					break
-				}
-
-				for _, valueCmp := range cmp.ValueComparators {
-					if !compareValue(fieldValue, valueCmp.Value, valueCmp.Operator) {
-						passesFilters = false
-						break
-					}
-				}
-
-				if !passesFilters {
-					break
-				}
-			}
-
-			if !passesFilters {
-				continue
-			}
-
-			var eventData any
-			if a.config.IsLoopPlugin {
-				// immediately remarshal the data
-				// TODO: update aptos-go-sdk to allow returning the string directly
-				resultBytes, err := json.Marshal(jsonData)
-				if err != nil {
-					return nil, fmt.Errorf("failed to re-marshal event for seqNum %d: %w", event.SequenceNumber, err)
-				}
-				eventData = &resultBytes
-			} else {
-				// create new instance of eventData for each event
-				eventData = reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
-
-				err := codec.DecodeAptosJsonValue(jsonData, &eventData)
-				if err != nil {
-					return nil, fmt.Errorf("failed to decode event data: %+w", err)
-				}
-			}
-
-			head, ok := headCache[event.Version]
-			if !ok {
-				head, err = a.getBlockHead(event.Version)
-				if err != nil {
-					return nil, err
-				}
-				headCache[event.Version] = head
-			}
-
-			sequence := types.Sequence{
-				Cursor: fmt.Sprintf("%d", event.SequenceNumber),
-				Head:   head,
-				Data:   eventData,
-			}
-			sequences = append(sequences, sequence)
-
-			// Check if we've reached the limit
-			if limit > 0 && uint64(len(sequences)) >= limit {
-				shouldBreak = true
-				break
-			}
-		}
-
-		if shouldBreak {
-			break
-		}
-	}
-
-	for _, sortBy := range limitAndSort.SortBy {
-		if seqSort, ok := sortBy.(query.SortBySequence); ok {
-			sort.Slice(sequences, func(i, j int) bool {
-				iSeq, _ := strconv.ParseUint(sequences[i].Cursor, 10, 64)
-				jSeq, _ := strconv.ParseUint(sequences[j].Cursor, 10, 64)
-
-				if seqSort.GetDirection() == query.Desc {
-					return iSeq > jSeq
-				}
-				return iSeq < jSeq
-			})
-		}
+		sequences = append(sequences, sequence)
 	}
 
 	return sequences, nil
