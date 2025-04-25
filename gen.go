@@ -28,3 +28,6 @@ package aptos
 //go:generate go run ./cmd/bindgen --input ./contracts/mcms/mcms/sources/mcms_registry.move --output ./bindings/mcms/mcms_registry
 
 //go:generate go run ./cmd/bindgen --input ./contracts/mcms/mcms_test/sources/mcms_user.move --output ./bindings/mcms_test/mcms_user
+
+//go:generate go run ./cmd/bindgen --input ./contracts/data-feeds/sources/registry.move --output ./bindings/data-feeds/registry
+//go:generate go run ./cmd/bindgen --input ./contracts/data-feeds/sources/router.move --output ./bindings/data-feeds/router
