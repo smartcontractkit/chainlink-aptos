@@ -137,7 +137,7 @@ module ccip::rmn_remote {
 
     inline fun calculate_digest(report: &Report): vector<u8> {
         let digest = vector[];
-        eth_abi::encode_bytes32(&mut digest, get_report_digest_header());
+        eth_abi::encode_bytes32(&mut digest, get_report_digest_header_internal());
         eth_abi::encode_u64(&mut digest, report.dest_chain_id);
         eth_abi::encode_u64(&mut digest, report.dest_chain_selector);
         eth_abi::encode_address(&mut digest, report.rmn_remote_contract_address);
@@ -338,7 +338,16 @@ module ccip::rmn_remote {
     }
 
     #[view]
-    public fun get_report_digest_header(): vector<u8> {
+    public fun get_report_digest_header(): vector<u8> acquires RMNRemoteState {
+        let state = borrow_state();
+        if (state.config_count == 0) {
+            vector[]
+        } else {
+            get_report_digest_header_internal()
+        }
+    }
+
+    inline fun get_report_digest_header_internal(): vector<u8> {
         aptos_hash::keccak256(b"RMN_V1_6_ANY2APTOS_REPORT")
     }
 
