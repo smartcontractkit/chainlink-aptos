@@ -4,6 +4,14 @@ version = "1.0.0"
 authors = []
 
 [addresses]
+data_feeds = "_"
+owner = "_"
+platform_a = "_"
+platform_b = "_"
+owner_a = "_"
+owner_b = "_"
+
+[dev-addresses]
 data_feeds = "0x300"
 owner = "0xcafe"
 platform_a = "0x100"
