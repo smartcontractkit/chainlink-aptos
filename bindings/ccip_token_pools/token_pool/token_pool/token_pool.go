@@ -77,6 +77,17 @@ type Released struct {
 	Amount     uint64               `move:"u64"`
 }
 
+type Burned struct {
+	LocalToken aptos.AccountAddress `move:"address"`
+	Amount     uint64               `move:"u64"`
+}
+
+type Minted struct {
+	LocalToken aptos.AccountAddress `move:"address"`
+	Recipient  aptos.AccountAddress `move:"address"`
+	Amount     uint64               `move:"u64"`
+}
+
 type AllowlistRemove struct {
 	Sender aptos.AccountAddress `move:"address"`
 }
