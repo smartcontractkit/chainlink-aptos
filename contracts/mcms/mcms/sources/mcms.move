@@ -1784,4 +1784,14 @@ module mcms::mcms {
             data
         }
     }
+
+    #[test_only]
+    public fun test_timelock_dispatch(
+        target: address,
+        module_name: String,
+        function_name: String,
+        data: vector<u8>
+    ) acquires Multisig, MultisigState, Timelock {
+        timelock_dispatch(target, module_name, function_name, data)
+    }
 }

@@ -728,4 +728,31 @@ module mcms::mcms_registry {
     public fun init_module_for_testing(publisher: &signer) {
         init_module(publisher);
     }
+
+    #[test_only]
+    public fun test_start_dispatch(
+        callback_address: address,
+        callback_module_name: String,
+        callback_function: String,
+        data: vector<u8>
+    ): Object<Metadata> acquires RegistryState, OwnerRegistration {
+        start_dispatch(
+            callback_address,
+            callback_module_name,
+            callback_function,
+            data
+        )
+    }
+
+    #[test_only]
+    public fun test_finish_dispatch(callback_address: address) acquires RegistryState {
+        finish_dispatch(callback_address)
+    }
+
+    #[test_only]
+    public fun move_from_owner_transfers(owner_address: address) acquires OwnerTransfers {
+        let OwnerTransfers { pending_transfers } =
+            move_from<OwnerTransfers>(owner_address);
+        pending_transfers.destroy();
+    }
 }
