@@ -23,3 +23,5 @@ owner_b = "0x22"
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
 ChainlinkPlatformA = { local = "../platform_a" }
 ChainlinkPlatformB = { local = "../platform_b" }
+
+[dev-dependencies]

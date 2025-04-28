@@ -115,7 +115,6 @@ module data_feeds::registry {
     const ENOT_PROPOSED_OWNER: u64 = 11;
     const EEMPTY_WORKFLOW_OWNERS: u64 = 12;
 
-
     inline fun assert_is_owner(
         registry: &Registry, target_address: address
     ) {
@@ -147,20 +146,22 @@ module data_feeds::registry {
         let object_signer = object::generate_signer(&constructor_ref);
 
         // callback for Storage-A
-        let cb_a = aptos_framework::function_info::new_function_info(
-            publisher,
-            string::utf8(b"registry"),
-            string::utf8(b"on_report_a")
-        );
+        let cb_a =
+            aptos_framework::function_info::new_function_info(
+                publisher,
+                string::utf8(b"registry"),
+                string::utf8(b"on_report_a")
+            );
         // register to receive platform_a::forwarder reports
         platform_a::storage::register(publisher, cb_a, new_proof_a());
 
         // callback for Storage-B
-        let cb_b = aptos_framework::function_info::new_function_info(
-            publisher,
-            string::utf8(b"registry"),
-            string::utf8(b"on_report_b")
-        );
+        let cb_b =
+            aptos_framework::function_info::new_function_info(
+                publisher,
+                string::utf8(b"registry"),
+                string::utf8(b"on_report_b")
+            );
         // register to receive platform_b::forwarder reports
         platform_b::storage::register(publisher, cb_b, new_proof_b());
 
@@ -313,6 +314,7 @@ module data_feeds::registry {
     /// Only has the `drop` ability to prevent copying and persisting in global storage.
     // Slot-A and Slot-B proof types
     struct OnReceiveA has drop {}
+
     struct OnReceiveB has drop {}
 
     /// Creates a new OnReceive object.
@@ -476,8 +478,7 @@ module data_feeds::registry {
         let observation_timestamp: u256;
         let benchmark_price: u256;
 
-        observation_timestamp =
-            (to_u32be(vector::slice(&report_data, 60, 64)) as u256);
+        observation_timestamp = (to_u32be(vector::slice(&report_data, 60, 64)) as u256);
         // NOTE: aptos has no signed integer types, so can't parse as i192, this is a raw representation
         benchmark_price = to_u256be(vector::slice(&report_data, 64, 96));
 
@@ -662,7 +663,9 @@ module data_feeds::registry {
     }
 
     #[test_only]
-    fun set_up_test(publisher: &signer, platform_a: &signer, platform_b: &signer) {
+    fun set_up_test(
+        publisher: &signer, platform_a: &signer, platform_b: &signer
+    ) {
         use aptos_framework::account::{Self};
         account::create_account_for_test(signer::address_of(publisher));
 
@@ -769,9 +772,19 @@ module data_feeds::registry {
         assert!(reports == expected_reports, 1);
     }
 
-    #[test(owner = @owner, publisher = @data_feeds, platform_a = @platform_a, platform_b = @platform_b)]
+    #[
+        test(
+            owner = @owner,
+            publisher = @data_feeds,
+            platform_a = @platform_a,
+            platform_b = @platform_b
+        )
+    ]
     fun test_perform_update(
-        owner: &signer, publisher: &signer, platform_a: &signer, platform_b: &signer
+        owner: &signer,
+        publisher: &signer,
+        platform_a: &signer,
+        platform_b: &signer
     ) acquires Registry {
         set_up_test(publisher, platform_a, platform_b);
 
@@ -827,10 +840,20 @@ module data_feeds::registry {
         assert!(get_owner() == signer::address_of(new_owner), 2);
     }
 
-    #[test(publisher = @data_feeds, platform_a = @platform_a, platform_b = @platform_b, unknown_user = @0xbeef)]
+    #[
+        test(
+            publisher = @data_feeds,
+            platform_a = @platform_a,
+            platform_b = @platform_b,
+            unknown_user = @0xbeef
+        )
+    ]
     #[expected_failure(abort_code = 327681, location = data_feeds::registry)]
     fun test_transfer_ownership_failure_not_owner(
-        publisher: &signer, platform_a: &signer, platform_b: &signer, unknown_user: &signer
+        publisher: &signer,
+        platform_a: &signer,
+        platform_b: &signer,
+        unknown_user: &signer
     ) acquires Registry {
         set_up_test(publisher, platform_a, platform_b);
 
@@ -839,10 +862,20 @@ module data_feeds::registry {
         transfer_ownership(unknown_user, signer::address_of(unknown_user));
     }
 
-    #[test(owner = @owner, publisher = @data_feeds, platform_a = @platform_a, platform_b = @platform_b)]
+    #[
+        test(
+            owner = @owner,
+            publisher = @data_feeds,
+            platform_a = @platform_a,
+            platform_b = @platform_b
+        )
+    ]
     #[expected_failure(abort_code = 65546, location = data_feeds::registry)]
     fun test_transfer_ownership_failure_transfer_to_self(
-        owner: &signer, publisher: &signer, platform_a: &signer, platform_b: &signer
+        owner: &signer,
+        publisher: &signer,
+        platform_a: &signer,
+        platform_b: &signer
     ) acquires Registry {
         set_up_test(publisher, platform_a, platform_b);
 
@@ -877,7 +910,9 @@ module data_feeds::registry {
     }
 
     #[test(publisher = @data_feeds, platform_a = @platform_a, platform_b = @platform_b)]
-    fun test_retrieve_benchmark(publisher: &signer, platform_a: &signer, platform_b: &signer) acquires Registry {
+    fun test_retrieve_benchmark(
+        publisher: &signer, platform_a: &signer, platform_b: &signer
+    ) acquires Registry {
         set_up_test(publisher, platform_a, platform_b);
 
         let feed_id = vector[1, 2, 3, 4, 5];
