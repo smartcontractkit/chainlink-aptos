@@ -667,7 +667,7 @@ module ccip::fee_quoter {
             } else { 0 };
 
         let call_data_length: u256 =
-            (data_len as u256) * (token_transfer_bytes_overhead as u256);
+            (data_len as u256) + (token_transfer_bytes_overhead as u256);
         let dest_call_data_cost =
             call_data_length
                 * (dest_chain_config.dest_gas_per_payload_byte_base as u256);
