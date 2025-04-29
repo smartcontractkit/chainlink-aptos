@@ -514,9 +514,6 @@ module data_feeds::registry {
 
         let is_v03 = vector::length(&report_data) == 9 * 32; // 288 bytes
 
-        std::debug::print(&is_v03);
-        std::debug::print(&vector::length(&report_data));
-
         let observation_timestamp_ptr: u64 = if (is_v03) { 3 * 32 } else { 64 };
         let benchmark_price_ptr: u64       = if (is_v03) { 6 * 32 } else { 64 };
 
