@@ -150,7 +150,7 @@ module data_feeds::registry {
         let transfer_ref = object::generate_transfer_ref(&constructor_ref);
         let object_signer = object::generate_signer(&constructor_ref);
 
-        // callback for active slot
+        // callback for on_report function
         let cb =
             aptos_framework::function_info::new_function_info(
                 publisher,
@@ -160,7 +160,7 @@ module data_feeds::registry {
         // register to receive platform::forwarder reports
         platform::storage::register(publisher, cb, new_proof());
 
-        // callback for Storage-B
+        // callback for on_report_b function
         let cb_b =
             aptos_framework::function_info::new_function_info(
                 publisher,
