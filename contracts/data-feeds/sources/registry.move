@@ -114,7 +114,7 @@ module data_feeds::registry {
     const ECANNOT_TRANSFER_TO_SELF: u64 = 10;
     const ENOT_PROPOSED_OWNER: u64 = 11;
     const EEMPTY_WORKFLOW_OWNERS: u64 = 12;
-    const EINVALID_RAW_REPORT: u64 = 7;
+    const EINVALID_RAW_REPORT: u64 = 13;
 
     // Schema types (For Backwards Compatibility) only
     const SCHEMA_V3: u16 = 3;
