@@ -395,8 +395,10 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 
 	// TODO: implement a background WriteTxConfirmer to periodically source new events/transactions,
 	// relevant to this forwarder), and emit write-tx-accepted/confirmed events.
-
-	go c.acceptAndConfirmWrite(ctx, *info, txID, query)
+	err = c.acceptAndConfirmWrite(ctx, *info, txID, query)
+	if err != nil {
+		return capabilities.CapabilityResponse{}, err
+	}
 	return success(), nil
 }
 
@@ -416,7 +418,7 @@ func (c *writeTarget) UnregisterFromWorkflow(ctx context.Context, request capabi
 //   - 'platform.write-target.WriteAccepted'  if accepted (with or without an error)
 //   - 'platform.write-target.WriteError'     if accepted (with an error)
 //   - 'platform.write-target.WriteConfirmed' if confirmed (until timeout)
-func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInfo, txID uuid.UUID, query func(context.Context) (*TransmissionState, error)) {
+func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInfo, txID uuid.UUID, query func(context.Context) (*TransmissionState, error)) error {
 	attrs := c.traceAttributes(info.request.Metadata.WorkflowExecutionID)
 	_, span := c.beholder.Tracer.Start(ctx, "Execute.acceptAndConfirmWrite", trace.WithAttributes(attrs...))
 	defer span.End()
@@ -438,69 +440,30 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 	capInfo, _ := c.Info(ctx)
 	builder := NewMessageBuilder(c.chainInfo, capInfo)
 
-	// Fn helpers
-	checkAcceptedStatus := func(ctx context.Context) (commontypes.TransactionStatus, bool, error) {
-		// Check TXM for status
-		status, err := c.cw.GetTransactionStatus(ctx, txID.String())
-		if err != nil {
-			return commontypes.Unknown, false, fmt.Errorf("failed to get tx status: %w", err)
-		}
-
-		lggr.Debugw("txm - tx status", "txID", txID, "status", status)
-
-		// Check if the transaction was accepted (included in a chain block, not required to be finalized)
-		// Notice: 'Unconfirmed' is used by TXM to indicate the transaction is not yet included in a block,
-		// while 'Included' (N/A yet) could be used to indicate the transaction is included in a block but not yet finalized.
-		if /* status == commontypes.Included || */ status == commontypes.Finalized {
-			return status, true, nil
-		}
-
-		// false if [Unknown, Pending, Failed, Fatal]
-		return status, false, nil
+	txAccepted, err := c.waitUntilFinalized(ctx, lggr, txID)
+	if err != nil {
+		// We (eventually) failed to confirm the report was transmitted
+		msg := builder.buildWriteError(&info, 0, "failed to wait until tx gets finalized", err.Error())
+		lggr.Errorw("failed to wait until tx gets finalized", "txID", txID, "error", err)
+		_ = c.beholder.ProtoEmitter.Emit(ctx, msg)
+		return msg.AsError()
 	}
-	checkConfirmedStatus := query
 
-	// Store the acceptance status
-	accepted := false
+	checkConfirmedStatus := query
 
 	for {
 		select {
 		case <-ctx.Done():
 			// We (eventually) failed to confirm the report was transmitted
-			_ = c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteError(&info, 0, "write confirmation - failed", "timed out"))
-			return
+			msg := builder.buildWriteError(&info, 0, "write confirmation - failed", "timed out")
+			_ = c.beholder.ProtoEmitter.EmitWithLog(ctx, msg)
+			return msg.AsError()
 		case <-ticker.C:
 			// Fetch the latest head from the chain (timestamp)
 			head, err := c.cs.LatestHead(ctx)
 			if err != nil {
 				lggr.Errorw("failed to fetch the latest head", "txID", txID, "err", err)
 				continue
-			}
-
-			if !accepted {
-				// Check acceptance status
-				status, accepted, err := checkAcceptedStatus(ctx)
-				if err != nil {
-					lggr.Errorw("failed to check accepted status", "txID", txID, "err", err)
-					continue
-				}
-
-				if !accepted {
-					lggr.Infow("not accepted yet", "txID", txID, "status", status)
-					continue
-				}
-
-				lggr.Infow("accepted", "txID", txID, "status", status)
-				// Notice: report write confirmation is only possible after a tx is accepted without an error
-				// TODO: [Beholder] Emit 'platform.write-target.WriteAccepted' (useful to source tx hash, block number, and tx status/error)
-
-				// TODO: check if accepted with an error (e.g., on-chain revert)
-				// Notice: this functionality is not available in the current CW/TXM API
-				acceptedWithErr := false
-				if acceptedWithErr { //nolint:staticcheck
-					// TODO: [Beholder] Emit 'platform.write-target.WriteError' if accepted with an error (surface specific on-chain error)
-					// Notice: no return, we continue to check for confirmation (tx could be accepted by another node)
-				}
 			}
 
 			// Check confirmation status (transmission state)
@@ -517,13 +480,62 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 
 			// We (eventually) confirmed the report was transmitted
 			// Emit the confirmation message and return
-			lggr.Infow("confirmed - transmission state visible", "txID", txID)
+			if !txAccepted {
+				lggr.Infow("confirmed - transmission state visible but submitted by another node. This node's tx failed", "txID", txID)
+			} else {
+				lggr.Infow("confirmed - transmission state visible", "txID", txID)
+			}
 
 			// Source the transmitter address from the on-chain state
 			info.reportTransmissionState = state
 
 			_ = c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(&info, head))
-			return
+
+			return nil
+		}
+	}
+}
+
+func (c *writeTarget) waitUntilFinalized(ctx context.Context, lggr logger.Logger, txID uuid.UUID) (accepted bool, err error) {
+	// Retry interval for the confirmation process
+	interval := c.config.ConfirmerPollPeriod.Duration()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		case <-ticker.C:
+			// Check TXM for status
+			status, err := c.cw.GetTransactionStatus(ctx, txID.String())
+			if err != nil {
+				lggr.Errorw("failed to fetch the transaction status", "txID", txID, "err", err)
+				continue
+			}
+
+			lggr.Debugw("txm - tx status", "txID", txID, "status", status)
+
+			// Check if the transaction was accepted (included in a chain block, not required to be finalized)
+			// Notice: 'Unconfirmed' is used by TXM to indicate the transaction is not yet included in a block,
+			// while 'Included' (N/A yet) could be used to indicate the transaction is included in a block but not yet finalized.
+			// Check if the transaction was accepted (included in a chain block, not required to be finalized)
+			// Notice: 'Unconfirmed' is used by TXM to indicate the transaction is not yet included in a block,
+			// while 'Included' (N/A yet) could be used to indicate the transaction is included in a block but not yet finalized.
+			switch status {
+			case commontypes.Finalized /*,commontypes.Included*/ :
+				// Notice: report write confirmation is only possible after a tx is accepted without an error
+				// TODO: [Beholder] Emit 'platform.write-target.WriteAccepted' (useful to source tx hash, block number, and tx status/error)
+				lggr.Infow("accepted", "txID", txID, "status", status)
+				return true, nil
+			case commontypes.Failed, commontypes.Fatal:
+				// TODO: [Beholder] Emit 'platform.write-target.WriteError' if accepted with an error (surface specific on-chain error)
+				lggr.Infow("transaction failed", "txID", txID, "status", status)
+				return false, nil
+			default:
+				lggr.Infow("not accepted yet", "txID", txID, "status", status)
+				continue
+			}
 		}
 	}
 }
