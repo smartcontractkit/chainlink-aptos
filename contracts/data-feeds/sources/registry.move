@@ -114,6 +114,11 @@ module data_feeds::registry {
     const ECANNOT_TRANSFER_TO_SELF: u64 = 10;
     const ENOT_PROPOSED_OWNER: u64 = 11;
     const EEMPTY_WORKFLOW_OWNERS: u64 = 12;
+    const EINVALID_RAW_REPORT: u64 = 7;
+
+    // Schema types (For Backwards Compatibility) only
+    const SCHEMA_V3: u16 = 3;
+    const SCHEMA_V4: u16 = 4;
 
     inline fun assert_is_owner(
         registry: &Registry, target_address: address
@@ -145,15 +150,15 @@ module data_feeds::registry {
         let transfer_ref = object::generate_transfer_ref(&constructor_ref);
         let object_signer = object::generate_signer(&constructor_ref);
 
-        // callback for Storage-A
-        let cb_a =
+        // callback for active slot
+        let cb =
             aptos_framework::function_info::new_function_info(
                 publisher,
                 string::utf8(b"registry"),
-                string::utf8(b"on_report_a")
+                string::utf8(b"on_report")
             );
-        // register to receive platform_a::forwarder reports
-        platform_a::storage::register(publisher, cb_a, new_proof_a());
+        // register to receive platform::forwarder reports
+        platform::storage::register(publisher, cb, new_proof());
 
         // callback for Storage-B
         let cb_b =
@@ -312,14 +317,12 @@ module data_feeds::registry {
     /// Serves as a proof type for the dispatch engine, used to authenticate and handle incoming message callbacks.
     /// This identifier links callback registration with the `on_report` event and enables secure retrieval of callback data.
     /// Only has the `drop` ability to prevent copying and persisting in global storage.
-    // Slot-A and Slot-B proof types
-    struct OnReceiveA has drop {}
-
+    struct OnReceive has drop {}
     struct OnReceiveB has drop {}
 
     /// Creates a new OnReceive object.
-    inline fun new_proof_a(): OnReceiveA {
-        OnReceiveA {}
+    inline fun new_proof(): OnReceive {
+        OnReceive {}
     }
 
     /// Creates a new OnReceive object.
@@ -327,22 +330,22 @@ module data_feeds::registry {
         OnReceiveB {}
     }
 
-    public fun on_report_a<T: key>(_meta: object::Object<T>): option::Option<u128> acquires Registry {
+    public fun on_report<T: key>(_meta: object::Object<T>): option::Option<u128> acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
 
-        let (metadata, data) = platform_a::storage::retrieve(new_proof_a());
+        let (metadata, data) = platform::storage::retrieve(new_proof());
 
-        let parsed_metadata = platform_a::storage::parse_report_metadata(metadata);
+        let parsed_metadata = platform::storage::parse_report_metadata(metadata);
 
         let workflow_owner =
-            platform_a::storage::get_report_metadata_workflow_owner(&parsed_metadata);
+            platform::storage::get_report_metadata_workflow_owner(&parsed_metadata);
         assert!(
             vector::contains(&registry.allowed_workflow_owners, &workflow_owner),
             EUNAUTHORIZED_WORKFLOW_OWNER
         );
 
         let workflow_name =
-            platform_a::storage::get_report_metadata_workflow_name(&parsed_metadata);
+            platform::storage::get_report_metadata_workflow_name(&parsed_metadata);
         assert!(
             vector::is_empty(&registry.allowed_workflow_names)
                 || vector::contains(&registry.allowed_workflow_names, &workflow_name),
@@ -441,26 +444,60 @@ module data_feeds::registry {
 
     // Parse ETH ABI encoded raw data into multiple reports
     fun parse_raw_report(data: vector<u8>): (vector<vector<u8>>, vector<vector<u8>>) {
-        let offset = 0;
+        let data_len: u64 = vector::length(&data);
+        let offset: u64 = 0;
         assert!(
             to_u256be(vector::slice(&data, offset, offset + 32)) == 32,
             32
         );
         offset = offset + 32;
 
-        let count = to_u256be(vector::slice(&data, offset, offset + 32));
+        let count_u256 = to_u256be(vector::slice(&data, offset, offset + 32));
+        // Should be safe, we should never have enough reports to overflow this
+        let count: u64  = count_u256 as u64;
         offset = offset + 32;
 
-        let feed_ids = vector[];
-        let reports = vector[];
+        let feed_ids: vector<vector<u8>> = vector::empty<vector<u8>>();
+        let reports: vector<vector<u8>> = vector::empty<vector<u8>>();
 
-        for (i in 0..count) {
-            let feed_id = vector::slice(&data, offset, offset + 32);
-            vector::push_back(&mut feed_ids, feed_id);
-            let len = 96;
-            let report = vector::slice(&data, offset, offset + len);
-            vector::push_back(&mut reports, report);
-            offset = offset + len;
+        let is_v03: bool = data_len == count * 13 * 32 + 2 * 32;
+        let is_llo: bool = data_len == count * 3 * 32 + 64;
+
+        if (is_v03) {
+            // skip len * offsets table
+            offset = offset + 32 * count;
+        };
+
+        if (is_llo) {
+            for (i in 0..count) {
+                let feed_id = vector::slice(&data, offset, offset + 32);
+                vector::push_back(&mut feed_ids, feed_id);
+                let len = 3 * 32;
+                let report = vector::slice(&data, offset, offset + len);
+                vector::push_back(&mut reports, report);
+                offset = offset + len;
+            };
+        } else if (is_v03) {
+            for (i in 0..count) {
+                let feed_id = vector::slice(&data, offset, offset + 32);
+                vector::push_back(&mut feed_ids, feed_id);
+                offset = offset + 32;
+
+                assert!(
+                    to_u256be(vector::slice(&data, offset, offset + 32)) == 64,
+                    64
+                );
+                offset = offset + 32;
+
+                let len = (to_u256be(vector::slice(&data, offset, offset + 32)) as u64);
+                offset = offset + 32;
+
+                let report = vector::slice(&data, offset, offset + len);
+                vector::push_back(&mut reports, report);
+                offset = offset + len;
+            };
+        } else {
+                abort error::invalid_argument(EINVALID_RAW_REPORT);
         };
 
         (feed_ids, reports)
@@ -475,12 +512,27 @@ module data_feeds::registry {
         );
         let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
 
-        let observation_timestamp: u256;
-        let benchmark_price: u256;
+        let is_v03 = vector::length(&report_data) == 9 * 32; // 288 bytes
 
-        observation_timestamp = (to_u32be(vector::slice(&report_data, 60, 64)) as u256);
-        // NOTE: aptos has no signed integer types, so can't parse as i192, this is a raw representation
-        benchmark_price = to_u256be(vector::slice(&report_data, 64, 96));
+        std::debug::print(&is_v03);
+        std::debug::print(&vector::length(&report_data));
+
+        let observation_timestamp_ptr: u64 = if (is_v03) { 3 * 32 } else { 64 };
+        let benchmark_price_ptr: u64       = if (is_v03) { 6 * 32 } else { 64 };
+
+        let observation_timestamp: u256 =
+            to_u32be(
+                vector::slice(&report_data,
+                            observation_timestamp_ptr - 4,
+                            observation_timestamp_ptr)
+            ) as u256;
+
+        let benchmark_price: u256 =
+            to_u256be(
+                vector::slice(&report_data,
+                            benchmark_price_ptr,
+                            benchmark_price_ptr + 32)
+            );
 
         if (feed.observation_timestamp >= observation_timestamp) {
             event::emit(
@@ -664,13 +716,13 @@ module data_feeds::registry {
 
     #[test_only]
     fun set_up_test(
-        publisher: &signer, platform_a: &signer, platform_b: &signer
+        publisher: &signer, platform: &signer, platform_b: &signer
     ) {
         use aptos_framework::account::{Self};
         account::create_account_for_test(signer::address_of(publisher));
 
-        platform_a::forwarder::init_module_for_testing(platform_a);
-        platform_a::storage::init_module_for_testing(platform_a);
+        platform::forwarder::init_module_for_testing(platform);
+        platform::storage::init_module_for_testing(platform);
 
         platform_b::forwarder::init_module_for_testing(platform_b);
         platform_b::storage::init_module_for_testing(platform_b);
@@ -776,17 +828,17 @@ module data_feeds::registry {
         test(
             owner = @owner,
             publisher = @data_feeds,
-            platform_a = @platform_a,
+            platform = @platform,
             platform_b = @platform_b
         )
     ]
     fun test_perform_update(
         owner: &signer,
         publisher: &signer,
-        platform_a: &signer,
+        platform: &signer,
         platform_b: &signer
     ) acquires Registry {
-        set_up_test(publisher, platform_a, platform_b);
+        set_up_test(publisher, platform, platform_b);
 
         let report_data =
             x"00011111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a8";
@@ -814,11 +866,113 @@ module data_feeds::registry {
         assert!(benchmark.observation_timestamp == expected_timestamp, 1);
     }
 
+
+    #[test]
+    fun test_parse_raw_report_v3() {
+        // request_context = 00018463f564e082c55b7237add2a03bd6b3c35789d38be0f6964d9aba82f1a8000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000
+        // metadata = 1019256d85b84c7ba85cd9b7bb94fe15b73d7ec99e3cc0f470ee5dd2a1eaac88c000000000000000000000000bc3a8582cc08d3df797ab13a6c567eadb2517b3f0f931b7145b218016bf9dde43030303045544842544300000000000000000000000000000000000000aa00010
+        // 0000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000001c
+        // raw report =
+        // 0000000000000000000000000000000000000000000000000000000000000020 32
+        // 0000000000000000000000000000000000000000000000000000000000000002 len=2
+        // 0000000000000000000000000000000000000000000000000000000000000040 offset
+        // 00000000000000000000000000000000000000000000000000000000000001c0 offset
+        // 0003111111111111111100000000000000000000000000000000000000000000 feed_id
+        // 0000000000000000000000000000000000000000000000000000000000000040 offset
+        // 0000000000000000000000000000000000000000000000000000000000000120 len=228
+        // 0003111111111111111100000000000000000000000000000000000000000000
+        // 0000000000000000000000000000000000000000000000000000000066b3a12c
+        // 0000000000000000000000000000000000000000000000000000000066b3a12c
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 0000000000000000000000000000000000000000000000000000000066c2e36c
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 0003222222222222222200000000000000000000000000000000000000000000 feed_id
+        // 0000000000000000000000000000000000000000000000000000000000000040 offset
+        // 0000000000000000000000000000000000000000000000000000000000000120 len=228
+        // 0003222222222222222200000000000000000000000000000000000000000000
+        // 0000000000000000000000000000000000000000000000000000000066b3a12c
+        // 0000000000000000000000000000000000000000000000000000000066b3a12c
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 0000000000000000000000000000000000000000000000000000000066c2e36c
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+        // 00000000000000000000000000000000000000000000000000000000000494a8
+
+        let data =
+            x"00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000001c000031111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000012000031111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800032222222222222222000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000012000032222222222222222000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a8";
+
+        let (feed_ids, reports) = parse_raw_report(data);
+        std::debug::print(&feed_ids);
+        std::debug::print(&reports);
+
+        assert!(
+            feed_ids
+                == vector[
+                    x"0003111111111111111100000000000000000000000000000000000000000000",
+                    x"0003222222222222222200000000000000000000000000000000000000000000"
+                ],
+            1
+        );
+
+        let expected_reports = vector[
+            x"00031111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a8",
+            x"00032222222222222222000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a8"
+        ];
+        assert!(reports == expected_reports, 1);
+    }
+
     #[
         test(
             owner = @owner,
             publisher = @data_feeds,
-            platform_a = @platform_a,
+            platform = @platform,
+            platform_b = @platform_b
+        )
+    ]
+    fun test_perform_update_v3(
+        owner: &signer,
+        publisher: &signer,
+        platform: &signer,
+        platform_b: &signer
+    ) acquires Registry {
+        set_up_test(publisher, platform, platform_b);
+
+        let report_data =
+            x"0003fbba4fce42f65d6032b18aee53efdf526cc734ad296cb57565979d883bdd0000000000000000000000000000000000000000000000000000000066ed173e0000000000000000000000000000000000000000000000000000000066ed174200000000000000007fffffffffffffffffffffffffffffffffffffffffffffff00000000000000007fffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000066ee68c2000000000000000000000000000000000000000000000d808cc35e6ed670bd00000000000000000000000000000000000000000000000d808590c35425347980000000000000000000000000000000000000000000000d8093f5f989878e7c00";
+        let feed_id = vector::slice(&report_data, 0, 32);
+        let expected_timestamp = 0x000066ed1742;
+        let expected_benchmark = 0x000d808cc35e6ed670bd00;
+
+        let config_id = vector[1];
+
+        set_feeds(
+            owner,
+            vector[feed_id],
+            vector[string::utf8(b"description")],
+            config_id
+        );
+
+        let registry = borrow_global_mut<Registry>(get_state_addr());
+        perform_update(registry, feed_id, report_data);
+
+        let benchmarks = get_benchmarks(owner, vector[feed_id]);
+        assert!(vector::length(&benchmarks) == 1, 1);
+
+        let benchmark = vector::borrow(&benchmarks, 0);
+
+        assert!(benchmark.benchmark == expected_benchmark, 1);
+        assert!(benchmark.observation_timestamp == expected_timestamp, 1);
+    }
+
+    #[
+        test(
+            owner = @owner,
+            publisher = @data_feeds,
+            platform = @platform,
             platform_b = @platform_b,
             new_owner = @0xbeef
         )
@@ -826,11 +980,11 @@ module data_feeds::registry {
     fun test_transfer_ownership_success(
         owner: &signer,
         publisher: &signer,
-        platform_a: &signer,
+        platform: &signer,
         platform_b: &signer,
         new_owner: &signer
     ) acquires Registry {
-        set_up_test(publisher, platform_a, platform_b);
+        set_up_test(publisher, platform, platform_b);
 
         assert!(get_owner() == @owner, 1);
 
@@ -843,7 +997,7 @@ module data_feeds::registry {
     #[
         test(
             publisher = @data_feeds,
-            platform_a = @platform_a,
+            platform = @platform,
             platform_b = @platform_b,
             unknown_user = @0xbeef
         )
@@ -851,11 +1005,11 @@ module data_feeds::registry {
     #[expected_failure(abort_code = 327681, location = data_feeds::registry)]
     fun test_transfer_ownership_failure_not_owner(
         publisher: &signer,
-        platform_a: &signer,
+        platform: &signer,
         platform_b: &signer,
         unknown_user: &signer
     ) acquires Registry {
-        set_up_test(publisher, platform_a, platform_b);
+        set_up_test(publisher, platform, platform_b);
 
         assert!(get_owner() == @owner, 1);
 
@@ -866,7 +1020,7 @@ module data_feeds::registry {
         test(
             owner = @owner,
             publisher = @data_feeds,
-            platform_a = @platform_a,
+            platform = @platform,
             platform_b = @platform_b
         )
     ]
@@ -874,10 +1028,10 @@ module data_feeds::registry {
     fun test_transfer_ownership_failure_transfer_to_self(
         owner: &signer,
         publisher: &signer,
-        platform_a: &signer,
+        platform: &signer,
         platform_b: &signer
     ) acquires Registry {
-        set_up_test(publisher, platform_a, platform_b);
+        set_up_test(publisher, platform, platform_b);
 
         assert!(get_owner() == @owner, 1);
 
@@ -888,7 +1042,7 @@ module data_feeds::registry {
         test(
             owner = @owner,
             publisher = @data_feeds,
-            platform_a = @platform_a,
+            platform = @platform,
             platform_b = @platform_b,
             new_owner = @0xbeef
         )
@@ -897,11 +1051,11 @@ module data_feeds::registry {
     fun test_transfer_ownership_failure_not_proposed_owner(
         owner: &signer,
         publisher: &signer,
-        platform_a: &signer,
+        platform: &signer,
         platform_b: &signer,
         new_owner: &signer
     ) acquires Registry {
-        set_up_test(publisher, platform_a, platform_b);
+        set_up_test(publisher, platform, platform_b);
 
         assert!(get_owner() == @owner, 1);
 
@@ -909,11 +1063,11 @@ module data_feeds::registry {
         accept_ownership(new_owner);
     }
 
-    #[test(publisher = @data_feeds, platform_a = @platform_a, platform_b = @platform_b)]
+    #[test(publisher = @data_feeds, platform = @platform, platform_b = @platform_b)]
     fun test_retrieve_benchmark(
-        publisher: &signer, platform_a: &signer, platform_b: &signer
+        publisher: &signer, platform: &signer, platform_b: &signer
     ) acquires Registry {
-        set_up_test(publisher, platform_a, platform_b);
+        set_up_test(publisher, platform, platform_b);
 
         let feed_id = vector[1, 2, 3, 4, 5];
         set_feed_for_test(
