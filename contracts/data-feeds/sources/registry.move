@@ -318,6 +318,7 @@ module data_feeds::registry {
     /// This identifier links callback registration with the `on_report` event and enables secure retrieval of callback data.
     /// Only has the `drop` ability to prevent copying and persisting in global storage.
     struct OnReceive has drop {}
+
     struct OnReceiveB has drop {}
 
     /// Creates a new OnReceive object.
@@ -454,7 +455,7 @@ module data_feeds::registry {
 
         let count_u256 = to_u256be(vector::slice(&data, offset, offset + 32));
         // Should be safe, we should never have enough reports to overflow this
-        let count: u64  = count_u256 as u64;
+        let count: u64 = count_u256 as u64;
         offset = offset + 32;
 
         let feed_ids: vector<vector<u8>> = vector::empty<vector<u8>>();
@@ -497,7 +498,7 @@ module data_feeds::registry {
                 offset = offset + len;
             };
         } else {
-                abort error::invalid_argument(EINVALID_RAW_REPORT);
+            abort error::invalid_argument(EINVALID_RAW_REPORT);
         };
 
         (feed_ids, reports)
@@ -514,21 +515,24 @@ module data_feeds::registry {
 
         let is_v03 = vector::length(&report_data) == 9 * 32; // 288 bytes
 
-        let observation_timestamp_ptr: u64 = if (is_v03) { 3 * 32 } else { 64 };
-        let benchmark_price_ptr: u64       = if (is_v03) { 6 * 32 } else { 64 };
+        let observation_timestamp_ptr: u64 = if (is_v03) { 3 * 32 }
+        else { 64 };
+        let benchmark_price_ptr: u64 = if (is_v03) { 6 * 32 }
+        else { 64 };
 
         let observation_timestamp: u256 =
             to_u32be(
-                vector::slice(&report_data,
-                            observation_timestamp_ptr - 4,
-                            observation_timestamp_ptr)
+                vector::slice(
+                    &report_data,
+                    observation_timestamp_ptr - 4,
+                    observation_timestamp_ptr
+                )
             ) as u256;
 
         let benchmark_price: u256 =
             to_u256be(
-                vector::slice(&report_data,
-                            benchmark_price_ptr,
-                            benchmark_price_ptr + 32)
+                vector::slice(&report_data, benchmark_price_ptr, benchmark_price_ptr
+                    + 32)
             );
 
         if (feed.observation_timestamp >= observation_timestamp) {
@@ -862,7 +866,6 @@ module data_feeds::registry {
         assert!(benchmark.benchmark == expected_benchmark, 1);
         assert!(benchmark.observation_timestamp == expected_timestamp, 1);
     }
-
 
     #[test]
     fun test_parse_raw_report_v3() {
