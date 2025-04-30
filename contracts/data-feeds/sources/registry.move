@@ -462,14 +462,14 @@ module data_feeds::registry {
         let reports: vector<vector<u8>> = vector::empty<vector<u8>>();
 
         let is_v03: bool = data_len == count * 13 * 32 + 2 * 32;
-        let is_llo: bool = data_len == count * 3 * 32 + 64;
+        let is_benchmark: bool = data_len == count * 3 * 32 + 64;
 
         if (is_v03) {
             // skip len * offsets table
             offset = offset + 32 * count;
         };
 
-        if (is_llo) {
+        if (is_benchmark) {
             for (i in 0..count) {
                 let feed_id = vector::slice(&data, offset, offset + 32);
                 vector::push_back(&mut feed_ids, feed_id);
