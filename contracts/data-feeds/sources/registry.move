@@ -160,15 +160,15 @@ module data_feeds::registry {
         // register to receive platform::forwarder reports
         platform::storage::register(publisher, cb, new_proof());
 
-        // callback for on_report_b function
-        let cb_b =
+        // callback for on_report_secondary function
+        let cb_secondary =
             aptos_framework::function_info::new_function_info(
                 publisher,
                 string::utf8(b"registry"),
-                string::utf8(b"on_report_b")
+                string::utf8(b"on_report_secondary")
             );
-        // register to receive platform_b::forwarder reports
-        platform_b::storage::register(publisher, cb_b, new_proof_b());
+        // register to receive platform_secondary::forwarder reports
+        platform_secondary::storage::register(publisher, cb_secondary, new_proof_secondary());
 
         move_to(
             &object_signer,
@@ -318,8 +318,7 @@ module data_feeds::registry {
     /// This identifier links callback registration with the `on_report` event and enables secure retrieval of callback data.
     /// Only has the `drop` ability to prevent copying and persisting in global storage.
     struct OnReceive has drop {}
-
-    struct OnReceiveB has drop {}
+    struct OnReceiveSecondary has drop {}
 
     /// Creates a new OnReceive object.
     inline fun new_proof(): OnReceive {
@@ -327,8 +326,8 @@ module data_feeds::registry {
     }
 
     /// Creates a new OnReceive object.
-    inline fun new_proof_b(): OnReceiveB {
-        OnReceiveB {}
+    inline fun new_proof_secondary(): OnReceiveSecondary {
+        OnReceiveSecondary {}
     }
 
     public fun on_report<T: key>(_meta: object::Object<T>): option::Option<u128> acquires Registry {
@@ -365,22 +364,22 @@ module data_feeds::registry {
         option::none()
     }
 
-    public fun on_report_b<T: key>(_meta: object::Object<T>): option::Option<u128> acquires Registry {
+    public fun on_report_secondary<T: key>(_meta: object::Object<T>): option::Option<u128> acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
 
-        let (metadata, data) = platform_b::storage::retrieve(new_proof_b());
+        let (metadata, data) = platform_secondary::storage::retrieve(new_proof_secondary());
 
-        let parsed_metadata = platform_b::storage::parse_report_metadata(metadata);
+        let parsed_metadata = platform_secondary::storage::parse_report_metadata(metadata);
 
         let workflow_owner =
-            platform_b::storage::get_report_metadata_workflow_owner(&parsed_metadata);
+            platform_secondary::storage::get_report_metadata_workflow_owner(&parsed_metadata);
         assert!(
             vector::contains(&registry.allowed_workflow_owners, &workflow_owner),
             EUNAUTHORIZED_WORKFLOW_OWNER
         );
 
         let workflow_name =
-            platform_b::storage::get_report_metadata_workflow_name(&parsed_metadata);
+            platform_secondary::storage::get_report_metadata_workflow_name(&parsed_metadata);
         assert!(
             vector::is_empty(&registry.allowed_workflow_names)
                 || vector::contains(&registry.allowed_workflow_names, &workflow_name),
@@ -717,7 +716,7 @@ module data_feeds::registry {
 
     #[test_only]
     fun set_up_test(
-        publisher: &signer, platform: &signer, platform_b: &signer
+        publisher: &signer, platform: &signer, platform_secondary: &signer
     ) {
         use aptos_framework::account::{Self};
         account::create_account_for_test(signer::address_of(publisher));
@@ -725,8 +724,8 @@ module data_feeds::registry {
         platform::forwarder::init_module_for_testing(platform);
         platform::storage::init_module_for_testing(platform);
 
-        platform_b::forwarder::init_module_for_testing(platform_b);
-        platform_b::storage::init_module_for_testing(platform_b);
+        platform_secondary::forwarder::init_module_for_testing(platform_secondary);
+        platform_secondary::storage::init_module_for_testing(platform_secondary);
 
         init_module(publisher);
     }
@@ -830,16 +829,16 @@ module data_feeds::registry {
             owner = @owner,
             publisher = @data_feeds,
             platform = @platform,
-            platform_b = @platform_b
+            platform_secondary = @platform_secondary
         )
     ]
     fun test_perform_update(
         owner: &signer,
         publisher: &signer,
         platform: &signer,
-        platform_b: &signer
+        platform_secondary: &signer
     ) acquires Registry {
-        set_up_test(publisher, platform, platform_b);
+        set_up_test(publisher, platform, platform_secondary);
 
         let report_data =
             x"00011111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a8";
@@ -930,16 +929,16 @@ module data_feeds::registry {
             owner = @owner,
             publisher = @data_feeds,
             platform = @platform,
-            platform_b = @platform_b
+            platform_secondary = @platform_secondary
         )
     ]
     fun test_perform_update_v3(
         owner: &signer,
         publisher: &signer,
         platform: &signer,
-        platform_b: &signer
+        platform_secondary: &signer
     ) acquires Registry {
-        set_up_test(publisher, platform, platform_b);
+        set_up_test(publisher, platform, platform_secondary);
 
         let report_data =
             x"0003fbba4fce42f65d6032b18aee53efdf526cc734ad296cb57565979d883bdd0000000000000000000000000000000000000000000000000000000066ed173e0000000000000000000000000000000000000000000000000000000066ed174200000000000000007fffffffffffffffffffffffffffffffffffffffffffffff00000000000000007fffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000066ee68c2000000000000000000000000000000000000000000000d808cc35e6ed670bd00000000000000000000000000000000000000000000000d808590c35425347980000000000000000000000000000000000000000000000d8093f5f989878e7c00";
@@ -973,7 +972,7 @@ module data_feeds::registry {
             owner = @owner,
             publisher = @data_feeds,
             platform = @platform,
-            platform_b = @platform_b,
+            platform_secondary = @platform_secondary,
             new_owner = @0xbeef
         )
     ]
@@ -981,10 +980,10 @@ module data_feeds::registry {
         owner: &signer,
         publisher: &signer,
         platform: &signer,
-        platform_b: &signer,
+        platform_secondary: &signer,
         new_owner: &signer
     ) acquires Registry {
-        set_up_test(publisher, platform, platform_b);
+        set_up_test(publisher, platform, platform_secondary);
 
         assert!(get_owner() == @owner, 1);
 
@@ -998,7 +997,7 @@ module data_feeds::registry {
         test(
             publisher = @data_feeds,
             platform = @platform,
-            platform_b = @platform_b,
+            platform_secondary = @platform_secondary,
             unknown_user = @0xbeef
         )
     ]
@@ -1006,10 +1005,10 @@ module data_feeds::registry {
     fun test_transfer_ownership_failure_not_owner(
         publisher: &signer,
         platform: &signer,
-        platform_b: &signer,
+        platform_secondary: &signer,
         unknown_user: &signer
     ) acquires Registry {
-        set_up_test(publisher, platform, platform_b);
+        set_up_test(publisher, platform, platform_secondary);
 
         assert!(get_owner() == @owner, 1);
 
@@ -1021,7 +1020,7 @@ module data_feeds::registry {
             owner = @owner,
             publisher = @data_feeds,
             platform = @platform,
-            platform_b = @platform_b
+            platform_secondary = @platform_secondary
         )
     ]
     #[expected_failure(abort_code = 65546, location = data_feeds::registry)]
@@ -1029,9 +1028,9 @@ module data_feeds::registry {
         owner: &signer,
         publisher: &signer,
         platform: &signer,
-        platform_b: &signer
+        platform_secondary: &signer
     ) acquires Registry {
-        set_up_test(publisher, platform, platform_b);
+        set_up_test(publisher, platform, platform_secondary);
 
         assert!(get_owner() == @owner, 1);
 
@@ -1043,7 +1042,7 @@ module data_feeds::registry {
             owner = @owner,
             publisher = @data_feeds,
             platform = @platform,
-            platform_b = @platform_b,
+            platform_secondary = @platform_secondary,
             new_owner = @0xbeef
         )
     ]
@@ -1052,10 +1051,10 @@ module data_feeds::registry {
         owner: &signer,
         publisher: &signer,
         platform: &signer,
-        platform_b: &signer,
+        platform_secondary: &signer,
         new_owner: &signer
     ) acquires Registry {
-        set_up_test(publisher, platform, platform_b);
+        set_up_test(publisher, platform, platform_secondary);
 
         assert!(get_owner() == @owner, 1);
 
@@ -1063,11 +1062,11 @@ module data_feeds::registry {
         accept_ownership(new_owner);
     }
 
-    #[test(publisher = @data_feeds, platform = @platform, platform_b = @platform_b)]
+    #[test(publisher = @data_feeds, platform = @platform, platform_secondary = @platform_secondary)]
     fun test_retrieve_benchmark(
-        publisher: &signer, platform: &signer, platform_b: &signer
+        publisher: &signer, platform: &signer, platform_secondary: &signer
     ) acquires Registry {
-        set_up_test(publisher, platform, platform_b);
+        set_up_test(publisher, platform, platform_secondary);
 
         let feed_id = vector[1, 2, 3, 4, 5];
         set_feed_for_test(
