@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -45,6 +46,19 @@ const (
 	ContractMethodName_getTransmitter       = "getTransmitter"
 )
 
+type chainService interface {
+	LatestHead(ctx context.Context) (commontypes.Head, error)
+}
+
+type contractReader interface {
+	GetLatestValue(ctx context.Context, readIdentifier string, confidenceLevel primitives.ConfidenceLevel, params, returnVal any) error
+}
+
+type contractWriter interface {
+	SubmitTransaction(ctx context.Context, contractName, method string, args any, transactionID string, toAddress string, meta *commontypes.TxMeta, value *big.Int) error
+	GetTransactionStatus(ctx context.Context, transactionID string) (commontypes.TransactionStatus, error)
+}
+
 type writeTarget struct {
 	capabilities.CapabilityInfo
 
@@ -55,10 +69,11 @@ type writeTarget struct {
 	// Local beholder client, also hosting the protobuf emitter
 	beholder *monitor.BeholderClient
 
-	cs               commontypes.ChainService
-	cr               commontypes.ContractReader
-	cw               commontypes.ContractWriter
+	cs               chainService
+	cr               contractReader
+	cw               contractWriter
 	configValidateFn func(config ReqConfig) error
+	decodeReport     func(report []byte, metadata capabilities.RequestMetadata) (*platform.Report, error)
 
 	nodeAddress      string
 	forwarderAddress string
@@ -76,9 +91,9 @@ type WriteTargetOpts struct {
 	Logger   logger.Logger
 	Beholder *monitor.BeholderClient
 
-	ChainService     commontypes.ChainService
-	ContractReader   commontypes.ContractReader
-	ChainWriter      commontypes.ContractWriter
+	ChainService     chainService
+	ContractReader   contractReader
+	ChainWriter      contractWriter
 	ConfigValidateFn func(config ReqConfig) error
 
 	NodeAddress      string
@@ -116,6 +131,10 @@ func NewWriteTargetID(chainFamilyName, networkName, chainID, version string) (st
 
 // TODO: opts.Config input is not validated for sanity
 func NewWriteTarget(opts WriteTargetOpts) capabilities.TargetCapability {
+	return newWriteTarget(opts)
+}
+
+func newWriteTarget(opts WriteTargetOpts) *writeTarget {
 	capInfo := capabilities.MustNewCapabilityInfo(opts.ID, capabilities.CapabilityTypeTarget, CapabilityName)
 
 	return &writeTarget{
@@ -128,6 +147,7 @@ func NewWriteTarget(opts WriteTargetOpts) capabilities.TargetCapability {
 		opts.ContractReader,
 		opts.ChainWriter,
 		opts.ConfigValidateFn,
+		decodeReport,
 		opts.NodeAddress,
 		opts.ForwarderAddress,
 	}
@@ -230,18 +250,9 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	}
 
 	// Decode the report
-	reportDecoded, err := platform.Decode(inputs.Report)
+	reportDecoded, err := c.decodeReport(inputs.Report, request.Metadata)
 	if err != nil {
-		msg := builder.buildWriteError(info, 0, "failed to decode the report", err.Error())
-		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
-	}
-
-	// Validate encoded report is prefixed with workflowID and executionID that match the request meta
-	if reportDecoded.ExecutionID != request.Metadata.WorkflowExecutionID {
-		msg := builder.buildWriteError(info, 0, "decoded report execution ID does not match the request", "")
-		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
-	} else if reportDecoded.WorkflowID != request.Metadata.WorkflowID {
-		msg := builder.buildWriteError(info, 0, "decoded report workflow ID does not match the request", "")
+		msg := builder.buildWriteError(info, 0, "report is invalid", err.Error())
 		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
 	}
 
@@ -402,6 +413,23 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	return success(), nil
 }
 
+func decodeReport(report []byte, metadata capabilities.RequestMetadata) (*platform.Report, error) {
+	// Decode the report
+	reportDecoded, err := platform.Decode(report)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode report [%s]: %w", string(report), err)
+	}
+
+	// Validate encoded report is prefixed with workflowID and executionID that match the request meta
+	if reportDecoded.ExecutionID != metadata.WorkflowExecutionID {
+		return nil, errors.New("decoded report execution ID does not match the request")
+	} else if reportDecoded.WorkflowID != metadata.WorkflowID {
+		return nil, errors.New("decoded report execution ID does not match the request")
+	}
+
+	return reportDecoded, nil
+}
+
 func (c *writeTarget) RegisterToWorkflow(ctx context.Context, request capabilities.RegisterToWorkflowRequest) error {
 	// TODO: notify the background WriteTxConfirmer (workflow registered)
 	return nil
@@ -427,7 +455,7 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 
 	// Timeout for the confirmation process
 	timeout := c.config.ConfirmerTimeout.Duration()
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	// Retry interval for the confirmation process
@@ -440,7 +468,7 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 	capInfo, _ := c.Info(ctx)
 	builder := NewMessageBuilder(c.chainInfo, capInfo)
 
-	txAccepted, err := c.waitUntilFinalized(ctx, lggr, txID)
+	txAccepted, err := c.waitUntilTxReachesFinalStatus(ctx, lggr, txID)
 	if err != nil {
 		// We (eventually) failed to confirm the report was transmitted
 		msg := builder.buildWriteError(&info, 0, "failed to wait until tx gets finalized", err.Error())
@@ -455,7 +483,11 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 		select {
 		case <-ctx.Done():
 			// We (eventually) failed to confirm the report was transmitted
-			msg := builder.buildWriteError(&info, 0, "write confirmation - failed", "timed out")
+			cause := "transaction was finalized, but report was not observed on chain before timeout"
+			if !txAccepted {
+				cause = "transaction failed and no other node managed to get report on chain before timeout"
+			}
+			msg := builder.buildWriteError(&info, 0, "write confirmation - failed", cause)
 			_ = c.beholder.ProtoEmitter.EmitWithLog(ctx, msg)
 			return msg.AsError()
 		case <-ticker.C:
@@ -496,7 +528,7 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 	}
 }
 
-func (c *writeTarget) waitUntilFinalized(ctx context.Context, lggr logger.Logger, txID uuid.UUID) (accepted bool, err error) {
+func (c *writeTarget) waitUntilTxReachesFinalStatus(ctx context.Context, lggr logger.Logger, txID uuid.UUID) (accepted bool, err error) {
 	// Retry interval for the confirmation process
 	interval := c.config.ConfirmerPollPeriod.Duration()
 	ticker := time.NewTicker(interval)

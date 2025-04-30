@@ -30,7 +30,10 @@ const (
 func NewAptosWriteTargetMonitor(ctx context.Context, lggr logger.Logger) (*monitor.BeholderClient, error) {
 	// Initialize the Beholder client with a local logger a custom Emitter
 	client := beholder.GetClient().ForPackage("write_target")
+	return newMonitor(ctx, lggr, &client)
+}
 
+func newMonitor(ctx context.Context, lggr logger.Logger, client *beholder.Client) (*monitor.BeholderClient, error) {
 	registryMetrics, err := registry.NewMetrics()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new registry metrics: %w", err)
@@ -47,7 +50,7 @@ func NewAptosWriteTargetMonitor(ctx context.Context, lggr logger.Logger) (*monit
 	}
 
 	// Underlying ProtoEmitter
-	emitter := monitor.NewProtoEmitter(lggr, &client, schemaBasePath)
+	emitter := monitor.NewProtoEmitter(lggr, client, schemaBasePath)
 
 	// Proxy ProtoEmitter with additional processing
 	protoEmitterProxy := protoEmitter{
@@ -59,7 +62,7 @@ func NewAptosWriteTargetMonitor(ctx context.Context, lggr logger.Logger) (*monit
 			&dataFeedsProcessor{emitter, registryMetrics},
 		},
 	}
-	return &monitor.BeholderClient{Client: &client, ProtoEmitter: &protoEmitterProxy}, nil
+	return &monitor.BeholderClient{Client: client, ProtoEmitter: &protoEmitterProxy}, nil
 }
 
 // ProtoEmitter proxy specific to the Aptos WT

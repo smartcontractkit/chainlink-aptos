@@ -14,3 +14,11 @@ wrappers: ## Generate wrappers for Move contracts.
 .PHONY: move-test
 move-test: ## Run the Move tests.
 	contracts/scripts/test.sh
+
+.PHONY: mockery
+mockery: ## Install mockery.
+	go install github.com/vektra/mockery/v2@v2.53.3
+
+.PHONY: generate
+generate: mockery
+	mockery
