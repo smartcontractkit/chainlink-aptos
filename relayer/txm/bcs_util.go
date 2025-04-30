@@ -1,6 +1,7 @@
 package txm
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -288,13 +289,20 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 			return nil
 		}
 		if v, ok := argVal.(string); ok {
-			address := &aptos.AccountAddress{}
-			err := address.ParseStringRelaxed(v)
-			if err != nil {
-				return err
+			// first, check if it's base64
+			decoded, err := base64.StdEncoding.DecodeString(v)
+			if err == nil && len(decoded) == 32 {
+				address := aptos.AccountAddress(decoded)
+				address.MarshalBCS(serializer)
+			} else {
+				address := &aptos.AccountAddress{}
+				err := address.ParseStringRelaxed(v)
+				if err != nil {
+					return err
+				}
+				address.MarshalBCS(serializer)
+				return nil
 			}
-			address.MarshalBCS(serializer)
-			return nil
 		}
 	case aptos.TypeTagVector:
 		itemType := argType.Value.(*aptos.VectorTag).TypeParam
