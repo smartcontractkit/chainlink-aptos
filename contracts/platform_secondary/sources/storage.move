@@ -1,5 +1,5 @@
 /// The storage module stores all the state associated with the dispatch service.
-module platform_b::storage {
+module platform_secondary::storage {
     use std::option;
     use std::string;
     use std::signer;
@@ -16,7 +16,7 @@ module platform_b::storage {
 
     const APP_OBJECT_SEED: vector<u8> = b"STORAGE";
 
-    friend platform_b::forwarder;
+    friend platform_secondary::forwarder;
 
     const E_UNKNOWN_RECEIVER: u64 = 1;
     const E_INVALID_METADATA_LENGTH: u64 = 2;
@@ -217,7 +217,7 @@ module platform_b::storage {
 
     /// Prepares the dispatch table.
     fun init_module(publisher: &signer) {
-        assert!(signer::address_of(publisher) == @platform_b, 1);
+        assert!(signer::address_of(publisher) == @platform_secondary, 1);
 
         let constructor_ref = object::create_named_object(publisher, APP_OBJECT_SEED);
 
@@ -245,7 +245,7 @@ module platform_b::storage {
     }
 
     inline fun storage_address(): address {
-        object::create_object_address(&@platform_b, APP_OBJECT_SEED)
+        object::create_object_address(&@platform_secondary, APP_OBJECT_SEED)
     }
 
     inline fun storage_signer(): signer acquires Dispatcher {
@@ -304,7 +304,7 @@ module platform_b::storage {
 
     #[test_only]
     fun init_module_deprecated(publisher: &signer) {
-        assert!(signer::address_of(publisher) == @platform_b, 1);
+        assert!(signer::address_of(publisher) == @platform_secondary, 1);
 
         let constructor_ref = object::create_named_object(publisher, APP_OBJECT_SEED);
 
@@ -376,7 +376,7 @@ module platform_b::storage {
         option::none()
     }
 
-    #[test(publisher = @platform_b)]
+    #[test(publisher = @platform_secondary)]
     fun test_v2_migration(publisher: &signer) acquires Dispatcher, DispatcherV2, Storage {
         init_module_deprecated(publisher);
 
@@ -417,7 +417,7 @@ module platform_b::storage {
             assert!(callback_data == received_data, 1);
 
             let derived_addr = signer::address_of(&derived_publisher);
-            migrate_to_v2(vector[@platform_b, derived_addr]);
+            migrate_to_v2(vector[@platform_secondary, derived_addr]);
 
             // test that insert and retrieve still work after migration
             insert(signer::address_of(publisher), callback_metadata, callback_data);
@@ -432,7 +432,7 @@ module platform_b::storage {
                 ),
                 1
             );
-            assert!(!table::contains(&dispatcher.address_to_typeinfo, @platform_b), 1);
+            assert!(!table::contains(&dispatcher.address_to_typeinfo, @platform_secondary), 1);
             assert!(
                 !table::contains(
                     &dispatcher.dispatcher, type_info::type_of<TestProof2>()
@@ -449,7 +449,7 @@ module platform_b::storage {
                 1
             );
             assert!(
-                smart_table::contains(&dispatcher_v2.address_to_typeinfo, @platform_b),
+                smart_table::contains(&dispatcher_v2.address_to_typeinfo, @platform_secondary),
                 1
             );
             assert!(

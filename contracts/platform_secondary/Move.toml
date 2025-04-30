@@ -4,12 +4,12 @@ version = "1.0.0"
 authors = []
 
 [addresses]
-platform_b = "_"
-owner_b = "_"
+platform_secondary = "_"
+owner_secondary = "_"
 
 [dev-addresses]
-platform_b = "0x200"
-owner_b = "0x22"
+platform_secondary = "0x200"
+owner_secondary = "0x22"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
