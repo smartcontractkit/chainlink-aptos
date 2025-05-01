@@ -29,8 +29,8 @@ package aptos
 
 //go:generate go run ./cmd/bindgen --input ./contracts/mcms/mcms_test/sources/mcms_user.move --output ./bindings/mcms_test/mcms_user
 
-//go:generate go run ./cmd/bindgen --input ./contracts/data_feeds/sources/registry.move --output ./bindings/data-feeds/registry
-//go:generate go run ./cmd/bindgen --input ./contracts/data_feeds/sources/router.move --output ./bindings/data-feeds/router
+//go:generate go run ./cmd/bindgen --input ./contracts/data_feeds/sources/registry.move --output ./bindings/data_feeds/registry
+//go:generate go run ./cmd/bindgen --input ./contracts/data_feeds/sources/router.move --output ./bindings/data_feeds/router
 
 //go:generate go run ./cmd/bindgen --input ./contracts/platform/sources/forwarder.move --output ./bindings/platform/forwarder
 //go:generate go run ./cmd/bindgen --input ./contracts/platform/sources/storage.move --output ./bindings/platform/storage
