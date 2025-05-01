@@ -294,6 +294,7 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 			if err == nil && len(decoded) == 32 {
 				address := aptos.AccountAddress(decoded)
 				address.MarshalBCS(serializer)
+				return nil
 			} else {
 				address := &aptos.AccountAddress{}
 				err := address.ParseStringRelaxed(v)
