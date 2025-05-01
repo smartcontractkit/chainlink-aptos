@@ -3,7 +3,6 @@ package chainreader
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -17,11 +16,12 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
-	"github.com/smartcontractkit/chainlink-common/pkg/utils"
+	commonutils "github.com/smartcontractkit/chainlink-common/pkg/utils"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/loop"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
 type aptosChainReader struct {
@@ -30,7 +30,7 @@ type aptosChainReader struct {
 	logger  logger.Logger
 	config  ChainReaderConfig
 	dbStore *DBStore
-	starter utils.StartStopOnce
+	starter commonutils.StartStopOnce
 
 	moduleAddresses       map[string]aptos.AccountAddress
 	eventAccountAddresses map[string]aptos.AccountAddress
@@ -590,14 +590,17 @@ func (a *aptosChainReader) getBlockHead(version uint64) (types.Head, error) {
 	if err != nil {
 		return types.Head{}, fmt.Errorf("failed to get block by version: %w", err)
 	}
-	hexBytes, err := hex.DecodeString(strings.TrimPrefix(block.BlockHash, "0x"))
+
+	hexBytes, err := utils.DecodeHexRelaxed(block.BlockHash)
 	if err != nil {
 		return types.Head{}, fmt.Errorf("failed to decode block hash: %w", err)
 	}
+
 	head := types.Head{
 		Height:    fmt.Sprintf("%d", block.BlockHeight),
 		Hash:      hexBytes,
 		Timestamp: block.BlockTimestamp / 1000000, // microseconds to seconds conversion
 	}
+
 	return head, nil
 }

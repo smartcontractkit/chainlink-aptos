@@ -108,18 +108,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		/* simulateTx= */ true,
 	)
 	require.NoError(t, err)
-
-	confirmed := false
-	for i := 0; i < 10; i++ {
-		time.Sleep(time.Second * 1)
-		status, err := txmgr.GetStatus(txId)
-		require.NoError(t, err)
-		if status != commontypes.Unconfirmed {
-			confirmed = true
-			break
-		}
-	}
-	require.True(t, confirmed)
+	waitForTx(t, txmgr, txId)
 
 	config := ChainReaderConfig{
 		Modules: map[string]*ChainReaderModule{
@@ -495,6 +484,13 @@ func emitManyEvents(t *testing.T, txmgr *txm.AptosTxm, address, publicKeyHex str
 }
 
 func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
+	dsn := os.Getenv("TEST_DB_URL")
+	if dsn == "" {
+		// todo: make test run in CI
+		t.Skip("Skipping persistent tests as TEST_DB_URL is not set in CI")
+	}
+	db := sqltest.NewDB(t, dsn)
+	
 	keystore := testutils.NewTestKeystore(t)
 	keystore.AddKey(privateKey)
 
@@ -528,13 +524,6 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 			},
 		},
 	}
-
-	dsn := os.Getenv("TEST_DB_URL")
-	if dsn == "" {
-		// todo: make test run in CI
-		t.Skip("Skipping persistent tests as TEST_DB_URL is not set in CI")
-	}
-	db := sqltest.NewDB(t, dsn)
 
 	// Create ChainReader with persistence enabled.
 	chainReader := NewChainReader(logger, rateLimitedClient, config, db)
@@ -866,17 +855,7 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 		true,
 	)
 	require.NoError(t, err)
-	confirmed := false
-	for i := 0; i < 10; i++ {
-		time.Sleep(time.Second)
-		status, err := txmgr.GetStatus(txID)
-		require.NoError(t, err)
-		if status != commontypes.Unconfirmed {
-			confirmed = true
-			break
-		}
-	}
-	require.True(t, confirmed, "Contract deploy tx not confirmed")
+	waitForTx(t, txmgr, txID)
 
 	emitManyEvents(t, txmgr, acctAddr.String(), publicKeyHex, 20)
 
@@ -1189,7 +1168,7 @@ func waitForTx(t *testing.T, txmgr *txm.AptosTxm, txId string) {
 		time.Sleep(time.Second)
 		status, err := txmgr.GetStatus(txId)
 		require.NoError(t, err)
-		if status != commontypes.Unconfirmed {
+		if status == commontypes.Finalized {
 			confirmed = true
 			break
 		}

@@ -23,28 +23,18 @@ module lock_release_token_pool::lock_release_token_pool {
         token_pool_state: token_pool::TokenPoolState
     }
 
-    struct LockReleaseTokenPool has key, store {
+    struct LockReleaseTokenPoolState has key, store {
         store_signer_cap: SignerCapability,
         ownable_state: ownable::OwnableState,
         token_pool_state: token_pool::TokenPoolState,
         store_signer_address: address
     }
 
-    struct RemoteChainConfig has store, drop, copy {
-        remote_token_address: vector<u8>,
-        remote_pools: vector<vector<u8>>
-    }
-
     const E_NOT_PUBLISHER: u64 = 1;
     const E_ALREADY_INITIALIZED: u64 = 2;
     const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
-    const E_UNKNOWN_FUNGIBLE_ASSET: u64 = 4;
-    const E_LOCAL_TOKEN_MISMATCH: u64 = 5;
-    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 6;
-    const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 7;
-    const E_INVALID_ENCODED_AMOUNT: u64 = 8;
-    const E_INVALID_ARGUMENTS: u64 = 9;
-    const E_UNKNOWN_FUNCTION: u64 = 10;
+    const E_INVALID_ARGUMENTS: u64 = 4;
+    const E_UNKNOWN_FUNCTION: u64 = 5;
 
     // ================================================================
     // |                             Init                             |
@@ -59,7 +49,7 @@ module lock_release_token_pool::lock_release_token_pool {
         // register the pool on deployment, because in the case of object code deployment,
         // this is the only time we have a signer ref to @ccip_lock_release_pool.
         assert!(
-            !object::object_exists<Metadata>(@local_token),
+            object::object_exists<Metadata>(@local_token),
             error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
         );
         let metadata = object::address_to_object<Metadata>(@local_token);
@@ -69,7 +59,7 @@ module lock_release_token_pool::lock_release_token_pool {
         let token_pool_module_name = b"lock_release_token_pool";
 
         // Register the entrypoint with mcms
-        if (@mcms_register_entrypoints != @0x0) {
+        if (@mcms_register_entrypoints == @0x1) {
             mcms_registry::register_entrypoint(
                 publisher, string::utf8(token_pool_module_name), McmsCallback {}
             );
@@ -96,7 +86,7 @@ module lock_release_token_pool::lock_release_token_pool {
             publisher,
             LockReleaseTokenPoolDeployment {
                 store_signer_cap,
-                ownable_state: ownable::new(publisher, signer::address_of(publisher)),
+                ownable_state: ownable::new(publisher, @lock_release_token_pool),
                 token_pool_state: token_pool::initialize(
                     publisher, @local_token, vector[]
                 )
@@ -120,7 +110,7 @@ module lock_release_token_pool::lock_release_token_pool {
 
         let store_signer = account::create_signer_with_capability(&store_signer_cap);
 
-        let pool = LockReleaseTokenPool {
+        let pool = LockReleaseTokenPoolState {
             ownable_state,
             store_signer_address: signer::address_of(&store_signer),
             store_signer_cap,
@@ -134,7 +124,7 @@ module lock_release_token_pool::lock_release_token_pool {
     // ================================================================
 
     #[view]
-    public fun get_token(): address acquires LockReleaseTokenPool {
+    public fun get_token(): address acquires LockReleaseTokenPoolState {
         token_pool::get_token(&borrow_pool().token_pool_state)
     }
 
@@ -144,14 +134,14 @@ module lock_release_token_pool::lock_release_token_pool {
     }
 
     #[view]
-    public fun get_token_decimals(): u8 acquires LockReleaseTokenPool {
+    public fun get_token_decimals(): u8 acquires LockReleaseTokenPoolState {
         token_pool::get_token_decimals(&borrow_pool().token_pool_state)
     }
 
     #[view]
     public fun get_remote_pools(
         remote_chain_selector: u64
-    ): vector<vector<u8>> acquires LockReleaseTokenPool {
+    ): vector<vector<u8>> acquires LockReleaseTokenPoolState {
         token_pool::get_remote_pools(
             &borrow_pool().token_pool_state, remote_chain_selector
         )
@@ -160,7 +150,7 @@ module lock_release_token_pool::lock_release_token_pool {
     #[view]
     public fun is_remote_pool(
         remote_chain_selector: u64, remote_pool_address: vector<u8>
-    ): bool acquires LockReleaseTokenPool {
+    ): bool acquires LockReleaseTokenPoolState {
         token_pool::is_remote_pool(
             &borrow_pool().token_pool_state,
             remote_chain_selector,
@@ -171,14 +161,14 @@ module lock_release_token_pool::lock_release_token_pool {
     #[view]
     public fun get_remote_token(
         remote_chain_selector: u64
-    ): vector<u8> acquires LockReleaseTokenPool {
+    ): vector<u8> acquires LockReleaseTokenPoolState {
         let pool = borrow_pool();
         token_pool::get_remote_token(&pool.token_pool_state, remote_chain_selector)
     }
 
     public entry fun add_remote_pool(
         caller: &signer, remote_chain_selector: u64, remote_pool_address: vector<u8>
-    ) acquires LockReleaseTokenPool {
+    ) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -189,7 +179,7 @@ module lock_release_token_pool::lock_release_token_pool {
 
     public entry fun remove_remote_pool(
         caller: &signer, remote_chain_selector: u64, remote_pool_address: vector<u8>
-    ) acquires LockReleaseTokenPool {
+    ) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -199,13 +189,15 @@ module lock_release_token_pool::lock_release_token_pool {
     }
 
     #[view]
-    public fun is_supported_chain(remote_chain_selector: u64): bool acquires LockReleaseTokenPool {
+    public fun is_supported_chain(
+        remote_chain_selector: u64
+    ): bool acquires LockReleaseTokenPoolState {
         let pool = borrow_pool();
         token_pool::is_supported_chain(&pool.token_pool_state, remote_chain_selector)
     }
 
     #[view]
-    public fun get_supported_chains(): vector<u64> acquires LockReleaseTokenPool {
+    public fun get_supported_chains(): vector<u64> acquires LockReleaseTokenPoolState {
         let pool = borrow_pool();
         token_pool::get_supported_chains(&pool.token_pool_state)
     }
@@ -216,7 +208,7 @@ module lock_release_token_pool::lock_release_token_pool {
         remote_chain_selectors_to_add: vector<u64>,
         remote_pool_addresses_to_add: vector<vector<vector<u8>>>,
         remote_token_addresses_to_add: vector<vector<u8>>
-    ) acquires LockReleaseTokenPool {
+    ) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -230,20 +222,20 @@ module lock_release_token_pool::lock_release_token_pool {
     }
 
     #[view]
-    public fun get_allowlist_enabled(): bool acquires LockReleaseTokenPool {
+    public fun get_allowlist_enabled(): bool acquires LockReleaseTokenPoolState {
         let pool = borrow_pool();
         token_pool::get_allowlist_enabled(&pool.token_pool_state)
     }
 
     #[view]
-    public fun get_allowlist(): vector<address> acquires LockReleaseTokenPool {
+    public fun get_allowlist(): vector<address> acquires LockReleaseTokenPoolState {
         let pool = borrow_pool();
         token_pool::get_allowlist(&pool.token_pool_state)
     }
 
     public entry fun apply_allowlist_updates(
         caller: &signer, removes: vector<address>, adds: vector<address>
-    ) acquires LockReleaseTokenPool {
+    ) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
         token_pool::apply_allowlist_updates(&mut pool.token_pool_state, removes, adds);
@@ -258,7 +250,7 @@ module lock_release_token_pool::lock_release_token_pool {
 
     public fun lock_or_burn<T: key>(
         _store: Object<T>, fa: FungibleAsset, _transfer_ref: &TransferRef
-    ) acquires LockReleaseTokenPool {
+    ) acquires LockReleaseTokenPoolState {
         // retrieve the input for this lock or burn operation. if this function is invoked
         // outside of ccip::token_admin_registry, the transaction will abort.
         let input =
@@ -298,7 +290,7 @@ module lock_release_token_pool::lock_release_token_pool {
 
     public fun release_or_mint<T: key>(
         _store: Object<T>, _amount: u64, _transfer_ref: &TransferRef
-    ): FungibleAsset acquires LockReleaseTokenPool {
+    ): FungibleAsset acquires LockReleaseTokenPoolState {
         // retrieve the input for this release or mint operation. if this function is invoked
         // outside of ccip::token_admin_registry, the transaction will abort.
         let input =
@@ -350,7 +342,7 @@ module lock_release_token_pool::lock_release_token_pool {
         inbound_is_enableds: vector<bool>,
         inbound_capacities: vector<u64>,
         inbound_rates: vector<u64>
-    ) acquires LockReleaseTokenPool {
+    ) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -389,7 +381,7 @@ module lock_release_token_pool::lock_release_token_pool {
         inbound_is_enabled: bool,
         inbound_capacity: u64,
         inbound_rate: u64
-    ) acquires LockReleaseTokenPool {
+    ) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -434,12 +426,12 @@ module lock_release_token_pool::lock_release_token_pool {
         abort error::permission_denied(E_NOT_PUBLISHER)
     }
 
-    inline fun borrow_pool(): &LockReleaseTokenPool {
-        borrow_global<LockReleaseTokenPool>(store_address())
+    inline fun borrow_pool(): &LockReleaseTokenPoolState {
+        borrow_global<LockReleaseTokenPoolState>(store_address())
     }
 
-    inline fun borrow_pool_mut(): &mut LockReleaseTokenPool {
-        borrow_global_mut<LockReleaseTokenPool>(store_address())
+    inline fun borrow_pool_mut(): &mut LockReleaseTokenPoolState {
+        borrow_global_mut<LockReleaseTokenPoolState>(store_address())
     }
 
     // ================================================================
@@ -447,19 +439,21 @@ module lock_release_token_pool::lock_release_token_pool {
     // ================================================================
 
     #[view]
-    public fun owner(): address acquires LockReleaseTokenPool {
+    public fun owner(): address acquires LockReleaseTokenPoolState {
         let pool = borrow_pool();
         ownable::owner(&pool.ownable_state)
     }
 
-    public entry fun transfer_ownership(caller: &signer, to: address) acquires LockReleaseTokenPool {
+    public entry fun transfer_ownership(
+        caller: &signer, to: address
+    ) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::transfer_ownership(
             signer::address_of(caller), &mut pool.ownable_state, to
         )
     }
 
-    public entry fun accept_ownership(caller: &signer) acquires LockReleaseTokenPool {
+    public entry fun accept_ownership(caller: &signer) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::accept_ownership(signer::address_of(caller), &mut pool.ownable_state)
     }
@@ -472,7 +466,7 @@ module lock_release_token_pool::lock_release_token_pool {
 
     public fun mcms_entrypoint<T: key>(
         _metadata: object::Object<T>
-    ): option::Option<u128> acquires LockReleaseTokenPool {
+    ): option::Option<u128> acquires LockReleaseTokenPoolState {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@lock_release_token_pool, McmsCallback {});
 
@@ -482,10 +476,12 @@ module lock_release_token_pool::lock_release_token_pool {
         if (function_bytes == b"add_remote_pool") {
             let remote_chain_selector = bcs_stream::deserialize_u64(&mut stream);
             let remote_pool_address = bcs_stream::deserialize_vector_u8(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
             add_remote_pool(&caller, remote_chain_selector, remote_pool_address);
         } else if (function_bytes == b"remove_remote_pool") {
             let remote_chain_selector = bcs_stream::deserialize_u64(&mut stream);
             let remote_pool_address = bcs_stream::deserialize_vector_u8(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
             remove_remote_pool(&caller, remote_chain_selector, remote_pool_address);
         } else if (function_bytes == b"apply_chain_updates") {
             let remote_chain_selectors_to_remove =
@@ -507,6 +503,7 @@ module lock_release_token_pool::lock_release_token_pool {
                 bcs_stream::deserialize_vector(
                     &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
                 );
+            bcs_stream::assert_is_consumed(&stream);
             apply_chain_updates(
                 &caller,
                 remote_chain_selectors_to_remove,
@@ -523,6 +520,7 @@ module lock_release_token_pool::lock_release_token_pool {
                 bcs_stream::deserialize_vector(
                     &mut stream, |stream| bcs_stream::deserialize_address(stream)
                 );
+            bcs_stream::assert_is_consumed(&stream);
             apply_allowlist_updates(&caller, removes, adds);
         } else if (function_bytes == b"set_chain_rate_limiter_configs") {
             let remote_chain_selectors =
@@ -553,6 +551,7 @@ module lock_release_token_pool::lock_release_token_pool {
                 bcs_stream::deserialize_vector(
                     &mut stream, |stream| bcs_stream::deserialize_u64(stream)
                 );
+            bcs_stream::assert_is_consumed(&stream);
             set_chain_rate_limiter_configs(
                 &caller,
                 remote_chain_selectors,
@@ -571,6 +570,7 @@ module lock_release_token_pool::lock_release_token_pool {
             let inbound_is_enabled = bcs_stream::deserialize_bool(&mut stream);
             let inbound_capacity = bcs_stream::deserialize_u64(&mut stream);
             let inbound_rate = bcs_stream::deserialize_u64(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
             set_chain_rate_limiter_config(
                 &caller,
                 remote_chain_selector,
@@ -583,8 +583,10 @@ module lock_release_token_pool::lock_release_token_pool {
             );
         } else if (function_bytes == b"transfer_ownership") {
             let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
             transfer_ownership(&caller, to);
         } else if (function_bytes == b"accept_ownership") {
+            bcs_stream::assert_is_consumed(&stream);
             accept_ownership(&caller);
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)

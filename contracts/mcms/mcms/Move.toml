@@ -9,10 +9,11 @@ mcms = "_"
 mcms_owner = "_"
 
 [dev-addresses]
-mcms = "0x4000"
+# 0xa969156fce9a4f08bcdc07b90f338efc630bff8dfa8340500cb6414aca762a4e must be the mcms address, as this is `multisig` address in the root metadata tests
+mcms = "0xa969156fce9a4f08bcdc07b90f338efc630bff8dfa8340500cb6414aca762a4e"
 mcms_owner = "0x4010"
 
 [dependencies]
-AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }
 
 [dev-dependencies]

@@ -1,0 +1,22 @@
+[package]
+name = "ChainlinkCCIPOnramp"
+version = "1.0.0"
+authors = []
+
+[addresses]
+ccip_onramp = "_"
+ccip = "_"
+mcms = "_"
+mcms_register_entrypoints = "_"
+
+[dev-addresses]
+ccip_onramp = "0x1001"
+ccip = "0x1000"
+mcms = "0x4000"
+mcms_register_entrypoints = "0x4001"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }
+ChainlinkCCIP = { local = "../ccip" }
+
+[dev-dependencies]

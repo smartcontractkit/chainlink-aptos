@@ -1,10 +1,5 @@
 /// This module defines messages for end users to interact with Aptos CCIP.
-/// TODO: having this in the ccip package means that ccip_receive user modules
-/// will need to know the address of @ccip ontop of @ccip_router. consider
-/// moving this, or not using structs at all
 module ccip::client {
-    friend ccip::offramp;
-
     struct Any2AptosMessage has store, drop, copy {
         message_id: vector<u8>,
         source_chain_selector: u64,
@@ -18,7 +13,35 @@ module ccip::client {
         amount: u64
     }
 
+    public fun new_any2aptos_message(
+        message_id: vector<u8>,
+        source_chain_selector: u64,
+        sender: vector<u8>,
+        data: vector<u8>,
+        dest_token_amounts: vector<Any2AptosTokenAmount>
+    ): Any2AptosMessage {
+        Any2AptosMessage {
+            message_id,
+            source_chain_selector,
+            sender,
+            data,
+            dest_token_amounts
+        }
+    }
+
+    public fun new_dest_token_amounts(
+        token_addresses: vector<address>, token_amounts: vector<u64>
+    ): vector<Any2AptosTokenAmount> {
+        token_addresses.zip_map_ref(
+            &token_amounts,
+            |token_address, token_amount| {
+                Any2AptosTokenAmount { token: *token_address, amount: *token_amount }
+            }
+        )
+    }
+
     // Any2AptosMessage accessors
+
     public fun get_message_id(input: &Any2AptosMessage): vector<u8> {
         input.message_id
     }
@@ -40,38 +63,12 @@ module ccip::client {
     }
 
     // Any2AptosTokenAmount accessors
+
     public fun get_token(input: &Any2AptosTokenAmount): address {
         input.token
     }
 
     public fun get_amount(input: &Any2AptosTokenAmount): u64 {
         input.amount
-    }
-
-    public(friend) fun new_any2aptos_message(
-        message_id: vector<u8>,
-        source_chain_selector: u64,
-        sender: vector<u8>,
-        data: vector<u8>,
-        dest_token_amounts: vector<Any2AptosTokenAmount>
-    ): Any2AptosMessage {
-        Any2AptosMessage {
-            message_id,
-            source_chain_selector,
-            sender,
-            data,
-            dest_token_amounts
-        }
-    }
-
-    public(friend) fun new_dest_token_amounts(
-        token_addresses: vector<address>, token_amounts: vector<u64>
-    ): vector<Any2AptosTokenAmount> {
-        token_addresses.zip_map_ref(
-            &token_amounts,
-            |token_address, token_amount| {
-                Any2AptosTokenAmount { token: *token_address, amount: *token_amount }
-            }
-        )
     }
 }

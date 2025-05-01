@@ -14,7 +14,6 @@ module mcms::mcms_registry {
     use std::smart_table::{Self, SmartTable};
     use std::string::{Self, String};
     use std::type_info::{Self, TypeInfo};
-    use std::vector;
 
     use mcms::mcms_account;
 
@@ -141,7 +140,7 @@ module mcms::mcms_registry {
         new_owner_seed: vector<u8>
     ): address {
         let owner_seed = NEW_OBJECT_REGISTRATION_SEED;
-        vector::append(&mut owner_seed, new_owner_seed);
+        owner_seed.append(new_owner_seed);
         account::create_resource_address(&@mcms, owner_seed)
     }
 
@@ -151,7 +150,7 @@ module mcms::mcms_registry {
         let object_owner_address = get_new_code_object_owner_address(new_owner_seed);
         let object_code_deployment_seed =
             bcs::to_bytes(&OBJECT_CODE_DEPLOYMENT_DOMAIN_SEPARATOR);
-        vector::append(&mut object_code_deployment_seed, bcs::to_bytes(&1u64));
+        object_code_deployment_seed.append(bcs::to_bytes(&1u64));
         object::create_object_address(
             &object_owner_address, object_code_deployment_seed
         )
@@ -163,7 +162,7 @@ module mcms::mcms_registry {
         object_address: address
     ): address {
         let owner_seed = EXISTING_OBJECT_REGISTRATION_SEED;
-        vector::append(&mut owner_seed, bcs::to_bytes(&object_address));
+        owner_seed.append(bcs::to_bytes(&object_address));
         account::create_resource_address(&@mcms, owner_seed)
     }
 
@@ -569,10 +568,6 @@ module mcms::mcms_registry {
             proof_type_info.account_address() == account_address,
             error::invalid_argument(E_PROOF_NOT_AT_ACCOUNT_ADDRESS)
         );
-        assert!(
-            proof_type_info.module_name() == module_name_bytes,
-            error::invalid_argument(E_PROOF_NOT_IN_MODULE)
-        );
 
         let owner_signer =
             account::create_signer_with_capability(&registration.owner_cap);
@@ -732,5 +727,32 @@ module mcms::mcms_registry {
     #[test_only]
     public fun init_module_for_testing(publisher: &signer) {
         init_module(publisher);
+    }
+
+    #[test_only]
+    public fun test_start_dispatch(
+        callback_address: address,
+        callback_module_name: String,
+        callback_function: String,
+        data: vector<u8>
+    ): Object<Metadata> acquires RegistryState, OwnerRegistration {
+        start_dispatch(
+            callback_address,
+            callback_module_name,
+            callback_function,
+            data
+        )
+    }
+
+    #[test_only]
+    public fun test_finish_dispatch(callback_address: address) acquires RegistryState {
+        finish_dispatch(callback_address)
+    }
+
+    #[test_only]
+    public fun move_from_owner_transfers(owner_address: address) acquires OwnerTransfers {
+        let OwnerTransfers { pending_transfers } =
+            move_from<OwnerTransfers>(owner_address);
+        pending_transfers.destroy();
     }
 }

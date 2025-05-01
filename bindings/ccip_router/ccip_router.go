@@ -32,10 +32,6 @@ func (C CCIPRouterContract) Router() module_router.RouterInterface {
 	return C.router
 }
 
-const (
-	DefaultSeed = "chainlink_router"
-)
-
 var FunctionInfo = bind.MustParseFunctionInfo(
 	module_router.FunctionInfo,
 )
@@ -43,12 +39,13 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 func Compile(ccipAddress, mcmsAddress aptos.AccountAddress, registerMCMSEntrypoints bool) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
+		"ccip_onramp":               ccipAddress,
 		"ccip_router":               ccipAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
 	if registerMCMSEntrypoints {
-		namedAddresses["mcms_register_entrypoints"] = ccipAddress
+		namedAddresses["mcms_register_entrypoints"] = aptos.AccountOne
 	}
 	// Compile using CLI
 	return compile.CompilePackage(contracts.CCIPRouter, namedAddresses)
@@ -62,7 +59,8 @@ func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIPRouter 
 }
 
 // DeployToExistingObject deploys the CCIP router package to an existing code object.
-// This should not be used in production, where CCIP is deployed via MCMS.
+// This should not be used in production, where CCIP is deployed via MCMS and the
+// router is deployed to the same object as CCIP.
 func DeployToExistingObject(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
@@ -70,6 +68,7 @@ func DeployToExistingObject(
 ) (*api.PendingTransaction, CCIPRouter, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
+		"ccip_onramp":               ccipAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}

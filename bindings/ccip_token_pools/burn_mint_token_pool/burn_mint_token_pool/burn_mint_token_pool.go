@@ -89,13 +89,8 @@ func NewBurnMintTokenPool(address aptos.AccountAddress, client aptos.AptosRpcCli
 type BurnMintTokenPoolDeployment struct {
 }
 
-type BurnMintTokenPool struct {
+type BurnMintTokenPoolState struct {
 	StoreSignerAddress aptos.AccountAddress `move:"address"`
-}
-
-type RemoteChainConfig struct {
-	RemoteTokenAddress []byte   `move:"vector<u8>"`
-	RemotePools        [][]byte `move:"vector<vector<u8>>"`
 }
 
 type CallbackProof struct {

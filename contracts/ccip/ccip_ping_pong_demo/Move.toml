@@ -6,6 +6,7 @@ authors = []
 [addresses]
 ccip = "_"
 ccip_router = "_"
+ccip_onramp = "_"
 ccip_ping_pong_demo = "_"
 mcms = "_"
 mcms_register_entrypoints = "_"
@@ -13,12 +14,13 @@ mcms_register_entrypoints = "_"
 [dev-addresses]
 ccip = "0x1000"
 ccip_router = "0x1001"
+ccip_onramp = "0x1002"
 ccip_ping_pong_demo = "0x3010"
 mcms = "0x4000"
 mcms_register_entrypoints = "0x4001"
 
 [dependencies]
-AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }
 ChainlinkCCIP = { local = "../ccip" }
 ChainlinkCCIPRouter = { local = "../ccip_router" }
 

@@ -90,13 +90,8 @@ func NewLockReleaseTokenPool(address aptos.AccountAddress, client aptos.AptosRpc
 type LockReleaseTokenPoolDeployment struct {
 }
 
-type LockReleaseTokenPool struct {
+type LockReleaseTokenPoolState struct {
 	StoreSignerAddress aptos.AccountAddress `move:"address"`
-}
-
-type RemoteChainConfig struct {
-	RemoteTokenAddress []byte   `move:"vector<u8>"`
-	RemotePools        [][]byte `move:"vector<vector<u8>>"`
 }
 
 type CallbackProof struct {

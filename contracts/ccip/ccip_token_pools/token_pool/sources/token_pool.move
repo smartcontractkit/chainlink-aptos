@@ -78,19 +78,15 @@ module ccip_token_pool::token_pool {
     }
 
     const E_NOT_PUBLISHER: u64 = 1;
-    const E_ALREADY_INITIALIZED: u64 = 2;
-    const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
-    const E_UNKNOWN_FUNGIBLE_ASSET: u64 = 4;
-    const E_ALLOWLIST_NOT_ENABLED: u64 = 5;
-    const E_LOCAL_TOKEN_MISMATCH: u64 = 6;
-    const E_UNKNOWN_REMOTE_CHAIN_SELECTOR: u64 = 7;
-    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 8;
-    const E_REMOTE_POOL_ALREADY_ADDED: u64 = 9;
-    const E_UNKNOWN_REMOTE_POOL: u64 = 10;
-    const E_REMOTE_CHAIN_TO_ADD_MISMATCH: u64 = 11;
-    const E_REMOTE_CHAIN_ALREADY_EXISTS: u64 = 12;
-    const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 13;
-    const E_INVALID_ENCODED_AMOUNT: u64 = 14;
+    const E_UNKNOWN_FUNGIBLE_ASSET: u64 = 2;
+    const E_UNKNOWN_REMOTE_CHAIN_SELECTOR: u64 = 3;
+    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 4;
+    const E_REMOTE_POOL_ALREADY_ADDED: u64 = 5;
+    const E_UNKNOWN_REMOTE_POOL: u64 = 6;
+    const E_REMOTE_CHAIN_TO_ADD_MISMATCH: u64 = 7;
+    const E_REMOTE_CHAIN_ALREADY_EXISTS: u64 = 8;
+    const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 9;
+    const E_INVALID_ENCODED_AMOUNT: u64 = 10;
 
     // ================================================================
     // |                    Initialize and state                      |
@@ -610,7 +606,6 @@ module ccip_token_pool::token_pool_test {
     use std::string;
     use std::primary_fungible_store;
     use std::fungible_asset;
-    use std::vector;
     use ccip_token_pool::token_pool::TokenPoolState;
 
     use ccip_token_pool::token_pool;
@@ -628,8 +623,8 @@ module ccip_token_pool::token_pool_test {
     fun initialize_correctly_sets_state(owner: &signer) {
         let state = set_up_test(owner);
 
-        assert!(token_pool::get_token_decimals(&state) == Decimals, 1);
-        assert!(token_pool::is_supported_chain(&state, DefaultRemoteChain), 1);
+        assert!(token_pool::get_token_decimals(&state) == Decimals);
+        assert!(token_pool::is_supported_chain(&state, DefaultRemoteChain));
 
         token_pool::destroy_token_pool(state);
     }
@@ -640,26 +635,14 @@ module ccip_token_pool::token_pool_test {
         let new_remote_pool = b"new_pool";
 
         assert!(
-            !token_pool::is_remote_pool(&state, DefaultRemoteChain, new_remote_pool),
-            1
+            !token_pool::is_remote_pool(&state, DefaultRemoteChain, new_remote_pool)
         );
-        assert!(
-            vector::length(&token_pool::get_remote_pools(&state, DefaultRemoteChain))
-                == 1,
-            1
-        );
+        assert!(token_pool::get_remote_pools(&state, DefaultRemoteChain).length() == 1);
 
         token_pool::add_remote_pool(&mut state, DefaultRemoteChain, new_remote_pool);
 
-        assert!(
-            token_pool::is_remote_pool(&state, DefaultRemoteChain, new_remote_pool),
-            1
-        );
-        assert!(
-            vector::length(&token_pool::get_remote_pools(&state, DefaultRemoteChain))
-                == 2,
-            1
-        );
+        assert!(token_pool::is_remote_pool(&state, DefaultRemoteChain, new_remote_pool));
+        assert!(token_pool::get_remote_pools(&state, DefaultRemoteChain).length() == 2);
 
         token_pool::destroy_token_pool(state);
     }

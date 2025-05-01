@@ -17,7 +17,7 @@ import (
 func main() {
 	inputFile := flag.String("input", "", "path to aptos file to parse")
 	outputFolder := flag.String("output", "", "path to output directory")
-	uppercase := flag.String("uppercase", "", "list of words to convert to uppercase")
+	uppercase := flag.String("uppercase", "CCIP,MCMS,RMN,USDC", "list of words to convert to uppercase")
 	externalStructs := flag.String("externalStructs", "", "comma-separated list of struct names, usage: --externalStructs ccip::ocr3_base::OCRConfig=github.com/smartcontractkit/chainlink-aptos/bindings/ccip/ocr3_base")
 
 	flag.Parse()

@@ -161,6 +161,10 @@ func (r *relayer) NewCCIPExecProvider(ctx context.Context, rargs types.RelayArgs
 	return nil, errors.New("ccip.exec is not supported for aptos")
 }
 
+func (r *relayer) Replay(ctx context.Context, fromBlock string, args map[string]any) error {
+	return errors.ErrUnsupported
+}
+
 // ChainService interface
 func (r *relayer) GetChainStatus(ctx context.Context) (types.ChainStatus, error) {
 	return r.chain.GetChainStatus(ctx)

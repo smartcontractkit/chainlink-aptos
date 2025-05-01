@@ -46,7 +46,7 @@ func Compile(address, ccipAddress, mcmsAddress, ccipTokenPoolAddress, localToken
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
 	if registerMCMSEntrypoints {
-		namedAddresses["mcms_register_entrypoints"] = ccipAddress
+		namedAddresses["mcms_register_entrypoints"] = aptos.AccountOne
 	}
 	// Compile using CLI
 	return compile.CompilePackage(contracts.CCIPBurnMintPool, namedAddresses)

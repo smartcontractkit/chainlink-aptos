@@ -1,10 +1,10 @@
 module ccip::nonce_manager {
+    use std::signer;
     use std::smart_table::{Self, SmartTable};
     use std::string::{Self, String};
 
+    use ccip::auth;
     use ccip::state_object;
-
-    friend ccip::onramp;
 
     struct NonceManagerState has key, store {
         // dest chain selector -> sender -> nonce
@@ -16,7 +16,7 @@ module ccip::nonce_manager {
         string::utf8(b"NonceManager 1.6.0")
     }
 
-    fun init_module() {
+    fun init_module(_publisher: &signer) {
         let state_object_signer = state_object::object_signer();
 
         move_to(
@@ -25,6 +25,7 @@ module ccip::nonce_manager {
         );
     }
 
+    #[view]
     public fun get_outbound_nonce(
         dest_chain_selector: u64, sender: address
     ): u64 acquires NonceManagerState {
@@ -38,9 +39,11 @@ module ccip::nonce_manager {
         *dest_chain_nonces.borrow_with_default(sender, &0)
     }
 
-    public(friend) fun get_incremented_outbound_nonce(
-        dest_chain_selector: u64, sender: address
+    public fun get_incremented_outbound_nonce(
+        caller: &signer, dest_chain_selector: u64, sender: address
     ): u64 acquires NonceManagerState {
+        auth::assert_is_allowed_onramp(signer::address_of(caller));
+
         let state = borrow_state_mut();
 
         if (!state.outbound_nonces.contains(dest_chain_selector)) {

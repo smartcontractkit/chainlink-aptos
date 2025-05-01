@@ -2,13 +2,11 @@ package chain
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
@@ -20,12 +18,13 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil"
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
-	"github.com/smartcontractkit/chainlink-common/pkg/utils"
+	commonutils "github.com/smartcontractkit/chainlink-common/pkg/utils"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
 type Chain interface {
@@ -69,7 +68,7 @@ func (o *ChainOpts) Validate() (err error) {
 var _ Chain = (*chain)(nil)
 
 type chain struct {
-	starter utils.StartStopOnce
+	starter commonutils.StartStopOnce
 
 	id   string
 	cfg  *config.TOMLConfig
@@ -274,7 +273,7 @@ func (c *chain) LatestHead(ctx context.Context) (types.Head, error) {
 	}
 
 	// Map to common Head type
-	hash, err := hex.DecodeString(strings.TrimPrefix(block.BlockHash, "0x"))
+	hash, err := utils.DecodeHexRelaxed(block.BlockHash)
 	if err != nil {
 		return types.Head{}, fmt.Errorf("failed to decode block hash: %w", err)
 	}
@@ -307,6 +306,10 @@ func (c *chain) ListNodeStatuses(ctx context.Context, pageSize int32, pageToken 
 
 func (c *chain) Transact(ctx context.Context, from, to string, amount *big.Int, balanceCheck bool) error {
 	// TODO: this should be (?) hooked into ChainWriter API
+	return errors.ErrUnsupported
+}
+
+func (c *chain) Replay(ctx context.Context, fromBlock string, args map[string]any) error {
 	return errors.ErrUnsupported
 }
 

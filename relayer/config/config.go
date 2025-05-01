@@ -226,7 +226,7 @@ func (c *TOMLConfig) ValidateConfig() (err error) {
 		var network aptos.NetworkConfig
 		network, err = GetNetworkConfig(c.ChainID)
 		if err == nil && c.NetworkName != network.Name {
-			err = errors.Join(err, config.ErrInvalid{Name: "NetworkName", Msg: "does not match known network for chain ID"})
+			err = errors.Join(err, config.ErrInvalid{Name: "NetworkName", Value: c.NetworkName, Msg: fmt.Sprintf("does not match known network (%s) for chain ID", network.Name)})
 		}
 	}
 

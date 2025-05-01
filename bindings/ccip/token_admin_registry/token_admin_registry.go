@@ -26,7 +26,7 @@ type TokenAdminRegistryInterface interface {
 	GetPools(opts *bind.CallOpts, localTokens []aptos.AccountAddress) ([]aptos.AccountAddress, error)
 	GetPool(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, error)
 	GetTokenConfig(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, aptos.AccountAddress, aptos.AccountAddress, error)
-	GetAllConfiguredTokens(opts *bind.CallOpts, startingBucketIndex uint64, startingVectorIndex uint64, maxCount uint64) ([]aptos.AccountAddress, *uint64, *uint64, error)
+	GetAllConfiguredTokens(opts *bind.CallOpts, startKey aptos.AccountAddress, maxCount uint64) ([]aptos.AccountAddress, aptos.AccountAddress, bool, error)
 	IsAdministrator(opts *bind.CallOpts, localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bool, error)
 
 	SetPool(opts *bind.TransactOpts, localToken aptos.AccountAddress, tokenPoolAddress aptos.AccountAddress) (*api.PendingTransaction, error)
@@ -42,7 +42,7 @@ type TokenAdminRegistryEncoder interface {
 	GetPools(localTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetPool(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetTokenConfig(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	GetAllConfiguredTokens(startingBucketIndex uint64, startingVectorIndex uint64, maxCount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetAllConfiguredTokens(startKey aptos.AccountAddress, maxCount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	IsAdministrator(localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	SetPool(localToken aptos.AccountAddress, tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TransferAdminRole(localToken aptos.AccountAddress, newAdmin aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -52,9 +52,13 @@ type TokenAdminRegistryEncoder interface {
 	FinishLockOrBurn(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	FinishReleaseOrMint(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TestGetAllConfiguredTokens() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TestGetAllConfiguredTokensEdgeCases() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TestGetAllConfiguredTokensPagination() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TestGetAllConfiguredTokensNonExistent() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"token_admin_registry","name":"accept_admin_role","parameters":[{"name":"local_token","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"assert_can_register","parameters":[{"name":"registry_owner_address","type":"address"},{"name":"token_pool_address","type":"address"},{"name":"fungible_asset_metadata","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"finish_lock_or_burn","parameters":[{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"finish_release_or_mint","parameters":[{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"set_pool","parameters":[{"name":"local_token","type":"address"},{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"start_lock_or_burn","parameters":[{"name":"token_pool_address","type":"address"},{"name":"sender","type":"address"},{"name":"remote_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"token_admin_registry","name":"transfer_admin_role","parameters":[{"name":"local_token","type":"address"},{"name":"new_admin","type":"address"}]}]`
+const FunctionInfo = `[{"package":"ccip","module":"token_admin_registry","name":"accept_admin_role","parameters":[{"name":"local_token","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"assert_can_register","parameters":[{"name":"registry_owner_address","type":"address"},{"name":"token_pool_address","type":"address"},{"name":"fungible_asset_metadata","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"finish_lock_or_burn","parameters":[{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"finish_release_or_mint","parameters":[{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"set_pool","parameters":[{"name":"local_token","type":"address"},{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"start_lock_or_burn","parameters":[{"name":"token_pool_address","type":"address"},{"name":"sender","type":"address"},{"name":"remote_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"token_admin_registry","name":"test_get_all_configured_tokens","parameters":null},{"package":"ccip","module":"token_admin_registry","name":"test_get_all_configured_tokens_edge_cases","parameters":null},{"package":"ccip","module":"token_admin_registry","name":"test_get_all_configured_tokens_non_existent","parameters":null},{"package":"ccip","module":"token_admin_registry","name":"test_get_all_configured_tokens_pagination","parameters":null},{"package":"ccip","module":"token_admin_registry","name":"transfer_admin_role","parameters":[{"name":"local_token","type":"address"},{"name":"new_admin","type":"address"}]}]`
 
 func NewTokenAdminRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) TokenAdminRegistryInterface {
 	contract := bind.NewBoundContract(address, "ccip", "token_admin_registry", client)
@@ -230,27 +234,27 @@ func (c TokenAdminRegistryContract) GetTokenConfig(opts *bind.CallOpts, localTok
 	return r0, r1, r2, nil
 }
 
-func (c TokenAdminRegistryContract) GetAllConfiguredTokens(opts *bind.CallOpts, startingBucketIndex uint64, startingVectorIndex uint64, maxCount uint64) ([]aptos.AccountAddress, *uint64, *uint64, error) {
-	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.GetAllConfiguredTokens(startingBucketIndex, startingVectorIndex, maxCount)
+func (c TokenAdminRegistryContract) GetAllConfiguredTokens(opts *bind.CallOpts, startKey aptos.AccountAddress, maxCount uint64) ([]aptos.AccountAddress, aptos.AccountAddress, bool, error) {
+	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.GetAllConfiguredTokens(startKey, maxCount)
 	if err != nil {
-		return *new([]aptos.AccountAddress), *new(*uint64), *new(*uint64), err
+		return *new([]aptos.AccountAddress), *new(aptos.AccountAddress), *new(bool), err
 	}
 
 	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return *new([]aptos.AccountAddress), *new(*uint64), *new(*uint64), err
+		return *new([]aptos.AccountAddress), *new(aptos.AccountAddress), *new(bool), err
 	}
 
 	var (
 		r0 []aptos.AccountAddress
-		r1 bind.StdOption[uint64]
-		r2 bind.StdOption[uint64]
+		r1 aptos.AccountAddress
+		r2 bool
 	)
 
 	if err := codec.DecodeAptosJsonArray(callData, &r0, &r1, &r2); err != nil {
-		return *new([]aptos.AccountAddress), *new(*uint64), *new(*uint64), err
+		return *new([]aptos.AccountAddress), *new(aptos.AccountAddress), *new(bool), err
 	}
-	return r0, r1.Value(), r2.Value(), nil
+	return r0, r1, r2, nil
 }
 
 func (c TokenAdminRegistryContract) IsAdministrator(opts *bind.CallOpts, localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bool, error) {
@@ -336,14 +340,12 @@ func (c tokenAdminRegistryEncoder) GetTokenConfig(localToken aptos.AccountAddres
 	})
 }
 
-func (c tokenAdminRegistryEncoder) GetAllConfiguredTokens(startingBucketIndex uint64, startingVectorIndex uint64, maxCount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c tokenAdminRegistryEncoder) GetAllConfiguredTokens(startKey aptos.AccountAddress, maxCount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("get_all_configured_tokens", nil, []string{
-		"u64",
-		"u64",
+		"address",
 		"u64",
 	}, []any{
-		startingBucketIndex,
-		startingVectorIndex,
+		startKey,
 		maxCount,
 	})
 }
@@ -434,4 +436,20 @@ func (c tokenAdminRegistryEncoder) MCMSEntrypoint(Metadata aptos.AccountAddress)
 	}, []any{
 		Metadata,
 	})
+}
+
+func (c tokenAdminRegistryEncoder) TestGetAllConfiguredTokens() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("test_get_all_configured_tokens", nil, []string{}, []any{})
+}
+
+func (c tokenAdminRegistryEncoder) TestGetAllConfiguredTokensEdgeCases() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("test_get_all_configured_tokens_edge_cases", nil, []string{}, []any{})
+}
+
+func (c tokenAdminRegistryEncoder) TestGetAllConfiguredTokensPagination() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("test_get_all_configured_tokens_pagination", nil, []string{}, []any{})
+}
+
+func (c tokenAdminRegistryEncoder) TestGetAllConfiguredTokensNonExistent() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("test_get_all_configured_tokens_non_existent", nil, []string{}, []any{})
 }
