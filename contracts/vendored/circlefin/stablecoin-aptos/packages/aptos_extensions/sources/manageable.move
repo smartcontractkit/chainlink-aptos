@@ -16,7 +16,7 @@
 
 /// This module defines logic for managing an admin role privilege with two-step role transfer restrictions.
 /// The two-step transfer process ensures the role is never transferred to an
-/// inaccesible address.
+/// inaccessible address.
 ///
 /// Inspired by OpenZeppelin's Ownable2Step in Solidity:
 /// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable2Step.sol.

@@ -1,8 +1,8 @@
-# Developer enviroment
+# Developer environment
 
 Aptos scripts require `go`, `docker`, `geth`, `aptos`, `jq`, and `curl` .
 
-Enter the developer enviroment using Nix:
+Enter the developer environment using Nix:
 
 ```bash
 nix develop

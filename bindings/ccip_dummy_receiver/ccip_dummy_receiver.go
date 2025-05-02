@@ -54,7 +54,7 @@ func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) CCIPDummyRe
 	}
 }
 
-// DeployToObject deploys the dummmy receiver contract to a new named object.
+// DeployToObject deploys the dummy receiver contract to a new named object.
 // The resulting address will be calculated using the deployer's account address and the next sequence number
 func DeployToObject(
 	auth aptos.TransactionSigner,
