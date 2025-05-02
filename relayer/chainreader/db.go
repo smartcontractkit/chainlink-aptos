@@ -124,11 +124,23 @@ WHERE event_account_address = $1 AND event_handle = $2
 			switch v := expr.Primitive.(type) {
 			case *primitives.Comparator:
 				for _, valueCmp := range v.ValueComparators {
+					// todo: temp, remove when fixed
+					var vName string
+					if v.Name == "SourceChain" {
+						continue
+					} else if v.Name == "DestChain" {
+						vName = "DestChainSelector"
+					} else {
+						vName = v.Name
+					}
+
+
+
 					var condition string
 					if isNumeric(valueCmp.Value) {
-						condition = fmt.Sprintf("CAST(data->>'%s' AS numeric) %s $%d", v.Name, operatorSQL(valueCmp.Operator), argCount)
+						condition = fmt.Sprintf("CAST(data->>'%s' AS numeric) %s $%d", vName, operatorSQL(valueCmp.Operator), argCount)
 					} else {
-						condition = fmt.Sprintf("data->>'%s' %s $%d", v.Name, operatorSQL(valueCmp.Operator), argCount)
+						condition = fmt.Sprintf("data->>'%s' %s $%d", vName, operatorSQL(valueCmp.Operator), argCount)
 					}
 					baseSQL += " AND " + condition
 					args = append(args, valueCmp.Value)
