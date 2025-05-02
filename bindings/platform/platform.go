@@ -42,10 +42,9 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 	module_storage.FunctionInfo,
 )
 
-func Compile(owner aptos.AccountAddress, platform aptos.AccountAddress) (compile.CompiledPackage, error) {
+func Compile(ownerAddress aptos.AccountAddress) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
-		"owner":    owner,
-		"platform": platform,
+		"owner": ownerAddress,
 	}
 	// Compile using CLI
 	return compile.CompilePackage(contracts.Platform, namedAddresses)
@@ -64,12 +63,10 @@ func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) Platform {
 func DeployToObject(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
-	address aptos.AccountAddress,
-	platform aptos.AccountAddress,
+	ownerAddress aptos.AccountAddress,
 ) (aptos.AccountAddress, *api.PendingTransaction, Platform, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
-		"owner":    address,
-		"platform": platform,
+		"owner": ownerAddress,
 	}
 	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.Platform, namedAddresses)
 	if err != nil {
