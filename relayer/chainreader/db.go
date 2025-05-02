@@ -148,6 +148,7 @@ WHERE event_account_address = $1 AND event_handle = $2
 				}
 			}
 		}
+	}
 
 	if len(limitAndSort.SortBy) > 0 {
 		direction := "ASC"
