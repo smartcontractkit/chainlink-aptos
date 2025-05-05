@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 )
 
-//go:embed ccip large_packages mcms vendored
+//go:embed ccip large_packages mcms vendored data-feeds platform
 var Embed embed.FS
 
 type Package string
@@ -21,6 +21,8 @@ const (
 	CCIPDummyReceiver   = Package("ccip_dummy_receiver")
 	CCIPOfframp         = Package("ccip_offramp")
 	CCIPOnramp          = Package("ccip_onramp")
+	DataFeeds           = Package("data_feeds")
+	Platform            = Package("platform")
 
 	MCMS     = Package("mcms")
 	MCMSTest = Package("mcms_test")
@@ -40,6 +42,8 @@ var Contracts map[Package]string = map[Package]string{
 	CCIPDummyReceiver:   filepath.Join("ccip", "ccip_dummy_receiver"),
 	CCIPOfframp:         filepath.Join("ccip", "ccip_offramp"),
 	CCIPOnramp:          filepath.Join("ccip", "ccip_onramp"),
+	DataFeeds:           "data-feeds",
+	Platform:            "platform",
 
 	MCMS:     filepath.Join("mcms", "mcms"),
 	MCMSTest: filepath.Join("mcms", "mcms_test"),

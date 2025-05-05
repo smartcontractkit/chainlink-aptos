@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
+	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil/sqltest"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
@@ -50,8 +52,8 @@ func TestChainReaderLocal(t *testing.T) {
 		runGetLatestValueTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
 	})
 
-	t.Run("QueryKey", func(t *testing.T) {
-		runQueryKeyTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
+	t.Run("QueryKeyPersistent", func(t *testing.T) {
+		runQueryKeyPersistentTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
 	})
 }
 
@@ -106,18 +108,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		/* simulateTx= */ true,
 	)
 	require.NoError(t, err)
-
-	confirmed := false
-	for i := 0; i < 10; i++ {
-		time.Sleep(time.Second * 1)
-		status, err := txmgr.GetStatus(txId)
-		require.NoError(t, err)
-		if status != commontypes.Unconfirmed {
-			confirmed = true
-			break
-		}
-	}
-	require.True(t, confirmed)
+	waitForTx(t, txmgr, txId)
 
 	config := ChainReaderConfig{
 		Modules: map[string]*ChainReaderModule{
@@ -263,7 +254,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		Address: accountAddress.String(),
 	}
 
-	chainReader := NewChainReader(logger, rateLimitedClient, config)
+	chainReader := NewChainReader(logger, rateLimitedClient, config, nil)
 	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{binding})
 	require.NoError(t, err)
 
@@ -492,7 +483,14 @@ func emitManyEvents(t *testing.T, txmgr *txm.AptosTxm, address, publicKeyHex str
 	}
 }
 
-func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
+func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
+	dsn := os.Getenv("TEST_DB_URL")
+	if dsn == "" {
+		// todo: make test run in CI
+		t.Skip("Skipping persistent tests as TEST_DB_URL is not set in CI")
+	}
+	db := sqltest.NewDB(t, dsn)
+	
 	keystore := testutils.NewTestKeystore(t)
 	keystore.AddKey(privateKey)
 
@@ -501,199 +499,329 @@ func runQueryKeyTest(t *testing.T, logger logger.Logger, rpcUrl string, accountA
 
 	rateLimitedClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
 
-	compilationResult := testutils.CompileTestModule(t, accountAddress)
+	getClient := func() (aptos.AptosRpcClient, error) { return rateLimitedClient, nil }
+	txmgr, err := txm.New(logger, keystore, txm.DefaultConfigSet, getClient)
+	require.NoError(t, err)
+	err = txmgr.Start(context.Background())
+	require.NoError(t, err)
+
 	publicKeyHex := hex.EncodeToString([]byte(publicKey))
-
-	txmgr := initTxManager(t, logger, keystore, rateLimitedClient)
-
+	compilationResult := testutils.CompileTestModule(t, accountAddress)
 	txId := deployContract(t, txmgr, accountAddress.String(), publicKeyHex, compilationResult)
 	waitForTx(t, txmgr, txId)
-
-	// Emit 20 events initially
-	emitManyEvents(t, txmgr, accountAddress.String(), publicKeyHex, 20)
 
 	config := ChainReaderConfig{
 		Modules: map[string]*ChainReaderModule{
 			"testContract": {
 				Name: "echo",
 				Events: map[string]*ChainReaderEvent{
-					"SingleValueEvent": {
-						EventHandleStructName: "EventStore",
-						EventHandleFieldName:  "single_value_events",
-						// retrieve using 2 address components
-						EventAccountAddress: accountAddress.String() + "::echo::get_event_address",
-						EventFieldRenames: map[string]RenamedField{
-							"value": {
-								NewName: "SingleUintValue",
-							},
-						},
-					},
 					"DoubleValueEvent": {
-						// don't specify event handle address to let it be filled out
 						EventHandleStructName: "EventStore",
 						EventHandleFieldName:  "double_value_events",
-						EventAccountAddress:   accountAddress.String(),
-					},
-					"VectorVectorEvent": {
-						EventHandleStructName: "EventStore",
-						EventHandleFieldName:  "vector_vector_events",
-						// retrieve using 3 address components
-						EventAccountAddress: "echo::get_event_address",
+						EventAccountAddress:   "",
 					},
 				},
 			},
 		},
 	}
 
-	chainReader := NewChainReader(logger, rateLimitedClient, config)
-	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{
-		{Name: "testContract", Address: accountAddress.String()},
-	})
+	// Create ChainReader with persistence enabled.
+	chainReader := NewChainReader(logger, rateLimitedClient, config, db)
+	binding := commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()}
+	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{binding})
 	require.NoError(t, err)
 
-	t.Run("Get all events paginated", func(t *testing.T) {
-		pageSize := uint64(5)
-		var allEvents []*SingleValueEvent
+	emitManyEvents(t, txmgr, accountAddress.String(), publicKeyHex, 20)
 
-		for offset := uint64(0); ; offset += pageSize {
-			sequences, err := chainReader.QueryKey(
-				context.Background(),
-				commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
-				query.KeyFilter{
-					Key: "SingleValueEvent",
-					Expressions: []query.Expression{{
-						Primitive: &primitives.Comparator{
-							Name: "offset",
-							ValueComparators: []primitives.ValueComparator{{
-								Operator: primitives.Eq,
-								Value:    offset,
-							}},
-						},
-					}},
-				},
-				query.LimitAndSort{Limit: query.CountLimit(pageSize)},
-				&SingleValueEvent{},
-			)
-			require.NoError(t, err)
-			if len(sequences) == 0 {
-				break
-			}
-			for _, seq := range sequences {
-				allEvents = append(allEvents, seq.Data.(*SingleValueEvent))
-			}
-		}
-		require.Len(t, allEvents, 20)
-		for i := 0; i < len(allEvents)-1; i++ {
-			require.Less(t, allEvents[i].SingleUintValue, allEvents[i+1].SingleUintValue)
-		}
-	})
-
-	t.Run("Get newest event with offset", func(t *testing.T) {
-		sequences, err := chainReader.QueryKey(
+	t.Run("All events", func(t *testing.T) {
+		seqs, err := chainReader.QueryKey(
 			context.Background(),
-			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
-			query.KeyFilter{
-				Key: "SingleValueEvent",
-				Expressions: []query.Expression{{
-					Primitive: &primitives.Comparator{
-						Name: "offset",
-						ValueComparators: []primitives.ValueComparator{{
-							Operator: primitives.Eq,
-							Value:    uint64(1),
-						}},
-					},
-				}},
-			},
-			query.LimitAndSort{Limit: query.CountLimit(1)},
-			&SingleValueEvent{},
+			binding,
+			query.KeyFilter{Key: "DoubleValueEvent"},
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&DoubleValueEvent{},
 		)
 		require.NoError(t, err)
-		require.Len(t, sequences, 1)
-		event := sequences[0].Data.(*SingleValueEvent)
-		require.Equal(t, uint64(1), event.SingleUintValue)
+		require.NotEmpty(t, seqs)
 	})
 
-	t.Run("Get events sorted in desc", func(t *testing.T) {
-		sequences, err := chainReader.QueryKey(
+	t.Run("Filter by numeric value", func(t *testing.T) {
+		filter := query.KeyFilter{
+			Key: "DoubleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("number",
+					primitives.ValueComparator{Value: uint64(5), Operator: primitives.Gte},
+					primitives.ValueComparator{Value: uint64(10), Operator: primitives.Lt},
+				),
+			},
+		}
+		seqs, err := chainReader.QueryKey(
 			context.Background(),
-			commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
-			query.KeyFilter{Key: "SingleValueEvent"},
+			binding,
+			filter,
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, seqs)
+		for _, seq := range seqs {
+			evt := seq.Data.(*DoubleValueEvent)
+			require.GreaterOrEqual(t, evt.Number, uint64(5))
+			require.Less(t, evt.Number, uint64(10))
+		}
+	})
+
+	t.Run("Filter by text equality", func(t *testing.T) {
+		sampleText := "test7"
+		filter := query.KeyFilter{
+			Key: "DoubleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("text",
+					primitives.ValueComparator{Value: sampleText, Operator: primitives.Eq},
+				),
+			},
+		}
+		seqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			filter,
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, seqs)
+		for _, seq := range seqs {
+			evt := seq.Data.(*DoubleValueEvent)
+			require.Equal(t, sampleText, evt.Text)
+		}
+	})
+
+	t.Run("Sorted results descending", func(t *testing.T) {
+		seqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "DoubleValueEvent"},
 			query.LimitAndSort{
 				Limit: query.CountLimit(10),
 				SortBy: []query.SortBy{
 					query.NewSortBySequence(query.Desc),
 				},
 			},
-			&SingleValueEvent{},
+			&DoubleValueEvent{},
 		)
 		require.NoError(t, err)
-		require.Len(t, sequences, 10)
-		for i := 0; i < len(sequences)-1; i++ {
-			require.Greater(t, sequences[i].Data.(*SingleValueEvent).SingleUintValue,
-				sequences[i+1].Data.(*SingleValueEvent).SingleUintValue)
+		require.Len(t, seqs, 10)
+
+		for i := 0; i < len(seqs)-1; i++ {
+			curr, err := strconv.ParseUint(seqs[i].Cursor, 10, 64)
+			require.NoError(t, err)
+			next, err := strconv.ParseUint(seqs[i+1].Cursor, 10, 64)
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, curr, next)
 		}
 	})
 
-	t.Run("Handle concurrent event emission", func(t *testing.T) {
-		initialCount := 20
-		concurrentCount := 15
+	t.Run("Error cases", func(t *testing.T) {
+		invalidFilter := query.KeyFilter{
+			Key: "DoubleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("non_existent_field",
+					primitives.ValueComparator{Value: uint64(1), Operator: primitives.Eq},
+				),
+			},
+		}
+		seqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			invalidFilter,
+			query.LimitAndSort{},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.Empty(t, seqs)
+	})
 
-		// Start concurrent emission in background
-		done := make(chan bool)
-		go func() {
-			emitManyEvents(t, txmgr, accountAddress.String(), publicKeyHex, concurrentCount)
-			done <- true
-		}()
+	t.Run("Get events using timestamp filter", func(t *testing.T) {
+		allSeqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "DoubleValueEvent"},
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, allSeqs)
 
-		seenSequences := make(map[uint64]bool)
-		maxAttempts := 10
-		success := false
-		var lastSeq uint64
+		midIdx := len(allSeqs) / 2
+		midTimestamp := allSeqs[midIdx].Head.Timestamp
 
-		for attempt := 0; attempt < maxAttempts && !success; attempt++ {
-			sequences, err := chainReader.QueryKey(
-				context.Background(),
-				commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()},
-				query.KeyFilter{Key: "SingleValueEvent"},
-				query.LimitAndSort{
-					Limit: query.CountLimit(50),
-					SortBy: []query.SortBy{
-						query.NewSortBySequence(query.Asc),
-					},
-				},
-				&SingleValueEvent{},
-			)
-			require.NoError(t, err)
-
-			for _, seq := range sequences {
-				seqNum, err := strconv.ParseUint(seq.Cursor, 10, 64)
-				require.NoError(t, err)
-				seenSequences[seqNum] = true
-				if seqNum > lastSeq {
-					lastSeq = seqNum
-				}
-			}
-
-			if len(seenSequences) > initialCount {
-				success = true
-			} else {
-				time.Sleep(2 * time.Second)
-			}
+		filter := query.KeyFilter{
+			Key:         "DoubleValueEvent",
+			Expressions: []query.Expression{query.Timestamp(midTimestamp, primitives.Gte)},
 		}
 
-		<-done
+		filteredSeqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			filter,
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, filteredSeqs)
 
-		t.Logf("Seen %d events (initial: %d, concurrent: %d)", len(seenSequences), initialCount, concurrentCount)
-		require.True(t, success, "Failed to see concurrent events after multiple attempts")
-		require.Greater(t, len(seenSequences), initialCount, "Should see more than initial events")
-		require.LessOrEqual(t, len(seenSequences), initialCount+concurrentCount, "Should not see more events than emitted")
+		for _, seq := range filteredSeqs {
+			require.GreaterOrEqual(t, seq.Head.Timestamp, midTimestamp)
+		}
+	})
+
+	t.Run("Complex filtering with multiple comparators", func(t *testing.T) {
+		filter := query.KeyFilter{
+			Key: "DoubleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("number",
+					primitives.ValueComparator{Value: uint64(3), Operator: primitives.Gte},
+					primitives.ValueComparator{Value: uint64(7), Operator: primitives.Lt},
+				),
+			},
+		}
+
+		seqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			filter,
+			query.LimitAndSort{},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, seqs)
+		for _, seq := range seqs {
+			evt := seq.Data.(*DoubleValueEvent)
+			require.GreaterOrEqual(t, evt.Number, uint64(3))
+			require.Less(t, evt.Number, uint64(7))
+		}
+	})
+
+	t.Run("Combined filtering with timestamp", func(t *testing.T) {
+		allSeqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "DoubleValueEvent"},
+			query.LimitAndSort{},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, allSeqs)
+
+		midTs := allSeqs[len(allSeqs)/2].Head.Timestamp
+
+		combinedFilter := query.KeyFilter{
+			Key: "DoubleValueEvent",
+			Expressions: []query.Expression{
+				query.Timestamp(midTs, primitives.Gte),
+				query.Comparator("number",
+					primitives.ValueComparator{Value: uint64(15), Operator: primitives.Lte},
+				),
+			},
+		}
+
+		seqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			combinedFilter,
+			query.LimitAndSort{},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, seqs)
+		for _, seq := range seqs {
+			evt := seq.Data.(*DoubleValueEvent)
+			require.LessOrEqual(t, evt.Number, uint64(15))
+			require.GreaterOrEqual(t, seq.Head.Timestamp, midTs)
+		}
+	})
+
+	t.Run("Sync multiple batches", func(t *testing.T) {
+		extraCount := 30
+		emitManyEvents(t, txmgr, accountAddress.String(), publicKeyHex, extraCount)
+		seqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "DoubleValueEvent"},
+			query.LimitAndSort{Limit: query.CountLimit(1000)},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, len(seqs), 20+extraCount)
+	})
+
+	t.Run("Filter by renamed numeric value", func(t *testing.T) {
+		configRenamed := ChainReaderConfig{
+			Modules: map[string]*ChainReaderModule{
+				"testContract": {
+					Name: "echo",
+					Events: map[string]*ChainReaderEvent{
+						"DoubleValueEvent": {
+							EventHandleStructName: "EventStore",
+							EventHandleFieldName:  "double_value_events",
+							EventAccountAddress:   "", // defaults to bound contract address
+							EventFieldRenames: map[string]RenamedField{
+								"number": {NewName: "RenamedNumber"},
+							},
+						},
+					},
+				},
+			},
+		}
+		chainReaderRenamed := NewChainReader(logger, rateLimitedClient, configRenamed, db)
+		bindingRenamed := commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()}
+		err := chainReaderRenamed.Bind(context.Background(), []commontypes.BoundContract{bindingRenamed})
+		require.NoError(t, err)
+
+		txId := uuid.New().String()
+		err = txmgr.Enqueue(
+			txId,
+			getSampleTxMetadata(),
+			accountAddress.String(),
+			publicKeyHex,
+			fmt.Sprintf("%s::echo::echo_with_events", accountAddress.String()),
+			[]string{},
+			[]string{"u64", "0x1::string::String", "vector<u8>"},
+			[]any{uint64(7), "test7", []byte{7}},
+			true,
+		)
+		require.NoError(t, err)
+		waitForTx(t, txmgr, txId)
+
+		filter := query.KeyFilter{
+			Key: "DoubleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("RenamedNumber",
+					primitives.ValueComparator{Value: uint64(5), Operator: primitives.Gte},
+					primitives.ValueComparator{Value: uint64(10), Operator: primitives.Lt},
+				),
+			},
+		}
+		seqs, err := chainReaderRenamed.QueryKey(
+			context.Background(),
+			bindingRenamed,
+			filter,
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&DoubleValueEventRenamed{},
+		)
+		require.NoError(t, err)
+		// Expect exactly one event (the one we just emitted).
+		require.Len(t, seqs, 1)
+		evt := seqs[0].Data.(*DoubleValueEventRenamed)
+		require.Equal(t, uint64(7), evt.RenamedNumber)
 	})
 }
 
-func TestLoopChainReaderLocal(t *testing.T) {
+func TestLoopChainReaderPersistent(t *testing.T) {
 	lg := logger.Test(t)
 	privKey, pubKey, acctAddr := setupTestAccount(t, lg)
 
+	// Start node and fund account.
 	err := testutils.StartAptosNode()
 	require.NoError(t, err)
 	rpcURL := "http://localhost:8080/v1"
@@ -703,6 +831,7 @@ func TestLoopChainReaderLocal(t *testing.T) {
 	require.NoError(t, err)
 	rlClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
 
+	// Compile and deploy the contract.
 	compRes := testutils.CompileTestModule(t, acctAddr)
 	keystore := testutils.NewTestKeystore(t)
 	keystore.AddKey(privKey)
@@ -712,12 +841,13 @@ func TestLoopChainReaderLocal(t *testing.T) {
 	err = txmgr.Start(context.Background())
 	require.NoError(t, err)
 
+	publicKeyHex := hex.EncodeToString([]byte(pubKey))
 	txID := uuid.New().String()
 	err = txmgr.Enqueue(
 		txID,
 		getSampleTxMetadata(),
 		acctAddr.String(),
-		hex.EncodeToString([]byte(pubKey)),
+		publicKeyHex,
 		"0x1::code::publish_package_txn",
 		[]string{},
 		[]string{"vector<u8>", "vector<vector<u8>>"},
@@ -725,18 +855,9 @@ func TestLoopChainReaderLocal(t *testing.T) {
 		true,
 	)
 	require.NoError(t, err)
+	waitForTx(t, txmgr, txID)
 
-	confirmed := false
-	for i := 0; i < 10; i++ {
-		time.Sleep(time.Second)
-		status, err := txmgr.GetStatus(txID)
-		require.NoError(t, err)
-		if status != commontypes.Unconfirmed {
-			confirmed = true
-			break
-		}
-	}
-	require.True(t, confirmed, "Contract deploy tx not confirmed")
+	emitManyEvents(t, txmgr, acctAddr.String(), publicKeyHex, 20)
 
 	config := ChainReaderConfig{
 		Modules: map[string]*ChainReaderModule{
@@ -779,15 +900,182 @@ func TestLoopChainReaderLocal(t *testing.T) {
 		IsLoopPlugin: true,
 	}
 
-	chainReader := NewChainReader(lg, rlClient, config)
-	loopReader := loop.NewLoopChainReader(lg, chainReader)
-	binding := commontypes.BoundContract{
-		Name:    "testContract",
-		Address: acctAddr.String(),
+	dsn := os.Getenv("TEST_DB_URL")
+	if dsn == "" {
+		t.Skip("Skipping persistent tests as TEST_DB_URL is not set")
 	}
+	db := sqltest.NewDB(t, dsn)
+
+	// Create ChainReader with persistence enabled.
+	chainReader := NewChainReader(lg, rlClient, config, db)
+	binding := commontypes.BoundContract{Name: "testContract", Address: acctAddr.String()}
+	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{binding})
+	require.NoError(t, err)
+
+	loopReader := loop.NewLoopChainReader(lg, chainReader)
+	// Re-bind using the loop reader
 	err = loopReader.Bind(context.Background(), []commontypes.BoundContract{binding})
 	require.NoError(t, err)
+
+	// Declare the confidence level used with GetLatestValue.
 	confidenceLevel := primitives.Finalized
+
+	t.Run("QueryKey - Filter by SingleUintValue", func(t *testing.T) {
+		filter := query.KeyFilter{
+			Key: "SingleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("SingleUintValue",
+					primitives.ValueComparator{Value: uint64(2), Operator: primitives.Gte},
+					primitives.ValueComparator{Value: uint64(4), Operator: primitives.Lt},
+				),
+			},
+		}
+		// Now call QueryKey on the loopReader, not the chainReader.
+		seqs, err := loopReader.QueryKey(
+			context.Background(),
+			binding,
+			filter,
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, seqs, "Expected non-empty event results")
+
+		for _, seq := range seqs {
+			event := seq.Data.(*SingleValueEvent)
+			require.GreaterOrEqual(t, event.SingleUintValue, uint64(2))
+			require.Less(t, event.SingleUintValue, uint64(4))
+		}
+	})
+
+	t.Run("QueryKey - Sorted Results Descending", func(t *testing.T) {
+		// Fetch 10 events sorted descending by SingleUintValue
+		seqs, err := loopReader.QueryKey(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "SingleValueEvent"},
+			query.LimitAndSort{
+				Limit: query.CountLimit(10),
+				SortBy: []query.SortBy{
+					query.NewSortBySequence(query.Desc),
+				},
+			},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.Len(t, seqs, 10)
+		for i := 0; i < len(seqs)-1; i++ {
+			evtCurrent := seqs[i].Data.(*SingleValueEvent)
+			evtNext := seqs[i+1].Data.(*SingleValueEvent)
+			require.GreaterOrEqual(t, evtCurrent.SingleUintValue, evtNext.SingleUintValue)
+		}
+	})
+
+	t.Run("QueryKey - Combined Filtering with Timestamp", func(t *testing.T) {
+		// First, fetch all events to pick a mid timestamp.
+		allSeqs, err := loopReader.QueryKey(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "SingleValueEvent"},
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, allSeqs)
+		midTimestamp := allSeqs[len(allSeqs)/2].Head.Timestamp
+
+		filter := query.KeyFilter{
+			Key: "SingleValueEvent",
+			Expressions: []query.Expression{
+				query.Timestamp(midTimestamp, primitives.Gte),
+				query.Comparator("SingleUintValue",
+					primitives.ValueComparator{Value: uint64(10), Operator: primitives.Gte},
+				),
+			},
+		}
+		seqs, err := loopReader.QueryKey(
+			context.Background(),
+			binding,
+			filter,
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, seqs)
+		for _, seq := range seqs {
+			require.GreaterOrEqual(t, seq.Head.Timestamp, midTimestamp)
+			evt := seq.Data.(*SingleValueEvent)
+			require.GreaterOrEqual(t, evt.SingleUintValue, uint64(10))
+		}
+	})
+
+	t.Run("QueryKey - Multiple Independent Comparators", func(t *testing.T) {
+		multiFilter := query.KeyFilter{
+			Key: "SingleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("SingleUintValue",
+					primitives.ValueComparator{Value: uint64(3), Operator: primitives.Gte},
+				),
+				query.Comparator("SingleUintValue",
+					primitives.ValueComparator{Value: uint64(7), Operator: primitives.Lt},
+				),
+			},
+		}
+		seqs, err := loopReader.QueryKey(
+			context.Background(),
+			binding,
+			multiFilter,
+			query.LimitAndSort{},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, seqs)
+		for _, seq := range seqs {
+			evt := seq.Data.(*SingleValueEvent)
+			require.GreaterOrEqual(t, evt.SingleUintValue, uint64(3))
+			require.Less(t, evt.SingleUintValue, uint64(7))
+		}
+	})
+
+	t.Run("QueryKey - Error Cases", func(t *testing.T) {
+		// Filtering on a non-existent field returns empty results.
+		invalidFilter := query.KeyFilter{
+			Key: "SingleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("NonExistentField",
+					primitives.ValueComparator{Value: uint64(1), Operator: primitives.Eq},
+				),
+			},
+		}
+		seqs, err := loopReader.QueryKey(
+			context.Background(),
+			binding,
+			invalidFilter,
+			query.LimitAndSort{},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.Empty(t, seqs)
+
+		// Mismatched type should yield an error.
+		invalidTypeFilter := query.KeyFilter{
+			Key: "SingleValueEvent",
+			Expressions: []query.Expression{
+				query.Comparator("SingleUintValue",
+					primitives.ValueComparator{Value: "not a number", Operator: primitives.Eq},
+				),
+			},
+		}
+		seqs, err = loopReader.QueryKey(
+			context.Background(),
+			binding,
+			invalidTypeFilter,
+			query.LimitAndSort{},
+			&SingleValueEvent{},
+		)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "cannot unmarshal string into Go value")
+	})
 
 	t.Run("GetLatestValue - Simple value read", func(t *testing.T) {
 		var ret uint64
@@ -880,7 +1168,7 @@ func waitForTx(t *testing.T, txmgr *txm.AptosTxm, txId string) {
 		time.Sleep(time.Second)
 		status, err := txmgr.GetStatus(txId)
 		require.NoError(t, err)
-		if status != commontypes.Unconfirmed {
+		if status == commontypes.Finalized {
 			confirmed = true
 			break
 		}
@@ -917,4 +1205,9 @@ type ComplexStruct struct {
 	RenamedFlag   bool     `json:"RenamedFlag"`
 	RenamedNested Nested   `json:"RenamedNested"`
 	RenamedValues []uint64 `json:"RenamedValues"`
+}
+
+type DoubleValueEventRenamed struct {
+	RenamedNumber uint64 `json:"RenamedNumber"`
+	Text          string `json:"text"`
 }
