@@ -39,7 +39,7 @@ ChainlinkCCIP = { local = "../../ccip" }
 CCIPTokenPool = { local = "../token_pool" }
 
 # Circle imports
-MessageTransmitter = { local = "../../../vendor/circlefin/aptos-cctp/packages/message_transmitter" }
-TokenMessengerMinter = { local = "../../../vendor/circlefin/aptos-cctp/packages/token_messenger_minter" }
+MessageTransmitter = { local = "../../../vendored/circlefin/aptos-cctp/packages/message_transmitter" }
+TokenMessengerMinter = { local = "../../../vendored/circlefin/aptos-cctp/packages/token_messenger_minter" }
 
 [dev-dependencies]

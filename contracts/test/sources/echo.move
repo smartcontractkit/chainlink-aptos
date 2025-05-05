@@ -31,7 +31,8 @@ module test::echo {
     struct EventStore has key {
         single_value_events: event::EventHandle<SingleValueEvent>,
         double_value_events: event::EventHandle<DoubleValueEvent>,
-        vector_vector_events: event::EventHandle<VectorVectorEvent>
+        vector_vector_events: event::EventHandle<VectorVectorEvent>,
+        complex_struct_events: event::EventHandle<ComplexStruct>
     }
 
     fun init_module(account: &signer) {
@@ -40,7 +41,8 @@ module test::echo {
             EventStore {
                 single_value_events: account::new_event_handle<SingleValueEvent>(account),
                 double_value_events: account::new_event_handle<DoubleValueEvent>(account),
-                vector_vector_events: account::new_event_handle<VectorVectorEvent>(account)
+                vector_vector_events: account::new_event_handle<VectorVectorEvent>(account),
+                complex_struct_events: account::new_event_handle<ComplexStruct>(account)
             }
         );
     }
@@ -63,6 +65,10 @@ module test::echo {
         let values = vector::empty<vector<u8>>();
         vector::push_back(&mut values, bytes);
         event::emit_event(&mut store.vector_vector_events, VectorVectorEvent { values });
+
+        let nested = Nested { id: number, description: text };
+        let cs = ComplexStruct { flag: true, nested, values: vector[number, number + 1] };
+        event::emit_event(&mut store.complex_struct_events, cs);
     }
 
     // used to test event account address handling in ChainReader
