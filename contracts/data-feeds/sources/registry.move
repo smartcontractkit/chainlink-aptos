@@ -330,9 +330,13 @@ module data_feeds::registry {
         OnReceiveSecondary {}
     }
 
+    // Callback function to be called via a @platform::forwarder contract
+    // This callback will be accessed via a 'primary' @platform instance
     public fun on_report<T: key>(_meta: object::Object<T>): option::Option<u128> acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
 
+        // Fetch report data from the @platform::storage contract
+        // Saved previously by the platform::forwarder contract
         let (metadata, data) = platform::storage::retrieve(new_proof());
 
         let parsed_metadata = platform::storage::parse_report_metadata(metadata);
@@ -352,7 +356,7 @@ module data_feeds::registry {
             EUNAUTHORIZED_WORKFLOW_NAME
         );
 
-        let (feed_ids, reports) = parse_raw_report(data);
+        let (feed_ids, reports) = parse_raw_report(&data);
         vector::zip_ref(
             &feed_ids,
             &reports,
@@ -364,9 +368,13 @@ module data_feeds::registry {
         option::none()
     }
 
+    // Callback function to be called via a @platform::forwarder contract
+    // This callback will be accessed via a different 'secondary' @platform instance
     public fun on_report_secondary<T: key>(_meta: object::Object<T>): option::Option<u128> acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
 
+        // Fetch report data from the @platform::storage contract
+        // Saved previously by the platform::forwarder contract
         let (metadata, data) = platform_secondary::storage::retrieve(new_proof_secondary());
 
         let parsed_metadata = platform_secondary::storage::parse_report_metadata(metadata);
@@ -386,7 +394,7 @@ module data_feeds::registry {
             EUNAUTHORIZED_WORKFLOW_NAME
         );
 
-        let (feed_ids, reports) = parse_raw_report(data);
+        let (feed_ids, reports) = parse_raw_report(&data);
         vector::zip_ref(
             &feed_ids,
             &reports,
@@ -443,59 +451,30 @@ module data_feeds::registry {
     }
 
     // Parse ETH ABI encoded raw data into multiple reports
-    fun parse_raw_report(data: vector<u8>): (vector<vector<u8>>, vector<vector<u8>>) {
-        let data_len: u64 = vector::length(&data);
+    fun parse_raw_report(data: &vector<u8>): (vector<vector<u8>>, vector<vector<u8>>) {
+        let data_len: u64 = vector::length(data);
         let offset: u64 = 0;
         assert!(
-            to_u256be(vector::slice(&data, offset, offset + 32)) == 32,
+            to_u256be(vector::slice(data, offset, offset + 32)) == 32,
             32
         );
         offset = offset + 32;
 
-        let count_u256 = to_u256be(vector::slice(&data, offset, offset + 32));
-        // Should be safe, we should never have enough reports to overflow this
-        let count: u64 = count_u256 as u64;
+        let count = to_u256be(vector::slice(data, offset, offset + 32)) as u64;
         offset = offset + 32;
-
-        let feed_ids: vector<vector<u8>> = vector::empty<vector<u8>>();
-        let reports: vector<vector<u8>> = vector::empty<vector<u8>>();
 
         let is_v03: bool = data_len == count * 13 * 32 + 2 * 32;
         let is_benchmark: bool = data_len == count * 3 * 32 + 64;
 
+        let feed_ids;
+        let reports;
+
         if (is_v03) {
             // skip len * offsets table
             offset = offset + 32 * count;
-        };
-
-        if (is_benchmark) {
-            for (i in 0..count) {
-                let feed_id = vector::slice(&data, offset, offset + 32);
-                vector::push_back(&mut feed_ids, feed_id);
-                let len = 3 * 32;
-                let report = vector::slice(&data, offset, offset + len);
-                vector::push_back(&mut reports, report);
-                offset = offset + len;
-            };
-        } else if (is_v03) {
-            for (i in 0..count) {
-                let feed_id = vector::slice(&data, offset, offset + 32);
-                vector::push_back(&mut feed_ids, feed_id);
-                offset = offset + 32;
-
-                assert!(
-                    to_u256be(vector::slice(&data, offset, offset + 32)) == 64,
-                    64
-                );
-                offset = offset + 32;
-
-                let len = (to_u256be(vector::slice(&data, offset, offset + 32)) as u64);
-                offset = offset + 32;
-
-                let report = vector::slice(&data, offset, offset + len);
-                vector::push_back(&mut reports, report);
-                offset = offset + len;
-            };
+            (feed_ids, reports) = parse_v03_reports(data, offset, count);
+        } else if (is_benchmark) {
+            (feed_ids, reports) = parse_benchmark_reports(data, offset, count);
         } else {
             abort error::invalid_argument(EINVALID_RAW_REPORT);
         };
@@ -503,6 +482,51 @@ module data_feeds::registry {
         (feed_ids, reports)
     }
 
+    // Parse Benchmark + Timestamp reports
+    fun parse_benchmark_reports(data: &vector<u8>, offset: u64, count: u64): (vector<vector<u8>>, vector<vector<u8>>) {
+        let feed_ids: vector<vector<u8>> = vector::empty<vector<u8>>();
+        let reports: vector<vector<u8>> = vector::empty<vector<u8>>();
+
+        let len = 3 * 32;
+        for (i in 0..count) {
+            let feed_id = vector::slice(data, offset, offset + 32);
+            vector::push_back(&mut feed_ids, feed_id);
+            let report = vector::slice(data, offset, offset + len);
+            vector::push_back(&mut reports, report);
+            offset = offset + len;
+        };
+
+        (feed_ids, reports)
+    }
+
+    // Parse Mercury V03 reports
+    fun parse_v03_reports(data: &vector<u8>, offset: u64, count: u64): (vector<vector<u8>>, vector<vector<u8>>) {
+        let feed_ids: vector<vector<u8>> = vector::empty<vector<u8>>();
+        let reports: vector<vector<u8>> = vector::empty<vector<u8>>();
+
+        for (i in 0..count) {
+            let feed_id = vector::slice(data, offset, offset + 32);
+            vector::push_back(&mut feed_ids, feed_id);
+            offset = offset + 32;
+
+            assert!(
+                to_u256be(vector::slice(data, offset, offset + 32)) == 64,
+                64
+            );
+            offset = offset + 32;
+
+            let len = (to_u256be(vector::slice(data, offset, offset + 32)) as u64);
+            offset = offset + 32;
+
+            let report = vector::slice(data, offset, offset + len);
+            vector::push_back(&mut reports, report);
+            offset = offset + len;
+        };
+
+        (feed_ids, reports)
+    }
+
+    // Extract the Benchmark and Timestamp from a report, and update the feeds values
     fun perform_update(
         registry: &mut Registry, feed_id: vector<u8>, report_data: vector<u8>
     ) {
@@ -528,6 +552,7 @@ module data_feeds::registry {
                 )
             ) as u256;
 
+        // NOTE: aptos has no signed integer types, so can't parse as i192, this is a raw representation
         let benchmark_price: u256 =
             to_u256be(
                 vector::slice(&report_data, benchmark_price_ptr, benchmark_price_ptr
@@ -798,7 +823,7 @@ module data_feeds::registry {
         let data =
             x"0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000500011111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800021111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000594a800031111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000694a800041111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000794a800051111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000894a8";
 
-        let (feed_ids, reports) = parse_raw_report(data);
+        let (feed_ids, reports) = parse_raw_report(&data);
         std::debug::print(&feed_ids);
         std::debug::print(&reports);
 
@@ -904,7 +929,7 @@ module data_feeds::registry {
         let data =
             x"00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000001c000031111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000012000031111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800032222222222222222000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000012000032222222222222222000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a8";
 
-        let (feed_ids, reports) = parse_raw_report(data);
+        let (feed_ids, reports) = parse_raw_report(&data);
         std::debug::print(&feed_ids);
         std::debug::print(&reports);
 
