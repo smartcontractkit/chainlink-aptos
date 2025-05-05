@@ -168,7 +168,9 @@ module data_feeds::registry {
                 string::utf8(b"on_report_secondary")
             );
         // register to receive platform_secondary::forwarder reports
-        platform_secondary::storage::register(publisher, cb_secondary, new_proof_secondary());
+        platform_secondary::storage::register(
+            publisher, cb_secondary, new_proof_secondary()
+        );
 
         move_to(
             &object_signer,
@@ -318,6 +320,7 @@ module data_feeds::registry {
     /// This identifier links callback registration with the `on_report` event and enables secure retrieval of callback data.
     /// Only has the `drop` ability to prevent copying and persisting in global storage.
     struct OnReceive has drop {}
+
     struct OnReceiveSecondary has drop {}
 
     /// Creates a new OnReceive object.
@@ -370,24 +373,32 @@ module data_feeds::registry {
 
     // Callback function to be called via a @platform::forwarder contract
     // This callback will be accessed via a different 'secondary' @platform instance
-    public fun on_report_secondary<T: key>(_meta: object::Object<T>): option::Option<u128> acquires Registry {
+    public fun on_report_secondary<T: key>(
+        _meta: object::Object<T>
+    ): option::Option<u128> acquires Registry {
         let registry = borrow_global_mut<Registry>(get_state_addr());
 
         // Fetch report data from the @platform::storage contract
         // Saved previously by the platform::forwarder contract
-        let (metadata, data) = platform_secondary::storage::retrieve(new_proof_secondary());
+        let (metadata, data) =
+            platform_secondary::storage::retrieve(new_proof_secondary());
 
-        let parsed_metadata = platform_secondary::storage::parse_report_metadata(metadata);
+        let parsed_metadata =
+            platform_secondary::storage::parse_report_metadata(metadata);
 
         let workflow_owner =
-            platform_secondary::storage::get_report_metadata_workflow_owner(&parsed_metadata);
+            platform_secondary::storage::get_report_metadata_workflow_owner(
+                &parsed_metadata
+            );
         assert!(
             vector::contains(&registry.allowed_workflow_owners, &workflow_owner),
             EUNAUTHORIZED_WORKFLOW_OWNER
         );
 
         let workflow_name =
-            platform_secondary::storage::get_report_metadata_workflow_name(&parsed_metadata);
+            platform_secondary::storage::get_report_metadata_workflow_name(
+                &parsed_metadata
+            );
         assert!(
             vector::is_empty(&registry.allowed_workflow_names)
                 || vector::contains(&registry.allowed_workflow_names, &workflow_name),
@@ -483,7 +494,9 @@ module data_feeds::registry {
     }
 
     // Parse Benchmark + Timestamp reports
-    fun parse_benchmark_reports(data: &vector<u8>, offset: u64, count: u64): (vector<vector<u8>>, vector<vector<u8>>) {
+    fun parse_benchmark_reports(
+        data: &vector<u8>, offset: u64, count: u64
+    ): (vector<vector<u8>>, vector<vector<u8>>) {
         let feed_ids: vector<vector<u8>> = vector::empty<vector<u8>>();
         let reports: vector<vector<u8>> = vector::empty<vector<u8>>();
 
@@ -500,7 +513,9 @@ module data_feeds::registry {
     }
 
     // Parse Mercury V03 reports
-    fun parse_v03_reports(data: &vector<u8>, offset: u64, count: u64): (vector<vector<u8>>, vector<vector<u8>>) {
+    fun parse_v03_reports(
+        data: &vector<u8>, offset: u64, count: u64
+    ): (vector<vector<u8>>, vector<vector<u8>>) {
         let feed_ids: vector<vector<u8>> = vector::empty<vector<u8>>();
         let reports: vector<vector<u8>> = vector::empty<vector<u8>>();
 
@@ -1087,7 +1102,13 @@ module data_feeds::registry {
         accept_ownership(new_owner);
     }
 
-    #[test(publisher = @data_feeds, platform = @platform, platform_secondary = @platform_secondary)]
+    #[
+        test(
+            publisher = @data_feeds,
+            platform = @platform,
+            platform_secondary = @platform_secondary
+        )
+    ]
     fun test_retrieve_benchmark(
         publisher: &signer, platform: &signer, platform_secondary: &signer
     ) acquires Registry {
