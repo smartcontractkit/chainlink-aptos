@@ -115,127 +115,168 @@ func TestNewWriteTargetID(t *testing.T) {
 	}
 }
 
+type mockedWriteTarget struct {
+	cs *mocks.ChainService
+	cr *mocks.ContractReader
+	cw *mocks.ContractWriter
+	wt *writeTarget
+}
+
+func newMockedWriteTarget(t *testing.T, lggr logger.Logger) mockedWriteTarget {
+	cs := mocks.NewChainService(t)
+	cr := mocks.NewContractReader(t)
+	cw := mocks.NewContractWriter(t)
+	beholderClient, err := beholder.NewStdoutClient()
+	require.NoError(t, err)
+	bh := &monitor.BeholderClient{Client: beholderClient, ProtoEmitter: monitor.NoopProtoEmitter{}}
+	require.NoError(t, err)
+
+	wt := newWriteTarget(WriteTargetOpts{
+		ID: "write_aptos-1@1.0.0",
+		Config: Config{
+			ConfirmerPollPeriod: *config.MustNewDuration(100 * time.Millisecond),
+			ConfirmerTimeout:    *config.MustNewDuration(300 * time.Millisecond),
+		},
+		ChainInfo:        ChainInfo{},
+		Logger:           lggr,
+		Beholder:         bh,
+		ChainService:     cs,
+		ContractReader:   cr,
+		ChainWriter:      cw,
+		ConfigValidateFn: func(config ReqConfig) error { return nil },
+		NodeAddress:      "",
+		ForwarderAddress: "",
+	})
+	wt.decodeReport = func(report []byte, metadata capabilities.RequestMetadata) (*platform.Report, error) {
+		return &platform.Report{}, nil
+	}
+	return mockedWriteTarget{
+		cs: cs,
+		cr: cr,
+		cw: cw,
+		wt: wt,
+	}
+}
+
+func createValidRequest(t *testing.T) capabilities.CapabilityRequest {
+	signedReport, err := values.Wrap(types.SignedReport{
+		ID:     binary.BigEndian.AppendUint16(nil, 8),
+		Report: []byte("Report payload"), // no need not include valid metadata, since report validation is mocked
+	})
+	require.NoError(t, err)
+	inputs, err := values.NewMap(map[string]any{
+		KeySignedReport: signedReport,
+	})
+	require.NoError(t, err)
+	return capabilities.CapabilityRequest{
+		Metadata: capabilities.RequestMetadata{
+			WorkflowExecutionID: hex.EncodeToString([]byte("WorkflowExecutionID")),
+		},
+		Config: values.EmptyMap(),
+		Inputs: inputs,
+	}
+}
+
 func TestWriteTarget_Execute(t *testing.T) {
 	t.Parallel()
-	type testContext struct {
-		cs *mocks.ChainService
-		cr *mocks.ContractReader
-		cw *mocks.ContractWriter
-		wt *writeTarget
-	}
-	newTestContext := func(t *testing.T, lggr logger.Logger) testContext {
-		cs := mocks.NewChainService(t)
-		cr := mocks.NewContractReader(t)
-		cw := mocks.NewContractWriter(t)
-		beholderClient, err := beholder.NewStdoutClient()
-		require.NoError(t, err)
-		bh := &monitor.BeholderClient{Client: beholderClient, ProtoEmitter: monitor.NoopProtoEmitter{}}
-		require.NoError(t, err)
-
-		wt := newWriteTarget(WriteTargetOpts{
-			ID: "write_aptos-1@1.0.0",
-			Config: Config{
-				ConfirmerPollPeriod: *config.MustNewDuration(100 * time.Millisecond),
-				ConfirmerTimeout:    *config.MustNewDuration(300 * time.Millisecond),
-			},
-			ChainInfo:        ChainInfo{},
-			Logger:           lggr,
-			Beholder:         bh,
-			ChainService:     cs,
-			ContractReader:   cr,
-			ChainWriter:      cw,
-			ConfigValidateFn: func(config ReqConfig) error { return nil },
-			NodeAddress:      "",
-			ForwarderAddress: "",
-		})
-		wt.decodeReport = func(report []byte, metadata capabilities.RequestMetadata) (*platform.Report, error) {
-			return &platform.Report{}, nil
-		}
-		return testContext{
-			cs: cs,
-			cr: cr,
-			cw: cw,
-			wt: wt,
-		}
-	}
-	validRequest := func() capabilities.CapabilityRequest {
-		signedReport, err := values.Wrap(types.SignedReport{
-			ID:     binary.BigEndian.AppendUint16(nil, 8),
-			Report: []byte("Awesome report"),
-		})
-		require.NoError(t, err)
-		inputs, err := values.NewMap(map[string]any{
-			KeySignedReport: signedReport,
-		})
-		require.NoError(t, err)
-		return capabilities.CapabilityRequest{
-			Metadata: capabilities.RequestMetadata{
-				WorkflowExecutionID: hex.EncodeToString([]byte("WorkflowExecutionID")),
-			},
-			Config: values.EmptyMap(),
-			Inputs: inputs,
-		}
-	}()
-
 	t.Run("Returns error if tx is not finalized before timeout", func(t *testing.T) {
-		testContext := newTestContext(t, logger.Test(t))
+		testContext := newMockedWriteTarget(t, logger.Test(t))
 		testContext.cs.EXPECT().LatestHead(mock.Anything).Return(commontypes.Head{}, nil).Once()
+		// Mocks getTransmissionState. Signal that report was not transmitter to trigger creation of a new transaction.
 		testContext.cr.EXPECT().GetLatestValue(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+		// ContractWriter accepts transaction
 		testContext.cw.EXPECT().SubmitTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
-		testContext.cw.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(commontypes.Unconfirmed, nil)
+		// Transaction never reaches terminal state
+		testContext.cw.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(commontypes.Pending, nil)
 
-		_, err := testContext.wt.Execute(t.Context(), validRequest)
+		request := createValidRequest(t)
+		_, err := testContext.wt.Execute(t.Context(), request)
 		require.EqualError(t, err, "platform.write_target.WriteError [ERR-0] - failed to wait until tx gets finalized: context deadline exceeded")
 	})
-	runTxFinalizedButReportIsNotOnChain := func(t *testing.T, txStatus commontypes.TransactionStatus, expectedError string) {
-		testContext := newTestContext(t, logger.Test(t))
-		testContext.cs.EXPECT().LatestHead(mock.Anything).Return(commontypes.Head{}, nil)
-		testContext.cw.EXPECT().SubmitTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
-		testContext.cw.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(txStatus, nil).Once()
-		// returns that transmission is not on chain
-		testContext.cr.EXPECT().GetLatestValue(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	t.Run("Returns error if tx reaches terminal status, but report is not on chain", func(t *testing.T) {
+		testCases := []struct {
+			TransactionStatus commontypes.TransactionStatus
+			ExpectedError     string
+		}{
+			{
+				TransactionStatus: commontypes.Finalized,
+				ExpectedError:     "platform.write_target.WriteError [ERR-0] - write confirmation - failed: transaction was finalized, but report was not observed on chain before timeout",
+			},
+			{
+				TransactionStatus: commontypes.Fatal,
+				ExpectedError:     "platform.write_target.WriteError [ERR-0] - write confirmation - failed: transaction failed and no other node managed to get report on chain before timeout",
+			},
+			{
+				TransactionStatus: commontypes.Failed,
+				ExpectedError:     "platform.write_target.WriteError [ERR-0] - write confirmation - failed: transaction failed and no other node managed to get report on chain before timeout",
+			},
+		}
+		for _, tc := range testCases {
+			testContext := newMockedWriteTarget(t, logger.Test(t))
+			testContext.cs.EXPECT().LatestHead(mock.Anything).Return(commontypes.Head{}, nil)
+			// Mocks getTransmissionState. Since return value is not modified - signals that report was not accepted.
+			// First call is required to trigger transaction submission, subsequent calls to cause timeout error
+			testContext.cr.EXPECT().GetLatestValue(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+			// ContractWriter accepts transaction
+			testContext.cw.EXPECT().SubmitTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+			// Returns terminal transaction status
+			testContext.cw.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(tc.TransactionStatus, nil).Once()
 
-		_, err := testContext.wt.Execute(t.Context(), validRequest)
-		require.EqualError(t, err, expectedError)
-	}
-	t.Run("Returns error if tx reaches final status, but report is not on chain", func(t *testing.T) {
-		runTxFinalizedButReportIsNotOnChain(t, commontypes.Finalized, "platform.write_target.WriteError [ERR-0] - write confirmation - failed: transaction was finalized, but report was not observed on chain before timeout")
-		runTxFinalizedButReportIsNotOnChain(t, commontypes.Fatal, "platform.write_target.WriteError [ERR-0] - write confirmation - failed: transaction failed and no other node managed to get report on chain before timeout")
-		runTxFinalizedButReportIsNotOnChain(t, commontypes.Failed, "platform.write_target.WriteError [ERR-0] - write confirmation - failed: transaction failed and no other node managed to get report on chain before timeout")
+			request := createValidRequest(t)
+			_, err := testContext.wt.Execute(t.Context(), request)
+			require.EqualError(t, err, tc.ExpectedError)
+		}
 	})
-	runHappyPath := func(t *testing.T, lggr logger.Logger, transactionStatus commontypes.TransactionStatus) {
-		testContext := newTestContext(t, lggr)
-		testContext.cs.EXPECT().LatestHead(mock.Anything).Return(commontypes.Head{Height: "12"}, nil)
-		secondCall := false
-		testContext.cr.EXPECT().GetLatestValue(mock.Anything, "-forwarder-getTransmissionState", mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-			func(ctx context.Context, s string, level primitives.ConfidenceLevel, inputs interface{}, rawTransmitted interface{}) error {
-				transmitted := rawTransmitted.(*bool)
-				*transmitted = secondCall // return false on the first call to trigger transaction
-				secondCall = true
-				return nil
-			}).Twice()
-		testContext.cr.EXPECT().GetLatestValue(mock.Anything, "-forwarder-getTransmitter", mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-			func(ctx context.Context, s string, level primitives.ConfidenceLevel, inputs interface{}, rawTransmitterAddr interface{}) error {
-				transmitterAddr := rawTransmitterAddr.(*struct {
-					Vec []string
-				})
-				transmitterAddr.Vec = []string{"0x0abc"}
-				return nil
-			}).Once()
-		testContext.cw.EXPECT().SubmitTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
-		testContext.cw.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(transactionStatus, nil)
-		result, err := testContext.wt.Execute(t.Context(), validRequest)
-		require.NoError(t, err)
-		require.Equal(t, success(), result)
-	}
 	t.Run("Returns success if report is on chains", func(t *testing.T) {
-		runHappyPath(t, logger.Test(t), commontypes.Finalized)
-	})
-	t.Run("Returns success and logs info, if tx failed but report end-up on chain", func(t *testing.T) {
-		for _, txStatus := range []commontypes.TransactionStatus{commontypes.Failed, commontypes.Fatal} {
+		testCases := []struct {
+			TransactionStatus commontypes.TransactionStatus
+			ExpectedLogMsg    string
+		}{
+			{
+				TransactionStatus: commontypes.Finalized,
+				ExpectedLogMsg:    "confirmed - transmission state visible",
+			},
+			{
+				TransactionStatus: commontypes.Fatal,
+				ExpectedLogMsg:    "confirmed - transmission state visible but submitted by another node. This node's tx failed",
+			},
+			{
+				TransactionStatus: commontypes.Failed,
+				ExpectedLogMsg:    "confirmed - transmission state visible but submitted by another node. This node's tx failed",
+			},
+		}
+		for _, tc := range testCases {
 			lggr, observed := logger.TestObserved(t, zapcore.InfoLevel)
-			runHappyPath(t, lggr, txStatus)
-			tests.RequireLogMessage(t, observed, "confirmed - transmission state visible but submitted by another node. This node's tx failed")
+			mockedWT := newMockedWriteTarget(t, lggr)
+			mockedWT.cs.EXPECT().LatestHead(mock.Anything).Return(commontypes.Head{Height: "12"}, nil)
+			secondCall := false
+			// On the first trigger transaction submission by setting transmitted to `false`, on second call return
+			// true to signal that report is on chain.
+			mockedWT.cr.EXPECT().GetLatestValue(mock.Anything, "-forwarder-getTransmissionState", mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
+				func(ctx context.Context, s string, level primitives.ConfidenceLevel, inputs interface{}, rawTransmitted interface{}) error {
+					transmitted := rawTransmitted.(*bool)
+					*transmitted = secondCall // return false on the first call to trigger transaction
+					secondCall = true
+					return nil
+				}).Twice()
+			// Returns address of the report transmitter
+			mockedWT.cr.EXPECT().GetLatestValue(mock.Anything, "-forwarder-getTransmitter", mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
+				func(ctx context.Context, s string, level primitives.ConfidenceLevel, inputs interface{}, rawTransmitterAddr interface{}) error {
+					transmitterAddr := rawTransmitterAddr.(*struct {
+						Vec []string
+					})
+					transmitterAddr.Vec = []string{"0x0abc"}
+					return nil
+				}).Once()
+			// signal that transaction was accepted by CW
+			mockedWT.cw.EXPECT().SubmitTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+			// signal that transaction is in terminal state and it's time to poll for transmission status
+			mockedWT.cw.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(tc.TransactionStatus, nil)
+			request := createValidRequest(t)
+			result, err := mockedWT.wt.Execute(t.Context(), request)
+			require.NoError(t, err)
+			require.Equal(t, success(), result)
+			tests.RequireLogMessage(t, observed, tc.ExpectedLogMsg)
 		}
 	})
 }
