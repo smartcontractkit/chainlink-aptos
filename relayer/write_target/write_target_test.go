@@ -180,17 +180,17 @@ func createValidRequest(t *testing.T) capabilities.CapabilityRequest {
 func TestWriteTarget_Execute(t *testing.T) {
 	t.Parallel()
 	t.Run("Returns error if tx is not finalized before timeout", func(t *testing.T) {
-		testContext := newMockedWriteTarget(t, logger.Test(t))
-		testContext.cs.EXPECT().LatestHead(mock.Anything).Return(commontypes.Head{}, nil).Once()
+		mockedWT := newMockedWriteTarget(t, logger.Test(t))
+		mockedWT.cs.EXPECT().LatestHead(mock.Anything).Return(commontypes.Head{}, nil).Once()
 		// Mocks getTransmissionState. Signal that report was not transmitter to trigger creation of a new transaction.
-		testContext.cr.EXPECT().GetLatestValue(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+		mockedWT.cr.EXPECT().GetLatestValue(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 		// ContractWriter accepts transaction
-		testContext.cw.EXPECT().SubmitTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+		mockedWT.cw.EXPECT().SubmitTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 		// Transaction never reaches terminal state
-		testContext.cw.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(commontypes.Pending, nil)
+		mockedWT.cw.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(commontypes.Pending, nil)
 
 		request := createValidRequest(t)
-		_, err := testContext.wt.Execute(t.Context(), request)
+		_, err := mockedWT.wt.Execute(t.Context(), request)
 		require.EqualError(t, err, "platform.write_target.WriteError [ERR-0] - failed to wait until tx gets finalized: context deadline exceeded")
 	})
 	t.Run("Returns error if tx reaches terminal status, but report is not on chain", func(t *testing.T) {
@@ -212,18 +212,18 @@ func TestWriteTarget_Execute(t *testing.T) {
 			},
 		}
 		for _, tc := range testCases {
-			testContext := newMockedWriteTarget(t, logger.Test(t))
-			testContext.cs.EXPECT().LatestHead(mock.Anything).Return(commontypes.Head{}, nil)
+			mockedWT := newMockedWriteTarget(t, logger.Test(t))
+			mockedWT.cs.EXPECT().LatestHead(mock.Anything).Return(commontypes.Head{}, nil)
 			// Mocks getTransmissionState. Since return value is not modified - signals that report was not accepted.
 			// First call is required to trigger transaction submission, subsequent calls to cause timeout error
-			testContext.cr.EXPECT().GetLatestValue(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+			mockedWT.cr.EXPECT().GetLatestValue(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			// ContractWriter accepts transaction
-			testContext.cw.EXPECT().SubmitTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+			mockedWT.cw.EXPECT().SubmitTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 			// Returns terminal transaction status
-			testContext.cw.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(tc.TransactionStatus, nil).Once()
+			mockedWT.cw.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(tc.TransactionStatus, nil).Once()
 
 			request := createValidRequest(t)
-			_, err := testContext.wt.Execute(t.Context(), request)
+			_, err := mockedWT.wt.Execute(t.Context(), request)
 			require.EqualError(t, err, tc.ExpectedError)
 		}
 	})

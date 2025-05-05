@@ -468,7 +468,7 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 	capInfo, _ := c.Info(ctx)
 	builder := NewMessageBuilder(c.chainInfo, capInfo)
 
-	txAccepted, err := c.waitUntilTxReachesFinalStatus(ctx, lggr, txID)
+	txFinalized, err := c.waitTxReachesTerminalStatus(ctx, lggr, txID)
 	if err != nil {
 		// We (eventually) failed to confirm the report was transmitted
 		msg := builder.buildWriteError(&info, 0, "failed to wait until tx gets finalized", err.Error())
@@ -484,7 +484,7 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 		case <-ctx.Done():
 			// We (eventually) failed to confirm the report was transmitted
 			cause := "transaction was finalized, but report was not observed on chain before timeout"
-			if !txAccepted {
+			if !txFinalized {
 				cause = "transaction failed and no other node managed to get report on chain before timeout"
 			}
 			msg := builder.buildWriteError(&info, 0, "write confirmation - failed", cause)
@@ -512,7 +512,7 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 
 			// We (eventually) confirmed the report was transmitted
 			// Emit the confirmation message and return
-			if !txAccepted {
+			if !txFinalized {
 				lggr.Infow("confirmed - transmission state visible but submitted by another node. This node's tx failed", "txID", txID)
 			} else {
 				lggr.Infow("confirmed - transmission state visible", "txID", txID)
@@ -528,7 +528,8 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 	}
 }
 
-func (c *writeTarget) waitUntilTxReachesFinalStatus(ctx context.Context, lggr logger.Logger, txID uuid.UUID) (accepted bool, err error) {
+// Polls transaction status until it reaches one of terminal states [Finalized, Failed, Fatal]
+func (c *writeTarget) waitTxReachesTerminalStatus(ctx context.Context, lggr logger.Logger, txID uuid.UUID) (finalized bool, err error) {
 	// Retry interval for the confirmation process
 	interval := c.config.ConfirmerPollPeriod.Duration()
 	ticker := time.NewTicker(interval)
@@ -548,14 +549,8 @@ func (c *writeTarget) waitUntilTxReachesFinalStatus(ctx context.Context, lggr lo
 
 			lggr.Debugw("txm - tx status", "txID", txID, "status", status)
 
-			// Check if the transaction was accepted (included in a chain block, not required to be finalized)
-			// Notice: 'Unconfirmed' is used by TXM to indicate the transaction is not yet included in a block,
-			// while 'Included' (N/A yet) could be used to indicate the transaction is included in a block but not yet finalized.
-			// Check if the transaction was accepted (included in a chain block, not required to be finalized)
-			// Notice: 'Unconfirmed' is used by TXM to indicate the transaction is not yet included in a block,
-			// while 'Included' (N/A yet) could be used to indicate the transaction is included in a block but not yet finalized.
 			switch status {
-			case commontypes.Finalized /*,commontypes.Included*/ :
+			case commontypes.Finalized:
 				// Notice: report write confirmation is only possible after a tx is accepted without an error
 				// TODO: [Beholder] Emit 'platform.write-target.WriteAccepted' (useful to source tx hash, block number, and tx status/error)
 				lggr.Infow("accepted", "txID", txID, "status", status)
