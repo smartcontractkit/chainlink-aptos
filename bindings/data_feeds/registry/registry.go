@@ -55,15 +55,16 @@ type RegistryEncoder interface {
 	ToU32be(data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ToU256be(data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	NewProof() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	OnReport(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	ParseRawReport(data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	NewProofSecondary() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	OnReport(Meta aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	OnReportSecondary(Meta aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetBenchmarks(feedIds [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetBenchmarksUnchecked(feedIds [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetReports(feedIds [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetReportsUnchecked(feedIds [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"data_feeds","module":"registry","name":"accept_ownership","parameters":null},{"package":"data_feeds","module":"registry","name":"get_benchmarks","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_benchmarks_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_reports","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_reports_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_state_addr","parameters":null},{"package":"data_feeds","module":"registry","name":"new_proof","parameters":null},{"package":"data_feeds","module":"registry","name":"on_report","parameters":[{"name":"_metadata","type":"address"}]},{"package":"data_feeds","module":"registry","name":"parse_raw_report","parameters":[{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"remove_feeds","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_feeds","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"},{"name":"config_id","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_feeds_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"},{"name":"config_id","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_workflow_config","parameters":[{"name":"allowed_workflow_owners","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"allowed_workflow_names","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"to_u16be","parameters":[{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"to_u256be","parameters":[{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"to_u32be","parameters":[{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"data_feeds","module":"registry","name":"update_descriptions","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"}]}]`
+const FunctionInfo = `[{"package":"data_feeds","module":"registry","name":"accept_ownership","parameters":null},{"package":"data_feeds","module":"registry","name":"get_benchmarks","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_benchmarks_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_reports","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_reports_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_state_addr","parameters":null},{"package":"data_feeds","module":"registry","name":"new_proof","parameters":null},{"package":"data_feeds","module":"registry","name":"new_proof_secondary","parameters":null},{"package":"data_feeds","module":"registry","name":"on_report","parameters":[{"name":"_meta","type":"address"}]},{"package":"data_feeds","module":"registry","name":"on_report_secondary","parameters":[{"name":"_meta","type":"address"}]},{"package":"data_feeds","module":"registry","name":"remove_feeds","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_feeds","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"},{"name":"config_id","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_feeds_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"},{"name":"config_id","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_workflow_config","parameters":[{"name":"allowed_workflow_owners","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"allowed_workflow_names","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"to_u16be","parameters":[{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"to_u256be","parameters":[{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"to_u32be","parameters":[{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"data_feeds","module":"registry","name":"update_descriptions","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"}]}]`
 
 func NewRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) RegistryInterface {
 	contract := bind.NewBoundContract(address, "data_feeds", "registry", client)
@@ -155,6 +156,9 @@ type OwnershipTransferred struct {
 }
 
 type OnReceive struct {
+}
+
+type OnReceiveSecondary struct {
 }
 
 type RegistryContract struct {
@@ -431,19 +435,23 @@ func (c registryEncoder) NewProof() (bind.ModuleInformation, string, []aptos.Typ
 	return c.BoundContract.Encode("new_proof", nil, []string{}, []any{})
 }
 
-func (c registryEncoder) OnReport(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c registryEncoder) NewProofSecondary() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("new_proof_secondary", nil, []string{}, []any{})
+}
+
+func (c registryEncoder) OnReport(Meta aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("on_report", nil, []string{
 		"address",
 	}, []any{
-		Metadata,
+		Meta,
 	})
 }
 
-func (c registryEncoder) ParseRawReport(data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("parse_raw_report", nil, []string{
-		"vector<u8>",
+func (c registryEncoder) OnReportSecondary(Meta aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("on_report_secondary", nil, []string{
+		"address",
 	}, []any{
-		data,
+		Meta,
 	})
 }
 
