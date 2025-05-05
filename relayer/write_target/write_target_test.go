@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/report/platform"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target/mocks"
 )
@@ -128,7 +129,7 @@ func TestWriteTarget_Execute(t *testing.T) {
 		cw := mocks.NewContractWriter(t)
 		beholderClient, err := beholder.NewStdoutClient()
 		require.NoError(t, err)
-		bh, err := newMonitor(t.Context(), lggr, beholderClient)
+		bh := &monitor.BeholderClient{Client: beholderClient, ProtoEmitter: monitor.NoopProtoEmitter{}}
 		require.NoError(t, err)
 
 		wt := newWriteTarget(WriteTargetOpts{
