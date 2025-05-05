@@ -18,35 +18,42 @@ triggers:
    config:
      maxFrequencyMs: 5000
      feedIds:
-       - "0x0003111111111111111100000000000000000000000000000000000000000000"
-       - "0x0003222222222222222200000000000000000000000000000000000000000000"
+       - "1020001001" # BTC / USD
+       - "1020000101" # ETH / USD
+       - "1020000102" # LINK / USD
 
 consensus:
- - id: "offchain_reporting@1.0.0"
-   ref: "aptos_feeds"
-   inputs:
-     observations:
-       - "$(trigger.outputs)"
-   config:
-     report_id: "0001"
-     key_id: "aptos"
-     aggregation_method: "data_feeds"
-     aggregation_config:
-       allowedPartialStaleness: "0.5"
-       feeds:
-         "0x0003111111111111111100000000000000000000000000000000000000000000":
-           deviation: "0.05"
-           heartbeat: 60
-         "0x0003222222222222222200000000000000000000000000000000000000000000":
-           deviation: "0.05"
-           heartbeat: 60
-     encoder: "EVM"
-     encoder_config:
-       abi: "(bytes32 FeedID, bytes RawReport)[] Reports"
+  - id: "offchain_reporting@1.0.0"
+    ref: "data-feeds"
+    inputs:
+      observations:
+        - $(trigger.outputs)
+    config:
+      report_id: "0002"
+      key_id: "evm"
+      aggregation_method: "llo_streams"
+      aggregation_config:
+        streams:
+          "1020001001": # BTC / USD
+            remappedID: "0x01bb0467f5000304000000000000000000000000000000000000000000000000"
+            deviation: "0.05"
+            heartbeat: 1800
+          "1020000101": # ETH / USD
+            remappedID: "0x01d585327c000332000000000000000000000000000000000000000000000000"
+            deviation: "0.05"
+            heartbeat: 1800
+          "1020000102": # LINK / USD
+            remappedID: "0x0101199b3b000332000000000000000000000000000000000000000000000000"
+            deviation: "0.05"
+            heartbeat: 1800
+
+      encoder: "EVM"
+      encoder_config:
+        abi: (bytes32 RemappedID, uint32 Timestamp, uint224 Price)[] Reports
 targets:
  - id: "write_aptos-localnet@1.0.0"
    inputs:
-     signed_report: "$(aptos_feeds.outputs)" # TODO: annotate with network if not shared across networks
+     signed_report: "$(data-feeds.outputs)" # TODO: annotate with network if not shared across networks
    config:
      address: "%s"
      deltaStage: "45s"

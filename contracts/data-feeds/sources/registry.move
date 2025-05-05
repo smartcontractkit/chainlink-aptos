@@ -454,7 +454,7 @@ module data_feeds::registry {
 
         let count_u256 = to_u256be(vector::slice(&data, offset, offset + 32));
         // Should be safe, we should never have enough reports to overflow this
-        let count: u64 = count_u256 as u64;
+        let count: u64 = (count_u256 as u64);
         offset = offset + 32;
 
         let feed_ids: vector<vector<u8>> = vector::empty<vector<u8>>();
@@ -520,13 +520,13 @@ module data_feeds::registry {
         else { 64 };
 
         let observation_timestamp: u256 =
-            to_u32be(
+            (to_u32be(
                 vector::slice(
                     &report_data,
                     observation_timestamp_ptr - 4,
                     observation_timestamp_ptr
                 )
-            ) as u256;
+            ) as u256);
 
         let benchmark_price: u256 =
             to_u256be(

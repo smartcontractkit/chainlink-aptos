@@ -149,7 +149,37 @@ func (d *Deployer) DeployPlatform() error {
 	return nil
 }
 
-func (d *Deployer) DeployDataFeeds(platformAddress string) error {
+func (d *Deployer) DeployPlatformSecondary() error {
+	cmdStr := []string{
+		"aptos",
+		"move",
+		"create-object-and-publish-package",
+		"--package-dir=/contracts/platform_secondary",
+		"--address-name=platform_secondary",
+		"--named-addresses",
+		fmt.Sprintf("platform_secondary=%s,owner_secondary=%s", DEVNET_ACC, DEVNET_ACC),
+		"--profile=default",
+		"--assume-yes",
+	}
+
+	out, err := ExecCmd(d.Devnet.Client, cmdStr, *d.lggr)
+	if err != nil {
+		return err
+	}
+
+	// Fetch contract address from output
+	regex := regexp.MustCompile(`0x[a-zA-Z0-9]+`)
+	d.Contracts.PlatformSecondaryAddress = regex.FindString(strings.Split(out, "Code was successfully deployed to object address ")[1])
+
+	if d.Contracts.PlatformSecondaryAddress == "" {
+		return errors.New("Could not set platform secondary address")
+	}
+
+	d.lggr.Info().Msg(out)
+	return nil
+}
+
+func (d *Deployer) DeployDataFeeds(platformAddress string, platformSecondaryAddress string) error {
 	cmdStr := []string{
 		"aptos",
 		"move",
@@ -157,7 +187,7 @@ func (d *Deployer) DeployDataFeeds(platformAddress string) error {
 		"--package-dir=/contracts/data-feeds",
 		"--address-name=data_feeds",
 		"--named-addresses",
-		fmt.Sprintf("data_feeds=%s,platform=%s,owner=%s", DEVNET_ACC, platformAddress, DEVNET_ACC),
+		fmt.Sprintf("data_feeds=%s,platform=%s,owner=%s,platform_secondary=%s,owner_secondary=%s", DEVNET_ACC, platformAddress, DEVNET_ACC, platformSecondaryAddress, DEVNET_ACC),
 		"--profile=default",
 		"--assume-yes",
 	}

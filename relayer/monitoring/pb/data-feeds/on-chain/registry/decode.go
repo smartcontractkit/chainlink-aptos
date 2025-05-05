@@ -32,6 +32,7 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 	// when the generalized Write Target is completed, as it will allow report schemas to be defined
 	// in the workflow and passed to the Write Target.
 	if dfErr == nil {
+		fmt.Println("Data Feeds report!!")
 		msgs := make([]*FeedUpdated, 0, len(*mercuryReports))
 
 		// Allocate space for the messages (event per updated feed)
@@ -79,6 +80,8 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 	if lloErr != nil {
 		return nil, fmt.Errorf("failed to decode DF Report and LLO Report | DF Err: %w, LLO Err: %w", dfErr, lloErr)
 	}
+	fmt.Println("LLO report!!")
+
 	msgs := make([]*FeedUpdated, 0, len(*lloReports))
 
 	for _, rf := range *lloReports {
