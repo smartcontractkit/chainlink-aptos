@@ -1,17 +1,18 @@
 /// The router module provides an interface to the registry module.
 module chainlink_data_feeds::router {
-    use std::string::String;
+    use std::string;
     use std::vector;
     
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
+    use sui::object;
+    use sui::tx_context;
     use sui::transfer;
     use sui::event;
     
     use chainlink_data_feeds::registry::{Self, Benchmark, Report};
     
     // Constants
-    const APP_OBJECT_SEED: vector<u8> = b"ROUTER";
+    // Unused constant
+    // const APP_OBJECT_SEED: vector<u8> = b"ROUTER";
     
     // Error codes
     const E_NOT_OWNER: u64 = 0;
@@ -19,23 +20,23 @@ module chainlink_data_feeds::router {
     const E_NOT_PROPOSED_OWNER: u64 = 2;
     
     // Capability for authorizing sensitive operations
-    struct AdminCap has key, store {
+    public struct AdminCap has key, store {
         id: UID
     }
     
-    struct Router has key {
+    public struct Router has key {
         id: UID,
         owner_address: address,
         pending_owner_address: address
     }
     
     // Events
-    struct OwnershipTransferRequested has copy, drop {
+    public struct OwnershipTransferRequested has copy, drop {
         from: address,
         to: address
     }
     
-    struct OwnershipTransferred has copy, drop {
+    public struct OwnershipTransferred has copy, drop {
         from: address,
         to: address
     }
@@ -71,7 +72,7 @@ module chainlink_data_feeds::router {
     
     // Public entry functions
     public fun get_benchmarks(
-        admin_cap: &AdminCap,
+        _admin_cap: &AdminCap,
         router: &Router,
         registry: &registry::Registry,
         feed_ids: vector<vector<u8>>,
@@ -84,7 +85,7 @@ module chainlink_data_feeds::router {
     }
     
     public fun get_reports(
-        admin_cap: &AdminCap,
+        _admin_cap: &AdminCap,
         router: &Router,
         registry: &registry::Registry,
         feed_ids: vector<vector<u8>>,
@@ -97,18 +98,18 @@ module chainlink_data_feeds::router {
     }
     
     public fun get_descriptions(
-        router: &Router,
+        _router: &Router,
         registry: &registry::Registry,
         feed_ids: vector<vector<u8>>
     ): vector<String> {
         let results = registry::get_feed_metadata(registry, feed_ids);
-        vector::map(
+        vector::map!(
             results, |metadata| registry::get_feed_metadata_description(&metadata)
         )
     }
     
     public entry fun configure_feeds(
-        admin_cap: &AdminCap,
+        _admin_cap: &AdminCap,
         router: &Router,
         registry: &mut registry::Registry,
         feed_ids: vector<vector<u8>>,
@@ -128,7 +129,7 @@ module chainlink_data_feeds::router {
     }
     
     public entry fun transfer_ownership(
-        admin_cap: &AdminCap,
+        _admin_cap: &AdminCap,
         router: &mut Router,
         to: address,
         ctx: &mut TxContext
@@ -162,5 +163,9 @@ module chainlink_data_feeds::router {
         );
     }
     
-    // Test functions would be added in a separate test module
+    // Test functions
+    #[test_only]
+    public fun init_for_testing(ctx: &mut TxContext) {
+        init(ctx);
+    }
 }
