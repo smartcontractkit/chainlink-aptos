@@ -1,12 +1,47 @@
 package txm
 
 import (
+	"encoding/json"
 	"math/big"
 	"testing"
 
 	"github.com/aptos-labs/aptos-go-sdk"
+	"github.com/aptos-labs/aptos-go-sdk/bcs"
 	"github.com/stretchr/testify/require"
 )
+
+func TestCreateBcsValue(t *testing.T) {
+	t.Parallel()
+	t.Run("", func(t *testing.T) {
+		address := &aptos.AccountAddress{}
+		_ = address.ParseStringRelaxed("0x3b17dad1bdd88f337712cc2f6187bb741d56da467320373fd9198262cc93de76")
+		stringAddress := address.StringLong()
+		byteAddress, err := bcs.Serialize(address)
+		require.NoError(t, err)
+		typeTag, err := CreateTypeTag("address")
+		require.NoError(t, err)
+
+		// Test serializing a hex string value
+		serialized, err := CreateBcsValue(typeTag, stringAddress)
+		require.NoError(t, err)
+		require.Equal(t, byteAddress, serialized)
+
+		// Test serializing a base64 string
+		// When marshalling using JSON, the bytearray will be serialized as a base64 string,
+		// unmarshalling this string into an any will result in it being treated as a string, not a bytearray.
+		// CreateBcsValue is supposed to account for this by first testing if the value can be decoded using base64
+		marshaled, err := json.Marshal(struct {
+			Address []byte `json:"address"`
+		}{Address: byteAddress})
+		require.NoError(t, err)
+		result := make(map[string]interface{})
+		err = json.Unmarshal(marshaled, &result)
+		require.NoError(t, err)
+		serialized, err = CreateBcsValue(typeTag, result["address"].(string))
+		require.NoError(t, err)
+		require.Equal(t, byteAddress, serialized)
+	})
+}
 
 func TestGetBcsValues(t *testing.T) {
 	t.Parallel()
