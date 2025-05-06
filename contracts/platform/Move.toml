@@ -1,0 +1,10 @@
+[package]
+name = "ChainlinkPlatform"
+version = "1.0.0"
+published-at = "0x0" # Will be updated with the actual ID after publication
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
+
+[addresses]
+chainlink_platform = "0x0"
