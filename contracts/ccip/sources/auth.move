@@ -23,11 +23,11 @@ module chainlink_ccip::auth {
     const E_NOT_OWNER_OR_CCIP: u64 = 4;
     
     // Field keys for dynamic fields
-    struct OnrampsKey has copy, drop, store {}
-    struct OfframpsKey has copy, drop, store {}
-    struct OwnableKey has copy, drop, store {}
+    public struct OnrampsKey has copy, drop, store {}
+    public struct OfframpsKey has copy, drop, store {}
+    public struct OwnableKey has copy, drop, store {}
     
-    struct AdminCap has key, store {
+    public struct AdminCap has key, store {
         id: UID
     }
     
@@ -38,59 +38,74 @@ module chainlink_ccip::auth {
             id: object::new(ctx)
         };
         
+        // The state object is created and shared in the state_object module's init function
+        
+        // Transfer the admin capability to the sender
+        transfer::transfer(admin_cap, tx_context::sender(ctx));
+    }
+    
+    #[test_only]
+    public fun init_for_testing(ctx: &mut TxContext): StateObject {
+        // Create admin capability
+        let admin_cap = AdminCap {
+            id: object::new(ctx)
+        };
+        
         // Create the allowed onramps allowlist
-        let allowed_onramps = allowlist::new_with_name(
+        let mut allowed_onramps = allowlist::new_with_name(
             vector[], string::utf8(b"onramps")
         );
         allowlist::set_allowlist_enabled(&mut allowed_onramps, true);
         
         // Create the allowed offramps allowlist
-        let allowed_offramps = allowlist::new_with_name(
+        let mut allowed_offramps = allowlist::new_with_name(
             vector[], string::utf8(b"offramps")
         );
         allowlist::set_allowlist_enabled(&mut allowed_offramps, true);
         
-        // Get the state object
-        let state_object = state_object::init_for_testing(ctx);
+        // Get the state object from the state_object module
+        let mut state_object = state_object::init_for_testing(ctx);
         
         // Add dynamic fields to the state object
-        df::add(&mut state_object.id, OnrampsKey {}, allowed_onramps);
-        df::add(&mut state_object.id, OfframpsKey {}, allowed_offramps);
+        df::add(state_object::id_mut(&mut state_object), OnrampsKey {}, allowed_onramps);
+        df::add(state_object::id_mut(&mut state_object), OfframpsKey {}, allowed_offramps);
         df::add(
-            &mut state_object.id, 
+            state_object::id_mut(&mut state_object), 
             OwnableKey {}, 
             ownable::new(tx_context::sender(ctx))
         );
         
         // Transfer the admin capability to the sender
         transfer::transfer(admin_cap, tx_context::sender(ctx));
+        
+        state_object
     }
     
     // View functions
     public fun get_allowed_onramps(state_obj: &StateObject): vector<address> {
         let allowed_onramps = df::borrow<OnrampsKey, AllowlistState>(
-            &state_obj.id, OnrampsKey {}
+            state_object::id(state_obj), OnrampsKey {}
         );
         allowlist::get_allowlist(allowed_onramps)
     }
     
     public fun get_allowed_offramps(state_obj: &StateObject): vector<address> {
         let allowed_offramps = df::borrow<OfframpsKey, AllowlistState>(
-            &state_obj.id, OfframpsKey {}
+            state_object::id(state_obj), OfframpsKey {}
         );
         allowlist::get_allowlist(allowed_offramps)
     }
     
     public fun is_onramp_allowed(state_obj: &StateObject, onramp_address: address): bool {
         let allowed_onramps = df::borrow<OnrampsKey, AllowlistState>(
-            &state_obj.id, OnrampsKey {}
+            state_object::id(state_obj), OnrampsKey {}
         );
         allowlist::is_allowed(allowed_onramps, onramp_address)
     }
     
     public fun is_offramp_allowed(state_obj: &StateObject, offramp_address: address): bool {
         let allowed_offramps = df::borrow<OfframpsKey, AllowlistState>(
-            &state_obj.id, OfframpsKey {}
+            state_object::id(state_obj), OfframpsKey {}
         );
         allowlist::is_allowed(allowed_offramps, offramp_address)
     }
@@ -105,13 +120,13 @@ module chainlink_ccip::auth {
     ) {
         let caller = tx_context::sender(ctx);
         let ownable_state = df::borrow<OwnableKey, OwnableState>(
-            &state_obj.id, OwnableKey {}
+            state_object::id(state_obj), OwnableKey {}
         );
         
         assert_is_owner_or_ccip(caller, ownable_state);
         
         let allowed_onramps = df::borrow_mut<OnrampsKey, AllowlistState>(
-            &mut state_obj.id, OnrampsKey {}
+            state_object::id_mut(state_obj), OnrampsKey {}
         );
         
         allowlist::apply_allowlist_updates(
@@ -130,13 +145,13 @@ module chainlink_ccip::auth {
     ) {
         let caller = tx_context::sender(ctx);
         let ownable_state = df::borrow<OwnableKey, OwnableState>(
-            &state_obj.id, OwnableKey {}
+            state_object::id(state_obj), OwnableKey {}
         );
         
         assert_is_owner_or_ccip(caller, ownable_state);
         
         let allowed_offramps = df::borrow_mut<OfframpsKey, AllowlistState>(
-            &mut state_obj.id, OfframpsKey {}
+            state_object::id_mut(state_obj), OfframpsKey {}
         );
         
         allowlist::apply_allowlist_updates(
@@ -158,7 +173,7 @@ module chainlink_ccip::auth {
     
     public fun assert_is_allowed_onramp(state_obj: &StateObject, caller: address) {
         let allowed_onramps = df::borrow<OnrampsKey, AllowlistState>(
-            &state_obj.id, OnrampsKey {}
+            state_object::id(state_obj), OnrampsKey {}
         );
         assert!(
             allowlist::is_allowed(allowed_onramps, caller),
@@ -168,7 +183,7 @@ module chainlink_ccip::auth {
     
     public fun assert_is_allowed_offramp(state_obj: &StateObject, caller: address) {
         let allowed_offramps = df::borrow<OfframpsKey, AllowlistState>(
-            &state_obj.id, OfframpsKey {}
+            state_object::id(state_obj), OfframpsKey {}
         );
         assert!(
             allowlist::is_allowed(allowed_offramps, caller),
@@ -179,14 +194,14 @@ module chainlink_ccip::auth {
     // Ownership functions
     public fun owner(state_obj: &StateObject): address {
         let ownable_state = df::borrow<OwnableKey, OwnableState>(
-            &state_obj.id, OwnableKey {}
+            state_object::id(state_obj), OwnableKey {}
         );
         ownable::owner(ownable_state)
     }
     
     public fun assert_only_owner(state_obj: &StateObject, caller: address) {
         let ownable_state = df::borrow<OwnableKey, OwnableState>(
-            &state_obj.id, OwnableKey {}
+            state_object::id(state_obj), OwnableKey {}
         );
         ownable::assert_only_owner(caller, ownable_state);
     }
@@ -199,7 +214,7 @@ module chainlink_ccip::auth {
     ) {
         let caller = tx_context::sender(ctx);
         let ownable_state = df::borrow_mut<OwnableKey, OwnableState>(
-            &mut state_obj.id, OwnableKey {}
+            state_object::id_mut(state_obj), OwnableKey {}
         );
         
         ownable::transfer_ownership(caller, ownable_state, to);
@@ -211,7 +226,7 @@ module chainlink_ccip::auth {
     ) {
         let caller = tx_context::sender(ctx);
         let ownable_state = df::borrow_mut<OwnableKey, OwnableState>(
-            &mut state_obj.id, OwnableKey {}
+            state_object::id_mut(state_obj), OwnableKey {}
         );
         
         ownable::accept_ownership(caller, ownable_state);
@@ -224,7 +239,7 @@ module chainlink_ccip::auth {
         ctx: &mut TxContext
     ) {
         let ownable_state = df::borrow_mut<OwnableKey, OwnableState>(
-            &mut state_obj.id, OwnableKey {}
+            state_object::id_mut(state_obj), OwnableKey {}
         );
         
         ownable::execute_ownership_transfer(ctx, ownable_state, to);
@@ -232,5 +247,5 @@ module chainlink_ccip::auth {
     
     // MCMS integration would be implemented differently in Sui
     // This is a placeholder for the MCMS entrypoint functionality
-    struct McmsCallback has drop {}
+    public struct McmsCallback has drop {}
 }

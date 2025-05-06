@@ -11,7 +11,7 @@ module chainlink_ccip::ownable {
     const E_NOT_PENDING_OWNER: u64 = 2;
     const E_CANNOT_TRANSFER_TO_SELF: u64 = 3;
     
-    struct OwnableState has store {
+    struct OwnableState has store, drop {
         owner: address,
         pending_owner: address
     }

@@ -11,19 +11,19 @@ module chainlink_ccip::allowlist {
     // Error codes
     const E_ALLOWLIST_NOT_ENABLED: u64 = 1;
     
-    struct AllowlistState has store {
+    public struct AllowlistState has store {
         allowlist_name: String,
         allowlist_enabled: bool,
         allowlist: vector<address>
     }
     
     // Events
-    struct AllowlistRemove has copy, drop {
+    public struct AllowlistRemove has copy, drop {
         allowlist_name: String,
         removed_address: address
     }
     
-    struct AllowlistAdd has copy, drop {
+    public struct AllowlistAdd has copy, drop {
         allowlist_name: String,
         added_address: address
     }
@@ -67,8 +67,8 @@ module chainlink_ccip::allowlist {
     public fun apply_allowlist_updates(
         state: &mut AllowlistState, removes: vector<address>, adds: vector<address>
     ) {
-        let i = 0;
-        let len = vector::length(&removes);
+        let mut i = 0;
+        let mut len = vector::length(&removes);
         
         while (i < len) {
             let removed_address = *vector::borrow(&removes, i);
@@ -147,7 +147,7 @@ module chainlink_ccip::allowlist_test {
         // Test setup
         let scenario = ts::begin(owner);
         {
-            let state = allowlist::new(vector::empty());
+            let mut state = allowlist::new(vector::empty());
             
             assert!(!allowlist::get_allowlist_enabled(&state));
             assert!(vector::is_empty(&allowlist::get_allowlist(&state)));
@@ -170,7 +170,7 @@ module chainlink_ccip::allowlist_test {
         {
             let init_allowlist = vector[@0x1, @0x2];
             
-            let state = allowlist::new(init_allowlist);
+            let mut state = allowlist::new(init_allowlist);
             
             assert!(allowlist::get_allowlist_enabled(&state));
             assert!(vector::length(&allowlist::get_allowlist(&state)) == 2);
@@ -196,7 +196,7 @@ module chainlink_ccip::allowlist_test {
         // Test setup
         let scenario = ts::begin(owner);
         {
-            let state = allowlist::new(vector::empty());
+            let mut state = allowlist::new(vector::empty());
             
             let adds = vector[@0x1];
             
@@ -215,7 +215,7 @@ module chainlink_ccip::allowlist_test {
         // Test setup
         let scenario = ts::begin(owner);
         {
-            let state = allowlist::new(vector::empty());
+            let mut state = allowlist::new(vector::empty());
             allowlist::set_allowlist_enabled(&mut state, true);
             
             assert!(vector::is_empty(&allowlist::get_allowlist(&state)));
@@ -250,7 +250,7 @@ module chainlink_ccip::allowlist_test {
         let scenario = ts::begin(owner);
         {
             let account_to_allow = @0x1;
-            let state = allowlist::new(vector::empty());
+            let mut state = allowlist::new(vector::empty());
             allowlist::set_allowlist_enabled(&mut state, true);
             
             let adds_and_removes = vector[account_to_allow];

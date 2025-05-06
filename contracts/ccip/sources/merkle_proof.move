@@ -17,9 +17,9 @@ module chainlink_ccip::merkle_proof {
         proof: vector<vector<u8>>,
         root: vector<u8>
     ): bool {
-        let computed_hash = leaf;
+        let mut computed_hash = leaf;
         
-        let i = 0;
+        let mut i = 0;
         let len = vector::length(&proof);
         
         while (i < len) {
@@ -40,7 +40,7 @@ module chainlink_ccip::merkle_proof {
     
     /// Concatenates two byte arrays and computes the Keccak-256 hash.
     fun concat_and_hash(a: &vector<u8>, b: &vector<u8>): vector<u8> {
-        let result = *a;
+        let mut result = *a;
         vector::append(&mut result, *b);
         keccak256(&result)
     }
@@ -52,7 +52,7 @@ module chainlink_ccip::merkle_proof {
         let b_len = vector::length(b);
         let min_len = if (a_len < b_len) { a_len } else { b_len };
         
-        let i = 0;
+        let mut i = 0;
         while (i < min_len) {
             let a_byte = *vector::borrow(a, i);
             let b_byte = *vector::borrow(b, i);

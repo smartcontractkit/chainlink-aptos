@@ -19,7 +19,7 @@ module chainlink_ccip::ccip_tests {
         let scenario = ts::begin(owner);
         {
             // Initialize with empty allowlist
-            let state = allowlist::new(vector::empty());
+            let mut state = allowlist::new(vector::empty());
             
             // Check that allowlist is disabled
             assert!(!allowlist::get_allowlist_enabled(&state), 0);
@@ -59,7 +59,7 @@ module chainlink_ccip::ccip_tests {
         let scenario = ts::begin(owner);
         {
             // Initialize ownable state
-            let state = ownable::new(owner);
+            let mut state = ownable::new(owner);
             
             // Check owner
             assert!(ownable::owner(&state) == owner, 0);
@@ -91,7 +91,7 @@ module chainlink_ccip::ccip_tests {
         let scenario = ts::begin(owner);
         {
             // Initialize ownable state
-            let state = ownable::new(owner);
+            let mut state = ownable::new(owner);
             
             // Try to transfer ownership as non-owner (should fail)
             ownable::transfer_ownership(not_owner, &mut state, not_owner);
