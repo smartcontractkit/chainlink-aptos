@@ -64,4 +64,11 @@ module ccip::nonce_manager {
     inline fun borrow_state_mut(): &mut NonceManagerState {
         borrow_global_mut<NonceManagerState>(state_object::object_address())
     }
+
+    // ========================== TEST ONLY ==========================
+
+    #[test_only]
+    public fun test_init_module(publisher: &signer) {
+        init_module(publisher);
+    }
 }

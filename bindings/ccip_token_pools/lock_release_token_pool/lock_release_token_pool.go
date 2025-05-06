@@ -41,7 +41,7 @@ func Compile(address, ccipAddress, mcmsAddress, ccipTokenPoolAddress, localToken
 		"lock_release_token_pool":   address,
 		"ccip":                      ccipAddress,
 		"ccip_token_pool":           ccipTokenPoolAddress,
-		"local_token":               localTokenAddress,
+		"lock_release_local_token":  localTokenAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
@@ -71,7 +71,7 @@ func DeployToObject(
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
 		"ccip_token_pool":           ccipTokenPoolAddress,
-		"local_token":               localTokenAddress,
+		"lock_release_local_token":  localTokenAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
