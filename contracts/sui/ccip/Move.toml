@@ -1,0 +1,12 @@
+[package]
+name = "ChainlinkCCIP"
+version = "1.0.0"
+published-at = "0x0" # Will be updated with the actual ID after publication
+edition = "2024"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "devnet" }
+ChainlinkManyChainMultisig = { local = "../mcms" }
+
+[addresses]
+chainlink_ccip = "0x0"
