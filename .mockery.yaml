@@ -1,0 +1,16 @@
+dir: "{{ .InterfaceDir }}/mocks"
+mockname: "{{ .InterfaceName }}"
+outpkg: mocks
+filename: "{{ .InterfaceName | snakecase }}.go"
+packages:
+  github.com/smartcontractkit/chainlink-aptos/relayer/write_target:
+    interfaces:
+      chainService:
+        config:
+          mockname: ChainService
+      contractReader:
+        config:
+          mockname: ContractReader
+      contractWriter:
+        config:
+          mockname: ContractWriter
