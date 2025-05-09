@@ -25,64 +25,75 @@ func DecodeAsFeedUpdated(m *wt_msg.WriteConfirmed) ([]*FeedUpdated, error) {
 		return nil, fmt.Errorf("failed to decode report: %w", err)
 	}
 
-	// Decode the underlying Data Feeds reports
-	mercuryReports, dfErr := data_feeds.Decode(r.Data)
-
 	// HACK: to check if the report is a Mercury report or an LLO report, this will be removed
 	// when the generalized Write Target is completed, as it will allow report schemas to be defined
 	// in the workflow and passed to the Write Target.
+
+	// Decode the underlying Data Feeds reports
+	mercuryReports, dfErr := data_feeds.Decode(r.Data)
 	if dfErr == nil {
-		msgs := make([]*FeedUpdated, 0, len(*mercuryReports))
-
-		// Allocate space for the messages (event per updated feed)
-
-		// Iterate over the underlying Mercury reports
-		for _, rf := range *mercuryReports {
-			// Notice: we assume that Mercury will be the only source of reports used for Data Feeds,
-			// at least for the foreseeable future. If this assumption changes, we should check the
-			// the report type here (potentially encoded in the feed ID) and decode accordingly.
-
-			// Decode the common Mercury report
-			rm, err := mercury_vX.Decode(rf.Data)
-			if err != nil {
-				return nil, fmt.Errorf("failed to decode Mercury report: %w", err)
-			}
-
-			// Parse the report type
-			t := mercury_vX.GetReportType(rm.FeedId)
-
-			// Notice: we publish the DataFeed FeedID, not the unrelying DataStream FeedID
-			feedID := data_feeds.FeedID(rf.FeedId)
-
-			switch t {
-			case uint16(3):
-				rm, err := mercury_v3.Decode(rf.Data)
-				if err != nil {
-					return nil, fmt.Errorf("failed to decode Mercury v%d report: %w", t, err)
-				}
-
-				msgs = append(msgs, newFeedUpdated(m, feedID, rm.ObservationsTimestamp, rm.BenchmarkPrice, rf.Data, true))
-			case uint16(4):
-				rm, err := mercury_v4.Decode(rf.Data)
-				if err != nil {
-					return nil, fmt.Errorf("failed to decode Mercury v%d report: %w", t, err)
-				}
-
-				msgs = append(msgs, newFeedUpdated(m, feedID, rm.ObservationsTimestamp, rm.BenchmarkPrice, rf.Data, false))
-			default:
-				return nil, fmt.Errorf("unsupported Mercury report type: %d", t)
-			}
-		}
-		return msgs, nil
+		return mercuryReportToFeedUpdated(m, mercuryReports)
 	}
+
+	// Decode the underlying LLO reports if the Data Feeds report decoding fails
 	lloReports, lloErr := llo.Decode(r.Data)
-	if lloErr != nil {
-		return nil, fmt.Errorf("failed to decode DF Report and LLO Report | DF Err: %w, LLO Err: %w", dfErr, lloErr)
+	if lloErr == nil {
+		return lloReportToFeedUpdated(m, lloReports)
 	}
+
+	return nil, fmt.Errorf("failed to decode DF Report and LLO Report | DF Err: %w, LLO Err: %w", dfErr, lloErr)
+}
+
+func lloReportToFeedUpdated(m *wt_msg.WriteConfirmed, lloReports *llo.Reports) ([]*FeedUpdated, error) {
 	msgs := make([]*FeedUpdated, 0, len(*lloReports))
 
 	for _, rf := range *lloReports {
 		msgs = append(msgs, newFeedUpdated(m, rf.RemappedID, rf.Timestamp, rf.Price, []byte{}, false))
+	}
+	return msgs, nil
+}
+
+func mercuryReportToFeedUpdated(m *wt_msg.WriteConfirmed, mercuryReports *data_feeds.Reports) ([]*FeedUpdated, error) {
+	msgs := make([]*FeedUpdated, 0, len(*mercuryReports))
+
+	// Allocate space for the messages (event per updated feed)
+
+	// Iterate over the underlying Mercury reports
+	for _, rf := range *mercuryReports {
+		// Notice: we assume that Mercury will be the only source of reports used for Data Feeds,
+		// at least for the foreseeable future. If this assumption changes, we should check the
+		// the report type here (potentially encoded in the feed ID) and decode accordingly.
+
+		// Decode the common Mercury report
+		rm, err := mercury_vX.Decode(rf.Data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode Mercury report: %w", err)
+		}
+
+		// Parse the report type
+		t := mercury_vX.GetReportType(rm.FeedId)
+
+		// Notice: we publish the DataFeed FeedID, not the unrelying DataStream FeedID
+		feedID := data_feeds.FeedID(rf.FeedId)
+
+		switch t {
+		case uint16(3):
+			rm, err := mercury_v3.Decode(rf.Data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode Mercury v%d report: %w", t, err)
+			}
+
+			msgs = append(msgs, newFeedUpdated(m, feedID, rm.ObservationsTimestamp, rm.BenchmarkPrice, rf.Data, true))
+		case uint16(4):
+			rm, err := mercury_v4.Decode(rf.Data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode Mercury v%d report: %w", t, err)
+			}
+
+			msgs = append(msgs, newFeedUpdated(m, feedID, rm.ObservationsTimestamp, rm.BenchmarkPrice, rf.Data, false))
+		default:
+			return nil, fmt.Errorf("unsupported Mercury report type: %d", t)
+		}
 	}
 	return msgs, nil
 }

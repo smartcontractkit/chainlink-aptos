@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/report/llo"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDecodeFeedReport(t *testing.T) {
@@ -28,20 +29,14 @@ func TestDecodeFeedReport(t *testing.T) {
 
 	// Pack the original data using the ABI schema.
 	encoded, err := schema.Pack(original)
-	if err != nil {
-		t.Fatalf("failed to pack data: %v", err)
-	}
+	require.NoError(t, err, "failed to pack data")
 
 	// Decode the data using our Decode function.
 	decoded, err := llo.Decode(encoded)
-	if err != nil {
-		t.Fatalf("failed to decode data: %v", err)
-	}
+	require.NoError(t, err, "failed to decode data")
 
 	// Check that the lengths match.
-	if len(*decoded) != len(original) {
-		t.Fatalf("expected %d records, got %d", len(original), len(*decoded))
-	}
+	require.Equal(t, len(*decoded), len(original), "decoded length does not match original length")
 
 	// Compare each record field by field.
 	for i := range original {
@@ -49,18 +44,12 @@ func TestDecodeFeedReport(t *testing.T) {
 		decRecord := (*decoded)[i]
 
 		// Compare FeedID.
-		if origRecord.RemappedID != decRecord.RemappedID {
-			t.Errorf("record %d: mismatched FeedID: expected %x, got %x", i, origRecord.RemappedID, decRecord.RemappedID)
-		}
+		require.Equal(t, origRecord.RemappedID, decRecord.RemappedID, "FeedID mismatch")
 
 		// Compare Price using big.Int.Cmp.
-		if origRecord.Price.Cmp(decRecord.Price) != 0 {
-			t.Errorf("record %d: mismatched Price: expected %v, got %v", i, origRecord.Price, decRecord.Price)
-		}
+		require.Equal(t, origRecord.Price.String(), decRecord.Price.String(), "Price mismatch")
 
 		// Compare Timestamp.
-		if origRecord.Timestamp != decRecord.Timestamp {
-			t.Errorf("record %d: mismatched Timestamp: expected %d, got %d", i, origRecord.Timestamp, decRecord.Timestamp)
-		}
+		require.Equal(t, origRecord.Timestamp, decRecord.Timestamp, "Timestamp mismatch")
 	}
 }
