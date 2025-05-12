@@ -53,10 +53,13 @@ module burn_mint_token_pool::burn_mint_token_pool {
         // register the pool on deployment, because in the case of object code deployment,
         // this is the only time we have a signer ref to @ccip_burn_mint_pool.
         assert!(
-            object::object_exists<Metadata>(@local_token),
+            object::object_exists<Metadata>(@burn_mint_local_token),
             error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
         );
-        let metadata = object::address_to_object<Metadata>(@local_token);
+        let metadata = object::address_to_object<Metadata>(@burn_mint_local_token);
+
+        // create an Account on the object for event handles.
+        account::create_account_if_does_not_exist(@burn_mint_token_pool);
 
         // the name of this module. if incorrect, callbacks will fail to be registered and
         // register_pool will revert.
@@ -72,7 +75,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
         token_admin_registry::register_pool(
             publisher,
             token_pool_module_name,
-            @local_token,
+            @burn_mint_local_token,
             CallbackProof {}
         );
 
@@ -92,17 +95,14 @@ module burn_mint_token_pool::burn_mint_token_pool {
                 store_signer_cap,
                 ownable_state: ownable::new(publisher, @burn_mint_token_pool),
                 token_pool_state: token_pool::initialize(
-                    publisher, @local_token, vector[]
+                    publisher, @burn_mint_local_token, vector[]
                 )
             }
         );
     }
 
     public fun initialize(
-        caller: &signer,
-        local_token: address,
-        burn_ref: BurnRef,
-        mint_ref: MintRef
+        caller: &signer, burn_ref: BurnRef, mint_ref: MintRef
     ) acquires BurnMintTokenPoolDeployment {
         assert_can_initialize(signer::address_of(caller));
 
@@ -111,8 +111,12 @@ module burn_mint_token_pool::burn_mint_token_pool {
             error::invalid_argument(E_ALREADY_INITIALIZED)
         );
 
+        let metadata = object::address_to_object<Metadata>(@burn_mint_local_token);
+        let burn_ref_metadata = fungible_asset::burn_ref_metadata(&burn_ref);
+        let mint_ref_metadata = fungible_asset::mint_ref_metadata(&mint_ref);
+
         assert!(
-            @local_token == local_token,
+            metadata == burn_ref_metadata && metadata == mint_ref_metadata,
             error::invalid_argument(E_LOCAL_TOKEN_MISMATCH)
         );
 
@@ -264,7 +268,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
     struct CallbackProof has drop {}
 
     public fun lock_or_burn<T: key>(
-        _store: Object<T>, fa: FungibleAsset, _transfer_ref: &BurnRef
+        _store: Object<T>, fa: FungibleAsset, _transfer_ref: &TransferRef
     ) acquires BurnMintTokenPoolState {
         // retrieve the input for this lock or burn operation. if this function is invoked
         // outside of ccip::token_admin_registry, the transaction will abort.
@@ -276,7 +280,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
         let pool = borrow_pool_mut();
         let fa_amount = fungible_asset::amount(&fa);
 
-        // This metod validates various aspects of the lock or burn operation. If any of the
+        // This method validates various aspects of the lock or burn operation. If any of the
         // validations fail, the transaction will abort.
         let dest_token_address =
             token_pool::validate_lock_or_burn(
@@ -289,11 +293,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
         // Construct lock_or_burn output before we lose access to fa
         let dest_pool_data = token_pool::encode_local_decimals(&fa);
 
-        // Burn the funds in the pool
-        primary_fungible_store::deposit(pool.store_signer_address, fa);
-        primary_fungible_store::burn(
-            &pool.burn_ref, pool.store_signer_address, fa_amount
-        );
+        // Burn the funds
+        fungible_asset::burn(&pool.burn_ref, fa);
 
         // set the output for this lock or burn operation.
         token_admin_registry::set_lock_or_burn_output_v1(
@@ -303,7 +304,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
             dest_pool_data
         );
 
-        token_pool::emit_locked_or_burned(&mut pool.token_pool_state, fa_amount);
+        token_pool::emit_burned(&mut pool.token_pool_state, fa_amount);
     }
 
     public fun release_or_mint<T: key>(
@@ -323,15 +324,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
             &mut pool.token_pool_state, &input, local_amount
         );
 
-        let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
-        let store_address =
-            account::get_signer_capability_address(&pool.store_signer_cap);
-        let fa_metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
-        // Mint and withdraw the amount from the store for release. this will revert if the store has insufficient balance.
-        primary_fungible_store::mint(&pool.mint_ref, store_address, local_amount);
-        let fa = primary_fungible_store::withdraw(
-            &store_signer, fa_metadata, local_amount
-        );
+        // Mint the amount for release.
+        let fa = fungible_asset::mint(&pool.mint_ref, local_amount);
 
         // set the output for this release or mint operation.
         token_admin_registry::set_release_or_mint_output_v1(
@@ -340,7 +334,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
 
         let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
 
-        token_pool::emit_released_or_minted(
+        token_pool::emit_minted(
             &mut pool.token_pool_state,
             recipient,
             local_amount
@@ -612,5 +606,14 @@ module burn_mint_token_pool::burn_mint_token_pool {
         };
 
         option::none()
+    }
+
+    // ================================================================
+    // |                      Test functions                          |
+    // ================================================================
+
+    #[test_only]
+    public entry fun test_init_module(owner: &signer) {
+        init_module(owner);
     }
 }

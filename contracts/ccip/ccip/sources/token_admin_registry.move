@@ -346,8 +346,6 @@ module ccip::token_admin_registry {
         let dispatch_extend_ref = object::generate_extend_ref(&dispatch_constructor_ref);
         let dispatch_transfer_ref =
             object::generate_transfer_ref(&dispatch_constructor_ref);
-        let dispatch_fa_transfer_ref =
-            fungible_asset::generate_transfer_ref(&dispatch_constructor_ref);
 
         let dispatch_metadata =
             fungible_asset::add_fungibility(
@@ -361,6 +359,9 @@ module ccip::token_admin_registry {
                 string::utf8(b""),
                 string::utf8(b"")
             );
+
+        let dispatch_fa_transfer_ref =
+            fungible_asset::generate_transfer_ref(&dispatch_constructor_ref);
 
         // create a FungibleStore for dispatchable_deposit(). it's valid for the FungibleStore to be on the same object
         // as the fungible asset Metadata itself.

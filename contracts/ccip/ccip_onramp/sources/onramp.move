@@ -522,7 +522,6 @@ module ccip_onramp::onramp {
             fee_value_juels,
             token_amounts: token_transfers
         };
-
         let metadata_hash =
             calculate_metadata_hash(state.chain_selector, dest_chain_selector);
         let message_id = calculate_message_hash(&message, metadata_hash);
@@ -963,7 +962,7 @@ module ccip_onramp::onramp {
         _metadata: Object<T>
     ): option::Option<u128> acquires OnRampDeployment, OnRampState {
         let (caller, function, data) =
-            mcms_registry::get_callback_params(@ccip, McmsCallback {});
+            mcms_registry::get_callback_params(@ccip_onramp, McmsCallback {});
 
         let function_bytes = *function.bytes();
         let stream = bcs_stream::new(data);
@@ -1076,5 +1075,31 @@ module ccip_onramp::onramp {
         };
 
         option::none()
+    }
+
+    public fun dynamic_config_fee_aggregator(config: &DynamicConfig): address {
+        config.fee_aggregator
+    }
+
+    public fun dynamic_config_allowlist_admin(config: &DynamicConfig): address {
+        config.allowlist_admin
+    }
+
+    public fun static_config_chain_selector(config: &StaticConfig): u64 {
+        config.chain_selector
+    }
+
+    // ========================== TEST ONLY ==========================
+
+    #[test_only]
+    public fun test_init_module(publisher: &signer) {
+        init_module(publisher);
+    }
+
+    #[test_only]
+    public fun register_mcms_entrypoint(publisher: &signer) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(b"onramp"), McmsCallback {}
+        );
     }
 }
