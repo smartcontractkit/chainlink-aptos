@@ -934,7 +934,7 @@ module ccip_offramp::offramp {
 
         // check that the amount deposited to the user's primary fungible store is exactly `local_amount`
         assert!(
-            after_balance > before_balance
+            after_balance >= before_balance
                 && (after_balance - before_balance) == local_amount,
             error::invalid_state(E_FUNGIBLE_ASSET_AMOUNT_MISMATCH)
         );
