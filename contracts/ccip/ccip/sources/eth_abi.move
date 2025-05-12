@@ -62,9 +62,11 @@ module ccip::eth_abi {
         encode_u256(out, (value.length() as u256));
 
         out.append(value);
-        let padding_len = 32 - (value.length() % 32);
-        for (i in 0..padding_len) {
-            out.push_back(0);
+        if (value.length() % 32 != 0) {
+            let padding_len = 32 - (value.length() % 32);
+            for (i in 0..padding_len) {
+                out.push_back(0);
+            }
         }
     }
 
