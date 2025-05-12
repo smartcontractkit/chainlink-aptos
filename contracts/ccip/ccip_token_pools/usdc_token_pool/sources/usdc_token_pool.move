@@ -354,7 +354,7 @@ module usdc_token_pool::usdc_token_pool {
             dest_pool_data
         );
 
-        token_pool::emit_locked(&mut pool.token_pool_state, fa_amount);
+        token_pool::emit_burned(&mut pool.token_pool_state, fa_amount);
     }
 
     public fun release_or_mint<T: key>(
@@ -407,7 +407,7 @@ module usdc_token_pool::usdc_token_pool {
 
         let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
 
-        token_pool::emit_released(
+        token_pool::emit_minted(
             &mut pool.token_pool_state,
             recipient,
             local_amount
