@@ -230,4 +230,11 @@ module ccip::auth {
 
         option::none()
     }
+
+    // ========================== TEST ONLY ==========================
+
+    #[test_only]
+    public fun test_init_module(publisher: &signer) {
+        init_module(publisher);
+    }
 }
