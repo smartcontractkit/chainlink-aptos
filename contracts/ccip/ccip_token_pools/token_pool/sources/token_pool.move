@@ -15,6 +15,8 @@ module ccip_token_pool::token_pool {
     use ccip_token_pool::token_pool_rate_limiter;
 
     const STORE_OBJECT_SEED: vector<u8> = b"CCIPTokenPool";
+    const MAX_U256: u256 =
+        115792089237316195423570985008687907853269984665640564039457584007913129639935;
 
     struct TokenPoolState has key, store {
         allowlist_state: allowlist::AllowlistState,
@@ -102,6 +104,7 @@ module ccip_token_pool::token_pool {
     const E_REMOTE_CHAIN_ALREADY_EXISTS: u64 = 8;
     const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 9;
     const E_INVALID_ENCODED_AMOUNT: u64 = 10;
+    const E_DECIMAL_OVERFLOW: u64 = 11;
 
     // ================================================================
     // |                    Initialize and state                      |
@@ -527,7 +530,6 @@ module ccip_token_pool::token_pool {
     fun calculate_local_amount_internal(
         remote_amount: u256, remote_decimals: u8, local_decimals: u8
     ): u256 {
-        // TODO: check for overflows
         if (remote_decimals == local_decimals) {
             return remote_amount
         } else if (remote_decimals > local_decimals) {
@@ -539,11 +541,26 @@ module ccip_token_pool::token_pool {
             return current_amount
         } else {
             let decimals_diff = local_decimals - remote_decimals;
-            let current_amount = remote_amount;
+            // This is a safety check to prevent overflow in the next calculation.
+            // More than 77 would never fit in a uint256 and would cause an overflow. We also check if the resulting amount
+            // would overflow.
+            assert!(
+                decimals_diff <= 77,
+                error::invalid_state(E_DECIMAL_OVERFLOW)
+            );
+
+            let multiplier: u256 = 1;
+            let base: u256 = 10;
             for (i in 0..decimals_diff) {
-                current_amount *= 10;
+                multiplier = multiplier * base;
             };
-            return current_amount
+
+            assert!(
+                remote_amount <= (MAX_U256 / multiplier),
+                error::invalid_state(E_DECIMAL_OVERFLOW)
+            );
+
+            return remote_amount * multiplier
         }
     }
 
@@ -635,103 +652,5 @@ module ccip_token_pool::token_pool {
         event::destroy_handle(chain_added_events);
 
         token_pool_rate_limiter::destroy_rate_limiter(rate_limiter_config);
-    }
-}
-
-#[test_only]
-module ccip_token_pool::token_pool_test {
-    use std::account;
-    use std::signer;
-    use std::object;
-    use std::option;
-    use std::string;
-    use std::primary_fungible_store;
-    use std::fungible_asset;
-    use ccip_token_pool::token_pool::TokenPoolState;
-
-    use ccip_token_pool::token_pool;
-
-    struct TestToken has key {}
-
-    const Decimals: u8 = 8;
-    const OwnerInitbalance: u64 = 1_000_000;
-
-    const DefaultRemoteChain: u64 = 2000;
-    const DefaultRemoteToken: vector<u8> = b"default_remote_token";
-    const DefaultRemotePool: vector<u8> = b"default_remote_pool";
-
-    #[test(owner = @ccip_token_pool)]
-    fun initialize_correctly_sets_state(owner: &signer) {
-        let state = set_up_test(owner);
-
-        assert!(token_pool::get_token_decimals(&state) == Decimals);
-        assert!(token_pool::is_supported_chain(&state, DefaultRemoteChain));
-
-        token_pool::destroy_token_pool(state);
-    }
-
-    #[test(owner = @ccip_token_pool)]
-    fun add_remote_pool_existing_chain(owner: &signer) {
-        let state = set_up_test(owner);
-        let new_remote_pool = b"new_pool";
-
-        assert!(
-            !token_pool::is_remote_pool(&state, DefaultRemoteChain, new_remote_pool)
-        );
-        assert!(token_pool::get_remote_pools(&state, DefaultRemoteChain).length() == 1);
-
-        token_pool::add_remote_pool(&mut state, DefaultRemoteChain, new_remote_pool);
-
-        assert!(token_pool::is_remote_pool(&state, DefaultRemoteChain, new_remote_pool));
-        assert!(token_pool::get_remote_pools(&state, DefaultRemoteChain).length() == 2);
-
-        token_pool::destroy_token_pool(state);
-    }
-
-    // ================================================================
-    // |                           Setup                              |
-    // ================================================================
-
-    inline fun set_up_test(owner: &signer): token_pool::TokenPoolState {
-        let signer_address = signer::address_of(owner);
-        account::create_account_for_test(signer_address);
-
-        let constructor_ref = &object::create_named_object(owner, b"CCIPTokenPool");
-        move_to(owner, TestToken {});
-
-        primary_fungible_store::create_primary_store_enabled_fungible_asset(
-            constructor_ref,
-            option::none(),
-            string::utf8(b"TEST"),
-            string::utf8(b"TEST"),
-            Decimals,
-            string::utf8(b""),
-            string::utf8(b"")
-        );
-
-        let fungible_asset_mint_ref = fungible_asset::generate_mint_ref(constructor_ref);
-
-        primary_fungible_store::mint(
-            &fungible_asset_mint_ref, signer_address, OwnerInitbalance
-        );
-
-        let token_address = object::address_from_constructor_ref(constructor_ref);
-
-        let state = token_pool::initialize(owner, token_address, vector[]);
-
-        // Set state in the pool
-        set_up_default_remote_chain(&mut state);
-
-        state
-    }
-
-    inline fun set_up_default_remote_chain(state: &mut TokenPoolState) {
-        token_pool::apply_chain_updates(
-            state,
-            vector[],
-            vector[DefaultRemoteChain],
-            vector[vector[DefaultRemotePool]],
-            vector[DefaultRemoteToken]
-        )
     }
 }
