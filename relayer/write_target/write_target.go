@@ -521,7 +521,10 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 			// Source the transmitter address from the on-chain state
 			info.reportTransmissionState = state
 
-			_ = c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(&info, head))
+			err = c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteConfirmed(&info, head))
+			if err != nil {
+				lggr.Errorw("failed to emit write confirmed", "err", err)
+			}
 
 			return nil
 		}
