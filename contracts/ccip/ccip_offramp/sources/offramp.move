@@ -635,7 +635,9 @@ module ccip_offramp::offramp {
         let merkle_root_values = vector[];
         blessed_merkle_roots.for_each_ref(|merkle_root| {
             let merkle_root: &MerkleRoot = merkle_root;
-            merkle_root_source_chains_selector.push_back(merkle_root.source_chain_selector);
+            merkle_root_source_chains_selector.push_back(
+                merkle_root.source_chain_selector
+            );
             merkle_root_min_seq_nrs.push_back(merkle_root.min_seq_nr);
             merkle_root_max_seq_nrs.push_back(merkle_root.max_seq_nr);
             merkle_root_values.push_back(merkle_root.merkle_root);
@@ -1241,14 +1243,12 @@ module ccip_offramp::offramp {
 
     public entry fun transfer_ownership(caller: &signer, to: address) acquires OffRampState {
         let state = borrow_state_mut();
-        ownable::transfer_ownership(
-            signer::address_of(caller), &mut state.ownable_state, to
-        )
+        ownable::transfer_ownership(caller, &mut state.ownable_state, to)
     }
 
     public entry fun accept_ownership(caller: &signer) acquires OffRampState {
         let state = borrow_state_mut();
-        ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
+        ownable::accept_ownership(caller, &mut state.ownable_state)
     }
 
     public entry fun execute_ownership_transfer(
@@ -1273,7 +1273,7 @@ module ccip_offramp::offramp {
     ) acquires OffRampState {
         let state = borrow_state_mut();
         ocr3_base::set_ocr3_config(
-            signer::address_of(caller),
+            caller,
             &mut state.ocr3_base_state,
             config_digest,
             ocr_plugin_type,
