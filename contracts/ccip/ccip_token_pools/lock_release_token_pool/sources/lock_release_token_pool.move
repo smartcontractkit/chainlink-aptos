@@ -56,6 +56,9 @@ module lock_release_token_pool::lock_release_token_pool {
         );
         let metadata = object::address_to_object<Metadata>(@lock_release_local_token);
 
+        // create an Account on the object for event handles.
+        account::create_account_if_does_not_exist(@lock_release_token_pool);
+
         // the name of this module. if incorrect, callbacks will fail to be registered and
         // register_pool will revert.
         let token_pool_module_name = b"lock_release_token_pool";
@@ -301,7 +304,7 @@ module lock_release_token_pool::lock_release_token_pool {
             dest_pool_data
         );
 
-        token_pool::emit_locked_or_burned(&mut pool.token_pool_state, fa_amount);
+        token_pool::emit_locked(&mut pool.token_pool_state, fa_amount);
     }
 
     public fun release_or_mint<T: key>(
@@ -336,7 +339,7 @@ module lock_release_token_pool::lock_release_token_pool {
 
         let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
 
-        token_pool::emit_released_or_minted(
+        token_pool::emit_released(
             &mut pool.token_pool_state,
             recipient,
             local_amount
