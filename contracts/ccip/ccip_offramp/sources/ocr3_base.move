@@ -320,9 +320,10 @@ module ccip_offramp::ocr3_base {
     inline fun hash_report(
         report: vector<u8>, config_digest: vector<u8>, sequence_bytes: vector<u8>
     ): vector<u8> {
-        report.append(config_digest);
-        report.append(sequence_bytes);
-        aptos_hash::blake2b_256(report)
+        let combined = copy report;
+        combined.append(config_digest);
+        combined.append(sequence_bytes);
+        aptos_hash::blake2b_256(combined)
     }
 
     inline fun verify_signature(
