@@ -490,7 +490,7 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 		t.Skip("Skipping persistent tests as TEST_DB_URL is not set in CI")
 	}
 	db := sqltest.NewDB(t, dsn)
-	
+
 	keystore := testutils.NewTestKeystore(t)
 	keystore.AddKey(privateKey)
 
@@ -738,6 +738,27 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 			evt := seq.Data.(*DoubleValueEvent)
 			require.LessOrEqual(t, evt.Number, uint64(15))
 			require.GreaterOrEqual(t, seq.Head.Timestamp, midTs)
+		}
+	})
+
+	t.Run("QueryKeyWithMetadata - Enriched event metadata", func(t *testing.T) {
+		extReader, ok := chainReader.(ExtendedContractReader)
+		require.True(t, ok, "chainReader does not implement ExtendedContractReader")
+
+		enrichedSeqs, err := extReader.QueryKeyWithMetadata(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "DoubleValueEvent"},
+			query.LimitAndSort{Limit: query.CountLimit(10)},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, enrichedSeqs, "expected at least one enriched event")
+
+		for _, seqMeta := range enrichedSeqs {
+			require.NotEmpty(t, seqMeta.Sequence.Cursor, "cursor should be set")
+			require.NotEqual(t, uint64(0), seqMeta.TxVersion, "tx version must be non zero")
+			require.NotEmpty(t, seqMeta.TxHash, "tx hash must not be empty")
 		}
 	})
 
