@@ -107,14 +107,12 @@ module ccip_token_pool::token_pool_test {
 
     #[test]
     #[expected_failure(abort_code = 196618, location = ccip_token_pool::token_pool)]
-    fun test_multiplication_overflow_protection() {
-        // Test for multiplication overflow protection
-        // Using a very large value that would overflow when multiplied by 10^18
-        let remote_amount: u256 = 0xffffffffffffffffffffffffffffffff; // Extremely large value
-        let remote_decimals: u8 = 0; // 0 decimals
-        let local_decimals: u8 = 18; // 18 decimals
+    fun test_local_amount_u64_overflow() {
+        let remote_amount: u256 = 0xffffffffffffffffffffffffffffffff;
+        let remote_decimals: u8 = 0;
+        let local_decimals: u8 = 18;
 
-        // E_DECIMAL_OVERFLOW error
+        // E_INVALID_ENCODED_AMOUNT error
         let _local_amount =
             token_pool::calculate_local_amount(
                 remote_amount, remote_decimals, local_decimals
