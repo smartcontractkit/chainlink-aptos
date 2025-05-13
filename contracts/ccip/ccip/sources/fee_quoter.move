@@ -585,7 +585,7 @@ module ccip::fee_quoter {
         _fee_token_store: address,
         extra_args: vector<u8>
     ): u64 acquires FeeQuoterState {
-        let state = borrow_state_mut();
+        let state = borrow_state();
 
         let dest_chain_config = get_dest_chain_config_internal(
             state, dest_chain_selector
