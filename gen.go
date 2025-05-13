@@ -1,5 +1,9 @@
 package aptos
 
+//go:generate go run ./cmd/bindgen --input ./contracts/link-token/sources/allowlist.move --output ./bindings/link-token/allowlist
+// //go:generate go run ./cmd/bindgen --input ./contracts/link-token/sources/link_token.move --output ./bindings/link-token/link_token
+//go:generate go run ./cmd/bindgen --input ./contracts/link-token/sources/ownable.move --output ./bindings/link-token/ownable
+
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/auth.move --output ./bindings/ccip/auth
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/fee_quoter.move --output ./bindings/ccip/fee_quoter
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/receiver_registry.move --output ./bindings/ccip/receiver_registry
