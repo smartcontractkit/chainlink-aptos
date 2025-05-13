@@ -520,6 +520,11 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 						EventHandleFieldName:  "double_value_events",
 						EventAccountAddress:   "",
 					},
+					"SingleValueEvent": {
+						EventHandleStructName: "EventStore",
+						EventHandleFieldName:  "single_value_events",
+						EventAccountAddress:   "",
+					},
 				},
 			},
 		},
@@ -543,6 +548,41 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 		)
 		require.NoError(t, err)
 		require.NotEmpty(t, seqs)
+	})
+
+	t.Run("Events stored separately", func(t *testing.T) {
+		doubleSeqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "DoubleValueEvent"},
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, doubleSeqs, "Expected DoubleValueEvent events")
+
+		singleSeqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "SingleValueEvent"},
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, singleSeqs, "Expected SingleValueEvent events")
+
+		for _, seq := range doubleSeqs {
+			evt, ok := seq.Data.(*DoubleValueEvent)
+			require.True(t, ok, "Expected DoubleValueEvent type")
+			require.NotEqual(t, uint64(0), evt.Number, "DoubleValueEvent number should be non-zero")
+			require.NotEmpty(t, evt.Text, "DoubleValueEvent text should not be empty")
+		}
+
+		for _, seq := range singleSeqs {
+			evt, ok := seq.Data.(*SingleValueEvent)
+			require.True(t, ok, "Expected SingleValueEvent type")
+			require.NotEqual(t, uint64(0), evt.SingleUintValue, "SingleValueEvent value should be non-zero")
+		}
 	})
 
 	t.Run("Filter by numeric value", func(t *testing.T) {

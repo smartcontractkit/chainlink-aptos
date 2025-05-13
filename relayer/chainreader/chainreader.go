@@ -97,7 +97,8 @@ func (a *aptosChainReader) syncEvent(ctx context.Context, boundAddress aptos.Acc
 	}
 
 	eventHandle := boundAddress.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
-	latestOffset, err := a.dbStore.GetLatestOffset(ctx, eventAccountAddress.String(), eventHandle)
+	eventFieldName := eventConfig.EventHandleFieldName
+	latestOffset, err := a.dbStore.GetLatestOffset(ctx, eventAccountAddress.String(), eventHandle, eventFieldName)
 	if err != nil {
 		return fmt.Errorf("syncEvent: failed to get latest offset: %w", err)
 	}
@@ -105,7 +106,7 @@ func (a *aptosChainReader) syncEvent(ctx context.Context, boundAddress aptos.Acc
 	var batchSize uint64 = 25
 	var records []EventRecord
 	for {
-		newEvents, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventConfig.EventHandleFieldName, &latestOffset, &batchSize)
+		newEvents, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventFieldName, &latestOffset, &batchSize)
 		if err != nil {
 			a.logger.Errorw("syncEvent: failed to fetch new events", "error", err)
 			// If fetching fails, we continue with what is already in the DB
@@ -132,6 +133,7 @@ func (a *aptosChainReader) syncEvent(ctx context.Context, boundAddress aptos.Acc
 			record := EventRecord{
 				EventAccountAddress: eventAccountAddress.String(),
 				EventHandle:         eventHandle,
+				EventFieldName:      eventFieldName,
 				EventOffset:         &event.SequenceNumber,
 				TxVersion:           event.Version,
 				BlockHeight:         head.Height,
@@ -460,7 +462,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		return nil, fmt.Errorf("syncEvent error: %w", err)
 	}
 
-	dbRecords, err := a.dbStore.QueryEvents(ctx, eventAccountAddress.String(), eventHandle, expressions, limitAndSort)
+	dbRecords, err := a.dbStore.QueryEvents(ctx, eventAccountAddress.String(), eventHandle, eventConfig.EventHandleFieldName, expressions, limitAndSort)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query events from db: %w", err)
 	}
