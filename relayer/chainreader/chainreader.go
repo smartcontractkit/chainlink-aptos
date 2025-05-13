@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/aptos-labs/aptos-go-sdk"
@@ -39,6 +40,11 @@ type aptosChainReader struct {
 }
 
 var _ types.ContractTypeProvider = &aptosChainReader{}
+
+type ExtendedContractReader interface {
+	types.ContractReader
+	QueryKeyWithMetadata(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]SequenceWithMetadata, error)
+}
 
 func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config ChainReaderConfig, ds sqlutil.DataSource) types.ContractReader {
 	reader := &aptosChainReader{
@@ -126,8 +132,8 @@ func (a *aptosChainReader) syncEvent(ctx context.Context, boundAddress aptos.Acc
 			record := EventRecord{
 				EventAccountAddress: eventAccountAddress.String(),
 				EventHandle:         eventHandle,
-				EventOffset:         event.SequenceNumber,
-				BlockVersion:        event.Version,
+				EventOffset:         &event.SequenceNumber,
+				TxVersion:           event.Version,
 				BlockHeight:         head.Height,
 				BlockHash:           head.Hash,
 				BlockTimestamp:      head.Timestamp,
@@ -480,7 +486,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		}
 
 		sequence := types.Sequence{
-			Cursor: fmt.Sprintf("%d", rec.EventOffset),
+			Cursor: fmt.Sprintf("%d", rec.ID),
 			Head: types.Head{
 				Height:    rec.BlockHeight,
 				Hash:      rec.BlockHash,
@@ -492,6 +498,39 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	}
 
 	return sequences, nil
+}
+
+func (a *aptosChainReader) QueryKeyWithMetadata(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]SequenceWithMetadata, error) {
+	seqs, err := a.QueryKey(ctx, contract, filter, limitAndSort, sequenceDataType)
+	if err != nil {
+		return nil, err
+	}
+
+	var enriched []SequenceWithMetadata
+	for _, seq := range seqs {
+		eventID, err := strconv.ParseUint(seq.Cursor, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid event id in cursor %q: %w", seq.Cursor, err)
+		}
+
+		txVersion, err := a.dbStore.GetTxVersionByID(ctx, eventID)
+		if err != nil {
+			return nil, err
+		}
+
+		tx, err := a.client.TransactionByVersion(txVersion)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get tx details for version %d: %w", txVersion, err)
+		}
+
+		enriched = append(enriched, SequenceWithMetadata{
+			Sequence:  seq,
+			TxVersion: txVersion,
+			TxHash:    tx.Hash(),
+		})
+	}
+
+	return enriched, nil
 }
 
 func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContract) error {
