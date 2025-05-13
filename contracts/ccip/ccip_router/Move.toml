@@ -11,7 +11,7 @@ mcms = "_"
 mcms_register_entrypoints = "_"
 
 [dev-addresses]
-ccip_router = "0x1001"
+ccip_router = "0x824121a3a828f5b7371da004c96fd02d0319518642a9456ca4c36628b713b069"
 ccip_onramp = "0x1002"
 ccip = "0x1000"
 mcms = "0x4000"
