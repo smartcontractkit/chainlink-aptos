@@ -7,6 +7,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/compile"
 	module_allowlist "github.com/smartcontractkit/chainlink-aptos/bindings/link-token/allowlist"
+	module_link_token "github.com/smartcontractkit/chainlink-aptos/bindings/link-token/link_token"
 	module_ownable "github.com/smartcontractkit/chainlink-aptos/bindings/link-token/ownable"
 	"github.com/smartcontractkit/chainlink-aptos/contracts"
 )
@@ -15,6 +16,7 @@ type LinkToken interface {
 	Address() aptos.AccountAddress
 
 	Allowlist() module_allowlist.AllowlistInterface
+	LinkToken() module_link_token.LinkTokenInterface
 	Ownable() module_ownable.OwnableInterface
 }
 
@@ -24,6 +26,7 @@ type LinkTokenContact struct {
 	address aptos.AccountAddress
 
 	allowlist module_allowlist.AllowlistInterface
+	linkToken module_link_token.LinkTokenInterface
 	ownable   module_ownable.OwnableInterface
 }
 
@@ -33,6 +36,10 @@ func (l LinkTokenContact) Address() aptos.AccountAddress {
 
 func (l LinkTokenContact) Allowlist() module_allowlist.AllowlistInterface {
 	return l.allowlist
+}
+
+func (l LinkTokenContact) LinkToken() module_link_token.LinkTokenInterface {
+	return l.linkToken
 }
 
 func (l LinkTokenContact) Ownable() module_ownable.OwnableInterface {
