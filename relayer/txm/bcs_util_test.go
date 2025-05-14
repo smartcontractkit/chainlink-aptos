@@ -134,4 +134,48 @@ func TestGetBcsValues(t *testing.T) {
 		require.EqualValues(t, value1, decoded[0])
 		require.EqualValues(t, value2, decoded[1])
 	})
+	t.Run("*uint8,*uint16", func(t *testing.T) {
+		t.Parallel()
+		value1 := uint8(1)
+		typeTag1, err := CreateTypeTag("0x1::option::Option<u8>")
+		require.NoError(t, err)
+		encoded1, err := CreateBcsValue(typeTag1, &value1)
+		require.NoError(t, err)
+
+		var value2 *uint16
+		typeTag2, err := CreateTypeTag("0x1::option::Option<u16>")
+		require.NoError(t, err)
+		encoded2, err := CreateBcsValue(typeTag2, value2)
+		require.NoError(t, err)
+
+		bcs := append(encoded1, encoded2...)
+
+		decoded, err := GetBcsValues(bcs, typeTag1, typeTag2)
+		require.NoError(t, err)
+		require.Len(t, decoded, 2)
+		require.EqualValues(t, &value1, decoded[0])
+		require.EqualValues(t, value2, decoded[1])
+	})
+	t.Run("*string,**big.Int", func(t *testing.T) {
+		t.Parallel()
+		value1 := "helloworld"
+		typeTag1, err := CreateTypeTag("0x1::option::Option<0x1::string::String>")
+		require.NoError(t, err)
+		encoded1, err := CreateBcsValue(typeTag1, &value1)
+		require.NoError(t, err)
+
+		value2 := big.NewInt(1234567890)
+		typeTag2, err := CreateTypeTag("0x1::option::Option<u256>")
+		require.NoError(t, err)
+		encoded2, err := CreateBcsValue(typeTag2, &value2)
+		require.NoError(t, err)
+
+		bcs := append(encoded1, encoded2...)
+
+		decoded, err := GetBcsValues(bcs, typeTag1, typeTag2)
+		require.NoError(t, err)
+		require.Len(t, decoded, 2)
+		require.EqualValues(t, &value1, decoded[0])
+		require.EqualValues(t, &value2, decoded[1])
+	})
 }
