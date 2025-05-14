@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS aptos.events (
     block_height TEXT NOT NULL,
     block_hash BYTEA NOT NULL,
     block_timestamp BIGINT NOT NULL,
-    data JSONB NOT NULL
+    data JSONB NOT NULL,
+		UNIQUE (event_account_address, event_handle, event_field_name, tx_version)
 );
 `
 	_, err = store.ds.ExecContext(ctx, createTableSQL)
@@ -88,7 +89,8 @@ INSERT INTO aptos.events (
     block_timestamp,
     data
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-ON CONFLICT DO NOTHING;
+ON CONFLICT (event_account_address, event_handle, event_field_name, tx_version)
+DO NOTHING;
 `
 
 	for _, record := range records {
@@ -158,7 +160,7 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 		if sortDir, ok := limitAndSort.SortBy[0].(query.SortBySequence); ok && sortDir.GetDirection() == query.Desc {
 			direction = "DESC"
 		}
-		baseSQL += " ORDER BY block_timestamp " + direction
+		baseSQL += " ORDER BY tx_version " + direction
 	}
 
 	if limitAndSort.Limit.Count > 0 {
