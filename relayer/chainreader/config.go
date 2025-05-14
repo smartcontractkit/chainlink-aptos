@@ -1,5 +1,9 @@
 package chainreader
 
+import (
+	"github.com/smartcontractkit/chainlink-common/pkg/types"
+)
+
 type ChainReaderConfig struct {
 	IsLoopPlugin bool
 	Modules      map[string]*ChainReaderModule
@@ -64,4 +68,10 @@ type RenamedField struct {
 
 	// Rename sub-fields. This assumes that the event field value is a struct or a map with string keys.
 	SubFieldRenames map[string]RenamedField
+}
+
+type SequenceWithMetadata struct {
+	Sequence  types.Sequence
+	TxVersion uint64
+	TxHash    string
 }
