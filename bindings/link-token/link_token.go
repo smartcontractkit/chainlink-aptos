@@ -63,6 +63,7 @@ func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) LinkToken {
 	return LinkTokenContact{
 		address:   address,
 		allowlist: module_allowlist.NewAllowlist(address, client),
+		linkToken: module_link_token.NewLinkToken(address, client),
 		ownable:   module_ownable.NewOwnable(address, client),
 	}
 }
