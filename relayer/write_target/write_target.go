@@ -111,7 +111,7 @@ type TransmissionState struct {
 }
 
 // NewWriteTargetID returns the capability ID for the write target
-func NewWriteTargetID(chainFamilyName, networkName, chainID, version string) (string, error) {
+func NewWriteTargetID(chainFamilyName, networkName, chainID, tag, version string) (string, error) {
 	// Input args should not be empty
 	if chainFamilyName == "" || version == "" {
 		return "", fmt.Errorf("invalid input: chainFamilyName, and version must not be empty")
@@ -126,7 +126,12 @@ func NewWriteTargetID(chainFamilyName, networkName, chainID, version string) (st
 		networkID = chainID
 	}
 
-	return fmt.Sprintf("%s_%s-%s@%s", CapabilityName, chainFamilyName, networkID, version), nil
+	id := fmt.Sprintf("%s_%s-%s", CapabilityName, chainFamilyName, networkID)
+	if tag != "" {
+		id += ":" + tag
+	}
+
+	return id + "@" + version, nil
 }
 
 // TODO: opts.Config input is not validated for sanity
