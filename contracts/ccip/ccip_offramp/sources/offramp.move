@@ -593,7 +593,8 @@ module ccip_offramp::offramp {
                 // If no non-stale valid price updates are present and the report contains no merkle roots, either
                 // blessed or unblesssed, the entire report is stale and should be rejected.
                 assert!(
-                    commit_report.blessed_merkle_roots.length() > 0 || commit_report.unblessed_merkle_roots.length() > 0,
+                    commit_report.blessed_merkle_roots.length() > 0
+                        || commit_report.unblessed_merkle_roots.length() > 0,
                     error::invalid_argument(E_STALE_COMMIT_REPORT)
                 );
             }
