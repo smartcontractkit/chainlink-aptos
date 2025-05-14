@@ -590,14 +590,19 @@ module ccip_offramp::offramp {
                     gas_usd_per_unit_gas
                 );
             } else {
+                // If no non-stale valid price updates are present and the report contains no merkle roots, either
+                // blessed or unblesssed, the entire report is stale and should be rejected.
                 assert!(
-                    commit_report.blessed_merkle_roots.length() > 0,
+                    commit_report.blessed_merkle_roots.length() > 0 || commit_report.unblessed_merkle_roots.length() > 0,
                     error::invalid_argument(E_STALE_COMMIT_REPORT)
                 );
             }
         };
 
+        // Commit the roots that do require RMN blessing validation. The blessings are checked at the start of this
+        // function.
         commit_merkle_roots(state, commit_report.blessed_merkle_roots, true);
+        // Commit the roots that do not require RMN blessing validation.
         commit_merkle_roots(state, commit_report.unblessed_merkle_roots, false);
 
         event::emit(
