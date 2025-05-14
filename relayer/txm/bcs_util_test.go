@@ -178,8 +178,9 @@ func TestGetBcsValues(t *testing.T) {
 		require.EqualValues(t, &value1, decoded[0])
 		require.EqualValues(t, &value2, decoded[1])
 	})
-	t.Run("**uint8,*big.Int", func(t *testing.T) {
+	t.Run("**uint8,**uint8,*big.Int", func(t *testing.T) {
 		t.Parallel()
+		// optional **uint8 - set
 		value1 := uint8(14)
 		value1Ptr := &value1
 		typeTag1, err := CreateTypeTag("0x1::option::Option<0x1::option::Option<u8>>")
@@ -187,19 +188,29 @@ func TestGetBcsValues(t *testing.T) {
 		encoded1, err := CreateBcsValue(typeTag1, &value1Ptr)
 		require.NoError(t, err)
 
-		value2 := big.NewInt(1234567890)
-		typeTag2, err := CreateTypeTag("u256")
+		// optional **uint8 - unset
+		var value2 *uint8
+		typeTag2, err := CreateTypeTag("0x1::option::Option<0x1::option::Option<u8>>")
 		require.NoError(t, err)
-		encoded2, err := CreateBcsValue(typeTag2, value2)
+		encoded2, err := CreateBcsValue(typeTag2, &value2)
+		require.NoError(t, err)
+
+		// normal *big.Int - should not be de(referenced) to **big.Int/big.Int
+		value3 := big.NewInt(1234567890)
+		typeTag3, err := CreateTypeTag("u256")
+		require.NoError(t, err)
+		encoded3, err := CreateBcsValue(typeTag3, value3)
 		require.NoError(t, err)
 
 		bcs := append(encoded1, encoded2...)
+		bcs = append(bcs, encoded3...)
 
-		decoded, err := GetBcsValues(bcs, typeTag1, typeTag2)
+		decoded, err := GetBcsValues(bcs, typeTag1, typeTag2, typeTag3)
 		require.NoError(t, err)
-		require.Len(t, decoded, 2)
+		require.Len(t, decoded, 3)
 		require.EqualValues(t, &value1Ptr, decoded[0])
-		require.EqualValues(t, value2, decoded[1])
+		require.EqualValues(t, &value2, decoded[1])
+		require.EqualValues(t, value3, decoded[2])
 	})
 	t.Run("*[]uint16,*[]uint32", func(t *testing.T) {
 		t.Parallel()
