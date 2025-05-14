@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 
@@ -490,7 +489,7 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 		t.Skip("Skipping persistent tests as TEST_DB_URL is not set in CI")
 	}
 	db := sqltest.NewDB(t, dsn)
-	
+
 	keystore := testutils.NewTestKeystore(t)
 	keystore.AddKey(privateKey)
 
@@ -520,6 +519,11 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 						EventHandleFieldName:  "double_value_events",
 						EventAccountAddress:   "",
 					},
+					"SingleValueEvent": {
+						EventHandleStructName: "EventStore",
+						EventHandleFieldName:  "single_value_events",
+						EventAccountAddress:   "",
+					},
 				},
 			},
 		},
@@ -543,6 +547,38 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 		)
 		require.NoError(t, err)
 		require.NotEmpty(t, seqs)
+	})
+
+	t.Run("Events stored separately", func(t *testing.T) {
+		doubleSeqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "DoubleValueEvent"},
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, doubleSeqs, "Expected DoubleValueEvent events")
+
+		singleSeqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "SingleValueEvent"},
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, singleSeqs, "Expected SingleValueEvent events")
+
+		for _, seq := range doubleSeqs {
+			_, ok := seq.Data.(*DoubleValueEvent)
+			require.True(t, ok, "Expected DoubleValueEvent type")
+		}
+
+		for _, seq := range singleSeqs {
+			_, ok := seq.Data.(*SingleValueEvent)
+			require.True(t, ok, "Expected SingleValueEvent type")
+		}
 	})
 
 	t.Run("Filter by numeric value", func(t *testing.T) {
@@ -597,7 +633,10 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 	})
 
 	t.Run("Sorted results descending", func(t *testing.T) {
-		seqs, err := chainReader.QueryKey(
+		extReader, ok := chainReader.(ExtendedContractReader)
+		require.True(t, ok, "chainReader does not implement ExtendedContractReader")
+
+		enrichedSeqs, err := extReader.QueryKeyWithMetadata(
 			context.Background(),
 			binding,
 			query.KeyFilter{Key: "DoubleValueEvent"},
@@ -610,14 +649,12 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 			&DoubleValueEvent{},
 		)
 		require.NoError(t, err)
-		require.Len(t, seqs, 10)
+		require.Len(t, enrichedSeqs, 10)
 
-		for i := 0; i < len(seqs)-1; i++ {
-			curr, err := strconv.ParseUint(seqs[i].Cursor, 10, 64)
-			require.NoError(t, err)
-			next, err := strconv.ParseUint(seqs[i+1].Cursor, 10, 64)
-			require.NoError(t, err)
-			require.GreaterOrEqual(t, curr, next)
+		for i := 0; i < len(enrichedSeqs)-1; i++ {
+			curr := enrichedSeqs[i].TxVersion
+			next := enrichedSeqs[i+1].TxVersion
+			require.Greater(t, curr, next, "Expected tx_version in descending order")
 		}
 	})
 
@@ -738,6 +775,27 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 			evt := seq.Data.(*DoubleValueEvent)
 			require.LessOrEqual(t, evt.Number, uint64(15))
 			require.GreaterOrEqual(t, seq.Head.Timestamp, midTs)
+		}
+	})
+
+	t.Run("QueryKeyWithMetadata - Enriched event metadata", func(t *testing.T) {
+		extReader, ok := chainReader.(ExtendedContractReader)
+		require.True(t, ok, "chainReader does not implement ExtendedContractReader")
+
+		enrichedSeqs, err := extReader.QueryKeyWithMetadata(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "DoubleValueEvent"},
+			query.LimitAndSort{Limit: query.CountLimit(10)},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, enrichedSeqs, "expected at least one enriched event")
+
+		for _, seqMeta := range enrichedSeqs {
+			require.NotEmpty(t, seqMeta.Sequence.Cursor, "cursor should be set")
+			require.NotEqual(t, uint64(0), seqMeta.TxVersion, "tx version must be non zero")
+			require.NotEmpty(t, seqMeta.TxHash, "tx hash must not be empty")
 		}
 	})
 
