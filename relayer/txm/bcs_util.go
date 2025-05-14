@@ -476,7 +476,19 @@ func getType(typeTag aptos.TypeTag) reflect.Type {
 	case aptos.TypeTagAddress:
 		return reflect.TypeOf(aptos.AccountAddress{})
 	case aptos.TypeTagStruct:
-		return reflect.TypeOf(string(""))
+		tag := typeTag.Value.(*aptos.StructTag)
+		// Can't use tag.String() as it would contain type parameters
+		tagName := fmt.Sprintf("%s::%s::%s", tag.Address.String(), tag.Module, tag.Name)
+		switch tagName {
+		case "0x1::string::String":
+			return reflect.TypeOf(string(""))
+		case "0x1::option::Option":
+			if len(tag.TypeParams) != 1 {
+				return nil
+			}
+			return reflect.PointerTo(getType(tag.TypeParams[0]))
+		}
+		return nil
 	case aptos.TypeTagVector:
 		elementType := getType(typeTag.Value.(*aptos.VectorTag).TypeParam)
 		return reflect.SliceOf(elementType)
