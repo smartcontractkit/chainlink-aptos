@@ -48,7 +48,7 @@ func TestChainReaderLocal(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("GetLatestValue", func(t *testing.T) {
-		// runGetLatestValueTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
+		runGetLatestValueTest(t, logger, rpcUrl, accountAddress, publicKey, privateKey)
 	})
 
 	t.Run("QueryKeyPersistent", func(t *testing.T) {
