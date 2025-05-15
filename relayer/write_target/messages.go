@@ -170,7 +170,7 @@ func (m *messageBuilder) buildWriteSent(i *requestInfo, head types.Head, txID st
 
 		BlockHash:      hex.EncodeToString(head.Hash),
 		BlockHeight:    head.Height,
-		BlockTimestamp: head.Timestamp,
+		BlockTimestamp: head.Timestamp * 1000, // Convert to milliseconds
 
 		// Execution Context - Source
 		MetaSourceId: i.node,
@@ -211,7 +211,7 @@ func (m *messageBuilder) buildWriteConfirmed(i *requestInfo, head types.Head) *w
 
 		BlockHash:      hex.EncodeToString(head.Hash),
 		BlockHeight:    head.Height,
-		BlockTimestamp: head.Timestamp,
+		BlockTimestamp: head.Timestamp * 1000, // Convert to milliseconds
 
 		// Transmission Info
 		Transmitter: i.reportTransmissionState.Transmitter,
