@@ -278,6 +278,7 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		msg := builder.buildWriteError(info, 0, "failed to fetch the latest head", err.Error())
 		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
 	}
+	head.Timestamp = head.Timestamp * 1000 // Convert to milliseconds
 
 	c.lggr.Debugw("non-empty valid report",
 		"reportID", info.reportInfo.reportID,
