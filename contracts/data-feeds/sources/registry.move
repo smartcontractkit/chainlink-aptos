@@ -473,7 +473,7 @@ module data_feeds::registry {
     fun parse_raw_report(data: &mut vector<u8>): (vector<vector<u8>>, vector<vector<u8>>) {
         let data_len: u64 = vector::length(data);
 
-        // Reverse data to be able to use vector::trim which is gas efficient
+        // reverse data to be able to use vector::trim which is gas efficient
         vector::reverse(data);
 
         let element_width = to_u256(vector::trim(data, data_len - 32));
@@ -481,14 +481,12 @@ module data_feeds::registry {
             element_width == 32,
             32
         );
-        data_len = data_len - 32;
 
-        let count =  to_u256(vector::trim(data, data_len - 32)) as u64;
-        data_len = data_len - 32;
+        let count =  to_u256(vector::trim(data, data_len - 64)) as u64;
 
-        // Check which report type based on length.
-        let is_v03: bool = (data_len + 64) == count * 13 * 32 + 2 * 32;
-        let is_benchmark: bool = (data_len + 64) == count * 3 * 32 + 64;
+        // check which report type based on length.
+        let is_v03: bool = data_len == count * 13 * 32 + 2 * 32;
+        let is_benchmark: bool = data_len == count * 3 * 32 + 64;
 
         let feed_ids;
         let reports;
@@ -496,7 +494,7 @@ module data_feeds::registry {
         if (is_v03) {
             // skip offsets table
             let report_offsets_size = 32 * count;
-            vector::trim(data, data_len - report_offsets_size);
+            vector::trim(data, data_len - report_offsets_size - 64);
 
             (feed_ids, reports) = parse_v03_reports(data, count);
         } else if (is_benchmark) {
