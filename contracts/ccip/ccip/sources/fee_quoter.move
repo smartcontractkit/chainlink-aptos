@@ -195,7 +195,7 @@ module ccip::fee_quoter {
     const E_MESSAGE_TOO_LARGE: u64 = 13;
     const E_UNSUPPORTED_NUMBER_OF_TOKENS: u64 = 14;
     const E_INVALID_EVM_ADDRESS: u64 = 15;
-    const E_INVALID_SVM_ADDRESS: u64 = 16;
+    const E_INVALID_32BYTES_ADDRESS: u64 = 16;
     const E_FEE_TOKEN_COST_TOO_HIGH: u64 = 17;
     const E_MESSAGE_GAS_LIMIT_TOO_HIGH: u64 = 18;
     const E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE: u64 = 19;
@@ -1329,14 +1329,14 @@ module ccip::fee_quoter {
     ) {
         assert!(
             encoded_address.length() == 32,
-            error::invalid_argument(E_INVALID_SVM_ADDRESS)
+            error::invalid_argument(E_INVALID_32BYTES_ADDRESS)
         );
 
         if (must_be_non_zero) {
             let encoded_address_uint = eth_abi::decode_u256_value(encoded_address);
             assert!(
                 encoded_address_uint > 0,
-                error::invalid_argument(E_INVALID_SVM_ADDRESS)
+                error::invalid_argument(E_INVALID_32BYTES_ADDRESS)
             );
         };
     }
