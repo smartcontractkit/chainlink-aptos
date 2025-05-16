@@ -468,6 +468,7 @@ module data_feeds::registry {
     fun parse_raw_report(data: &vector<u8>): (vector<vector<u8>>, vector<vector<u8>>) {
         let data_len: u64 = vector::length(data);
         let offset: u64 = 0;
+
         assert!(
             to_u256be(vector::slice(data, offset, offset + 32)) == 32,
             32
