@@ -1238,6 +1238,8 @@ module ccip::fee_quoter {
         borrow_global_mut<FeeQuoterState>(state_object::object_address())
     }
 
+    // Token prices can be stale. On EVM we have additional fallbacks to a price feed, if configured. Since these
+    // fallbacks don't exist on Aptos, we simply return the price as is.
     inline fun get_token_price_internal(
         state: &FeeQuoterState, token: address
     ): TimestampedPrice {
