@@ -129,6 +129,7 @@ module mcms::mcms_registry {
     const E_NEW_OWNER_MISMATCH: u64 = 17;
     const E_TRANSFER_NOT_ACCEPTED: u64 = 18;
     const E_NOT_PROPOSED_OWNER: u64 = 19;
+    const E_MODULE_NOT_REGISTERED: u64 = 20;
 
     fun init_module(publisher: &signer) {
         move_to(publisher, RegistryState { registered_addresses: smart_table::new() });
@@ -278,7 +279,9 @@ module mcms::mcms_registry {
             let owner_registration = borrow_owner_registration(owner_address);
             let owner_signer =
                 &account::create_signer_with_capability(&owner_registration.owner_cap);
-            move_to(owner_signer, OwnerTransfers { pending_transfers: smart_table::new() });
+            move_to(
+                owner_signer, OwnerTransfers { pending_transfers: smart_table::new() }
+            );
         };
 
         let pending_transfers = borrow_global_mut<OwnerTransfers>(owner_address);
@@ -635,6 +638,11 @@ module mcms::mcms_registry {
         let registration = borrow_owner_registration(owner_address);
 
         let callback_module_name_bytes = *callback_module_name.bytes();
+        assert!(
+            registration.callback_modules.contains(callback_module_name_bytes),
+            error::invalid_state(E_MODULE_NOT_REGISTERED)
+        );
+
         let registered_module =
             registration.callback_modules.borrow(callback_module_name_bytes);
 
