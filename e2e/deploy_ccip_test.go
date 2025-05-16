@@ -36,17 +36,28 @@ import (
 )
 
 func Test_DeployCCIP(t *testing.T) {
-	//client, err := aptos.NewNodeClient("https://api.testnet.aptoslabs.com/v1", 2)
-	client, err := aptos.NewClient(aptos.LocalnetConfig)
-	require.NoError(t, err)
+	localnet := false
+
 	deployerKey := &crypto.Ed25519PrivateKey{}
 	require.NoError(t, deployerKey.FromHex(os.Getenv("DEPLOYER_KEY")))
 	deployerAccount, err := aptos.NewAccountFromSigner(deployerKey)
 	require.NoError(t, err)
-	err = client.Fund(deployerAccount.AccountAddress(), 10000000000)
-	require.NoError(t, err)
 	opts := &bind.TransactOpts{Signer: deployerAccount}
-	chainSelector := mcmstypes.ChainSelector(chain_selectors.APTOS_LOCALNET.Selector)
+
+	var (
+		client        *aptos.Client
+		chainSelector mcmstypes.ChainSelector
+	)
+	if !localnet {
+		client, err = aptos.NewClient(aptos.TestnetConfig)
+		require.NoError(t, err)
+		chainSelector = mcmstypes.ChainSelector(chain_selectors.APTOS_TESTNET.Selector)
+	} else {
+		client, err = aptos.NewClient(aptos.LocalnetConfig)
+		require.NoError(t, err)
+		err = client.Fund(deployerAccount.AccountAddress(), 10000000000)
+		chainSelector = mcmstypes.ChainSelector(chain_selectors.APTOS_LOCALNET.Selector)
+	}
 
 	waitForTransaction := func(hash string) {
 		data, err := client.WaitForTransaction(hash)
@@ -130,7 +141,7 @@ func Test_DeployCCIP(t *testing.T) {
 	linkTokenObjectAddress, err := mcmsContract.MCMSRegistry().GetNewCodeObjectAddress(nil, []byte(linkTokenSeed))
 	require.NoError(t, err)
 	fmt.Printf("Deploying LINK token to: %v\n", linkTokenObjectAddress.StringLong())
-	
+
 	linkTokenStateAddress := linkTokenObjectAddress.NamedObjectAddress([]byte("link::link_token::token_state"))
 	fmt.Printf("LINK Token State address: %v\n", linkTokenStateAddress.StringLong())
 	linkTokenMetadataAddress := linkTokenStateAddress.NamedObjectAddress([]byte("LINK"))
@@ -160,7 +171,7 @@ func Test_DeployCCIP(t *testing.T) {
 		}
 		addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunk(chunk.Metadata, chunk.CodeIndices, chunk.Chunks))
 	}
-	
+
 	// Initialize LINK token
 	boundLinkToken := link_token.Bind(linkTokenObjectAddress, client)
 	maxSupply := big.NewInt(10000000000000)
