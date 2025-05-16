@@ -430,6 +430,7 @@ module data_feeds::registry {
             error::invalid_argument(EEMPTY_WORKFLOW_OWNERS)
         );
         assert_no_duplicates(&allowed_workflow_owners);
+        assert_no_duplicates(&allowed_workflow_names);
 
         registry.allowed_workflow_owners = allowed_workflow_owners;
         registry.allowed_workflow_names = allowed_workflow_names;
