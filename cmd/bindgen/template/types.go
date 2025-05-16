@@ -96,7 +96,7 @@ func createGoTypeFromMove(s string, localStructs map[string]parse.Struct, extern
 			}
 			return tmplType{
 				GoType:   "*" + innerType.GoType,
-				MoveType: fmt.Sprintf("0x1::option::Option::%s", innerType.MoveType),
+				MoveType: fmt.Sprintf("0x1::option::Option<%s>", innerType.MoveType),
 				StdOption: &tmplOption{
 					UnderlyingGoType: innerType.GoType,
 				},
