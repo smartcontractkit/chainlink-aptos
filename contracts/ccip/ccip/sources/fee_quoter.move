@@ -36,6 +36,7 @@ module ccip::fee_quoter {
     const CHAIN_FAMILY_SELECTOR_EVM: vector<u8> = x"2812d52c";
     const CHAIN_FAMILY_SELECTOR_SVM: vector<u8> = x"1e10bdc4";
     const CHAIN_FAMILY_SELECTOR_APTOS: vector<u8> = x"ac77ffec";
+    const CHAIN_FAMILY_SELECTOR_SUI: vector<u8> = x"c4e05953";
 
     const EVM_PRECOMPILE_SPACE: u256 = 1024;
 
@@ -610,7 +611,8 @@ module ccip::fee_quoter {
             if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM) {
                 validate_evm_address(receiver);
                 resolve_generic_gas_limit(dest_chain_config, extra_args)
-            } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS) {
+            } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
+                || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI) {
                 validate_32byte_address(receiver, true);
                 resolve_generic_gas_limit(dest_chain_config, extra_args)
             } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
@@ -1044,7 +1046,8 @@ module ccip::fee_quoter {
     ): (vector<u8>, bool) {
         let chain_family_selector = dest_chain_config.chain_family_selector;
         if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM
-            || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS) {
+            || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
+            || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI) {
             let (gas_limit, allow_out_of_order_execution) =
                 decode_generic_extra_args(extra_args);
             let extra_args_v2 =
@@ -1100,7 +1103,8 @@ module ccip::fee_quoter {
             if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM) {
                 validate_evm_address(dest_token_address);
             } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM
-                || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS) {
+                || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
+                || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI) {
                 validate_32byte_address(dest_token_address, /* must_be_non_zero= */ true);
             };
 
@@ -1175,7 +1179,8 @@ module ccip::fee_quoter {
         assert!(
             chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM
                 || chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM
-                || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS,
+                || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
+                || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI,
             error::invalid_argument(E_INVALID_CHAIN_FAMILY_SELECTOR)
         );
 
