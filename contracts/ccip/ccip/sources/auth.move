@@ -188,31 +188,31 @@ module ccip::auth {
         let stream = bcs_stream::new(data);
 
         if (function_bytes == b"apply_allowed_onramp_updates") {
-            let onramps_to_add =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_address(stream)
-                );
             let onramps_to_remove =
                 bcs_stream::deserialize_vector(
                     &mut stream,
                     |stream| bcs_stream::deserialize_address(stream)
                 );
-            bcs_stream::assert_is_consumed(&stream);
-            apply_allowed_onramp_updates(&caller, onramps_to_add, onramps_to_remove)
-        } else if (function_bytes == b"apply_allowed_offramp_updates") {
-            let offramps_to_add =
+            let onramps_to_add =
                 bcs_stream::deserialize_vector(
                     &mut stream,
                     |stream| bcs_stream::deserialize_address(stream)
                 );
+            bcs_stream::assert_is_consumed(&stream);
+            apply_allowed_onramp_updates(&caller, onramps_to_remove, onramps_to_add)
+        } else if (function_bytes == b"apply_allowed_offramp_updates") {
             let offramps_to_remove =
                 bcs_stream::deserialize_vector(
                     &mut stream,
                     |stream| bcs_stream::deserialize_address(stream)
                 );
+            let offramps_to_add =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_address(stream)
+                );
             bcs_stream::assert_is_consumed(&stream);
-            apply_allowed_offramp_updates(&caller, offramps_to_add, offramps_to_remove)
+            apply_allowed_offramp_updates(&caller, offramps_to_remove, offramps_to_add)
         } else if (function_bytes == b"transfer_ownership") {
             let to = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
@@ -229,5 +229,12 @@ module ccip::auth {
         };
 
         option::none()
+    }
+
+    // ========================== TEST ONLY ==========================
+
+    #[test_only]
+    public fun test_init_module(publisher: &signer) {
+        init_module(publisher);
     }
 }

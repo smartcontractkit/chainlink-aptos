@@ -202,6 +202,7 @@ module mcms::mcms {
     const E_INVALID_ROOT_LEN: u64 = 49;
     const E_NOT_CANCELLER_ROLE: u64 = 50;
     const E_NOT_TIMELOCK_ROLE: u64 = 51;
+    const E_UNKNOWN_MCMS_MODULE: u64 = 52;
 
     fun init_module(publisher: &signer) {
         let bypasser = create_multisig(publisher, BYPASSER_ROLE);
@@ -1264,6 +1265,8 @@ module mcms::mcms {
             } else if (module_name_bytes == b"mcms_registry") {
                 // dispatch to the registry module's functions for code object management.
                 timelock_dispatch_to_registry(function_name_bytes, data);
+            } else {
+                abort E_UNKNOWN_MCMS_MODULE;
             }
         } else {
             // If role is present, it must be a bypasser (calling from `execute`).
@@ -1418,6 +1421,13 @@ module mcms::mcms {
             let new_owner_address = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
             mcms_registry::transfer_code_object(
+                self_signer, object_address, new_owner_address
+            );
+        } else if (function_name_bytes == b"execute_code_object_transfer") {
+            let object_address = bcs_stream::deserialize_address(&mut stream);
+            let new_owner_address = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            mcms_registry::execute_code_object_transfer(
                 self_signer, object_address, new_owner_address
             );
         } else {
@@ -1773,5 +1783,15 @@ module mcms::mcms {
             function_name,
             data
         }
+    }
+
+    #[test_only]
+    public fun test_timelock_dispatch(
+        target: address,
+        module_name: String,
+        function_name: String,
+        data: vector<u8>
+    ) acquires Multisig, MultisigState, Timelock {
+        timelock_dispatch(target, module_name, function_name, data)
     }
 }

@@ -7,7 +7,7 @@ cd "$(dirname -- "$0")/.."
 directories=$(find . -type f -name "Move.toml" -exec dirname {} \;)
 
 for dir in $directories; do
-  if [[ "$dir" == *"vendor"* ]]; then
+  if [[ "$dir" == *"vendored"* ]]; then
     continue
   fi
   echo "$ aptos move test --package-dir \"${dir}\""

@@ -129,6 +129,7 @@ module mcms::mcms_registry {
     const E_NEW_OWNER_MISMATCH: u64 = 17;
     const E_TRANSFER_NOT_ACCEPTED: u64 = 18;
     const E_NOT_PROPOSED_OWNER: u64 = 19;
+    const E_MODULE_NOT_REGISTERED: u64 = 20;
 
     fun init_module(publisher: &signer) {
         move_to(publisher, RegistryState { registered_addresses: smart_table::new() });
@@ -278,7 +279,9 @@ module mcms::mcms_registry {
             let owner_registration = borrow_owner_registration(owner_address);
             let owner_signer =
                 &account::create_signer_with_capability(&owner_registration.owner_cap);
-            move_to(owner_signer, OwnerTransfers { pending_transfers: smart_table::new() });
+            move_to(
+                owner_signer, OwnerTransfers { pending_transfers: smart_table::new() }
+            );
         };
 
         let pending_transfers = borrow_global_mut<OwnerTransfers>(owner_address);
@@ -635,6 +638,11 @@ module mcms::mcms_registry {
         let registration = borrow_owner_registration(owner_address);
 
         let callback_module_name_bytes = *callback_module_name.bytes();
+        assert!(
+            registration.callback_modules.contains(callback_module_name_bytes),
+            error::invalid_state(E_MODULE_NOT_REGISTERED)
+        );
+
         let registered_module =
             registration.callback_modules.borrow(callback_module_name_bytes);
 
@@ -727,5 +735,32 @@ module mcms::mcms_registry {
     #[test_only]
     public fun init_module_for_testing(publisher: &signer) {
         init_module(publisher);
+    }
+
+    #[test_only]
+    public fun test_start_dispatch(
+        callback_address: address,
+        callback_module_name: String,
+        callback_function: String,
+        data: vector<u8>
+    ): Object<Metadata> acquires RegistryState, OwnerRegistration {
+        start_dispatch(
+            callback_address,
+            callback_module_name,
+            callback_function,
+            data
+        )
+    }
+
+    #[test_only]
+    public fun test_finish_dispatch(callback_address: address) acquires RegistryState {
+        finish_dispatch(callback_address)
+    }
+
+    #[test_only]
+    public fun move_from_owner_transfers(owner_address: address) acquires OwnerTransfers {
+        let OwnerTransfers { pending_transfers } =
+            move_from<OwnerTransfers>(owner_address);
+        pending_transfers.destroy();
     }
 }

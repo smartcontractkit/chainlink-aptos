@@ -30,7 +30,6 @@ const (
 func NewAptosWriteTargetMonitor(ctx context.Context, lggr logger.Logger) (*monitor.BeholderClient, error) {
 	// Initialize the Beholder client with a local logger a custom Emitter
 	client := beholder.GetClient().ForPackage("write_target")
-
 	registryMetrics, err := registry.NewMetrics()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new registry metrics: %w", err)

@@ -14,8 +14,11 @@ module mcms::mcms_tests {
     use std::object;
     use std::simple_map;
     use aptos_framework::account;
-    use mcms::params::{Self};
     use std::bcs;
+    use mcms::params::{Self};
+    use mcms::object_code_util;
+    use mcms::mcms_registry;
+    use std::code::{PackageRegistry};
 
     // keccak256("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP_APTOS")
     const MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP: vector<u8> = x"e5a6d1256b00d7ec22512b6b60a3f4d75c559745d2dbf309f77b8b756caabe14";
@@ -119,7 +122,7 @@ module mcms::mcms_tests {
     const OP1_DATA: vector<u8> = x"01a969156fce9a4f08bcdc07b90f338efc630bff8dfa8340500cb6414aca762a4e010c6d636d735f6163636f756e7401106163636570745f6f776e6572736869700100200000000000000000000000000000000000000000000000000000000000000000000000000000000000";
 
     #[test_only]
-    fun setup(deployer: &signer, _owner: &signer, framework: &signer): address {
+    fun setup(deployer: &signer, owner: &signer, framework: &signer): address {
         // setup aptos coin for test
         let (burn, mint) = aptos_coin::initialize_for_test(framework);
         coin::destroy_mint_cap(mint);
@@ -127,6 +130,7 @@ module mcms::mcms_tests {
         // setup deployer account for test
         let deployer_addr = signer::address_of(deployer);
         aptos_framework::account::create_account_for_test(deployer_addr);
+        aptos_framework::account::create_account_for_test(signer::address_of(owner));
 
         // setup test components
         timestamp::set_time_has_started_for_testing(framework);
@@ -137,7 +141,7 @@ module mcms::mcms_tests {
 
         mcms::init_module_for_testing(deployer);
 
-        signer::address_of(deployer)
+        deployer_addr
     }
 
     #[test_only]
@@ -1536,14 +1540,14 @@ module mcms::mcms_tests {
         let id = mcms::hash_operation_batch(calls, TEST_PREDECESSOR, TEST_SALT);
 
         // Verify operation is pending
-        assert!(mcms::timelock_is_operation_pending(id), 0);
+        assert!(mcms::timelock_is_operation_pending(id));
 
         // Cancel the operation
         mcms::test_timelock_cancel(id);
 
         // Verify operation is no longer pending
-        assert!(!mcms::timelock_is_operation_pending(id), 1);
-        assert!(!mcms::timelock_is_operation(id), 2);
+        assert!(!mcms::timelock_is_operation_pending(id));
+        assert!(!mcms::timelock_is_operation(id));
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -2132,6 +2136,42 @@ module mcms::mcms_tests {
         assert!(mcms::timelock_min_delay() == delay, 0);
     }
 
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    #[expected_failure(
+        abort_code = mcms::mcms::E_UNKNOWN_MCMS_MODULE, location = mcms::mcms
+    )]
+    public fun test_unknown_mcms_module(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) {
+        setup(deployer, owner, framework);
+
+        let targets = vector[@mcms];
+        let module_names = vector[string::utf8(b"unknown_module")];
+        let function_names = vector[string::utf8(b"timelock_update_min_delay")];
+        let datas = vector[bcs::to_bytes(&MIN_DELAY)];
+        let predecessor = mcms::zero_hash();
+        let salt = vector[1u8];
+
+        mcms::test_timelock_schedule_batch(
+            targets,
+            module_names,
+            function_names,
+            datas,
+            predecessor,
+            salt,
+            0
+        );
+
+        mcms::timelock_execute_batch(
+            targets,
+            module_names,
+            function_names,
+            datas,
+            predecessor,
+            salt
+        );
+    }
+
     #[test]
     public fun test_merkle__ecdsa_recover_evm_addr() {
         let eth_signed_message_hash =
@@ -2141,5 +2181,656 @@ module mcms::mcms_tests {
         let recovered_addr =
             mcms::test_ecdsa_recover_evm_addr(eth_signed_message_hash, signature);
         assert!(recovered_addr == x"16c9fACed8a1e3C6aEA2B654EEca5617eb900EFf", 1);
+    }
+
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    public fun test_view_getter_functions(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) {
+        setup(deployer, owner, framework);
+
+        assert!(mcms::bypasser_role() == 0);
+        assert!(mcms::canceller_role() == 1);
+        assert!(mcms::proposer_role() == 2);
+        assert!(mcms::timelock_role() == 3);
+
+        assert!(mcms::is_valid_role(0));
+
+        assert!(mcms::num_groups() == 32);
+        assert!(mcms::max_num_signers() == 200);
+        assert!(
+            mcms::zero_hash()
+                == vector[
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0
+                ]
+        );
+
+        let bypasser = mcms::multisig_object(mcms::bypasser_role());
+        let _canceller = mcms::multisig_object(mcms::canceller_role());
+        let proposer = mcms::multisig_object(mcms::proposer_role());
+
+        let config_bypasser = mcms::get_config(mcms::bypasser_role());
+        let config_canceller = mcms::get_config(mcms::canceller_role());
+        let config_proposer = mcms::get_config(mcms::proposer_role());
+
+        let bypasser_signers = mcms::config_signers(&config_bypasser);
+        let canceller_signers = mcms::config_signers(&config_canceller);
+        let proposer_signers = mcms::config_signers(&config_proposer);
+
+        assert!(vector::length(&bypasser_signers) == 0);
+        assert!(vector::length(&canceller_signers) == 0);
+        assert!(vector::length(&proposer_signers) == 0);
+
+        // Test expiring root and op count getters
+        let (root_bypasser, valid_until_bypasser, op_count_bypasser) =
+            mcms::expiring_root_and_op_count(bypasser);
+        assert!(root_bypasser.length() == 0);
+        assert!(valid_until_bypasser == 0);
+        assert!(op_count_bypasser == 0);
+
+        // Test root metadata getters
+        let metadata_bypasser = mcms::root_metadata(bypasser);
+        assert!(mcms::role(metadata_bypasser) == mcms::bypasser_role());
+        assert!(mcms::pre_op_count(metadata_bypasser) == 0);
+        assert!(mcms::post_op_count(metadata_bypasser) == 0);
+        assert!(!mcms::override_previous_root(metadata_bypasser));
+
+        // Test get_root_metadata view function
+        let root_metadata = mcms::get_root_metadata(mcms::proposer_role());
+        assert!(mcms::role(root_metadata) == mcms::proposer_role());
+
+        // Test get_op_count function
+        let op_count = mcms::get_op_count(mcms::proposer_role());
+        assert!(op_count == 0);
+
+        // Test get_root function
+        let (root, valid_until) = mcms::get_root(mcms::proposer_role());
+        assert!(root.length() == 0);
+        assert!(valid_until == 0);
+
+        // Test timelock view functions
+        assert!(mcms::timelock_min_delay() == 0);
+        assert!(mcms::timelock_get_blocked_functions_count() == 0);
+
+        // Test signers map functions
+        let signers_map = mcms::signers(proposer);
+        assert!(simple_map::length(&signers_map) == 0);
+    }
+
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    public fun test_view_getter_functions_after_config(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) {
+        // Setup the test environment
+        setup(deployer, owner, framework);
+
+        // Set a config to test view functions after configuration
+        let role = mcms::proposer_role();
+        mcms::set_config(
+            owner,
+            role,
+            vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3],
+            SIGNER_GROUPS,
+            GROUP_QUORUMS,
+            GROUP_PARENTS,
+            true
+        );
+
+        // Test getting config after setting
+        let config = mcms::get_config(role);
+        let signers = mcms::config_signers(&config);
+        assert!(vector::length(&signers) == 3, 0);
+
+        // Test group quorums and parents getters
+        let group_quorums = mcms::config_group_quorums(&config);
+        let group_parents = mcms::config_group_parents(&config);
+        assert!(group_quorums == GROUP_QUORUMS, 1);
+        assert!(group_parents == GROUP_PARENTS, 2);
+
+        // Test signers map after configuration
+        let multisig = mcms::multisig_object(role);
+        let signers_map = mcms::signers(multisig);
+        assert!(simple_map::length(&signers_map) == 3, 3);
+        assert!(simple_map::contains_key(&signers_map, &PROPOSER_ADDR1), 4);
+        assert!(simple_map::contains_key(&signers_map, &PROPOSER_ADDR2), 5);
+        assert!(simple_map::contains_key(&signers_map, &PROPOSER_ADDR3), 6);
+
+        // Test signer_view function
+        let signer1 = *simple_map::borrow(&signers_map, &PROPOSER_ADDR1);
+        let (addr, index, group) = mcms::signer_view(&signer1);
+        assert!(addr == PROPOSER_ADDR1, 7);
+        assert!(index == 0, 8);
+        assert!(group == 0, 9);
+    }
+
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    public fun test_timelock_view_functions(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) {
+        setup(deployer, owner, framework);
+
+        assert!(mcms::timelock_min_delay() == 0);
+        assert!(mcms::timelock_get_blocked_functions_count() == 0);
+
+        mcms::test_timelock_block_function(
+            TEST_TARGET_ADDRESS,
+            string::utf8(b"test_module"),
+            string::utf8(b"test_function")
+        );
+
+        assert!(mcms::timelock_get_blocked_functions_count() == 1);
+
+        let blocked_fn = mcms::timelock_get_blocked_function(0);
+        assert!(mcms::target(blocked_fn) == TEST_TARGET_ADDRESS);
+        assert!(mcms::module_name(blocked_fn) == string::utf8(b"test_module"));
+        assert!(mcms::function_name(blocked_fn) == string::utf8(b"test_function"), 5);
+
+        let new_delay = 10;
+        mcms::test_timelock_update_min_delay(new_delay);
+        assert!(mcms::timelock_min_delay() == new_delay);
+
+        // Schedule a batch operation and test operation status getters
+        let targets = vector[@mcms];
+        let module_names = vector[string::utf8(b"mcms")];
+        let function_names = vector[string::utf8(b"timelock_update_min_delay")];
+        let data = bcs::to_bytes(&MIN_DELAY);
+        let datas = vector[data];
+        let predecessor = mcms::zero_hash();
+        let salt = vector[1u8];
+        // Use a delay that is greater than the min_delay to avoid E_INSUFFICIENT_DELAY error
+        let delay = 100;
+
+        let calls = mcms::create_calls(targets, module_names, function_names, datas);
+        let id = mcms::hash_operation_batch(calls, predecessor, salt);
+
+        assert!(!mcms::timelock_is_operation(id));
+        assert!(!mcms::timelock_is_operation_pending(id));
+        assert!(!mcms::timelock_is_operation_ready(id)); // Not ready yet due to delay
+        assert!(!mcms::timelock_is_operation_done(id));
+
+        let timestamp = mcms::timelock_get_timestamp(id);
+        assert!(timestamp == 0);
+
+        mcms::test_timelock_schedule_batch(
+            targets,
+            module_names,
+            function_names,
+            datas,
+            predecessor,
+            salt,
+            delay
+        );
+
+        assert!(mcms::timelock_is_operation(id));
+        assert!(mcms::timelock_is_operation_pending(id));
+        assert!(!mcms::timelock_is_operation_ready(id)); // Not ready yet due to delay
+        assert!(!mcms::timelock_is_operation_done(id));
+
+        // Get timestamp and verify it's in the future
+        let timestamp = mcms::timelock_get_timestamp(id);
+        assert!(timestamp > timestamp::now_seconds());
+
+        timestamp::update_global_time_for_test_secs(TIMESTAMP + delay + 100);
+        assert!(mcms::timelock_is_operation_ready(id));
+    }
+
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    public fun test_function_view_functions(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) {
+        setup(deployer, owner, framework);
+
+        let target = @0x123;
+        let module_name = string::utf8(b"test_module");
+        let function_name = string::utf8(b"test_function");
+
+        // Test function helper getters
+        let targets = vector[target];
+        let module_names = vector[module_name];
+        let function_names = vector[function_name];
+        let datas = vector[vector[0u8]];
+
+        let calls = mcms::create_calls(targets, module_names, function_names, datas);
+        assert!(vector::length(&calls) == 1, 0);
+
+        // Test function view functions
+        let data = mcms::data(calls[0]);
+        assert!(data == vector[0u8], 1);
+
+        // Test blocked functions view functions
+        mcms::test_timelock_block_function(target, module_name, function_name);
+        let blocked_fns = mcms::timelock_get_blocked_functions();
+        assert!(vector::length(&blocked_fns) == 1, 2);
+
+        // Test function getters on blocked function
+        let blocked_fn = blocked_fns[0];
+        assert!(mcms::target(blocked_fn) == target, 3);
+        assert!(mcms::module_name(blocked_fn) == module_name, 4);
+        assert!(mcms::function_name(blocked_fn) == function_name, 5);
+    }
+
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    public fun test_timelock_dispatch_to_self(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) {
+        setup(deployer, owner, framework);
+
+        mcms_account::transfer_ownership_to_self(owner);
+        mcms_account::accept_ownership(deployer);
+
+        // mcms::set_config
+        let target = @mcms;
+        let module_name = string::utf8(b"mcms");
+        let function_name = string::utf8(b"set_config");
+
+        let data = bcs::to_bytes(&mcms::proposer_role());
+        data.append(
+            bcs::to_bytes(&vector[PROPOSER_ADDR1, PROPOSER_ADDR2, PROPOSER_ADDR3])
+        );
+        data.append(bcs::to_bytes(&SIGNER_GROUPS));
+        data.append(bcs::to_bytes(&GROUP_QUORUMS));
+        data.append(bcs::to_bytes(&GROUP_PARENTS));
+        data.append(bcs::to_bytes(&true));
+
+        mcms::test_timelock_dispatch(target, module_name, function_name, data);
+
+        // timelock_schedule_batch
+        let targets = vector[@mcms];
+        let module_names = vector[string::utf8(b"mcms")];
+        let function_names = vector[string::utf8(b"set_config")];
+        let datas = vector[data];
+        let predecessor = mcms::zero_hash();
+        let salt = vector[1u8];
+        let delay = 0;
+
+        dispatch_timelock_schedule_batch(
+            targets,
+            module_names,
+            function_names,
+            datas,
+            predecessor,
+            salt,
+            delay
+        );
+
+        // timelock_execute_batch
+        let timelock_execute_batch_data = bcs::to_bytes(&targets);
+        timelock_execute_batch_data.append(bcs::to_bytes(&module_names));
+        timelock_execute_batch_data.append(bcs::to_bytes(&function_names));
+        timelock_execute_batch_data.append(bcs::to_bytes(&datas));
+        timelock_execute_batch_data.append(bcs::to_bytes(&predecessor));
+        timelock_execute_batch_data.append(bcs::to_bytes(&salt));
+        mcms::test_timelock_dispatch(
+            target,
+            string::utf8(b"mcms"),
+            string::utf8(b"timelock_execute_batch"),
+            timelock_execute_batch_data
+        );
+
+        // timelock_bypasser_execute_batch
+        let bypasser_execute_batch_data = bcs::to_bytes(&targets);
+        bypasser_execute_batch_data.append(bcs::to_bytes(&module_names));
+        bypasser_execute_batch_data.append(bcs::to_bytes(&function_names));
+        bypasser_execute_batch_data.append(bcs::to_bytes(&datas));
+
+        mcms::test_timelock_dispatch(
+            target,
+            string::utf8(b"mcms"),
+            string::utf8(b"timelock_bypasser_execute_batch"),
+            bypasser_execute_batch_data
+        );
+
+        // test_timelock_cancel
+        // First schedule the operation for `set_config`
+        let salt = vector[2u8];
+        dispatch_timelock_schedule_batch(
+            targets,
+            module_names,
+            function_names,
+            datas,
+            predecessor,
+            salt,
+            delay
+        );
+        // Create calls for set_config
+        let calls = mcms::create_calls(targets, module_names, function_names, datas);
+        let id = mcms::hash_operation_batch(calls, predecessor, salt);
+        let timelock_cancel_data = bcs::to_bytes(&id);
+        mcms::test_timelock_dispatch(
+            target,
+            string::utf8(b"mcms"),
+            string::utf8(b"timelock_cancel"),
+            timelock_cancel_data
+        );
+
+        dispatch_timelock_schedule_batch(
+            vector[@mcms],
+            vector[string::utf8(b"mcms")],
+            vector[string::utf8(b"timelock_update_min_delay")],
+            vector[bcs::to_bytes(&100)],
+            mcms::zero_hash(), // predecessor
+            vector[1u8], // salt
+            0 // delay
+        );
+        mcms::test_timelock_dispatch(
+            target,
+            string::utf8(b"mcms"),
+            string::utf8(b"timelock_update_min_delay"),
+            bcs::to_bytes(&100)
+        );
+
+        // reset delay
+        mcms::test_timelock_update_min_delay(0);
+
+        let data = bcs::to_bytes(&@mcms);
+        data.append(bcs::to_bytes(&string::utf8(b"mcms")));
+        data.append(bcs::to_bytes(&string::utf8(b"timelock_update_min_delay")));
+        dispatch_timelock_schedule_batch(
+            vector[@mcms],
+            vector[string::utf8(b"mcms")],
+            vector[string::utf8(b"timelock_block_function")],
+            vector[data],
+            mcms::zero_hash(), // predecessor
+            vector[1u8], // salt
+            0 // delay
+        );
+        mcms::test_timelock_dispatch(
+            target,
+            string::utf8(b"mcms"),
+            string::utf8(b"timelock_block_function"),
+            data
+        );
+
+        dispatch_timelock_schedule_batch(
+            vector[@mcms],
+            vector[string::utf8(b"mcms")],
+            vector[string::utf8(b"timelock_unblock_function")],
+            vector[data],
+            mcms::zero_hash(), // predecessor
+            vector[1u8], // salt
+            0 // delay
+        );
+        mcms::test_timelock_dispatch(
+            @mcms,
+            string::utf8(b"mcms"),
+            string::utf8(b"timelock_unblock_function"),
+            data
+        );
+    }
+
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    #[expected_failure(abort_code = 327682, location = mcms::mcms_account)]
+    public fun test_timelock_dispatch_to_account(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) {
+        setup(deployer, owner, framework);
+        mcms_account::transfer_ownership_to_self(owner);
+        mcms_account::accept_ownership(deployer);
+
+        mcms::test_timelock_dispatch(
+            @mcms,
+            string::utf8(b"mcms_account"),
+            string::utf8(b"transfer_ownership"),
+            bcs::to_bytes(&@0x123)
+        );
+        // Fail with E_MUST_BE_PROPOSED_OWNER
+        mcms::test_timelock_dispatch(
+            @mcms,
+            string::utf8(b"mcms_account"),
+            string::utf8(b"accept_ownership"),
+            vector[]
+        );
+    }
+
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    #[expected_failure(abort_code = 196608, location = std::code)]
+    public fun test_timelock_dispatch_to_deployer(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) {
+        setup(deployer, owner, framework);
+        mcms_account::transfer_ownership_to_self(owner);
+        mcms_account::accept_ownership(deployer);
+        mcms_registry::init_module_for_testing(deployer);
+
+        let (metadata, code) = object_code_util::test_metadata_and_code();
+        let code_indices: vector<u16> = vector[0, 1];
+
+        // Serialize data for code indices and code chunks
+        let data = bcs::to_bytes(&metadata);
+        data.append(bcs::to_bytes(&code_indices));
+        data.append(bcs::to_bytes(&code));
+
+        mcms::test_timelock_dispatch(
+            @mcms,
+            string::utf8(b"mcms_deployer"),
+            string::utf8(b"stage_code_chunk"),
+            data
+        );
+
+        mcms::test_timelock_dispatch(
+            @mcms,
+            string::utf8(b"mcms_deployer"),
+            string::utf8(b"cleanup_staging_area"),
+            vector[]
+        );
+
+        // Serialize data for stage_code_chunk_and_publish_to_object
+        let code_indices: vector<u16> = vector[0, 1];
+        let new_owner_seed = vector[1u8];
+        let data = bcs::to_bytes(&metadata);
+        data.append(bcs::to_bytes(&code_indices));
+        data.append(bcs::to_bytes(&code));
+        data.append(bcs::to_bytes(&new_owner_seed));
+
+        mcms::test_timelock_dispatch(
+            @mcms,
+            string::utf8(b"mcms_deployer"),
+            string::utf8(b"stage_code_chunk_and_publish_to_object"),
+            data
+        );
+
+        // upgrade
+        let object_address = mcms_registry::get_new_code_object_address(new_owner_seed);
+        let upgrade_data = bcs::to_bytes(&metadata);
+        upgrade_data.append(bcs::to_bytes(&code_indices));
+        upgrade_data.append(bcs::to_bytes(&code));
+        upgrade_data.append(bcs::to_bytes(&object_address));
+
+        // Will throw `const EALREADY_REQUESTED: u64 = 0x03_0000` from code.rs as we this creates
+        // a second publish request in the same TX
+        mcms::test_timelock_dispatch(
+            @mcms,
+            string::utf8(b"mcms_deployer"),
+            string::utf8(b"stage_code_chunk_and_upgrade_object_code"),
+            upgrade_data
+        );
+    }
+
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    public fun test_timelock_dispatch_to_registry(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) {
+        setup(deployer, owner, framework);
+        mcms_account::transfer_ownership_to_self(owner);
+        mcms_account::accept_ownership(deployer);
+        mcms_registry::init_module_for_testing(deployer);
+
+        let (metadata, code) = object_code_util::test_metadata_and_code();
+        let object_address =
+            object_code_util::publish_code_object(deployer, metadata, code);
+        let data = bcs::to_bytes(&object_address);
+        mcms::test_timelock_dispatch(
+            @mcms,
+            string::utf8(b"mcms_registry"),
+            string::utf8(b"create_owner_for_preexisting_code_object"),
+            data
+        );
+
+        let registered_owner_address =
+            mcms_registry::get_registered_owner_address(object_address);
+        let expected_owner_address =
+            mcms_registry::get_preexisting_code_object_owner_address(object_address);
+        assert!(registered_owner_address == expected_owner_address);
+
+        // Transfer code ownership to registered owner
+        object::transfer(
+            deployer,
+            object::address_to_object<PackageRegistry>(object_address),
+            registered_owner_address
+        );
+
+        // Serialize transfer_code_object
+        let data = bcs::to_bytes(&object_address);
+        let new_owner_address = signer::address_of(owner);
+        data.append(bcs::to_bytes(&new_owner_address));
+        mcms::test_timelock_dispatch(
+            @mcms,
+            string::utf8(b"mcms_registry"),
+            string::utf8(b"transfer_code_object"),
+            data
+        );
+
+        mcms_registry::accept_code_object(owner, object_address);
+
+        // Serialize execute_code_object_transfer
+        let data = bcs::to_bytes(&object_address);
+        data.append(bcs::to_bytes(&new_owner_address));
+        mcms::test_timelock_dispatch(
+            @mcms,
+            string::utf8(b"mcms_registry"),
+            string::utf8(b"execute_code_object_transfer"),
+            data
+        );
+    }
+
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    public fun test_timelock_dispatch_to_registry_accept_code_object(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) {
+        setup(deployer, owner, framework);
+        mcms_account::transfer_ownership_to_self(owner);
+        mcms_account::accept_ownership(deployer);
+        mcms_registry::init_module_for_testing(deployer);
+
+        let (metadata, code) = object_code_util::test_metadata_and_code();
+        let object_address =
+            object_code_util::publish_code_object(deployer, metadata, code);
+        let data = bcs::to_bytes(&object_address);
+        mcms::test_timelock_dispatch(
+            @mcms,
+            string::utf8(b"mcms_registry"),
+            string::utf8(b"create_owner_for_preexisting_code_object"),
+            data
+        );
+
+        let registered_owner_address =
+            mcms_registry::get_registered_owner_address(object_address);
+        let expected_owner_address =
+            mcms_registry::get_preexisting_code_object_owner_address(object_address);
+        assert!(registered_owner_address == expected_owner_address);
+
+        let code_object = object::address_to_object<PackageRegistry>(object_address);
+        // Transfer code ownership to registered owner
+        object::transfer(
+            deployer,
+            code_object,
+            registered_owner_address
+        );
+
+        // Serialize transfer_code_object
+        let data = bcs::to_bytes(&object_address);
+        let new_owner_address = signer::address_of(owner);
+        data.append(bcs::to_bytes(&new_owner_address));
+
+        mcms::test_timelock_dispatch(
+            @mcms,
+            string::utf8(b"mcms_registry"),
+            string::utf8(b"transfer_code_object"),
+            data
+        );
+
+        mcms_registry::accept_code_object(owner, object_address);
+        // Serialize execute_code_object_transfer
+        let data = bcs::to_bytes(&object_address);
+        data.append(bcs::to_bytes(&new_owner_address));
+        mcms::test_timelock_dispatch(
+            @mcms,
+            string::utf8(b"mcms_registry"),
+            string::utf8(b"execute_code_object_transfer"),
+            data
+        );
+
+        assert!(object::owner(code_object) == new_owner_address);
+        // Check that the original owner is kept the same, this is needed as we
+        // keep the signer_cap for the original owner
+        assert!(
+            mcms_registry::get_registered_owner_address(object_address)
+                == registered_owner_address
+        );
+        // Check that the code object is owned by the new owner (not MCMS owned)
+        assert!(!mcms_registry::is_owned_code_object(object_address));
+    }
+
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    #[
+        expected_failure(
+            abort_code = mcms::mcms::E_UNKNOWN_MCMS_REGISTRY_MODULE_FUNCTION,
+            location = mcms::mcms
+        )
+    ]
+    public fun test_timelock_dispatch_to_registry_invalid_module(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) {
+        setup(deployer, owner, framework);
+        mcms_account::transfer_ownership_to_self(owner);
+        mcms_account::accept_ownership(deployer);
+        mcms_registry::init_module_for_testing(deployer);
+
+        let (metadata, code) = object_code_util::test_metadata_and_code();
+        let object_address =
+            object_code_util::publish_code_object(deployer, metadata, code);
+        let data = bcs::to_bytes(&object_address);
+        mcms::test_timelock_dispatch(
+            @mcms,
+            string::utf8(b"mcms_registry"),
+            string::utf8(b"invalid_module_function"),
+            data
+        );
+    }
+
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
+    #[expected_failure(abort_code = mcms::mcms::E_INVALID_ROLE, location = mcms::mcms)]
+    public fun test_invalid_role(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) {
+        setup(deployer, owner, framework);
+        mcms::multisig_object(100);
+    }
+
+    #[test_only]
+    public fun dispatch_timelock_schedule_batch(
+        targets: vector<address>,
+        module_names: vector<String>,
+        function_names: vector<String>,
+        datas: vector<vector<u8>>,
+        predecessor: vector<u8>,
+        salt: vector<u8>,
+        delay: u64
+    ) {
+        let schedule_batch_data = bcs::to_bytes(&targets);
+        schedule_batch_data.append(bcs::to_bytes(&module_names));
+        schedule_batch_data.append(bcs::to_bytes(&function_names));
+        schedule_batch_data.append(bcs::to_bytes(&datas));
+        schedule_batch_data.append(bcs::to_bytes(&predecessor));
+        schedule_batch_data.append(bcs::to_bytes(&salt));
+        schedule_batch_data.append(bcs::to_bytes(&delay));
+
+        mcms::test_timelock_dispatch(
+            targets[0],
+            string::utf8(b"mcms"),
+            string::utf8(b"timelock_schedule_batch"),
+            schedule_batch_data
+        );
     }
 }

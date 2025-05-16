@@ -3,6 +3,7 @@ package parse
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	tree_sitter_move_on_aptos "github.com/aptos-labs/tree-sitter-move-on-aptos/bindings/go"
 	tree_sitter "github.com/smacker/go-tree-sitter"
@@ -149,7 +150,7 @@ func Functions(module []byte) ([]Func, error) {
 			switch capture.Index {
 			case 0:
 				// @attribute
-				if capture.Node.Content(module) == "test" || capture.Node.Content(module) == "test_only" {
+				if strings.Contains(capture.Node.Content(module), "test") || strings.Contains(capture.Node.Content(module), "expected") {
 					testFunc = true
 				}
 				if capture.Node.Content(module) == "view" {
