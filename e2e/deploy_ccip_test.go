@@ -28,6 +28,9 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_onramp"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_router"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/burn_mint_token_pool"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/token_pool"
+	link_token "github.com/smartcontractkit/chainlink-aptos/bindings/link-token"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/mcms"
 	module_mcms "github.com/smartcontractkit/chainlink-aptos/bindings/mcms/mcms"
 )
@@ -118,6 +121,37 @@ func Test_DeployCCIP(t *testing.T) {
 
 	// Accept ownership of MCMS
 	addToProposal(mcmsContract.MCMSAccount().Encoder().AcceptOwnership())
+	
+	// Deploy LINK token
+	linkTokenSeed := "LINK_TOKEN"
+	linkTokenObjectAddress, err := mcmsContract.MCMSRegistry().GetNewCodeObjectAddress(nil, []byte(linkTokenSeed))
+	require.NoError(t, err)
+	fmt.Printf("Deploying LINK token to: %v\n", linkTokenObjectAddress.StringLong())
+	
+	linkTokenPayload, err := link_token.Compile(linkTokenObjectAddress)
+	require.NoError(t, err)
+	chunks, err := bind.CreateChunks(linkTokenPayload, bind.ChunkSizeInBytes)
+	require.NoError(t, err)
+	for i, chunk := range chunks {
+		if i == len(chunks)-1 {
+			addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunkAndPublishToObject(chunk.Metadata, chunk.CodeIndices, chunk.Chunks, []byte(linkTokenSeed)))
+			break
+		}
+		addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunk(chunk.Metadata, chunk.CodeIndices, chunk.Chunks))
+	}
+	
+	// Deploy LINK MCMS Registrar
+	mcmsRegistrarPayload, err := link_token.CompileMCMSRegistrar(linkTokenObjectAddress, mcmsAddress, true)
+	require.NoError(t, err)
+	chunks, err = bind.CreateChunks(mcmsRegistrarPayload, bind.ChunkSizeInBytes)
+	require.NoError(t, err)
+	for i, chunk := range chunks {
+		if i == len(chunks)-1 {
+			addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunkAndUpgradeObjectCode(chunk.Metadata, chunk.CodeIndices, chunk.Chunks, linkTokenObjectAddress))
+			break
+		}
+		addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunk(chunk.Metadata, chunk.CodeIndices, chunk.Chunks))
+	}
 
 	// Deploy CCIP
 	ccipOwnerAddress, err := mcmsContract.MCMSRegistry().GetNewCodeObjectOwnerAddress(nil, []byte(ccip.DefaultSeed))
@@ -128,9 +162,8 @@ func Test_DeployCCIP(t *testing.T) {
 
 	ccipPayload, err := ccip.Compile(ccipObjectAddress, mcmsContract.Address(), true)
 	require.NoError(t, err)
-	chunks, err := bind.CreateChunks(ccipPayload, bind.ChunkSizeInBytes)
+	chunks, err = bind.CreateChunks(ccipPayload, bind.ChunkSizeInBytes)
 	require.NoError(t, err)
-
 	for i, chunk := range chunks {
 		if i == len(chunks)-1 {
 			addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunkAndPublishToObject(chunk.Metadata, chunk.CodeIndices, chunk.Chunks, []byte(ccip.DefaultSeed)))
@@ -187,6 +220,32 @@ func Test_DeployCCIP(t *testing.T) {
 	addToProposal(ccipContract.Auth().Encoder().ApplyAllowedOfframpUpdates(nil, []aptos.AccountAddress{ccipOwnerAddress}))
 	addToProposal(ccipContract.FeeQuoter().Encoder().UpdatePrices([]aptos.AccountAddress{token}, []*big.Int{big.NewInt(1000)}, []uint64{5678}, []*big.Int{big.NewInt(0)}))
 
+	// Deploy token pool on top of link token
+	tokenPoolPayload, err := token_pool.Compile(linkTokenObjectAddress, ccipObjectAddress, mcmsAddress)
+	require.NoError(t, err)
+	chunks, err = bind.CreateChunks(tokenPoolPayload, bind.ChunkSizeInBytes)
+	require.NoError(t, err)
+	for i, chunk := range chunks {
+		if i == len(chunks)-1 {
+			addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunkAndUpgradeObjectCode(chunk.Metadata, chunk.CodeIndices, chunk.Chunks, linkTokenObjectAddress))
+			break
+		}
+		addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunk(chunk.Metadata, chunk.CodeIndices, chunk.Chunks))
+	}
+	
+	// Deploy BurnMintTokenPool on top of link token
+	burnMintTokenPoolPayload, err := burn_mint_token_pool.Compile(linkTokenObjectAddress, ccipObjectAddress, mcmsAddress, linkTokenObjectAddress, linkTokenObjectAddress, true)
+	require.NoError(t, err)
+	chunks, err = bind.CreateChunks(burnMintTokenPoolPayload, bind.ChunkSizeInBytes)
+	require.NoError(t, err)
+	for i, chunk := range chunks {
+		if i == len(chunks)-1 {
+			addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunkAndUpgradeObjectCode(chunk.Metadata, chunk.CodeIndices, chunk.Chunks, linkTokenObjectAddress))
+			break
+		}
+		addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunk(chunk.Metadata, chunk.CodeIndices, chunk.Chunks))
+	}
+	
 	// Build, setRoot and execute proposal
 	timelockProposal, err := proposalBuilder.Build()
 	require.NoError(t, err)
