@@ -45,7 +45,7 @@ func NewOwnable(address aptos.AccountAddress, client aptos.AptosRpcClient) Ownab
 
 type OwnableState struct {
 	TargetObject    bind.StdObject   `move:"aptos_framework::object::Object"`
-	PendingTransfer *PendingTransfer `move:"std::option::Option<PendingTransfer>"`
+	PendingTransfer *PendingTransfer `move:"0x1::option::Option<PendingTransfer>"`
 }
 
 type PendingTransfer struct {

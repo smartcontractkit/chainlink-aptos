@@ -79,10 +79,10 @@ type TokenPoolRegistration struct {
 	DispatchMetadata               bind.StdObject         `move:"aptos_framework::object::Object"`
 	DispatchDepositFungibleStore   bind.StdObject         `move:"aptos_framework::object::Object"`
 	ExecutionState                 byte                   `move:"u8"`
-	ExecutingLockOrBurnInputV1     *LockOrBurnInputV1     `move:"std::option::Option<LockOrBurnInputV1>"`
-	ExecutingReleaseOrMintInputV1  *ReleaseOrMintInputV1  `move:"std::option::Option<ReleaseOrMintInputV1>"`
-	ExecutingLockOrBurnOutputV1    *LockOrBurnOutputV1    `move:"std::option::Option<LockOrBurnOutputV1>"`
-	ExecutingReleaseOrMintOutputV1 *ReleaseOrMintOutputV1 `move:"std::option::Option<ReleaseOrMintOutputV1>"`
+	ExecutingLockOrBurnInputV1     *LockOrBurnInputV1     `move:"0x1::option::Option<LockOrBurnInputV1>"`
+	ExecutingReleaseOrMintInputV1  *ReleaseOrMintInputV1  `move:"0x1::option::Option<ReleaseOrMintInputV1>"`
+	ExecutingLockOrBurnOutputV1    *LockOrBurnOutputV1    `move:"0x1::option::Option<LockOrBurnOutputV1>"`
+	ExecutingReleaseOrMintOutputV1 *ReleaseOrMintOutputV1 `move:"0x1::option::Option<ReleaseOrMintOutputV1>"`
 }
 
 type LockOrBurnInputV1 struct {

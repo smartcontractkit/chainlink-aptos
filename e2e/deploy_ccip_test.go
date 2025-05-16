@@ -36,14 +36,17 @@ import (
 )
 
 func Test_DeployCCIP(t *testing.T) {
-	client, err := aptos.NewNodeClient("https://api.testnet.aptoslabs.com/v1", 2)
+	//client, err := aptos.NewNodeClient("https://api.testnet.aptoslabs.com/v1", 2)
+	client, err := aptos.NewClient(aptos.LocalnetConfig)
 	require.NoError(t, err)
 	deployerKey := &crypto.Ed25519PrivateKey{}
 	require.NoError(t, deployerKey.FromHex(os.Getenv("DEPLOYER_KEY")))
 	deployerAccount, err := aptos.NewAccountFromSigner(deployerKey)
 	require.NoError(t, err)
+	err = client.Fund(deployerAccount.AccountAddress(), 10000000000)
+	require.NoError(t, err)
 	opts := &bind.TransactOpts{Signer: deployerAccount}
-	chainSelector := mcmstypes.ChainSelector(chain_selectors.APTOS_TESTNET.Selector)
+	chainSelector := mcmstypes.ChainSelector(chain_selectors.APTOS_LOCALNET.Selector)
 
 	waitForTransaction := func(hash string) {
 		data, err := client.WaitForTransaction(hash)
@@ -121,13 +124,18 @@ func Test_DeployCCIP(t *testing.T) {
 
 	// Accept ownership of MCMS
 	addToProposal(mcmsContract.MCMSAccount().Encoder().AcceptOwnership())
-	
+
 	// Deploy LINK token
 	linkTokenSeed := "LINK_TOKEN"
 	linkTokenObjectAddress, err := mcmsContract.MCMSRegistry().GetNewCodeObjectAddress(nil, []byte(linkTokenSeed))
 	require.NoError(t, err)
 	fmt.Printf("Deploying LINK token to: %v\n", linkTokenObjectAddress.StringLong())
 	
+	linkTokenStateAddress := linkTokenObjectAddress.NamedObjectAddress([]byte("link::link_token::token_state"))
+	fmt.Printf("LINK Token State address: %v\n", linkTokenStateAddress.StringLong())
+	linkTokenMetadataAddress := linkTokenStateAddress.NamedObjectAddress([]byte("LINK"))
+	fmt.Printf("LINK Token Metadata address: %v\n", linkTokenMetadataAddress.StringLong())
+
 	linkTokenPayload, err := link_token.Compile(linkTokenObjectAddress)
 	require.NoError(t, err)
 	chunks, err := bind.CreateChunks(linkTokenPayload, bind.ChunkSizeInBytes)
@@ -139,7 +147,7 @@ func Test_DeployCCIP(t *testing.T) {
 		}
 		addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunk(chunk.Metadata, chunk.CodeIndices, chunk.Chunks))
 	}
-	
+
 	// Deploy LINK MCMS Registrar
 	mcmsRegistrarPayload, err := link_token.CompileMCMSRegistrar(linkTokenObjectAddress, mcmsAddress, true)
 	require.NoError(t, err)
@@ -152,6 +160,11 @@ func Test_DeployCCIP(t *testing.T) {
 		}
 		addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunk(chunk.Metadata, chunk.CodeIndices, chunk.Chunks))
 	}
+	
+	// Initialize LINK token
+	boundLinkToken := link_token.Bind(linkTokenObjectAddress, client)
+	maxSupply := big.NewInt(10000000000000)
+	addToProposal(boundLinkToken.LinkToken().Encoder().Initialize(&maxSupply, "LinkToken", "LINK", 8, "", ""))
 
 	// Deploy CCIP
 	ccipOwnerAddress, err := mcmsContract.MCMSRegistry().GetNewCodeObjectOwnerAddress(nil, []byte(ccip.DefaultSeed))
@@ -232,9 +245,9 @@ func Test_DeployCCIP(t *testing.T) {
 		}
 		addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunk(chunk.Metadata, chunk.CodeIndices, chunk.Chunks))
 	}
-	
+
 	// Deploy BurnMintTokenPool on top of link token
-	burnMintTokenPoolPayload, err := burn_mint_token_pool.Compile(linkTokenObjectAddress, ccipObjectAddress, mcmsAddress, linkTokenObjectAddress, linkTokenObjectAddress, true)
+	burnMintTokenPoolPayload, err := burn_mint_token_pool.Compile(linkTokenObjectAddress, ccipObjectAddress, mcmsAddress, linkTokenObjectAddress, linkTokenMetadataAddress, true)
 	require.NoError(t, err)
 	chunks, err = bind.CreateChunks(burnMintTokenPoolPayload, bind.ChunkSizeInBytes)
 	require.NoError(t, err)
@@ -245,7 +258,7 @@ func Test_DeployCCIP(t *testing.T) {
 		}
 		addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunk(chunk.Metadata, chunk.CodeIndices, chunk.Chunks))
 	}
-	
+
 	// Build, setRoot and execute proposal
 	timelockProposal, err := proposalBuilder.Build()
 	require.NoError(t, err)
