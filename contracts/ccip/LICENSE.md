@@ -53,3 +53,20 @@ In consideration of the right to use this License’s text and the "Business Sou
 3. To specify a Change Date.
 
 4. Not to modify this License in any other way.
+
+
+
+Content residing under (1) "/contracts/large_packages"; (2) "/contracts/mcms/mcms/sources/utils/bcs_stream.move"; (3) "/contracts/mcms/mcms/sources/mcms_deployer.move" includes software developed by Aptos Labs under the Apache License, Version 2.0, as modified by SmartContract ChainLink Limited SEZC.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+

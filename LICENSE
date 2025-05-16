@@ -24,8 +24,15 @@ THE SOFTWARE.
 
 
 *All content residing under (1) “/contracts/ccip”; (2) “/contracts/mcms”
+(except for "/contracts/mcms/mcms/sources/utils/bcs_stream.move" and
+"/contracts/mcms/mcms/sources/mcms_deployer.move", as described below)
 are licensed under “Business Source License 1.1” with a Change Date of
 March 12, 2029 and Change License to “MIT License”
+
+*All content residing under (1) "/contracts/large_packages"; (2)
+"/contracts/mcms/mcms/sources/utils/bcs_stream.move"; (3)
+"/contracts/mcms/mcms/sources/mcms_deployer.move" are licensed under
+ "Apache License, Version 2.0".
 
 * Content outside of the above mentioned directories or restrictions
 above is available under the "MIT" license as defined above.

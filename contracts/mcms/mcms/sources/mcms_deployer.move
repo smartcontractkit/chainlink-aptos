@@ -1,3 +1,14 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2023 Aptos Labs
+// Modifications copyright 2025 SmartContract ChainLink Limited SEZC
+//
+// Modified from: https://github.com/aptos-labs/aptos-core/blob/ebdfadf4002c35e4095e23c6312eeb28beca8f72/aptos-move/framework/aptos-experimental/sources/large_packages.move
+//
+// Changes:
+// - Updated the code to use the Move 2 syntax and conventions.
+// - Added `assert_is_owner` checks.
+// - Removed publishing to account functionality.
+
 /// This module is a modified version of Aptos' large_packages package, providing functions for publishing and upgrading
 /// MCMS-owned modules of arbitrary sizes via object code deployment.
 module mcms::mcms_deployer {

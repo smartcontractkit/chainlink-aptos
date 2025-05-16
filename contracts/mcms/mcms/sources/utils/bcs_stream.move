@@ -1,5 +1,16 @@
-/// Copied and modified from: https://github.com/aptos-labs/aptos-core/blob/9baf39b6fba7812f09238c91973f61fd0955057c/aptos-move/move-examples/bcs-stream/sources/stream.move
-///
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2023 Aptos Labs
+// Modifications copyright 2025 SmartContract ChainLink Limited SEZC
+//
+// Modified from: https://github.com/aptos-labs/aptos-core/blob/9baf39b6fba7812f09238c91973f61fd0955057c/aptos-move/move-examples/bcs-stream/sources/stream.move
+//
+// Changes:
+// - Added `deserialize_vector_u8` function to deserialize a variable-size vector of u8.
+// - Added `deserialize_fixed_vector_u8` function to deserialize a fixed-size vector of u8.
+// - Added `assert_is_consumed` function to check if the stream has been fully consumed.
+// - Modified formatting and comments for clarity.
+// - Updated the code to use the Move 2 syntax and conventions.
+
 /// This module enables the deserialization of BCS-formatted byte arrays into Move primitive types.
 /// Deserialization Strategies:
 /// - Per-Byte Deserialization: Employed for most types to ensure lower gas consumption, this method processes each byte

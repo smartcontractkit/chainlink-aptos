@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2023 Aptos Labs
+// Modifications copyright 2025 SmartContract ChainLink Limited SEZC
+//
+// Modified from: https://github.com/aptos-labs/aptos-core/blob/ebdfadf4002c35e4095e23c6312eeb28beca8f72/aptos-move/framework/aptos-experimental/sources/large_packages.move
+//
+// Changes:
+// - Updated the code to use the Move 2 syntax and conventions.
+
 /// This provides a framework for uploading large packages to standard accounts or objects.
 /// In each pass, the caller pushes more code by calling `stage_code_chunk`.
 /// In the final call, the caller can use `stage_code_chunk_and_publish_to_account`, `stage_code_chunk_and_publish_to_object`, or
@@ -11,7 +20,6 @@
 module large_packages::large_packages {
     use std::error;
     use std::signer;
-    use std::vector;
     use aptos_std::smart_table::{Self, SmartTable};
 
     use aptos_framework::code::{Self, PackageRegistry};
@@ -102,7 +110,7 @@ module large_packages::large_packages {
         code_chunks: vector<vector<u8>>
     ): &mut StagingArea acquires StagingArea {
         assert!(
-            vector::length(&code_indices) == vector::length(&code_chunks),
+            code_indices.length() == code_chunks.length(),
             error::invalid_argument(ECODE_MISMATCH)
         );
 
@@ -121,20 +129,18 @@ module large_packages::large_packages {
 
         let staging_area = borrow_global_mut<StagingArea>(owner_address);
 
-        if (!vector::is_empty(&metadata_chunk)) {
-            vector::append(&mut staging_area.metadata_serialized, metadata_chunk);
+        if (!metadata_chunk.is_empty()) {
+            staging_area.metadata_serialized.append(metadata_chunk);
         };
 
-        for (i in 0..vector::length(&code_chunks)) {
-            let inner_code = *vector::borrow(&code_chunks, i);
-            let idx = (*vector::borrow(&code_indices, i) as u64);
+        for (i in 0..code_chunks.length()) {
+            let inner_code = code_chunks[i];
+            let idx = (code_indices[i] as u64);
 
-            if (smart_table::contains(&staging_area.code, idx)) {
-                vector::append(
-                    smart_table::borrow_mut(&mut staging_area.code, idx), inner_code
-                );
+            if (staging_area.code.contains(idx)) {
+                staging_area.code.borrow_mut(idx).append(inner_code);
             } else {
-                smart_table::add(&mut staging_area.code, idx, inner_code);
+                staging_area.code.add(idx, inner_code);
                 if (idx > staging_area.last_module_idx) {
                     staging_area.last_module_idx = idx;
                 }
@@ -178,10 +184,7 @@ module large_packages::large_packages {
         let last_module_idx = staging_area.last_module_idx;
         let code = vector[];
         for (i in 0..(last_module_idx + 1)) {
-            vector::push_back(
-                &mut code,
-                *smart_table::borrow(&staging_area.code, i)
-            );
+            code.push_back(*staging_area.code.borrow(i));
         };
         code
     }
@@ -195,6 +198,6 @@ module large_packages::large_packages {
     public entry fun cleanup_staging_area(owner: &signer) acquires StagingArea {
         let StagingArea { metadata_serialized: _, code, last_module_idx: _ } =
             move_from<StagingArea>(signer::address_of(owner));
-        smart_table::destroy(code);
+        code.destroy();
     }
 }
