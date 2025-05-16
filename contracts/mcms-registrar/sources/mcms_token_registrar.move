@@ -20,7 +20,7 @@ module link::mcms_token_registrar {
 
         if (@mcms_register_entrypoints == @0x1) {
             mcms_registry::register_entrypoint(
-                publisher, string::utf8(b"mcms_token_registrar"), McmsCallback {}
+                publisher, string::utf8(b"link_token"), McmsCallback {}
             );
         };
     }
