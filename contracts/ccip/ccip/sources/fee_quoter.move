@@ -40,6 +40,11 @@ module ccip::fee_quoter {
 
     const EVM_PRECOMPILE_SPACE: u256 = 1024;
 
+    // According to the Aptos docs, the first 0xa addresses are reserved for precompiles.
+    // https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/doc/account.md#function-create_framework_reserved_account-1
+    // We use the same range for SUI.
+    const MOVE_PRECOMPILE_SPACE: u256 = 0x0b;
+
     const SVM_EXTRA_ARGS_V1_TAG: vector<u8> = x"1f3b3aba";
     const GENERIC_EXTRA_ARGS_V2_TAG: vector<u8> = x"181dcf10";
 
@@ -609,25 +614,20 @@ module ccip::fee_quoter {
         validate_message(dest_chain_config, data_len, tokens_len);
 
         let gas_limit =
-            if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM) {
-                validate_evm_address(receiver);
-                resolve_generic_gas_limit(dest_chain_config, extra_args)
-            } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
+            if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM
+                || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
                 || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI) {
-                validate_32byte_address(receiver, true);
                 resolve_generic_gas_limit(dest_chain_config, extra_args)
             } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
                 let require_valid_token_receiver = tokens_len > 0;
-                let svm_gas_limit =
-                    resolve_svm_gas_limit(
-                        dest_chain_config, extra_args, require_valid_token_receiver
-                    );
-                let must_be_non_zero = svm_gas_limit > 0;
-                validate_32byte_address(receiver, must_be_non_zero);
-                svm_gas_limit
+                resolve_svm_gas_limit(
+                    dest_chain_config, extra_args, require_valid_token_receiver
+                )
             } else {
                 abort error::invalid_argument(E_UNKNOWN_CHAIN_FAMILY_SELECTOR)
             };
+
+        validate_dest_family_address(chain_family_selector, receiver, gas_limit);
 
         let fee_token_price = get_token_price_internal(state, fee_token);
         assert!(
@@ -1111,13 +1111,9 @@ module ccip::fee_quoter {
                 );
             };
 
-            if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM) {
-                validate_evm_address(dest_token_address);
-            } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM
-                || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
-                || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI) {
-                validate_32byte_address(dest_token_address, /* must_be_non_zero= */ true);
-            };
+            // We pass in 1 as gas_limit as this only matters for SVM address validation. This ensures the address
+            // may not be 0x0.
+            validate_dest_family_address(chain_family_selector, dest_token_address, 1);
 
             let dest_gas_amount =
                 if (token_transfer_fee_config.is_enabled) {
@@ -1324,6 +1320,25 @@ module ccip::fee_quoter {
         );
     }
 
+    inline fun validate_dest_family_address(
+        chain_family_selector: vector<u8>, encoded_address: vector<u8>, gas_limit: u256
+    ) {
+        if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM) {
+            validate_evm_address(encoded_address);
+        } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
+            // SVM addresses don't have a precompile space at the first X addresses, instead we validate that if the gasLimit
+            // is non-zero, the address must not be 0x0.
+            let min_address = 0;
+            if (gas_limit > 0) {
+                min_address = 1;
+            };
+            validate_32byte_address(encoded_address, min_address);
+        } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
+            || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI) {
+            validate_32byte_address(encoded_address, MOVE_PRECOMPILE_SPACE);
+        };
+    }
+
     inline fun validate_evm_address(encoded_address: vector<u8>) {
         assert!(
             encoded_address.length() == 32,
@@ -1343,20 +1358,18 @@ module ccip::fee_quoter {
     }
 
     inline fun validate_32byte_address(
-        encoded_address: vector<u8>, must_be_non_zero: bool
+        encoded_address: vector<u8>, min_value: u256
     ) {
         assert!(
             encoded_address.length() == 32,
             error::invalid_argument(E_INVALID_32BYTES_ADDRESS)
         );
 
-        if (must_be_non_zero) {
-            let encoded_address_uint = eth_abi::decode_u256_value(encoded_address);
-            assert!(
-                encoded_address_uint > 0,
-                error::invalid_argument(E_INVALID_32BYTES_ADDRESS)
-            );
-        };
+        let encoded_address_uint = eth_abi::decode_u256_value(encoded_address);
+        assert!(
+            encoded_address_uint >= min_value,
+            error::invalid_argument(E_INVALID_32BYTES_ADDRESS)
+        );
     }
 
     // ================================================================
