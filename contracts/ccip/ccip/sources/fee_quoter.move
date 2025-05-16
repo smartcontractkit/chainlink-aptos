@@ -36,6 +36,7 @@ module ccip::fee_quoter {
     const CHAIN_FAMILY_SELECTOR_EVM: vector<u8> = x"2812d52c";
     const CHAIN_FAMILY_SELECTOR_SVM: vector<u8> = x"1e10bdc4";
     const CHAIN_FAMILY_SELECTOR_APTOS: vector<u8> = x"ac77ffec";
+    const CHAIN_FAMILY_SELECTOR_SUI: vector<u8> = x"c4e05953";
 
     const EVM_PRECOMPILE_SPACE: u256 = 1024;
 
@@ -195,7 +196,7 @@ module ccip::fee_quoter {
     const E_MESSAGE_TOO_LARGE: u64 = 13;
     const E_UNSUPPORTED_NUMBER_OF_TOKENS: u64 = 14;
     const E_INVALID_EVM_ADDRESS: u64 = 15;
-    const E_INVALID_SVM_ADDRESS: u64 = 16;
+    const E_INVALID_32BYTES_ADDRESS: u64 = 16;
     const E_FEE_TOKEN_COST_TOO_HIGH: u64 = 17;
     const E_MESSAGE_GAS_LIMIT_TOO_HIGH: u64 = 18;
     const E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE: u64 = 19;
@@ -210,6 +211,7 @@ module ccip::fee_quoter {
     const E_INVALID_CHAIN_FAMILY_SELECTOR: u64 = 28;
     const E_TO_TOKEN_AMOUNT_TOO_LARGE: u64 = 29;
     const E_UNKNOWN_FUNCTION: u64 = 30;
+    const E_ZERO_TOKEN_PRICE: u64 = 31;
 
     #[view]
     public fun type_and_version(): String {
@@ -610,7 +612,8 @@ module ccip::fee_quoter {
             if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM) {
                 validate_evm_address(receiver);
                 resolve_generic_gas_limit(dest_chain_config, extra_args)
-            } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS) {
+            } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
+                || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI) {
                 validate_32byte_address(receiver, true);
                 resolve_generic_gas_limit(dest_chain_config, extra_args)
             } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
@@ -627,6 +630,11 @@ module ccip::fee_quoter {
             };
 
         let fee_token_price = get_token_price_internal(state, fee_token);
+        assert!(
+            fee_token_price.value > 0,
+            error::invalid_state(E_ZERO_TOKEN_PRICE)
+        );
+
         let packed_gas_price =
             get_validated_gas_price_internal(
                 state, dest_chain_config, dest_chain_selector
@@ -758,22 +766,17 @@ module ccip::fee_quoter {
     inline fun resolve_generic_gas_limit(
         dest_chain_config: &DestChainConfig, extra_args: vector<u8>
     ): u256 {
-        let extra_args_len = extra_args.length();
-        if (extra_args_len == 0) {
-            dest_chain_config.default_tx_gas_limit as u256
-        } else {
-            let (gas_limit, allow_out_of_order_execution) =
-                decode_generic_extra_args(extra_args);
-            assert!(
-                gas_limit <= (dest_chain_config.max_per_msg_gas_limit as u256),
-                error::invalid_argument(E_MESSAGE_GAS_LIMIT_TOO_HIGH)
-            );
-            assert!(
-                !dest_chain_config.enforce_out_of_order || allow_out_of_order_execution,
-                error::invalid_argument(E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE)
-            );
-            gas_limit
-        }
+        let (gas_limit, allow_out_of_order_execution) =
+            decode_generic_extra_args(dest_chain_config, extra_args);
+        assert!(
+            gas_limit <= (dest_chain_config.max_per_msg_gas_limit as u256),
+            error::invalid_argument(E_MESSAGE_GAS_LIMIT_TOO_HIGH)
+        );
+        assert!(
+            !dest_chain_config.enforce_out_of_order || allow_out_of_order_execution,
+            error::invalid_argument(E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE)
+        );
+        gas_limit
     }
 
     inline fun resolve_svm_gas_limit(
@@ -812,17 +815,27 @@ module ccip::fee_quoter {
         compute_units as u256
     }
 
-    inline fun decode_generic_extra_args(extra_args: vector<u8>): (u256, bool) {
-        // TODO: we need extra validation here. if extra_args length is less than tag length + data length,
-        // vector::slice will revert.
+    inline fun decode_generic_extra_args(
+        dest_chain_config: &DestChainConfig, extra_args: vector<u8>
+    ): (u256, bool) {
         let extra_args_len = extra_args.length();
-        let args_tag = extra_args.slice(0, 4);
-        let args_data = extra_args.slice(4, extra_args_len);
-
-        if (args_tag == GENERIC_EXTRA_ARGS_V2_TAG) {
-            decode_generic_extra_args_v2(args_data)
+        if (extra_args_len == 0) {
+            // If extra args are empty, generate default values.
+            (dest_chain_config.default_tx_gas_limit as u256, false)
         } else {
-            abort error::invalid_argument(E_INVALID_EXTRA_ARGS_TAG)
+            assert!(
+                extra_args_len >= 4,
+                error::invalid_argument(E_INVALID_EXTRA_ARGS_DATA)
+            );
+
+            let args_tag = extra_args.slice(0, 4);
+            let args_data = extra_args.slice(4, extra_args_len);
+
+            if (args_tag == GENERIC_EXTRA_ARGS_V2_TAG) {
+                decode_generic_extra_args_v2(args_data)
+            } else {
+                abort error::invalid_argument(E_INVALID_EXTRA_ARGS_TAG)
+            }
         }
     }
 
@@ -1044,9 +1057,10 @@ module ccip::fee_quoter {
     ): (vector<u8>, bool) {
         let chain_family_selector = dest_chain_config.chain_family_selector;
         if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM
-            || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS) {
+            || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
+            || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI) {
             let (gas_limit, allow_out_of_order_execution) =
-                decode_generic_extra_args(extra_args);
+                decode_generic_extra_args(dest_chain_config, extra_args);
             let extra_args_v2 =
                 encode_generic_extra_args_v2(gas_limit, allow_out_of_order_execution);
             (extra_args_v2, allow_out_of_order_execution)
@@ -1100,7 +1114,8 @@ module ccip::fee_quoter {
             if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM) {
                 validate_evm_address(dest_token_address);
             } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM
-                || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS) {
+                || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
+                || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI) {
                 validate_32byte_address(dest_token_address, /* must_be_non_zero= */ true);
             };
 
@@ -1175,7 +1190,8 @@ module ccip::fee_quoter {
         assert!(
             chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM
                 || chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM
-                || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS,
+                || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
+                || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI,
             error::invalid_argument(E_INVALID_CHAIN_FAMILY_SELECTOR)
         );
 
@@ -1238,6 +1254,8 @@ module ccip::fee_quoter {
         borrow_global_mut<FeeQuoterState>(state_object::object_address())
     }
 
+    // Token prices can be stale. On EVM we have additional fallbacks to a price feed, if configured. Since these
+    // fallbacks don't exist on Aptos, we simply return the price as is.
     inline fun get_token_price_internal(
         state: &FeeQuoterState, token: address
     ): TimestampedPrice {
@@ -1329,14 +1347,14 @@ module ccip::fee_quoter {
     ) {
         assert!(
             encoded_address.length() == 32,
-            error::invalid_argument(E_INVALID_SVM_ADDRESS)
+            error::invalid_argument(E_INVALID_32BYTES_ADDRESS)
         );
 
         if (must_be_non_zero) {
             let encoded_address_uint = eth_abi::decode_u256_value(encoded_address);
             assert!(
                 encoded_address_uint > 0,
-                error::invalid_argument(E_INVALID_SVM_ADDRESS)
+                error::invalid_argument(E_INVALID_32BYTES_ADDRESS)
             );
         };
     }
