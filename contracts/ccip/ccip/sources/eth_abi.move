@@ -19,6 +19,7 @@ module ccip::eth_abi {
     const E_INVALID_BOOL: u64 = 3;
     const E_INVALID_SELECTOR: u64 = 4;
     const E_INVALID_U256_LENGTH: u64 = 5;
+    const E_INTEGER_OVERFLOW: u64 = 6;
 
     public inline fun encode_address(out: &mut vector<u8>, value: address) {
         out.append(bcs::to_bytes(&value))
@@ -170,15 +171,21 @@ module ccip::eth_abi {
     }
 
     public fun decode_u8(stream: &mut ABIStream): u8 {
-        (decode_u256(stream) as u8)
+        let value = decode_u256(stream);
+        assert!(value <= 0xFF, error::invalid_argument(E_INTEGER_OVERFLOW));
+        (value as u8)
     }
 
     public fun decode_u32(stream: &mut ABIStream): u32 {
-        (decode_u256(stream) as u32)
+        let value = decode_u256(stream);
+        assert!(value <= 0xFFFFFFFF, error::invalid_argument(E_INTEGER_OVERFLOW));
+        (value as u32)
     }
 
     public fun decode_u64(stream: &mut ABIStream): u64 {
-        (decode_u256(stream) as u64)
+        let value = decode_u256(stream);
+        assert!(value <= 0xFFFFFFFFFFFFFFFF, error::invalid_argument(E_INTEGER_OVERFLOW));
+        (value as u64)
     }
 
     public fun decode_bool(stream: &mut ABIStream): bool {
