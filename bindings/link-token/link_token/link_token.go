@@ -67,7 +67,7 @@ type LinkTokenEncoder interface {
 	AssertIsAllowedBurner(caller aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"link","module":"link_token","name":"accept_ownership","parameters":null},{"package":"link","module":"link_token","name":"apply_allowed_burner_updates","parameters":[{"name":"burners_to_remove","type":"vector\u003caddress\u003e"},{"name":"burners_to_add","type":"vector\u003caddress\u003e"}]},{"package":"link","module":"link_token","name":"apply_allowed_minter_updates","parameters":[{"name":"minters_to_remove","type":"vector\u003caddress\u003e"},{"name":"minters_to_add","type":"vector\u003caddress\u003e"}]},{"package":"link","module":"link_token","name":"assert_is_allowed_burner","parameters":[{"name":"caller","type":"address"}]},{"package":"link","module":"link_token","name":"assert_is_allowed_minter","parameters":[{"name":"caller","type":"address"}]},{"package":"link","module":"link_token","name":"burn","parameters":[{"name":"from","type":"address"},{"name":"amount","type":"u64"}]},{"package":"link","module":"link_token","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"link","module":"link_token","name":"initialize","parameters":[{"name":"max_supply","type":"std::option::Option\u003cu128\u003e"},{"name":"name","type":"0x1::string::String"},{"name":"symbol","type":"0x1::string::String"},{"name":"decimals","type":"u8"},{"name":"icon","type":"0x1::string::String"},{"name":"project","type":"0x1::string::String"}]},{"package":"link","module":"link_token","name":"mint","parameters":[{"name":"to","type":"address"},{"name":"amount","type":"u64"}]},{"package":"link","module":"link_token","name":"token_metadata_internal","parameters":null},{"package":"link","module":"link_token","name":"token_state_address_internal","parameters":null},{"package":"link","module":"link_token","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
+const FunctionInfo = `[{"package":"link","module":"link_token","name":"accept_ownership","parameters":null},{"package":"link","module":"link_token","name":"apply_allowed_burner_updates","parameters":[{"name":"burners_to_remove","type":"vector\u003caddress\u003e"},{"name":"burners_to_add","type":"vector\u003caddress\u003e"}]},{"package":"link","module":"link_token","name":"apply_allowed_minter_updates","parameters":[{"name":"minters_to_remove","type":"vector\u003caddress\u003e"},{"name":"minters_to_add","type":"vector\u003caddress\u003e"}]},{"package":"link","module":"link_token","name":"assert_is_allowed_burner","parameters":[{"name":"caller","type":"address"}]},{"package":"link","module":"link_token","name":"assert_is_allowed_minter","parameters":[{"name":"caller","type":"address"}]},{"package":"link","module":"link_token","name":"burn","parameters":[{"name":"from","type":"address"},{"name":"amount","type":"u64"}]},{"package":"link","module":"link_token","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"link","module":"link_token","name":"initialize","parameters":[{"name":"max_supply","type":"0x1::option::Option::u128"},{"name":"name","type":"0x1::string::String"},{"name":"symbol","type":"0x1::string::String"},{"name":"decimals","type":"u8"},{"name":"icon","type":"0x1::string::String"},{"name":"project","type":"0x1::string::String"}]},{"package":"link","module":"link_token","name":"mint","parameters":[{"name":"to","type":"address"},{"name":"amount","type":"u64"}]},{"package":"link","module":"link_token","name":"token_metadata_internal","parameters":null},{"package":"link","module":"link_token","name":"token_state_address_internal","parameters":null},{"package":"link","module":"link_token","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
 
 func NewLinkToken(address aptos.AccountAddress, client aptos.AptosRpcClient) LinkTokenInterface {
 	contract := bind.NewBoundContract(address, "link", "link_token", client)
@@ -92,7 +92,7 @@ type TokenMetadataRefs struct {
 type Initialize struct {
 	Publisher aptos.AccountAddress `move:"address"`
 	Token     bind.StdObject       `move:"aptos_framework::object::Object"`
-	MaxSupply **big.Int            `move:"std::option::Option<u128>"`
+	MaxSupply **big.Int            `move:"0x1::option::Option::u128"`
 	Decimals  byte                 `move:"u8"`
 	Icon      string               `move:"0x1::string::String"`
 	Project   string               `move:"0x1::string::String"`
@@ -412,7 +412,7 @@ func (c linkTokenEncoder) Owner() (bind.ModuleInformation, string, []aptos.TypeT
 
 func (c linkTokenEncoder) Initialize(maxSupply **big.Int, name string, symbol string, decimals byte, icon string, project string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("initialize", nil, []string{
-		"std::option::Option<u128>",
+		"0x1::option::Option::u128",
 		"0x1::string::String",
 		"0x1::string::String",
 		"u8",

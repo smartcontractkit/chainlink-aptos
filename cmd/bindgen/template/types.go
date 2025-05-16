@@ -89,14 +89,14 @@ func createGoTypeFromMove(s string, localStructs map[string]parse.Struct, extern
 		}
 
 		// Hardcoded stdlib structs
-		if innerTypeName, moveType, ok := isGenericType(s, "std::option::Option"); ok {
+		if innerTypeName, _, ok := isGenericType(s, "std::option::Option"); ok {
 			innerType, err := createGoTypeFromMove(innerTypeName, localStructs, externalStructs)
 			if err != nil {
 				return tmplType{}, err
 			}
 			return tmplType{
 				GoType:   "*" + innerType.GoType,
-				MoveType: moveType,
+				MoveType: fmt.Sprintf("0x1::option::Option::%s", innerType.MoveType),
 				StdOption: &tmplOption{
 					UnderlyingGoType: innerType.GoType,
 				},
