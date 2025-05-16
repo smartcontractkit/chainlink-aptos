@@ -51,7 +51,7 @@ type RegistryEncoder interface {
 	AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStateAddr() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	SetFeedsUnchecked(feedIds [][]byte, descriptions []string, configId []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	ToU16be(data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ToU256(data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ToU32be(data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ToU256be(data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	NewProof() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -64,7 +64,7 @@ type RegistryEncoder interface {
 	GetReportsUnchecked(feedIds [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"data_feeds","module":"registry","name":"accept_ownership","parameters":null},{"package":"data_feeds","module":"registry","name":"get_benchmarks","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_benchmarks_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_reports","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_reports_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_state_addr","parameters":null},{"package":"data_feeds","module":"registry","name":"new_proof","parameters":null},{"package":"data_feeds","module":"registry","name":"new_proof_secondary","parameters":null},{"package":"data_feeds","module":"registry","name":"on_report","parameters":[{"name":"_meta","type":"address"}]},{"package":"data_feeds","module":"registry","name":"on_report_secondary","parameters":[{"name":"_meta","type":"address"}]},{"package":"data_feeds","module":"registry","name":"remove_feeds","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_feeds","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"},{"name":"config_id","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_feeds_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"},{"name":"config_id","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_workflow_config","parameters":[{"name":"allowed_workflow_owners","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"allowed_workflow_names","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"to_u16be","parameters":[{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"to_u256be","parameters":[{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"to_u32be","parameters":[{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"data_feeds","module":"registry","name":"update_descriptions","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"}]}]`
+const FunctionInfo = `[{"package":"data_feeds","module":"registry","name":"accept_ownership","parameters":null},{"package":"data_feeds","module":"registry","name":"get_benchmarks","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_benchmarks_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_reports","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_reports_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_state_addr","parameters":null},{"package":"data_feeds","module":"registry","name":"new_proof","parameters":null},{"package":"data_feeds","module":"registry","name":"new_proof_secondary","parameters":null},{"package":"data_feeds","module":"registry","name":"on_report","parameters":[{"name":"_meta","type":"address"}]},{"package":"data_feeds","module":"registry","name":"on_report_secondary","parameters":[{"name":"_meta","type":"address"}]},{"package":"data_feeds","module":"registry","name":"remove_feeds","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_feeds","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"},{"name":"config_id","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_feeds_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"},{"name":"config_id","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_workflow_config","parameters":[{"name":"allowed_workflow_owners","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"allowed_workflow_names","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"to_u256","parameters":[{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"to_u256be","parameters":[{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"to_u32be","parameters":[{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"data_feeds","module":"registry","name":"update_descriptions","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"}]}]`
 
 func NewRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) RegistryInterface {
 	contract := bind.NewBoundContract(address, "data_feeds", "registry", client)
@@ -130,6 +130,10 @@ type FeedSet struct {
 	FeedId      []byte `move:"vector<u8>"`
 	Description string `move:"0x1::string::String"`
 	ConfigId    []byte `move:"vector<u8>"`
+}
+
+type FeedUnset struct {
+	FeedId []byte `move:"vector<u8>"`
 }
 
 type FeedUpdated struct {
@@ -407,8 +411,8 @@ func (c registryEncoder) SetFeedsUnchecked(feedIds [][]byte, descriptions []stri
 	})
 }
 
-func (c registryEncoder) ToU16be(data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("to_u16be", nil, []string{
+func (c registryEncoder) ToU256(data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("to_u256", nil, []string{
 		"vector<u8>",
 	}, []any{
 		data,
