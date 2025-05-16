@@ -132,6 +132,10 @@ type FeedSet struct {
 	ConfigId    []byte `move:"vector<u8>"`
 }
 
+type FeedUnset struct {
+	FeedId []byte `move:"vector<u8>"`
+}
+
 type FeedUpdated struct {
 	FeedId    []byte   `move:"vector<u8>"`
 	Timestamp *big.Int `move:"u256"`
