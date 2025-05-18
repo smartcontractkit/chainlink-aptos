@@ -470,6 +470,11 @@ module data_feeds::registry {
         let offset: u64 = 0;
 
         assert!(
+            data_len > 64,
+            error::invalid_argument(EINVALID_RAW_REPORT)
+        );
+
+        assert!(
             to_u256be(vector::slice(data, offset, offset + 32)) == 32,
             32
         );
@@ -814,6 +819,15 @@ module data_feeds::registry {
                 report: report_data
             }
         );
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 65549, location = Self)]
+    fun test_parse_raw_report_length_failure() {
+        let data =
+            x"00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000005";
+
+        parse_raw_report(&data);
     }
 
     #[test]
