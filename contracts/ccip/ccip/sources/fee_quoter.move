@@ -1,19 +1,5 @@
 /// This module is responsible for storage and retrieval of fee token and token transfer
 /// information and pricing.
-///
-/// TODO:
-/// at the moment, this module updates prices from received OCR3 reports.
-/// on EVM, the FeeQuoter contract takes the newer value between the prices stored locally
-/// (which are from OCR3 reports or from keystone reports), and that of a configured OCR2
-/// data feed price value.
-/// on Aptos, we have keystone feeds only and could:
-/// - allow configuration of feed_ids to query the keystone feeds router/registry module
-/// - support dynamic dispatch registration with the keystone forwarder module to receive
-///   keystone reports directly.
-/// only one of the two should be necessary since the data source for both should be the same
-/// (ie. keystone reports) and contain the same data points.
-/// the first option should be preferred since it does not require additional complexity with
-/// dynamic dispatch and additional report deserialization.
 module ccip::fee_quoter {
     use std::account;
     use std::error;
@@ -38,11 +24,20 @@ module ccip::fee_quoter {
     const CHAIN_FAMILY_SELECTOR_APTOS: vector<u8> = x"ac77ffec";
     const CHAIN_FAMILY_SELECTOR_SUI: vector<u8> = x"c4e05953";
 
+    /// @dev We disallow the first 1024 addresses to avoid calling into a range known for hosting precompiles. Calling
+    /// into precompiles probably won't cause any issues, but to be safe we can disallow this range. It is extremely
+    /// unlikely that anyone would ever be able to generate an address in this range. There is no official range of
+    /// precompiles, but EIP-7587 proposes to reserve the range 0x100 to 0x1ff. Our range is more conservative, even
+    /// though it might not be exhaustive for all chains, which is OK. We also disallow the zero address, which is a
+    /// common practice.
     const EVM_PRECOMPILE_SPACE: u256 = 1024;
 
-    // According to the Aptos docs, the first 0xa addresses are reserved for precompiles.
-    // https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/doc/account.md#function-create_framework_reserved_account-1
-    // We use the same range for SUI.
+    /// @dev According to the Aptos docs, the first 0xa addresses are reserved for precompiles.
+    /// https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/doc/account.md#function-create_framework_reserved_account-1
+    /// We use the same range for SUI, even though there is one documented reserved address outside of this range.
+    /// Since sending a message to this address would not cause any negative side effects, as it would never register
+    /// a callback with CCIP, there is no negative impact.
+    /// https://move-book.com/appendix/reserved-addresses.html
     const MOVE_PRECOMPILE_SPACE: u256 = 0x0b;
 
     const SVM_EXTRA_ARGS_V1_TAG: vector<u8> = x"1f3b3aba";
