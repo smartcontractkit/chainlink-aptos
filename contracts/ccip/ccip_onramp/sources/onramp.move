@@ -245,7 +245,9 @@ module ccip_onramp::onramp {
     }
 
     #[view]
-    public fun get_expected_next_sequence_number(dest_chain_selector: u64): u64 acquires OnRampState {
+    public fun get_expected_next_sequence_number(
+        dest_chain_selector: u64
+    ): u64 acquires OnRampState {
         let state = borrow_state();
         assert!(
             state.dest_chain_configs.contains(dest_chain_selector),
