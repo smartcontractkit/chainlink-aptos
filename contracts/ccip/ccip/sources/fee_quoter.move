@@ -1002,7 +1002,7 @@ module ccip::fee_quoter {
         fee_token: address,
         fee_token_amount: u64,
         extra_args: vector<u8>,
-        source_token_addresses: vector<address>,
+        local_token_addresses: vector<address>,
         dest_token_addresses: vector<vector<u8>>,
         dest_pool_datas: vector<vector<u8>>
     ): (u64, bool, vector<u8>, vector<vector<u8>>) acquires FeeQuoterState {
@@ -1040,7 +1040,7 @@ module ccip::fee_quoter {
                 state,
                 dest_chain_config,
                 dest_chain_selector,
-                source_token_addresses,
+                local_token_addresses,
                 dest_token_addresses,
                 dest_pool_datas
             );
