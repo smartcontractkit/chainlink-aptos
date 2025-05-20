@@ -492,6 +492,7 @@ module ccip_onramp::onramp {
                 fee_token,
                 fee_token_amount,
                 extra_args,
+                token_addresses,
                 dest_token_addresses,
                 dest_pool_datas
             );
