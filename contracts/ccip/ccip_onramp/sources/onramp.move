@@ -151,6 +151,7 @@ module ccip_onramp::onramp {
     const E_UNEXPECTED_FUNGIBLE_ASSET: u64 = 17;
     const E_FEE_AGGREGATOR_NOT_SET: u64 = 18;
     const E_MUST_BE_CALLED_BY_ROUTER: u64 = 19;
+    const E_TOKEN_AMOUNT_MISMATCH: u64 = 20;
 
     #[view]
     public fun type_and_version(): String {
@@ -416,6 +417,11 @@ module ccip_onramp::onramp {
             account::create_signer_with_capability(&state.state_signer_cap);
 
         let tokens_len = token_addresses.length();
+        assert!(
+            tokens_len == token_store_addresses.length(),
+            error::invalid_argument(E_TOKEN_AMOUNT_MISMATCH)
+        );
+
         let token_transfers = vector[];
         for (i in 0..tokens_len) {
             let token = token_addresses[i];
