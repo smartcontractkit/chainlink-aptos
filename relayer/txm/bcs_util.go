@@ -44,8 +44,9 @@ func CreateTypeTag(typeName string) (aptos.TypeTag, error) {
 					TypeParam: innerTypeTag,
 				}}, nil
 		} else {
-			// assume it's a struct.
-			structTokens := strings.Split(typeName, "::")
+			// Assume it's a struct - split into the first three substrings
+			// There might be multiple nested structs such as 0x1::option::Option<0x1::string::String>
+			structTokens := strings.SplitN(typeName, "::", 3)
 			if len(structTokens) != 3 {
 				return aptos.TypeTag{}, fmt.Errorf("invalid struct type: %s", typeName)
 			}
@@ -66,6 +67,9 @@ func CreateTypeTag(typeName string) (aptos.TypeTag, error) {
 				}
 				outerStructName := structName[0:openIndex]
 				innerTypeParams := structName[openIndex+1 : len(structName)-1]
+				// TODO this would currently not work with nested structs
+				//  E.g. 0x1::module::Name<u8,0x1::module::Name<u16,u32>>
+				//
 				innerTypeTokens := strings.Split(innerTypeParams, ",")
 				structTypeTags := []aptos.TypeTag{}
 				for _, token := range innerTypeTokens {
@@ -334,12 +338,36 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 		return nil
 	case aptos.TypeTagStruct:
 		tag := argType.Value.(*aptos.StructTag)
-		if tag.String() != "0x1::string::String" {
-			return errors.New("The only supported struct arg is of type 0x1::string::String")
-		}
-		if v, ok := argVal.(string); ok {
-			serializer.WriteString(v)
-			return nil
+		// Can't use tag.String() as it would contain type parameters
+		tagName := fmt.Sprintf("%s::%s::%s", tag.Address.String(), tag.Module, tag.Name)
+		switch tagName {
+		case "0x1::string::String":
+			if v, ok := argVal.(string); ok {
+				serializer.WriteString(v)
+				return nil
+			}
+		case "0x1::option::Option":
+			rv := reflect.ValueOf(argVal)
+			if rv.Kind() != reflect.Pointer {
+				return fmt.Errorf("invalid arg for 0x1::option::Option, want %q, have: %q", reflect.Pointer.String(), rv.Kind().String())
+			}
+			if len(tag.TypeParams) != 1 {
+				return errors.New("invalid option::Option type parameters")
+			}
+			if rv.IsNil() {
+				// If the option is unset/nil pointer is passed, serialize as an empty vector
+				serializer.Uleb128(0)
+				return nil
+			} else {
+				// If the option is set/a value is passed, serialize as a vector of length 1
+				serializer.Uleb128(1)
+				if err := serializeArg(rv.Elem().Interface(), tag.TypeParams[0], serializer); err != nil {
+					return err
+				}
+				return nil
+			}
+		default:
+			return fmt.Errorf("unsupported struct tag: %s", tagName)
 		}
 	default:
 		return errors.New("unsupported arg type")
@@ -396,10 +424,34 @@ func deserializeArg(argType aptos.TypeTag, deserializer *bcs.Deserializer) (any,
 		return returns.Interface(), nil
 	case aptos.TypeTagStruct:
 		tag := argType.Value.(*aptos.StructTag)
-		if tag.String() == "0x1::string::String" {
+		// Can't use tag.String() as it would contain type parameters
+		tagName := fmt.Sprintf("%s::%s::%s", tag.Address.String(), tag.Module, tag.Name)
+		switch tagName {
+		case "0x1::string::String":
 			return deserializer.ReadString(), nil
+		case "0x1::option::Option":
+			if len(tag.TypeParams) != 1 {
+				return nil, errors.New("invalid option::Option type parameters")
+			}
+			length := deserializer.Uleb128()
+			if length == 0 {
+				// Unset option - return a new nil pointer of the underlying type
+				vp := reflect.NewAt(getType(tag.TypeParams[0]), nil)
+				return vp.Interface(), nil
+			} else if length == 1 {
+				// Option is set - deserialize the underlying value and return a new pointer to it
+				elem, err := deserializeArg(tag.TypeParams[0], deserializer)
+				if err != nil {
+					return nil, err
+				}
+				val := reflect.ValueOf(elem)
+				vp := reflect.New(val.Type())
+				vp.Elem().Set(val)
+				return vp.Interface(), nil
+			}
+			return nil, fmt.Errorf("deserializing 0x1::option::Option: received invalid serialized vector of length %v", length)
 		}
-		return nil, errors.New("The only supported struct arg is of type 0x1::string::String")
+		return nil, fmt.Errorf("unsupported struct tag: %s", tagName)
 	default:
 		return nil, errors.New("unsupported arg type")
 	}
@@ -424,7 +476,19 @@ func getType(typeTag aptos.TypeTag) reflect.Type {
 	case aptos.TypeTagAddress:
 		return reflect.TypeOf(aptos.AccountAddress{})
 	case aptos.TypeTagStruct:
-		return reflect.TypeOf(string(""))
+		tag := typeTag.Value.(*aptos.StructTag)
+		// Can't use tag.String() as it would contain type parameters
+		tagName := fmt.Sprintf("%s::%s::%s", tag.Address.String(), tag.Module, tag.Name)
+		switch tagName {
+		case "0x1::string::String":
+			return reflect.TypeOf(string(""))
+		case "0x1::option::Option":
+			if len(tag.TypeParams) != 1 {
+				return nil
+			}
+			return reflect.PointerTo(getType(tag.TypeParams[0]))
+		}
+		return nil
 	case aptos.TypeTagVector:
 		elementType := getType(typeTag.Value.(*aptos.VectorTag).TypeParam)
 		return reflect.SliceOf(elementType)

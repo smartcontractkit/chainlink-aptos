@@ -599,7 +599,9 @@ module mcms::mcms_registry {
 
         let callback_function_info =
             function_info::new_function_info(
-                account, module_name, string::utf8(b"mcms_entrypoint")
+                account,
+                string::utf8(proof_type_info.module_name()),
+                string::utf8(b"mcms_entrypoint")
             );
 
         dispatchable_fungible_asset::register_derive_supply_dispatch_function(
