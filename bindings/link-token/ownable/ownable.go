@@ -29,9 +29,10 @@ type OwnableInterface interface {
 
 type OwnableEncoder interface {
 	New(objectAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	Destroy(state OwnableState) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"link","module":"ownable","name":"new","parameters":[{"name":"object_address","type":"address"}]}]`
+const FunctionInfo = `[{"package":"link","module":"ownable","name":"destroy","parameters":[{"name":"state","type":"OwnableState"}]},{"package":"link","module":"ownable","name":"new","parameters":[{"name":"object_address","type":"address"}]}]`
 
 func NewOwnable(address aptos.AccountAddress, client aptos.AptosRpcClient) OwnableInterface {
 	contract := bind.NewBoundContract(address, "link", "ownable", client)
@@ -94,5 +95,13 @@ func (c ownableEncoder) New(objectAddress aptos.AccountAddress) (bind.ModuleInfo
 		"address",
 	}, []any{
 		objectAddress,
+	})
+}
+
+func (c ownableEncoder) Destroy(state OwnableState) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("destroy", nil, []string{
+		"OwnableState",
+	}, []any{
+		state,
 	})
 }
