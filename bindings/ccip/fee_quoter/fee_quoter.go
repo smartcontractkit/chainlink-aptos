@@ -32,7 +32,7 @@ type FeeQuoterInterface interface {
 	GetTokenTransferFeeConfig(opts *bind.CallOpts, destChainSelector uint64, token aptos.AccountAddress) (TokenTransferFeeConfig, error)
 	GetValidatedFee(opts *bind.CallOpts, destChainSelector uint64, receiver []byte, data []byte, localTokenAddresses []aptos.AccountAddress, localTokenAmounts []uint64, TokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, FeeTokenStore aptos.AccountAddress, extraArgs []byte) (uint64, error)
 	GetPremiumMultiplierWeiPerEth(opts *bind.CallOpts, token aptos.AccountAddress) (uint64, error)
-	ProcessMessageArgs(opts *bind.CallOpts, destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, sourceTokenAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, destPoolDatas [][]byte) (uint64, bool, []byte, [][]byte, error)
+	ProcessMessageArgs(opts *bind.CallOpts, destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, localTokenAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, destPoolDatas [][]byte) (uint64, bool, []byte, [][]byte, error)
 	GetDestChainConfig(opts *bind.CallOpts, destChainSelector uint64) (DestChainConfig, error)
 	GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error)
 
@@ -57,7 +57,7 @@ type FeeQuoterEncoder interface {
 	GetTokenTransferFeeConfig(destChainSelector uint64, token aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetValidatedFee(destChainSelector uint64, receiver []byte, data []byte, localTokenAddresses []aptos.AccountAddress, localTokenAmounts []uint64, TokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, FeeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetPremiumMultiplierWeiPerEth(token aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	ProcessMessageArgs(destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, sourceTokenAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, destPoolDatas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ProcessMessageArgs(destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, localTokenAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, destPoolDatas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetDestChainConfig(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStaticConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Initialize(maxFeeJuelsPerMsg uint64, linkToken aptos.AccountAddress, tokenPriceStalenessThreshold uint64, feeTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -411,8 +411,8 @@ func (c FeeQuoterContract) GetPremiumMultiplierWeiPerEth(opts *bind.CallOpts, to
 	return r0, nil
 }
 
-func (c FeeQuoterContract) ProcessMessageArgs(opts *bind.CallOpts, destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, sourceTokenAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, destPoolDatas [][]byte) (uint64, bool, []byte, [][]byte, error) {
-	module, function, typeTags, args, err := c.feeQuoterEncoder.ProcessMessageArgs(destChainSelector, feeToken, feeTokenAmount, extraArgs, sourceTokenAddresses, destTokenAddresses, destPoolDatas)
+func (c FeeQuoterContract) ProcessMessageArgs(opts *bind.CallOpts, destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, localTokenAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, destPoolDatas [][]byte) (uint64, bool, []byte, [][]byte, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.ProcessMessageArgs(destChainSelector, feeToken, feeTokenAmount, extraArgs, localTokenAddresses, destTokenAddresses, destPoolDatas)
 	if err != nil {
 		return *new(uint64), *new(bool), *new([]byte), *new([][]byte), err
 	}
@@ -625,7 +625,7 @@ func (c feeQuoterEncoder) GetPremiumMultiplierWeiPerEth(token aptos.AccountAddre
 	})
 }
 
-func (c feeQuoterEncoder) ProcessMessageArgs(destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, sourceTokenAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, destPoolDatas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c feeQuoterEncoder) ProcessMessageArgs(destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, localTokenAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, destPoolDatas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("process_message_args", nil, []string{
 		"u64",
 		"address",
@@ -639,7 +639,7 @@ func (c feeQuoterEncoder) ProcessMessageArgs(destChainSelector uint64, feeToken 
 		feeToken,
 		feeTokenAmount,
 		extraArgs,
-		sourceTokenAddresses,
+		localTokenAddresses,
 		destTokenAddresses,
 		destPoolDatas,
 	})
