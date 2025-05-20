@@ -24,8 +24,7 @@ module mcms::mcms_executor {
                 }
             );
         };
-        let pending_execute =
-            borrow_global_mut<PendingExecute>(signer::address_of(caller));
+        let pending_execute = borrow_global_mut<PendingExecute>(caller_address);
         if (!data_chunk.is_empty()) {
             pending_execute.data.append(data_chunk);
         };
@@ -61,7 +60,7 @@ module mcms::mcms_executor {
             data.append(data_chunk);
         };
         if (!partial_proofs.is_empty()) {
-            proofs.append(partial_proofs)
+            proofs.append(partial_proofs);
         };
         mcms::execute(
             role,

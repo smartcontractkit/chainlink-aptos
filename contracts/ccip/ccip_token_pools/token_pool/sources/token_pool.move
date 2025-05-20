@@ -105,6 +105,7 @@ module ccip_token_pool::token_pool {
     const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 9;
     const E_INVALID_ENCODED_AMOUNT: u64 = 10;
     const E_DECIMAL_OVERFLOW: u64 = 11;
+    const E_CURSED_CHAIN: u64 = 12;
 
     // ================================================================
     // |                    Initialize and state                      |
@@ -373,7 +374,10 @@ module ccip_token_pool::token_pool {
         // Check RMN curse status
         let remote_chain_selector =
             token_admin_registry::get_lock_or_burn_remote_chain_selector(input);
-        assert!(!rmn_remote::is_cursed_u128((remote_chain_selector as u128)));
+        assert!(
+            !rmn_remote::is_cursed_u128((remote_chain_selector as u128)),
+            error::invalid_state(E_CURSED_CHAIN)
+        );
 
         // Allowlist check
         let _sender = token_admin_registry::get_lock_or_burn_sender(input);

@@ -238,6 +238,7 @@ module ccip_offramp::offramp {
     const E_FUNGIBLE_ASSET_AMOUNT_MISMATCH: u64 = 21;
     const E_SIGNATURE_VERIFICATION_REQUIRED_IN_COMMIT_PLUGIN: u64 = 22;
     const E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN: u64 = 23;
+    const E_RMN_BLESSING_MISMATCH: u64 = 24;
 
     #[view]
     public fun type_and_version(): String {
@@ -297,11 +298,6 @@ module ccip_offramp::offramp {
         let ownable_state = ownable::new(state_signer, @ccip_offramp);
 
         ownable::assert_only_owner(signer::address_of(caller), &ownable_state);
-
-        assert!(
-            source_chains_selector.length() == source_chains_is_enabled.length(),
-            error::invalid_argument(E_SOURCE_CHAIN_SELECTORS_MISMATCH)
-        );
 
         let state = OffRampState {
             state_signer_cap,
@@ -421,12 +417,6 @@ module ccip_offramp::offramp {
         };
 
         assert_source_chain_enabled(state, source_chain_selector);
-
-        assert!(
-            execution_report.message.header.source_chain_selector
-                == source_chain_selector,
-            error::invalid_argument(E_SOURCE_CHAIN_SELECTOR_MISMATCH)
-        );
         assert!(
             execution_report.message.header.dest_chain_selector == state.chain_selector,
             error::invalid_argument(E_DEST_CHAIN_SELECTOR_MISMATCH)
@@ -678,7 +668,10 @@ module ccip_offramp::offramp {
 
                 // If the root is blessed but RMN blessing is disabled for the source chain, or if the root is not
                 // blessed but RMN blessing is enabled, we revert.
-                assert!(is_blessed != source_chain_config.is_rmn_verification_disabled, 0);
+                assert!(
+                    is_blessed != source_chain_config.is_rmn_verification_disabled,
+                    error::invalid_state(E_RMN_BLESSING_MISMATCH)
+                );
 
                 assert!(
                     source_chain_config.on_ramp == root.on_ramp_address,
