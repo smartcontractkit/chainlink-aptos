@@ -195,7 +195,6 @@ module ccip_ping_pong_demo::ping_pong_demo {
         option::none()
     }
 
-    // TODO: separate functions due to deploy error, see ccip::state_object
     #[view]
     public fun get_store_address(): address {
         store_address()

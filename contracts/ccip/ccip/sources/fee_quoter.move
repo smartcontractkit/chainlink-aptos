@@ -861,9 +861,12 @@ module ccip::fee_quoter {
     inline fun decode_svm_extra_args(
         extra_args: vector<u8>
     ): (u32, u64, bool, vector<u8>, vector<vector<u8>>) {
-        // TODO: we need extra validation here. if extra_args length is less than tag length + data length,
-        // vector::slice will revert.
         let extra_args_len = extra_args.length();
+        assert!(
+            extra_args_len >= 4,
+            error::invalid_argument(E_INVALID_EXTRA_ARGS_DATA)
+        );
+
         let args_tag = extra_args.slice(0, 4);
         assert!(
             args_tag == SVM_EXTRA_ARGS_V1_TAG,
