@@ -36,12 +36,13 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 	module_lock_release_token_pool.FunctionInfo,
 )
 
-func Compile(address, ccipAddress, mcmsAddress, ccipTokenPoolAddress, localTokenAddress aptos.AccountAddress, registerMCMSEntrypoints bool) (compile.CompiledPackage, error) {
+func Compile(address, ccipAddress, mcmsAddress, ccipTokenPoolAddress, localTokenAddress, tokenPoolAdministrator aptos.AccountAddress, registerMCMSEntrypoints bool) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"lock_release_token_pool":   address,
 		"ccip":                      ccipAddress,
 		"ccip_token_pool":           ccipTokenPoolAddress,
 		"lock_release_local_token":  localTokenAddress,
+		"token_pool_administrator":  tokenPoolAdministrator,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
@@ -60,6 +61,7 @@ func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) LockRelease
 }
 
 // DeployToObject deploys the LockReleaseTokenPool to a new named object.
+// The token pool's administrator will be set to the deployer's account address.
 func DeployToObject(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
@@ -72,6 +74,7 @@ func DeployToObject(
 		"ccip":                      ccipAddress,
 		"ccip_token_pool":           ccipTokenPoolAddress,
 		"lock_release_local_token":  localTokenAddress,
+		"token_pool_administrator":  auth.AccountAddress(),
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
