@@ -277,6 +277,7 @@ module ccip::token_admin_registry {
         token_pool_account: &signer,
         token_pool_module_name: vector<u8>,
         local_token: address,
+        initial_administrator: address,
         _proof: ProofType
     ) acquires TokenAdminRegistryState {
         assert!(
@@ -303,12 +304,9 @@ module ccip::token_admin_registry {
             error::invalid_argument(E_FUNGIBLE_ASSET_ALREADY_REGISTERED)
         );
 
-        // the initial administrator will always be the token pool account.
-        // callers can immediately propose a new administrator afterwards if
-        // needed.
         let token_config = TokenConfig {
             token_pool_address,
-            administrator: token_pool_address,
+            administrator: initial_administrator,
             pending_administrator: @0x0
         };
 
