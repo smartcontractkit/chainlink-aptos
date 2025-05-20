@@ -106,6 +106,12 @@ module ccip::token_admin_registry {
         new_admin: address
     }
 
+    #[event]
+    struct TokenUnregistered has store, drop {
+        local_token: address,
+        previous_pool_address: address
+    }
+
     const E_INVALID_FUNGIBLE_ASSET: u64 = 1;
     const E_NOT_FUNGIBLE_ASSET_OWNER: u64 = 2;
     const E_INVALID_TOKEN_POOL: u64 = 3;
@@ -422,6 +428,48 @@ module ccip::token_admin_registry {
                 == fungible_asset_object_root_owner_address) { return };
 
         abort error::permission_denied(E_NOT_FUNGIBLE_ASSET_OWNER)
+    }
+
+    public entry fun unregister_token(
+        caller: &signer, local_token: address
+    ) acquires TokenAdminRegistryState, TokenPoolRegistration {
+        let state = borrow_state_mut();
+        assert!(
+            state.token_configs.contains(&local_token),
+            error::invalid_argument(E_FUNGIBLE_ASSET_NOT_REGISTERED)
+        );
+
+        let token_config = state.token_configs.remove(&local_token);
+        assert!(
+            token_config.administrator == signer::address_of(caller),
+            error::permission_denied(E_NOT_ADMINISTRATOR)
+        );
+
+        let previous_pool_address = token_config.token_pool_address;
+        if (exists<TokenPoolRegistration>(previous_pool_address)) {
+            let TokenPoolRegistration {
+                lock_or_burn_function: _,
+                release_or_mint_function: _,
+                proof_typeinfo: _,
+                dispatch_metadata: _,
+                dispatch_deposit_fungible_store: _,
+                dispatch_extend_ref: _,
+                dispatch_transfer_ref: _,
+                dispatch_fa_transfer_ref: _,
+                execution_state: _,
+                executing_lock_or_burn_input_v1: _,
+                executing_release_or_mint_input_v1: _,
+                executing_lock_or_burn_output_v1: _,
+                executing_release_or_mint_output_v1: _
+            } = move_from<TokenPoolRegistration>(previous_pool_address);
+        };
+
+        event::emit(
+            TokenUnregistered {
+                local_token,
+                previous_pool_address: token_config.token_pool_address
+            }
+        );
     }
 
     public entry fun set_pool(
