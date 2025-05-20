@@ -388,11 +388,18 @@ module ccip::fee_quoter {
         );
         let dest_chain_fee_configs =
             state.token_transfer_fee_configs.borrow(dest_chain_selector);
-        assert!(
-            dest_chain_fee_configs.contains(token),
-            error::invalid_argument(E_TOKEN_NOT_SUPPORTED)
-        );
-        dest_chain_fee_configs.borrow(token)
+        if (dest_chain_fee_configs.contains(token)) {
+            dest_chain_fee_configs.borrow(token)
+        } else {
+            &TokenTransferFeeConfig {
+                min_fee_usd_cents: 0,
+                max_fee_usd_cents: 0,
+                deci_bps: 0,
+                dest_gas_overhead: 0,
+                dest_bytes_overhead: 0,
+                is_enabled: false
+            }
+        }
     }
 
     // Note that unlike EVM, this only allows changes for a single dest chain selector
@@ -995,6 +1002,7 @@ module ccip::fee_quoter {
         fee_token: address,
         fee_token_amount: u64,
         extra_args: vector<u8>,
+        source_token_addresses: vector<address>,
         dest_token_addresses: vector<vector<u8>>,
         dest_pool_datas: vector<vector<u8>>
     ): (u64, bool, vector<u8>, vector<vector<u8>>) acquires FeeQuoterState {
@@ -1019,8 +1027,6 @@ module ccip::fee_quoter {
         let dest_chain_config = get_dest_chain_config_internal(
             state, dest_chain_selector
         );
-        let token_transfer_fee_config =
-            get_token_transfer_fee_config_internal(state, dest_chain_selector, fee_token);
 
         let (converted_extra_args, is_out_of_order_execution) =
             process_chain_family_selector(
@@ -1031,8 +1037,10 @@ module ccip::fee_quoter {
 
         let dest_exec_data_per_token =
             process_pool_return_data(
+                state,
                 dest_chain_config,
-                token_transfer_fee_config,
+                dest_chain_selector,
+                source_token_addresses,
                 dest_token_addresses,
                 dest_pool_datas
             );
@@ -1085,19 +1093,28 @@ module ccip::fee_quoter {
     }
 
     inline fun process_pool_return_data(
+        state: &FeeQuoterState,
         dest_chain_config: &DestChainConfig,
-        token_transfer_fee_config: &TokenTransferFeeConfig,
+        dest_chain_selector: u64,
+        local_token_addresses: vector<address>,
         dest_token_addresses: vector<vector<u8>>,
         dest_pool_datas: vector<vector<u8>>
-    ): vector<vector<u8>> {
+    ): vector<vector<u8>> acquires FeeQuoterState {
         let chain_family_selector = dest_chain_config.chain_family_selector;
 
         let tokens_len = dest_token_addresses.length();
 
         let dest_exec_data_per_token = vector[];
         for (i in 0..tokens_len) {
+            let local_token_address = local_token_addresses[i];
             let dest_token_address = dest_token_addresses[i];
             let dest_pool_data_len = dest_pool_datas[i].length();
+
+            let token_transfer_fee_config =
+                get_token_transfer_fee_config_internal(
+                    state, dest_chain_selector, local_token_address
+                );
+
             if (dest_pool_data_len > (CCIP_LOCK_OR_BURN_V1_RET_BYTES as u64)) {
                 assert!(
                     dest_pool_data_len
