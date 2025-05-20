@@ -195,6 +195,28 @@ module data_feeds::registry {
         object::create_object_address(&@data_feeds, APP_OBJECT_SEED)
     }
 
+    public entry fun init_platform_secondary(
+        authority: &signer,
+    ) acquires Registry {
+        let registry = borrow_global_mut<Registry>(get_state_addr());
+        assert_is_owner(registry, signer::address_of(authority));
+
+        let registry = borrow_global<Registry>(get_state_addr());
+        let extend_ref = &registry.extend_ref;
+
+        let publisher = object::generate_signer_for_extending(extend_ref);
+
+        let cb_secondary = aptos_framework::function_info::new_function_info(
+            &publisher,
+            string::utf8(b"registry"),
+            string::utf8(b"on_report_secondary")
+        );
+
+        platform_secondary::storage::register(
+            &publisher, cb_secondary, new_proof_secondary()
+        );
+    }
+
     public entry fun set_feeds(
         authority: &signer,
         feed_ids: vector<vector<u8>>,
