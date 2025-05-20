@@ -468,14 +468,12 @@ module lock_release_token_pool::lock_release_token_pool {
         caller: &signer, to: address
     ) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
-        ownable::transfer_ownership(
-            signer::address_of(caller), &mut pool.ownable_state, to
-        )
+        ownable::transfer_ownership(caller, &mut pool.ownable_state, to)
     }
 
     public entry fun accept_ownership(caller: &signer) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
-        ownable::accept_ownership(signer::address_of(caller), &mut pool.ownable_state)
+        ownable::accept_ownership(caller, &mut pool.ownable_state)
     }
 
     // ================================================================

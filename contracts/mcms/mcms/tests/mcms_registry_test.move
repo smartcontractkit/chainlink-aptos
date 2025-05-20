@@ -378,6 +378,21 @@ module mcms::mcms_registry_test {
         mcms_registry::accept_code_object(deployer, object_address);
     }
 
+    #[test(deployer = @mcms, owner = @mcms_owner, framework = @0x1)]
+    #[expected_failure(abort_code = 65542, location = mcms::mcms_registry)]
+    public fun test_proof_not_in_module(
+        deployer: &signer, owner: &signer, framework: &signer
+    ) {
+        setup(framework, deployer, owner);
+        mcms_account::init_module_for_testing(deployer);
+        mcms_registry::init_module_for_testing(deployer);
+
+        let module_name = string::utf8(b"incorrect_module_name");
+        // Fails with E_PROOF_NOT_IN_MODULE
+        let _owner_addr =
+            mcms_registry::register_entrypoint(deployer, module_name, ModuleProof {});
+    }
+
     // Test Module MCMS Entrypoint
     public fun mcms_entrypoint<T: key>(_metadata: object::Object<T>): option::Option<u128> {
         option::none()

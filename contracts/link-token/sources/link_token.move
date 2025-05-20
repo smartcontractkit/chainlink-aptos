@@ -348,7 +348,7 @@ module link::link_token {
     /// So we only extract the ownable state from the token state
     public entry fun transfer_ownership(caller: &signer, to: address) acquires TokenState {
         ownable::transfer_ownership(
-            signer::address_of(caller),
+            caller,
             &mut TokenState[token_state_address_internal()].ownable_state,
             to
         )
@@ -358,7 +358,7 @@ module link::link_token {
     /// that the caller is the pending owner
     public entry fun accept_ownership(caller: &signer) acquires TokenState {
         ownable::accept_ownership(
-            signer::address_of(caller),
+            caller,
             &mut TokenState[token_state_address_internal()].ownable_state
         )
     }

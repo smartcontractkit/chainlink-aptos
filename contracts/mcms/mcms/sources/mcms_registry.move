@@ -571,6 +571,10 @@ module mcms::mcms_registry {
             proof_type_info.account_address() == account_address,
             error::invalid_argument(E_PROOF_NOT_AT_ACCOUNT_ADDRESS)
         );
+        assert!(
+            proof_type_info.module_name() == module_name_bytes,
+            error::invalid_argument(E_PROOF_NOT_IN_MODULE)
+        );
 
         let owner_signer =
             account::create_signer_with_capability(&registration.owner_cap);
