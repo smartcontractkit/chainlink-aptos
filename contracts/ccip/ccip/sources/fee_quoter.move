@@ -1099,7 +1099,7 @@ module ccip::fee_quoter {
         local_token_addresses: vector<address>,
         dest_token_addresses: vector<vector<u8>>,
         dest_pool_datas: vector<vector<u8>>
-    ): vector<vector<u8>> acquires FeeQuoterState {
+    ): vector<vector<u8>> {
         let chain_family_selector = dest_chain_config.chain_family_selector;
 
         let tokens_len = dest_token_addresses.length();
