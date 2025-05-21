@@ -20,6 +20,7 @@ module ccip::eth_abi {
     const E_INVALID_SELECTOR: u64 = 4;
     const E_INVALID_U256_LENGTH: u64 = 5;
     const E_INTEGER_OVERFLOW: u64 = 6;
+    const E_INVALID_BYTES32_LENGTH: u64 = 7;
 
     public inline fun encode_address(out: &mut vector<u8>, value: address) {
         out.append(bcs::to_bytes(&value))
@@ -51,7 +52,7 @@ module ccip::eth_abi {
     public inline fun encode_bytes32(
         out: &mut vector<u8>, value: vector<u8>
     ) {
-        assert!(value.length() <= 32, 600001);
+        assert!(value.length() <= 32, E_INVALID_BYTES32_LENGTH);
         let padding_len = 32 - value.length();
         for (i in 0..padding_len) {
             out.push_back(0);
@@ -91,7 +92,7 @@ module ccip::eth_abi {
     public inline fun encode_packed_bytes32(
         out: &mut vector<u8>, value: vector<u8>
     ) {
-        assert!(value.length() <= 32, 600002);
+        assert!(value.length() <= 32, E_INVALID_BYTES32_LENGTH);
         out.append(value)
     }
 

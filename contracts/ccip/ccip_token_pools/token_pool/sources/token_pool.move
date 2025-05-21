@@ -17,6 +17,7 @@ module ccip_token_pool::token_pool {
     const STORE_OBJECT_SEED: vector<u8> = b"CCIPTokenPool";
     const MAX_U256: u256 =
         115792089237316195423570985008687907853269984665640564039457584007913129639935;
+    const MAX_U64: u256 = 18446744073709551615;
 
     struct TokenPoolState has key, store {
         allowlist_state: allowlist::AllowlistState,
@@ -522,9 +523,8 @@ module ccip_token_pool::token_pool {
             calculate_local_amount_internal(
                 remote_amount, remote_decimals, local_decimals
             );
-        // check that the calculated amount fits in a u64
         assert!(
-            local_amount <= 18446744073709551615,
+            local_amount <= MAX_U64,
             error::invalid_state(E_INVALID_ENCODED_AMOUNT)
         );
         local_amount as u64

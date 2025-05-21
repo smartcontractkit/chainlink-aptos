@@ -43,6 +43,7 @@ type USDCTokenPoolInterface interface {
 	ApplyAllowlistUpdates(opts *bind.TransactOpts, removes []aptos.AccountAddress, adds []aptos.AccountAddress) (*api.PendingTransaction, error)
 	TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
 	AcceptOwnership(opts *bind.TransactOpts) (*api.PendingTransaction, error)
+	ExecuteOwnershipTransfer(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
 
 	// Encoder returns the encoder implementation of this module.
 	Encoder() USDCTokenPoolEncoder
@@ -69,6 +70,7 @@ type USDCTokenPoolEncoder interface {
 	ApplyAllowlistUpdates(removes []aptos.AccountAddress, adds []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TransferOwnership(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Initialize() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ParseMessageAndAttestation(payload []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	EncodeDestPoolData(localDomainIdentifier uint32, nonce uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -81,7 +83,7 @@ type USDCTokenPoolEncoder interface {
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"usdc_token_pool","module":"usdc_token_pool","name":"accept_ownership","parameters":null},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"add_remote_pool","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"remote_pool_address","type":"vector\u003cu8\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"apply_allowlist_updates","parameters":[{"name":"removes","type":"vector\u003caddress\u003e"},{"name":"adds","type":"vector\u003caddress\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"apply_chain_updates","parameters":[{"name":"remote_chain_selectors_to_remove","type":"vector\u003cu64\u003e"},{"name":"remote_chain_selectors_to_add","type":"vector\u003cu64\u003e"},{"name":"remote_pool_addresses_to_add","type":"vector\u003cvector\u003cvector\u003cu8\u003e\u003e\u003e"},{"name":"remote_token_addresses_to_add","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"assert_can_initialize","parameters":[{"name":"caller_address","type":"address"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"decode_dest_pool_data","parameters":[{"name":"dest_pool_data","type":"vector\u003cu8\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"encode_dest_pool_data","parameters":[{"name":"local_domain_identifier","type":"u32"},{"name":"nonce","type":"u64"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"initialize","parameters":null},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"parse_message_and_attestation","parameters":[{"name":"payload","type":"vector\u003cu8\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"remove_remote_pool","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"remote_pool_address","type":"vector\u003cu8\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"set_chain_rate_limiter_config","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"outbound_is_enabled","type":"bool"},{"name":"outbound_capacity","type":"u64"},{"name":"outbound_rate","type":"u64"},{"name":"inbound_is_enabled","type":"bool"},{"name":"inbound_capacity","type":"u64"},{"name":"inbound_rate","type":"u64"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"set_chain_rate_limiter_configs","parameters":[{"name":"remote_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"outbound_is_enableds","type":"vector\u003cbool\u003e"},{"name":"outbound_capacities","type":"vector\u003cu64\u003e"},{"name":"outbound_rates","type":"vector\u003cu64\u003e"},{"name":"inbound_is_enableds","type":"vector\u003cbool\u003e"},{"name":"inbound_capacities","type":"vector\u003cu64\u003e"},{"name":"inbound_rates","type":"vector\u003cu64\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"set_domains","parameters":[{"name":"remote_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"remote_domain_identifiers","type":"vector\u003cu32\u003e"},{"name":"allowed_remote_callers","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"enableds","type":"vector\u003cbool\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"store_address","parameters":null},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
+const FunctionInfo = `[{"package":"usdc_token_pool","module":"usdc_token_pool","name":"accept_ownership","parameters":null},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"add_remote_pool","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"remote_pool_address","type":"vector\u003cu8\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"apply_allowlist_updates","parameters":[{"name":"removes","type":"vector\u003caddress\u003e"},{"name":"adds","type":"vector\u003caddress\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"apply_chain_updates","parameters":[{"name":"remote_chain_selectors_to_remove","type":"vector\u003cu64\u003e"},{"name":"remote_chain_selectors_to_add","type":"vector\u003cu64\u003e"},{"name":"remote_pool_addresses_to_add","type":"vector\u003cvector\u003cvector\u003cu8\u003e\u003e\u003e"},{"name":"remote_token_addresses_to_add","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"assert_can_initialize","parameters":[{"name":"caller_address","type":"address"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"decode_dest_pool_data","parameters":[{"name":"dest_pool_data","type":"vector\u003cu8\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"encode_dest_pool_data","parameters":[{"name":"local_domain_identifier","type":"u32"},{"name":"nonce","type":"u64"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"initialize","parameters":null},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"parse_message_and_attestation","parameters":[{"name":"payload","type":"vector\u003cu8\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"remove_remote_pool","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"remote_pool_address","type":"vector\u003cu8\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"set_chain_rate_limiter_config","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"outbound_is_enabled","type":"bool"},{"name":"outbound_capacity","type":"u64"},{"name":"outbound_rate","type":"u64"},{"name":"inbound_is_enabled","type":"bool"},{"name":"inbound_capacity","type":"u64"},{"name":"inbound_rate","type":"u64"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"set_chain_rate_limiter_configs","parameters":[{"name":"remote_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"outbound_is_enableds","type":"vector\u003cbool\u003e"},{"name":"outbound_capacities","type":"vector\u003cu64\u003e"},{"name":"outbound_rates","type":"vector\u003cu64\u003e"},{"name":"inbound_is_enableds","type":"vector\u003cbool\u003e"},{"name":"inbound_capacities","type":"vector\u003cu64\u003e"},{"name":"inbound_rates","type":"vector\u003cu64\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"set_domains","parameters":[{"name":"remote_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"remote_domain_identifiers","type":"vector\u003cu32\u003e"},{"name":"allowed_remote_callers","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"enableds","type":"vector\u003cbool\u003e"}]},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"store_address","parameters":null},{"package":"usdc_token_pool","module":"usdc_token_pool","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
 
 func NewUSDCTokenPool(address aptos.AccountAddress, client aptos.AptosRpcClient) USDCTokenPoolInterface {
 	contract := bind.NewBoundContract(address, "usdc_token_pool", "usdc_token_pool", client)
@@ -483,6 +485,15 @@ func (c USDCTokenPoolContract) AcceptOwnership(opts *bind.TransactOpts) (*api.Pe
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
+func (c USDCTokenPoolContract) ExecuteOwnershipTransfer(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.usdcTokenPoolEncoder.ExecuteOwnershipTransfer(to)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
 // Encoder
 type usdcTokenPoolEncoder struct {
 	*bind.BoundContract
@@ -620,6 +631,14 @@ func (c usdcTokenPoolEncoder) TransferOwnership(to aptos.AccountAddress) (bind.M
 
 func (c usdcTokenPoolEncoder) AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("accept_ownership", nil, []string{}, []any{})
+}
+
+func (c usdcTokenPoolEncoder) ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("execute_ownership_transfer", nil, []string{
+		"address",
+	}, []any{
+		to,
+	})
 }
 
 func (c usdcTokenPoolEncoder) Initialize() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {

@@ -144,14 +144,13 @@ module ccip_onramp::onramp {
     const E_UNSUPPORTED_TOKEN: u64 = 10;
     const E_INVALID_FEE_TOKEN: u64 = 11;
     const E_CURSED_BY_RMN: u64 = 12;
-    const E_BAD_RMN_SIGNAL: u64 = 13;
-    const E_INVALID_TOKEN: u64 = 14;
-    const E_INVALID_TOKEN_STORE: u64 = 15;
-    const E_UNEXPECTED_WITHDRAW_AMOUNT: u64 = 16;
-    const E_UNEXPECTED_FUNGIBLE_ASSET: u64 = 17;
-    const E_FEE_AGGREGATOR_NOT_SET: u64 = 18;
-    const E_MUST_BE_CALLED_BY_ROUTER: u64 = 19;
-    const E_TOKEN_AMOUNT_MISMATCH: u64 = 20;
+    const E_INVALID_TOKEN: u64 = 13;
+    const E_INVALID_TOKEN_STORE: u64 = 14;
+    const E_UNEXPECTED_WITHDRAW_AMOUNT: u64 = 15;
+    const E_UNEXPECTED_FUNGIBLE_ASSET: u64 = 16;
+    const E_FEE_AGGREGATOR_NOT_SET: u64 = 17;
+    const E_MUST_BE_CALLED_BY_ROUTER: u64 = 18;
+    const E_TOKEN_AMOUNT_MISMATCH: u64 = 19;
 
     #[view]
     public fun type_and_version(): String {
@@ -348,11 +347,7 @@ module ccip_onramp::onramp {
         fee_token_store: address,
         extra_args: vector<u8>
     ): vector<u8> acquires OnRampState {
-        assert!(
-            !rmn_remote::is_cursed_global(),
-            error::permission_denied(E_BAD_RMN_SIGNAL)
-        );
-
+        // get_fee_internal checks for curse status
         let fee_token_amount =
             get_fee_internal(
                 dest_chain_selector,
