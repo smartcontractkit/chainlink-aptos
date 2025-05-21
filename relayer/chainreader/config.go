@@ -59,6 +59,9 @@ type ChainReaderEvent struct {
 
 	// Renames of event field names (optional). When not provided, the field names are used as-is.
 	EventFieldRenames map[string]RenamedField
+
+	// Renames provided filters to match the event field names (optional). When not provided, the filters are used as-is.
+	EventFilterRenames map[string]string
 }
 
 type RenamedField struct {

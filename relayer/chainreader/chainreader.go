@@ -462,6 +462,10 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		return nil, fmt.Errorf("syncEvent error: %w", err)
 	}
 
+	if eventConfig.EventFilterRenames != nil {
+		expressions = applyEventFilterRenames(expressions, eventConfig.EventFilterRenames)
+	}
+
 	dbRecords, err := a.dbStore.QueryEvents(ctx, eventAccountAddress.String(), eventHandle, eventConfig.EventHandleFieldName, expressions, limitAndSort)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query events from db: %w", err)

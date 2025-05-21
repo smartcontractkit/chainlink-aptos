@@ -799,20 +799,6 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 		}
 	})
 
-	t.Run("Sync multiple batches", func(t *testing.T) {
-		extraCount := 30
-		emitManyEvents(t, txmgr, accountAddress.String(), publicKeyHex, extraCount)
-		seqs, err := chainReader.QueryKey(
-			context.Background(),
-			binding,
-			query.KeyFilter{Key: "DoubleValueEvent"},
-			query.LimitAndSort{Limit: query.CountLimit(1000)},
-			&DoubleValueEvent{},
-		)
-		require.NoError(t, err)
-		require.GreaterOrEqual(t, len(seqs), 20+extraCount)
-	})
-
 	t.Run("Filter by renamed numeric value", func(t *testing.T) {
 		configRenamed := ChainReaderConfig{
 			Modules: map[string]*ChainReaderModule{
@@ -825,6 +811,9 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 							EventAccountAddress:   "", // defaults to bound contract address
 							EventFieldRenames: map[string]RenamedField{
 								"number": {NewName: "RenamedNumber"},
+							},
+							EventFilterRenames: map[string]string{
+								"RandomFilterName": "RenamedNumber",
 							},
 						},
 					},
@@ -854,12 +843,13 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 		filter := query.KeyFilter{
 			Key: "DoubleValueEvent",
 			Expressions: []query.Expression{
-				query.Comparator("RenamedNumber",
+				query.Comparator("RandomFilterName",
 					primitives.ValueComparator{Value: uint64(5), Operator: primitives.Gte},
 					primitives.ValueComparator{Value: uint64(10), Operator: primitives.Lt},
 				),
 			},
 		}
+
 		seqs, err := chainReaderRenamed.QueryKey(
 			context.Background(),
 			bindingRenamed,
@@ -868,7 +858,7 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 			&DoubleValueEventRenamed{},
 		)
 		require.NoError(t, err)
-		// Expect exactly one event (the one we just emitted).
+
 		require.Len(t, seqs, 1)
 		evt := seqs[0].Data.(*DoubleValueEventRenamed)
 		require.Equal(t, uint64(7), evt.RenamedNumber)

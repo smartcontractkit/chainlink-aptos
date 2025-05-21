@@ -20,6 +20,7 @@ func NewDBStore(ds sqlutil.DataSource) *DBStore {
 
 func (store *DBStore) EnsureSchema(ctx context.Context) error {
 	schemaSQL := `
+DROP SCHEMA IF EXISTS aptos CASCADE;
 CREATE SCHEMA IF NOT EXISTS aptos;
 `
 	_, err := store.ds.ExecContext(ctx, schemaSQL)

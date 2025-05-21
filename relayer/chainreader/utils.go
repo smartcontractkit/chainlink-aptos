@@ -2,12 +2,9 @@ package chainreader
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
-
-	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 )
 
 func unwrapSlice(value any) ([]any, bool) {
@@ -85,78 +82,24 @@ func renameMapFields(jsonData map[string]any, renames map[string]RenamedField) e
 	return nil
 }
 
-func compareValue(fieldValue, compareValue any, operator primitives.ComparisonOperator) bool {
-	// If the field value is a string and the comparator is numeric, try to parse it.
-	if fieldStr, ok := fieldValue.(string); ok {
-		if cmpNum, ok := compareValue.(uint64); ok {
-			num, err := strconv.ParseUint(fieldStr, 10, 64)
-			if err != nil {
-				return false
+func applyEventFilterRenames(exprs []query.Expression, renames map[string]string) []query.Expression {
+	newExprs := make([]query.Expression, len(exprs))
+	for i, expr := range exprs {
+		if expr.IsPrimitive() {
+			if comp, ok := expr.Primitive.(*primitives.Comparator); ok {
+				newName := comp.Name
+				if renamed, exists := renames[comp.Name]; exists {
+					newName = renamed
+				}
+				newExprs[i] = query.Comparator(newName, comp.ValueComparators...)
+			} else {
+				newExprs[i] = expr
 			}
-			var result bool
-			switch operator {
-			case primitives.Eq:
-				result = num == cmpNum
-			case primitives.Neq:
-				result = num != cmpNum
-			case primitives.Gt:
-				result = num > cmpNum
-			case primitives.Lt:
-				result = num < cmpNum
-			case primitives.Gte:
-				result = num >= cmpNum
-			case primitives.Lte:
-				result = num <= cmpNum
-			default:
-				return false
-			}
-			return result
+		} else {
+			newExprs[i] = expr
 		}
-
-		// Fallback: if both values are strings, do string comparison.
-		if compareStr, ok := compareValue.(string); ok {
-			switch operator {
-			case primitives.Eq:
-				return fieldStr == compareStr
-			case primitives.Neq:
-				return fieldStr != compareStr
-			default:
-				return false
-			}
-		}
-		return false
 	}
-
-	// Fallback: try decoding the field value to a uint64.
-	var fieldNum uint64
-	if err := codec.DecodeAptosJsonValue(fieldValue, &fieldNum); err != nil {
-		return false
-	}
-
-	cmpNum, ok := compareValue.(uint64)
-	if !ok {
-		return false
-	}
-
-	var result bool
-	switch operator {
-	case primitives.Eq:
-		result = fieldNum == cmpNum
-	case primitives.Neq:
-		result = fieldNum != cmpNum
-	case primitives.Gt:
-		result = fieldNum > cmpNum
-	case primitives.Lt:
-		result = fieldNum < cmpNum
-	case primitives.Gte:
-		result = fieldNum >= cmpNum
-	case primitives.Lte:
-		result = fieldNum <= cmpNum
-	default:
-		result = false
-	}
-
-	return result
+	return newExprs
 }
 
 func isNumeric(value any) bool {
