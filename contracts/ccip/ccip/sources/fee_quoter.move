@@ -112,7 +112,7 @@ module ccip::fee_quoter {
         default_token_fee_usd_cents: u16,
         default_token_dest_gas_overhead: u32,
         default_tx_gas_limit: u32,
-        // TODO: should this be octa per apt?
+        // Multiplier for gas costs, 1e18 based so 11e17 = 10% extra cost.
         gas_multiplier_wei_per_eth: u64,
         gas_price_staleness_threshold: u32,
         network_fee_usd_cents: u32
@@ -388,24 +388,24 @@ module ccip::fee_quoter {
     inline fun get_token_transfer_fee_config_internal(
         state: &FeeQuoterState, dest_chain_selector: u64, token: address
     ): &TokenTransferFeeConfig {
-        assert!(
-            state.token_transfer_fee_configs.contains(dest_chain_selector),
-            error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
-        );
-        let dest_chain_fee_configs =
-            state.token_transfer_fee_configs.borrow(dest_chain_selector);
-
-        dest_chain_fee_configs.borrow_with_default(
-            token,
-            &TokenTransferFeeConfig {
+        let empty_fee_config =
+            TokenTransferFeeConfig {
                 min_fee_usd_cents: 0,
                 max_fee_usd_cents: 0,
                 deci_bps: 0,
                 dest_gas_overhead: 0,
                 dest_bytes_overhead: 0,
                 is_enabled: false
-            }
-        )
+            };
+
+        if (!state.token_transfer_fee_configs.contains(dest_chain_selector)) {
+            &empty_fee_config
+        } else {
+            let dest_chain_fee_configs =
+                state.token_transfer_fee_configs.borrow(dest_chain_selector);
+
+            dest_chain_fee_configs.borrow_with_default(token, &empty_fee_config)
+        }
     }
 
     // Note that unlike EVM, this only allows changes for a single dest chain selector
