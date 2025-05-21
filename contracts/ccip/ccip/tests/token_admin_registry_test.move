@@ -115,7 +115,7 @@ module ccip::token_admin_registry_test {
         assert!(admin == initial_administrator);
 
         // Unregister token
-        token_admin_registry::unregister_token(owner, token_addr);
+        token_admin_registry::unregister_pool(owner, token_addr);
 
         // Verify the token is unregistered (pool address should be @0x0)
         let pool_addr = token_admin_registry::get_pool(token_addr);
@@ -232,7 +232,7 @@ module ccip::token_admin_registry_test {
 
     #[test(ccip = @ccip, owner = @mcms, not_admin = @0x300)]
     #[expected_failure(abort_code = 327703, location = ccip::token_admin_registry)]
-    fun test_unregister_token_not_admin(
+    fun test_unregister_pool_not_admin(
         ccip: &signer, owner: &signer, not_admin: &signer
     ) {
         account::create_account_for_test(signer::address_of(not_admin));
@@ -250,12 +250,12 @@ module ccip::token_admin_registry_test {
 
         // Try to unregister the token with a non-admin signer
         // Should fail with E_NOT_ADMINISTRATOR
-        token_admin_registry::unregister_token(not_admin, token_addr);
+        token_admin_registry::unregister_pool(not_admin, token_addr);
     }
 
     #[test(ccip = @ccip, owner = @mcms)]
     #[expected_failure(abort_code = 65558, location = ccip::token_admin_registry)]
-    fun test_unregister_token_not_registered(
+    fun test_unregister_pool_not_registered(
         ccip: &signer, owner: &signer
     ) {
         let (ccip_obj_signer, _mock_obj_signer, token_obj) = setup(ccip, owner);
@@ -263,7 +263,7 @@ module ccip::token_admin_registry_test {
 
         // Try to unregister a token that is not registered
         // Should fail with E_FUNGIBLE_ASSET_NOT_REGISTERED
-        token_admin_registry::unregister_token(&ccip_obj_signer, token_addr);
+        token_admin_registry::unregister_pool(&ccip_obj_signer, token_addr);
     }
 
     #[test(ccip = @ccip, owner = @mcms)]

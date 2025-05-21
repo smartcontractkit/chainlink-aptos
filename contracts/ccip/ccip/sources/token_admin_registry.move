@@ -430,7 +430,7 @@ module ccip::token_admin_registry {
         abort error::permission_denied(E_NOT_FUNGIBLE_ASSET_OWNER)
     }
 
-    public entry fun unregister_token(
+    public entry fun unregister_pool(
         caller: &signer, local_token: address
     ) acquires TokenAdminRegistryState, TokenPoolRegistration {
         let state = borrow_state_mut();
