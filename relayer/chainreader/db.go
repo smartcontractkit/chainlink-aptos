@@ -141,6 +141,11 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 		if expr.IsPrimitive() {
 			switch v := expr.Primitive.(type) {
 			case *primitives.Comparator:
+				// temp fix, remove when selector available
+				if v.Name == "SourceChain" {
+					continue
+				}
+
 				for _, valueCmp := range v.ValueComparators {
 					var condition string
 					if isNumeric(valueCmp.Value) {
