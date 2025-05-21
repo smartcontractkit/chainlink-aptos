@@ -7,7 +7,7 @@ module managed_token_pool::managed_token_pool {
     use std::option;
     use std::signer;
     use std::string::{Self, String};
-    
+
     use managed_token::managed_token;
 
     use ccip::ownable;
@@ -91,7 +91,7 @@ module managed_token_pool::managed_token_pool {
             store_signer_cap,
             token_pool_state: token_pool::initialize(
                 publisher, @managed_token_pool, vector[]
-            ),
+            )
         };
 
         move_to(&store_signer, pool);
@@ -251,7 +251,10 @@ module managed_token_pool::managed_token_pool {
         let dest_pool_data = token_pool::encode_local_decimals(&fa);
 
         // Burn the funds
-        let store = primary_fungible_store::ensure_primary_store_exists(pool.store_signer_address, fungible_asset::asset_metadata(&fa));
+        let store =
+            primary_fungible_store::ensure_primary_store_exists(
+                pool.store_signer_address, fungible_asset::asset_metadata(&fa)
+            );
         let signer = &account::create_signer_with_capability(&pool.store_signer_cap);
         fungible_asset::deposit(store, fa);
         managed_token::burn(signer, pool.store_signer_address, fa_amount);
@@ -287,7 +290,10 @@ module managed_token_pool::managed_token_pool {
         // Mint the amount for release.
         let local_token = token_admin_registry::get_release_or_mint_local_token(&input);
         let metadata = object::address_to_object<Metadata>(local_token);
-        let store = primary_fungible_store::ensure_primary_store_exists(pool.store_signer_address, metadata);
+        let store =
+            primary_fungible_store::ensure_primary_store_exists(
+                pool.store_signer_address, metadata
+            );
         let signer = &account::create_signer_with_capability(&pool.store_signer_cap);
         managed_token::mint(signer, pool.store_signer_address, local_amount);
         let fa = fungible_asset::withdraw(signer, store, local_amount);
