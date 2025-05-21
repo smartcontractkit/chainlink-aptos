@@ -17,9 +17,9 @@ module managed_token_pool::managed_token_pool {
     use mcms::mcms_registry;
     use mcms::bcs_stream;
 
-    const STORE_OBJECT_SEED: vector<u8> = b"CcipBurnMintTokenPool";
+    const STORE_OBJECT_SEED: vector<u8> = b"CcipManagedTokenPool";
 
-    struct BurnMintTokenPoolState has key, store {
+    struct ManagedTokenPoolState has key, store {
         store_signer_cap: SignerCapability,
         ownable_state: ownable::OwnableState,
         token_pool_state: token_pool::TokenPoolState,
@@ -39,12 +39,12 @@ module managed_token_pool::managed_token_pool {
 
     #[view]
     public fun type_and_version(): String {
-        string::utf8(b"BurnMintTokenPool 1.6.0")
+        string::utf8(b"ManagedTokenPool 1.6.0")
     }
 
     fun init_module(publisher: &signer) {
         // register the pool on deployment, because in the case of object code deployment,
-        // this is the only time we have a signer ref to @ccip_burn_mint_pool.
+        // this is the only time we have a signer ref to @ccip_managed_pool.
         assert!(
             object::object_exists<Metadata>(@managed_token),
             error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
@@ -56,7 +56,7 @@ module managed_token_pool::managed_token_pool {
 
         // the name of this module. if incorrect, callbacks will fail to be registered and
         // register_pool will revert.
-        let token_pool_module_name = b"burn_mint_token_pool";
+        let token_pool_module_name = b"managed_token_pool";
 
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints == @0x1) {
@@ -85,7 +85,7 @@ module managed_token_pool::managed_token_pool {
 
         let store_signer = account::create_signer_with_capability(&store_signer_cap);
 
-        let pool = BurnMintTokenPoolState {
+        let pool = ManagedTokenPoolState {
             ownable_state: ownable::new(publisher, @managed_token_pool),
             store_signer_address: signer::address_of(&store_signer),
             store_signer_cap,
@@ -102,7 +102,7 @@ module managed_token_pool::managed_token_pool {
     // ================================================================
 
     #[view]
-    public fun get_token(): address acquires BurnMintTokenPoolState {
+    public fun get_token(): address acquires ManagedTokenPoolState {
         token_pool::get_token(&borrow_pool().token_pool_state)
     }
 
@@ -112,14 +112,14 @@ module managed_token_pool::managed_token_pool {
     }
 
     #[view]
-    public fun get_token_decimals(): u8 acquires BurnMintTokenPoolState {
+    public fun get_token_decimals(): u8 acquires ManagedTokenPoolState {
         token_pool::get_token_decimals(&borrow_pool().token_pool_state)
     }
 
     #[view]
     public fun get_remote_pools(
         remote_chain_selector: u64
-    ): vector<vector<u8>> acquires BurnMintTokenPoolState {
+    ): vector<vector<u8>> acquires ManagedTokenPoolState {
         token_pool::get_remote_pools(
             &borrow_pool().token_pool_state, remote_chain_selector
         )
@@ -128,7 +128,7 @@ module managed_token_pool::managed_token_pool {
     #[view]
     public fun is_remote_pool(
         remote_chain_selector: u64, remote_pool_address: vector<u8>
-    ): bool acquires BurnMintTokenPoolState {
+    ): bool acquires ManagedTokenPoolState {
         token_pool::is_remote_pool(
             &borrow_pool().token_pool_state,
             remote_chain_selector,
@@ -139,14 +139,14 @@ module managed_token_pool::managed_token_pool {
     #[view]
     public fun get_remote_token(
         remote_chain_selector: u64
-    ): vector<u8> acquires BurnMintTokenPoolState {
+    ): vector<u8> acquires ManagedTokenPoolState {
         let pool = borrow_pool();
         token_pool::get_remote_token(&pool.token_pool_state, remote_chain_selector)
     }
 
     public entry fun add_remote_pool(
         caller: &signer, remote_chain_selector: u64, remote_pool_address: vector<u8>
-    ) acquires BurnMintTokenPoolState {
+    ) acquires ManagedTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -157,7 +157,7 @@ module managed_token_pool::managed_token_pool {
 
     public entry fun remove_remote_pool(
         caller: &signer, remote_chain_selector: u64, remote_pool_address: vector<u8>
-    ) acquires BurnMintTokenPoolState {
+    ) acquires ManagedTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -167,13 +167,13 @@ module managed_token_pool::managed_token_pool {
     }
 
     #[view]
-    public fun is_supported_chain(remote_chain_selector: u64): bool acquires BurnMintTokenPoolState {
+    public fun is_supported_chain(remote_chain_selector: u64): bool acquires ManagedTokenPoolState {
         let pool = borrow_pool();
         token_pool::is_supported_chain(&pool.token_pool_state, remote_chain_selector)
     }
 
     #[view]
-    public fun get_supported_chains(): vector<u64> acquires BurnMintTokenPoolState {
+    public fun get_supported_chains(): vector<u64> acquires ManagedTokenPoolState {
         let pool = borrow_pool();
         token_pool::get_supported_chains(&pool.token_pool_state)
     }
@@ -184,7 +184,7 @@ module managed_token_pool::managed_token_pool {
         remote_chain_selectors_to_add: vector<u64>,
         remote_pool_addresses_to_add: vector<vector<vector<u8>>>,
         remote_token_addresses_to_add: vector<vector<u8>>
-    ) acquires BurnMintTokenPoolState {
+    ) acquires ManagedTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -198,20 +198,20 @@ module managed_token_pool::managed_token_pool {
     }
 
     #[view]
-    public fun get_allowlist_enabled(): bool acquires BurnMintTokenPoolState {
+    public fun get_allowlist_enabled(): bool acquires ManagedTokenPoolState {
         let pool = borrow_pool();
         token_pool::get_allowlist_enabled(&pool.token_pool_state)
     }
 
     #[view]
-    public fun get_allowlist(): vector<address> acquires BurnMintTokenPoolState {
+    public fun get_allowlist(): vector<address> acquires ManagedTokenPoolState {
         let pool = borrow_pool();
         token_pool::get_allowlist(&pool.token_pool_state)
     }
 
     public entry fun apply_allowlist_updates(
         caller: &signer, removes: vector<address>, adds: vector<address>
-    ) acquires BurnMintTokenPoolState {
+    ) acquires ManagedTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
         token_pool::apply_allowlist_updates(&mut pool.token_pool_state, removes, adds);
@@ -226,7 +226,7 @@ module managed_token_pool::managed_token_pool {
 
     public fun lock_or_burn<T: key>(
         _store: Object<T>, fa: FungibleAsset, _transfer_ref: &TransferRef
-    ) acquires BurnMintTokenPoolState {
+    ) acquires ManagedTokenPoolState {
         // retrieve the input for this lock or burn operation. if this function is invoked
         // outside of ccip::token_admin_registry, the transaction will abort.
         let input =
@@ -272,7 +272,7 @@ module managed_token_pool::managed_token_pool {
 
     public fun release_or_mint<T: key>(
         _store: Object<T>, _amount: u64, _transfer_ref: &TransferRef
-    ): FungibleAsset acquires BurnMintTokenPoolState {
+    ): FungibleAsset acquires ManagedTokenPoolState {
         // retrieve the input for this release or mint operation. if this function is invoked
         // outside of ccip::token_admin_registry, the transaction will abort.
         let input =
@@ -328,7 +328,7 @@ module managed_token_pool::managed_token_pool {
         inbound_is_enableds: vector<bool>,
         inbound_capacities: vector<u64>,
         inbound_rates: vector<u64>
-    ) acquires BurnMintTokenPoolState {
+    ) acquires ManagedTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -367,7 +367,7 @@ module managed_token_pool::managed_token_pool {
         inbound_is_enabled: bool,
         inbound_capacity: u64,
         inbound_rate: u64
-    ) acquires BurnMintTokenPoolState {
+    ) acquires ManagedTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
@@ -401,10 +401,10 @@ module managed_token_pool::managed_token_pool {
         if (caller_address == @managed_token_pool) { return };
 
         if (object::is_object(@managed_token_pool)) {
-            let burn_mint_token_pool_object =
+            let managed_token_pool_object =
                 object::address_to_object<ObjectCore>(@managed_token_pool);
-            if (caller_address == object::owner(burn_mint_token_pool_object)
-                || caller_address == object::root_owner(burn_mint_token_pool_object)) {
+            if (caller_address == object::owner(managed_token_pool_object)
+                || caller_address == object::root_owner(managed_token_pool_object)) {
                 return
             };
         };
@@ -412,12 +412,12 @@ module managed_token_pool::managed_token_pool {
         abort error::permission_denied(E_NOT_PUBLISHER)
     }
 
-    inline fun borrow_pool(): &BurnMintTokenPoolState {
-        borrow_global<BurnMintTokenPoolState>(store_address())
+    inline fun borrow_pool(): &ManagedTokenPoolState {
+        borrow_global<ManagedTokenPoolState>(store_address())
     }
 
-    inline fun borrow_pool_mut(): &mut BurnMintTokenPoolState {
-        borrow_global_mut<BurnMintTokenPoolState>(store_address())
+    inline fun borrow_pool_mut(): &mut ManagedTokenPoolState {
+        borrow_global_mut<ManagedTokenPoolState>(store_address())
     }
 
     // ================================================================
@@ -425,17 +425,17 @@ module managed_token_pool::managed_token_pool {
     // ================================================================
 
     #[view]
-    public fun owner(): address acquires BurnMintTokenPoolState {
+    public fun owner(): address acquires ManagedTokenPoolState {
         let pool = borrow_pool();
         ownable::owner(&pool.ownable_state)
     }
 
-    public entry fun transfer_ownership(caller: &signer, to: address) acquires BurnMintTokenPoolState {
+    public entry fun transfer_ownership(caller: &signer, to: address) acquires ManagedTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::transfer_ownership(caller, &mut pool.ownable_state, to)
     }
 
-    public entry fun accept_ownership(caller: &signer) acquires BurnMintTokenPoolState {
+    public entry fun accept_ownership(caller: &signer) acquires ManagedTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::accept_ownership(caller, &mut pool.ownable_state)
     }
@@ -448,7 +448,7 @@ module managed_token_pool::managed_token_pool {
 
     public fun mcms_entrypoint<T: key>(
         _metadata: object::Object<T>
-    ): option::Option<u128> acquires BurnMintTokenPoolState {
+    ): option::Option<u128> acquires ManagedTokenPoolState {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@managed_token_pool, McmsCallback {});
 
