@@ -11,7 +11,7 @@ mcms_register_entrypoints = "_"
 
 [dev-addresses]
 ## CCIP Core: 1xxx
-ccip = "0x1000"
+ccip = "0x30b33dec3fcac5ef3ea775128d88722b64ba59a4598277e537f284917403df29"
 
 # MCMS: 4xxx
 mcms = "0x4000"
