@@ -32,10 +32,10 @@ type OwnableEncoder interface {
 	Destroy(state OwnableState) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"link","module":"ownable","name":"destroy","parameters":[{"name":"state","type":"OwnableState"}]},{"package":"link","module":"ownable","name":"new","parameters":[{"name":"object_address","type":"address"}]}]`
+const FunctionInfo = `[{"package":"managed_token","module":"ownable","name":"destroy","parameters":[{"name":"state","type":"OwnableState"}]},{"package":"managed_token","module":"ownable","name":"new","parameters":[{"name":"object_address","type":"address"}]}]`
 
 func NewOwnable(address aptos.AccountAddress, client aptos.AptosRpcClient) OwnableInterface {
-	contract := bind.NewBoundContract(address, "link", "ownable", client)
+	contract := bind.NewBoundContract(address, "managed_token", "ownable", client)
 	return OwnableContract{
 		BoundContract:  contract,
 		ownableEncoder: ownableEncoder{BoundContract: contract},

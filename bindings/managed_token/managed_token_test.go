@@ -1,4 +1,4 @@
-package link_token
+package managed_token
 
 import (
 	"testing"

@@ -1,4 +1,4 @@
-package link_token
+package managed_token
 
 import (
 	"github.com/aptos-labs/aptos-go-sdk"
@@ -6,9 +6,9 @@ import (
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/compile"
-	module_allowlist "github.com/smartcontractkit/chainlink-aptos/bindings/link-token/allowlist"
-	module_link_token "github.com/smartcontractkit/chainlink-aptos/bindings/link-token/link_token"
-	module_ownable "github.com/smartcontractkit/chainlink-aptos/bindings/link-token/ownable"
+	module_allowlist "github.com/smartcontractkit/chainlink-aptos/bindings/managed_token/allowlist"
+	module_managed_token "github.com/smartcontractkit/chainlink-aptos/bindings/managed_token/managed_token"
+	module_ownable "github.com/smartcontractkit/chainlink-aptos/bindings/managed_token/ownable"
 	"github.com/smartcontractkit/chainlink-aptos/contracts"
 )
 
@@ -16,7 +16,7 @@ type LinkToken interface {
 	Address() aptos.AccountAddress
 
 	Allowlist() module_allowlist.AllowlistInterface
-	LinkToken() module_link_token.LinkTokenInterface
+	LinkToken() module_managed_token.ManagedTokenInterface
 	Ownable() module_ownable.OwnableInterface
 }
 
@@ -26,7 +26,7 @@ type LinkTokenContact struct {
 	address aptos.AccountAddress
 
 	allowlist module_allowlist.AllowlistInterface
-	linkToken module_link_token.LinkTokenInterface
+	linkToken module_managed_token.ManagedTokenInterface
 	ownable   module_ownable.OwnableInterface
 }
 
@@ -38,7 +38,7 @@ func (l LinkTokenContact) Allowlist() module_allowlist.AllowlistInterface {
 	return l.allowlist
 }
 
-func (l LinkTokenContact) LinkToken() module_link_token.LinkTokenInterface {
+func (l LinkTokenContact) LinkToken() module_managed_token.ManagedTokenInterface {
 	return l.linkToken
 }
 
@@ -53,28 +53,28 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 
 func Compile(address aptos.AccountAddress) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
-		"link": address,
+		"managed_token": address,
 	}
 	// Compile using CLI
-	return compile.CompilePackage(contracts.LinkToken, namedAddresses)
+	return compile.CompilePackage(contracts.ManagedToken, namedAddresses)
 }
 
 func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) LinkToken {
 	return LinkTokenContact{
 		address:   address,
 		allowlist: module_allowlist.NewAllowlist(address, client),
-		linkToken: module_link_token.NewLinkToken(address, client),
+		linkToken: module_managed_token.NewManagedToken(address, client),
 		ownable:   module_ownable.NewOwnable(address, client),
 	}
 }
 
-// DeployToObject deploys the link-token package to a new named object.
+// DeployToObject deploys the managed_token package to a new named object.
 // The resulting address will be calculated using the deployer's account address and sequence number.
 func DeployToObject(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
 ) (aptos.AccountAddress, *api.PendingTransaction, LinkToken, error) {
-	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.LinkToken, nil)
+	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.ManagedToken, nil)
 	if err != nil {
 		return aptos.AccountAddress{}, nil, nil, err
 	}
@@ -83,12 +83,12 @@ func DeployToObject(
 
 // CompileMCMSRegistrar compiles the mcms-registrar package
 func CompileMCMSRegistrar(
-	linkTokenAddress,
+	managedTokenAddress,
 	mcmsAddress aptos.AccountAddress,
 	registerMCMSEntrypoints bool,
 ) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
-		"link":                      linkTokenAddress,
+		"managed_token":             managedTokenAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}

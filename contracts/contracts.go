@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 )
 
-//go:embed ccip large_packages mcms vendored data-feeds platform link-token mcms-registrar
+//go:embed ccip large_packages mcms vendored data-feeds platform managed_token mcms-registrar
 var Embed embed.FS
 
 type Package string
@@ -16,13 +16,14 @@ const (
 	CCIPBurnMintPool    = Package("burn_mint_token_pool")
 	CCIPLockReleasePool = Package("lock_release_token_pool")
 	CCIPUSDCTokenPool   = Package("usdc_token_pool")
+	CCIPManagedTokenPool = Package("managed_token_pool")
 	CCIPTokenPool       = Package("ccip_token_pool")
 	CCIPRouter          = Package("ccip_router")
 	CCIPDummyReceiver   = Package("ccip_dummy_receiver")
 	CCIPOfframp         = Package("ccip_offramp")
 	CCIPOnramp          = Package("ccip_onramp")
 
-	LinkToken     = Package("link")
+	ManagedToken  = Package("link")
 	MCMSRegistrar = Package("mcms-registrar")
 
 	DataFeeds = Package("data_feeds")
@@ -41,6 +42,7 @@ var Contracts map[Package]string = map[Package]string{
 	CCIPBurnMintPool:    filepath.Join("ccip", "ccip_token_pools", "burn_mint_token_pool"),
 	CCIPLockReleasePool: filepath.Join("ccip", "ccip_token_pools", "lock_release_token_pool"),
 	CCIPUSDCTokenPool:   filepath.Join("ccip", "ccip_token_pools", "usdc_token_pool"),
+	CCIPManagedTokenPool: filepath.Join("ccip", "ccip_token_pools", "managed_token_pool"),
 	CCIPTokenPool:       filepath.Join("ccip", "ccip_token_pools", "token_pool"),
 	CCIPRouter:          filepath.Join("ccip", "ccip_router"),
 	CCIPDummyReceiver:   filepath.Join("ccip", "ccip_dummy_receiver"),
@@ -49,7 +51,7 @@ var Contracts map[Package]string = map[Package]string{
 	DataFeeds:           "data-feeds",
 	Platform:            "platform",
 
-	LinkToken:     filepath.Join("link-token"),
+	ManagedToken:  filepath.Join("managed_token"),
 	MCMSRegistrar: filepath.Join("mcms-registrar"),
 
 	MCMS:     filepath.Join("mcms", "mcms"),
