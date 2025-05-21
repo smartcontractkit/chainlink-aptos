@@ -31,7 +31,7 @@ module ccip_dummy_receiver::dummy_receiver {
 
         let handle = account::new_event_handle(publisher);
 
-        move_to(publisher, CCIPReceiverState{ received_message_events: handle });
+        move_to(publisher, CCIPReceiverState { received_message_events: handle });
 
         receiver_registry::register_receiver(
             publisher, b"dummy_receiver", DummyReceiverProof {}
@@ -50,7 +50,7 @@ module ccip_dummy_receiver::dummy_receiver {
         let state = borrow_state_mut();
 
         event::emit(ReceivedMessage { data });
-        event::emit_event(&mut state.received_message_events, ReceivedMessage{ data });
+        event::emit_event(&mut state.received_message_events, ReceivedMessage { data });
 
         option::none()
     }
