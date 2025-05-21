@@ -59,8 +59,14 @@ module ccip::fee_quoter {
     const VAL_1E16: u256 = 10_000_000_000_000_000;
     const VAL_1E18: u256 = 1_000_000_000_000_000_000;
 
+    // Link has 8 decimals on Aptos and 18 decimals on it's native chain, Ethereum. We want to emit
+    // the fee in juels (1e18) denomination for consistency across chains. This means we multiply
+    // the fee by 1e8 on Aptos before we emit it in the event.
+    const LOCAL_8_TO_18_DECIMALS_LINK_MULTIPLIER: u256 = 10_000_000_000;
+
     struct FeeQuoterState has key, store {
-        max_fee_juels_per_msg: u64,
+        // max_fee_juels_per_msg is in juels (1e18) denomination for consistency across chains.
+        max_fee_juels_per_msg: u256,
         link_token: address,
         token_price_staleness_threshold: u64,
         fee_tokens: vector<address>,
@@ -84,7 +90,7 @@ module ccip::fee_quoter {
     }
 
     struct StaticConfig has drop {
-        max_fee_juels_per_msg: u64,
+        max_fee_juels_per_msg: u256,
         link_token: address,
         token_price_staleness_threshold: u64
     }
@@ -229,7 +235,7 @@ module ccip::fee_quoter {
 
     public entry fun initialize(
         caller: &signer,
-        max_fee_juels_per_msg: u64,
+        max_fee_juels_per_msg: u256,
         link_token: address,
         token_price_staleness_threshold: u64,
         fee_tokens: vector<address>
@@ -388,9 +394,9 @@ module ccip::fee_quoter {
         );
         let dest_chain_fee_configs =
             state.token_transfer_fee_configs.borrow(dest_chain_selector);
-        if (dest_chain_fee_configs.contains(token)) {
-            dest_chain_fee_configs.borrow(token)
-        } else {
+
+        dest_chain_fee_configs.borrow_with_default(
+            token,
             &TokenTransferFeeConfig {
                 min_fee_usd_cents: 0,
                 max_fee_usd_cents: 0,
@@ -399,7 +405,7 @@ module ccip::fee_quoter {
                 dest_bytes_overhead: 0,
                 is_enabled: false
             }
-        }
+        )
     }
 
     // Note that unlike EVM, this only allows changes for a single dest chain selector
@@ -997,6 +1003,7 @@ module ccip::fee_quoter {
     }
 
     #[view]
+    /// @returns (msg_fee_juels, is_out_of_order_execution, converted_extra_args, dest_exec_data_per_token)
     public fun process_message_args(
         dest_chain_selector: u64,
         fee_token: address,
@@ -1005,9 +1012,10 @@ module ccip::fee_quoter {
         local_token_addresses: vector<address>,
         dest_token_addresses: vector<vector<u8>>,
         dest_pool_datas: vector<vector<u8>>
-    ): (u64, bool, vector<u8>, vector<vector<u8>>) acquires FeeQuoterState {
+    ): (u256, bool, vector<u8>, vector<vector<u8>>) acquires FeeQuoterState {
         let state = borrow_state();
-        let msg_fee_juels =
+        // This is the fee in Aptos denomination. We convert it to juels (1e18 based) below.
+        let msg_fee_link_local_denomination =
             if (fee_token == state.link_token) {
                 fee_token_amount
             } else {
@@ -1019,6 +1027,13 @@ module ccip::fee_quoter {
                 )
             };
 
+        // We convert the local denomination to juels here. This means that the offchain monitoring will always
+        // get a consistent juels amount regardless of the token denomination on the chain.
+        let msg_fee_juels =
+            (msg_fee_link_local_denomination as u256)
+                * LOCAL_8_TO_18_DECIMALS_LINK_MULTIPLIER;
+
+        // max_fee_juels_per_msg is in juels denomination for consistency across chains.
         assert!(
             msg_fee_juels <= state.max_fee_juels_per_msg,
             error::invalid_argument(E_MESSAGE_FEE_TOO_HIGH)
@@ -1400,7 +1415,7 @@ module ccip::fee_quoter {
         let stream = bcs_stream::new(data);
 
         if (function_bytes == b"initialize") {
-            let max_fee_juels_per_msg = bcs_stream::deserialize_u64(&mut stream);
+            let max_fee_juels_per_msg = bcs_stream::deserialize_u256(&mut stream);
             let link_token = bcs_stream::deserialize_address(&mut stream);
             let token_price_staleness_threshold = bcs_stream::deserialize_u64(
                 &mut stream

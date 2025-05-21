@@ -120,7 +120,7 @@ type Aptos2AnyRampMessage struct {
 	ExtraArgs      []byte                   `move:"vector<u8>"`
 	FeeToken       aptos.AccountAddress     `move:"address"`
 	FeeTokenAmount uint64                   `move:"u64"`
-	FeeValueJuels  uint64                   `move:"u64"`
+	FeeValueJuels  *big.Int                 `move:"u256"`
 	TokenAmounts   []Aptos2AnyTokenTransfer `move:"vector<Aptos2AnyTokenTransfer>"`
 }
 

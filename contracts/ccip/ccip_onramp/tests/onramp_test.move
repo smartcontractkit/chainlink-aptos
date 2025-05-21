@@ -139,7 +139,7 @@ module ccip_onramp::onramp_test {
 
         fee_quoter::initialize(
             owner,
-            20000000000000,
+            200_000_000_000_000_000_000,
             token_addr,
             12400,
             vector[token_addr]
