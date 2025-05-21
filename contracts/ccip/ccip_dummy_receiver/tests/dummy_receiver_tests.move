@@ -2,9 +2,7 @@
 module ccip_dummy_receiver::dummy_receiver_tests {
     use std::vector;
     use std::event;
-    use std::object::{Self, Object, ObjectCore};
-    use std::option;
-    use std::account;
+    use std::object::{Self};
     use std::signer;
     use aptos_framework::timestamp;
     use ccip_dummy_receiver::dummy_receiver::{Self, ReceivedMessage};
