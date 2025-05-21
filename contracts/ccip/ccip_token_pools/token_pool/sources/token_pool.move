@@ -417,7 +417,10 @@ module ccip_token_pool::token_pool {
         // Check RMN curse status
         let remote_chain_selector =
             token_admin_registry::get_release_or_mint_remote_chain_selector(input);
-        assert!(!rmn_remote::is_cursed_u128((remote_chain_selector as u128)));
+        assert!(
+            !rmn_remote::is_cursed_u128((remote_chain_selector as u128)),
+            error::invalid_state(E_CURSED_CHAIN)
+        );
 
         let source_pool_address =
             token_admin_registry::get_release_or_mint_source_pool_address(input);
