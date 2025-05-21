@@ -177,3 +177,7 @@ func (a *aptosChainWriter) GetFeeComponents(ctx context.Context) (*commontypes.C
 		DataAvailabilityFee: big.NewInt(0),
 	}, nil
 }
+
+func (a *aptosChainWriter) GetEstimateFee(ctx context.Context, contract, method string, args any, toAddress string, meta *commontypes.TxMeta, val *big.Int) (commontypes.EstimateFee, error) {
+	return commontypes.EstimateFee{}, errors.New("not implemented")
+}
