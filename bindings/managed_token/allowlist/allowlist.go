@@ -33,10 +33,10 @@ type AllowlistEncoder interface {
 	DestroyAllowlist(state AllowlistState) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"link","module":"allowlist","name":"destroy_allowlist","parameters":[{"name":"state","type":"AllowlistState"}]},{"package":"link","module":"allowlist","name":"new","parameters":[{"name":"allowlist","type":"vector\u003caddress\u003e"}]},{"package":"link","module":"allowlist","name":"new_with_name","parameters":[{"name":"allowlist","type":"vector\u003caddress\u003e"},{"name":"allowlist_name","type":"0x1::string::String"}]}]`
+const FunctionInfo = `[{"package":"managed_token","module":"allowlist","name":"destroy_allowlist","parameters":[{"name":"state","type":"AllowlistState"}]},{"package":"managed_token","module":"allowlist","name":"new","parameters":[{"name":"allowlist","type":"vector\u003caddress\u003e"}]},{"package":"managed_token","module":"allowlist","name":"new_with_name","parameters":[{"name":"allowlist","type":"vector\u003caddress\u003e"},{"name":"allowlist_name","type":"0x1::string::String"}]}]`
 
 func NewAllowlist(address aptos.AccountAddress, client aptos.AptosRpcClient) AllowlistInterface {
-	contract := bind.NewBoundContract(address, "link", "allowlist", client)
+	contract := bind.NewBoundContract(address, "managed_token", "allowlist", client)
 	return AllowlistContract{
 		BoundContract:    contract,
 		allowlistEncoder: allowlistEncoder{BoundContract: contract},
