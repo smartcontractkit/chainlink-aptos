@@ -23,7 +23,7 @@ const (
 	CCIPOfframp          = Package("ccip_offramp")
 	CCIPOnramp           = Package("ccip_onramp")
 
-	ManagedToken  = Package("link")
+	ManagedToken  = Package("managed_token")
 	MCMSRegistrar = Package("mcms-registrar")
 
 	DataFeeds = Package("data_feeds")
