@@ -191,4 +191,9 @@ module ccip::receiver_registry {
         );
         borrow_global_mut<CCIPReceiverRegistration>(receiver_address)
     }
+
+    #[test_only]
+    public fun init_module_for_testing(publisher: &signer) {
+        init_module(publisher);
+    }
 }
