@@ -109,7 +109,7 @@ module managed_token::managed_token_tests {
     public fun test_burn_managed_token(
         owner: &signer, recipient: &signer, managed_token: &signer
     ) {
-        // Setup env and mint link first, mint 100 to recipient
+        // Setup env and mint managed_token first, mint 100 to recipient
         test_mint_managed_token(owner, recipient, managed_token);
 
         let recipient_addr = signer::address_of(recipient);

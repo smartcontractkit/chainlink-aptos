@@ -72,7 +72,7 @@ module managed_token::managed_token {
 
     #[view]
     public fun type_and_version(): String {
-        string::utf8(b"LinkToken 1.0.0")
+        string::utf8(b"ManagedToken 1.0.0")
     }
 
     #[view]
