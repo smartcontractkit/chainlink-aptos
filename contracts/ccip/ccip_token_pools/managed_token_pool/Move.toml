@@ -10,7 +10,7 @@ managed_token_pool = "_"
 token_pool_administrator = "_"
 mcms = "_"
 mcms_register_entrypoints = "_"
-link_token = "_"
+managed_token = "_"
 
 [dev-addresses]
 ccip = "0x1000"
@@ -19,12 +19,12 @@ managed_token_pool = "0x2001"
 token_pool_administrator = "0x2900"
 mcms = "0x4000"
 mcms_register_entrypoints = "0x4001"
-link_token = "0x9000"
+managed_token = "0x9000"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }
 ChainlinkCCIP = { local = "../../ccip" }
 CCIPTokenPool = { local = "../token_pool" }
-ChainlinkToken = { local = "../../../link-token", addr_subst = { "link" = "0x0" }}
+ManagedToken = { local = "../../../managed_token"}
 
 [dev-dependencies]

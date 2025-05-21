@@ -7,7 +7,8 @@ module managed_token_pool::managed_token_pool {
     use std::option;
     use std::signer;
     use std::string::{Self, String};
-    use link::link_token;
+    
+    use managed_token::managed_token;
 
     use ccip::ownable;
     use ccip::token_admin_registry;
@@ -45,10 +46,10 @@ module managed_token_pool::managed_token_pool {
         // register the pool on deployment, because in the case of object code deployment,
         // this is the only time we have a signer ref to @ccip_burn_mint_pool.
         assert!(
-            object::object_exists<Metadata>(@link),
+            object::object_exists<Metadata>(@managed_token),
             error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
         );
-        let metadata = object::address_to_object<Metadata>(@link);
+        let metadata = object::address_to_object<Metadata>(@managed_token);
 
         // create an Account on the object for event handles.
         account::create_account_if_does_not_exist(@managed_token_pool);
@@ -67,7 +68,7 @@ module managed_token_pool::managed_token_pool {
         token_admin_registry::register_pool(
             publisher,
             token_pool_module_name,
-            @link,
+            @managed_token,
             @token_pool_administrator,
             CallbackProof {}
         );
@@ -253,7 +254,7 @@ module managed_token_pool::managed_token_pool {
         let store = primary_fungible_store::ensure_primary_store_exists(pool.store_signer_address, fungible_asset::asset_metadata(&fa));
         let signer = &account::create_signer_with_capability(&pool.store_signer_cap);
         fungible_asset::deposit(store, fa);
-        link_token::burn(signer, pool.store_signer_address, fa_amount);
+        managed_token::burn(signer, pool.store_signer_address, fa_amount);
 
         // set the output for this lock or burn operation.
         token_admin_registry::set_lock_or_burn_output_v1(
@@ -288,7 +289,7 @@ module managed_token_pool::managed_token_pool {
         let metadata = object::address_to_object<Metadata>(local_token);
         let store = primary_fungible_store::ensure_primary_store_exists(pool.store_signer_address, metadata);
         let signer = &account::create_signer_with_capability(&pool.store_signer_cap);
-        link_token::mint(signer, pool.store_signer_address, local_amount);
+        managed_token::mint(signer, pool.store_signer_address, local_amount);
         let fa = fungible_asset::withdraw(signer, store, local_amount);
 
         // set the output for this release or mint operation.

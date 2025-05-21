@@ -15,7 +15,7 @@
 /// Note that direct ownership transfers via 0x1::object::transfer are still possible.
 /// This module handles such cases gracefully by reading the current owner directly
 /// from the object.
-module link::ownable {
+module managed_token::ownable {
     use std::account;
     use std::error;
     use std::event::{Self, EventHandle};
