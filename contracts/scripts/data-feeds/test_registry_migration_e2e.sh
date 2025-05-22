@@ -243,8 +243,10 @@ fi
 
 # Kill the node when the script exits (normal or error)
 cleanup() {
-  echo "🛑 Cleaning up Aptos testnet (PID $APTOS_PID)"
-  kill "$APTOS_PID" 2>/dev/null || true
+  if [[ -n "${APTOS_PID:-}" ]]; then
+    echo "🛑 Cleaning up Aptos testnet (PID $APTOS_PID)"
+    kill "$APTOS_PID" 2>/dev/null || true
+  fi
 }
 trap cleanup EXIT
 
@@ -297,7 +299,7 @@ run "Deploy Forwarder 1" OUT_FWD1 \
     --max-gas 50000 --assume-yes
 
 PLATFORM_FORWARDER_ADDR=$(print "$OUT_FWD1" | extract_addr)
-echo "$PLATFORM_FORWARDER_ADDR" >"$CONTRACTS_ROOT/platform/contract_address.txt"
+run "Forwarder 1: $PLATFORM_FORWARDER_ADDR" _out true
 
 # If address empty ⇒ show full CLI output before dying
 if [[ -z "$PLATFORM_FORWARDER_ADDR" ]]; then
@@ -323,7 +325,7 @@ run "Deploy Forwarder 2" OUT_FWD2 \
     --max-gas 50000 --assume-yes
 
 PLATFORM_SECONDARY_FORWARDER_ADDR=$(print "$OUT_FWD2" | extract_addr)
-echo "$PLATFORM_SECONDARY_FORWARDER_ADDR" >"$CONTRACTS_ROOT/platform_secondary/contract_address.txt"
+run "Forwarder 2: $PLATFORM_SECONDARY_FORWARDER_ADDR" _out true
 
 # If address empty ⇒ show full CLI output before dying
 if [[ -z "$PLATFORM_SECONDARY_FORWARDER_ADDR" ]]; then
@@ -349,7 +351,7 @@ run "Deploy data-feeds (legacy, pre-migration)" OUT_DF_LEGACY \
     --max-gas 50000 --assume-yes
 
 DATA_FEEDS_ADDR=$(print "$OUT_DF_LEGACY" | extract_addr)
-echo "$DATA_FEEDS_ADDR" >"$CONTRACTS_ROOT/legacy/data-feeds-pre-migration/contract_address.txt"
+run "Registry: $DATA_FEEDS_ADDR" _out true
 
 # If address empty ⇒ show full CLI output before dying
 if [[ -z "$DATA_FEEDS_ADDR" ]]; then
