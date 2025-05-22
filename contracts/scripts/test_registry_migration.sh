@@ -1,6 +1,94 @@
 #!/usr/bin/env bash
-set -euxo pipefail
+# ------------------------------------------------------------------------------
+#  Aptos test script for the Registry migration to support 2 Forwarders
+#  • Optional command tracing         :  DEBUG=1 ./test_registry_migration.sh
+# ------------------------------------------------------------------------------
 
+set -euo pipefail
+if [[ "${DEBUG:-}" =~ ^(1|true|yes|y)$ ]]; then
+  echo "entered!!"
+  set -x
+fi
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Cosmetics (colour & spinner helpers)
+# ──────────────────────────────────────────────────────────────────────────────
+if [[ -t 1 && "${TERM:-dumb}" != "dumb" ]]; then
+  use_tty=true
+  BOLD=$(tput bold)  RESET=$(tput sgr0)
+  GREEN=$(tput setaf 2)  RED=$(tput setaf 1)  YELLOW=$(tput setaf 3) CYAN=$(tput setaf 6)
+  SPIN_CHARS='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+  tput civis # hide cursor
+  trap 'tput cnorm' EXIT INT TERM
+else
+  use_tty=false
+  BOLD='' RESET='' GREEN='' RED='' YELLOW='' CYAN='' SPIN_CHARS='-\|/'
+fi
+
+print()      { printf '%b\n' "$*"; }
+heading()    { print "\n${CYAN}${BOLD}$*${RESET}"; }
+success()    { print "  ${GREEN}✔ $*${RESET}"; }
+# fail <msg> [<logfile>]
+fail() {
+  local msg=$1 log=${2:-}
+  print "  ${RED}✖ ${msg}${RESET}"
+  [[ -f "$log" ]] && { print ""; cat "$log"; }
+}
+warn()       { print "  ${YELLOW}$*${RESET}"; }
+
+spinner() {              # spinner <pid>
+  local pid=$1 i=0
+  if [[ $- == *x* ]]; then             # x-trace already ON → turn it off
+    (
+      set +e   # <-- turn -e OFF inside this subshell
+      set +x   # quiet
+      while kill -0 "$pid" 2>/dev/null; do
+        printf "\r  %s " "${SPIN_CHARS:i++%${#SPIN_CHARS}:1}"
+        sleep 0.1
+      done
+    )
+  else
+    while kill -0 "$pid" 2>/dev/null; do
+      printf "\r  %s " "${SPIN_CHARS:i++%${#SPIN_CHARS}:1}"
+      sleep 0.1
+    done                              # quiet spinner
+  fi
+}
+
+run() {
+  # run <description> <var_to_capture_output> <command ...>
+  local desc=$1 outvar=$2; shift 2
+  local log_file; log_file=$(mktemp)
+  heading "$desc"
+  local start_time; start_time=$(date +%s)
+
+  # wrap command in subshell so set -e outside doesn’t kill spinner instantly
+  (
+    set +e  # we’ll handle exit code ourselves
+    "$@" >"$log_file" 2>&1
+    echo $? >"$log_file.rc"
+  ) & local pid=$!
+
+  $use_tty && spinner "$pid"
+  wait "$pid"
+
+  local exit_code; exit_code=$(cat "$log_file.rc")
+  local duration=$(( $(date +%s)-start_time))
+
+  if [[ $exit_code -ne 0 ]]; then
+    fail "$desc (in ${duration}s)" "$log_file"
+    rm -f "$log_file" "$log_file.rc"
+    exit $exit_code
+  fi
+
+  printf -v "$outvar" '%s' "$(cat "$log_file")"
+  success "$desc (in ${duration}s)"
+  rm -f "$log_file" "$log_file.rc"
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Constants / Inputs (from your original script)
+# ──────────────────────────────────────────────────────────────────────────────
 ORACLE_PUBKEYS=(
       "247d0189f65f58be83a4e7d87ff338aaf8956e9acb9fcc783f34f9edc29d1b40"
       "ba20d3da9b07663f1e8039081a514649fd61a48be2d241bc63537ee47d028fcd"
@@ -81,212 +169,185 @@ ORACLE_SIGNATURES_3=(
 ORACLE_SIGNATURES_ARGS_3=$(IFS=, ; printf '"%s",' "${ORACLE_SIGNATURES_3[@]}")
 ORACLE_SIGNATURES_ARGS_3="[${ORACLE_SIGNATURES_ARGS_3%,}]"
 
+# ──────────────────────────────────────────────────────────────────────────────
+#  Environment discovery
+# ──────────────────────────────────────────────────────────────────────────────
 PUBLISHER_PROFILE=default
 PUBLISHER_ADDR=0x$(aptos config show-profiles --profile=$PUBLISHER_PROFILE | grep 'account' | sed -n 's/.*"account": \"\(.*\)\".*/\1/p')
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTRACTS_ROOT="$SCRIPT_DIR/.."
 
-# get local gas
-aptos account fund-with-faucet --profile default --amount 100000000
+# ──────────────────────────────────────────────────────────────────────────────
+#  Helper to extract “Code was successfully deployed” address from stdout
+# ──────────────────────────────────────────────────────────────────────────────
+extract_addr() {
+  # Grab the first 0x-prefixed address on a “Code was successfully …” line.
+  # Works with both “deployed” and “published” message variants.
+  grep -Eo 'Code was successfully .* object address +0x[0-9a-fA-F]+' \
+  | head -n1 | grep -Eo '0x[0-9a-fA-F]+'
+}
 
-echo "Deploying Forwarder 1..."
+# ──────────────────────────────────────────────────────────────────────────────
+#  0.  Fund gas
+# ──────────────────────────────────────────────────────────────────────────────
+run "Funding dev account with test APT" _out \
+  aptos account fund-with-faucet --profile "$PUBLISHER_PROFILE" --amount 100000000
 
-# deploy platform forwarder
-OUTPUT=$(aptos move create-object-and-publish-package \
-  --package-dir "$CONTRACTS_ROOT/platform" \
-  --address-name platform \
-  --named-addresses owner=$PUBLISHER_ADDR \
-  --profile $PUBLISHER_PROFILE \
-  --max-gas 50000 \
-	--assume-yes)
- 
-echo "✅ Deployed Forwarder 1! 🚀"
+# ──────────────────────────────────────────────────────────────────────────────
+#  1.  Deploy Forwarder 1
+# ──────────────────────────────────────────────────────────────────────────────
+run "Deploy Forwarder 1" OUT_FWD1 \
+  aptos move create-object-and-publish-package \
+    --package-dir "$CONTRACTS_ROOT/platform" \
+    --address-name platform \
+    --named-addresses owner="$PUBLISHER_ADDR" \
+    --profile "$PUBLISHER_PROFILE" \
+    --max-gas 50000 --assume-yes
 
-# # Extract the deployed contract address and save it to a file
-echo "$OUTPUT" | grep "Code was successfully deployed to object address" | awk '{print $NF}' | sed 's/\.$//' > $CONTRACTS_ROOT/platform/contract_address.txt
-PLATFORM_FORWARDER_ADDR=$(cat $CONTRACTS_ROOT/platform/contract_address.txt)
-echo "Contract deployed to address: $PLATFORM_FORWARDER_ADDR"
-echo "Contract address saved to contract_address.txt"
+PLATFORM_FORWARDER_ADDR=$(print "$OUT_FWD1" | extract_addr)
+echo "$PLATFORM_FORWARDER_ADDR" >"$CONTRACTS_ROOT/platform/contract_address.txt"
 
-echo "Setting config on Forwarder 1..."
-
-aptos move run --function-id "$PLATFORM_FORWARDER_ADDR::forwarder::set_config" --assume-yes --args u32:1 u32:1 u8:1 "hex:$ORACLE_PUBKEY_ARGS"
-
-echo "✅ Config set on Forwarder 1! 🚀"
-
-echo "Deploying Forwarder 2..."
-
-# deploy secondary platform forwarder
-OUTPUT=$(aptos move create-object-and-publish-package \
-  --package-dir "$CONTRACTS_ROOT/platform_secondary" \
-  --address-name platform_secondary \
-  --named-addresses owner_secondary=$PUBLISHER_ADDR \
-  --profile $PUBLISHER_PROFILE \
-  --max-gas 50000 \
-	--assume-yes)
-
-echo "✅ Deployed Forwarder 2! 🚀"
- 
-# # Extract the deployed contract address and save it to a file
-echo "$OUTPUT" | grep "Code was successfully deployed to object address" | awk '{print $NF}' | sed 's/\.$//' > $CONTRACTS_ROOT/platform_secondary/contract_address.txt
-PLATFORM_SECONDARY_FORWARDER_ADDR=$(cat $CONTRACTS_ROOT/platform_secondary/contract_address.txt)
-echo "Contract deployed to address: $PLATFORM_SECONDARY_FORWARDER_ADDR"
-echo "Contract address saved to contract_address.txt"
-
-echo "Setting config on Forwarder 2..."
-
-aptos move run --function-id "$PLATFORM_SECONDARY_FORWARDER_ADDR::forwarder::set_config" --assume-yes --args u32:1 u32:1 u8:1 "hex:$ORACLE_PUBKEY_ARGS"
-
-echo "✅ Config set on Forwarder 2! 🚀"
-
-echo "Deploying data-feeds..."
-
-# deploy data feeds
- OUTPUT=$(aptos move create-object-and-publish-package \
-  --package-dir "$CONTRACTS_ROOT/legacy/data-feeds-pre-migration" \
-  --address-name data_feeds \
-  --named-addresses platform=$PLATFORM_FORWARDER_ADDR,owner=$PUBLISHER_ADDR \
-  --profile $PUBLISHER_PROFILE \
-  --max-gas 50000 \
- --assume-yes)
-
- echo "✅ Deployed data-feeds! 🚀"
-
-# Extract the deployed contract address and save it to a file
-echo "$OUTPUT" | grep "Code was successfully deployed to object address" | awk '{print $NF}' | sed 's/\.$//' > $CONTRACTS_ROOT/legacy/data-feeds-pre-migration/contract_address.txt
-DATA_FEEDS_ADDR=$(cat $CONTRACTS_ROOT/legacy/data-feeds-pre-migration/contract_address.txt)
-echo "Contract deployed to address: $DATA_FEEDS_ADDR"
-echo "Contract address saved to contract_address.txt"
-
-echo "Setting workflow config..."
-
-# data_feeds::router::set_workflow_config(workflow_owners, workflow_names)
-aptos move run --function-id "$DATA_FEEDS_ADDR::registry::set_workflow_config" --assume-yes --args "hex:[\"$WORKFLOW_ONWER\"]" 'string:[]'
-
-echo "✅ Workflow config set! 🚀"
-
-echo "Setting feed_id 1 on Registry..."
-
-# data_feeds::router::set_feeds(feed_ids, descriptions, config_id)
-aptos move run --function-id "$DATA_FEEDS_ADDR::registry::set_feeds" --assume-yes --args "hex:[\"$FEED_ID_1\"]" 'string:["FOOBAR"]' 'hex:0x99'
-
-echo "✅ feed_id 1 set on Registry! 🚀"
-
-echo "Setting feed_id 2 on Registry..."
-
-aptos move run --function-id "$DATA_FEEDS_ADDR::registry::set_feeds" --assume-yes --args "hex:[\"$FEED_ID_2\"]" 'string:["BARFOO"]' 'hex:0x99'
-
-echo "✅ feed_id 2 set on Registry! 🚀"
-
-echo "Writing report 1 to Registry..."
-
-# send writes to registry via forwarder
-aptos move run --function-id "$PLATFORM_FORWARDER_ADDR::forwarder::report" --assume-yes --args "address:$DATA_FEEDS_ADDR" "hex:$FORWARDER_REPORT_PAYLOAD_1" "hex:$ORACLE_SIGNATURES_ARGS_1"
-
-echo "✅ Report 1 written to Registry! 🚀"
-
-echo "Reading report 1 from Registry..."
-
-# reads saved value
- OUTPUT=$(aptos move view --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes)
-
-BENCHMARK_1=$(echo "$OUTPUT" | jq -r '.Result[0][0].feed.benchmark')
-
-if [[ "$EXPECTED_BENCHMARK_1" != "$BENCHMARK_1" ]]; then
-  echo "❌ Bad read after write"
-  echo "   Expected: $EXPECTED_BENCHMARK_1"
-  echo "   Got:      $BENCHMARK_1"
+# If address empty ⇒ show full CLI output before dying
+if [[ -z "$PLATFORM_FORWARDER_ADDR" ]]; then
+  fail "Could not extract Forwarder 1 contract address" <(print "$OUT_FWD1")
   exit 1
-else
-  echo "✅ Correct benchmark value read from Registry!! 🚀"
 fi
 
-echo "Upgrading Registry to support benchmark reports and 2 Forwarders..."
+run "Set config on Forwarder 1" _out \
+  aptos move run --function-id "$PLATFORM_FORWARDER_ADDR::forwarder::set_config" \
+    --assume-yes --args u32:1 u32:1 u8:1 "hex:$ORACLE_PUBKEY_ARGS"
 
-# upgrade data feeds
- OUTPUT=$(aptos move upgrade-object \
-  --package-dir "$CONTRACTS_ROOT/data-feeds" \
-  --object-address $DATA_FEEDS_ADDR \
-  --address-name data_feeds \
-  --named-addresses data_feeds=$DATA_FEEDS_ADDR,platform=$PLATFORM_FORWARDER_ADDR,owner=$PUBLISHER_ADDR,platform_secondary=$PLATFORM_SECONDARY_FORWARDER_ADDR,owner_secondary=$PUBLISHER_ADDR \
-  --profile $PUBLISHER_PROFILE \
-  --max-gas 50000 \
- --assume-yes)
+# ──────────────────────────────────────────────────────────────────────────────
+#  2.  Deploy Forwarder 2
+# ──────────────────────────────────────────────────────────────────────────────
+run "Deploy Forwarder 2" OUT_FWD2 \
+  aptos move create-object-and-publish-package \
+    --package-dir "$CONTRACTS_ROOT/platform_secondary" \
+    --address-name platform_secondary \
+    --named-addresses owner_secondary="$PUBLISHER_ADDR" \
+    --profile "$PUBLISHER_PROFILE" \
+    --max-gas 50000 --assume-yes
 
-echo "✅ Registry upgraded! 🚀"
+PLATFORM_SECONDARY_FORWARDER_ADDR=$(print "$OUT_FWD2" | extract_addr)
+echo "$PLATFORM_SECONDARY_FORWARDER_ADDR" >"$CONTRACTS_ROOT/platform_secondary/contract_address.txt"
 
-echo "Reading report 1 from Registry AFTER UPGRADE..."
-
-# reads saved value
- OUTPUT=$(aptos move view --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes)
-
-BENCHMARK_1=$(echo "$OUTPUT" | jq -r '.Result[0][0].feed.benchmark')
-
-if [[ "$EXPECTED_BENCHMARK_1" != "$BENCHMARK_1" ]]; then
-  echo "❌ Bad read after write"
-  echo "   Expected: $EXPECTED_BENCHMARK_1"
-  echo "   Got:      $BENCHMARK_1"
+# If address empty ⇒ show full CLI output before dying
+if [[ -z "$PLATFORM_SECONDARY_FORWARDER_ADDR" ]]; then
+  fail "Could not extract Forwarder 1 contract address" <(print "$OUT_FWD2")
   exit 1
-else
-  echo "✅ Correct benchmark value read from Registry!! 🚀"
 fi
 
+run "Set config on Forwarder 2" _out \
+  aptos move run --function-id "$PLATFORM_SECONDARY_FORWARDER_ADDR::forwarder::set_config" \
+    --assume-yes --args u32:1 u32:1 u8:1 "hex:$ORACLE_PUBKEY_ARGS"
 
-echo "Writing report 2 to Registry..."
+# ──────────────────────────────────────────────────────────────────────────────
+#  3.  Deploy legacy data-feeds package
+# ──────────────────────────────────────────────────────────────────────────────
+run "Deploy data-feeds (legacy, pre-migration)" OUT_DF_LEGACY \
+  aptos move create-object-and-publish-package \
+    --package-dir "$CONTRACTS_ROOT/legacy/data-feeds-pre-migration" \
+    --address-name data_feeds \
+    --named-addresses platform="$PLATFORM_FORWARDER_ADDR",owner="$PUBLISHER_ADDR" \
+    --profile "$PUBLISHER_PROFILE" \
+    --max-gas 50000 --assume-yes
 
-# send writes to registry via forwarder
-aptos move run --function-id "$PLATFORM_FORWARDER_ADDR::forwarder::report" --assume-yes --args "address:$DATA_FEEDS_ADDR" "hex:$FORWARDER_REPORT_PAYLOAD_2" "hex:$ORACLE_SIGNATURES_ARGS_2"
+DATA_FEEDS_ADDR=$(print "$OUT_DF_LEGACY" | extract_addr)
+echo "$DATA_FEEDS_ADDR" >"$CONTRACTS_ROOT/legacy/data-feeds-pre-migration/contract_address.txt"
 
-echo "✅ Report 2 written to Registry! 🚀"
-
-echo "Reading report 2 from Registry..."
-
-# reads saved value
- OUTPUT=$(aptos move view --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes)
-
-BENCHMARK_2=$(echo "$OUTPUT" | jq -r '.Result[0][0].feed.benchmark')
-
-if [[ "$EXPECTED_BENCHMARK_2" != "$BENCHMARK_2" ]]; then
-  echo "❌ Bad read after write"
-  echo "   Expected: $EXPECTED_BENCHMARK_2"
-  echo "   Got:      $BENCHMARK_2"
+# If address empty ⇒ show full CLI output before dying
+if [[ -z "$DATA_FEEDS_ADDR" ]]; then
+  fail "Could not extract Forwarder 1 contract address" <(print "$OUT_DF_LEGACY")
   exit 1
-else
-  echo "✅ Correct benchmark value read from Registry!! 🚀"
 fi
 
-echo "Writing report 3 to Registry..."
+run "Set workflow config" _out \
+  aptos move run --function-id "$DATA_FEEDS_ADDR::registry::set_workflow_config" \
+    --assume-yes --args "hex:[\"$WORKFLOW_ONWER\"]" 'string:[]'
 
-# send writes to registry via forwarder
-aptos move run --function-id "$PLATFORM_SECONDARY_FORWARDER_ADDR::forwarder::report" --assume-yes --args "address:$DATA_FEEDS_ADDR" "hex:$FORWARDER_REPORT_PAYLOAD_3" "hex:$ORACLE_SIGNATURES_ARGS_3"
+run "Register feed #1 (LINK)" _out \
+  aptos move run --function-id "$DATA_FEEDS_ADDR::registry::set_feeds" \
+    --assume-yes --args "hex:[\"$FEED_ID_1\"]" 'string:["LINK"]' 'hex:0x99'
 
-echo "✅ Report 3 written to Registry! 🚀"
+run "Register feed #2 (APT)" _out \
+  aptos move run --function-id "$DATA_FEEDS_ADDR::registry::set_feeds" \
+    --assume-yes --args "hex:[\"$FEED_ID_2\"]" 'string:["APT"]' 'hex:0x99'
 
-echo "Reading report 3 from Registry..."
+# ──────────────────────────────────────────────────────────────────────────────
+#  4.  Report 1 – write & verify
+# ──────────────────────────────────────────────────────────────────────────────
+run "Write report 1 (via Forwarder 1)" _out \
+  aptos move run --function-id "$PLATFORM_FORWARDER_ADDR::forwarder::report" \
+    --assume-yes --args "address:$DATA_FEEDS_ADDR" \
+    "hex:$FORWARDER_REPORT_PAYLOAD_1" "hex:$ORACLE_SIGNATURES_ARGS_1"
 
-# reads saved value
- OUTPUT=$(aptos move view --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes)
+run "Read report 1" OUT_REPORT1_READ \
+  aptos move view --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes
 
-BENCHMARK_3=$(echo "$OUTPUT" | jq -r '.Result[0][0].feed.benchmark')
-BENCHMARK_3_2=$(echo "$OUTPUT" | jq -r '.Result[0][1].feed.benchmark')
+BENCHMARK_1=$(print "$OUT_REPORT1_READ" | jq -r '.Result[0][0].feed.benchmark')
+[[ "$BENCHMARK_1" == "$EXPECTED_BENCHMARK_1" ]] \
+  && success "Benchmark 1 matches expected value" \
+  || { fail "Benchmark 1 mismatch"; exit 1; }
 
-if [[ "$EXPECTED_BENCHMARK_3" != "$BENCHMARK_3" ]]; then
-  echo "❌ Bad read after write"
-  echo "   Expected: $EXPECTED_BENCHMARK_3"
-  echo "   Got:      $BENCHMARK_3"
-  exit 1
-else
-  echo "✅ Correct benchmark value read from Registry!! 🚀"
-fi
+# ──────────────────────────────────────────────────────────────────────────────
+#  5.  Upgrade registry
+# ──────────────────────────────────────────────────────────────────────────────
+run "Upgrade registry contract (supports benchmark reports & 2 forwarders)" _out \
+  aptos move upgrade-object \
+    --package-dir "$CONTRACTS_ROOT/data-feeds" \
+    --object-address "$DATA_FEEDS_ADDR" \
+    --address-name data_feeds \
+    --named-addresses data_feeds="$DATA_FEEDS_ADDR",platform="$PLATFORM_FORWARDER_ADDR",owner="$PUBLISHER_ADDR",platform_secondary="$PLATFORM_SECONDARY_FORWARDER_ADDR",owner_secondary="$PUBLISHER_ADDR" \
+    --profile "$PUBLISHER_PROFILE" \
+    --max-gas 50000 --assume-yes
 
-if [[ "$EXPECTED_BENCHMARK_3_2" != "$BENCHMARK_3_2" ]]; then
-  echo "❌ Bad read after write"
-  echo "   Expected: $EXPECTED_BENCHMARK_3_2"
-  echo "   Got:      $BENCHMARK_3_2"
-  exit 1
-else
-  echo "✅ Correct benchmark value read from Registry!! 🚀"
-fi
+run "Read report 1 after upgrade" OUT_REPORT1_POST \
+  aptos move view --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes
 
+BENCHMARK_1_POST=$(print "$OUT_REPORT1_POST" | jq -r '.Result[0][0].feed.benchmark')
+[[ "$BENCHMARK_1_POST" == "$EXPECTED_BENCHMARK_1" ]] \
+  && success "Benchmark 1 still correct after upgrade" \
+  || { fail "Benchmark 1 changed after upgrade"; exit 1; }
 
+# ──────────────────────────────────────────────────────────────────────────────
+#  6.  Report 2 – write & verify
+# ──────────────────────────────────────────────────────────────────────────────
+run "Write report 2 (via Forwarder 1)" _out \
+  aptos move run --function-id "$PLATFORM_FORWARDER_ADDR::forwarder::report" \
+    --assume-yes --args "address:$DATA_FEEDS_ADDR" \
+    "hex:$FORWARDER_REPORT_PAYLOAD_2" "hex:$ORACLE_SIGNATURES_ARGS_2"
+
+run "Read report 2" OUT_REPORT2_READ \
+  aptos move view --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes
+
+BENCHMARK_2=$(print "$OUT_REPORT2_READ" | jq -r '.Result[0][0].feed.benchmark')
+[[ "$BENCHMARK_2" == "$EXPECTED_BENCHMARK_2" ]] \
+  && success "Benchmark 2 matches expected value" \
+  || { fail "Benchmark 2 mismatch"; exit 1; }
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  7.  Report 3 – write (via 2nd forwarder) & verify
+# ──────────────────────────────────────────────────────────────────────────────
+run "Write report 3 (via Forwarder 2)" _out \
+  aptos move run --function-id "$PLATFORM_SECONDARY_FORWARDER_ADDR::forwarder::report" \
+    --assume-yes --args "address:$DATA_FEEDS_ADDR" \
+    "hex:$FORWARDER_REPORT_PAYLOAD_3" "hex:$ORACLE_SIGNATURES_ARGS_3"
+
+run "Read report 3" OUT_REPORT3_READ \
+  aptos move view --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes
+
+BENCHMARK_3=$(print "$OUT_REPORT3_READ"   | jq -r '.Result[0][0].feed.benchmark')
+BENCHMARK_3_2=$(print "$OUT_REPORT3_READ" | jq -r '.Result[0][1].feed.benchmark')
+
+[[ "$BENCHMARK_3"   == "$EXPECTED_BENCHMARK_3"   ]] && success "Benchmark 3 primary   OK" || { fail "Benchmark 3 primary mismatch";   exit 1; }
+[[ "$BENCHMARK_3_2" == "$EXPECTED_BENCHMARK_3_2" ]] && success "Benchmark 3 secondary OK" || { fail "Benchmark 3 secondary mismatch"; exit 1; }
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Summary
+# ──────────────────────────────────────────────────────────────────────────────
+heading "🎉 All benchmarks validated — deployment pipeline complete"
+print "  Forwarder 1 address : $PLATFORM_FORWARDER_ADDR"
+print "  Forwarder 2 address : $PLATFORM_SECONDARY_FORWARDER_ADDR"
+print "  Registry address    : $DATA_FEEDS_ADDR"
+print "  Publisher account   : $PUBLISHER_ADDR"
