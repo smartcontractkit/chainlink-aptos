@@ -25,26 +25,17 @@ module stablecoin::stablecoin_utils_tests {
 
     #[test]
     fun stablecoin_obj_seed__should_return_expected_seed_value() {
-        assert_eq(
-            stablecoin_utils::stablecoin_obj_seed(), EXPECTED_STABLECOIN_OBJ_SEED
-        );
+        assert_eq(stablecoin_utils::stablecoin_obj_seed(), EXPECTED_STABLECOIN_OBJ_SEED);
     }
 
     #[test]
     fun stablecoin_address__should_return_expected_stablecoin_object_address() {
         // first verify that the configured stablecoin package address is the expected value (configured in the move.toml file)
-        assert_eq(
-            @stablecoin,
-            @0x94ae22c4ecec81b458095a7ae2a5de2ac81d2bff9c8633e029194424e422db3b
-        );
+        assert_eq(@stablecoin, @0x94ae22c4ecec81b458095a7ae2a5de2ac81d2bff9c8633e029194424e422db3b);
 
         // then compare the expected stablecoin object address with a pre-computed value.
-        let expected_address =
-            object::create_object_address(&@stablecoin, EXPECTED_STABLECOIN_OBJ_SEED);
-        assert_eq(
-            expected_address,
-            @0xc6a3f2ea3a7abd98aebd8c2290648a4973ab6022cad2e88efd64fd3fb3bda245
-        );
+        let expected_address = object::create_object_address(&@stablecoin, EXPECTED_STABLECOIN_OBJ_SEED);
+        assert_eq(expected_address, @0xc6a3f2ea3a7abd98aebd8c2290648a4973ab6022cad2e88efd64fd3fb3bda245);
 
         // lastly, compare the expected stablecoin object address with the stablecoin_address function return value.
         assert_eq(stablecoin_utils::stablecoin_address(), expected_address);

@@ -18,12 +18,7 @@ spec stablecoin::stablecoin {
     use std::signer;
     use std::table_with_length;
     use aptos_framework::object::ObjectCore;
-    use aptos_framework::fungible_asset::{
-        ConcurrentFungibleBalance,
-        FungibleStore,
-        Metadata,
-        Untransferable
-    };
+    use aptos_framework::fungible_asset::{ConcurrentFungibleBalance, FungibleStore, Metadata, Untransferable};
     use aptos_framework::primary_fungible_store::DeriveRefPod;
     use aptos_extensions::ownable::OwnerRole;
     use aptos_extensions::pausable::PauseState;
@@ -50,7 +45,7 @@ spec stablecoin::stablecoin {
     /// Post condition: The stablecoin address is always initialized with the expected resources.
     /// Post condition: The package address is always initialized with the expected resources.
     spec init_module {
-        /// The list of abort conditions here intentionally does not enumerate through the
+        /// The list of abort conditions here intentionally does not enumerate through the 
         /// abort conditions that happens from calling the underlying framework functions
         /// to avoid an unnecessary long proof. Only the key conditions are proved here.
         pragma aborts_if_is_partial;
@@ -104,8 +99,7 @@ spec stablecoin::stablecoin {
         aborts_if !exists<StablecoinState>(stablecoin_address);
         aborts_if global<StablecoinState>(stablecoin_address).initialized_version != 0;
         aborts_if !exists<MetadataState>(stablecoin_address);
-        aborts_if !exists<Metadata>(stablecoin_address)
-            || !object::spec_exists_at<Metadata>(stablecoin_address);
+        aborts_if !exists<Metadata>(stablecoin_address) || !object::spec_exists_at<Metadata>(stablecoin_address);
 
         include ValidateMetadataMutation {
             name: option::spec_some(name),
@@ -142,27 +136,20 @@ spec stablecoin::stablecoin {
 
         requires exists<ObjectCore>(store_address);
         requires exists<FungibleStore>(store_address);
-
-        aborts_if !exists<PauseState>(stablecoin_address)
-            || !object::spec_exists_at<PauseState>(stablecoin_address);
+        
+        aborts_if !exists<PauseState>(stablecoin_address) || !object::spec_exists_at<PauseState>(stablecoin_address);
         aborts_if !exists<BlocklistState>(stablecoin_address);
         aborts_if global<PauseState>(stablecoin_address).paused == true;
-        aborts_if table_with_length::spec_contains(
-            global<BlocklistState>(stablecoin_address).blocklist,
-            object::owner(store)
-        );
+        aborts_if table_with_length::spec_contains(global<BlocklistState>(stablecoin_address).blocklist, object::owner(store));
         aborts_if transfer_ref.metadata != fungible_asset::store_metadata(store);
         aborts_if transfer_ref.metadata != fungible_asset::asset_metadata(fa);
-        aborts_if global<FungibleStore>(store_address).balance
-            > MAX_U64 - deposit_amount;
+        aborts_if global<FungibleStore>(store_address).balance > MAX_U64 - deposit_amount;
 
         // Cannot be proved - If the concurrent balance feature is enabled, balance is always increased by the deposit amount.
 
         // If store balance is not zero and the concurrent balance feature is not enabled, balance is always increased by the deposit amount.
-        ensures (
-            global<FungibleStore>(store_address).balance != 0
-                || !exists<ConcurrentFungibleBalance>(store_address)
-        ) ==>
+        ensures (global<FungibleStore>(store_address).balance != 0
+            || !exists<ConcurrentFungibleBalance>(store_address)) ==>
             global<FungibleStore>(store_address).balance
                 == old(global<FungibleStore>(store_address).balance) + deposit_amount;
     }
@@ -191,31 +178,24 @@ spec stablecoin::stablecoin {
         requires exists<ObjectCore>(store_address);
         requires exists<FungibleStore>(store_address);
 
-        aborts_if !exists<PauseState>(stablecoin_address)
-            || !object::spec_exists_at<PauseState>(stablecoin_address);
+        aborts_if !exists<PauseState>(stablecoin_address) || !object::spec_exists_at<PauseState>(stablecoin_address);
         aborts_if !exists<BlocklistState>(stablecoin_address);
         aborts_if global<PauseState>(stablecoin_address).paused == true;
-        aborts_if table_with_length::spec_contains(
-            global<BlocklistState>(stablecoin_address).blocklist,
-            object::owner(store)
-        );
+        aborts_if table_with_length::spec_contains(global<BlocklistState>(stablecoin_address).blocklist, object::owner(store));
         aborts_if transfer_ref.metadata != fungible_asset::store_metadata(store);
         aborts_if (
-            global<FungibleStore>(store_address).balance != 0
-                || !exists<ConcurrentFungibleBalance>(store_address)
+            global<FungibleStore>(store_address).balance != 0 || !exists<ConcurrentFungibleBalance>(store_address)
         ) && global<FungibleStore>(store_address).balance < amount;
 
         // Cannot be proved - if the concurrent balance feature is enabled, amount that exceeds current balance will trigger abort due to underflow.
         // Cannot be proved - if the concurrent balance feature is enabled, balance is always decreased by the amount.
 
         // If store balance is not zero and the concurrent balance feature is not enabled, balance is always decreased by the amount.
-        ensures (
-            global<FungibleStore>(store_address).balance == 0
-                && exists<ConcurrentFungibleBalance>(store_address)
-        ) || global<FungibleStore>(store_address).balance
-            == old(global<FungibleStore>(store_address).balance) - amount;
+        ensures (global<FungibleStore>(store_address).balance == 0
+            && exists<ConcurrentFungibleBalance>(store_address))
+            || global<FungibleStore>(store_address).balance
+                == old(global<FungibleStore>(store_address).balance) - amount;
 
-        ensures result
-            == FungibleAsset { metadata: transfer_ref.metadata, amount };
+        ensures result == FungibleAsset { metadata: transfer_ref.metadata, amount };
     }
 }

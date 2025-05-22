@@ -65,9 +65,7 @@ module token_messenger_minter::burn_message {
     }
 
     public(friend) fun get_mint_recipient(message: &vector<u8>): address {
-        deserialize::deserialize_address(
-            message, MINT_RECIPIENT_INDEX, MINT_RECIPIENT_LEN
-        )
+        deserialize::deserialize_address(message, MINT_RECIPIENT_INDEX, MINT_RECIPIENT_LEN)
     }
 
     public(friend) fun get_amount(message: &vector<u8>): u256 {
@@ -95,10 +93,7 @@ module token_messenger_minter::burn_message {
     }
 
     public(friend) fun validate_message(message: &vector<u8>) {
-        assert!(
-            vector::length<u8>(message) == BURN_MESSAGE_LEN,
-            error::invalid_argument(EINVALID_MESSAGE_LENGTH)
-        );
+        assert!(vector::length<u8>(message) == BURN_MESSAGE_LEN, error::invalid_argument(EINVALID_MESSAGE_LENGTH));
     }
 
     // -----------------------------
@@ -118,31 +113,16 @@ module token_messenger_minter::burn_message {
         x"000000000000000000000000000000001c7d4b196cb0c7b01d743fbc6116a902379c72380000000000000000000000001f26414439c8d03fc4b9ca912cefd5cb508c960500000000000000000000000000000000000000000000000000000000000004be0000000000000000000000003b61abee91852714e4e99b09a1af3e9c13893ef1"
     }
 
-    #[test_only]
-    const VERSION: u32 = 0;
-    #[test_only]
-    const BURN_TOKEN: address =
-        @0x0000000000000000000000001c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
-    #[test_only]
-    const MINT_RECIPIENT: address =
-        @0x0000000000000000000000001F26414439C8D03FC4B9CA912CEFD5CB508C9605;
-    #[test_only]
-    const AMOUNT: u256 = 1214;
-    #[test_only]
-    const MESSAGE_SENDER: address =
-        @0x0000000000000000000000003b61AbEe91852714E4e99b09a1AF3e9C13893eF1;
+    #[test_only] const VERSION: u32 = 0;
+    #[test_only] const BURN_TOKEN: address = @0x0000000000000000000000001c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
+    #[test_only] const MINT_RECIPIENT: address = @0x0000000000000000000000001F26414439C8D03FC4B9CA912CEFD5CB508C9605;
+    #[test_only] const AMOUNT: u256 = 1214;
+    #[test_only] const MESSAGE_SENDER: address = @0x0000000000000000000000003b61AbEe91852714E4e99b09a1AF3e9C13893eF1;
 
     #[test]
     fun test_burn_message_serialization() {
         let original_message = get_raw_test_message();
-        let serialized_message =
-            serialize(
-                VERSION,
-                BURN_TOKEN,
-                MINT_RECIPIENT,
-                AMOUNT,
-                MESSAGE_SENDER
-            );
+        let serialized_message = serialize(VERSION, BURN_TOKEN, MINT_RECIPIENT, AMOUNT, MESSAGE_SENDER);
         assert!(original_message == serialized_message, 0);
     }
 

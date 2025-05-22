@@ -25,8 +25,7 @@ spec aptos_extensions::manageable {
     /// Post condition: The admin address is always returned.
     spec admin {
         aborts_if !exists<AdminRole>(resource_address);
-        ensures global<AdminRole>(resource_address)
-            == old(global<AdminRole>(resource_address));
+        ensures global<AdminRole>(resource_address) == old(global<AdminRole>(resource_address));
         ensures result == global<AdminRole>(resource_address).admin;
     }
 
@@ -35,8 +34,7 @@ spec aptos_extensions::manageable {
     /// Post condition: The pending admin address is always returned.
     spec pending_admin {
         aborts_if !exists<AdminRole>(resource_address);
-        ensures global<AdminRole>(resource_address)
-            == old(global<AdminRole>(resource_address));
+        ensures global<AdminRole>(resource_address) == old(global<AdminRole>(resource_address));
         ensures result == global<AdminRole>(resource_address).pending_admin;
     }
 
@@ -45,26 +43,22 @@ spec aptos_extensions::manageable {
     /// Post condition: There are no changes to the AdminRole state.
     spec assert_is_admin {
         aborts_if !exists<AdminRole>(resource_address);
-        aborts_if signer::address_of(caller)
-            != global<AdminRole>(resource_address).admin;
-        ensures global<AdminRole>(resource_address)
-            == old(global<AdminRole>(resource_address));
+        aborts_if signer::address_of(caller) != global<AdminRole>(resource_address).admin;
+        ensures global<AdminRole>(resource_address) == old(global<AdminRole>(resource_address));
     }
 
     /// Abort condition: The AdminRole resource is missing.
     /// Post condition: There are no changes to the AdminRole state.
     spec assert_admin_exists {
         aborts_if !exists<AdminRole>(resource_address);
-        ensures global<AdminRole>(resource_address)
-            == old(global<AdminRole>(resource_address));
+        ensures global<AdminRole>(resource_address) == old(global<AdminRole>(resource_address));
     }
 
     /// Abort condition: The AdminRole resource already exists at the resource address.
     /// Post condition: The AdminRole resource is created properly.
     spec new {
         aborts_if exists<AdminRole>(signer::address_of(caller));
-        ensures global<AdminRole>(signer::address_of(caller))
-            == AdminRole { admin, pending_admin: option::spec_none() };
+        ensures global<AdminRole>(signer::address_of(caller)) == AdminRole { admin, pending_admin: option::spec_none() };
     }
 
     /// Abort condition: The AdminRole resource is missing.
@@ -73,13 +67,9 @@ spec aptos_extensions::manageable {
     /// Post condition: The admin does not change.
     spec change_admin {
         aborts_if !exists<AdminRole>(resource_address);
-        aborts_if signer::address_of(caller)
-            != global<AdminRole>(resource_address).admin;
-        ensures global<AdminRole>(resource_address).admin
-            == old(global<AdminRole>(resource_address).admin);
-        ensures option::spec_contains(
-            global<AdminRole>(resource_address).pending_admin, new_admin
-        );
+        aborts_if signer::address_of(caller) != global<AdminRole>(resource_address).admin;
+        ensures global<AdminRole>(resource_address).admin == old(global<AdminRole>(resource_address).admin);
+        ensures option::spec_contains(global<AdminRole>(resource_address).pending_admin, new_admin);
     }
 
     /// Abort condition: The AdminRole resource is missing.
@@ -91,12 +81,10 @@ spec aptos_extensions::manageable {
         aborts_if !exists<AdminRole>(resource_address);
         aborts_if option::is_none(global<AdminRole>(resource_address).pending_admin);
         aborts_if !option::spec_contains(
-            global<AdminRole>(resource_address).pending_admin,
-            signer::address_of(caller)
+            global<AdminRole>(resource_address).pending_admin, signer::address_of(caller)
         );
         ensures global<AdminRole>(resource_address).admin == signer::address_of(caller);
-        ensures global<AdminRole>(resource_address).pending_admin
-            == option::spec_none();
+        ensures global<AdminRole>(resource_address).pending_admin == option::spec_none();
     }
 
     /// Abort condition: The AdminRole resource is missing.

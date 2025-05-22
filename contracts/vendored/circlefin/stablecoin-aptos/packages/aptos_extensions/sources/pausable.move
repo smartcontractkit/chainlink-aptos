@@ -87,10 +87,7 @@ module aptos_extensions::pausable {
 
     /// Asserts that state is not paused.
     public fun assert_not_paused(obj_address: address) acquires PauseState {
-        assert!(
-            !is_paused(object::address_to_object<PauseState>(obj_address)),
-            EPAUSED
-        );
+        assert!(!is_paused(object::address_to_object<PauseState>(obj_address)), EPAUSED);
     }
 
     // === Write functions ===
@@ -126,9 +123,7 @@ module aptos_extensions::pausable {
     }
 
     /// Changes the PauseState pauser address.
-    entry fun update_pauser(
-        caller: &signer, obj: Object<PauseState>, new_pauser: address
-    ) acquires PauseState {
+    entry fun update_pauser(caller: &signer, obj: Object<PauseState>, new_pauser: address) acquires PauseState {
         let obj_address = object::object_address(&obj);
         ownable::assert_is_owner(caller, obj_address);
         let pause_state = borrow_global_mut<PauseState>(obj_address);
@@ -141,8 +136,7 @@ module aptos_extensions::pausable {
 
     /// Removes the PauseState resource from the caller.
     public fun destroy(caller: &signer) acquires PauseState {
-        let PauseState { paused: _, pauser: _ } =
-            move_from<PauseState>(signer::address_of(caller));
+        let PauseState { paused: _, pauser: _ } = move_from<PauseState>(signer::address_of(caller));
 
         event::emit(PauseStateDestroyed { obj_address: signer::address_of(caller) });
     }
@@ -182,9 +176,7 @@ module aptos_extensions::pausable {
     }
 
     #[test_only]
-    public fun test_update_pauser(
-        caller: &signer, obj: Object<PauseState>, new_pauser: address
-    ) acquires PauseState {
+    public fun test_update_pauser(caller: &signer, obj: Object<PauseState>, new_pauser: address) acquires PauseState {
         update_pauser(caller, obj, new_pauser)
     }
 
@@ -194,9 +186,7 @@ module aptos_extensions::pausable {
     }
 
     #[test_only]
-    public fun set_pauser_for_testing(
-        obj_address: address, pauser: address
-    ) acquires PauseState {
+    public fun set_pauser_for_testing(obj_address: address, pauser: address) acquires PauseState {
         borrow_global_mut<PauseState>(obj_address).pauser = pauser;
     }
 }

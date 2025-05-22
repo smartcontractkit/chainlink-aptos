@@ -37,7 +37,10 @@ module aptos_extensions::pausable_tests {
         pausable::new(&signer, PAUSER_ADDRESS);
 
         let obj = object::address_to_object<PauseState>(obj_address);
-        assert_eq(pausable::pauser(obj), PAUSER_ADDRESS);
+        assert_eq(
+            pausable::pauser(obj),
+            PAUSER_ADDRESS
+        );
     }
 
     #[test]
@@ -48,7 +51,10 @@ module aptos_extensions::pausable_tests {
         pausable::new(&signer, PAUSER_ADDRESS);
 
         let obj = object::address_to_object<PauseState>(obj_address);
-        assert_eq(pausable::is_paused(obj), false);
+        assert_eq(
+            pausable::is_paused(obj),
+            false
+        );
     }
 
     #[test, expected_failure(abort_code = aptos_extensions::pausable::ENON_EXISTENT_OBJECT)]
@@ -179,10 +185,11 @@ module aptos_extensions::pausable_tests {
     public fun update_pauser__should_set_new_pauser() {
         let owner_signer = &create_signer_for_test(OWNER_ADDRESS);
         let (obj, obj_address) = setup_pausable(OWNER_ADDRESS, PAUSER_ADDRESS);
-        let pauser_changed_event =
-            pausable::test_PauserChanged_event(
-                obj_address, PAUSER_ADDRESS_2, PAUSER_ADDRESS
-            );
+        let pauser_changed_event = pausable::test_PauserChanged_event(
+            obj_address,
+            PAUSER_ADDRESS_2,
+            PAUSER_ADDRESS
+        );
 
         assert_eq(pausable::pauser(obj), PAUSER_ADDRESS);
 
@@ -196,16 +203,16 @@ module aptos_extensions::pausable_tests {
     public fun update_pauser__should_be_idempotent() {
         let owner_signer = &create_signer_for_test(OWNER_ADDRESS);
         let (obj, obj_address) = setup_pausable(OWNER_ADDRESS, PAUSER_ADDRESS);
-        let pauser_changed_event_1 =
-            pausable::test_PauserChanged_event(
-                obj_address, PAUSER_ADDRESS_2, PAUSER_ADDRESS
-            );
-        let pauser_changed_event_2 =
-            pausable::test_PauserChanged_event(
-                obj_address,
-                PAUSER_ADDRESS_2,
-                PAUSER_ADDRESS_2
-            );
+        let pauser_changed_event_1 = pausable::test_PauserChanged_event(
+            obj_address,
+            PAUSER_ADDRESS_2,
+            PAUSER_ADDRESS
+        );
+        let pauser_changed_event_2 = pausable::test_PauserChanged_event(
+            obj_address,
+            PAUSER_ADDRESS_2,
+            PAUSER_ADDRESS_2
+        );
 
         pausable::test_update_pauser(owner_signer, obj, PAUSER_ADDRESS_2);
         pausable::test_update_pauser(owner_signer, obj, PAUSER_ADDRESS_2);
@@ -227,8 +234,7 @@ module aptos_extensions::pausable_tests {
     public fun destroy__should_remove_pausable_state_resource() {
         let (_, obj_address) = setup_pausable(OWNER_ADDRESS, PAUSER_ADDRESS);
         let object_signer = create_signer_for_test(obj_address);
-        let pause_state_destroyed_event =
-            pausable::test_PauseStateDestroyed_event(obj_address);
+        let pause_state_destroyed_event = pausable::test_PauseStateDestroyed_event(obj_address);
 
         assert_eq(object::object_exists<PauseState>(obj_address), true);
 

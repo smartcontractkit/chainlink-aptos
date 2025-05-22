@@ -1,13 +1,13 @@
 // Copyright 2024 Circle Internet Group, Inc. All rights reserved.
-//
+// 
 // SPDX-License-Identifier: Apache-2.0
-//
+// 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-//
+// 
 //     http://www.apache.org/licenses/LICENSE-2.0
-//
+// 
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -41,21 +41,16 @@ module stablecoin::dispatchable_fungible_asset_tests {
 
     // === Tests ===
 
-    #[
-        test,
-        expected_failure(
-            abort_code = ERR_INVALID_ARGUMENT_INVALID_DISPATCHABLE_OPERATIONS,
-            location = aptos_framework::fungible_asset
-        )
-    ]
+    #[test, expected_failure(
+        abort_code = ERR_INVALID_ARGUMENT_INVALID_DISPATCHABLE_OPERATIONS,
+        location = aptos_framework::fungible_asset
+    )]
     fun deposit__should_fail_if_bypassing_dispatchable_function() {
         // Create DFA
         let (constructor_ref, metadata) = setup_dfa(OWNER);
 
         // Create a store
-        let store = primary_fungible_store::create_primary_store(
-            RANDOM_ADDRESS, metadata
-        );
+        let store = primary_fungible_store::create_primary_store(RANDOM_ADDRESS, metadata);
 
         // Create asset to deposit
         let mint_ref = fungible_asset::generate_mint_ref(&constructor_ref);
@@ -65,18 +60,15 @@ module stablecoin::dispatchable_fungible_asset_tests {
         fungible_asset::deposit(store, minted_asset);
     }
 
-    #[
-        test,
-        expected_failure(abort_code = dispatchable_fungible_asset_test_utils::ENO_DEPOSIT)
-    ]
+    #[test, expected_failure(
+        abort_code = dispatchable_fungible_asset_test_utils::ENO_DEPOSIT
+    )]
     fun deposit__should_fail_if_dispatchable_function_fails() {
         // Create DFA
         let (constructor_ref, metadata) = setup_dfa_with_failing_deposit(OWNER);
 
         // Create a store
-        let store = primary_fungible_store::create_primary_store(
-            RANDOM_ADDRESS, metadata
-        );
+        let store = primary_fungible_store::create_primary_store(RANDOM_ADDRESS, metadata);
 
         // Create asset to deposit
         let mint_ref = fungible_asset::generate_mint_ref(&constructor_ref);
@@ -92,9 +84,7 @@ module stablecoin::dispatchable_fungible_asset_tests {
         let (constructor_ref, metadata) = setup_dfa(OWNER);
 
         // Create a store
-        let store = primary_fungible_store::create_primary_store(
-            RANDOM_ADDRESS, metadata
-        );
+        let store = primary_fungible_store::create_primary_store(RANDOM_ADDRESS, metadata);
 
         // Create asset to deposit
         let mint_ref = fungible_asset::generate_mint_ref(&constructor_ref);
@@ -106,21 +96,16 @@ module stablecoin::dispatchable_fungible_asset_tests {
         assert_eq(fungible_asset::balance(store), DEPOSIT_AMOUNT);
     }
 
-    #[
-        test,
-        expected_failure(
-            abort_code = ERR_INVALID_ARGUMENT_INVALID_DISPATCHABLE_OPERATIONS,
-            location = aptos_framework::fungible_asset
-        )
-    ]
+    #[test, expected_failure(
+        abort_code = ERR_INVALID_ARGUMENT_INVALID_DISPATCHABLE_OPERATIONS,
+        location = aptos_framework::fungible_asset
+    )]
     fun withdraw__should_fail_if_bypassing_dispatchable_function() {
         // Create DFA
         let (constructor_ref, metadata) = setup_dfa(OWNER);
 
         // Create a store
-        let store = primary_fungible_store::create_primary_store(
-            RANDOM_ADDRESS, metadata
-        );
+        let store = primary_fungible_store::create_primary_store(RANDOM_ADDRESS, metadata);
 
         // Deposit an asset first
         let mint_ref = fungible_asset::generate_mint_ref(&constructor_ref);
@@ -129,31 +114,25 @@ module stablecoin::dispatchable_fungible_asset_tests {
         assert_eq(fungible_asset::balance(store), DEPOSIT_AMOUNT);
 
         // Try to withdraw outside of dispatchable_fungible_asset::withdraw
-        let withdrawn_asset =
-            fungible_asset::withdraw(
-                &create_signer_for_test(RANDOM_ADDRESS),
-                store,
-                DEPOSIT_AMOUNT
-            );
+        let withdrawn_asset = fungible_asset::withdraw(
+            &create_signer_for_test(RANDOM_ADDRESS),
+            store,
+            DEPOSIT_AMOUNT
+        );
 
         // Redeposit, even though this won't be reached
         dispatchable_fungible_asset::deposit(store, withdrawn_asset);
     }
 
-    #[
-        test,
-        expected_failure(
-            abort_code = dispatchable_fungible_asset_test_utils::ENO_WITHDRAW
-        )
-    ]
+    #[test, expected_failure(
+        abort_code = dispatchable_fungible_asset_test_utils::ENO_WITHDRAW
+    )]
     fun withdraw__should_fail_if_dispatchable_function_fails() {
         // Create DFA
         let (constructor_ref, metadata) = setup_dfa_with_failing_withdraw(OWNER);
 
         // Create a store
-        let store = primary_fungible_store::create_primary_store(
-            RANDOM_ADDRESS, metadata
-        );
+        let store = primary_fungible_store::create_primary_store(RANDOM_ADDRESS, metadata);
 
         // Deposit an asset first
         let mint_ref = fungible_asset::generate_mint_ref(&constructor_ref);
@@ -162,14 +141,13 @@ module stablecoin::dispatchable_fungible_asset_tests {
         assert_eq(fungible_asset::balance(store), DEPOSIT_AMOUNT);
 
         // Invoke dispatchable withdraw
-        let withdrawn_asset =
-            dispatchable_fungible_asset::withdraw(
-                &create_signer_for_test(RANDOM_ADDRESS),
-                store,
-                DEPOSIT_AMOUNT
-            );
+        let withdrawn_asset = dispatchable_fungible_asset::withdraw(
+            &create_signer_for_test(RANDOM_ADDRESS),
+            store,
+            DEPOSIT_AMOUNT
+        );
 
-        // Redeposit, even though this won't be reached
+        // Redeposit, even though this won't be reached 
         dispatchable_fungible_asset::deposit(store, withdrawn_asset);
     }
 
@@ -179,9 +157,7 @@ module stablecoin::dispatchable_fungible_asset_tests {
         let (constructor_ref, metadata) = setup_dfa(OWNER);
 
         // Create a store
-        let store = primary_fungible_store::create_primary_store(
-            RANDOM_ADDRESS, metadata
-        );
+        let store = primary_fungible_store::create_primary_store(RANDOM_ADDRESS, metadata);
 
         // Deposit an asset first
         let mint_ref = fungible_asset::generate_mint_ref(&constructor_ref);
@@ -191,12 +167,11 @@ module stablecoin::dispatchable_fungible_asset_tests {
 
         // Invoke dispatchable withdraw
         assert_eq(fungible_asset::balance(store), DEPOSIT_AMOUNT);
-        let withdrawn_asset =
-            dispatchable_fungible_asset::withdraw(
-                &create_signer_for_test(RANDOM_ADDRESS),
-                store,
-                DEPOSIT_AMOUNT
-            );
+        let withdrawn_asset = dispatchable_fungible_asset::withdraw(
+            &create_signer_for_test(RANDOM_ADDRESS),
+            store,
+            DEPOSIT_AMOUNT
+        );
         assert_eq(fungible_asset::balance(store), 0);
 
         // Redeposit

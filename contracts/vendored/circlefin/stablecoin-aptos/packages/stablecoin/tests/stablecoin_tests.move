@@ -86,12 +86,7 @@ module stablecoin::stablecoin_tests {
         );
     }
 
-    #[
-        test,
-        expected_failure(
-            abort_code = stablecoin::stablecoin::ESTABLECOIN_VERSION_INITIALIZED
-        )
-    ]
+    #[test, expected_failure(abort_code = stablecoin::stablecoin::ESTABLECOIN_VERSION_INITIALIZED)]
     fun initialize_v1__should_fail_if_already_initialized() {
         test_init_module();
 
@@ -111,17 +106,14 @@ module stablecoin::stablecoin_tests {
     fun stablecoin_address__should_return_stablecoin_address() {
         setup();
 
-        assert_eq(
-            stablecoin::stablecoin_address(), stablecoin_utils::stablecoin_address()
-        );
+        assert_eq(stablecoin::stablecoin_address(), stablecoin_utils::stablecoin_address());
     }
 
     #[test]
     fun deposit__should_succeed_and_pass_all_assertions() {
         let stablecoin_metadata = setup();
         let owner = create_signer_for_test(RANDOM_ADDRESS);
-        let fungible_store =
-            fungible_asset::create_test_store(&owner, stablecoin_metadata);
+        let fungible_store = fungible_asset::create_test_store(&owner, stablecoin_metadata);
 
         test_deposit(fungible_store, 100);
     }
@@ -130,8 +122,7 @@ module stablecoin::stablecoin_tests {
     fun deposit__should_succeed_and_pass_all_assertions_for_zero_amount() {
         let stablecoin_metadata = setup();
         let owner = create_signer_for_test(RANDOM_ADDRESS);
-        let fungible_store =
-            fungible_asset::create_test_store(&owner, stablecoin_metadata);
+        let fungible_store = fungible_asset::create_test_store(&owner, stablecoin_metadata);
 
         test_deposit(fungible_store, 0);
     }
@@ -140,8 +131,7 @@ module stablecoin::stablecoin_tests {
     fun deposit__should_fail_when_paused() {
         let stablecoin_metadata = setup();
         let owner = create_signer_for_test(RANDOM_ADDRESS);
-        let fungible_store =
-            fungible_asset::create_test_store(&owner, stablecoin_metadata);
+        let fungible_store = fungible_asset::create_test_store(&owner, stablecoin_metadata);
 
         pausable::set_paused_for_testing(stablecoin_utils::stablecoin_address(), true);
 
@@ -152,32 +142,24 @@ module stablecoin::stablecoin_tests {
     fun deposit__should_fail_if_store_owner_is_blocklisted() {
         let stablecoin_metadata = setup();
         let owner = create_signer_for_test(RANDOM_ADDRESS);
-        let fungible_store =
-            fungible_asset::create_test_store(&owner, stablecoin_metadata);
-        let blocklister = create_signer_for_test(blocklistable::blocklister());
+        let fungible_store = fungible_asset::create_test_store(&owner, stablecoin_metadata);
+        let blocklister =
+            create_signer_for_test(blocklistable::blocklister());
 
         test_blocklist(&blocklister, RANDOM_ADDRESS);
 
         test_deposit(fungible_store, 100);
     }
 
-    #[
-        test,
-        expected_failure(
-            abort_code = ERR_OBJ_OBJECT_DOES_NOT_EXIST, location = aptos_framework::object
-        )
-    ]
+    #[test, expected_failure(abort_code = ERR_OBJ_OBJECT_DOES_NOT_EXIST, location = aptos_framework::object)]
     fun deposit__should_fail_if_store_does_not_have_owner() {
         let stablecoin_metadata = setup();
         let secondary_store_constructor_ref = object::create_object(RANDOM_ADDRESS);
         let secondary_store_addr =
             object::address_from_constructor_ref(&secondary_store_constructor_ref);
-        let secondary_store_delete_ref =
-            object::generate_delete_ref(&secondary_store_constructor_ref);
+        let secondary_store_delete_ref = object::generate_delete_ref(&secondary_store_constructor_ref);
         let fungible_store =
-            fungible_asset::create_store(
-                &secondary_store_constructor_ref, stablecoin_metadata
-            );
+            fungible_asset::create_store(&secondary_store_constructor_ref, stablecoin_metadata);
 
         object::delete(secondary_store_delete_ref);
         assert_eq(object::is_object(secondary_store_addr), false);
@@ -185,18 +167,12 @@ module stablecoin::stablecoin_tests {
         test_deposit(fungible_store, 100);
     }
 
-    #[
-        test,
-        expected_failure(
-            abort_code = stablecoin::stablecoin::ESTABLECOIN_METADATA_MISMATCH
-        )
-    ]
+    #[test, expected_failure(abort_code = stablecoin::stablecoin::ESTABLECOIN_METADATA_MISMATCH)]
     fun deposit__should_fail_if_depositing_other_assets() {
         setup();
         // create alternative fungible asset
         let owner = &create_signer_for_test(RANDOM_ADDRESS);
-        let (mint_ref, transfer_ref, _, _, metadata) =
-            fungible_asset::create_fungible_asset(owner);
+        let (mint_ref, transfer_ref, _, _, metadata) = fungible_asset::create_fungible_asset(owner);
         let store = fungible_asset::create_test_store(owner, metadata);
         let fa = fungible_asset::mint(&mint_ref, 100);
 
@@ -207,15 +183,17 @@ module stablecoin::stablecoin_tests {
     fun withdraw__should_succeed_and_pass_all_assertions() {
         let stablecoin_metadata = setup();
         let owner = &create_signer_for_test(RANDOM_ADDRESS);
-        let fungible_store = fungible_asset::create_test_store(
-            owner, stablecoin_metadata
-        );
+        let fungible_store = fungible_asset::create_test_store(owner, stablecoin_metadata);
 
         // Deposit first
         test_deposit(fungible_store, 100);
 
         // Withdraw
-        test_withdraw(owner, fungible_store, 50)
+        test_withdraw(
+            owner,
+            fungible_store,
+            50,
+        )
     }
 
     #[test]
@@ -223,15 +201,17 @@ module stablecoin::stablecoin_tests {
         let stablecoin_metadata = setup();
         let indirect_owner = &create_signer_for_test(RANDOM_ADDRESS);
         let owner = &object::generate_signer(&object::create_object(RANDOM_ADDRESS));
-        let fungible_store = fungible_asset::create_test_store(
-            owner, stablecoin_metadata
-        );
+        let fungible_store = fungible_asset::create_test_store(owner, stablecoin_metadata);
 
         // Deposit first
         test_deposit(fungible_store, 100);
 
         // Withdraw
-        test_withdraw(indirect_owner, fungible_store, 50)
+        test_withdraw(
+            indirect_owner,
+            fungible_store,
+            50,
+        )
     }
 
     #[test]
@@ -242,7 +222,7 @@ module stablecoin::stablecoin_tests {
         test_withdraw(
             owner,
             fungible_asset::create_test_store(owner, stablecoin_metadata),
-            0
+            0,
         )
     }
 
@@ -250,9 +230,7 @@ module stablecoin::stablecoin_tests {
     fun withdraw__should_fail_when_paused() {
         let stablecoin_metadata = setup();
         let owner = &create_signer_for_test(RANDOM_ADDRESS);
-        let fungible_store = fungible_asset::create_test_store(
-            owner, stablecoin_metadata
-        );
+        let fungible_store = fungible_asset::create_test_store(owner, stablecoin_metadata);
 
         // Deposit first
         test_deposit(fungible_store, 100);
@@ -261,60 +239,57 @@ module stablecoin::stablecoin_tests {
         pausable::set_paused_for_testing(stablecoin_utils::stablecoin_address(), true);
 
         // Withdraw
-        test_withdraw(owner, fungible_store, 100)
+        test_withdraw(
+            owner,
+            fungible_store,
+            100,
+        )
     }
 
     #[test, expected_failure(abort_code = stablecoin::blocklistable::EBLOCKLISTED)]
     fun withdraw__should_fail_if_store_owner_is_blocklisted() {
         let stablecoin_metadata = setup();
         let owner = &create_signer_for_test(RANDOM_ADDRESS);
-        let fungible_store = fungible_asset::create_test_store(
-            owner, stablecoin_metadata
-        );
-        let blocklister = create_signer_for_test(blocklistable::blocklister());
+        let fungible_store = fungible_asset::create_test_store(owner, stablecoin_metadata);
+        let blocklister =
+            create_signer_for_test(blocklistable::blocklister());
 
         test_blocklist(&blocklister, RANDOM_ADDRESS);
 
-        test_withdraw(owner, fungible_store, 100)
+        test_withdraw(
+            owner,
+            fungible_store,
+            100,
+        )
     }
 
-    #[
-        test,
-        expected_failure(
-            abort_code = ERR_OBJ_OBJECT_DOES_NOT_EXIST, location = aptos_framework::object
-        )
-    ]
+    #[test, expected_failure(abort_code = ERR_OBJ_OBJECT_DOES_NOT_EXIST, location = aptos_framework::object)]
     fun withdraw__should_fail_if_store_does_not_have_owner() {
         let stablecoin_metadata = setup();
         let owner = &create_signer_for_test(RANDOM_ADDRESS);
         let secondary_store_constructor_ref = object::create_object(RANDOM_ADDRESS);
         let secondary_store_addr =
             object::address_from_constructor_ref(&secondary_store_constructor_ref);
-        let secondary_store_delete_ref =
-            object::generate_delete_ref(&secondary_store_constructor_ref);
+        let secondary_store_delete_ref = object::generate_delete_ref(&secondary_store_constructor_ref);
         let fungible_store =
-            fungible_asset::create_store(
-                &secondary_store_constructor_ref, stablecoin_metadata
-            );
+            fungible_asset::create_store(&secondary_store_constructor_ref, stablecoin_metadata);
 
         object::delete(secondary_store_delete_ref);
         assert_eq(object::is_object(secondary_store_addr), false);
 
-        test_withdraw(owner, fungible_store, 100)
+        test_withdraw(
+            owner,
+            fungible_store,
+            100,
+        )
     }
 
-    #[
-        test,
-        expected_failure(
-            abort_code = stablecoin::stablecoin::ESTABLECOIN_METADATA_MISMATCH
-        )
-    ]
+    #[test, expected_failure(abort_code = stablecoin::stablecoin::ESTABLECOIN_METADATA_MISMATCH)]
     fun withdraw__should_fail_if_withdrawing_other_assets() {
         setup();
         // create alternative fungible asset
         let owner = &create_signer_for_test(RANDOM_ADDRESS);
-        let (mint_ref, transfer_ref, burn_ref, _, metadata) =
-            fungible_asset::create_fungible_asset(owner);
+        let (mint_ref, transfer_ref, burn_ref, _, metadata) = fungible_asset::create_fungible_asset(owner);
         let store = fungible_asset::create_test_store(owner, metadata);
         let amount = 100;
         fungible_asset::mint_to(&mint_ref, store, amount);
@@ -329,15 +304,14 @@ module stablecoin::stablecoin_tests {
     public fun setup(): (Object<Metadata>) {
         test_init_module();
 
-        let stablecoin_metadata =
-            test_initialize_v1(
-                &create_signer_for_test(@deployer),
-                string::utf8(NAME),
-                string::utf8(SYMBOL),
-                DECIMALS,
-                string::utf8(ICON_URI),
-                string::utf8(PROJECT_URI)
-            );
+        let stablecoin_metadata = test_initialize_v1(
+            &create_signer_for_test(@deployer),
+            string::utf8(NAME),
+            string::utf8(SYMBOL),
+            DECIMALS,
+            string::utf8(ICON_URI),
+            string::utf8(PROJECT_URI)
+        );
 
         stablecoin_metadata
     }
@@ -347,8 +321,7 @@ module stablecoin::stablecoin_tests {
 
         stablecoin::test_init_module(&resource_acct_signer);
 
-        validate_stablecoin_object_state(
-            stablecoin_utils::stablecoin_address(),
+        validate_stablecoin_object_state(stablecoin_utils::stablecoin_address(),
             utf8(vector[]),
             utf8(vector[]),
             0,
@@ -380,8 +353,7 @@ module stablecoin::stablecoin_tests {
             project_uri
         );
 
-        let stablecoin_metadata =
-            object::address_to_object<Metadata>(stablecoin_utils::stablecoin_address());
+        let stablecoin_metadata = object::address_to_object<Metadata>(stablecoin_utils::stablecoin_address());
 
         // verify the fungible asset metadata is updated correctly
         assert_eq(fungible_asset::name(stablecoin_metadata), name);
@@ -417,51 +389,18 @@ module stablecoin::stablecoin_tests {
         let stablecoin_metadata = object::address_to_object<Metadata>(stablecoin_address);
 
         // Ensure that all the expected resources exists.
-        assert_eq(
-            object::object_exists<fungible_asset::ConcurrentSupply>(stablecoin_address),
-            true
-        );
-        assert_eq(
-            object::object_exists<fungible_asset::DispatchFunctionStore>(
-                stablecoin_address
-            ),
-            true
-        );
-        assert_eq(
-            object::object_exists<fungible_asset::Metadata>(stablecoin_address), true
-        );
-        assert_eq(
-            object::object_exists<fungible_asset::Untransferable>(stablecoin_address),
-            true
-        );
-        assert_eq(
-            object::object_exists<dispatchable_fungible_asset::TransferRefStore>(
-                stablecoin_address
-            ),
-            true
-        );
-        assert_eq(
-            object::object_exists<primary_fungible_store::DeriveRefPod>(stablecoin_address),
-            true
-        );
-        assert_eq(
-            object::object_exists<blocklistable::BlocklistState>(stablecoin_address),
-            true
-        );
-        assert_eq(
-            object::object_exists<metadata::MetadataState>(stablecoin_address), true
-        );
+        assert_eq(object::object_exists<fungible_asset::ConcurrentSupply>(stablecoin_address), true);
+        assert_eq(object::object_exists<fungible_asset::DispatchFunctionStore>(stablecoin_address), true);
+        assert_eq(object::object_exists<fungible_asset::Metadata>(stablecoin_address), true);
+        assert_eq(object::object_exists<fungible_asset::Untransferable>(stablecoin_address), true);
+        assert_eq(object::object_exists<dispatchable_fungible_asset::TransferRefStore>(stablecoin_address), true);
+        assert_eq(object::object_exists<primary_fungible_store::DeriveRefPod>(stablecoin_address), true);
+        assert_eq(object::object_exists<blocklistable::BlocklistState>(stablecoin_address), true);
+        assert_eq(object::object_exists<metadata::MetadataState>(stablecoin_address), true);
         assert_eq(object::object_exists<ownable::OwnerRole>(stablecoin_address), true);
-        assert_eq(
-            object::object_exists<pausable::PauseState>(stablecoin_address), true
-        );
-        assert_eq(
-            object::object_exists<stablecoin::StablecoinState>(stablecoin_address),
-            true
-        );
-        assert_eq(
-            object::object_exists<treasury::TreasuryState>(stablecoin_address), true
-        );
+        assert_eq(object::object_exists<pausable::PauseState>(stablecoin_address), true);
+        assert_eq(object::object_exists<stablecoin::StablecoinState>(stablecoin_address), true);
+        assert_eq(object::object_exists<treasury::TreasuryState>(stablecoin_address), true);
         assert_eq(manageable::admin_role_exists_for_testing(@stablecoin), true);
         assert_eq(upgradable::signer_cap_store_exists_for_testing(@stablecoin), true);
 
@@ -483,14 +422,10 @@ module stablecoin::stablecoin_tests {
         assert_eq(treasury::master_minter(), master_minter);
         assert_eq(treasury::num_controllers_for_testing(), 0);
         assert_eq(treasury::num_mint_allowances_for_testing(), 0);
-        assert_eq(
-            blocklistable::transfer_ref_metadata_for_testing(), stablecoin_metadata
-        );
+        assert_eq(blocklistable::transfer_ref_metadata_for_testing(), stablecoin_metadata);
         assert_eq(blocklistable::num_blocklisted_for_testing(), 0);
         assert_eq(blocklistable::blocklister(), blocklister);
-        assert_eq(
-            metadata::mutate_metadata_ref_metadata_for_testing(), stablecoin_metadata
-        );
+        assert_eq(metadata::mutate_metadata_ref_metadata_for_testing(), stablecoin_metadata);
         assert_eq(metadata::metadata_updater(), metadata_updater);
 
         // Ensure the upgradable signer capability is setup correctly
@@ -512,38 +447,41 @@ module stablecoin::stablecoin_tests {
             new_function_info(
                 &create_signer_for_test(@stablecoin),
                 string::utf8(b"stablecoin"),
-                string::utf8(b"override_withdraw")
+                string::utf8(b"override_withdraw"),
             );
         let deposit_function_info =
             new_function_info(
                 &create_signer_for_test(@stablecoin),
                 string::utf8(b"stablecoin"),
-                string::utf8(b"override_deposit")
+                string::utf8(b"override_deposit"),
             );
 
-        let store =
-            fungible_asset::create_test_store(
-                &create_signer_for_test(RANDOM_ADDRESS), stablecoin_metadata
-            );
+        let store = fungible_asset::create_test_store(&create_signer_for_test(RANDOM_ADDRESS), stablecoin_metadata);
         assert_eq(
             fungible_asset::deposit_dispatch_function(store),
-            option::some(deposit_function_info)
+            option::some(deposit_function_info),
         );
         assert_eq(
             fungible_asset::withdraw_dispatch_function(store),
-            option::some(withdraw_function_info)
+            option::some(withdraw_function_info),
         );
     }
 
-    fun test_deposit(fungible_store: Object<FungibleStore>, amount: u64) {
+    fun test_deposit(
+        fungible_store: Object<FungibleStore>,
+        amount: u64
+    ) {
         let minted_asset = treasury::test_mint(amount);
         dispatchable_fungible_asset::deposit(fungible_store, minted_asset);
 
         // Event emission
         let store_owner = object::owner(fungible_store);
         let store_address = object::object_address(&fungible_store);
-        let expected_event =
-            stablecoin::test_Deposit_event(store_owner, store_address, amount);
+        let expected_event = stablecoin::test_Deposit_event(
+            store_owner,
+            store_address,
+            amount
+        );
         assert_eq(event::was_event_emitted(&expected_event), true);
 
         // Balance check
@@ -551,7 +489,9 @@ module stablecoin::stablecoin_tests {
     }
 
     fun test_withdraw(
-        owner: &signer, fungible_store: Object<FungibleStore>, amount: u64
+        owner: &signer,
+        fungible_store: Object<FungibleStore>,
+        amount: u64
     ) {
         let balance_before = fungible_asset::balance(fungible_store);
         let withdrawn_asset =
@@ -560,8 +500,11 @@ module stablecoin::stablecoin_tests {
         // Event emission
         let store_owner = object::owner(fungible_store);
         let store_address = object::object_address(&fungible_store);
-        let expected_event =
-            stablecoin::test_Withdraw_event(store_owner, store_address, amount);
+        let expected_event = stablecoin::test_Withdraw_event(
+            store_owner,
+            store_address,
+            amount
+        );
         assert_eq(event::was_event_emitted(&expected_event), true);
 
         // Balance check
@@ -572,9 +515,7 @@ module stablecoin::stablecoin_tests {
         treasury::test_burn(withdrawn_asset);
     }
 
-    fun destroy_fungible_asset(
-        constructor_ref: &ConstructorRef, asset: FungibleAsset
-    ) {
+    fun destroy_fungible_asset(constructor_ref: &ConstructorRef, asset: FungibleAsset) {
         let burn_ref = fungible_asset::generate_burn_ref(constructor_ref);
         fungible_asset::burn(&burn_ref, asset);
     }
@@ -591,8 +532,7 @@ module stablecoin::stablecoin_tests {
         );
 
         // compute the resource account address
-        let resource_account_address =
-            account::create_resource_address(&@deployer, TEST_SEED);
+        let resource_account_address = account::create_resource_address(&@deployer, TEST_SEED);
 
         // verify the resource account address is the same as the configured test package address
         assert_eq(@stablecoin, resource_account_address);

@@ -69,10 +69,7 @@ module stablecoin::blocklistable {
     #[view]
     /// Returns whether an address is blocklisted
     public fun is_blocklisted(addr: address): bool acquires BlocklistState {
-        internal_is_blocklisted(
-            borrow_global<BlocklistState>(stablecoin_address()),
-            addr
-        )
+        internal_is_blocklisted(borrow_global<BlocklistState>(stablecoin_address()), addr)
     }
 
     #[view]
@@ -92,16 +89,13 @@ module stablecoin::blocklistable {
     public(friend) fun new(
         stablecoin_obj_constructor_ref: &ConstructorRef, blocklister: address
     ) {
-        let stablecoin_obj_signer =
-            &object::generate_signer(stablecoin_obj_constructor_ref);
+        let stablecoin_obj_signer = &object::generate_signer(stablecoin_obj_constructor_ref);
         move_to(
             stablecoin_obj_signer,
             BlocklistState {
                 blocklist: table_with_length::new(),
                 blocklister,
-                transfer_ref: fungible_asset::generate_transfer_ref(
-                    stablecoin_obj_constructor_ref
-                )
+                transfer_ref: fungible_asset::generate_transfer_ref(stablecoin_obj_constructor_ref)
             }
         );
     }
@@ -109,9 +103,7 @@ module stablecoin::blocklistable {
     /// Adds an account to the blocklist.
     entry fun blocklist(caller: &signer, addr_to_block: address) acquires BlocklistState {
         let blocklist_state = borrow_global_mut<BlocklistState>(stablecoin_address());
-        assert!(
-            signer::address_of(caller) == blocklist_state.blocklister, ENOT_BLOCKLISTER
-        );
+        assert!(signer::address_of(caller) == blocklist_state.blocklister, ENOT_BLOCKLISTER);
         if (!internal_is_blocklisted(blocklist_state, addr_to_block)) {
             table_with_length::add(&mut blocklist_state.blocklist, addr_to_block, true);
         };
@@ -121,9 +113,7 @@ module stablecoin::blocklistable {
     /// Removes an account from the blocklist.
     entry fun unblocklist(caller: &signer, addr_to_unblock: address) acquires BlocklistState {
         let blocklist_state = borrow_global_mut<BlocklistState>(stablecoin_address());
-        assert!(
-            signer::address_of(caller) == blocklist_state.blocklister, ENOT_BLOCKLISTER
-        );
+        assert!(signer::address_of(caller) == blocklist_state.blocklister, ENOT_BLOCKLISTER);
         if (internal_is_blocklisted(blocklist_state, addr_to_unblock)) {
             table_with_length::remove(&mut blocklist_state.blocklist, addr_to_unblock);
         };
@@ -131,9 +121,7 @@ module stablecoin::blocklistable {
     }
 
     /// Update blocklister role
-    entry fun update_blocklister(
-        caller: &signer, new_blocklister: address
-    ) acquires BlocklistState {
+    entry fun update_blocklister(caller: &signer, new_blocklister: address) acquires BlocklistState {
         let stablecoin_address = stablecoin_address();
         ownable::assert_is_owner(caller, stablecoin_address);
 
@@ -146,9 +134,7 @@ module stablecoin::blocklistable {
 
     // === Aliases ===
 
-    inline fun internal_is_blocklisted(
-        blocklist_state: &BlocklistState, addr: address
-    ): bool {
+    inline fun internal_is_blocklisted(blocklist_state: &BlocklistState, addr: address): bool {
         table_with_length::contains(&blocklist_state.blocklist, addr)
     }
 
@@ -175,9 +161,7 @@ module stablecoin::blocklistable {
 
     #[test_only]
     public fun num_blocklisted_for_testing(): u64 acquires BlocklistState {
-        table_with_length::length(
-            &borrow_global<BlocklistState>(stablecoin_address()).blocklist
-        )
+        table_with_length::length(&borrow_global<BlocklistState>(stablecoin_address()).blocklist)
     }
 
     #[test_only]
@@ -186,11 +170,8 @@ module stablecoin::blocklistable {
     }
 
     #[test_only]
-    public fun set_blocklisted_for_testing(
-        addr: address, blocklisted: bool
-    ) acquires BlocklistState {
-        let blocklist =
-            &mut borrow_global_mut<BlocklistState>(stablecoin_address()).blocklist;
+    public fun set_blocklisted_for_testing(addr: address, blocklisted: bool) acquires BlocklistState {
+        let blocklist = &mut borrow_global_mut<BlocklistState>(stablecoin_address()).blocklist;
         if (blocklisted) {
             table_with_length::add(blocklist, addr, true);
         } else if (table_with_length::contains(blocklist, addr)) {
@@ -219,16 +200,12 @@ module stablecoin::blocklistable {
     }
 
     #[test_only]
-    public fun test_update_blocklister(
-        caller: &signer, new_blocklister: address
-    ) acquires BlocklistState {
+    public fun test_update_blocklister(caller: &signer, new_blocklister: address) acquires BlocklistState {
         update_blocklister(caller, new_blocklister);
     }
 
     #[test_only]
-    public fun test_BlocklisterChanged_event(
-        old_blocklister: address, new_blocklister: address
-    ): BlocklisterChanged {
+    public fun test_BlocklisterChanged_event(old_blocklister: address, new_blocklister: address): BlocklisterChanged {
         BlocklisterChanged { old_blocklister, new_blocklister }
     }
 }

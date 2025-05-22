@@ -37,8 +37,14 @@ module aptos_extensions::ownable_tests {
         ownable::new(&signer, OWNER_ADDRESS);
 
         let obj = object::address_to_object<OwnerRole>(obj_address);
-        assert_eq(ownable::owner(obj), OWNER_ADDRESS);
-        assert_eq(ownable::pending_owner(obj), option::none());
+        assert_eq(
+            ownable::owner(obj),
+            OWNER_ADDRESS
+        );
+        assert_eq(
+            ownable::pending_owner(obj),
+            option::none()
+        );
     }
 
     #[test, expected_failure(abort_code = aptos_extensions::ownable::ENON_EXISTENT_OBJECT)]
@@ -54,7 +60,10 @@ module aptos_extensions::ownable_tests {
 
         ownable::set_owner_for_testing(obj_address, OWNER_ADDRESS_2);
 
-        assert_eq(ownable::owner(obj), OWNER_ADDRESS_2);
+        assert_eq(
+            ownable::owner(obj),
+            OWNER_ADDRESS_2
+        );
     }
 
     #[test]
@@ -85,10 +94,11 @@ module aptos_extensions::ownable_tests {
     public fun transfer_ownership__should_set_pending_owner() {
         let (obj, obj_address) = setup_ownable(OWNER_ADDRESS);
         let owner_signer = &create_signer_for_test(OWNER_ADDRESS);
-        let transfer_started_event =
-            ownable::test_OwnershipTransferStarted_event(
-                obj_address, OWNER_ADDRESS, OWNER_ADDRESS_2
-            );
+        let transfer_started_event = ownable::test_OwnershipTransferStarted_event(
+            obj_address,
+            OWNER_ADDRESS,
+            OWNER_ADDRESS_2
+        );
 
         ownable::test_transfer_ownership(owner_signer, obj, OWNER_ADDRESS_2);
 
@@ -103,10 +113,11 @@ module aptos_extensions::ownable_tests {
     public fun transfer_ownership__should_reset_pending_owner_if_already_set() {
         let (obj, obj_address) = setup_ownable(OWNER_ADDRESS);
         let owner_signer = &create_signer_for_test(OWNER_ADDRESS);
-        let transfer_started_event =
-            ownable::test_OwnershipTransferStarted_event(
-                obj_address, OWNER_ADDRESS, OWNER_ADDRESS_2
-            );
+        let transfer_started_event = ownable::test_OwnershipTransferStarted_event(
+            obj_address,
+            OWNER_ADDRESS,
+            OWNER_ADDRESS_2
+        );
 
         ownable::set_pending_owner_for_testing(obj_address, OWNER_ADDRESS_3);
         ownable::test_transfer_ownership(owner_signer, obj, OWNER_ADDRESS_2);
@@ -122,10 +133,11 @@ module aptos_extensions::ownable_tests {
     public fun transfer_ownership__should_set_same_pending_owner() {
         let (obj, obj_address) = setup_ownable(OWNER_ADDRESS);
         let owner_signer = &create_signer_for_test(OWNER_ADDRESS);
-        let transfer_started_event =
-            ownable::test_OwnershipTransferStarted_event(
-                obj_address, OWNER_ADDRESS, OWNER_ADDRESS_2
-            );
+        let transfer_started_event = ownable::test_OwnershipTransferStarted_event(
+            obj_address,
+            OWNER_ADDRESS,
+            OWNER_ADDRESS_2
+        );
 
         ownable::set_pending_owner_for_testing(obj_address, OWNER_ADDRESS_2);
         ownable::test_transfer_ownership(owner_signer, obj, OWNER_ADDRESS_2);
@@ -149,15 +161,19 @@ module aptos_extensions::ownable_tests {
     public fun accept_ownership__should_change_owner() {
         let new_owner_signer = &create_signer_for_test(OWNER_ADDRESS_2);
         let (obj, obj_address) = setup_ownable(OWNER_ADDRESS);
-        let ownership_transferred_event =
-            ownable::test_OwnershipTransferred_event(
-                obj_address, OWNER_ADDRESS, OWNER_ADDRESS_2
-            );
+        let ownership_transferred_event = ownable::test_OwnershipTransferred_event(
+            obj_address,
+            OWNER_ADDRESS,
+            OWNER_ADDRESS_2
+        );
 
         ownable::set_pending_owner_for_testing(obj_address, OWNER_ADDRESS_2);
         ownable::test_accept_ownership(new_owner_signer, obj);
 
-        assert_eq(ownable::owner(obj), OWNER_ADDRESS_2);
+        assert_eq(
+            ownable::owner(obj),
+            OWNER_ADDRESS_2
+        );
         assert_eq(event::was_event_emitted(&ownership_transferred_event), true);
     }
 
@@ -169,12 +185,13 @@ module aptos_extensions::ownable_tests {
         ownable::set_pending_owner_for_testing(obj_address, OWNER_ADDRESS_2);
         ownable::test_accept_ownership(new_owner_signer, obj);
 
-        assert_eq(ownable::pending_owner(obj), option::none());
+        assert_eq(
+            ownable::pending_owner(obj),
+            option::none()
+        );
     }
 
-    #[test, expected_failure(
-        abort_code = aptos_extensions::ownable::EPENDING_OWNER_NOT_SET
-    )]
+    #[test, expected_failure(abort_code = aptos_extensions::ownable::EPENDING_OWNER_NOT_SET)]
     public fun accept_ownership__should_fail_if_pending_owner_is_not_set() {
         let new_owner_signer = &create_signer_for_test(OWNER_ADDRESS_2);
         let (obj, _) = setup_ownable(OWNER_ADDRESS);
@@ -199,16 +216,21 @@ module aptos_extensions::ownable_tests {
         ownable::test_transfer_ownership(owner_signer, obj, OWNER_ADDRESS);
         ownable::test_accept_ownership(owner_signer, obj);
 
-        assert_eq(ownable::owner(obj), OWNER_ADDRESS);
-        assert_eq(ownable::pending_owner(obj), option::none());
+        assert_eq(
+            ownable::owner(obj),
+            OWNER_ADDRESS
+        );
+        assert_eq(
+            ownable::pending_owner(obj),
+            option::none()
+        );
     }
 
     #[test]
     public fun destroy__should_remove_owner_role_resource() {
         let (_, obj_address) = setup_ownable(OWNER_ADDRESS);
         let object_signer = create_signer_for_test(obj_address);
-        let owner_role_destroyed_event =
-            ownable::test_OwnerRoleDestroyed_event(obj_address);
+        let owner_role_destroyed_event = ownable::test_OwnerRoleDestroyed_event(obj_address);
 
         assert_eq(object::object_exists<OwnerRole>(obj_address), true);
 

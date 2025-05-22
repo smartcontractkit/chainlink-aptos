@@ -38,21 +38,13 @@ module aptos_extensions::upgradeable_tests {
         manageable::new(resource_acct_signer, ADMIN_ADDRESS);
         upgradable::new(resource_acct_signer, resource_acct_signer_cap);
 
-        assert_eq(
-            upgradable::signer_cap_store_exists_for_testing(RESOURCE_ADDRESS), true
-        );
+        assert_eq(upgradable::signer_cap_store_exists_for_testing(RESOURCE_ADDRESS), true);
 
-        let extracted_signer_cap =
-            upgradable::extract_signer_cap_for_testing(RESOURCE_ADDRESS);
+        let extracted_signer_cap = upgradable::extract_signer_cap_for_testing(RESOURCE_ADDRESS);
         assert_eq(extracted_signer_cap, create_test_signer_cap(RESOURCE_ADDRESS));
     }
 
-    #[
-        test,
-        expected_failure(
-            abort_code = aptos_extensions::manageable::EMISSING_ADMIN_RESOURCE
-        )
-    ]
+    #[test, expected_failure(abort_code = aptos_extensions::manageable::EMISSING_ADMIN_RESOURCE)]
     fun new__should_fail_if_admin_resource_is_missing() {
         upgradable::new(
             &create_signer_for_test(RESOURCE_ADDRESS),
@@ -60,9 +52,7 @@ module aptos_extensions::upgradeable_tests {
         );
     }
 
-    #[test, expected_failure(
-        abort_code = aptos_extensions::upgradable::EMISMATCHED_SIGNER_CAP
-    )]
+    #[test, expected_failure(abort_code = aptos_extensions::upgradable::EMISMATCHED_SIGNER_CAP)]
     fun new__should_fail_if_signer_cap_is_for_different_address() {
         let resource_acct_signer = &create_signer_for_test(RESOURCE_ADDRESS);
         manageable::new(resource_acct_signer, ADMIN_ADDRESS);
@@ -75,8 +65,9 @@ module aptos_extensions::upgradeable_tests {
     #[test]
     fun upgrade_package__should_succeed() {
         setup_upgradeable(RESOURCE_ADDRESS, ADMIN_ADDRESS);
-        let package_upgraded_event =
-            upgradable::test_PackageUpgraded_event(RESOURCE_ADDRESS);
+        let package_upgraded_event = upgradable::test_PackageUpgraded_event(
+            RESOURCE_ADDRESS
+        );
         upgradable::test_upgrade_package(
             &create_signer_for_test(ADMIN_ADDRESS),
             RESOURCE_ADDRESS,
@@ -102,14 +93,12 @@ module aptos_extensions::upgradeable_tests {
     #[test]
     fun extract_signer_cap__should_extract_signer_capability() {
         setup_upgradeable(RESOURCE_ADDRESS, ADMIN_ADDRESS);
-        let cap_extracted_event =
-            upgradable::test_SignerCapExtracted_event(RESOURCE_ADDRESS);
+        let cap_extracted_event = upgradable::test_SignerCapExtracted_event(RESOURCE_ADDRESS);
 
-        let signer_cap =
-            upgradable::extract_signer_cap(
-                &create_signer_for_test(ADMIN_ADDRESS),
-                RESOURCE_ADDRESS
-            );
+        let signer_cap = upgradable::extract_signer_cap(
+            &create_signer_for_test(ADMIN_ADDRESS),
+            RESOURCE_ADDRESS
+        );
 
         assert_eq(create_test_signer_cap(RESOURCE_ADDRESS), signer_cap);
         assert_eq(event::was_event_emitted(&cap_extracted_event), true);
@@ -119,27 +108,21 @@ module aptos_extensions::upgradeable_tests {
     fun extract_signer_cap__should_remove_signer_cap_store_resource() {
         setup_upgradeable(RESOURCE_ADDRESS, ADMIN_ADDRESS);
 
-        assert_eq(
-            upgradable::signer_cap_store_exists_for_testing(RESOURCE_ADDRESS), true
-        );
+        assert_eq(upgradable::signer_cap_store_exists_for_testing(RESOURCE_ADDRESS), true);
 
         upgradable::extract_signer_cap(
             &create_signer_for_test(ADMIN_ADDRESS),
             RESOURCE_ADDRESS
         );
 
-        assert_eq(
-            upgradable::signer_cap_store_exists_for_testing(RESOURCE_ADDRESS), false
-        );
+        assert_eq(upgradable::signer_cap_store_exists_for_testing(RESOURCE_ADDRESS), false);
     }
 
     #[test, expected_failure(abort_code = aptos_extensions::manageable::ENOT_ADMIN)]
     fun extract_signer_cap__should_fail_if_caller_not_admin() {
         setup_upgradeable(RESOURCE_ADDRESS, ADMIN_ADDRESS);
 
-        upgradable::extract_signer_cap(
-            &create_signer_for_test(RANDOM_ADDRESS), RESOURCE_ADDRESS
-        );
+        upgradable::extract_signer_cap(&create_signer_for_test(RANDOM_ADDRESS), RESOURCE_ADDRESS);
     }
 
     // === Test helpers ===

@@ -132,10 +132,7 @@ module stablecoin::treasury {
     #[view]
     /// Returns whether an address is a minter.
     public fun is_minter(minter: address): bool acquires TreasuryState {
-        internal_is_minter(
-            borrow_global<TreasuryState>(stablecoin_address()),
-            minter
-        )
+        internal_is_minter(borrow_global<TreasuryState>(stablecoin_address()), minter)
     }
 
     #[view]
@@ -153,8 +150,7 @@ module stablecoin::treasury {
     public(friend) fun new(
         stablecoin_obj_constructor_ref: &ConstructorRef, master_minter: address
     ) {
-        let stablecoin_obj_signer =
-            &object::generate_signer(stablecoin_obj_constructor_ref);
+        let stablecoin_obj_signer = &object::generate_signer(stablecoin_obj_constructor_ref);
         move_to(
             stablecoin_obj_signer,
             TreasuryState {
@@ -170,9 +166,7 @@ module stablecoin::treasury {
     /// Configures the controller for a minter.
     /// Each unique controller may only control one minter,
     /// but each minter may be controlled by multiple controllers.
-    entry fun configure_controller(
-        caller: &signer, controller: address, minter: address
-    ) acquires TreasuryState {
+    entry fun configure_controller(caller: &signer, controller: address, minter: address) acquires TreasuryState {
         let treasury_state = borrow_global_mut<TreasuryState>(stablecoin_address());
         assert!(
             signer::address_of(caller) == treasury_state.master_minter,
@@ -217,9 +211,7 @@ module stablecoin::treasury {
 
     /// Increment the mint allowance for a minter.
     /// Only callable by the minter's controller.
-    entry fun increment_minter_allowance(
-        caller: &signer, allowance_increment: u64
-    ) acquires TreasuryState {
+    entry fun increment_minter_allowance(caller: &signer, allowance_increment: u64) acquires TreasuryState {
         let stablecoin_address = stablecoin_address();
         pausable::assert_not_paused(stablecoin_address);
         assert!(allowance_increment != 0, EZERO_AMOUNT);
@@ -232,17 +224,11 @@ module stablecoin::treasury {
         let minter = internal_get_minter(treasury_state, controller);
         assert!(internal_is_minter(treasury_state, minter), ENOT_MINTER);
 
-        let new_allowance =
-            internal_get_mint_allowance(treasury_state, minter) + allowance_increment;
+        let new_allowance = internal_get_mint_allowance(treasury_state, minter) + allowance_increment;
         internal_set_mint_allowance(treasury_state, minter, new_allowance);
 
         event::emit(
-            MinterAllowanceIncremented {
-                controller,
-                minter,
-                allowance_increment,
-                new_allowance
-            }
+            MinterAllowanceIncremented { controller, minter, allowance_increment, new_allowance }
         )
     }
 
@@ -306,9 +292,7 @@ module stablecoin::treasury {
     }
 
     /// Update master minter role
-    entry fun update_master_minter(
-        caller: &signer, new_master_minter: address
-    ) acquires TreasuryState {
+    entry fun update_master_minter(caller: &signer, new_master_minter: address) acquires TreasuryState {
         let stablecoin_address = stablecoin_address();
         ownable::assert_is_owner(caller, stablecoin_address);
 
@@ -321,27 +305,19 @@ module stablecoin::treasury {
 
     // === Aliases ===
 
-    inline fun internal_get_minter(
-        treasury_state: &TreasuryState, controller: address
-    ): address {
+    inline fun internal_get_minter(treasury_state: &TreasuryState, controller: address): address {
         *smart_table::borrow(&treasury_state.controllers, controller)
     }
 
-    inline fun internal_is_controller(
-        treasury_state: &TreasuryState, controller: address
-    ): bool {
+    inline fun internal_is_controller(treasury_state: &TreasuryState, controller: address): bool {
         smart_table::contains(&treasury_state.controllers, controller)
     }
 
-    inline fun internal_is_minter(
-        treasury_state: &TreasuryState, minter: address
-    ): bool {
+    inline fun internal_is_minter(treasury_state: &TreasuryState, minter: address): bool {
         smart_table::contains(&treasury_state.mint_allowances, minter)
     }
 
-    inline fun internal_get_mint_allowance(
-        treasury_state: &TreasuryState, minter: address
-    ): u64 {
+    inline fun internal_get_mint_allowance(treasury_state: &TreasuryState, minter: address): u64 {
         *smart_table::borrow(&treasury_state.mint_allowances, minter)
     }
 
@@ -375,10 +351,7 @@ module stablecoin::treasury {
 
     #[test_only]
     public fun test_mint(amount: u64): FungibleAsset acquires TreasuryState {
-        fungible_asset::mint(
-            &borrow_global<TreasuryState>(stablecoin_address()).mint_ref,
-            amount
-        )
+        fungible_asset::mint(&borrow_global<TreasuryState>(stablecoin_address()).mint_ref, amount)
     }
 
     #[test_only]
@@ -390,87 +363,64 @@ module stablecoin::treasury {
 
     #[test_only]
     public fun test_burn(asset: FungibleAsset) acquires TreasuryState {
-        fungible_asset::burn(
-            &borrow_global<TreasuryState>(stablecoin_address()).burn_ref,
-            asset
-        )
+        fungible_asset::burn(&borrow_global<TreasuryState>(stablecoin_address()).burn_ref, asset)
     }
 
     #[test_only]
     public fun num_controllers_for_testing(): u64 acquires TreasuryState {
-        smart_table::length(
-            &borrow_global<TreasuryState>(stablecoin_address()).controllers
-        )
+        smart_table::length(&borrow_global<TreasuryState>(stablecoin_address()).controllers)
     }
 
     #[test_only]
     public fun num_mint_allowances_for_testing(): u64 acquires TreasuryState {
-        smart_table::length(
-            &borrow_global<TreasuryState>(stablecoin_address()).mint_allowances
-        )
+        smart_table::length(&borrow_global<TreasuryState>(stablecoin_address()).mint_allowances)
     }
 
     #[test_only]
     public fun set_master_minter_for_testing(master_minter: address) acquires TreasuryState {
-        borrow_global_mut<TreasuryState>(stablecoin_address()).master_minter =
-            master_minter;
+        borrow_global_mut<TreasuryState>(stablecoin_address()).master_minter = master_minter;
     }
 
     #[test_only]
     public fun is_controller_for_testing(controller: address): bool acquires TreasuryState {
-        internal_is_controller(
-            borrow_global<TreasuryState>(stablecoin_address()),
-            controller
-        )
+        internal_is_controller(borrow_global<TreasuryState>(stablecoin_address()), controller)
     }
 
     #[test_only]
-    public fun force_configure_controller_for_testing(
-        controller: address, minter: address
-    ) acquires TreasuryState {
-        let controllers =
-            &mut borrow_global_mut<TreasuryState>(stablecoin_address()).controllers;
+    public fun force_configure_controller_for_testing(controller: address, minter: address) acquires TreasuryState {
+        let controllers = &mut borrow_global_mut<TreasuryState>(stablecoin_address()).controllers;
         smart_table::upsert(controllers, controller, minter);
     }
 
     #[test_only]
     public fun force_remove_controller_for_testing(controller: address) acquires TreasuryState {
-        let controllers =
-            &mut borrow_global_mut<TreasuryState>(stablecoin_address()).controllers;
+        let controllers = &mut borrow_global_mut<TreasuryState>(stablecoin_address()).controllers;
         if (smart_table::contains(controllers, controller)) {
             smart_table::remove(controllers, controller);
         }
     }
 
     #[test_only]
-    public fun force_configure_minter_for_testing(
-        minter: address, mint_allowance: u64
-    ) acquires TreasuryState {
-        let mint_allowances =
-            &mut borrow_global_mut<TreasuryState>(stablecoin_address()).mint_allowances;
+    public fun force_configure_minter_for_testing(minter: address, mint_allowance: u64) acquires TreasuryState {
+        let mint_allowances = &mut borrow_global_mut<TreasuryState>(stablecoin_address()).mint_allowances;
         smart_table::upsert(mint_allowances, minter, mint_allowance);
     }
 
     #[test_only]
     public fun force_remove_minter_for_testing(minter: address) acquires TreasuryState {
-        let mint_allowances =
-            &mut borrow_global_mut<TreasuryState>(stablecoin_address()).mint_allowances;
+        let mint_allowances = &mut borrow_global_mut<TreasuryState>(stablecoin_address()).mint_allowances;
         if (smart_table::contains(mint_allowances, minter)) {
             smart_table::remove(mint_allowances, minter);
         }
     }
 
     #[test_only]
-    public fun test_configure_controller(
-        caller: &signer, controller: address, minter: address
-    ) acquires TreasuryState {
+    public fun test_configure_controller(caller: &signer, controller: address, minter: address) acquires TreasuryState {
         configure_controller(caller, controller, minter)
     }
 
     #[test_only]
-    public fun test_remove_controller(
-        caller: &signer, controller: address
-    ) acquires TreasuryState {
+    public fun test_remove_controller(caller: &signer, controller: address) acquires TreasuryState {
         remove_controller(caller, controller)
     }
 
@@ -480,9 +430,7 @@ module stablecoin::treasury {
     }
 
     #[test_only]
-    public fun test_increment_minter_allowance(
-        caller: &signer, allowance_increment: u64
-    ) acquires TreasuryState {
+    public fun test_increment_minter_allowance(caller: &signer, allowance_increment: u64) acquires TreasuryState {
         increment_minter_allowance(caller, allowance_increment)
     }
 
@@ -492,9 +440,7 @@ module stablecoin::treasury {
     }
 
     #[test_only]
-    public fun test_ControllerConfigured_event(
-        controller: address, minter: address
-    ): ControllerConfigured {
+    public fun test_ControllerConfigured_event(controller: address, minter: address): ControllerConfigured {
         ControllerConfigured { controller, minter }
     }
 
@@ -504,9 +450,7 @@ module stablecoin::treasury {
     }
 
     #[test_only]
-    public fun test_MinterConfigured_event(
-        controller: address, minter: address, allowance: u64
-    ): MinterConfigured {
+    public fun test_MinterConfigured_event(controller: address, minter: address, allowance: u64): MinterConfigured {
         MinterConfigured { controller, minter, allowance }
     }
 
@@ -517,18 +461,11 @@ module stablecoin::treasury {
         allowance_increment: u64,
         new_allowance: u64
     ): MinterAllowanceIncremented {
-        MinterAllowanceIncremented {
-            controller,
-            minter,
-            allowance_increment,
-            new_allowance
-        }
+        MinterAllowanceIncremented { controller, minter, allowance_increment, new_allowance }
     }
 
     #[test_only]
-    public fun test_MinterRemoved_event(
-        controller: address, minter: address
-    ): MinterRemoved {
+    public fun test_MinterRemoved_event(controller: address, minter: address): MinterRemoved {
         MinterRemoved { controller, minter }
     }
 
@@ -543,9 +480,7 @@ module stablecoin::treasury {
     }
 
     #[test_only]
-    public fun test_update_master_minter(
-        caller: &signer, new_master_minter: address
-    ) acquires TreasuryState {
+    public fun test_update_master_minter(caller: &signer, new_master_minter: address) acquires TreasuryState {
         update_master_minter(caller, new_master_minter);
     }
 

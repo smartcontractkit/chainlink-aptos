@@ -85,17 +85,13 @@ module aptos_extensions::manageable_tests {
     #[test]
     fun assert_is_admin__should_succeed_if_called_by_admin() {
         setup_manageable(RESOURCE_ADDRESS, ADMIN_ADDRESS);
-        manageable::assert_is_admin(
-            &create_signer_for_test(ADMIN_ADDRESS), RESOURCE_ADDRESS
-        );
+        manageable::assert_is_admin(&create_signer_for_test(ADMIN_ADDRESS), RESOURCE_ADDRESS);
     }
 
     #[test, expected_failure(abort_code = aptos_extensions::manageable::ENOT_ADMIN)]
     fun assert_is_admin__should_abort_if_not_called_by_admin() {
         setup_manageable(RESOURCE_ADDRESS, ADMIN_ADDRESS);
-        manageable::assert_is_admin(
-            &create_signer_for_test(ADMIN_ADDRESS_2), RESOURCE_ADDRESS
-        );
+        manageable::assert_is_admin(&create_signer_for_test(ADMIN_ADDRESS_2), RESOURCE_ADDRESS);
     }
 
     #[test]
@@ -104,12 +100,7 @@ module aptos_extensions::manageable_tests {
         manageable::assert_admin_exists(RESOURCE_ADDRESS);
     }
 
-    #[
-        test,
-        expected_failure(
-            abort_code = aptos_extensions::manageable::EMISSING_ADMIN_RESOURCE
-        )
-    ]
+    #[test, expected_failure(abort_code = aptos_extensions::manageable::EMISSING_ADMIN_RESOURCE)]
     fun assert_admin_exists__should_abort_if_admin_resource_does_not_exist() {
         setup_manageable(RESOURCE_ADDRESS, ADMIN_ADDRESS);
         manageable::assert_admin_exists(ADMIN_ADDRESS);
@@ -119,12 +110,11 @@ module aptos_extensions::manageable_tests {
     fun change_admin__should_set_pending_admin() {
         setup_manageable(RESOURCE_ADDRESS, ADMIN_ADDRESS);
         let admin_signer = &create_signer_for_test(ADMIN_ADDRESS);
-        let admin_change_started_event =
-            manageable::test_AdminChangeStarted_event(
-                RESOURCE_ADDRESS,
-                ADMIN_ADDRESS,
-                ADMIN_ADDRESS_2
-            );
+        let admin_change_started_event = manageable::test_AdminChangeStarted_event(
+            RESOURCE_ADDRESS,
+            ADMIN_ADDRESS,
+            ADMIN_ADDRESS_2
+        );
 
         manageable::test_change_admin(admin_signer, RESOURCE_ADDRESS, ADMIN_ADDRESS_2);
 
@@ -139,12 +129,11 @@ module aptos_extensions::manageable_tests {
     fun change_admin__should_reset_pending_admin_if_already_set() {
         setup_manageable(RESOURCE_ADDRESS, ADMIN_ADDRESS);
         let admin_signer = &create_signer_for_test(ADMIN_ADDRESS);
-        let admin_change_started_event =
-            manageable::test_AdminChangeStarted_event(
-                RESOURCE_ADDRESS,
-                ADMIN_ADDRESS,
-                ADMIN_ADDRESS_2
-            );
+        let admin_change_started_event = manageable::test_AdminChangeStarted_event(
+            RESOURCE_ADDRESS,
+            ADMIN_ADDRESS,
+            ADMIN_ADDRESS_2
+        );
 
         manageable::set_pending_admin_for_testing(RESOURCE_ADDRESS, ADMIN_ADDRESS_3);
         manageable::test_change_admin(admin_signer, RESOURCE_ADDRESS, ADMIN_ADDRESS_2);
@@ -160,12 +149,11 @@ module aptos_extensions::manageable_tests {
     fun change_admin__should_set_same_pending_admin() {
         setup_manageable(RESOURCE_ADDRESS, ADMIN_ADDRESS);
         let admin_signer = &create_signer_for_test(ADMIN_ADDRESS);
-        let admin_change_started_event =
-            manageable::test_AdminChangeStarted_event(
-                RESOURCE_ADDRESS,
-                ADMIN_ADDRESS,
-                ADMIN_ADDRESS_2
-            );
+        let admin_change_started_event = manageable::test_AdminChangeStarted_event(
+            RESOURCE_ADDRESS,
+            ADMIN_ADDRESS,
+            ADMIN_ADDRESS_2
+        );
 
         manageable::set_pending_admin_for_testing(RESOURCE_ADDRESS, ADMIN_ADDRESS_2);
         manageable::test_change_admin(admin_signer, RESOURCE_ADDRESS, ADMIN_ADDRESS_2);
@@ -181,21 +169,18 @@ module aptos_extensions::manageable_tests {
     fun change_admin__should_fail_if_caller_not_admin() {
         setup_manageable(RESOURCE_ADDRESS, ADMIN_ADDRESS);
         let invalid_admin_signer = &create_signer_for_test(ADMIN_ADDRESS_2);
-        manageable::test_change_admin(
-            invalid_admin_signer, RESOURCE_ADDRESS, ADMIN_ADDRESS_2
-        );
+        manageable::test_change_admin(invalid_admin_signer, RESOURCE_ADDRESS, ADMIN_ADDRESS_2);
     }
 
     #[test]
     fun accept_admin__should_change_admin() {
         setup_manageable(RESOURCE_ADDRESS, ADMIN_ADDRESS);
         let new_admin_signer = &create_signer_for_test(ADMIN_ADDRESS_2);
-        let admin_changed_event =
-            manageable::test_AdminChanged_event(
-                RESOURCE_ADDRESS,
-                ADMIN_ADDRESS,
-                ADMIN_ADDRESS_2
-            );
+        let admin_changed_event = manageable::test_AdminChanged_event(
+            RESOURCE_ADDRESS,
+            ADMIN_ADDRESS,
+            ADMIN_ADDRESS_2
+        );
 
         manageable::set_pending_admin_for_testing(RESOURCE_ADDRESS, ADMIN_ADDRESS_2);
         manageable::test_accept_admin(new_admin_signer, RESOURCE_ADDRESS);
@@ -221,9 +206,7 @@ module aptos_extensions::manageable_tests {
         );
     }
 
-    #[test, expected_failure(
-        abort_code = aptos_extensions::manageable::EPENDING_ADMIN_NOT_SET
-    )]
+    #[test, expected_failure(abort_code = aptos_extensions::manageable::EPENDING_ADMIN_NOT_SET)]
     fun accept_admin__should_fail_if_pending_admin_is_not_set() {
         let new_admin_signer = &create_signer_for_test(ADMIN_ADDRESS_2);
         setup_manageable(RESOURCE_ADDRESS, ADMIN_ADDRESS);
@@ -262,8 +245,7 @@ module aptos_extensions::manageable_tests {
     public fun destroy__should_remove_admin_role_resource() {
         setup_manageable(RESOURCE_ADDRESS, ADMIN_ADDRESS);
         let resource_signer = create_signer_for_test(RESOURCE_ADDRESS);
-        let admin_role_destroyed_event =
-            manageable::test_AdminRoleDestroyed_event(RESOURCE_ADDRESS);
+        let admin_role_destroyed_event = manageable::test_AdminRoleDestroyed_event(RESOURCE_ADDRESS);
 
         assert_eq(manageable::admin_role_exists_for_testing(RESOURCE_ADDRESS), true);
 

@@ -89,9 +89,7 @@ module stablecoin::stablecoin {
     fun init_module(resource_acct_signer: &signer) {
         // Create the stablecoin's object container.
         let stablecoin_obj_constructor_ref =
-            &object::create_named_object(
-                resource_acct_signer, stablecoin_utils::stablecoin_obj_seed()
-            );
+            &object::create_named_object(resource_acct_signer, stablecoin_utils::stablecoin_obj_seed());
 
         // Create the fungible asset primary store resources with default values.
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
@@ -108,8 +106,7 @@ module stablecoin::stablecoin {
         fungible_asset::set_untransferable(stablecoin_obj_constructor_ref);
 
         // Create the StablecoinState resource.
-        let stablecoin_obj_signer =
-            &object::generate_signer(stablecoin_obj_constructor_ref);
+        let stablecoin_obj_signer = &object::generate_signer(stablecoin_obj_constructor_ref);
         move_to(
             stablecoin_obj_signer,
             StablecoinState {
@@ -126,10 +123,7 @@ module stablecoin::stablecoin {
         treasury::new(stablecoin_obj_constructor_ref, @deployer);
 
         // Retrieve the resource account signer capability and initialize the managable::AdminRole and upgradable::SignerCapStore resources.
-        let signer_cap =
-            resource_account::retrieve_resource_account_cap(
-                resource_acct_signer, @deployer
-            );
+        let signer_cap = resource_account::retrieve_resource_account_cap(resource_acct_signer, @deployer);
         manageable::new(resource_acct_signer, @deployer);
         upgradable::new(resource_acct_signer, signer_cap);
 
@@ -166,9 +160,7 @@ module stablecoin::stablecoin {
         manageable::assert_is_admin(caller, @stablecoin);
         let stablecoin_address = stablecoin_utils::stablecoin_address();
         let stablecoin_state = borrow_global_mut<StablecoinState>(stablecoin_address);
-        assert!(
-            stablecoin_state.initialized_version == 0, ESTABLECOIN_VERSION_INITIALIZED
-        );
+        assert!(stablecoin_state.initialized_version == 0, ESTABLECOIN_VERSION_INITIALIZED);
 
         stablecoin_state.initialized_version = 1;
 
@@ -189,8 +181,7 @@ module stablecoin::stablecoin {
     ) {
         let stablecoin_address = stablecoin_utils::stablecoin_address();
         assert!(
-            object::object_address(&fungible_asset::store_metadata(store))
-                == stablecoin_address,
+            object::object_address(&fungible_asset::store_metadata(store)) == stablecoin_address,
             ESTABLECOIN_METADATA_MISMATCH
         );
 
@@ -210,8 +201,7 @@ module stablecoin::stablecoin {
     ): FungibleAsset {
         let stablecoin_address = stablecoin_utils::stablecoin_address();
         assert!(
-            object::object_address(&fungible_asset::store_metadata(store))
-                == stablecoin_address,
+            object::object_address(&fungible_asset::store_metadata(store)) == stablecoin_address,
             ESTABLECOIN_METADATA_MISMATCH
         );
 
@@ -221,9 +211,7 @@ module stablecoin::stablecoin {
         blocklistable::assert_not_blocklisted(store_owner);
         let asset = fungible_asset::withdraw_with_ref(transfer_ref, store, amount);
 
-        event::emit(
-            Withdraw { store_owner, store: object::object_address(&store), amount }
-        );
+        event::emit(Withdraw { store_owner, store: object::object_address(&store), amount });
 
         asset
     }
@@ -244,14 +232,7 @@ module stablecoin::stablecoin {
         icon_uri: String,
         project_uri: String
     ) acquires StablecoinState {
-        initialize_v1(
-            caller,
-            name,
-            symbol,
-            decimals,
-            icon_uri,
-            project_uri
-        );
+        initialize_v1(caller, name, symbol, decimals, icon_uri, project_uri);
     }
 
     #[test_only]
@@ -260,12 +241,8 @@ module stablecoin::stablecoin {
     }
 
     #[test_only]
-    public fun set_initialized_version_for_testing(
-        initialized_version: u8
-    ) acquires StablecoinState {
-        borrow_global_mut<StablecoinState>(stablecoin_utils::stablecoin_address()).initialized_version =
-
-            initialized_version;
+    public fun set_initialized_version_for_testing(initialized_version: u8) acquires StablecoinState {
+        borrow_global_mut<StablecoinState>(stablecoin_utils::stablecoin_address()).initialized_version = initialized_version;
     }
 
     #[test_only]
@@ -276,22 +253,17 @@ module stablecoin::stablecoin {
     }
 
     #[test_only]
-    public fun test_Deposit_event(
-        store_owner: address, store: address, amount: u64
-    ): Deposit {
+    public fun test_Deposit_event(store_owner: address, store: address, amount: u64): Deposit {
         Deposit { store_owner, store, amount }
     }
 
     #[test_only]
-    public fun test_Withdraw_event(
-        store_owner: address, store: address, amount: u64
-    ): Withdraw {
+    public fun test_Withdraw_event(store_owner: address, store: address, amount: u64): Withdraw {
         Withdraw { store_owner, store, amount }
     }
 
     #[test_only]
-    public fun test_StablecoinInitialized_event(initialized_version: u8):
-        StablecoinInitialized {
+    public fun test_StablecoinInitialized_event(initialized_version: u8): StablecoinInitialized {
         StablecoinInitialized { initialized_version }
     }
 }

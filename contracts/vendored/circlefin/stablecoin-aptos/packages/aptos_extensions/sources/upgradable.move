@@ -56,8 +56,7 @@ module aptos_extensions::upgradable {
     public fun new(caller: &signer, signer_cap: SignerCapability) {
         manageable::assert_admin_exists(signer::address_of(caller));
         assert!(
-            account::get_signer_capability_address(&signer_cap)
-                == signer::address_of(caller),
+            account::get_signer_capability_address(&signer_cap) == signer::address_of(caller),
             EMISMATCHED_SIGNER_CAP
         );
         move_to(caller, SignerCapStore { signer_cap });
@@ -81,9 +80,7 @@ module aptos_extensions::upgradable {
     }
 
     /// Extracts the SignerCapability from the SignerCapStore and removes the SignerCapStore resource.
-    public fun extract_signer_cap(
-        caller: &signer, resource_acct: address
-    ): SignerCapability acquires SignerCapStore {
+    public fun extract_signer_cap(caller: &signer, resource_acct: address): SignerCapability acquires SignerCapStore {
         manageable::assert_is_admin(caller, resource_acct);
 
         let SignerCapStore { signer_cap } = move_from<SignerCapStore>(resource_acct);
@@ -106,17 +103,13 @@ module aptos_extensions::upgradable {
     }
 
     #[test_only]
-    public fun extract_signer_cap_for_testing(
-        resource_acct: address
-    ): SignerCapability acquires SignerCapStore {
+    public fun extract_signer_cap_for_testing(resource_acct: address): SignerCapability acquires SignerCapStore {
         let SignerCapStore { signer_cap } = move_from<SignerCapStore>(resource_acct);
         signer_cap
     }
 
     #[test_only]
-    public fun set_signer_cap_for_testing(
-        caller: &signer, signer_cap: SignerCapability
-    ) {
+    public fun set_signer_cap_for_testing(caller: &signer, signer_cap: SignerCapability) {
         move_to(caller, SignerCapStore { signer_cap });
     }
 
@@ -127,12 +120,7 @@ module aptos_extensions::upgradable {
         metadata_serialized: vector<u8>,
         code: vector<vector<u8>>
     ) acquires SignerCapStore {
-        upgrade_package(
-            caller,
-            resource_acct,
-            metadata_serialized,
-            code
-        );
+        upgrade_package(caller, resource_acct, metadata_serialized, code);
     }
 
     #[test_only]
