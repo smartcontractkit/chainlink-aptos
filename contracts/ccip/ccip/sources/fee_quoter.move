@@ -1680,4 +1680,80 @@ module ccip::fee_quoter {
 
         option::none()
     }
+
+    #[test]
+    fun test_decode_generic_extra_args_v2() {
+        let dest_chain_config = DestChainConfig {
+            is_enabled: true,
+            max_number_of_tokens_per_msg: 1000,
+            max_data_bytes: 1000,
+            max_per_msg_gas_limit: 1000,
+            dest_gas_overhead: 1000,
+            dest_gas_per_payload_byte_base: 10,
+            dest_gas_per_payload_byte_high: 10,
+            dest_gas_per_payload_byte_threshold: 1000,
+            dest_data_availability_overhead_gas: 1000,
+            dest_gas_per_data_availability_byte: 1000,
+            dest_data_availability_multiplier_bps: 1000,
+            chain_family_selector: b"test",
+            enforce_out_of_order: true,
+            default_token_fee_usd_cents: 1000,
+            default_token_dest_gas_overhead: 1000,
+            default_tx_gas_limit: 1000,
+            gas_multiplier_wei_per_eth: 1000,
+            gas_price_staleness_threshold: 1000,
+            network_fee_usd_cents: 1000
+        };
+
+        let expected_gas_limit = 101;
+        let expected_allow_out_of_order_execution = true;
+
+        let extra_args =
+            client::encode_generic_extra_args_v2(
+                expected_gas_limit,
+                expected_allow_out_of_order_execution
+            );
+
+        let (gas_limit, allow_out_of_order_execution) =
+            decode_generic_extra_args(&dest_chain_config, extra_args);
+
+        assert!(gas_limit == expected_gas_limit, 0);
+        assert!(allow_out_of_order_execution == expected_allow_out_of_order_execution, 0);
+    }
+
+    #[test]
+    fun test_decode_svm_extra_args_v1() {
+        let expected_compute_units = 101;
+        let expected_account_is_writable_bitmap = 102;
+        let expected_allow_out_of_order_execution = true;
+        let expected_token_receiver =
+            x"1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+        let expected_accounts = vector[
+            x"2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdea",
+            x"3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdeb"
+        ];
+
+        let extra_args =
+            client::encode_svm_extra_args_v1(
+                expected_compute_units,
+                expected_account_is_writable_bitmap,
+                expected_allow_out_of_order_execution,
+                expected_token_receiver,
+                expected_accounts
+            );
+
+        let (
+            compute_units,
+            account_is_writable_bitmap,
+            allow_out_of_order_execution,
+            token_receiver,
+            accounts
+        ) = decode_svm_extra_args(extra_args);
+
+        assert!(compute_units == expected_compute_units, 0);
+        assert!(account_is_writable_bitmap == expected_account_is_writable_bitmap, 0);
+        assert!(allow_out_of_order_execution == expected_allow_out_of_order_execution, 0);
+        assert!(token_receiver == expected_token_receiver, 0);
+        assert!(accounts == expected_accounts, 0);
+    }
 }
