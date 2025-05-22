@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ------------------------------------------------------------------------------
-#  Aptos test script for the Registry migration to support 2 Forwarders
+#  Data Feeds: Aptos test script for the Registry migration to support 2 Forwarders
 #  • Optional command tracing         :  DEBUG=1 ./test_registry_migration.sh
 # ------------------------------------------------------------------------------
 
@@ -170,13 +170,104 @@ ORACLE_SIGNATURES_ARGS_3=$(IFS=, ; printf '"%s",' "${ORACLE_SIGNATURES_3[@]}")
 ORACLE_SIGNATURES_ARGS_3="[${ORACLE_SIGNATURES_ARGS_3%,}]"
 
 # ──────────────────────────────────────────────────────────────────────────────
-#  Environment discovery
+#  Environment
 # ──────────────────────────────────────────────────────────────────────────────
-PUBLISHER_PROFILE=default
+PUBLISHER_PROFILE=test_registry_migration_e2e
+NETWORK=local
+TMP_KEY_FILE=test-key.tmp
+
+echo -e "e2e Data Feeds Registry Upgrade migration test starting! 🚀\n"
+
+REST_PORT=8080
+FAUCET_PORT=8081
+LOG_FILE=/tmp/aptos-testnet.log
+
+wait_for_ports() {
+  local port1=$1
+  local port2=$2
+  local max_retries=30
+
+  echo "⏳ Waiting for ports $port1 and $port2 to become available..."
+
+  for i in $(seq 1 "$max_retries"); do
+    port1_up=$(lsof -i :"$port1" -sTCP:LISTEN -t >/dev/null 2>&1 && echo "yes" || echo "no")
+    port2_up=$(lsof -i :"$port2" -sTCP:LISTEN -t >/dev/null 2>&1 && echo "yes" || echo "no")
+
+    if [[ "$port1_up" == "yes" && "$port2_up" == "yes" ]]; then
+      echo "✅ Both ports are now listening: $port1 and $port2"
+      return 0
+    fi
+
+    sleep 1
+  done
+
+  echo "❌ Timed out waiting for both ports to be available."
+  echo "    $port1: $port1_up"
+  echo "    $port2: $port2_up"
+  exit 1
+}
+
+# Check if the exact aptos process is running
+if pgrep -f "aptos node run-local-testnet" >/dev/null; then
+  echo "✅ Aptos local testnet process is already running."
+
+  # Confirm both ports are listening
+  if lsof -i :"$REST_PORT" -sTCP:LISTEN -t >/dev/null && \
+     lsof -i :"$FAUCET_PORT" -sTCP:LISTEN -t >/dev/null; then
+    echo "✅ Ports $REST_PORT and $FAUCET_PORT are in use by Aptos testnet."
+  else
+    echo "❌ Aptos process is running but one or both required ports are not listening."
+    exit 1
+  fi
+else
+  # Ensure ports are not taken by some other process
+  if lsof -i :"$REST_PORT" -sTCP:LISTEN -t >/dev/null; then
+    echo "❌ Port $REST_PORT is in use by another process. Can't start Aptos."
+    exit 1
+  fi
+
+  if lsof -i :"$FAUCET_PORT" -sTCP:LISTEN -t >/dev/null; then
+    echo "❌ Port $FAUCET_PORT is in use by another process. Can't start Aptos."
+    exit 1
+  fi
+
+  echo "🚀 Starting Aptos local testnet with faucet..."
+  nohup aptos node run-local-testnet --with-faucet > "$LOG_FILE" 2>&1 &
+  APTOS_PID=$!
+  echo -e "✅ Started in background. Logs at $LOG_FILE\n"
+  echo "Aptos local network PID: $APTOS_PID"
+
+  run "Waiting for Aptos local network to fully boot!" _out \
+    wait_for_ports $REST_PORT $FAUCET_PORT
+fi
+
+# Kill the node when the script exits (normal or error)
+cleanup() {
+  echo "🛑 Cleaning up Aptos testnet (PID $APTOS_PID)"
+  kill "$APTOS_PID" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+
+if [[ ! -f .aptos/config.yaml ]] || ! grep -q "^  $PUBLISHER_PROFILE:" .aptos/config.yaml; then
+  echo -e "\nWe are about to make your address profile: ($PUBLISHER_PROFILE) for the e2e test!\n"
+  echo -e "💥 This will create a .aptos/ folder in your current directory. 💥 Be aware. Re-run from a diretory if your choosing if you wish..\n"
+  aptos key generate --output-file $TMP_KEY_FILE --assume-yes
+  echo -e "\n"
+  aptos init \
+    --profile $PUBLISHER_PROFILE \
+    --network $NETWORK \
+    --assume-yes \
+    --private-key-file $TMP_KEY_FILE
+  rm "$TMP_KEY_FILE"
+  rm "$TMP_KEY_FILE.pub"
+fi
+
+
 PUBLISHER_ADDR=0x$(aptos config show-profiles --profile=$PUBLISHER_PROFILE | grep 'account' | sed -n 's/.*"account": \"\(.*\)\".*/\1/p')
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONTRACTS_ROOT="$SCRIPT_DIR/.."
+CONTRACTS_ROOT="$SCRIPT_DIR/../.."
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  Helper to extract “Code was successfully deployed” address from stdout
@@ -215,7 +306,9 @@ if [[ -z "$PLATFORM_FORWARDER_ADDR" ]]; then
 fi
 
 run "Set config on Forwarder 1" _out \
-  aptos move run --function-id "$PLATFORM_FORWARDER_ADDR::forwarder::set_config" \
+  aptos move run \
+    --profile "$PUBLISHER_PROFILE" \
+    --function-id "$PLATFORM_FORWARDER_ADDR::forwarder::set_config" \
     --assume-yes --args u32:1 u32:1 u8:1 "hex:$ORACLE_PUBKEY_ARGS"
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -223,10 +316,10 @@ run "Set config on Forwarder 1" _out \
 # ──────────────────────────────────────────────────────────────────────────────
 run "Deploy Forwarder 2" OUT_FWD2 \
   aptos move create-object-and-publish-package \
+    --profile "$PUBLISHER_PROFILE" \
     --package-dir "$CONTRACTS_ROOT/platform_secondary" \
     --address-name platform_secondary \
     --named-addresses owner_secondary="$PUBLISHER_ADDR" \
-    --profile "$PUBLISHER_PROFILE" \
     --max-gas 50000 --assume-yes
 
 PLATFORM_SECONDARY_FORWARDER_ADDR=$(print "$OUT_FWD2" | extract_addr)
@@ -239,7 +332,9 @@ if [[ -z "$PLATFORM_SECONDARY_FORWARDER_ADDR" ]]; then
 fi
 
 run "Set config on Forwarder 2" _out \
-  aptos move run --function-id "$PLATFORM_SECONDARY_FORWARDER_ADDR::forwarder::set_config" \
+  aptos move run \
+    --profile "$PUBLISHER_PROFILE" \
+    --function-id "$PLATFORM_SECONDARY_FORWARDER_ADDR::forwarder::set_config" \
     --assume-yes --args u32:1 u32:1 u8:1 "hex:$ORACLE_PUBKEY_ARGS"
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -247,10 +342,10 @@ run "Set config on Forwarder 2" _out \
 # ──────────────────────────────────────────────────────────────────────────────
 run "Deploy data-feeds (legacy, pre-migration)" OUT_DF_LEGACY \
   aptos move create-object-and-publish-package \
+    --profile "$PUBLISHER_PROFILE" \
     --package-dir "$CONTRACTS_ROOT/legacy/data-feeds-pre-migration" \
     --address-name data_feeds \
     --named-addresses platform="$PLATFORM_FORWARDER_ADDR",owner="$PUBLISHER_ADDR" \
-    --profile "$PUBLISHER_PROFILE" \
     --max-gas 50000 --assume-yes
 
 DATA_FEEDS_ADDR=$(print "$OUT_DF_LEGACY" | extract_addr)
@@ -263,27 +358,37 @@ if [[ -z "$DATA_FEEDS_ADDR" ]]; then
 fi
 
 run "Set workflow config" _out \
-  aptos move run --function-id "$DATA_FEEDS_ADDR::registry::set_workflow_config" \
+  aptos move run \
+    --profile "$PUBLISHER_PROFILE" \
+    --function-id "$DATA_FEEDS_ADDR::registry::set_workflow_config" \
     --assume-yes --args "hex:[\"$WORKFLOW_ONWER\"]" 'string:[]'
 
 run "Register feed #1 (LINK)" _out \
-  aptos move run --function-id "$DATA_FEEDS_ADDR::registry::set_feeds" \
+  aptos move run \
+    --profile "$PUBLISHER_PROFILE" \
+    --function-id "$DATA_FEEDS_ADDR::registry::set_feeds" \
     --assume-yes --args "hex:[\"$FEED_ID_1\"]" 'string:["LINK"]' 'hex:0x99'
 
 run "Register feed #2 (APT)" _out \
-  aptos move run --function-id "$DATA_FEEDS_ADDR::registry::set_feeds" \
+  aptos move run \
+    --profile "$PUBLISHER_PROFILE" \
+    --function-id "$DATA_FEEDS_ADDR::registry::set_feeds" \
     --assume-yes --args "hex:[\"$FEED_ID_2\"]" 'string:["APT"]' 'hex:0x99'
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  4.  Report 1 – write & verify
 # ──────────────────────────────────────────────────────────────────────────────
 run "Write report 1 (via Forwarder 1)" _out \
-  aptos move run --function-id "$PLATFORM_FORWARDER_ADDR::forwarder::report" \
+  aptos move run \
+    --profile "$PUBLISHER_PROFILE" \
+    --function-id "$PLATFORM_FORWARDER_ADDR::forwarder::report" \
     --assume-yes --args "address:$DATA_FEEDS_ADDR" \
     "hex:$FORWARDER_REPORT_PAYLOAD_1" "hex:$ORACLE_SIGNATURES_ARGS_1"
 
 run "Read report 1" OUT_REPORT1_READ \
-  aptos move view --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes
+  aptos move view \
+    --profile "$PUBLISHER_PROFILE" \
+    --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes
 
 BENCHMARK_1=$(print "$OUT_REPORT1_READ" | jq -r '.Result[0][0].feed.benchmark')
 [[ "$BENCHMARK_1" == "$EXPECTED_BENCHMARK_1" ]] \
@@ -295,15 +400,17 @@ BENCHMARK_1=$(print "$OUT_REPORT1_READ" | jq -r '.Result[0][0].feed.benchmark')
 # ──────────────────────────────────────────────────────────────────────────────
 run "Upgrade registry contract (supports benchmark reports & 2 forwarders)" _out \
   aptos move upgrade-object \
+    --profile "$PUBLISHER_PROFILE" \
     --package-dir "$CONTRACTS_ROOT/data-feeds" \
     --object-address "$DATA_FEEDS_ADDR" \
     --address-name data_feeds \
     --named-addresses data_feeds="$DATA_FEEDS_ADDR",platform="$PLATFORM_FORWARDER_ADDR",owner="$PUBLISHER_ADDR",platform_secondary="$PLATFORM_SECONDARY_FORWARDER_ADDR",owner_secondary="$PUBLISHER_ADDR" \
-    --profile "$PUBLISHER_PROFILE" \
     --max-gas 50000 --assume-yes
 
 run "Read report 1 after upgrade" OUT_REPORT1_POST \
-  aptos move view --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes
+  aptos move view \
+    --profile "$PUBLISHER_PROFILE" \
+    --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes
 
 BENCHMARK_1_POST=$(print "$OUT_REPORT1_POST" | jq -r '.Result[0][0].feed.benchmark')
 [[ "$BENCHMARK_1_POST" == "$EXPECTED_BENCHMARK_1" ]] \
@@ -314,12 +421,16 @@ BENCHMARK_1_POST=$(print "$OUT_REPORT1_POST" | jq -r '.Result[0][0].feed.benchma
 #  6.  Report 2 – write & verify
 # ──────────────────────────────────────────────────────────────────────────────
 run "Write report 2 (via Forwarder 1)" _out \
-  aptos move run --function-id "$PLATFORM_FORWARDER_ADDR::forwarder::report" \
+  aptos move run \
+    --profile "$PUBLISHER_PROFILE" \
+    --function-id "$PLATFORM_FORWARDER_ADDR::forwarder::report" \
     --assume-yes --args "address:$DATA_FEEDS_ADDR" \
     "hex:$FORWARDER_REPORT_PAYLOAD_2" "hex:$ORACLE_SIGNATURES_ARGS_2"
 
 run "Read report 2" OUT_REPORT2_READ \
-  aptos move view --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes
+  aptos move view \
+    --profile "$PUBLISHER_PROFILE" \
+    --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes
 
 BENCHMARK_2=$(print "$OUT_REPORT2_READ" | jq -r '.Result[0][0].feed.benchmark')
 [[ "$BENCHMARK_2" == "$EXPECTED_BENCHMARK_2" ]] \
@@ -330,12 +441,16 @@ BENCHMARK_2=$(print "$OUT_REPORT2_READ" | jq -r '.Result[0][0].feed.benchmark')
 #  7.  Report 3 – write (via 2nd forwarder) & verify
 # ──────────────────────────────────────────────────────────────────────────────
 run "Write report 3 (via Forwarder 2)" _out \
-  aptos move run --function-id "$PLATFORM_SECONDARY_FORWARDER_ADDR::forwarder::report" \
+  aptos move run \
+    --profile "$PUBLISHER_PROFILE" \
+    --function-id "$PLATFORM_SECONDARY_FORWARDER_ADDR::forwarder::report" \
     --assume-yes --args "address:$DATA_FEEDS_ADDR" \
     "hex:$FORWARDER_REPORT_PAYLOAD_3" "hex:$ORACLE_SIGNATURES_ARGS_3"
 
 run "Read report 3" OUT_REPORT3_READ \
-  aptos move view --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes
+  aptos move view \
+    --profile "$PUBLISHER_PROFILE" \
+    --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes
 
 BENCHMARK_3=$(print "$OUT_REPORT3_READ"   | jq -r '.Result[0][0].feed.benchmark')
 BENCHMARK_3_2=$(print "$OUT_REPORT3_READ" | jq -r '.Result[0][1].feed.benchmark')
