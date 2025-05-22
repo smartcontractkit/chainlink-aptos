@@ -669,6 +669,13 @@ module usdc_token_pool::usdc_token_pool {
         ownable::accept_ownership(caller, &mut pool.ownable_state)
     }
 
+    public entry fun execute_ownership_transfer(
+        caller: &signer, to: address
+    ) acquires USDCTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::execute_ownership_transfer(caller, &mut pool.ownable_state, to)
+    }
+
     // ================================================================
     // |                      MCMS entrypoint                         |
     // ================================================================
@@ -824,6 +831,10 @@ module usdc_token_pool::usdc_token_pool {
         } else if (function_bytes == b"accept_ownership") {
             bcs_stream::assert_is_consumed(&stream);
             accept_ownership(&caller);
+        } else if (function_bytes == b"execute_ownership_transfer") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            execute_ownership_transfer(&caller, to)
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };

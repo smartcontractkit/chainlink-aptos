@@ -878,7 +878,7 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool = @burn_mint_token_pool,
             lock_release_token_pool = @lock_release_token_pool
         ),
-        expected_failure(abort_code = 196626, location = ccip_onramp::onramp) // E_FEE_AGGREGATOR_NOT_SET error with corrected code
+        expected_failure(abort_code = 196625, location = ccip_onramp::onramp) // E_FEE_AGGREGATOR_NOT_SET error with corrected code
     ]
     fun test_withdraw_fee_tokens_failure_when_fee_aggregator_not_set(
         aptos_framework: &signer,
