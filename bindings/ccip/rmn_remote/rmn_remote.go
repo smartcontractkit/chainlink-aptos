@@ -23,7 +23,7 @@ var (
 
 type RMNRemoteInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
-	Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error)
+	Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootOnRampAddresses [][]byte, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error)
 	GetArm(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	GetVersionedConfig(opts *bind.CallOpts) (uint32, Config, error)
 	GetLocalChainSelector(opts *bind.CallOpts) (uint64, error)
@@ -46,7 +46,7 @@ type RMNRemoteInterface interface {
 
 type RMNRemoteEncoder interface {
 	TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	Verify(merkleRootSourceChainSelectors []uint64, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	Verify(merkleRootSourceChainSelectors []uint64, merkleRootOnRampAddresses [][]byte, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetArm() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetVersionedConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetLocalChainSelector() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -104,6 +104,7 @@ type Report struct {
 
 type MerkleRoot struct {
 	SourceChainSelector uint64 `move:"u64"`
+	OnRampAddress       []byte `move:"vector<u8>"`
 	MinSeqNr            uint64 `move:"u64"`
 	MaxSeqNr            uint64 `move:"u64"`
 	MerkleRoot          []byte `move:"vector<u8>"`
@@ -159,8 +160,8 @@ func (c RMNRemoteContract) TypeAndVersion(opts *bind.CallOpts) (string, error) {
 	return r0, nil
 }
 
-func (c RMNRemoteContract) Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error) {
-	module, function, typeTags, args, err := c.rmnRemoteEncoder.Verify(merkleRootSourceChainSelectors, merkleRootMinSeqNrs, merkleRootMaxSeqNrs, merkleRootValues, signatures)
+func (c RMNRemoteContract) Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootOnRampAddresses [][]byte, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error) {
+	module, function, typeTags, args, err := c.rmnRemoteEncoder.Verify(merkleRootSourceChainSelectors, merkleRootOnRampAddresses, merkleRootMinSeqNrs, merkleRootMaxSeqNrs, merkleRootValues, signatures)
 	if err != nil {
 		return *new(bool), err
 	}
@@ -414,15 +415,17 @@ func (c rmnRemoteEncoder) TypeAndVersion() (bind.ModuleInformation, string, []ap
 	return c.BoundContract.Encode("type_and_version", nil, []string{}, []any{})
 }
 
-func (c rmnRemoteEncoder) Verify(merkleRootSourceChainSelectors []uint64, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c rmnRemoteEncoder) Verify(merkleRootSourceChainSelectors []uint64, merkleRootOnRampAddresses [][]byte, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("verify", nil, []string{
 		"vector<u64>",
+		"vector<vector<u8>>",
 		"vector<u64>",
 		"vector<u64>",
 		"vector<vector<u8>>",
 		"vector<vector<u8>>",
 	}, []any{
 		merkleRootSourceChainSelectors,
+		merkleRootOnRampAddresses,
 		merkleRootMinSeqNrs,
 		merkleRootMaxSeqNrs,
 		merkleRootValues,

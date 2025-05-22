@@ -17,6 +17,7 @@ module ccip_token_pool::token_pool {
     const STORE_OBJECT_SEED: vector<u8> = b"CCIPTokenPool";
     const MAX_U256: u256 =
         115792089237316195423570985008687907853269984665640564039457584007913129639935;
+    const MAX_U64: u256 = 18446744073709551615;
 
     struct TokenPoolState has key, store {
         allowlist_state: allowlist::AllowlistState,
@@ -105,6 +106,7 @@ module ccip_token_pool::token_pool {
     const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 9;
     const E_INVALID_ENCODED_AMOUNT: u64 = 10;
     const E_DECIMAL_OVERFLOW: u64 = 11;
+    const E_CURSED_CHAIN: u64 = 12;
 
     // ================================================================
     // |                    Initialize and state                      |
@@ -373,7 +375,10 @@ module ccip_token_pool::token_pool {
         // Check RMN curse status
         let remote_chain_selector =
             token_admin_registry::get_lock_or_burn_remote_chain_selector(input);
-        assert!(!rmn_remote::is_cursed_u128((remote_chain_selector as u128)));
+        assert!(
+            !rmn_remote::is_cursed_u128((remote_chain_selector as u128)),
+            error::invalid_state(E_CURSED_CHAIN)
+        );
 
         // Allowlist check
         let _sender = token_admin_registry::get_lock_or_burn_sender(input);
@@ -413,7 +418,10 @@ module ccip_token_pool::token_pool {
         // Check RMN curse status
         let remote_chain_selector =
             token_admin_registry::get_release_or_mint_remote_chain_selector(input);
-        assert!(!rmn_remote::is_cursed_u128((remote_chain_selector as u128)));
+        assert!(
+            !rmn_remote::is_cursed_u128((remote_chain_selector as u128)),
+            error::invalid_state(E_CURSED_CHAIN)
+        );
 
         let source_pool_address =
             token_admin_registry::get_release_or_mint_source_pool_address(input);
@@ -518,9 +526,8 @@ module ccip_token_pool::token_pool {
             calculate_local_amount_internal(
                 remote_amount, remote_decimals, local_decimals
             );
-        // check that the calculated amount fits in a u64
         assert!(
-            local_amount <= 18446744073709551615,
+            local_amount <= MAX_U64,
             error::invalid_state(E_INVALID_ENCODED_AMOUNT)
         );
         local_amount as u64

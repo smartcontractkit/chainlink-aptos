@@ -1,11 +1,11 @@
-module link::mcms_token_registrar {
+module managed_token::mcms_token_registrar {
     use std::object::{Self, Object};
     use std::option::{Self, Option};
     use std::string::{Self, String};
 
     use mcms::bcs_stream;
     use mcms::mcms_registry;
-    use link::link_token;
+    use managed_token::managed_token;
 
     const E_UNKNOWN_FUNCTION: u64 = 1;
     const E_NOT_PUBLISHER: u64 = 2;
@@ -16,11 +16,11 @@ module link::mcms_token_registrar {
     }
 
     fun init_module(publisher: &signer) {
-        assert!(object::is_object(@link), E_NOT_PUBLISHER);
+        assert!(object::is_object(@managed_token), E_NOT_PUBLISHER);
 
         if (@mcms_register_entrypoints == @0x1) {
             mcms_registry::register_entrypoint(
-                publisher, string::utf8(b"mcms_token_registrar"), McmsCallback {}
+                publisher, string::utf8(b"managed_token"), McmsCallback {}
             );
         };
     }
@@ -33,9 +33,9 @@ module link::mcms_token_registrar {
 
     public fun mcms_entrypoint<T: key>(_metadata: Object<T>): Option<u128> {
         let (caller, function, data) =
-            mcms_registry::get_callback_params(@link, McmsCallback {});
+            mcms_registry::get_callback_params(@managed_token, McmsCallback {});
 
-        let function_bytes = *string::bytes(&function);
+        let function_bytes = *function.bytes();
         let stream = bcs_stream::new(data);
 
         if (function_bytes == b"initialize") {
@@ -50,7 +50,7 @@ module link::mcms_token_registrar {
             let project = bcs_stream::deserialize_string(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
 
-            link_token::initialize(
+            managed_token::initialize(
                 &caller,
                 max_supply,
                 name,
@@ -64,13 +64,13 @@ module link::mcms_token_registrar {
             let amount = bcs_stream::deserialize_u64(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
 
-            link_token::mint(&caller, to, amount)
+            managed_token::mint(&caller, to, amount)
         } else if (function_bytes == b"burn") {
             let from = bcs_stream::deserialize_address(&mut stream);
             let amount = bcs_stream::deserialize_u64(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
 
-            link_token::burn(&caller, from, amount)
+            managed_token::burn(&caller, from, amount)
         } else if (function_bytes == b"apply_allowed_minter_updates") {
             let minters_to_remove =
                 bcs_stream::deserialize_vector(
@@ -82,7 +82,7 @@ module link::mcms_token_registrar {
                 );
             bcs_stream::assert_is_consumed(&stream);
 
-            link_token::apply_allowed_minter_updates(
+            managed_token::apply_allowed_minter_updates(
                 &caller, minters_to_remove, minters_to_add
             )
         } else if (function_bytes == b"apply_allowed_burner_updates") {
@@ -96,23 +96,23 @@ module link::mcms_token_registrar {
                 );
             bcs_stream::assert_is_consumed(&stream);
 
-            link_token::apply_allowed_burner_updates(
+            managed_token::apply_allowed_burner_updates(
                 &caller, burners_to_remove, burners_to_add
             )
         } else if (function_bytes == b"transfer_ownership") {
             let to = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
 
-            link_token::transfer_ownership(&caller, to)
+            managed_token::transfer_ownership(&caller, to)
         } else if (function_bytes == b"accept_ownership") {
             bcs_stream::assert_is_consumed(&stream);
 
-            link_token::accept_ownership(&caller)
+            managed_token::accept_ownership(&caller)
         } else if (function_bytes == b"execute_ownership_transfer") {
             let to = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
 
-            link_token::execute_ownership_transfer(&caller, to)
+            managed_token::execute_ownership_transfer(&caller, to)
         } else {
             abort E_UNKNOWN_FUNCTION
         };
