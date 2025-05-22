@@ -422,7 +422,6 @@ module lock_release_token_pool::lock_release_token_pool {
     // |                      Storage helpers                         |
     // ================================================================
 
-    // TODO: separate functions due to deploy error, see ccip::state_object
     #[view]
     public fun get_store_address(): address {
         store_address()

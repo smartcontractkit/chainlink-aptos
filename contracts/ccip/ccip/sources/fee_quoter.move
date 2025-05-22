@@ -50,6 +50,30 @@ module ccip::fee_quoter {
 
     const CCIP_LOCK_OR_BURN_V1_RET_BYTES: u32 = 32;
 
+    /// The maximum number of accounts that can be passed in SVMExtraArgs.
+    const SVM_EXTRA_ARGS_MAX_ACCOUNTS: u64 = 64;
+
+    /// Number of overhead accounts needed for message execution on SVM.
+    /// These are message.receiver, and the OffRamp Signer PDA specific to the receiver.
+    const SVM_MESSAGING_ACCOUNTS_OVERHEAD: u64 = 2;
+
+    /// The size of each SVM account (in bytes).
+    const SVM_ACCOUNT_BYTE_SIZE: u64 = 32;
+
+    /// The expected static payload size of a token transfer when Borsh encoded and submitted to SVM.
+    /// TokenPool extra data and offchain data sizes are dynamic, and should be accounted for separately.
+    const SVM_TOKEN_TRANSFER_DATA_OVERHEAD: u64 = (4 + 32) // source_pool
+    + 32 // token_address
+    + 4 // gas_amount
+    + 4 // extra_data overhead
+    + 32 // amount
+    + 32 // size of the token lookup table account
+    + 32 // token-related accounts in the lookup table, over-estimated to 32, typically between 11 - 13
+    + 32 // token account belonging to the token receiver, e.g ATA, not included in the token lookup table
+    + 32 // per-chain token pool config, not included in the token lookup table
+    + 32 // per-chain token billing config, not always included in the token lookup table
+    + 32; // OffRamp pool signer PDA, not included in the token lookup table;
+
     const MAX_U64: u256 = 18446744073709551615;
     const MAX_U160: u256 = 1461501637330902918203684832716283019655932542975;
     const MAX_U256: u256 =
@@ -218,6 +242,8 @@ module ccip::fee_quoter {
     const E_TO_TOKEN_AMOUNT_TOO_LARGE: u64 = 29;
     const E_UNKNOWN_FUNCTION: u64 = 30;
     const E_ZERO_TOKEN_PRICE: u64 = 31;
+    const E_TOO_MANY_SVM_EXTRA_ARGS_ACCOUNTS: u64 = 32;
+    const E_INVALID_SVM_EXTRA_ARGS_WRITABLE_BITMAP: u64 = 33;
 
     #[view]
     public fun type_and_version(): String {
@@ -627,9 +653,15 @@ module ccip::fee_quoter {
                 || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI) {
                 resolve_generic_gas_limit(dest_chain_config, extra_args)
             } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
-                let require_valid_token_receiver = tokens_len > 0;
                 resolve_svm_gas_limit(
-                    dest_chain_config, extra_args, require_valid_token_receiver
+                    dest_chain_config,
+                    state,
+                    dest_chain_selector,
+                    extra_args,
+                    receiver,
+                    data_len,
+                    tokens_len,
+                    local_token_addresses
                 )
             } else {
                 abort error::invalid_argument(E_UNKNOWN_CHAIN_FAMILY_SELECTOR)
@@ -789,38 +821,98 @@ module ccip::fee_quoter {
 
     inline fun resolve_svm_gas_limit(
         dest_chain_config: &DestChainConfig,
+        state: &FeeQuoterState,
+        dest_chain_selector: u64,
         extra_args: vector<u8>,
-        require_valid_token_receiver: bool
+        receiver: vector<u8>,
+        data_len: u64,
+        tokens_len: u64,
+        local_token_addresses: vector<address>
     ): u256 {
         let extra_args_len = extra_args.length();
         assert!(extra_args_len > 0, error::invalid_argument(E_INVALID_EXTRA_ARGS_DATA));
+
         let (
             compute_units,
-            _account_is_writable_bitmap,
+            account_is_writable_bitmap,
             allow_out_of_order_execution,
             token_receiver,
-            _accounts
+            accounts
         ) = decode_svm_extra_args(extra_args);
+
+        let gas_limit = compute_units;
+
         assert!(
             !dest_chain_config.enforce_out_of_order || allow_out_of_order_execution,
             error::invalid_argument(E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE)
         );
         assert!(
-            compute_units <= dest_chain_config.max_per_msg_gas_limit,
+            gas_limit <= dest_chain_config.max_per_msg_gas_limit,
             error::invalid_argument(E_MESSAGE_COMPUTE_UNIT_LIMIT_TOO_HIGH)
         );
-        if (require_valid_token_receiver) {
+
+        let accounts_length = accounts.length();
+        // The max payload size for SVM is heavily dependent on the accounts passed into extra args and the number of
+        // tokens. Below, token and account overhead will count towards maxDataBytes.
+        let svm_expanded_data_length = data_len;
+
+        let receiver_uint = eth_abi::decode_u256_value(receiver);
+        if (receiver_uint == 0) {
+            // When message receiver is zero, CCIP receiver is not invoked on SVM.
+            // There should not be additional accounts specified for the receiver.
             assert!(
-                token_receiver.length() == 32,
-                error::invalid_argument(E_INVALID_TOKEN_RECEIVER)
+                accounts_length == 0,
+                error::invalid_argument(E_TOO_MANY_SVM_EXTRA_ARGS_ACCOUNTS)
             );
-            let token_receiver_uint = eth_abi::decode_u256_value(token_receiver);
+        } else {
+            // The messaging accounts needed for CCIP receiver on SVM are:
+            // message receiver, offramp PDA signer,
+            // plus remaining accounts specified in SVM extraArgs. Each account is 32 bytes.
+            svm_expanded_data_length +=((
+                accounts_length + SVM_MESSAGING_ACCOUNTS_OVERHEAD
+            ) * SVM_ACCOUNT_BYTE_SIZE);
+        };
+
+        if (tokens_len > 0) {
             assert!(
-                token_receiver_uint > 0,
+                token_receiver.length() == 32
+                    && eth_abi::decode_u256_value(token_receiver) != 0,
                 error::invalid_argument(E_INVALID_TOKEN_RECEIVER)
             );
         };
-        compute_units as u256
+        assert!(
+            accounts_length <= SVM_EXTRA_ARGS_MAX_ACCOUNTS,
+            error::invalid_argument(E_TOO_MANY_SVM_EXTRA_ARGS_ACCOUNTS)
+        );
+        assert!(
+            (account_is_writable_bitmap >> (accounts_length as u8)) == 0,
+            error::invalid_argument(E_INVALID_SVM_EXTRA_ARGS_WRITABLE_BITMAP)
+        );
+
+        svm_expanded_data_length += tokens_len * SVM_TOKEN_TRANSFER_DATA_OVERHEAD;
+
+        // The token destBytesOverhead can be very different per token so we have to take it into account as well.
+        for (i in 0..tokens_len) {
+            let local_token_address = local_token_addresses[i];
+            let destBytesOverhead =
+                get_token_transfer_fee_config_internal(
+                    state, dest_chain_selector, local_token_address
+                ).dest_bytes_overhead;
+
+            // Pools get CCIP_LOCK_OR_BURN_V1_RET_BYTES by default, but if an override is set we use that instead.
+            if (destBytesOverhead > 0) {
+                svm_expanded_data_length +=(destBytesOverhead as u64);
+            } else {
+                svm_expanded_data_length +=(CCIP_LOCK_OR_BURN_V1_RET_BYTES as u64);
+            }
+        };
+
+        assert!(
+            svm_expanded_data_length <= (dest_chain_config.max_data_bytes as u64),
+            error::invalid_argument(E_MESSAGE_TOO_LARGE)
+        );
+
+        gas_limit as u256
     }
 
     inline fun decode_generic_extra_args(
@@ -867,9 +959,12 @@ module ccip::fee_quoter {
     inline fun decode_svm_extra_args(
         extra_args: vector<u8>
     ): (u32, u64, bool, vector<u8>, vector<vector<u8>>) {
-        // TODO: we need extra validation here. if extra_args length is less than tag length + data length,
-        // vector::slice will revert.
         let extra_args_len = extra_args.length();
+        assert!(
+            extra_args_len >= 4,
+            error::invalid_argument(E_INVALID_EXTRA_ARGS_DATA)
+        );
+
         let args_tag = extra_args.slice(0, 4);
         assert!(
             args_tag == SVM_EXTRA_ARGS_V1_TAG,
