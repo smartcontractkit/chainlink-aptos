@@ -32,11 +32,11 @@ type FeeQuoterInterface interface {
 	GetTokenTransferFeeConfig(opts *bind.CallOpts, destChainSelector uint64, token aptos.AccountAddress) (TokenTransferFeeConfig, error)
 	GetValidatedFee(opts *bind.CallOpts, destChainSelector uint64, receiver []byte, data []byte, localTokenAddresses []aptos.AccountAddress, localTokenAmounts []uint64, TokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, FeeTokenStore aptos.AccountAddress, extraArgs []byte) (uint64, error)
 	GetPremiumMultiplierWeiPerEth(opts *bind.CallOpts, token aptos.AccountAddress) (uint64, error)
-	ProcessMessageArgs(opts *bind.CallOpts, destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, localTokenAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, destPoolDatas [][]byte) (uint64, bool, []byte, [][]byte, error)
+	ProcessMessageArgs(opts *bind.CallOpts, destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, localTokenAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, destPoolDatas [][]byte) (*big.Int, bool, []byte, [][]byte, error)
 	GetDestChainConfig(opts *bind.CallOpts, destChainSelector uint64) (DestChainConfig, error)
 	GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error)
 
-	Initialize(opts *bind.TransactOpts, maxFeeJuelsPerMsg uint64, linkToken aptos.AccountAddress, tokenPriceStalenessThreshold uint64, feeTokens []aptos.AccountAddress) (*api.PendingTransaction, error)
+	Initialize(opts *bind.TransactOpts, maxFeeJuelsPerMsg *big.Int, linkToken aptos.AccountAddress, tokenPriceStalenessThreshold uint64, feeTokens []aptos.AccountAddress) (*api.PendingTransaction, error)
 	ApplyFeeTokenUpdates(opts *bind.TransactOpts, feeTokensToRemove []aptos.AccountAddress, feeTokensToAdd []aptos.AccountAddress) (*api.PendingTransaction, error)
 	ApplyTokenTransferFeeConfigUpdates(opts *bind.TransactOpts, destChainSelector uint64, addTokens []aptos.AccountAddress, addMinFeeUsdCents []uint32, addMaxFeeUsdCents []uint32, addDeciBps []uint16, addDestGasOverhead []uint32, addDestBytesOverhead []uint32, addIsEnabled []bool, removeTokens []aptos.AccountAddress) (*api.PendingTransaction, error)
 	ApplyPremiumMultiplierWeiPerEthUpdates(opts *bind.TransactOpts, tokens []aptos.AccountAddress, premiumMultiplierWeiPerEth []uint64) (*api.PendingTransaction, error)
@@ -60,7 +60,7 @@ type FeeQuoterEncoder interface {
 	ProcessMessageArgs(destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, localTokenAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, destPoolDatas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetDestChainConfig(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStaticConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	Initialize(maxFeeJuelsPerMsg uint64, linkToken aptos.AccountAddress, tokenPriceStalenessThreshold uint64, feeTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	Initialize(maxFeeJuelsPerMsg *big.Int, linkToken aptos.AccountAddress, tokenPriceStalenessThreshold uint64, feeTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplyFeeTokenUpdates(feeTokensToRemove []aptos.AccountAddress, feeTokensToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplyTokenTransferFeeConfigUpdates(destChainSelector uint64, addTokens []aptos.AccountAddress, addMinFeeUsdCents []uint32, addMaxFeeUsdCents []uint32, addDeciBps []uint16, addDestGasOverhead []uint32, addDestBytesOverhead []uint32, addIsEnabled []bool, removeTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplyPremiumMultiplierWeiPerEthUpdates(tokens []aptos.AccountAddress, premiumMultiplierWeiPerEth []uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -77,7 +77,7 @@ type FeeQuoterEncoder interface {
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"fee_quoter","name":"apply_dest_chain_config_updates","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"is_enabled","type":"bool"},{"name":"max_number_of_tokens_per_msg","type":"u16"},{"name":"max_data_bytes","type":"u32"},{"name":"max_per_msg_gas_limit","type":"u32"},{"name":"dest_gas_overhead","type":"u32"},{"name":"dest_gas_per_payload_byte_base","type":"u8"},{"name":"dest_gas_per_payload_byte_high","type":"u8"},{"name":"dest_gas_per_payload_byte_threshold","type":"u16"},{"name":"dest_data_availability_overhead_gas","type":"u32"},{"name":"dest_gas_per_data_availability_byte","type":"u16"},{"name":"dest_data_availability_multiplier_bps","type":"u16"},{"name":"chain_family_selector","type":"vector\u003cu8\u003e"},{"name":"enforce_out_of_order","type":"bool"},{"name":"default_token_fee_usd_cents","type":"u16"},{"name":"default_token_dest_gas_overhead","type":"u32"},{"name":"default_tx_gas_limit","type":"u32"},{"name":"gas_multiplier_wei_per_eth","type":"u64"},{"name":"gas_price_staleness_threshold","type":"u32"},{"name":"network_fee_usd_cents","type":"u32"}]},{"package":"ccip","module":"fee_quoter","name":"apply_fee_token_updates","parameters":[{"name":"fee_tokens_to_remove","type":"vector\u003caddress\u003e"},{"name":"fee_tokens_to_add","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"apply_premium_multiplier_wei_per_eth_updates","parameters":[{"name":"tokens","type":"vector\u003caddress\u003e"},{"name":"premium_multiplier_wei_per_eth","type":"vector\u003cu64\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"apply_token_transfer_fee_config_updates","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"add_tokens","type":"vector\u003caddress\u003e"},{"name":"add_min_fee_usd_cents","type":"vector\u003cu32\u003e"},{"name":"add_max_fee_usd_cents","type":"vector\u003cu32\u003e"},{"name":"add_deci_bps","type":"vector\u003cu16\u003e"},{"name":"add_dest_gas_overhead","type":"vector\u003cu32\u003e"},{"name":"add_dest_bytes_overhead","type":"vector\u003cu32\u003e"},{"name":"add_is_enabled","type":"vector\u003cbool\u003e"},{"name":"remove_tokens","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"calc_usd_value_from_token_amount","parameters":[{"name":"token_amount","type":"u64"},{"name":"token_price","type":"u256"}]},{"package":"ccip","module":"fee_quoter","name":"decode_generic_extra_args_v2","parameters":[{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"decode_svm_extra_args","parameters":[{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"decode_svm_extra_args_v1","parameters":[{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"encode_generic_extra_args_v2","parameters":[{"name":"gas_limit","type":"u256"},{"name":"allow_out_of_order_execution","type":"bool"}]},{"package":"ccip","module":"fee_quoter","name":"initialize","parameters":[{"name":"max_fee_juels_per_msg","type":"u64"},{"name":"link_token","type":"address"},{"name":"token_price_staleness_threshold","type":"u64"},{"name":"fee_tokens","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"fee_quoter","name":"update_prices","parameters":[{"name":"source_tokens","type":"vector\u003caddress\u003e"},{"name":"source_usd_per_token","type":"vector\u003cu256\u003e"},{"name":"gas_dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"gas_usd_per_unit_gas","type":"vector\u003cu256\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"validate_32byte_address","parameters":[{"name":"encoded_address","type":"vector\u003cu8\u003e"},{"name":"min_value","type":"u256"}]},{"package":"ccip","module":"fee_quoter","name":"validate_dest_family_address","parameters":[{"name":"chain_family_selector","type":"vector\u003cu8\u003e"},{"name":"encoded_address","type":"vector\u003cu8\u003e"},{"name":"gas_limit","type":"u256"}]},{"package":"ccip","module":"fee_quoter","name":"validate_evm_address","parameters":[{"name":"encoded_address","type":"vector\u003cu8\u003e"}]}]`
+const FunctionInfo = `[{"package":"ccip","module":"fee_quoter","name":"apply_dest_chain_config_updates","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"is_enabled","type":"bool"},{"name":"max_number_of_tokens_per_msg","type":"u16"},{"name":"max_data_bytes","type":"u32"},{"name":"max_per_msg_gas_limit","type":"u32"},{"name":"dest_gas_overhead","type":"u32"},{"name":"dest_gas_per_payload_byte_base","type":"u8"},{"name":"dest_gas_per_payload_byte_high","type":"u8"},{"name":"dest_gas_per_payload_byte_threshold","type":"u16"},{"name":"dest_data_availability_overhead_gas","type":"u32"},{"name":"dest_gas_per_data_availability_byte","type":"u16"},{"name":"dest_data_availability_multiplier_bps","type":"u16"},{"name":"chain_family_selector","type":"vector\u003cu8\u003e"},{"name":"enforce_out_of_order","type":"bool"},{"name":"default_token_fee_usd_cents","type":"u16"},{"name":"default_token_dest_gas_overhead","type":"u32"},{"name":"default_tx_gas_limit","type":"u32"},{"name":"gas_multiplier_wei_per_eth","type":"u64"},{"name":"gas_price_staleness_threshold","type":"u32"},{"name":"network_fee_usd_cents","type":"u32"}]},{"package":"ccip","module":"fee_quoter","name":"apply_fee_token_updates","parameters":[{"name":"fee_tokens_to_remove","type":"vector\u003caddress\u003e"},{"name":"fee_tokens_to_add","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"apply_premium_multiplier_wei_per_eth_updates","parameters":[{"name":"tokens","type":"vector\u003caddress\u003e"},{"name":"premium_multiplier_wei_per_eth","type":"vector\u003cu64\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"apply_token_transfer_fee_config_updates","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"add_tokens","type":"vector\u003caddress\u003e"},{"name":"add_min_fee_usd_cents","type":"vector\u003cu32\u003e"},{"name":"add_max_fee_usd_cents","type":"vector\u003cu32\u003e"},{"name":"add_deci_bps","type":"vector\u003cu16\u003e"},{"name":"add_dest_gas_overhead","type":"vector\u003cu32\u003e"},{"name":"add_dest_bytes_overhead","type":"vector\u003cu32\u003e"},{"name":"add_is_enabled","type":"vector\u003cbool\u003e"},{"name":"remove_tokens","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"calc_usd_value_from_token_amount","parameters":[{"name":"token_amount","type":"u64"},{"name":"token_price","type":"u256"}]},{"package":"ccip","module":"fee_quoter","name":"decode_generic_extra_args_v2","parameters":[{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"decode_svm_extra_args","parameters":[{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"decode_svm_extra_args_v1","parameters":[{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"encode_generic_extra_args_v2","parameters":[{"name":"gas_limit","type":"u256"},{"name":"allow_out_of_order_execution","type":"bool"}]},{"package":"ccip","module":"fee_quoter","name":"initialize","parameters":[{"name":"max_fee_juels_per_msg","type":"u256"},{"name":"link_token","type":"address"},{"name":"token_price_staleness_threshold","type":"u64"},{"name":"fee_tokens","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"fee_quoter","name":"update_prices","parameters":[{"name":"source_tokens","type":"vector\u003caddress\u003e"},{"name":"source_usd_per_token","type":"vector\u003cu256\u003e"},{"name":"gas_dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"gas_usd_per_unit_gas","type":"vector\u003cu256\u003e"}]},{"package":"ccip","module":"fee_quoter","name":"validate_32byte_address","parameters":[{"name":"encoded_address","type":"vector\u003cu8\u003e"},{"name":"min_value","type":"u256"}]},{"package":"ccip","module":"fee_quoter","name":"validate_dest_family_address","parameters":[{"name":"chain_family_selector","type":"vector\u003cu8\u003e"},{"name":"encoded_address","type":"vector\u003cu8\u003e"},{"name":"gas_limit","type":"u256"}]},{"package":"ccip","module":"fee_quoter","name":"validate_evm_address","parameters":[{"name":"encoded_address","type":"vector\u003cu8\u003e"}]}]`
 
 func NewFeeQuoter(address aptos.AccountAddress, client aptos.AptosRpcClient) FeeQuoterInterface {
 	contract := bind.NewBoundContract(address, "ccip", "fee_quoter", client)
@@ -90,14 +90,14 @@ func NewFeeQuoter(address aptos.AccountAddress, client aptos.AptosRpcClient) Fee
 // Structs
 
 type FeeQuoterState struct {
-	MaxFeeJuelsPerMsg            uint64                 `move:"u64"`
+	MaxFeeJuelsPerMsg            *big.Int               `move:"u256"`
 	LinkToken                    aptos.AccountAddress   `move:"address"`
 	TokenPriceStalenessThreshold uint64                 `move:"u64"`
 	FeeTokens                    []aptos.AccountAddress `move:"vector<address>"`
 }
 
 type StaticConfig struct {
-	MaxFeeJuelsPerMsg            uint64               `move:"u64"`
+	MaxFeeJuelsPerMsg            *big.Int             `move:"u256"`
 	LinkToken                    aptos.AccountAddress `move:"address"`
 	TokenPriceStalenessThreshold uint64               `move:"u64"`
 }
@@ -411,26 +411,26 @@ func (c FeeQuoterContract) GetPremiumMultiplierWeiPerEth(opts *bind.CallOpts, to
 	return r0, nil
 }
 
-func (c FeeQuoterContract) ProcessMessageArgs(opts *bind.CallOpts, destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, localTokenAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, destPoolDatas [][]byte) (uint64, bool, []byte, [][]byte, error) {
+func (c FeeQuoterContract) ProcessMessageArgs(opts *bind.CallOpts, destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, localTokenAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, destPoolDatas [][]byte) (*big.Int, bool, []byte, [][]byte, error) {
 	module, function, typeTags, args, err := c.feeQuoterEncoder.ProcessMessageArgs(destChainSelector, feeToken, feeTokenAmount, extraArgs, localTokenAddresses, destTokenAddresses, destPoolDatas)
 	if err != nil {
-		return *new(uint64), *new(bool), *new([]byte), *new([][]byte), err
+		return *new(*big.Int), *new(bool), *new([]byte), *new([][]byte), err
 	}
 
 	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return *new(uint64), *new(bool), *new([]byte), *new([][]byte), err
+		return *new(*big.Int), *new(bool), *new([]byte), *new([][]byte), err
 	}
 
 	var (
-		r0 uint64
+		r0 *big.Int
 		r1 bool
 		r2 []byte
 		r3 [][]byte
 	)
 
 	if err := codec.DecodeAptosJsonArray(callData, &r0, &r1, &r2, &r3); err != nil {
-		return *new(uint64), *new(bool), *new([]byte), *new([][]byte), err
+		return *new(*big.Int), *new(bool), *new([]byte), *new([][]byte), err
 	}
 	return r0, r1, r2, r3, nil
 }
@@ -479,7 +479,7 @@ func (c FeeQuoterContract) GetStaticConfig(opts *bind.CallOpts) (StaticConfig, e
 
 // Entry Functions
 
-func (c FeeQuoterContract) Initialize(opts *bind.TransactOpts, maxFeeJuelsPerMsg uint64, linkToken aptos.AccountAddress, tokenPriceStalenessThreshold uint64, feeTokens []aptos.AccountAddress) (*api.PendingTransaction, error) {
+func (c FeeQuoterContract) Initialize(opts *bind.TransactOpts, maxFeeJuelsPerMsg *big.Int, linkToken aptos.AccountAddress, tokenPriceStalenessThreshold uint64, feeTokens []aptos.AccountAddress) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.feeQuoterEncoder.Initialize(maxFeeJuelsPerMsg, linkToken, tokenPriceStalenessThreshold, feeTokens)
 	if err != nil {
 		return nil, err
@@ -657,9 +657,9 @@ func (c feeQuoterEncoder) GetStaticConfig() (bind.ModuleInformation, string, []a
 	return c.BoundContract.Encode("get_static_config", nil, []string{}, []any{})
 }
 
-func (c feeQuoterEncoder) Initialize(maxFeeJuelsPerMsg uint64, linkToken aptos.AccountAddress, tokenPriceStalenessThreshold uint64, feeTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c feeQuoterEncoder) Initialize(maxFeeJuelsPerMsg *big.Int, linkToken aptos.AccountAddress, tokenPriceStalenessThreshold uint64, feeTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("initialize", nil, []string{
-		"u64",
+		"u256",
 		"address",
 		"u64",
 		"vector<address>",

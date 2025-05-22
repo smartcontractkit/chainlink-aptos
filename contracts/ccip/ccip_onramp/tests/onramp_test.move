@@ -137,9 +137,11 @@ module ccip_onramp::onramp_test {
                 seed
             );
 
+        let one_e_18 = 1_000_000_000_000_000_000;
+
         fee_quoter::initialize(
             owner,
-            20000000000000,
+            200 * one_e_18, // 200 link
             token_addr,
             12400,
             vector[token_addr]
@@ -149,27 +151,15 @@ module ccip_onramp::onramp_test {
         assert!(onramp::owner() == owner_addr);
 
         fee_quoter::apply_fee_token_updates(owner, vector[], vector[token_addr]);
-        fee_quoter::apply_token_transfer_fee_config_updates(
-            owner,
-            DEST_CHAIN_SELECTOR, // dest_chain_selector
-            vector[token_addr], // add_tokens
-            vector[1], // add_min_fee_usd_cents
-            vector[1], // add_max_fee_usd_cents
-            vector[0], // add_deci_bps
-            vector[1], // add_dest_gas_overhead
-            vector[1], // add_dest_bytes_overhead
-            vector[true], // add_is_enabled
-            vector[] // remove_tokens
-        );
         fee_quoter::apply_dest_chain_config_updates(
             owner,
             DEST_CHAIN_SELECTOR, // dest_chain_selector
             true, // is_enabled
             1, // max_number_of_tokens_per_msg
-            10000, // max_data_bytes
-            7000000, // max_per_msg_gas_limit
-            0, // dest_gas_overhead
-            0, // dest_gas_per_payload_byte_base
+            30_000, // max_data_bytes
+            30_000_000, // max_per_msg_gas_limit
+            250_000, // dest_gas_overhead
+            16, // dest_gas_per_payload_byte_base
             0, // dest_gas_per_payload_byte_high
             0, // dest_gas_per_payload_byte_threshold
             0, // dest_data_availability_overhead_gas
@@ -177,17 +167,18 @@ module ccip_onramp::onramp_test {
             0, // dest_data_availability_multiplier_bps
             CHAIN_FAMILY_SELECTOR_EVM, // chain_family_selector
             false, // enforce_out_of_order
-            0, // default_token_fee_usd_cents
-            0, // default_token_dest_gas_overhead
-            1000000, // default_tx_gas_limit
-            0, // gas_multiplier_wei_per_eth
-            10000000, // gas_price_staleness_threshold
-            0 // network_fee_usd_cents
+            50, // default_token_fee_usd_cents
+            90_000, // default_token_dest_gas_overhead
+            200_000, // default_tx_gas_limit
+            one_e_18 as u64, // gas_multiplier_wei_per_eth
+            1_000_000, // gas_price_staleness_threshold
+            50 // network_fee_usd_cents
         );
         fee_quoter::apply_premium_multiplier_wei_per_eth_updates(
             owner,
             vector[token_addr], // tokens
-            vector[1] // premium_multiplier_wei_per_eth
+            // 900_000_000_000_000_000 = 90%
+            vector[900_000_000_000_000_000] // premium_multiplier_wei_per_eth
         );
 
         // To be able to call token_admin_dispatcher::dispatch_lock_or_burn
@@ -208,9 +199,10 @@ module ccip_onramp::onramp_test {
         fee_quoter::update_prices(
             owner,
             vector[token_addr], // source_tokens
-            vector[1000], // source_usd_per_token
+            // 1e18 per 1e18 tokens. A token with 8 decimals that's worth $15 would be $15e10 * 1e18 = $15e28
+            vector[150_000_000_000 * one_e_18], // source_usd_per_token
             vector[DEST_CHAIN_SELECTOR], // gas_dest_chain_selectors
-            vector[0] // gas_usd_per_unit_gas
+            vector[1_000_000_000_000] // gas_usd_per_unit_gas
         );
 
         (owner_addr, token_obj)
