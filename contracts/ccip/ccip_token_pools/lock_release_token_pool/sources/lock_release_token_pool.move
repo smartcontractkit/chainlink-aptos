@@ -1,16 +1,17 @@
 module lock_release_token_pool::lock_release_token_pool {
     use std::account::{Self, SignerCapability};
     use std::error;
-    use std::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef};
+    use std::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef, FungibleStore};
+    use std::dispatchable_fungible_asset;
     use std::primary_fungible_store;
     use std::object::{Self, Object, ObjectCore};
-    use std::option;
+    use std::option::{Self, Option};
     use std::signer;
     use std::string::{Self, String};
 
     use ccip::ownable;
     use ccip::token_admin_registry;
-    use ccip_token_pool::token_pool;
+    use ccip_token_pool::token_pool::{Self, TokenPoolState};
 
     use mcms::mcms_registry;
     use mcms::bcs_stream;
@@ -28,7 +29,7 @@ module lock_release_token_pool::lock_release_token_pool {
         ownable_state: ownable::OwnableState,
         token_pool_state: token_pool::TokenPoolState,
         store_signer_address: address,
-        transfer_ref: TransferRef
+        transfer_ref: Option<TransferRef>
     }
 
     const E_NOT_PUBLISHER: u64 = 1;
@@ -37,6 +38,7 @@ module lock_release_token_pool::lock_release_token_pool {
     const E_INVALID_ARGUMENTS: u64 = 4;
     const E_UNKNOWN_FUNCTION: u64 = 5;
     const E_LOCAL_TOKEN_MISMATCH: u64 = 6;
+    const E_DISPATCHABLE_TOKEN_WITHOUT_TRANSFER_REF: u64 = 7;
 
     // ================================================================
     // |                             Init                             |
@@ -100,21 +102,18 @@ module lock_release_token_pool::lock_release_token_pool {
         );
     }
 
+    /// Tokens that have dynamic dispatch enabled must provide a `TransferRef`
+    /// Tokens that do not have dynamic dispatch enabled can provide `option::none()`
+    /// You can still provide a transfer ref for tokens that don't have dynamic dispatch enabled
+    /// if you choose to do so.
     public fun initialize(
-        caller: &signer, transfer_ref: TransferRef
+        caller: &signer, transfer_ref: Option<TransferRef>
     ) acquires LockReleaseTokenPoolDeployment {
         assert_can_initialize(signer::address_of(caller));
 
         assert!(
             exists<LockReleaseTokenPoolDeployment>(@lock_release_token_pool),
             error::invalid_argument(E_ALREADY_INITIALIZED)
-        );
-
-        let metadata = object::address_to_object<Metadata>(@lock_release_local_token);
-        let transfer_ref_metadata = fungible_asset::transfer_ref_metadata(&transfer_ref);
-        assert!(
-            metadata == transfer_ref_metadata,
-            error::invalid_argument(E_LOCAL_TOKEN_MISMATCH)
         );
 
         let LockReleaseTokenPoolDeployment {
@@ -124,12 +123,28 @@ module lock_release_token_pool::lock_release_token_pool {
         } = move_from<LockReleaseTokenPoolDeployment>(@lock_release_token_pool);
 
         let store_signer = account::create_signer_with_capability(&store_signer_cap);
+        let store_signer_address = signer::address_of(&store_signer);
+
+        // If transfer ref is not provided, tokens with dynamic dispatch on deposit and withdraw
+        // are not allowed for this pool
+        if (transfer_ref.is_none()) {
+            let store =
+                primary_fungible_store::primary_store(
+                    store_signer_address,
+                    token_pool::get_fa_metadata(&token_pool_state)
+                );
+            assert!(
+                fungible_asset::deposit_dispatch_function(store).is_none()
+                    && fungible_asset::withdraw_dispatch_function(store).is_none(),
+                E_DISPATCHABLE_TOKEN_WITHOUT_TRANSFER_REF
+            );
+        };
 
         let pool = LockReleaseTokenPoolState {
-            ownable_state,
-            store_signer_address: signer::address_of(&store_signer),
             store_signer_cap,
+            ownable_state,
             token_pool_state,
+            store_signer_address,
             transfer_ref
         };
         move_to(&store_signer, pool);
@@ -202,6 +217,29 @@ module lock_release_token_pool::lock_release_token_pool {
         token_pool::remove_remote_pool(
             &mut pool.token_pool_state, remote_chain_selector, remote_pool_address
         );
+    }
+
+    inline fun has_transfer_ref(pool: &LockReleaseTokenPoolState): bool {
+        pool.transfer_ref.is_some()
+    }
+
+    #[view]
+    public fun pool_primary_store(): Object<FungibleStore> acquires LockReleaseTokenPoolState {
+        let pool = borrow_pool();
+        primary_fungible_store::primary_store(
+            pool.store_signer_address,
+            token_pool::get_fa_metadata(&pool.token_pool_state)
+        )
+    }
+
+    #[view]
+    public fun balance(): u64 acquires LockReleaseTokenPoolState {
+        fungible_asset::balance(pool_primary_store())
+    }
+
+    #[view]
+    public fun derived_balance(): u64 acquires LockReleaseTokenPoolState {
+        dispatchable_fungible_asset::derived_balance(pool_primary_store())
     }
 
     #[view]
@@ -289,13 +327,17 @@ module lock_release_token_pool::lock_release_token_pool {
 
         // Construct lock_or_burn output before we lose access to fa
         let dest_pool_data = token_pool::encode_local_decimals(&fa);
+        let metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
+        let store =
+            primary_fungible_store::primary_store(pool.store_signer_address, metadata);
 
         // Lock the funds in the pool
-        primary_fungible_store::deposit_with_ref(
-            &pool.transfer_ref,
-            pool.store_signer_address,
-            fa
-        );
+        if (has_transfer_ref(pool)) {
+            let transfer_ref = pool.transfer_ref.borrow();
+            fungible_asset::deposit_with_ref(transfer_ref, store, fa);
+        } else {
+            fungible_asset::deposit(store, fa);
+        };
 
         // set the output for this lock or burn operation.
         token_admin_registry::set_lock_or_burn_output_v1(
@@ -325,13 +367,19 @@ module lock_release_token_pool::lock_release_token_pool {
             &mut pool.token_pool_state, &input, local_amount
         );
 
+        let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
+        let metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
+        let store =
+            primary_fungible_store::primary_store(pool.store_signer_address, metadata);
+
         // Withdraw the amount from the store for release. this will revert if the store has insufficient balance.
         let fa =
-            primary_fungible_store::withdraw_with_ref(
-                &pool.transfer_ref,
-                pool.store_signer_address,
-                local_amount
-            );
+            if (has_transfer_ref(pool)) {
+                let transfer_ref = pool.transfer_ref.borrow();
+                fungible_asset::withdraw_with_ref(transfer_ref, store, local_amount)
+            } else {
+                fungible_asset::withdraw(&store_signer, store, local_amount)
+            };
 
         // set the output for this release or mint operation.
         token_admin_registry::set_release_or_mint_output_v1(
