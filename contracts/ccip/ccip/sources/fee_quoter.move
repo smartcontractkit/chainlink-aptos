@@ -13,6 +13,7 @@ module ccip::fee_quoter {
     use std::timestamp;
 
     use ccip::auth;
+    use ccip::client;
     use ccip::eth_abi;
     use ccip::state_object;
 
@@ -39,9 +40,6 @@ module ccip::fee_quoter {
     /// a callback with CCIP, there is no negative impact.
     /// https://move-book.com/appendix/reserved-addresses.html
     const MOVE_PRECOMPILE_SPACE: u256 = 0x0b;
-
-    const SVM_EXTRA_ARGS_V1_TAG: vector<u8> = x"1f3b3aba";
-    const GENERIC_EXTRA_ARGS_V2_TAG: vector<u8> = x"181dcf10";
 
     const GAS_PRICE_BITS: u8 = 112;
 
@@ -929,13 +927,13 @@ module ccip::fee_quoter {
             );
 
             let args_tag = extra_args.slice(0, 4);
-            let args_data = extra_args.slice(4, extra_args_len);
+            assert!(
+                args_tag == client::generic_extra_args_v2_tag(),
+                error::invalid_argument(E_INVALID_EXTRA_ARGS_TAG)
+            );
 
-            if (args_tag == GENERIC_EXTRA_ARGS_V2_TAG) {
-                decode_generic_extra_args_v2(args_data)
-            } else {
-                abort error::invalid_argument(E_INVALID_EXTRA_ARGS_TAG)
-            }
+            let args_data = extra_args.slice(4, extra_args_len);
+            decode_generic_extra_args_v2(args_data)
         }
     }
 
@@ -944,16 +942,6 @@ module ccip::fee_quoter {
         let gas_limit = eth_abi::decode_u256(&mut stream);
         let allow_out_of_order_execution = eth_abi::decode_bool(&mut stream);
         (gas_limit, allow_out_of_order_execution)
-    }
-
-    inline fun encode_generic_extra_args_v2(
-        gas_limit: u256, allow_out_of_order_execution: bool
-    ): vector<u8> {
-        let extra_args = vector[];
-        eth_abi::encode_selector(&mut extra_args, GENERIC_EXTRA_ARGS_V2_TAG);
-        eth_abi::encode_u256(&mut extra_args, gas_limit);
-        eth_abi::encode_bool(&mut extra_args, allow_out_of_order_execution);
-        extra_args
     }
 
     inline fun decode_svm_extra_args(
@@ -967,7 +955,7 @@ module ccip::fee_quoter {
 
         let args_tag = extra_args.slice(0, 4);
         assert!(
-            args_tag == SVM_EXTRA_ARGS_V1_TAG,
+            args_tag == client::svm_extra_args_v1_tag(),
             error::invalid_argument(E_INVALID_EXTRA_ARGS_TAG)
         );
         let args_data = extra_args.slice(4, extra_args_len);
@@ -1175,7 +1163,9 @@ module ccip::fee_quoter {
             let (gas_limit, allow_out_of_order_execution) =
                 decode_generic_extra_args(dest_chain_config, extra_args);
             let extra_args_v2 =
-                encode_generic_extra_args_v2(gas_limit, allow_out_of_order_execution);
+                client::encode_generic_extra_args_v2(
+                    gas_limit, allow_out_of_order_execution
+                );
             (extra_args_v2, allow_out_of_order_execution)
         } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
             let (
