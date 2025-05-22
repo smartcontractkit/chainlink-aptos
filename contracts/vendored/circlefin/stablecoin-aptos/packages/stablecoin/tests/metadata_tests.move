@@ -53,7 +53,7 @@ module stablecoin::metadata_tests {
         let (stablecoin_obj_constructor_ref, _, _) = setup_fa(@stablecoin);
         test_new(
             &stablecoin_obj_constructor_ref,
-            METADATA_UPDATER,
+            METADATA_UPDATER
         );
     }
 
@@ -241,13 +241,7 @@ module stablecoin::metadata_tests {
         let icon_uri = option::some(utf8(b"test_icon_uri"));
         let project_uri = option::some(utf8(b"test_project_uri"));
 
-        test_mutate_asset_metadata(
-            name,
-            symbol,
-            decimals,
-            icon_uri,
-            project_uri
-        );
+        test_mutate_asset_metadata(name, symbol, decimals, icon_uri, project_uri);
     }
 
     #[test]
@@ -280,13 +274,7 @@ module stablecoin::metadata_tests {
         let icon_uri = option::none();
         let project_uri = option::none();
 
-        test_mutate_asset_metadata(
-            name,
-            symbol,
-            decimals,
-            icon_uri,
-            project_uri
-        );
+        test_mutate_asset_metadata(name, symbol, decimals, icon_uri, project_uri);
     }
 
     #[test]
@@ -372,17 +360,19 @@ module stablecoin::metadata_tests {
     }
 
     fun test_new(
-        stablecoin_obj_constructor_ref: &ConstructorRef,
-        metadata_updater: address,
+        stablecoin_obj_constructor_ref: &ConstructorRef, metadata_updater: address
     ) {
         let stablecoin_signer = object::generate_signer(stablecoin_obj_constructor_ref);
-        let stablecoin_address = object::address_from_constructor_ref(stablecoin_obj_constructor_ref);
+        let stablecoin_address =
+            object::address_from_constructor_ref(stablecoin_obj_constructor_ref);
         let stablecoin_metadata = object::address_to_object<Metadata>(stablecoin_address);
 
         ownable::new(&stablecoin_signer, OWNER);
         metadata::new_for_testing(stablecoin_obj_constructor_ref, metadata_updater);
 
-        assert_eq(metadata::mutate_metadata_ref_metadata_for_testing(), stablecoin_metadata);
+        assert_eq(
+            metadata::mutate_metadata_ref_metadata_for_testing(), stablecoin_metadata
+        );
         assert_eq(metadata::metadata_updater(), metadata_updater);
     }
 
@@ -401,7 +391,13 @@ module stablecoin::metadata_tests {
             project_uri
         );
 
-        verify_asset_metadata_updated(name, symbol, option::none(), icon_uri, project_uri);
+        verify_asset_metadata_updated(
+            name,
+            symbol,
+            option::none(),
+            icon_uri,
+            project_uri
+        );
     }
 
     fun test_mutate_asset_metadata(
@@ -412,31 +408,28 @@ module stablecoin::metadata_tests {
         project_uri: Option<String>
     ) {
         metadata::test_mutate_asset_metadata(
-            name,
-            symbol,
-            decimals,
-            icon_uri,
-            project_uri
+            name, symbol, decimals, icon_uri, project_uri
         );
 
         verify_asset_metadata_updated(name, symbol, decimals, icon_uri, project_uri);
     }
 
-    fun verify_asset_metadata_updated(name: Option<String>,
-                                      symbol: Option<String>,
-                                      decimals: Option<u8>,
-                                      icon_uri: Option<String>,
-                                      project_uri: Option<String>) {
+    fun verify_asset_metadata_updated(
+        name: Option<String>,
+        symbol: Option<String>,
+        decimals: Option<u8>,
+        icon_uri: Option<String>,
+        project_uri: Option<String>
+    ) {
         let expected_name: String = {
-            if (option::is_some(&name)) *option::borrow(&name)
-            else utf8(NAME)
+            if (option::is_some(&name)) *option::borrow(&name) else utf8(NAME)
         };
         let expected_symbol: String = {
-            if (option::is_some(&symbol))*option::borrow(&symbol)
+            if (option::is_some(&symbol)) *option::borrow(&symbol)
             else utf8(SYMBOL)
         };
         let expected_decimals: u8 = {
-            if (option::is_some(&decimals))*option::borrow(&decimals)
+            if (option::is_some(&decimals)) *option::borrow(&decimals)
             else DECIMALS
         };
         let expected_icon_uri: String = {
@@ -450,38 +443,56 @@ module stablecoin::metadata_tests {
 
         let stablecoin_address = stablecoin_address();
 
-        assert_eq(fungible_asset::name(object::address_to_object<Metadata>(stablecoin_address)), expected_name);
-        assert_eq(fungible_asset::symbol(object::address_to_object<Metadata>(stablecoin_address)), expected_symbol);
-        assert_eq(fungible_asset::decimals(object::address_to_object<Metadata>(stablecoin_address)), expected_decimals);
-        assert_eq(fungible_asset::icon_uri(object::address_to_object<Metadata>(stablecoin_address)), expected_icon_uri);
         assert_eq(
-            fungible_asset::project_uri(object::address_to_object<Metadata>(stablecoin_address)),
+            fungible_asset::name(object::address_to_object<Metadata>(stablecoin_address)),
+            expected_name
+        );
+        assert_eq(
+            fungible_asset::symbol(
+                object::address_to_object<Metadata>(stablecoin_address)
+            ),
+            expected_symbol
+        );
+        assert_eq(
+            fungible_asset::decimals(
+                object::address_to_object<Metadata>(stablecoin_address)
+            ),
+            expected_decimals
+        );
+        assert_eq(
+            fungible_asset::icon_uri(
+                object::address_to_object<Metadata>(stablecoin_address)
+            ),
+            expected_icon_uri
+        );
+        assert_eq(
+            fungible_asset::project_uri(
+                object::address_to_object<Metadata>(stablecoin_address)
+            ),
             expected_project_uri
         );
 
-        let expected_event = metadata::test_MetadataUpdated_event(
-            expected_name,
-            expected_symbol,
-            expected_decimals,
-            expected_icon_uri,
-            expected_project_uri
-        );
+        let expected_event =
+            metadata::test_MetadataUpdated_event(
+                expected_name,
+                expected_symbol,
+                expected_decimals,
+                expected_icon_uri,
+                expected_project_uri
+            );
         assert_eq(event::was_event_emitted(&expected_event), true);
     }
 
     fun test_update_metadata_updater(
-        caller: &signer,
-        old_metadata_updater: address,
-        new_metadata_updater: address
+        caller: &signer, old_metadata_updater: address, new_metadata_updater: address
     ) {
         metadata::set_metadata_updater_for_testing(old_metadata_updater);
-        let expected_event = metadata::test_MetadataUpdaterChanged_event(
-            old_metadata_updater, new_metadata_updater
-        );
+        let expected_event =
+            metadata::test_MetadataUpdaterChanged_event(
+                old_metadata_updater, new_metadata_updater
+            );
 
-        metadata::test_update_metadata_updater(
-            caller, new_metadata_updater
-        );
+        metadata::test_update_metadata_updater(caller, new_metadata_updater);
 
         assert_eq(event::was_event_emitted(&expected_event), true);
         assert_eq(metadata::metadata_updater(), new_metadata_updater);

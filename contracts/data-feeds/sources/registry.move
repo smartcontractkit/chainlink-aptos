@@ -205,7 +205,9 @@ module data_feeds::registry {
             RegistryMigrationStatus { callback_registered: true }
         );
 
-        event::emit(CallbackRegistered { receiver_address: signer::address_of(publisher) });
+        event::emit(
+            CallbackRegistered { receiver_address: signer::address_of(publisher) }
+        );
     }
 
     inline fun get_state_addr(): address {
@@ -238,7 +240,9 @@ module data_feeds::registry {
             RegistryMigrationStatus { callback_registered: true }
         );
 
-        event::emit(CallbackRegistered { receiver_address: signer::address_of(publisher) });
+        event::emit(
+            CallbackRegistered { receiver_address: signer::address_of(publisher) }
+        );
     }
 
     public entry fun set_feeds(

@@ -388,7 +388,9 @@ module platform_secondary::forwarder {
     }
 
     #[test_only]
-    public entry fun set_up_test(owner_secondary: &signer, publisher: &signer) {
+    public entry fun set_up_test(
+        owner_secondary: &signer, publisher: &signer
+    ) {
         use aptos_framework::account::{Self};
         account::create_account_for_test(signer::address_of(owner_secondary));
         account::create_account_for_test(signer::address_of(publisher));
@@ -444,7 +446,9 @@ module platform_secondary::forwarder {
     }
 
     #[test(owner_secondary = @owner_secondary, publisher = @platform_secondary)]
-    public entry fun test_happy_path(owner_secondary: &signer, publisher: &signer) acquires State {
+    public entry fun test_happy_path(
+        owner_secondary: &signer, publisher: &signer
+    ) acquires State {
         set_up_test(owner_secondary, publisher);
 
         let config = generate_oracle_set();
@@ -518,7 +522,13 @@ module platform_secondary::forwarder {
         );
     }
 
-    #[test(owner_secondary = @owner_secondary, publisher = @platform_secondary, new_owner = @0xbeef)]
+    #[
+        test(
+            owner_secondary = @owner_secondary,
+            publisher = @platform_secondary,
+            new_owner = @0xbeef
+        )
+    ]
     fun test_transfer_ownership_success(
         owner_secondary: &signer, publisher: &signer, new_owner: &signer
     ) acquires State {
@@ -532,7 +542,13 @@ module platform_secondary::forwarder {
         assert!(get_owner() == signer::address_of(new_owner), 2);
     }
 
-    #[test(owner_secondary = @owner_secondary, publisher = @platform_secondary, unknown_user = @0xbeef)]
+    #[
+        test(
+            owner_secondary = @owner_secondary,
+            publisher = @platform_secondary,
+            unknown_user = @0xbeef
+        )
+    ]
     #[expected_failure(abort_code = 327687, location = platform_secondary::forwarder)]
     fun test_transfer_ownership_failure_not_owner(
         owner_secondary: &signer, publisher: &signer, unknown_user: &signer
@@ -556,7 +572,13 @@ module platform_secondary::forwarder {
         transfer_ownership(owner_secondary, signer::address_of(owner_secondary));
     }
 
-    #[test(owner_secondary = @owner_secondary, publisher = @platform_secondary, new_owner = @0xbeef)]
+    #[
+        test(
+            owner_secondary = @owner_secondary,
+            publisher = @platform_secondary,
+            new_owner = @0xbeef
+        )
+    ]
     #[expected_failure(abort_code = 327694, location = platform_secondary::forwarder)]
     fun test_transfer_ownership_failure_not_proposed_owner(
         owner_secondary: &signer, publisher: &signer, new_owner: &signer

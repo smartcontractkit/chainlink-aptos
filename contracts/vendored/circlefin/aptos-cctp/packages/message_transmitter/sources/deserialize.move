@@ -24,25 +24,27 @@ module message_transmitter::deserialize {
     use std::bcs;
 
     public fun deserialize_u32(data: &vector<u8>, index: u64, size: u64): u32 {
-        let result = vector::slice(data, index, index+size);
+        let result = vector::slice(data, index, index + size);
         vector::reverse(&mut result);
         from_bcs::to_u32(result)
     }
 
     public fun deserialize_u64(data: &vector<u8>, index: u64, size: u64): u64 {
-        let result = vector::slice(data, index, index+size);
+        let result = vector::slice(data, index, index + size);
         vector::reverse(&mut result);
         from_bcs::to_u64(result)
     }
 
     public fun deserialize_u256(data: &vector<u8>, index: u64, size: u64): u256 {
-        let result = vector::slice(data, index, index+size);
+        let result = vector::slice(data, index, index + size);
         vector::reverse(&mut result);
         from_bcs::to_u256(result)
     }
 
-    public fun deserialize_address(data: &vector<u8>, index: u64, size: u64): address {
-        let result = vector::slice(data, index, index+size);
+    public fun deserialize_address(
+        data: &vector<u8>, index: u64, size: u64
+    ): address {
+        let result = vector::slice(data, index, index + size);
         from_bcs::to_address(result)
     }
 
@@ -52,7 +54,9 @@ module message_transmitter::deserialize {
         let serialized = bcs::to_bytes(&num);
         vector::reverse(&mut serialized);
 
-        let deserialized = deserialize_u32(&serialized, 0, vector::length<u8>(&serialized));
+        let deserialized = deserialize_u32(
+            &serialized, 0, vector::length<u8>(&serialized)
+        );
         assert!(deserialized == num, 0);
     }
 
@@ -62,7 +66,9 @@ module message_transmitter::deserialize {
         let serialized = bcs::to_bytes(&num);
         vector::reverse(&mut serialized);
 
-        let deserialized = deserialize_u64(&serialized, 0, vector::length<u8>(&serialized));
+        let deserialized = deserialize_u64(
+            &serialized, 0, vector::length<u8>(&serialized)
+        );
         assert!(deserialized == num, 0);
     }
 
@@ -72,7 +78,8 @@ module message_transmitter::deserialize {
         let serialized = bcs::to_bytes(&num);
         vector::reverse(&mut serialized);
 
-        let deserialized = deserialize_u256(&serialized, 0, vector::length<u8>(&serialized));
+        let deserialized =
+            deserialize_u256(&serialized, 0, vector::length<u8>(&serialized));
         assert!(deserialized == num, 0);
     }
 
@@ -81,7 +88,8 @@ module message_transmitter::deserialize {
         let address: address = @0xa9fb1b3009dcb79e2fe346c16a604b8fa8ae0a79;
         let serialized = bcs::to_bytes(&address);
 
-        let deserialized = deserialize_address(&serialized, 0, vector::length<u8>(&serialized));
+        let deserialized =
+            deserialize_address(&serialized, 0, vector::length<u8>(&serialized));
         assert!(deserialized == address, 0);
     }
 }

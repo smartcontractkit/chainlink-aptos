@@ -46,7 +46,8 @@ spec aptos_extensions::pausable {
     /// Post condition: There are no changes to the PauseState.
     spec assert_not_paused {
         aborts_if !exists<object::ObjectCore>(obj_address);
-        aborts_if !exists<PauseState>(obj_address) || !object::spec_exists_at<PauseState>(obj_address);
+        aborts_if !exists<PauseState>(obj_address)
+            || !object::spec_exists_at<PauseState>(obj_address);
         aborts_if global<PauseState>(obj_address).paused;
         ensures global<PauseState>(obj_address) == old(global<PauseState>(obj_address));
     }
@@ -60,7 +61,8 @@ spec aptos_extensions::pausable {
         aborts_if !exists<object::ObjectCore>(obj_address);
         aborts_if !object::spec_exists_at<OwnerRole>(obj_address);
         aborts_if exists<PauseState>(obj_address);
-        ensures global<PauseState>(obj_address) == PauseState { paused: false, pauser: pauser };
+        ensures global<PauseState>(obj_address)
+            == PauseState { paused: false, pauser: pauser };
     }
 
     /// Abort condition: The PauseState resource is missing.
@@ -72,7 +74,8 @@ spec aptos_extensions::pausable {
         aborts_if !exists<PauseState>(obj_address);
         aborts_if global<PauseState>(obj_address).pauser != signer::address_of(caller);
         ensures global<PauseState>(obj_address).paused;
-        ensures global<PauseState>(obj_address).pauser == old(global<PauseState>(obj_address).pauser);
+        ensures global<PauseState>(obj_address).pauser
+            == old(global<PauseState>(obj_address).pauser);
     }
 
     /// Abort condition: The PauseState resource is missing.
@@ -84,7 +87,8 @@ spec aptos_extensions::pausable {
         aborts_if !exists<PauseState>(obj_address);
         aborts_if global<PauseState>(obj_address).pauser != signer::address_of(caller);
         ensures !global<PauseState>(obj_address).paused;
-        ensures global<PauseState>(obj_address).pauser == old(global<PauseState>(obj_address).pauser);
+        ensures global<PauseState>(obj_address).pauser
+            == old(global<PauseState>(obj_address).pauser);
     }
 
     /// Abort condition: The input object does not contain a valid object address.
@@ -97,10 +101,12 @@ spec aptos_extensions::pausable {
         let obj_address = object::object_address(obj);
         aborts_if !exists<object::ObjectCore>(obj_address);
         aborts_if !exists<PauseState>(obj_address);
-        aborts_if !exists<OwnerRole>(obj_address) || !object::spec_exists_at<OwnerRole>(obj_address);
+        aborts_if !exists<OwnerRole>(obj_address)
+            || !object::spec_exists_at<OwnerRole>(obj_address);
         aborts_if global<OwnerRole>(obj_address).owner != signer::address_of(caller);
         ensures global<PauseState>(obj_address).pauser == new_pauser;
-        ensures global<PauseState>(obj_address).paused == old(global<PauseState>(obj_address).paused);
+        ensures global<PauseState>(obj_address).paused
+            == old(global<PauseState>(obj_address).paused);
     }
 
     /// Abort condition: The PauseState resource is missing.

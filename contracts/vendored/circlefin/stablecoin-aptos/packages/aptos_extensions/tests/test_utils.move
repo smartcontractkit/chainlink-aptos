@@ -45,9 +45,7 @@ module aptos_extensions::test_utils {
     }
 
     fun internal_assert_eq<T: drop>(a: T, b: T, debug: bool) {
-        if (&a == &b) {
-            return
-        };
+        if (&a == &b) { return };
         if (debug) {
             debug::print(&format2(&b"[FAILED_ASSERTION] assert_eq({}, {})", a, b));
         };
@@ -55,9 +53,7 @@ module aptos_extensions::test_utils {
     }
 
     fun internal_assert_neq<T: drop>(a: T, b: T, debug: bool) {
-        if (&a != &b) {
-            return
-        };
+        if (&a != &b) { return };
         if (debug) {
             debug::print(&format2(&b"[FAILED_ASSERTION] assert_neq({}, {})", a, b));
         };
@@ -96,12 +92,18 @@ module aptos_extensions::test_utils {
 
     #[test, expected_failure(abort_code = ERROR_FAILED_ASSERTION)]
     fun internal_assert_eq__should_fail_with_mismatched_vector() {
-        internal_assert_eq(vector[1, 2, 3], vector[2, 3, 4], false /* debug */);
+        internal_assert_eq(
+            vector[1, 2, 3],
+            vector[2, 3, 4],
+            false /* debug */
+        );
     }
 
     #[test, expected_failure(abort_code = ERROR_FAILED_ASSERTION)]
     fun internal_assert_eq__should_fail_with_mismatched_string() {
-        internal_assert_eq(string::utf8(b"string"), string::utf8(b"other"), false /* debug */);
+        internal_assert_eq(
+            string::utf8(b"string"), string::utf8(b"other"), false /* debug */
+        );
     }
 
     #[test, expected_failure(abort_code = ERROR_FAILED_ASSERTION)]
@@ -148,12 +150,18 @@ module aptos_extensions::test_utils {
 
     #[test, expected_failure(abort_code = ERROR_FAILED_ASSERTION)]
     fun internal_assert_neq__should_fail_with_matching_vector() {
-        internal_assert_neq(vector[1, 2, 3], vector[1, 2, 3], false /* debug */);
+        internal_assert_neq(
+            vector[1, 2, 3],
+            vector[1, 2, 3],
+            false /* debug */
+        );
     }
 
     #[test, expected_failure(abort_code = ERROR_FAILED_ASSERTION)]
     fun internal_assert_neq__should_fail_with_matching_string() {
-        internal_assert_neq(string::utf8(b"string"), string::utf8(b"string"), false /* debug */);
+        internal_assert_neq(
+            string::utf8(b"string"), string::utf8(b"string"), false /* debug */
+        );
     }
 
     #[test, expected_failure(abort_code = ERROR_FAILED_ASSERTION)]

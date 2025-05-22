@@ -27,6 +27,7 @@ type RegistryInterface interface {
 	GetFeedMetadata(opts *bind.CallOpts, feedIds [][]byte) ([]FeedMetadata, error)
 	GetOwner(opts *bind.CallOpts) (aptos.AccountAddress, error)
 
+	RegisterCallbacks(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 	SetFeeds(opts *bind.TransactOpts, feedIds [][]byte, descriptions []string, configId []byte) (*api.PendingTransaction, error)
 	RemoveFeeds(opts *bind.TransactOpts, feedIds [][]byte) (*api.PendingTransaction, error)
 	UpdateDescriptions(opts *bind.TransactOpts, feedIds [][]byte, descriptions []string) (*api.PendingTransaction, error)
@@ -43,6 +44,7 @@ type RegistryEncoder interface {
 	GetFeeds() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetFeedMetadata(feedIds [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetOwner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	RegisterCallbacks() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	SetFeeds(feedIds [][]byte, descriptions []string, configId []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	RemoveFeeds(feedIds [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	UpdateDescriptions(feedIds [][]byte, descriptions []string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -63,7 +65,7 @@ type RegistryEncoder interface {
 	GetReportsUnchecked(feedIds [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"data_feeds","module":"registry","name":"accept_ownership","parameters":null},{"package":"data_feeds","module":"registry","name":"get_benchmarks","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_benchmarks_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_reports","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_reports_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_state_addr","parameters":null},{"package":"data_feeds","module":"registry","name":"new_proof","parameters":null},{"package":"data_feeds","module":"registry","name":"new_proof_secondary","parameters":null},{"package":"data_feeds","module":"registry","name":"on_report","parameters":[{"name":"_meta","type":"address"}]},{"package":"data_feeds","module":"registry","name":"on_report_secondary","parameters":[{"name":"_meta","type":"address"}]},{"package":"data_feeds","module":"registry","name":"remove_feeds","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_feeds","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"},{"name":"config_id","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_feeds_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"},{"name":"config_id","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_workflow_config","parameters":[{"name":"allowed_workflow_owners","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"allowed_workflow_names","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"to_u256be","parameters":[{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"to_u32be","parameters":[{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"data_feeds","module":"registry","name":"update_descriptions","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"}]}]`
+const FunctionInfo = `[{"package":"data_feeds","module":"registry","name":"accept_ownership","parameters":null},{"package":"data_feeds","module":"registry","name":"get_benchmarks","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_benchmarks_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_reports","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_reports_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"get_state_addr","parameters":null},{"package":"data_feeds","module":"registry","name":"new_proof","parameters":null},{"package":"data_feeds","module":"registry","name":"new_proof_secondary","parameters":null},{"package":"data_feeds","module":"registry","name":"on_report","parameters":[{"name":"_meta","type":"address"}]},{"package":"data_feeds","module":"registry","name":"on_report_secondary","parameters":[{"name":"_meta","type":"address"}]},{"package":"data_feeds","module":"registry","name":"register_callbacks","parameters":null},{"package":"data_feeds","module":"registry","name":"remove_feeds","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_feeds","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"},{"name":"config_id","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_feeds_unchecked","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"},{"name":"config_id","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"set_workflow_config","parameters":[{"name":"allowed_workflow_owners","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"allowed_workflow_names","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"data_feeds","module":"registry","name":"to_u256be","parameters":[{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"to_u32be","parameters":[{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"data_feeds","module":"registry","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"data_feeds","module":"registry","name":"update_descriptions","parameters":[{"name":"feed_ids","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"descriptions","type":"vector\u003c0x1::string::String\u003e"}]}]`
 
 func NewRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) RegistryInterface {
 	contract := bind.NewBoundContract(address, "data_feeds", "registry", client)
@@ -81,6 +83,10 @@ type Registry struct {
 	Feeds                 *bind.StdSimpleMap[[]byte, Feed] `move:"std::simple_map::SimpleMap<vector<u8>,Feed>"`
 	AllowedWorkflowOwners [][]byte                         `move:"vector<vector<u8>>"`
 	AllowedWorkflowNames  [][]byte                         `move:"vector<vector<u8>>"`
+}
+
+type RegistryMigrationStatus struct {
+	CallbackRegistered bool `move:"bool"`
 }
 
 type Feed struct {
@@ -156,6 +162,10 @@ type OwnershipTransferRequested struct {
 type OwnershipTransferred struct {
 	From aptos.AccountAddress `move:"address"`
 	To   aptos.AccountAddress `move:"address"`
+}
+
+type CallbackRegistered struct {
+	ReceiverAddress aptos.AccountAddress `move:"address"`
 }
 
 type OnReceive struct {
@@ -263,6 +273,15 @@ func (c RegistryContract) GetOwner(opts *bind.CallOpts) (aptos.AccountAddress, e
 
 // Entry Functions
 
+func (c RegistryContract) RegisterCallbacks(opts *bind.TransactOpts) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.registryEncoder.RegisterCallbacks()
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
 func (c RegistryContract) SetFeeds(opts *bind.TransactOpts, feedIds [][]byte, descriptions []string, configId []byte) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.registryEncoder.SetFeeds(feedIds, descriptions, configId)
 	if err != nil {
@@ -340,6 +359,10 @@ func (c registryEncoder) GetFeedMetadata(feedIds [][]byte) (bind.ModuleInformati
 
 func (c registryEncoder) GetOwner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("get_owner", nil, []string{}, []any{})
+}
+
+func (c registryEncoder) RegisterCallbacks() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("register_callbacks", nil, []string{}, []any{})
 }
 
 func (c registryEncoder) SetFeeds(feedIds [][]byte, descriptions []string, configId []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {

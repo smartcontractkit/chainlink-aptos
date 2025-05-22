@@ -29,28 +29,54 @@ module aptos_extensions::aptos_extensions_tests {
     /// error::invalid_argument(EUNAUTHORIZED_NOT_OWNER)
     const EUNAUTHORIZED_NOT_OWNER: u64 = 65538;
 
-    #[test, expected_failure(abort_code = ECONTAINER_NOT_PUBLISHED, location = aptos_framework::resource_account)]
+    #[
+        test,
+        expected_failure(
+            abort_code = ECONTAINER_NOT_PUBLISHED,
+            location = aptos_framework::resource_account
+        )
+    ]
     fun init_module__should_consume_the_resource_account_signer_cap() {
         account::create_account_for_test(@deployer);
-        resource_account::create_resource_account(&create_signer_for_test(@deployer), SEED, ZERO_AUTH_KEY);
-        let resource_account_address = account::create_resource_address(&@deployer, SEED);
+        resource_account::create_resource_account(
+            &create_signer_for_test(@deployer), SEED, ZERO_AUTH_KEY
+        );
+        let resource_account_address = account::create_resource_address(
+            &@deployer, SEED
+        );
         let resource_account_signer = &create_signer_for_test(resource_account_address);
 
         aptos_extensions::aptos_extensions::test_init_module(resource_account_signer);
 
-        resource_account::retrieve_resource_account_cap(resource_account_signer, @deployer);
+        resource_account::retrieve_resource_account_cap(
+            resource_account_signer, @deployer
+        );
     }
 
-    #[test, expected_failure(abort_code = EUNAUTHORIZED_NOT_OWNER, location = aptos_framework::resource_account)]
+    #[
+        test,
+        expected_failure(
+            abort_code = EUNAUTHORIZED_NOT_OWNER,
+            location = aptos_framework::resource_account
+        )
+    ]
     fun init_module__should_prevent_signer_cap_from_being_extracted_more_than_once() {
         account::create_account_for_test(@deployer);
-        resource_account::create_resource_account(&create_signer_for_test(@deployer), SEED, ZERO_AUTH_KEY);
-        resource_account::create_resource_account(&create_signer_for_test(@deployer), SEED_2, ZERO_AUTH_KEY);
-        let resource_account_address = account::create_resource_address(&@deployer, SEED);
+        resource_account::create_resource_account(
+            &create_signer_for_test(@deployer), SEED, ZERO_AUTH_KEY
+        );
+        resource_account::create_resource_account(
+            &create_signer_for_test(@deployer), SEED_2, ZERO_AUTH_KEY
+        );
+        let resource_account_address = account::create_resource_address(
+            &@deployer, SEED
+        );
         let resource_account_signer = &create_signer_for_test(resource_account_address);
 
         aptos_extensions::aptos_extensions::test_init_module(resource_account_signer);
 
-        resource_account::retrieve_resource_account_cap(resource_account_signer, @deployer);
+        resource_account::retrieve_resource_account_cap(
+            resource_account_signer, @deployer
+        );
     }
 }

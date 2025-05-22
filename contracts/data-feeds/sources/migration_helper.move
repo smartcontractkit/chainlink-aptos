@@ -16,9 +16,7 @@ module data_feeds::migration_helper {
         data_feeds::registry::register_callbacks(publisher);
 
         event::emit(
-            MigrationPerformed {
-                publisher: signer::address_of(publisher)
-            }
+            MigrationPerformed { publisher: signer::address_of(publisher) }
         );
     }
 }

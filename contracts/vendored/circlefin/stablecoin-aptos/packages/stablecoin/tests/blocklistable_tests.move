@@ -68,15 +68,14 @@ module stablecoin::blocklistable_tests {
         let (stablecoin_obj_constructor_ref, _, _) = setup_fa(@stablecoin);
         test_new(
             &stablecoin_obj_constructor_ref,
-            BLOCKLISTER,
+            BLOCKLISTER
         );
     }
 
     #[test]
     fun blocklist__should_succeed_with_unblocked_address() {
         setup();
-        let blocklister =
-            &create_signer_for_test(blocklistable::blocklister());
+        let blocklister = &create_signer_for_test(blocklistable::blocklister());
 
         test_blocklist(blocklister, RANDOM_ADDRESS);
     }
@@ -84,8 +83,7 @@ module stablecoin::blocklistable_tests {
     #[test]
     fun blocklist__should_be_idempotent() {
         setup();
-        let blocklister =
-            &create_signer_for_test(blocklistable::blocklister());
+        let blocklister = &create_signer_for_test(blocklistable::blocklister());
         blocklistable::set_blocklisted_for_testing(RANDOM_ADDRESS, true);
 
         test_blocklist(blocklister, RANDOM_ADDRESS);
@@ -102,8 +100,7 @@ module stablecoin::blocklistable_tests {
     #[test]
     fun unblocklist__should_unblock_blocked_address() {
         setup();
-        let blocklister =
-            &create_signer_for_test(blocklistable::blocklister());
+        let blocklister = &create_signer_for_test(blocklistable::blocklister());
         blocklistable::set_blocklisted_for_testing(RANDOM_ADDRESS, true);
 
         test_unblocklist(blocklister, RANDOM_ADDRESS);
@@ -112,8 +109,7 @@ module stablecoin::blocklistable_tests {
     #[test]
     fun unblocklist__should_succeed_on_unblocklisted_address() {
         setup();
-        let blocklister =
-            &create_signer_for_test(blocklistable::blocklister());
+        let blocklister = &create_signer_for_test(blocklistable::blocklister());
 
         test_unblocklist(blocklister, RANDOM_ADDRESS);
     }
@@ -121,8 +117,7 @@ module stablecoin::blocklistable_tests {
     #[test]
     fun unblocklist__should_be_idempotent() {
         setup();
-        let blocklister =
-            &create_signer_for_test(blocklistable::blocklister());
+        let blocklister = &create_signer_for_test(blocklistable::blocklister());
         blocklistable::set_blocklisted_for_testing(RANDOM_ADDRESS, false);
 
         test_unblocklist(blocklister, RANDOM_ADDRESS);
@@ -168,17 +163,19 @@ module stablecoin::blocklistable_tests {
     }
 
     fun test_new(
-        stablecoin_obj_constructor_ref: &ConstructorRef,
-        blocklister: address,
+        stablecoin_obj_constructor_ref: &ConstructorRef, blocklister: address
     ) {
-        let stablecoin_address = object::address_from_constructor_ref(stablecoin_obj_constructor_ref);
+        let stablecoin_address =
+            object::address_from_constructor_ref(stablecoin_obj_constructor_ref);
         let stablecoin_signer = object::generate_signer(stablecoin_obj_constructor_ref);
         let stablecoin_metadata = object::address_to_object<Metadata>(stablecoin_address);
 
         ownable::new(&stablecoin_signer, OWNER);
         blocklistable::new_for_testing(stablecoin_obj_constructor_ref, blocklister);
 
-        assert_eq(blocklistable::transfer_ref_metadata_for_testing(), stablecoin_metadata);
+        assert_eq(
+            blocklistable::transfer_ref_metadata_for_testing(), stablecoin_metadata
+        );
         assert_eq(blocklistable::num_blocklisted_for_testing(), 0);
         assert_eq(blocklistable::blocklister(), blocklister);
     }
@@ -202,14 +199,13 @@ module stablecoin::blocklistable_tests {
     }
 
     fun test_update_blocklister(
-        caller: &signer,
-        old_blocklister: address,
-        new_blocklister: address
+        caller: &signer, old_blocklister: address, new_blocklister: address
     ) {
         blocklistable::set_blocklister_for_testing(old_blocklister);
-        let expected_event = blocklistable::test_BlocklisterChanged_event(
-            old_blocklister, new_blocklister
-        );
+        let expected_event =
+            blocklistable::test_BlocklisterChanged_event(
+                old_blocklister, new_blocklister
+            );
 
         blocklistable::test_update_blocklister(caller, new_blocklister);
 

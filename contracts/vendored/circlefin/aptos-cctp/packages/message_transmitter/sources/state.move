@@ -48,8 +48,8 @@ module message_transmitter::state {
         signature_threshold: u64,
 
         // Admin Roles
-        enabled_attesters: vector<address>,         // Authorized witnesses to bridge transactions
-        attester_manager: address,                  // Manages attester state and configuration
+        enabled_attesters: vector<address>, // Authorized witnesses to bridge transactions
+        attester_manager: address // Manages attester state and configuration
     }
 
     public(friend) fun init_state(
@@ -71,7 +71,7 @@ module message_transmitter::state {
 
                 // Admin Roles
                 attester_manager: signer::address_of(owner),
-                enabled_attesters: vector::empty(),
+                enabled_attesters: vector::empty()
             }
         );
     }
@@ -101,7 +101,10 @@ module message_transmitter::state {
     }
 
     public(friend) fun is_nonce_used(source_and_nonce_hash: address): bool acquires State {
-        table_with_length::contains(&borrow_global<State>(get_object_address()).used_nonces, source_and_nonce_hash)
+        table_with_length::contains(
+            &borrow_global<State>(get_object_address()).used_nonces,
+            source_and_nonce_hash
+        )
     }
 
     public(friend) fun get_signature_threshold(): u64 acquires State {
@@ -113,7 +116,9 @@ module message_transmitter::state {
     }
 
     public(friend) fun get_num_enabled_attesters(): u64 acquires State {
-        vector::length(&borrow_global<State>(get_object_address()).enabled_attesters)
+        vector::length(
+            &borrow_global<State>(get_object_address()).enabled_attesters
+        )
     }
 
     public(friend) fun get_attester_manager(): address acquires State {
@@ -121,7 +126,9 @@ module message_transmitter::state {
     }
 
     public(friend) fun get_owner(): address {
-        ownable::owner(object::address_to_object<OwnerRole>(get_object_address()))
+        ownable::owner(
+            object::address_to_object<OwnerRole>(get_object_address())
+        )
     }
 
     public(friend) fun get_object_address(): address {
@@ -132,27 +139,36 @@ module message_transmitter::state {
     // ---------- Setters ----------
     // -----------------------------
 
-    public(friend) fun set_max_message_body_size(max_message_body_size: u64) acquires State {
-        borrow_global_mut<State>(get_object_address()).max_message_body_size = max_message_body_size
+    public(friend) fun set_max_message_body_size(
+        max_message_body_size: u64
+    ) acquires State {
+        borrow_global_mut<State>(get_object_address()).max_message_body_size =
+            max_message_body_size
     }
 
     public(friend) fun set_next_available_nonce(next_available_nonce: u64) acquires State {
-        borrow_global_mut<State>(get_object_address()).next_available_nonce = next_available_nonce
+        borrow_global_mut<State>(get_object_address()).next_available_nonce =
+            next_available_nonce
     }
 
     public(friend) fun set_nonce_used(source_and_nonce_hash: address) acquires State {
         table_with_length::add(
-            &mut borrow_global_mut<State>(get_object_address()).used_nonces, source_and_nonce_hash,
+            &mut borrow_global_mut<State>(get_object_address()).used_nonces,
+            source_and_nonce_hash,
             true
         );
     }
 
     public(friend) fun set_signature_threshold(signature_threshold: u64) acquires State {
-        borrow_global_mut<State>(get_object_address()).signature_threshold = signature_threshold
+        borrow_global_mut<State>(get_object_address()).signature_threshold =
+            signature_threshold
     }
 
     public(friend) fun add_attester(attester: address) acquires State {
-        vector::push_back(&mut borrow_global_mut<State>(get_object_address()).enabled_attesters, attester);
+        vector::push_back(
+            &mut borrow_global_mut<State>(get_object_address()).enabled_attesters,
+            attester
+        );
     }
 
     public(friend) fun remove_attester(attester: address) acquires State {
@@ -163,7 +179,8 @@ module message_transmitter::state {
     }
 
     public(friend) fun set_attester_manager(attester_manager: address) acquires State {
-        borrow_global_mut<State>(get_object_address()).attester_manager = attester_manager
+        borrow_global_mut<State>(get_object_address()).attester_manager =
+            attester_manager
     }
 
     // -----------------------------
@@ -181,9 +198,11 @@ module message_transmitter::state {
 
     #[test_only]
     public fun init_test_state(caller: &signer) {
-        let resource_account_address = account::create_resource_address(&@deployer, b"test_seed_mt");
+        let resource_account_address =
+            account::create_resource_address(&@deployer, b"test_seed_mt");
         let resource_account_signer = create_signer_for_test(resource_account_address);
-        let constructor_ref = object::create_named_object(&resource_account_signer, SEED_NAME);
+        let constructor_ref =
+            object::create_named_object(&resource_account_signer, SEED_NAME);
         let signer = object::generate_signer(&constructor_ref);
         init_state(caller, &signer, 9, 0, 256);
         ownable::new(&signer, signer::address_of(caller));
@@ -192,7 +211,10 @@ module message_transmitter::state {
 
     #[test_only]
     public fun set_paused(pauser: &signer) {
-        pausable::test_pause(pauser, object::address_to_object<PauseState>(get_object_address()));
+        pausable::test_pause(
+            pauser,
+            object::address_to_object<PauseState>(get_object_address())
+        );
     }
 
     #[test_only]
@@ -341,7 +363,9 @@ module message_transmitter::state {
 
     #[test(owner = @message_transmitter, unknown_attester = @0x1234)]
     #[expected_failure(abort_code = 0x60001, location = Self)]
-    fun test_remove_attester_attester_does_not_exist(owner: &signer, unknown_attester: &signer) acquires State {
+    fun test_remove_attester_attester_does_not_exist(
+        owner: &signer, unknown_attester: &signer
+    ) acquires State {
         init_test_state(owner);
         let address = signer::address_of(unknown_attester);
         remove_attester(address);

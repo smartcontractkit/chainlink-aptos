@@ -95,19 +95,25 @@ module aptos_extensions::ownable {
 
     /// Creates and inits a new OwnerRole object.
     public fun new(obj_signer: &signer, owner: address) {
-        assert!(object::is_object(signer::address_of(obj_signer)), ENON_EXISTENT_OBJECT);
+        assert!(
+            object::is_object(signer::address_of(obj_signer)), ENON_EXISTENT_OBJECT
+        );
         move_to(obj_signer, OwnerRole { owner, pending_owner: option::none() });
     }
 
     /// Starts the ownership transfer of the object by setting the pending owner to the new_owner address.
-    entry fun transfer_ownership(caller: &signer, obj: Object<OwnerRole>, new_owner: address) acquires OwnerRole {
+    entry fun transfer_ownership(
+        caller: &signer, obj: Object<OwnerRole>, new_owner: address
+    ) acquires OwnerRole {
         let obj_address = object::object_address(&obj);
         let owner_role = borrow_global_mut<OwnerRole>(obj_address);
         assert!(owner_role.owner == signer::address_of(caller), ENOT_OWNER);
 
         owner_role.pending_owner = option::some(new_owner);
 
-        event::emit(OwnershipTransferStarted { obj_address, old_owner: owner_role.owner, new_owner });
+        event::emit(
+            OwnershipTransferStarted { obj_address, old_owner: owner_role.owner, new_owner }
+        );
     }
 
     /// Transfers the ownership of the object by setting the owner to the pending owner address.
@@ -130,7 +136,8 @@ module aptos_extensions::ownable {
 
     /// Removes the OwnerRole resource from the caller.
     public fun destroy(caller: &signer) acquires OwnerRole {
-        let OwnerRole { owner: _, pending_owner: _ } = move_from<OwnerRole>(signer::address_of(caller));
+        let OwnerRole { owner: _, pending_owner: _ } =
+            move_from<OwnerRole>(signer::address_of(caller));
 
         event::emit(OwnerRoleDestroyed { obj_address: signer::address_of(caller) });
     }
@@ -164,7 +171,9 @@ module aptos_extensions::ownable {
     }
 
     #[test_only]
-    public fun test_accept_ownership(caller: &signer, obj: Object<OwnerRole>) acquires OwnerRole {
+    public fun test_accept_ownership(
+        caller: &signer, obj: Object<OwnerRole>
+    ) acquires OwnerRole {
         accept_ownership(caller, obj);
     }
 
@@ -175,7 +184,9 @@ module aptos_extensions::ownable {
     }
 
     #[test_only]
-    public fun set_pending_owner_for_testing(obj_address: address, pending_owner: address) acquires OwnerRole {
+    public fun set_pending_owner_for_testing(
+        obj_address: address, pending_owner: address
+    ) acquires OwnerRole {
         let role = borrow_global_mut<OwnerRole>(obj_address);
         role.pending_owner = option::some(pending_owner);
     }

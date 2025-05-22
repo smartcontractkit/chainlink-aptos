@@ -26,9 +26,11 @@ spec aptos_extensions::upgradable {
     /// Post condition: The SignerCapStore resource is created properly.
     spec new {
         aborts_if !exists<manageable::AdminRole>(signer::address_of(caller));
-        aborts_if account::get_signer_capability_address(signer_cap) != signer::address_of(caller);
+        aborts_if account::get_signer_capability_address(signer_cap)
+            != signer::address_of(caller);
         aborts_if exists<SignerCapStore>(signer::address_of(caller));
-        ensures global<SignerCapStore>(signer::address_of(caller)).signer_cap == signer_cap;
+        ensures global<SignerCapStore>(signer::address_of(caller)).signer_cap
+            == signer_cap;
     }
 
     /// Abort condition: The AdminRole resource is missing.
@@ -38,7 +40,8 @@ spec aptos_extensions::upgradable {
     spec upgrade_package {
         pragma aborts_if_is_partial;
         aborts_if !exists<manageable::AdminRole>(resource_acct);
-        aborts_if signer::address_of(caller) != global<manageable::AdminRole>(resource_acct).admin;
+        aborts_if signer::address_of(caller)
+            != global<manageable::AdminRole>(resource_acct).admin;
         aborts_if !exists<SignerCapStore>(resource_acct);
     }
 
@@ -49,7 +52,8 @@ spec aptos_extensions::upgradable {
     /// Post condition: The extracted signer_cap is returned.
     spec extract_signer_cap {
         aborts_if !exists<manageable::AdminRole>(resource_acct);
-        aborts_if signer::address_of(caller) != global<manageable::AdminRole>(resource_acct).admin;
+        aborts_if signer::address_of(caller)
+            != global<manageable::AdminRole>(resource_acct).admin;
         aborts_if !exists<SignerCapStore>(resource_acct);
         ensures !exists<SignerCapStore>(resource_acct);
         ensures result == old(global<SignerCapStore>(resource_acct).signer_cap);

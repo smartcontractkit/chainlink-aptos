@@ -74,11 +74,14 @@ module stablecoin::metadata {
     public(friend) fun new(
         stablecoin_obj_constructor_ref: &ConstructorRef, metadata_updater: address
     ) {
-        let stablecoin_obj_signer = &object::generate_signer(stablecoin_obj_constructor_ref);
+        let stablecoin_obj_signer =
+            &object::generate_signer(stablecoin_obj_constructor_ref);
         move_to(
             stablecoin_obj_signer,
             MetadataState {
-                mutate_metadata_ref: fungible_asset::generate_mutate_metadata_ref(stablecoin_obj_constructor_ref),
+                mutate_metadata_ref: fungible_asset::generate_mutate_metadata_ref(
+                    stablecoin_obj_constructor_ref
+                ),
                 metadata_updater
             }
         );
@@ -97,7 +100,13 @@ module stablecoin::metadata {
             signer::address_of(caller) == metadata_state.metadata_updater,
             ENOT_METADATA_UPDATER
         );
-        mutate_asset_metadata(name, symbol, option::none(), icon_uri, project_uri);
+        mutate_asset_metadata(
+            name,
+            symbol,
+            option::none(),
+            icon_uri,
+            project_uri
+        );
     }
 
     /// Mutates the FungibleAsset metadata
@@ -131,7 +140,9 @@ module stablecoin::metadata {
     }
 
     /// Update metadata updater role
-    entry fun update_metadata_updater(caller: &signer, new_metadata_updater: address) acquires MetadataState {
+    entry fun update_metadata_updater(
+        caller: &signer, new_metadata_updater: address
+    ) acquires MetadataState {
         let stablecoin_address = stablecoin_address();
         ownable::assert_is_owner(caller, stablecoin_address);
 
@@ -163,7 +174,8 @@ module stablecoin::metadata {
 
     #[test_only]
     public fun set_metadata_updater_for_testing(metadata_updater: address) acquires MetadataState {
-        borrow_global_mut<MetadataState>(stablecoin_address()).metadata_updater = metadata_updater;
+        borrow_global_mut<MetadataState>(stablecoin_address()).metadata_updater =
+            metadata_updater;
     }
 
     #[test_only]
@@ -200,7 +212,9 @@ module stablecoin::metadata {
     }
 
     #[test_only]
-    public fun test_update_metadata_updater(caller: &signer, new_metadata_updater: address) acquires MetadataState {
+    public fun test_update_metadata_updater(
+        caller: &signer, new_metadata_updater: address
+    ) acquires MetadataState {
         update_metadata_updater(caller, new_metadata_updater);
     }
 

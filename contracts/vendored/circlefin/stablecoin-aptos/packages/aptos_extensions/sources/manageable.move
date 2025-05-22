@@ -101,13 +101,17 @@ module aptos_extensions::manageable {
     }
 
     /// Starts the admin role change by setting the pending admin to the new_admin address.
-    entry fun change_admin(caller: &signer, resource_address: address, new_admin: address) acquires AdminRole {
+    entry fun change_admin(
+        caller: &signer, resource_address: address, new_admin: address
+    ) acquires AdminRole {
         let admin_role = borrow_global_mut<AdminRole>(resource_address);
         assert!(admin_role.admin == signer::address_of(caller), ENOT_ADMIN);
 
         admin_role.pending_admin = option::some(new_admin);
 
-        event::emit(AdminChangeStarted { resource_address, old_admin: admin_role.admin, new_admin });
+        event::emit(
+            AdminChangeStarted { resource_address, old_admin: admin_role.admin, new_admin }
+        );
     }
 
     /// Changes the admin address to the pending admin address.
@@ -129,7 +133,8 @@ module aptos_extensions::manageable {
 
     /// Removes the AdminRole resource from the caller.
     public fun destroy(caller: &signer) acquires AdminRole {
-        let AdminRole { admin: _, pending_admin: _ } = move_from<AdminRole>(signer::address_of(caller));
+        let AdminRole { admin: _, pending_admin: _ } =
+            move_from<AdminRole>(signer::address_of(caller));
 
         event::emit(AdminRoleDestroyed { resource_address: signer::address_of(caller) });
     }
@@ -156,23 +161,31 @@ module aptos_extensions::manageable {
     }
 
     #[test_only]
-    public fun test_change_admin(caller: &signer, resource_address: address, new_admin: address) acquires AdminRole {
+    public fun test_change_admin(
+        caller: &signer, resource_address: address, new_admin: address
+    ) acquires AdminRole {
         change_admin(caller, resource_address, new_admin);
     }
 
     #[test_only]
-    public fun test_accept_admin(caller: &signer, resource_address: address) acquires AdminRole {
+    public fun test_accept_admin(
+        caller: &signer, resource_address: address
+    ) acquires AdminRole {
         accept_admin(caller, resource_address);
     }
 
     #[test_only]
-    public fun set_admin_for_testing(resource_address: address, admin: address) acquires AdminRole {
+    public fun set_admin_for_testing(
+        resource_address: address, admin: address
+    ) acquires AdminRole {
         let role = borrow_global_mut<AdminRole>(resource_address);
         role.admin = admin;
     }
 
     #[test_only]
-    public fun set_pending_admin_for_testing(resource_address: address, pending_admin: address) acquires AdminRole {
+    public fun set_pending_admin_for_testing(
+        resource_address: address, pending_admin: address
+    ) acquires AdminRole {
         let role = borrow_global_mut<AdminRole>(resource_address);
         role.pending_admin = option::some(pending_admin);
     }

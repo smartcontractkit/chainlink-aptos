@@ -129,7 +129,10 @@ module message_transmitter::attester {
     entry fun enable_attester(caller: &signer, new_attester: address) {
         assert_is_attester_manager(caller);
         assert!(new_attester != @0x0, error::invalid_argument(EINVALID_ATTESTER_ADDRESS));
-        assert!(!is_enabled_attester(new_attester), error::already_exists(EATTESTER_ALREADY_ENABLED));
+        assert!(
+            !is_enabled_attester(new_attester),
+            error::already_exists(EATTESTER_ALREADY_ENABLED)
+        );
         state::add_attester(new_attester);
         event::emit(AttesterEnabled { attester: new_attester });
     }
@@ -143,10 +146,16 @@ module message_transmitter::attester {
     entry fun disable_attester(caller: &signer, attester: address) {
         assert_is_attester_manager(caller);
         let enabled_attesters = state::get_enabled_attesters();
-        assert!(vector::length<address>(&enabled_attesters) > 1, error::invalid_state(ETOO_FEW_ENABLED_ATTESTERS));
         assert!(
-            vector::length<address>(&enabled_attesters) > state::get_signature_threshold(),
-            error::invalid_state(ENUM_ATTESTERS_SHOULD_BE_GREATER_THAN_SIGNATURE_THRESHOLD)
+            vector::length<address>(&enabled_attesters) > 1,
+            error::invalid_state(ETOO_FEW_ENABLED_ATTESTERS)
+        );
+        assert!(
+            vector::length<address>(&enabled_attesters)
+                > state::get_signature_threshold(),
+            error::invalid_state(
+                ENUM_ATTESTERS_SHOULD_BE_GREATER_THAN_SIGNATURE_THRESHOLD
+            )
         );
         state::remove_attester(attester);
         event::emit(AttesterDisabled { attester });
@@ -156,12 +165,22 @@ module message_transmitter::attester {
     /// Aborts if:
     /// - the caller is not the owner
     /// - the new attester manager is the same the old one
-    entry fun update_attester_manager(caller: &signer, new_attester_manager: address) {
-        assert!(state::get_owner() == signer::address_of(caller), error::permission_denied(ENOT_OWNER));
+    entry fun update_attester_manager(
+        caller: &signer, new_attester_manager: address
+    ) {
+        assert!(
+            state::get_owner() == signer::address_of(caller),
+            error::permission_denied(ENOT_OWNER)
+        );
         let previous_attester_manager = state::get_attester_manager();
-        assert!(previous_attester_manager != new_attester_manager, error::already_exists(EINVALID_ATTESTER_MANAGER));
+        assert!(
+            previous_attester_manager != new_attester_manager,
+            error::already_exists(EINVALID_ATTESTER_MANAGER)
+        );
         state::set_attester_manager(new_attester_manager);
-        event::emit(AttesterManagerUpdated { previous_attester_manager, new_attester_manager });
+        event::emit(
+            AttesterManagerUpdated { previous_attester_manager, new_attester_manager }
+        );
     }
 
     /// Sets the signature threshold. Emits `SignatureThresholdUpdated` event
@@ -170,9 +189,14 @@ module message_transmitter::attester {
     /// - the signature threshold is not valid (e.g 0)
     /// - the signature threshold is the same as the existing one
     /// - the signature threshold exceeds the number of enabled attesters
-    entry fun set_signature_threshold(caller: &signer, new_signature_threshold: u64) {
+    entry fun set_signature_threshold(
+        caller: &signer, new_signature_threshold: u64
+    ) {
         assert_is_attester_manager(caller);
-        assert!(new_signature_threshold != 0, error::invalid_argument(EINVALID_SIGNATURE_THRESHOLD));
+        assert!(
+            new_signature_threshold != 0,
+            error::invalid_argument(EINVALID_SIGNATURE_THRESHOLD)
+        );
         let old_signature_threshold = state::get_signature_threshold();
         assert!(
             new_signature_threshold != old_signature_threshold,
@@ -183,7 +207,9 @@ module message_transmitter::attester {
             error::invalid_argument(ESIGNATURE_THRESHOLD_TOO_HIGH)
         );
         state::set_signature_threshold(new_signature_threshold);
-        event::emit(SignatureThresholdUpdated { old_signature_threshold, new_signature_threshold });
+        event::emit(
+            SignatureThresholdUpdated { old_signature_threshold, new_signature_threshold }
+        );
     }
 
     /// Validates the attestation for the given message
@@ -192,9 +218,11 @@ module message_transmitter::attester {
     /// - there are duplicate signers
     /// - signer is not one of the enabled attesters
     /// - addresses recovered are not in increasing order
-    public fun verify_attestation_signature(message: &vector<u8>, attestation: &vector<u8>) {
+    public fun verify_attestation_signature(
+        message: &vector<u8>, attestation: &vector<u8>
+    ) {
         // Validate Attestation Size
-        let signature_threshold =  state::get_signature_threshold();
+        let signature_threshold = state::get_signature_threshold();
         assert!(
             vector::length(attestation) == SIGNATURE_LENGTH * signature_threshold,
             error::invalid_argument(EINVALID_ATTESTATION_LENGTH)
@@ -212,16 +240,24 @@ module message_transmitter::attester {
             );
 
             // Enforce low s value signature check to prevent malleability
-            assert!(verify_low_s_value(&signature_with_recovery_id), error::invalid_argument(
-                EINVALID_SIGNATURE_CURVE_ORDER
-            ));
+            assert!(
+                verify_low_s_value(&signature_with_recovery_id),
+                error::invalid_argument(EINVALID_SIGNATURE_CURVE_ORDER)
+            );
 
             // Recover address from signature
-            let recovered_attester_address = recover_attester_address(&signature_with_recovery_id, &message_digest);
+            let recovered_attester_address =
+                recover_attester_address(&signature_with_recovery_id, &message_digest);
 
             // Compare the recovered attester address with existing one to make sure they are in increasing order
-            let result = comparator::compare(&recovered_attester_address, &current_attester_address);
-            assert!(comparator::is_greater_than(&result), error::invalid_argument(EATTESTER_NOT_IN_INCREASING_ORDER));
+            let result =
+                comparator::compare(
+                    &recovered_attester_address, &current_attester_address
+                );
+            assert!(
+                comparator::is_greater_than(&result),
+                error::invalid_argument(EATTESTER_NOT_IN_INCREASING_ORDER)
+            );
 
             // Validate the recovered attester is one of the enabled attesters
             assert!(
@@ -246,10 +282,15 @@ module message_transmitter::attester {
 
     fun assert_is_attester_manager(caller: &signer) {
         let attester_manager = state::get_attester_manager();
-        assert!(attester_manager == signer::address_of(caller), error::permission_denied(ENOT_ATTESTER_MANAGER));
+        assert!(
+            attester_manager == signer::address_of(caller),
+            error::permission_denied(ENOT_ATTESTER_MANAGER)
+        );
     }
 
-    fun recover_attester_address(signature: &vector<u8>, message_digest: &vector<u8>): address {
+    fun recover_attester_address(
+        signature: &vector<u8>, message_digest: &vector<u8>
+    ): address {
         // Retrieve and validate signature id
         let recovery_id = *vector::borrow(signature, SIGNATURE_LENGTH - 1) - 27;
         assert!(
@@ -258,16 +299,24 @@ module message_transmitter::attester {
         );
 
         // Recover public key
-        let ecdsa_signature = secp256k1::ecdsa_signature_from_bytes(
-            vector::slice(signature, 0, SIGNATURE_LENGTH - 1)
+        let ecdsa_signature =
+            secp256k1::ecdsa_signature_from_bytes(
+                vector::slice(signature, 0, SIGNATURE_LENGTH - 1)
+            );
+        let recovered_public_key =
+            secp256k1::ecdsa_recover(*message_digest, recovery_id, &ecdsa_signature);
+        assert!(
+            option::is_some(&recovered_public_key),
+            error::invalid_argument(EINVALID_MESSAGE_OR_SIGNATURE)
         );
-        let recovered_public_key = secp256k1::ecdsa_recover(*message_digest, recovery_id, &ecdsa_signature);
-        assert!(option::is_some(&recovered_public_key), error::invalid_argument(EINVALID_MESSAGE_OR_SIGNATURE));
 
         // Convert public key to address
-        let recovered_attester_address = get_address_from_public_key(
-            &secp256k1::ecdsa_raw_public_key_to_bytes(option::borrow(&recovered_public_key))
-        );
+        let recovered_attester_address =
+            get_address_from_public_key(
+                &secp256k1::ecdsa_raw_public_key_to_bytes(
+                    option::borrow(&recovered_public_key)
+                )
+            );
         recovered_attester_address
     }
 
@@ -276,7 +325,7 @@ module message_transmitter::attester {
     /// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/cryptography/ECDSA.sol#L137
     fun verify_low_s_value(signature: &vector<u8>): bool {
         // Signature is made of r(32 bytes) + s(32 Bytes) + v(1 Byte)
-        let signature_s_value = vector::slice(signature, 32, SIGNATURE_LENGTH-1);
+        let signature_s_value = vector::slice(signature, 32, SIGNATURE_LENGTH - 1);
         let result = comparator::compare(&signature_s_value, &HALF_CURVE_ORDER);
         comparator::is_smaller_than(&result) || comparator::is_equal(&result)
     }
@@ -361,9 +410,11 @@ module message_transmitter::attester {
         assert!(event::was_event_emitted(&attester_enabled_event), 0);
     }
 
-    #[test(owner = @message_transmitter, not_attester_manager =  @0x99)]
+    #[test(owner = @message_transmitter, not_attester_manager = @0x99)]
     #[expected_failure(abort_code = 0x50005, location = Self)]
-    fun test_enable_attester_not_attester_manager(owner: &signer, not_attester_manager: &signer) {
+    fun test_enable_attester_not_attester_manager(
+        owner: &signer, not_attester_manager: &signer
+    ) {
         init_for_test(owner, @0xfac);
         let new_attester = @0xfab;
         enable_attester(not_attester_manager, new_attester);
@@ -400,9 +451,11 @@ module message_transmitter::attester {
         assert!(event::was_event_emitted(&attester_enabled_event), 0);
     }
 
-    #[test(owner = @message_transmitter, not_attester_manager =  @0x99)]
+    #[test(owner = @message_transmitter, not_attester_manager = @0x99)]
     #[expected_failure(abort_code = 0x50005, location = Self)]
-    fun test_disable_attester_not_attester_manager(owner: &signer, not_attester_manager: &signer) {
+    fun test_disable_attester_not_attester_manager(
+        owner: &signer, not_attester_manager: &signer
+    ) {
         init_for_test(owner, @0xfac);
         let new_attester = @0xfab;
         disable_attester(not_attester_manager, new_attester);
@@ -450,7 +503,9 @@ module message_transmitter::attester {
 
     #[test(owner = @message_transmitter, not_owner = @0x99)]
     #[expected_failure(abort_code = 0x50001, location = Self)]
-    fun test_update_attester_manager_not_owner(owner: &signer, not_owner: &signer) {
+    fun test_update_attester_manager_not_owner(
+        owner: &signer, not_owner: &signer
+    ) {
         init_for_test(owner, @0xfac);
         let new_attester_manager = @0xfab;
         update_attester_manager(not_owner, new_attester_manager);
@@ -474,13 +529,18 @@ module message_transmitter::attester {
         let new_signature_threshold = 2;
         set_signature_threshold(owner, new_signature_threshold);
 
-        let attester_enabled_event = SignatureThresholdUpdated { old_signature_threshold, new_signature_threshold };
+        let attester_enabled_event = SignatureThresholdUpdated {
+            old_signature_threshold,
+            new_signature_threshold
+        };
         assert!(event::was_event_emitted(&attester_enabled_event), 0);
     }
 
-    #[test(owner = @message_transmitter, not_attester_manager =  @0x99)]
+    #[test(owner = @message_transmitter, not_attester_manager = @0x99)]
     #[expected_failure(abort_code = 0x50005, location = Self)]
-    fun test_set_signature_threshold_not_attester_manager(owner: &signer, not_attester_manager: &signer) {
+    fun test_set_signature_threshold_not_attester_manager(
+        owner: &signer, not_attester_manager: &signer
+    ) {
         init_for_test(owner, @0xfac);
         set_signature_threshold(not_attester_manager, 2);
     }
@@ -511,16 +571,22 @@ module message_transmitter::attester {
     // https://subnets.avax.network/c-chain/tx/0x1f0eb507b4650881092fbb238065d10ddedaac3bfe7fa456957176aa80e2e15f
 
     #[test(owner = @message_transmitter)]
-    fun test_verify_attestation_signature_single_signature(owner: &signer) {
+    fun test_verify_attestation_signature_single_signature(
+        owner: &signer
+    ) {
         let attester = @0xb0Ea8E1bE37F346C7EA7ec708834D0db18A17361;
         init_for_test(owner, attester);
-        let message = x"000000000000000100000005000000000001c50c0000000000000000000000006b25532e1060ce10cc3b0a99e5683b91bfde6982a65fc943419a5ad590042fd67c9791fd015acf53a54cc823edb8ff81b9ed722e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b97ef9ef8734c71904d8002f8b6bc66dd9c48a6e2b35a76035073ce97cd401aa4781fe579433c2fed59e7bdcc458748a7632277900000000000000000000000000000000000000000000000000000000483b92f90000000000000000000000001cd223dbc9ff35ff6b29dab2339acc842bf58ccb";
-        let attestation = x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d01e3697d85c80a04c5c5299ff8419c255688787c1b6dff50c5cf0621c4b29ffbf1c";
+        let message =
+            x"000000000000000100000005000000000001c50c0000000000000000000000006b25532e1060ce10cc3b0a99e5683b91bfde6982a65fc943419a5ad590042fd67c9791fd015acf53a54cc823edb8ff81b9ed722e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b97ef9ef8734c71904d8002f8b6bc66dd9c48a6e2b35a76035073ce97cd401aa4781fe579433c2fed59e7bdcc458748a7632277900000000000000000000000000000000000000000000000000000000483b92f90000000000000000000000001cd223dbc9ff35ff6b29dab2339acc842bf58ccb";
+        let attestation =
+            x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d01e3697d85c80a04c5c5299ff8419c255688787c1b6dff50c5cf0621c4b29ffbf1c";
         verify_attestation_signature(&message, &attestation);
     }
 
     #[test(owner = @message_transmitter)]
-    fun test_verify_attestation_signature_multiple_signatures(owner: &signer) {
+    fun test_verify_attestation_signature_multiple_signatures(
+        owner: &signer
+    ) {
         let attester_one = @0xb0Ea8E1bE37F346C7EA7ec708834D0db18A17361;
         let attester_two = @0xE2fEfe09E74b921CbbFF229E7cD40009231501CA;
 
@@ -528,24 +594,32 @@ module message_transmitter::attester {
         enable_attester(owner, attester_two);
         set_signature_threshold(owner, 2);
 
-        let message = x"000000000000000100000005000000000001c50c0000000000000000000000006b25532e1060ce10cc3b0a99e5683b91bfde6982a65fc943419a5ad590042fd67c9791fd015acf53a54cc823edb8ff81b9ed722e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b97ef9ef8734c71904d8002f8b6bc66dd9c48a6e2b35a76035073ce97cd401aa4781fe579433c2fed59e7bdcc458748a7632277900000000000000000000000000000000000000000000000000000000483b92f90000000000000000000000001cd223dbc9ff35ff6b29dab2339acc842bf58ccb";
-        let attestation = x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d01e3697d85c80a04c5c5299ff8419c255688787c1b6dff50c5cf0621c4b29ffbf1c742186b73f110593d67ffd1272979dfbccf467d005701392bc41714045f17ecc0c88242eba6a2c230202ebd0c2bb7c1a11358375bc6a035ba377a0cfe1b5a4e21c";
+        let message =
+            x"000000000000000100000005000000000001c50c0000000000000000000000006b25532e1060ce10cc3b0a99e5683b91bfde6982a65fc943419a5ad590042fd67c9791fd015acf53a54cc823edb8ff81b9ed722e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b97ef9ef8734c71904d8002f8b6bc66dd9c48a6e2b35a76035073ce97cd401aa4781fe579433c2fed59e7bdcc458748a7632277900000000000000000000000000000000000000000000000000000000483b92f90000000000000000000000001cd223dbc9ff35ff6b29dab2339acc842bf58ccb";
+        let attestation =
+            x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d01e3697d85c80a04c5c5299ff8419c255688787c1b6dff50c5cf0621c4b29ffbf1c742186b73f110593d67ffd1272979dfbccf467d005701392bc41714045f17ecc0c88242eba6a2c230202ebd0c2bb7c1a11358375bc6a035ba377a0cfe1b5a4e21c";
         verify_attestation_signature(&message, &attestation);
     }
 
     #[test(owner = @message_transmitter)]
     #[expected_failure(abort_code = 0x1000e, location = Self)]
-    fun test_verify_attestation_signature_malleable_signature(owner: &signer) {
+    fun test_verify_attestation_signature_malleable_signature(
+        owner: &signer
+    ) {
         let attester = @0xb0Ea8E1bE37F346C7EA7ec708834D0db18A17361;
         init_for_test(owner, attester);
-        let message = x"000000000000000100000005000000000001c50c0000000000000000000000006b25532e1060ce10cc3b0a99e5683b91bfde6982a65fc943419a5ad590042fd67c9791fd015acf53a54cc823edb8ff81b9ed722e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b97ef9ef8734c71904d8002f8b6bc66dd9c48a6e2b35a76035073ce97cd401aa4781fe579433c2fed59e7bdcc458748a7632277900000000000000000000000000000000000000000000000000000000483b92f90000000000000000000000001cd223dbc9ff35ff6b29dab2339acc842bf58ccb";
-        let attestation = x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d0e1c96827a37f5fb3a3ad66007be63da952275524f868ab2f62e1fc70850c41821b";
+        let message =
+            x"000000000000000100000005000000000001c50c0000000000000000000000006b25532e1060ce10cc3b0a99e5683b91bfde6982a65fc943419a5ad590042fd67c9791fd015acf53a54cc823edb8ff81b9ed722e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b97ef9ef8734c71904d8002f8b6bc66dd9c48a6e2b35a76035073ce97cd401aa4781fe579433c2fed59e7bdcc458748a7632277900000000000000000000000000000000000000000000000000000000483b92f90000000000000000000000001cd223dbc9ff35ff6b29dab2339acc842bf58ccb";
+        let attestation =
+            x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d0e1c96827a37f5fb3a3ad66007be63da952275524f868ab2f62e1fc70850c41821b";
         verify_attestation_signature(&message, &attestation);
     }
 
     #[test(owner = @message_transmitter)]
     #[expected_failure(abort_code = 0x1000a, location = Self)]
-    fun test_verify_attestation_signature_invalid_attestation_length(owner: &signer) {
+    fun test_verify_attestation_signature_invalid_attestation_length(
+        owner: &signer
+    ) {
         let attester = @0xb0Ea8E1bE37F346C7EA7ec708834D0db18A17361;
         init_for_test(owner, attester);
 
@@ -560,24 +634,30 @@ module message_transmitter::attester {
         let attester = @0xb0Ea8E1bE37F346C7EA7ec708834D0db18A17361;
         init_for_test(owner, attester);
         let message = b"hello";
-        let attestation = x"67315456c4b8e5b453174517326d8e1eefbb2d461d343e303dd25106afadfe35586c7375afd81251b0e72c0de112d2b9d9bdb136744c26d0d96d7bd2f84284021c";
+        let attestation =
+            x"67315456c4b8e5b453174517326d8e1eefbb2d461d343e303dd25106afadfe35586c7375afd81251b0e72c0de112d2b9d9bdb136744c26d0d96d7bd2f84284021c";
         verify_attestation_signature(&message, &attestation);
     }
 
     #[test(owner = @message_transmitter)]
     #[expected_failure(abort_code = 0x1000b, location = Self)]
-    fun test_verify_attestation_signature_invalid_signature_recovery_id(owner: &signer) {
+    fun test_verify_attestation_signature_invalid_signature_recovery_id(
+        owner: &signer
+    ) {
         let attester = @0xb0Ea8E1bE37F346C7EA7ec708834D0db18A17361;
         init_for_test(owner, attester);
 
         let message = b"message";
-        let attestation = x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d01e3697d85c80a04c5c5299ff8419c255688787c1b6dff50c5cf0621c4b29ffbfcc";
+        let attestation =
+            x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d01e3697d85c80a04c5c5299ff8419c255688787c1b6dff50c5cf0621c4b29ffbfcc";
         verify_attestation_signature(&message, &attestation);
     }
 
     #[test(owner = @message_transmitter)]
     #[expected_failure(abort_code = 0x10010, location = Self)]
-    fun test_verify_attestation_signature_duplicate_attester(owner: &signer) {
+    fun test_verify_attestation_signature_duplicate_attester(
+        owner: &signer
+    ) {
         let attester_one = @0xb0Ea8E1bE37F346C7EA7ec708834D0db18A17361;
         let attester_two = @0xE2fEfe09E74b921CbbFF229E7cD40009231501CA;
 
@@ -585,14 +665,18 @@ module message_transmitter::attester {
         enable_attester(owner, attester_two);
         set_signature_threshold(owner, 2);
 
-        let message = x"000000000000000100000005000000000001c50c0000000000000000000000006b25532e1060ce10cc3b0a99e5683b91bfde6982a65fc943419a5ad590042fd67c9791fd015acf53a54cc823edb8ff81b9ed722e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b97ef9ef8734c71904d8002f8b6bc66dd9c48a6e2b35a76035073ce97cd401aa4781fe579433c2fed59e7bdcc458748a7632277900000000000000000000000000000000000000000000000000000000483b92f90000000000000000000000001cd223dbc9ff35ff6b29dab2339acc842bf58ccb";
-        let attestation = x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d01e3697d85c80a04c5c5299ff8419c255688787c1b6dff50c5cf0621c4b29ffbf1c9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d01e3697d85c80a04c5c5299ff8419c255688787c1b6dff50c5cf0621c4b29ffbf1c";
+        let message =
+            x"000000000000000100000005000000000001c50c0000000000000000000000006b25532e1060ce10cc3b0a99e5683b91bfde6982a65fc943419a5ad590042fd67c9791fd015acf53a54cc823edb8ff81b9ed722e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b97ef9ef8734c71904d8002f8b6bc66dd9c48a6e2b35a76035073ce97cd401aa4781fe579433c2fed59e7bdcc458748a7632277900000000000000000000000000000000000000000000000000000000483b92f90000000000000000000000001cd223dbc9ff35ff6b29dab2339acc842bf58ccb";
+        let attestation =
+            x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d01e3697d85c80a04c5c5299ff8419c255688787c1b6dff50c5cf0621c4b29ffbf1c9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d01e3697d85c80a04c5c5299ff8419c255688787c1b6dff50c5cf0621c4b29ffbf1c";
         verify_attestation_signature(&message, &attestation);
     }
 
     #[test(owner = @message_transmitter)]
     #[expected_failure(abort_code = 0x10010, location = Self)]
-    fun test_verify_attestation_signature_wrong_signature_order(owner: &signer) {
+    fun test_verify_attestation_signature_wrong_signature_order(
+        owner: &signer
+    ) {
         let attester_one = @0xb0Ea8E1bE37F346C7EA7ec708834D0db18A17361;
         let attester_two = @0xE2fEfe09E74b921CbbFF229E7cD40009231501CA;
 
@@ -600,14 +684,18 @@ module message_transmitter::attester {
         enable_attester(owner, attester_two);
         set_signature_threshold(owner, 2);
 
-        let message = x"000000000000000100000005000000000001c50c0000000000000000000000006b25532e1060ce10cc3b0a99e5683b91bfde6982a65fc943419a5ad590042fd67c9791fd015acf53a54cc823edb8ff81b9ed722e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b97ef9ef8734c71904d8002f8b6bc66dd9c48a6e2b35a76035073ce97cd401aa4781fe579433c2fed59e7bdcc458748a7632277900000000000000000000000000000000000000000000000000000000483b92f90000000000000000000000001cd223dbc9ff35ff6b29dab2339acc842bf58ccb";
-        let attestation = x"742186b73f110593d67ffd1272979dfbccf467d005701392bc41714045f17ecc0c88242eba6a2c230202ebd0c2bb7c1a11358375bc6a035ba377a0cfe1b5a4e21c9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d01e3697d85c80a04c5c5299ff8419c255688787c1b6dff50c5cf0621c4b29ffbf1c";
+        let message =
+            x"000000000000000100000005000000000001c50c0000000000000000000000006b25532e1060ce10cc3b0a99e5683b91bfde6982a65fc943419a5ad590042fd67c9791fd015acf53a54cc823edb8ff81b9ed722e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b97ef9ef8734c71904d8002f8b6bc66dd9c48a6e2b35a76035073ce97cd401aa4781fe579433c2fed59e7bdcc458748a7632277900000000000000000000000000000000000000000000000000000000483b92f90000000000000000000000001cd223dbc9ff35ff6b29dab2339acc842bf58ccb";
+        let attestation =
+            x"742186b73f110593d67ffd1272979dfbccf467d005701392bc41714045f17ecc0c88242eba6a2c230202ebd0c2bb7c1a11358375bc6a035ba377a0cfe1b5a4e21c9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d01e3697d85c80a04c5c5299ff8419c255688787c1b6dff50c5cf0621c4b29ffbf1c";
         verify_attestation_signature(&message, &attestation);
     }
 
     #[test(owner = @message_transmitter)]
     #[expected_failure(abort_code = 0x1000c, location = Self)]
-    fun test_verify_attestation_signature_incorrect_attester(owner: &signer) {
+    fun test_verify_attestation_signature_incorrect_attester(
+        owner: &signer
+    ) {
         let attester_one = @0xb0Ea8E1bE37F346C7EA7ec708834D0db18A17361;
         let attester_two = @0x0a992d191DEeC32aFe36203Ad87D7d289a738F81;
 
@@ -615,8 +703,10 @@ module message_transmitter::attester {
         enable_attester(owner, attester_two);
         set_signature_threshold(owner, 2);
 
-        let message = x"000000000000000100000005000000000001c50c0000000000000000000000006b25532e1060ce10cc3b0a99e5683b91bfde6982a65fc943419a5ad590042fd67c9791fd015acf53a54cc823edb8ff81b9ed722e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b97ef9ef8734c71904d8002f8b6bc66dd9c48a6e2b35a76035073ce97cd401aa4781fe579433c2fed59e7bdcc458748a7632277900000000000000000000000000000000000000000000000000000000483b92f90000000000000000000000001cd223dbc9ff35ff6b29dab2339acc842bf58ccb";
-        let attestation = x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d01e3697d85c80a04c5c5299ff8419c255688787c1b6dff50c5cf0621c4b29ffbf1c742186b73f110593d67ffd1272979dfbccf467d005701392bc41714045f17ecc0c88242eba6a2c230202ebd0c2bb7c1a11358375bc6a035ba377a0cfe1b5a4e21c";
+        let message =
+            x"000000000000000100000005000000000001c50c0000000000000000000000006b25532e1060ce10cc3b0a99e5683b91bfde6982a65fc943419a5ad590042fd67c9791fd015acf53a54cc823edb8ff81b9ed722e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b97ef9ef8734c71904d8002f8b6bc66dd9c48a6e2b35a76035073ce97cd401aa4781fe579433c2fed59e7bdcc458748a7632277900000000000000000000000000000000000000000000000000000000483b92f90000000000000000000000001cd223dbc9ff35ff6b29dab2339acc842bf58ccb";
+        let attestation =
+            x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d01e3697d85c80a04c5c5299ff8419c255688787c1b6dff50c5cf0621c4b29ffbf1c742186b73f110593d67ffd1272979dfbccf467d005701392bc41714045f17ecc0c88242eba6a2c230202ebd0c2bb7c1a11358375bc6a035ba377a0cfe1b5a4e21c";
         verify_attestation_signature(&message, &attestation);
     }
 
@@ -624,19 +714,22 @@ module message_transmitter::attester {
 
     #[test]
     fun test_verify_low_s_value_normal_signature() {
-        let signature_less_than_half = x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d01e3697d85c80a04c5c5299ff8419c255688787c1b6dff50c5cf0621c4b29ffbf";
+        let signature_less_than_half =
+            x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d01e3697d85c80a04c5c5299ff8419c255688787c1b6dff50c5cf0621c4b29ffbf";
         assert!(verify_low_s_value(&signature_less_than_half), 0);
     }
 
     #[test]
     fun test_verify_low_s_value_malleable_greater_signature() {
-        let signature_greater_than_half = x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d0e1c96827a37f5fb3a3ad66007be63da952275524f868ab2f62e1fc70850c4182";
+        let signature_greater_than_half =
+            x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d0e1c96827a37f5fb3a3ad66007be63da952275524f868ab2f62e1fc70850c4182";
         assert!(!verify_low_s_value(&signature_greater_than_half), 0);
     }
 
     #[test]
     fun test_verify_low_s_value_malleable_equal_signature() {
-        let signature_equals_half = x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d07FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0";
+        let signature_equals_half =
+            x"9ca6e57cdbaff834d0faaffa5315a2da29d751ad26616a8a394e4b365f09f2d07FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0";
         assert!(verify_low_s_value(&signature_equals_half), 0);
     }
 

@@ -51,18 +51,29 @@ module token_messenger_minter::token_minter {
     /// - the burn_token isn't supported
     /// - the mint_token isn't supported
     /// - stablecoin mint aborts
-    public(friend) fun mint(source_domain: u32, burn_token: address, mint_recipient: address, amount: u64): address {
+    public(friend) fun mint(
+        source_domain: u32,
+        burn_token: address,
+        mint_recipient: address,
+        amount: u64
+    ): address {
         pausable::assert_not_paused(state::get_object_address());
         let mint_token = token_controller::get_local_token(source_domain, burn_token);
-        assert!(mint_token == stablecoin_address(), error::invalid_argument(EMINT_TOKEN_NOT_SUPPORTED));
+        assert!(
+            mint_token == stablecoin_address(),
+            error::invalid_argument(EMINT_TOKEN_NOT_SUPPORTED)
+        );
         let token_messenger_minter_signer = token_messenger_minter::get_signer();
         let asset = treasury::mint(&token_messenger_minter_signer, amount);
         let token_obj: Object<Metadata> = object::address_to_object(mint_token);
-        let store = if (fungible_asset::store_exists(mint_recipient)) {
-            object::address_to_object<FungibleStore>(mint_recipient)
-        } else {
-            primary_fungible_store::ensure_primary_store_exists(mint_recipient, token_obj)
-        };
+        let store =
+            if (fungible_asset::store_exists(mint_recipient)) {
+                object::address_to_object<FungibleStore>(mint_recipient)
+            } else {
+                primary_fungible_store::ensure_primary_store_exists(
+                    mint_recipient, token_obj
+                )
+            };
         dispatchable_fungible_asset::deposit(store, asset);
         mint_token
     }
@@ -113,7 +124,8 @@ module token_messenger_minter::token_minter {
 
     #[test_only]
     public fun get_account_balance(account_address: address): u64 {
-        let asset: Object<Metadata> = object::address_to_object(stablecoin::stablecoin_address());
+        let asset: Object<Metadata> =
+            object::address_to_object(stablecoin::stablecoin_address());
         primary_fungible_store::ensure_primary_store_exists(account_address, asset);
         primary_fungible_store::balance(account_address, asset)
     }
@@ -126,11 +138,12 @@ module token_messenger_minter::token_minter {
         resource_account::create_resource_account(
             &create_signer_for_test(@deployer),
             TEST_SEED,
-            b"",
+            b""
         );
 
         // compute the resource account address
-        let resource_account_address = account::create_resource_address(&@deployer, TEST_SEED);
+        let resource_account_address =
+            account::create_resource_address(&@deployer, TEST_SEED);
 
         // verify the resource account address is the same as the configured test package address
         assert!(@stablecoin == resource_account_address, 1);
@@ -149,7 +162,7 @@ module token_messenger_minter::token_minter {
             string::utf8(b"name"),
             string::utf8(b"symbol"),
             6,
-            string::utf8( b"icon uri"),
+            string::utf8(b"icon uri"),
             string::utf8(b"project uri")
         );
     }
@@ -157,14 +170,18 @@ module token_messenger_minter::token_minter {
     #[test_only]
     public(friend) fun init_test_token_minter(owner: &signer) {
         // Initialize Token Messenger minter
-        token_messenger_minter::initialize_test_token_messenger_minter(1, signer::address_of(owner));
+        token_messenger_minter::initialize_test_token_messenger_minter(
+            1, signer::address_of(owner)
+        );
 
         // Initialize Stablecoin
         init_test_stablecoin();
 
         // Add Token Messenger Minter object signer as minter
         let tmm_signer = token_messenger_minter::get_signer();
-        treasury::test_configure_controller(owner, signer::address_of(&tmm_signer), signer::address_of(&tmm_signer));
+        treasury::test_configure_controller(
+            owner, signer::address_of(&tmm_signer), signer::address_of(&tmm_signer)
+        );
         treasury::test_configure_minter(&tmm_signer, 10_000_000);
 
         // Link the newly created FA
@@ -184,9 +201,14 @@ module token_messenger_minter::token_minter {
     }
 
     #[test_only]
-    public(friend) fun withdraw_from_primary_store(owner: &signer, amount: u64, burn_token: address): FungibleAsset {
+    public(friend) fun withdraw_from_primary_store(
+        owner: &signer, amount: u64, burn_token: address
+    ): FungibleAsset {
         let token_obj: Object<Metadata> = object::address_to_object(burn_token);
-        let store = primary_fungible_store::ensure_primary_store_exists(signer::address_of(owner), token_obj);
+        let store =
+            primary_fungible_store::ensure_primary_store_exists(
+                signer::address_of(owner), token_obj
+            );
         dispatchable_fungible_asset::withdraw(owner, store, amount)
     }
 
@@ -200,13 +222,21 @@ module token_messenger_minter::token_minter {
         assert!(balance == 0, 0);
 
         // Mint 100 tokens to the user
-        let expected_mint_token = state::get_local_token(REMOTE_DOMAIN, REMOTE_STABLECOIN_ADDRESS);
-        let mint_token = mint(REMOTE_DOMAIN, REMOTE_STABLECOIN_ADDRESS, to_address, 100);
+        let expected_mint_token =
+            state::get_local_token(REMOTE_DOMAIN, REMOTE_STABLECOIN_ADDRESS);
+        let mint_token = mint(
+            REMOTE_DOMAIN,
+            REMOTE_STABLECOIN_ADDRESS,
+            to_address,
+            100
+        );
         assert!(mint_token == expected_mint_token, 0);
         assert!(get_account_balance(to_address) == 100, 0);
 
         // Burn 50 tokens from the user
-        let asset = withdraw_from_primary_store(user, 50, stablecoin::stablecoin_address());
+        let asset = withdraw_from_primary_store(
+            user, 50, stablecoin::stablecoin_address()
+        );
         burn(stablecoin::stablecoin_address(), asset);
         assert!(get_account_balance(signer::address_of(user)) == 50, 0);
     }
@@ -216,21 +246,33 @@ module token_messenger_minter::token_minter {
     fun test_mint_contract_paused(owner: &signer) {
         init_test_token_minter(owner);
         state::set_paused(owner);
-        mint(REMOTE_DOMAIN, REMOTE_STABLECOIN_ADDRESS, @0xfaa, 57834);
+        mint(
+            REMOTE_DOMAIN,
+            REMOTE_STABLECOIN_ADDRESS,
+            @0xfaa,
+            57834
+        );
     }
 
     #[test(owner = @deployer)]
     #[expected_failure(abort_code = 0x60005, location = token_controller)]
     fun test_mint_no_local_token(owner: &signer) {
         init_test_token_minter(owner);
-        mint(REMOTE_DOMAIN + 1, REMOTE_STABLECOIN_ADDRESS, @0xfaa, 57834);
+        mint(
+            REMOTE_DOMAIN + 1,
+            REMOTE_STABLECOIN_ADDRESS,
+            @0xfaa,
+            57834
+        );
     }
 
     #[test(owner = @deployer)]
     #[expected_failure(abort_code = 0x10001, location = Self)]
     fun test_mint_unsupported_mint_token(owner: &signer) {
         init_test_token_minter(owner);
-        token_controller::test_unlink_token_pair(owner, REMOTE_DOMAIN, REMOTE_STABLECOIN_ADDRESS);
+        token_controller::test_unlink_token_pair(
+            owner, REMOTE_DOMAIN, REMOTE_STABLECOIN_ADDRESS
+        );
         token_controller::test_link_token_pair(
             owner,
             @0xfac,
@@ -238,25 +280,39 @@ module token_messenger_minter::token_minter {
             REMOTE_STABLECOIN_ADDRESS
         );
 
-        mint(REMOTE_DOMAIN, REMOTE_STABLECOIN_ADDRESS, @0xfaa, 57834);
+        mint(
+            REMOTE_DOMAIN,
+            REMOTE_STABLECOIN_ADDRESS,
+            @0xfaa,
+            57834
+        );
     }
 
     #[test(owner = @deployer, user = @0xfaa)]
-    fun test_mint_and_burn_secondary_store_success(owner: &signer, user: &signer) {
+    fun test_mint_and_burn_secondary_store_success(
+        owner: &signer, user: &signer
+    ) {
         init_test_token_minter(owner);
         let to_address = signer::address_of(user);
         let balance = get_account_balance(to_address);
         assert!(balance == 0, 0);
 
         // Create secondary store
-        let metadata: Object<Metadata> = object::address_to_object(stablecoin::stablecoin_address());
+        let metadata: Object<Metadata> =
+            object::address_to_object(stablecoin::stablecoin_address());
         let secondary_store = create_test_store(user, metadata);
         let store_address = object::object_address(&secondary_store);
         assert!(fungible_asset::balance(secondary_store) == 0, 0);
 
         // Mint 100 tokens to the user's secondary store
-        let expected_mint_token = state::get_local_token(REMOTE_DOMAIN, REMOTE_STABLECOIN_ADDRESS);
-        let mint_token = mint(REMOTE_DOMAIN, REMOTE_STABLECOIN_ADDRESS, store_address, 100);
+        let expected_mint_token =
+            state::get_local_token(REMOTE_DOMAIN, REMOTE_STABLECOIN_ADDRESS);
+        let mint_token = mint(
+            REMOTE_DOMAIN,
+            REMOTE_STABLECOIN_ADDRESS,
+            store_address,
+            100
+        );
         assert!(mint_token == expected_mint_token, 0);
         assert!(fungible_asset::balance(secondary_store) == 100, 0);
 
@@ -270,9 +326,16 @@ module token_messenger_minter::token_minter {
     #[expected_failure(abort_code = pausable::EPAUSED, location = pausable)]
     fun test_burn_contract_paused(owner: &signer, user: &signer) {
         init_test_token_minter(owner);
-        mint(REMOTE_DOMAIN, REMOTE_STABLECOIN_ADDRESS, signer::address_of(user), 100);
+        mint(
+            REMOTE_DOMAIN,
+            REMOTE_STABLECOIN_ADDRESS,
+            signer::address_of(user),
+            100
+        );
         state::set_paused(owner);
-        let asset = withdraw_from_primary_store(user, 50, stablecoin::stablecoin_address());
+        let asset = withdraw_from_primary_store(
+            user, 50, stablecoin::stablecoin_address()
+        );
         burn(stablecoin::stablecoin_address(), asset);
     }
 
@@ -280,13 +343,22 @@ module token_messenger_minter::token_minter {
     #[expected_failure(abort_code = 0x20003, location = token_controller)]
     fun test_burn_invalid_burn_amount(owner: &signer, user: &signer) {
         init_test_token_minter(owner);
-        mint(REMOTE_DOMAIN, REMOTE_STABLECOIN_ADDRESS, signer::address_of(user), 100);
+        mint(
+            REMOTE_DOMAIN,
+            REMOTE_STABLECOIN_ADDRESS,
+            signer::address_of(user),
+            100
+        );
 
         // Set limit of 10 tokens
-        state::set_max_burn_limit_per_message_for_token(stablecoin::stablecoin_address(), 10);
+        state::set_max_burn_limit_per_message_for_token(
+            stablecoin::stablecoin_address(), 10
+        );
 
         // Try to Burn 50 tokens from the user
-        let asset = withdraw_from_primary_store(user, 50, stablecoin::stablecoin_address());
+        let asset = withdraw_from_primary_store(
+            user, 50, stablecoin::stablecoin_address()
+        );
         burn(stablecoin::stablecoin_address(), asset);
     }
 
@@ -294,10 +366,17 @@ module token_messenger_minter::token_minter {
     #[expected_failure(abort_code = 0x10002, location = token_controller)]
     fun test_burn_invalid_burn_token(owner: &signer, user: &signer) {
         init_test_token_minter(owner);
-        mint(REMOTE_DOMAIN, REMOTE_STABLECOIN_ADDRESS, signer::address_of(user), 100);
+        mint(
+            REMOTE_DOMAIN,
+            REMOTE_STABLECOIN_ADDRESS,
+            signer::address_of(user),
+            100
+        );
 
         // Try to Burn 50 tokens from the user
-        let asset = withdraw_from_primary_store(user, 50, stablecoin::stablecoin_address());
+        let asset = withdraw_from_primary_store(
+            user, 50, stablecoin::stablecoin_address()
+        );
         burn(REMOTE_STABLECOIN_ADDRESS, asset);
     }
 }

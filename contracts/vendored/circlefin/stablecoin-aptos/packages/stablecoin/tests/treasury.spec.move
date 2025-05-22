@@ -31,18 +31,24 @@ spec stablecoin::treasury {
         pragma aborts_if_is_strict;
 
         invariant forall addr: address where exists<TreasuryState>(addr):
-            object::object_address(global<TreasuryState>(addr).mint_ref.metadata) == addr
-                && object::object_address(global<TreasuryState>(addr).burn_ref.metadata) == addr;
+            object::object_address(global<TreasuryState>(addr).mint_ref.metadata)
+                == addr
+                && object::object_address(global<TreasuryState>(addr).burn_ref.metadata)
+                    == addr;
 
-        invariant update forall addr: address where old(exists<TreasuryState>(addr)) && exists<TreasuryState>(addr):
-            global<TreasuryState>(addr).mint_ref == old(global<TreasuryState>(addr).mint_ref)
-                && global<TreasuryState>(addr).burn_ref == old(global<TreasuryState>(addr).burn_ref);
+        invariant update forall addr: address where old(exists<TreasuryState>(addr))
+            && exists<TreasuryState>(addr):
+            global<TreasuryState>(addr).mint_ref
+                == old(global<TreasuryState>(addr).mint_ref)
+                && global<TreasuryState>(addr).burn_ref
+                    == old(global<TreasuryState>(addr).burn_ref);
     }
 
     /// Invariant: The max allowance of a minter does not exceed MAX_U64.
     spec TreasuryState {
-        invariant forall minter: address where smart_table::spec_contains(mint_allowances, minter):
-            smart_table::spec_get(mint_allowances, minter) <= MAX_U64;
+        invariant forall minter: address where smart_table::spec_contains(
+            mint_allowances, minter
+        ): smart_table::spec_get(mint_allowances, minter) <= MAX_U64;
     }
 
     /// Abort condition: The required resources are missing.
@@ -53,7 +59,8 @@ spec stablecoin::treasury {
 
         aborts_if !exists<TreasuryState>(stablecoin_address);
 
-        ensures global<TreasuryState>(stablecoin_address) == old(global<TreasuryState>(stablecoin_address));
+        ensures global<TreasuryState>(stablecoin_address)
+            == old(global<TreasuryState>(stablecoin_address));
         ensures result == global<TreasuryState>(stablecoin_address).master_minter;
     }
 
@@ -66,7 +73,8 @@ spec stablecoin::treasury {
 
         aborts_if !exists<TreasuryState>(stablecoin_address);
 
-        ensures global<TreasuryState>(stablecoin_address) == old(global<TreasuryState>(stablecoin_address));
+        ensures global<TreasuryState>(stablecoin_address)
+            == old(global<TreasuryState>(stablecoin_address));
 
         let is_controller = smart_table::spec_contains(
             global<TreasuryState>(stablecoin_address).controllers, controller
@@ -74,7 +82,10 @@ spec stablecoin::treasury {
         ensures is_controller ==>
             result
                 == option::spec_some(
-                    smart_table::spec_get(global<TreasuryState>(stablecoin_address).controllers, controller)
+                    smart_table::spec_get(
+                        global<TreasuryState>(stablecoin_address).controllers,
+                        controller
+                    )
                 );
         ensures !is_controller ==>
             result == option::spec_none();
@@ -88,9 +99,12 @@ spec stablecoin::treasury {
 
         aborts_if !exists<TreasuryState>(stablecoin_address);
 
-        ensures global<TreasuryState>(stablecoin_address) == old(global<TreasuryState>(stablecoin_address));
+        ensures global<TreasuryState>(stablecoin_address)
+            == old(global<TreasuryState>(stablecoin_address));
         ensures result
-            == smart_table::spec_contains(global<TreasuryState>(stablecoin_address).mint_allowances, minter);
+            == smart_table::spec_contains(
+                global<TreasuryState>(stablecoin_address).mint_allowances, minter
+            );
     }
 
     /// Abort condition: The required resources are missing.
@@ -102,11 +116,17 @@ spec stablecoin::treasury {
 
         aborts_if !exists<TreasuryState>(stablecoin_address);
 
-        ensures global<TreasuryState>(stablecoin_address) == old(global<TreasuryState>(stablecoin_address));
+        ensures global<TreasuryState>(stablecoin_address)
+            == old(global<TreasuryState>(stablecoin_address));
 
-        let is_minter = smart_table::spec_contains(global<TreasuryState>(stablecoin_address).mint_allowances, minter);
+        let is_minter = smart_table::spec_contains(
+            global<TreasuryState>(stablecoin_address).mint_allowances, minter
+        );
         ensures is_minter ==>
-            result == smart_table::spec_get(global<TreasuryState>(stablecoin_address).mint_allowances, minter);
+            result
+                == smart_table::spec_get(
+                    global<TreasuryState>(stablecoin_address).mint_allowances, minter
+                );
         ensures !is_minter ==> result == 0;
     }
 
@@ -114,7 +134,9 @@ spec stablecoin::treasury {
     /// Abort condition: A TreasuryState resource already exist at the address.
     /// Post condition: A TreasuryState resource is created at the address.
     spec new {
-        let address_to_instantiate = object::address_from_constructor_ref(stablecoin_obj_constructor_ref);
+        let address_to_instantiate = object::address_from_constructor_ref(
+            stablecoin_obj_constructor_ref
+        );
 
         aborts_if !exists<ObjectCore>(address_to_instantiate);
         aborts_if !object::spec_exists_at<fungible_asset::Metadata>(address_to_instantiate);
@@ -138,15 +160,33 @@ spec stablecoin::treasury {
 
         aborts_if caller != global<TreasuryState>(stablecoin_address).master_minter;
 
-        ensures !old(smart_table::spec_contains(global<TreasuryState>(stablecoin_address).controllers, controller)) ==>
+        ensures !old(
+            smart_table::spec_contains(
+                global<TreasuryState>(stablecoin_address).controllers, controller
+            )
+        ) ==>
             smart_table::spec_len(global<TreasuryState>(stablecoin_address).controllers)
-                == old(smart_table::spec_len(global<TreasuryState>(stablecoin_address).controllers)) + 1;
+                == old(
+                    smart_table::spec_len(
+                        global<TreasuryState>(stablecoin_address).controllers
+                    )
+                ) + 1;
 
-        ensures old(smart_table::spec_contains(global<TreasuryState>(stablecoin_address).controllers, controller)) ==>
+        ensures old(
+            smart_table::spec_contains(
+                global<TreasuryState>(stablecoin_address).controllers, controller
+            )
+        ) ==>
             smart_table::spec_len(global<TreasuryState>(stablecoin_address).controllers)
-                == old(smart_table::spec_len(global<TreasuryState>(stablecoin_address).controllers));
+                == old(
+                    smart_table::spec_len(
+                        global<TreasuryState>(stablecoin_address).controllers
+                    )
+                );
 
-        ensures smart_table::spec_get(global<TreasuryState>(stablecoin_address).controllers, controller) == minter;
+        ensures smart_table::spec_get(
+            global<TreasuryState>(stablecoin_address).controllers, controller
+        ) == minter;
 
         ensures global<TreasuryState>(stablecoin_address).master_minter
             == old(global<TreasuryState>(stablecoin_address)).master_minter;
@@ -168,12 +208,18 @@ spec stablecoin::treasury {
 
         aborts_if caller != global<TreasuryState>(stablecoin_address).master_minter;
 
-        aborts_if !smart_table::spec_contains(global<TreasuryState>(stablecoin_address).controllers, controller);
+        aborts_if !smart_table::spec_contains(
+            global<TreasuryState>(stablecoin_address).controllers, controller
+        );
 
-        ensures old(smart_table::spec_len(global<TreasuryState>(stablecoin_address).controllers))
-            - smart_table::spec_len(global<TreasuryState>(stablecoin_address).controllers) == 1;
+        ensures old(
+            smart_table::spec_len(global<TreasuryState>(stablecoin_address).controllers)
+        ) - smart_table::spec_len(global<TreasuryState>(stablecoin_address).controllers)
+            == 1;
 
-        ensures !smart_table::spec_contains(global<TreasuryState>(stablecoin_address).controllers, controller);
+        ensures !smart_table::spec_contains(
+            global<TreasuryState>(stablecoin_address).controllers, controller
+        );
 
         ensures global<TreasuryState>(stablecoin_address).master_minter
             == old(global<TreasuryState>(stablecoin_address)).master_minter;
@@ -191,25 +237,50 @@ spec stablecoin::treasury {
     spec configure_minter {
         let stablecoin_address = stablecoin::stablecoin_utils::spec_stablecoin_address();
         let caller = signer::address_of(caller);
-        let minter = smart_table::spec_get(global<TreasuryState>(stablecoin_address).controllers, caller);
+        let minter = smart_table::spec_get(
+            global<TreasuryState>(stablecoin_address).controllers, caller
+        );
 
         aborts_if !exists<ObjectCore>(stablecoin_address);
-        aborts_if !exists<PauseState>(stablecoin_address) || !object::spec_exists_at<PauseState>(stablecoin_address);
+        aborts_if !exists<PauseState>(stablecoin_address)
+            || !object::spec_exists_at<PauseState>(stablecoin_address);
         aborts_if !exists<TreasuryState>(stablecoin_address);
 
-        aborts_if !smart_table::spec_contains(global<TreasuryState>(stablecoin_address).controllers, caller);
+        aborts_if !smart_table::spec_contains(
+            global<TreasuryState>(stablecoin_address).controllers, caller
+        );
 
         aborts_if global<PauseState>(stablecoin_address).paused;
 
-        ensures !old(smart_table::spec_contains(global<TreasuryState>(stablecoin_address).mint_allowances, minter)) ==>
-            smart_table::spec_len(global<TreasuryState>(stablecoin_address).mint_allowances)
-                == old(smart_table::spec_len(global<TreasuryState>(stablecoin_address).mint_allowances)) + 1;
+        ensures !old(
+            smart_table::spec_contains(
+                global<TreasuryState>(stablecoin_address).mint_allowances, minter
+            )
+        ) ==>
+            smart_table::spec_len(
+                global<TreasuryState>(stablecoin_address).mint_allowances
+            ) == old(
+                smart_table::spec_len(
+                    global<TreasuryState>(stablecoin_address).mint_allowances
+                )
+            ) + 1;
 
-        ensures old(smart_table::spec_contains(global<TreasuryState>(stablecoin_address).mint_allowances, minter)) ==>
-            smart_table::spec_len(global<TreasuryState>(stablecoin_address).mint_allowances)
-                == old(smart_table::spec_len(global<TreasuryState>(stablecoin_address).mint_allowances));
+        ensures old(
+            smart_table::spec_contains(
+                global<TreasuryState>(stablecoin_address).mint_allowances, minter
+            )
+        ) ==>
+            smart_table::spec_len(
+                global<TreasuryState>(stablecoin_address).mint_allowances
+            ) == old(
+                smart_table::spec_len(
+                    global<TreasuryState>(stablecoin_address).mint_allowances
+                )
+            );
 
-        ensures smart_table::spec_get(global<TreasuryState>(stablecoin_address).mint_allowances, minter) == allowance;
+        ensures smart_table::spec_get(
+            global<TreasuryState>(stablecoin_address).mint_allowances, minter
+        ) == allowance;
 
         ensures global<TreasuryState>(stablecoin_address).master_minter
             == old(global<TreasuryState>(stablecoin_address)).master_minter;
@@ -229,29 +300,46 @@ spec stablecoin::treasury {
     spec increment_minter_allowance {
         let stablecoin_address = stablecoin::stablecoin_utils::spec_stablecoin_address();
         let caller = signer::address_of(caller);
-        let minter = smart_table::spec_get(global<TreasuryState>(stablecoin_address).controllers, caller);
+        let minter = smart_table::spec_get(
+            global<TreasuryState>(stablecoin_address).controllers, caller
+        );
 
         aborts_if !exists<ObjectCore>(stablecoin_address);
-        aborts_if !exists<PauseState>(stablecoin_address) || !object::spec_exists_at<PauseState>(stablecoin_address);
+        aborts_if !exists<PauseState>(stablecoin_address)
+            || !object::spec_exists_at<PauseState>(stablecoin_address);
         aborts_if !exists<TreasuryState>(stablecoin_address);
 
         aborts_if allowance_increment == 0;
 
-        aborts_if !smart_table::spec_contains(global<TreasuryState>(stablecoin_address).controllers, caller);
+        aborts_if !smart_table::spec_contains(
+            global<TreasuryState>(stablecoin_address).controllers, caller
+        );
 
-        aborts_if !smart_table::spec_contains(global<TreasuryState>(stablecoin_address).mint_allowances, minter);
+        aborts_if !smart_table::spec_contains(
+            global<TreasuryState>(stablecoin_address).mint_allowances, minter
+        );
 
-        aborts_if smart_table::spec_get(global<TreasuryState>(stablecoin_address).mint_allowances, minter)
-            + allowance_increment > MAX_U64;
+        aborts_if smart_table::spec_get(
+            global<TreasuryState>(stablecoin_address).mint_allowances, minter
+        ) + allowance_increment > MAX_U64;
 
         aborts_if global<PauseState>(stablecoin_address).paused;
 
-        ensures smart_table::spec_len(global<TreasuryState>(stablecoin_address).mint_allowances)
-            == old(smart_table::spec_len(global<TreasuryState>(stablecoin_address).mint_allowances));
+        ensures smart_table::spec_len(
+            global<TreasuryState>(stablecoin_address).mint_allowances
+        ) == old(
+            smart_table::spec_len(
+                global<TreasuryState>(stablecoin_address).mint_allowances
+            )
+        );
 
-        ensures smart_table::spec_get(global<TreasuryState>(stablecoin_address).mint_allowances, minter)
-            == old(smart_table::spec_get(global<TreasuryState>(stablecoin_address).mint_allowances, minter))
-                + allowance_increment;
+        ensures smart_table::spec_get(
+            global<TreasuryState>(stablecoin_address).mint_allowances, minter
+        ) == old(
+            smart_table::spec_get(
+                global<TreasuryState>(stablecoin_address).mint_allowances, minter
+            )
+        ) + allowance_increment;
 
         ensures global<TreasuryState>(stablecoin_address).master_minter
             == old(global<TreasuryState>(stablecoin_address)).master_minter;
@@ -268,18 +356,31 @@ spec stablecoin::treasury {
     spec remove_minter {
         let stablecoin_address = stablecoin::stablecoin_utils::spec_stablecoin_address();
         let caller = signer::address_of(caller);
-        let minter = smart_table::spec_get(global<TreasuryState>(stablecoin_address).controllers, caller);
+        let minter = smart_table::spec_get(
+            global<TreasuryState>(stablecoin_address).controllers, caller
+        );
 
         aborts_if !exists<TreasuryState>(stablecoin_address);
 
-        aborts_if !smart_table::spec_contains(global<TreasuryState>(stablecoin_address).controllers, caller);
+        aborts_if !smart_table::spec_contains(
+            global<TreasuryState>(stablecoin_address).controllers, caller
+        );
 
-        aborts_if !smart_table::spec_contains(global<TreasuryState>(stablecoin_address).mint_allowances, minter);
+        aborts_if !smart_table::spec_contains(
+            global<TreasuryState>(stablecoin_address).mint_allowances, minter
+        );
 
-        ensures old(smart_table::spec_len(global<TreasuryState>(stablecoin_address).mint_allowances))
-            - smart_table::spec_len(global<TreasuryState>(stablecoin_address).mint_allowances) == 1;
+        ensures old(
+            smart_table::spec_len(
+                global<TreasuryState>(stablecoin_address).mint_allowances
+            )
+        ) - smart_table::spec_len(
+            global<TreasuryState>(stablecoin_address).mint_allowances
+        ) == 1;
 
-        ensures !smart_table::spec_contains(global<TreasuryState>(stablecoin_address).mint_allowances, minter);
+        ensures !smart_table::spec_contains(
+            global<TreasuryState>(stablecoin_address).mint_allowances, minter
+        );
 
         ensures global<TreasuryState>(stablecoin_address).master_minter
             == old(global<TreasuryState>(stablecoin_address)).master_minter;
@@ -309,20 +410,28 @@ spec stablecoin::treasury {
         let minter = signer::address_of(caller);
 
         aborts_if !exists<ObjectCore>(stablecoin_address);
-        aborts_if !exists<PauseState>(stablecoin_address) || !object::spec_exists_at<PauseState>(stablecoin_address);
+        aborts_if !exists<PauseState>(stablecoin_address)
+            || !object::spec_exists_at<PauseState>(stablecoin_address);
         aborts_if !exists<BlocklistState>(stablecoin_address);
         aborts_if !exists<TreasuryState>(stablecoin_address);
-        aborts_if !exists<ConcurrentSupply>(stablecoin_address) && !exists<Supply>(stablecoin_address);
+        aborts_if !exists<ConcurrentSupply>(stablecoin_address)
+            && !exists<Supply>(stablecoin_address);
 
         aborts_if global<PauseState>(stablecoin_address).paused;
 
-        aborts_if !smart_table::spec_contains(global<TreasuryState>(stablecoin_address).mint_allowances, minter);
+        aborts_if !smart_table::spec_contains(
+            global<TreasuryState>(stablecoin_address).mint_allowances, minter
+        );
 
-        aborts_if table_with_length::spec_contains(global<BlocklistState>(stablecoin_address).blocklist, minter);
+        aborts_if table_with_length::spec_contains(
+            global<BlocklistState>(stablecoin_address).blocklist, minter
+        );
 
         aborts_if amount <= 0;
-        aborts_if amount > smart_table::spec_get(global<TreasuryState>(stablecoin_address).mint_allowances, minter)
-            || amount > MAX_U64;
+        aborts_if amount
+            > smart_table::spec_get(
+                global<TreasuryState>(stablecoin_address).mint_allowances, minter
+            ) || amount > MAX_U64;
 
         // This abort condition cannot be specified due to technical limitations, but
         // supply overflows have been generally unit tested.
@@ -341,23 +450,39 @@ spec stablecoin::treasury {
 
         ensures result
             == FungibleAsset {
-                metadata: object::address_to_object<fungible_asset::Metadata>(stablecoin_address),
+                metadata: object::address_to_object<fungible_asset::Metadata>(
+                    stablecoin_address
+                ),
                 amount
             };
 
         // This does not work, but supply updates have been generally unit tested.
         // ensures exists<ConcurrentSupply>(stablecoin_address) ==> aggregator_v2::read(global<ConcurrentSupply>(stablecoin_address).current)
         //     == old(aggregator_v2::read(global<ConcurrentSupply>(stablecoin_address).current)) + amount;
-        ensures !exists<ConcurrentSupply>(stablecoin_address) && exists<Supply>(stablecoin_address) ==>
-            global<Supply>(stablecoin_address).current == old(global<Supply>(stablecoin_address).current) + amount;
+        ensures !exists<ConcurrentSupply>(stablecoin_address)
+            && exists<Supply>(stablecoin_address) ==>
+            global<Supply>(stablecoin_address).current
+                == old(global<Supply>(stablecoin_address).current) + amount;
 
-        ensures old(smart_table::spec_get(global<TreasuryState>(stablecoin_address).mint_allowances, minter))
-            - smart_table::spec_get(global<TreasuryState>(stablecoin_address).mint_allowances, minter) == amount;
+        ensures old(
+            smart_table::spec_get(
+                global<TreasuryState>(stablecoin_address).mint_allowances, minter
+            )
+        ) - smart_table::spec_get(
+            global<TreasuryState>(stablecoin_address).mint_allowances, minter
+        ) == amount;
 
         ensures forall addr: address where addr != minter
-            && smart_table::spec_contains(global<TreasuryState>(stablecoin_address).mint_allowances, addr):
-            old(smart_table::spec_get(global<TreasuryState>(stablecoin_address).mint_allowances, addr))
-                == smart_table::spec_get(global<TreasuryState>(stablecoin_address).mint_allowances, addr);
+            && smart_table::spec_contains(
+                global<TreasuryState>(stablecoin_address).mint_allowances, addr
+            ):
+            old(
+                smart_table::spec_get(
+                    global<TreasuryState>(stablecoin_address).mint_allowances, addr
+                )
+            ) == smart_table::spec_get(
+                global<TreasuryState>(stablecoin_address).mint_allowances, addr
+            );
 
         ensures global<TreasuryState>(stablecoin_address).master_minter
             == old(global<TreasuryState>(stablecoin_address)).master_minter;
@@ -385,16 +510,22 @@ spec stablecoin::treasury {
         let amount = fungible_asset::amount(asset);
 
         aborts_if !exists<ObjectCore>(stablecoin_address);
-        aborts_if !exists<PauseState>(stablecoin_address) || !object::spec_exists_at<PauseState>(stablecoin_address);
+        aborts_if !exists<PauseState>(stablecoin_address)
+            || !object::spec_exists_at<PauseState>(stablecoin_address);
         aborts_if !exists<BlocklistState>(stablecoin_address);
         aborts_if !exists<TreasuryState>(stablecoin_address);
-        aborts_if !exists<ConcurrentSupply>(stablecoin_address) && !exists<Supply>(stablecoin_address);
+        aborts_if !exists<ConcurrentSupply>(stablecoin_address)
+            && !exists<Supply>(stablecoin_address);
 
         aborts_if global<PauseState>(stablecoin_address).paused;
 
-        aborts_if !smart_table::spec_contains(global<TreasuryState>(stablecoin_address).mint_allowances, burner);
+        aborts_if !smart_table::spec_contains(
+            global<TreasuryState>(stablecoin_address).mint_allowances, burner
+        );
 
-        aborts_if table_with_length::spec_contains(global<BlocklistState>(stablecoin_address).blocklist, burner);
+        aborts_if table_with_length::spec_contains(
+            global<BlocklistState>(stablecoin_address).blocklist, burner
+        );
 
         aborts_if amount <= 0;
         aborts_if !exists<ConcurrentSupply>(stablecoin_address)
@@ -405,16 +536,20 @@ spec stablecoin::treasury {
         // supply underflows have been generally unit tested.
         // aborts_if exists<ConcurrentSupply>(stablecoin_address) && aggregator_v2::try_sub() == false;
 
-        aborts_if fungible_asset::burn_ref_metadata(global<TreasuryState>(stablecoin_address).burn_ref)
-            != fungible_asset::metadata_from_asset(asset);
+        aborts_if fungible_asset::burn_ref_metadata(
+            global<TreasuryState>(stablecoin_address).burn_ref
+        ) != fungible_asset::metadata_from_asset(asset);
 
-        ensures global<TreasuryState>(stablecoin_address) == old(global<TreasuryState>(stablecoin_address));
+        ensures global<TreasuryState>(stablecoin_address)
+            == old(global<TreasuryState>(stablecoin_address));
 
         // This does not work, but supply updates have been generally unit tested.
         // ensures exists<ConcurrentSupply>(stablecoin_address) ==> aggregator_v2::read(global<ConcurrentSupply>(stablecoin_address).current)
         //     == old(aggregator_v2::read(global<ConcurrentSupply>(stablecoin_address).current)) - amount;
-        ensures !exists<ConcurrentSupply>(stablecoin_address) && exists<Supply>(stablecoin_address) ==>
-            global<Supply>(stablecoin_address).current == old(global<Supply>(stablecoin_address).current) - amount;
+        ensures !exists<ConcurrentSupply>(stablecoin_address)
+            && exists<Supply>(stablecoin_address) ==>
+            global<Supply>(stablecoin_address).current
+                == old(global<Supply>(stablecoin_address).current) - amount;
     }
 
     /// Abort condition: The required resources are missing.
@@ -426,12 +561,14 @@ spec stablecoin::treasury {
         let caller = signer::address_of(caller);
 
         aborts_if !exists<ObjectCore>(stablecoin_address);
-        aborts_if !exists<OwnerRole>(stablecoin_address) || !object::spec_exists_at<OwnerRole>(stablecoin_address);
+        aborts_if !exists<OwnerRole>(stablecoin_address)
+            || !object::spec_exists_at<OwnerRole>(stablecoin_address);
         aborts_if !exists<TreasuryState>(stablecoin_address);
 
         aborts_if caller != global<OwnerRole>(stablecoin_address).owner;
 
-        ensures global<TreasuryState>(stablecoin_address).master_minter == new_master_minter;
+        ensures global<TreasuryState>(stablecoin_address).master_minter
+            == new_master_minter;
 
         ensures global<TreasuryState>(stablecoin_address).controllers
             == old(global<TreasuryState>(stablecoin_address)).controllers;

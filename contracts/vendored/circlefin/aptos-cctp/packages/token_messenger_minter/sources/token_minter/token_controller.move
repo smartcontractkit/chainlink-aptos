@@ -15,7 +15,6 @@
 /// See the License for the specific language governing permissions and
 /// limitations under the License.
 
-
 module token_messenger_minter::token_controller {
     // Built-in Modules
     use std::error;
@@ -58,12 +57,12 @@ module token_messenger_minter::token_controller {
     #[event]
     struct SetBurnLimitPerMessage has drop, store {
         token: address,
-        burn_limit_per_message: u64,
+        burn_limit_per_message: u64
     }
 
     #[event]
     struct SetTokenController has drop, store {
-        token_controller: address,
+        token_controller: address
     }
 
     // -----------------------------
@@ -92,7 +91,9 @@ module token_messenger_minter::token_controller {
     /// Sets the token controller address. Emits `SetTokenController` event
     /// Aborts if:
     /// - the caller is not the owner
-    public(friend) entry fun set_token_controller(caller: &signer, new_token_controller: address) {
+    public(friend) entry fun set_token_controller(
+        caller: &signer, new_token_controller: address
+    ) {
         ownable::assert_is_owner(caller, state::get_object_address());
         state::set_token_controller(new_token_controller);
         event::emit(SetTokenController { token_controller: new_token_controller });
@@ -101,7 +102,9 @@ module token_messenger_minter::token_controller {
     /// Sets the maximum amount allowed to be burned per message/tx. Emits `SetBurnLimitPerMessage` event
     /// Aborts if:
     /// - the caller is not the token controller
-    entry fun set_max_burn_amount_per_message(caller: &signer, token: address, burn_limit_per_message: u64) {
+    entry fun set_max_burn_amount_per_message(
+        caller: &signer, token: address, burn_limit_per_message: u64
+    ) {
         assert_is_token_controller(caller);
         state::set_max_burn_limit_per_message_for_token(token, burn_limit_per_message);
         event::emit(SetBurnLimitPerMessage { token, burn_limit_per_message })
@@ -112,41 +115,54 @@ module token_messenger_minter::token_controller {
     /// Aborts if:
     /// - the caller is not the token controller
     /// - remote token is already linked to a local token
-    entry fun link_token_pair(caller: &signer, local_token: address, remote_domain: u32, remote_token: address) {
+    entry fun link_token_pair(
+        caller: &signer,
+        local_token: address,
+        remote_domain: u32,
+        remote_token: address
+    ) {
         assert_is_token_controller(caller);
         assert!(
             !state::local_token_exists(remote_domain, remote_token),
             error::already_exists(EREMOTE_DOMAIN_AND_TOKEN_ALREADY_LINKED)
         );
         state::add_local_token_for_remote_token(remote_domain, remote_token, local_token);
-        event::emit(TokenPairLinked { local_token, remote_domain, remote_token } );
+        event::emit(TokenPairLinked { local_token, remote_domain, remote_token });
     }
 
     /// Unlinks remote token and local token pair. Emits `TokenPairUnlinked` event
     /// Aborts if:
     /// - the caller is not the token controller
     /// - no link exists for the given remote token and domain
-    entry fun unlink_token_pair(caller: &signer, remote_domain: u32, remote_token: address) {
+    entry fun unlink_token_pair(
+        caller: &signer, remote_domain: u32, remote_token: address
+    ) {
         assert_is_token_controller(caller);
         assert!(
             state::local_token_exists(remote_domain, remote_token),
             error::not_found(ENO_LINK_EXIST_FOR_REMOTE_DOMAIN_AND_TOKEN)
         );
-        let local_token = state::remove_local_token_for_remote_token(remote_domain, remote_token);
-        event::emit(TokenPairUnlinked { local_token, remote_domain, remote_token } );
+        let local_token =
+            state::remove_local_token_for_remote_token(remote_domain, remote_token);
+        event::emit(TokenPairUnlinked { local_token, remote_domain, remote_token });
     }
 
     // -----------------------------
     // ----- Friend Functions ------
     // -----------------------------
 
-    public(friend) fun assert_amount_within_burn_limit(token: address, amount: u64) {
-        let (token_exists, limit) = state::get_max_burn_limit_per_message_for_token(token);
+    public(friend) fun assert_amount_within_burn_limit(
+        token: address, amount: u64
+    ) {
+        let (token_exists, limit) =
+            state::get_max_burn_limit_per_message_for_token(token);
         assert!(token_exists, error::invalid_argument(EBURN_TOKEN_NOT_SUPPORTED));
         assert!(amount <= limit, error::out_of_range(EAMOUNT_EXCEEDS_BURN_LIMIT))
     }
 
-    public(friend) fun get_local_token(remote_domain: u32, remote_token: address): address {
+    public(friend) fun get_local_token(
+        remote_domain: u32, remote_token: address
+    ): address {
         assert!(
             state::local_token_exists(remote_domain, remote_token),
             error::not_found(ENO_LINK_EXIST_FOR_REMOTE_DOMAIN_AND_TOKEN)
@@ -159,7 +175,10 @@ module token_messenger_minter::token_controller {
     // -----------------------------
 
     fun assert_is_token_controller(caller: &signer) {
-        assert!(token_controller() == signer::address_of(caller), error::permission_denied(ENOT_TOKEN_CONTROLLER));
+        assert!(
+            token_controller() == signer::address_of(caller),
+            error::permission_denied(ENOT_TOKEN_CONTROLLER)
+        );
     }
 
     // -----------------------------
@@ -169,7 +188,8 @@ module token_messenger_minter::token_controller {
     #[test_only]
     use aptos_framework::account::create_signer_for_test;
 
-    #[test_only] const TOKEN_CONTROLLER: address = @0x8e72;
+    #[test_only]
+    const TOKEN_CONTROLLER: address = @0x8e72;
 
     #[test_only]
     public fun init_test_token_controller(owner: &signer) {
@@ -178,17 +198,31 @@ module token_messenger_minter::token_controller {
     }
 
     #[test_only]
-    public fun test_link_token_pair(caller: &signer, local_token: address, remote_domain: u32, remote_token: address) {
-        link_token_pair(caller, local_token, remote_domain, remote_token);
+    public fun test_link_token_pair(
+        caller: &signer,
+        local_token: address,
+        remote_domain: u32,
+        remote_token: address
+    ) {
+        link_token_pair(
+            caller,
+            local_token,
+            remote_domain,
+            remote_token
+        );
     }
 
     #[test_only]
-    public fun test_unlink_token_pair(caller: &signer, remote_domain: u32, remote_token: address) {
+    public fun test_unlink_token_pair(
+        caller: &signer, remote_domain: u32, remote_token: address
+    ) {
         unlink_token_pair(caller, remote_domain, remote_token);
     }
 
     #[test_only]
-    public fun test_set_max_burn_amount_per_message(caller: &signer, token: address, burn_limit_per_message: u64) {
+    public fun test_set_max_burn_amount_per_message(
+        caller: &signer, token: address, burn_limit_per_message: u64
+    ) {
         set_max_burn_amount_per_message(caller, token, burn_limit_per_message)
     }
 
@@ -223,14 +257,18 @@ module token_messenger_minter::token_controller {
 
     #[test(owner = @deployer)]
     #[expected_failure(abort_code = 0x10002, location = Self)]
-    fun test_assert_amount_within_burn_limit_token_not_supported(owner: &signer) {
+    fun test_assert_amount_within_burn_limit_token_not_supported(
+        owner: &signer
+    ) {
         init_test_token_controller(owner);
         assert_amount_within_burn_limit(@0xfac, 8);
     }
 
     #[test(owner = @deployer)]
     #[expected_failure(abort_code = 0x20003, location = Self)]
-    fun test_assert_amount_within_burn_limit_amount_exceeds_limit(owner: &signer) {
+    fun test_assert_amount_within_burn_limit_amount_exceeds_limit(
+        owner: &signer
+    ) {
         init_test_token_controller(owner);
         let token = @0xfac;
         state::set_max_burn_limit_per_message_for_token(token, 10);
@@ -239,14 +277,16 @@ module token_messenger_minter::token_controller {
 
     // Test Is Token Controller
 
-    #[test(owner = @deployer, token_controller = @0xfac )]
-    fun test_is_token_controller_success(owner: &signer, token_controller: &signer) {
+    #[test(owner = @deployer, token_controller = @0xfac)]
+    fun test_is_token_controller_success(
+        owner: &signer, token_controller: &signer
+    ) {
         init_test_token_controller(owner);
         set_token_controller(owner, signer::address_of(token_controller));
         assert_is_token_controller(token_controller);
     }
 
-    #[test(owner = @deployer )]
+    #[test(owner = @deployer)]
     #[expected_failure(abort_code = 0x50001, location = Self)]
     fun test_is_token_controller_permission_denied(owner: &signer) {
         init_test_token_controller(owner);
@@ -256,7 +296,9 @@ module token_messenger_minter::token_controller {
     // Test Set Max Burn Amount Per Message
 
     #[test(owner = @deployer, token_controller = @0x8e72)]
-    fun test_set_max_burn_amount_per_message_success(owner: &signer, token_controller: &signer) {
+    fun test_set_max_burn_amount_per_message_success(
+        owner: &signer, token_controller: &signer
+    ) {
         init_test_token_controller(owner);
         let token = @0xfac;
         let limit = 87345;
@@ -264,12 +306,19 @@ module token_messenger_minter::token_controller {
         let (exists, burn_limit) = state::get_max_burn_limit_per_message_for_token(token);
         assert!(exists, 0);
         assert!(burn_limit == limit, 0);
-        assert!(event::was_event_emitted(&SetBurnLimitPerMessage { token, burn_limit_per_message: limit } ), 0);
+        assert!(
+            event::was_event_emitted(
+                &SetBurnLimitPerMessage { token, burn_limit_per_message: limit }
+            ),
+            0
+        );
     }
 
     #[test(owner = @deployer)]
     #[expected_failure(abort_code = 0x50001, location = Self)]
-    fun test_set_max_burn_amount_per_message_not_token_controller(owner: &signer) {
+    fun test_set_max_burn_amount_per_message_not_token_controller(
+        owner: &signer
+    ) {
         init_test_token_controller(owner);
         set_max_burn_amount_per_message(owner, @0xfac, 87345);
     }
@@ -289,14 +338,26 @@ module token_messenger_minter::token_controller {
     // Test Link Token Pair
 
     #[test(owner = @deployer, token_controller = @0x8e72)]
-    fun test_link_token_pair_success(owner: &signer, token_controller: &signer) {
+    fun test_link_token_pair_success(
+        owner: &signer, token_controller: &signer
+    ) {
         init_test_token_controller(owner);
         let remote_token = @0xfab;
         let remote_domain = 5;
         let local_token = @0xfaa;
-        link_token_pair(token_controller, local_token, remote_domain, remote_token);
+        link_token_pair(
+            token_controller,
+            local_token,
+            remote_domain,
+            remote_token
+        );
         assert!(get_local_token(remote_domain, remote_token) == local_token, 0);
-        assert!(event::was_event_emitted(&TokenPairLinked { local_token, remote_token, remote_domain } ), 0);
+        assert!(
+            event::was_event_emitted(
+                &TokenPairLinked { local_token, remote_token, remote_domain }
+            ),
+            0
+        );
     }
 
     #[test(owner = @deployer)]
@@ -306,25 +367,44 @@ module token_messenger_minter::token_controller {
         let remote_token = @0xfab;
         let remote_domain = 5;
         let local_token = @0xfaa;
-        link_token_pair(owner, local_token, remote_domain, remote_token);
+        link_token_pair(
+            owner,
+            local_token,
+            remote_domain,
+            remote_token
+        );
     }
 
     #[test(owner = @deployer, token_controller = @0x8e72)]
     #[expected_failure(abort_code = 0x80004, location = Self)]
-    fun test_link_token_pair_already_linked(owner: &signer, token_controller: &signer) {
+    fun test_link_token_pair_already_linked(
+        owner: &signer, token_controller: &signer
+    ) {
         init_test_token_controller(owner);
         let remote_token = @0xfab;
         let remote_domain = 5;
         let local_token = @0xfaa;
-        link_token_pair(token_controller, local_token, remote_domain, remote_token);
+        link_token_pair(
+            token_controller,
+            local_token,
+            remote_domain,
+            remote_token
+        );
         assert!(get_local_token(remote_domain, remote_token) == local_token, 0);
-        link_token_pair(token_controller, @0xfff, remote_domain, remote_token);
+        link_token_pair(
+            token_controller,
+            @0xfff,
+            remote_domain,
+            remote_token
+        );
     }
 
     // Test Unlink Token Pair
 
     #[test(owner = @deployer, token_controller = @0x8e72)]
-    fun test_unlink_token_pair_success(owner: &signer, token_controller: &signer) {
+    fun test_unlink_token_pair_success(
+        owner: &signer, token_controller: &signer
+    ) {
         init_test_token_controller(owner);
         let remote_token = @0xfab;
         let remote_domain = 5;
@@ -332,7 +412,12 @@ module token_messenger_minter::token_controller {
         state::add_local_token_for_remote_token(remote_domain, remote_token, local_token);
         unlink_token_pair(token_controller, remote_domain, remote_token);
         assert!(!state::local_token_exists(remote_domain, remote_token), 0);
-        assert!(event::was_event_emitted(&TokenPairUnlinked { local_token, remote_token, remote_domain } ), 0);
+        assert!(
+            event::was_event_emitted(
+                &TokenPairUnlinked { local_token, remote_token, remote_domain }
+            ),
+            0
+        );
     }
 
     #[test(owner = @deployer)]
@@ -348,7 +433,9 @@ module token_messenger_minter::token_controller {
 
     #[test(owner = @deployer, token_controller = @0x8e72)]
     #[expected_failure(abort_code = 0x60005, location = Self)]
-    fun test_unlink_token_pair_no_link_exist(owner: &signer, token_controller: &signer) {
+    fun test_unlink_token_pair_no_link_exist(
+        owner: &signer, token_controller: &signer
+    ) {
         init_test_token_controller(owner);
         unlink_token_pair(token_controller, 5, @0xfab);
     }

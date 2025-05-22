@@ -85,7 +85,7 @@ PUBLISHER_PROFILE=default
 PUBLISHER_ADDR=0x$(aptos config show-profiles --profile=$PUBLISHER_PROFILE | grep 'account' | sed -n 's/.*"account": \"\(.*\)\".*/\1/p')
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$SCRIPT_DIR/.."
+CONTRACTS_ROOT="$SCRIPT_DIR/.."
 
 # get local gas
 aptos account fund-with-faucet --profile default --amount 100000000
@@ -94,7 +94,7 @@ echo "Deploying Forwarder 1..."
 
 # deploy platform forwarder
 OUTPUT=$(aptos move create-object-and-publish-package \
-  --package-dir "$REPO_ROOT/platform" \
+  --package-dir "$CONTRACTS_ROOT/platform" \
   --address-name platform \
   --named-addresses owner=$PUBLISHER_ADDR \
   --profile $PUBLISHER_PROFILE \
@@ -104,8 +104,8 @@ OUTPUT=$(aptos move create-object-and-publish-package \
 echo "✅ Deployed Forwarder 1! 🚀"
 
 # # Extract the deployed contract address and save it to a file
-echo "$OUTPUT" | grep "Code was successfully deployed to object address" | awk '{print $NF}' | sed 's/\.$//' > $REPO_ROOT/platform/contract_address.txt
-PLATFORM_FORWARDER_ADDR=$(cat $REPO_ROOT/platform/contract_address.txt)
+echo "$OUTPUT" | grep "Code was successfully deployed to object address" | awk '{print $NF}' | sed 's/\.$//' > $CONTRACTS_ROOT/platform/contract_address.txt
+PLATFORM_FORWARDER_ADDR=$(cat $CONTRACTS_ROOT/platform/contract_address.txt)
 echo "Contract deployed to address: $PLATFORM_FORWARDER_ADDR"
 echo "Contract address saved to contract_address.txt"
 
@@ -119,7 +119,7 @@ echo "Deploying Forwarder 2..."
 
 # deploy secondary platform forwarder
 OUTPUT=$(aptos move create-object-and-publish-package \
-  --package-dir "$REPO_ROOT/platform_secondary" \
+  --package-dir "$CONTRACTS_ROOT/platform_secondary" \
   --address-name platform_secondary \
   --named-addresses owner_secondary=$PUBLISHER_ADDR \
   --profile $PUBLISHER_PROFILE \
@@ -129,8 +129,8 @@ OUTPUT=$(aptos move create-object-and-publish-package \
 echo "✅ Deployed Forwarder 2! 🚀"
  
 # # Extract the deployed contract address and save it to a file
-echo "$OUTPUT" | grep "Code was successfully deployed to object address" | awk '{print $NF}' | sed 's/\.$//' > $REPO_ROOT/platform_secondary/contract_address.txt
-PLATFORM_SECONDARY_FORWARDER_ADDR=$(cat $REPO_ROOT/platform_secondary/contract_address.txt)
+echo "$OUTPUT" | grep "Code was successfully deployed to object address" | awk '{print $NF}' | sed 's/\.$//' > $CONTRACTS_ROOT/platform_secondary/contract_address.txt
+PLATFORM_SECONDARY_FORWARDER_ADDR=$(cat $CONTRACTS_ROOT/platform_secondary/contract_address.txt)
 echo "Contract deployed to address: $PLATFORM_SECONDARY_FORWARDER_ADDR"
 echo "Contract address saved to contract_address.txt"
 
@@ -144,7 +144,7 @@ echo "Deploying data-feeds..."
 
 # deploy data feeds
  OUTPUT=$(aptos move create-object-and-publish-package \
-  --package-dir "$REPO_ROOT/data-feeds-pre-migration" \
+  --package-dir "$CONTRACTS_ROOT/legacy/data-feeds-pre-migration" \
   --address-name data_feeds \
   --named-addresses platform=$PLATFORM_FORWARDER_ADDR,owner=$PUBLISHER_ADDR \
   --profile $PUBLISHER_PROFILE \
@@ -154,8 +154,8 @@ echo "Deploying data-feeds..."
  echo "✅ Deployed data-feeds! 🚀"
 
 # Extract the deployed contract address and save it to a file
-echo "$OUTPUT" | grep "Code was successfully deployed to object address" | awk '{print $NF}' | sed 's/\.$//' > $REPO_ROOT/data-feeds/contract_address.txt
-DATA_FEEDS_ADDR=$(cat $REPO_ROOT/data-feeds/contract_address.txt)
+echo "$OUTPUT" | grep "Code was successfully deployed to object address" | awk '{print $NF}' | sed 's/\.$//' > $CONTRACTS_ROOT/legacy/data-feeds-pre-migration/contract_address.txt
+DATA_FEEDS_ADDR=$(cat $CONTRACTS_ROOT/legacy/data-feeds-pre-migration/contract_address.txt)
 echo "Contract deployed to address: $DATA_FEEDS_ADDR"
 echo "Contract address saved to contract_address.txt"
 
@@ -186,6 +186,8 @@ aptos move run --function-id "$PLATFORM_FORWARDER_ADDR::forwarder::report" --ass
 
 echo "✅ Report 1 written to Registry! 🚀"
 
+echo "Reading report 1 from Registry..."
+
 # reads saved value
  OUTPUT=$(aptos move view --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes)
 
@@ -204,7 +206,7 @@ echo "Upgrading Registry to support benchmark reports and 2 Forwarders..."
 
 # upgrade data feeds
  OUTPUT=$(aptos move upgrade-object \
-  --package-dir "$REPO_ROOT/data-feeds" \
+  --package-dir "$CONTRACTS_ROOT/data-feeds" \
   --object-address $DATA_FEEDS_ADDR \
   --address-name data_feeds \
   --named-addresses data_feeds=$DATA_FEEDS_ADDR,platform=$PLATFORM_FORWARDER_ADDR,owner=$PUBLISHER_ADDR,platform_secondary=$PLATFORM_SECONDARY_FORWARDER_ADDR,owner_secondary=$PUBLISHER_ADDR \
@@ -214,12 +216,31 @@ echo "Upgrading Registry to support benchmark reports and 2 Forwarders..."
 
 echo "✅ Registry upgraded! 🚀"
 
+echo "Reading report 1 from Registry AFTER UPGRADE..."
+
+# reads saved value
+ OUTPUT=$(aptos move view --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes)
+
+BENCHMARK_1=$(echo "$OUTPUT" | jq -r '.Result[0][0].feed.benchmark')
+
+if [[ "$EXPECTED_BENCHMARK_1" != "$BENCHMARK_1" ]]; then
+  echo "❌ Bad read after write"
+  echo "   Expected: $EXPECTED_BENCHMARK_1"
+  echo "   Got:      $BENCHMARK_1"
+  exit 1
+else
+  echo "✅ Correct benchmark value read from Registry!! 🚀"
+fi
+
+
 echo "Writing report 2 to Registry..."
 
 # send writes to registry via forwarder
 aptos move run --function-id "$PLATFORM_FORWARDER_ADDR::forwarder::report" --assume-yes --args "address:$DATA_FEEDS_ADDR" "hex:$FORWARDER_REPORT_PAYLOAD_2" "hex:$ORACLE_SIGNATURES_ARGS_2"
 
 echo "✅ Report 2 written to Registry! 🚀"
+
+echo "Reading report 2 from Registry..."
 
 # reads saved value
  OUTPUT=$(aptos move view --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes)
@@ -241,6 +262,8 @@ echo "Writing report 3 to Registry..."
 aptos move run --function-id "$PLATFORM_SECONDARY_FORWARDER_ADDR::forwarder::report" --assume-yes --args "address:$DATA_FEEDS_ADDR" "hex:$FORWARDER_REPORT_PAYLOAD_3" "hex:$ORACLE_SIGNATURES_ARGS_3"
 
 echo "✅ Report 3 written to Registry! 🚀"
+
+echo "Reading report 3 from Registry..."
 
 # reads saved value
  OUTPUT=$(aptos move view --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes)

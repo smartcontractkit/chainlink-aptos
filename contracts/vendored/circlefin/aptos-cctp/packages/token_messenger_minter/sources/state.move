@@ -53,12 +53,11 @@ module token_messenger_minter::state {
         remote_tokens_to_local_tokens: smart_table::SmartTable<address, address>,
 
         // Admin Roles
-        token_controller: address                   // Controls remote resources and burn limits
+        token_controller: address // Controls remote resources and burn limits
     }
 
     public(friend) fun init_state(
-        admin: &signer,
-        message_body_version: u32,
+        admin: &signer, message_body_version: u32
     ) {
         move_to(
             admin,
@@ -69,7 +68,7 @@ module token_messenger_minter::state {
                 burn_limits_per_message: smart_table::new(),
 
                 // Admin Roles
-                token_controller: @0x0,             // Token Controller gets initialized in its own module
+                token_controller: @0x0 // Token Controller gets initialized in its own module
             }
         );
     }
@@ -87,7 +86,10 @@ module token_messenger_minter::state {
     }
 
     public(friend) fun get_remote_token_messenger(domain: u32): address acquires State {
-        *smart_table::borrow(&borrow_global<State>(get_object_address()).remote_token_messengers, domain)
+        *smart_table::borrow(
+            &borrow_global<State>(get_object_address()).remote_token_messengers,
+            domain
+        )
     }
 
     public(friend) fun is_remote_token_messenger_set_for_domain(
@@ -99,27 +101,51 @@ module token_messenger_minter::state {
         )
     }
 
-    public(friend) fun get_max_burn_limit_per_message_for_token(token: address): (bool, u64) acquires State {
-        let exists = smart_table::contains(&borrow_global<State>(get_object_address()).burn_limits_per_message, token);
+    public(friend) fun get_max_burn_limit_per_message_for_token(
+        token: address
+    ): (bool, u64) acquires State {
+        let exists =
+            smart_table::contains(
+                &borrow_global<State>(get_object_address()).burn_limits_per_message,
+                token
+            );
         if (exists) {
-            (true, *smart_table::borrow(&borrow_global<State>(get_object_address()).burn_limits_per_message, token))
+            (
+                true,
+                *smart_table::borrow(
+                    &borrow_global<State>(get_object_address()).burn_limits_per_message,
+                    token
+                )
+            )
         } else {
             (false, 0)
         }
     }
 
-    public(friend) fun local_token_exists(remote_domain: u32, remote_token: address): bool acquires State {
+    public(friend) fun local_token_exists(
+        remote_domain: u32, remote_token: address
+    ): bool acquires State {
         let key = hash_remote_domain_and_token(remote_domain, remote_token);
-        smart_table::contains(&borrow_global<State>(get_object_address()).remote_tokens_to_local_tokens, key)
+        smart_table::contains(
+            &borrow_global<State>(get_object_address()).remote_tokens_to_local_tokens,
+            key
+        )
     }
 
-    public(friend) fun get_local_token(remote_domain: u32, remote_token: address): address acquires State {
+    public(friend) fun get_local_token(
+        remote_domain: u32, remote_token: address
+    ): address acquires State {
         let key = hash_remote_domain_and_token(remote_domain, remote_token);
-        *smart_table::borrow(&borrow_global<State>(get_object_address()).remote_tokens_to_local_tokens, key)
+        *smart_table::borrow(
+            &borrow_global<State>(get_object_address()).remote_tokens_to_local_tokens,
+            key
+        )
     }
 
     public(friend) fun is_paused(): bool {
-        pausable::is_paused(object::address_to_object<PauseState>(get_object_address()))
+        pausable::is_paused(
+            object::address_to_object<PauseState>(get_object_address())
+        )
     }
 
     public(friend) fun get_token_controller(): address acquires State {
@@ -127,11 +153,15 @@ module token_messenger_minter::state {
     }
 
     public(friend) fun get_num_remote_token_messengers(): u64 acquires State {
-        smart_table::length(&borrow_global<State>(get_object_address()).remote_token_messengers)
+        smart_table::length(
+            &borrow_global<State>(get_object_address()).remote_token_messengers
+        )
     }
 
     public(friend) fun get_num_linked_tokens(): u64 acquires State {
-        smart_table::length(&borrow_global<State>(get_object_address()).remote_tokens_to_local_tokens)
+        smart_table::length(
+            &borrow_global<State>(get_object_address()).remote_tokens_to_local_tokens
+        )
     }
 
     public(friend) fun get_object_address(): address {
@@ -142,7 +172,9 @@ module token_messenger_minter::state {
     // ---------- Setters ----------
     // -----------------------------
 
-    public(friend) fun add_remote_token_messenger(domain: u32, token_messenger: address) acquires State {
+    public(friend) fun add_remote_token_messenger(
+        domain: u32, token_messenger: address
+    ) acquires State {
         smart_table::add(
             &mut borrow_global_mut<State>(get_object_address()).remote_token_messengers,
             domain,
@@ -158,9 +190,7 @@ module token_messenger_minter::state {
     }
 
     public(friend) fun add_local_token_for_remote_token(
-        remote_domain: u32,
-        remote_token: address,
-        local_token: address
+        remote_domain: u32, remote_token: address, local_token: address
     ) acquires State {
         let key = hash_remote_domain_and_token(remote_domain, remote_token);
         smart_table::add(
@@ -171,8 +201,7 @@ module token_messenger_minter::state {
     }
 
     public(friend) fun remove_local_token_for_remote_token(
-        remote_domain: u32,
-        remote_token: address
+        remote_domain: u32, remote_token: address
     ): address acquires State {
         let key = hash_remote_domain_and_token(remote_domain, remote_token);
         smart_table::remove(
@@ -181,7 +210,9 @@ module token_messenger_minter::state {
         )
     }
 
-    public(friend) fun set_max_burn_limit_per_message_for_token(token: address, limit: u64) acquires State {
+    public(friend) fun set_max_burn_limit_per_message_for_token(
+        token: address, limit: u64
+    ) acquires State {
         smart_table::upsert(
             &mut borrow_global_mut<State>(get_object_address()).burn_limits_per_message,
             token,
@@ -190,7 +221,8 @@ module token_messenger_minter::state {
     }
 
     public(friend) fun set_token_controller(token_controller: address) acquires State {
-        borrow_global_mut<State>(get_object_address()).token_controller = token_controller;
+        borrow_global_mut<State>(get_object_address()).token_controller =
+            token_controller;
     }
 
     // -----------------------------
@@ -211,9 +243,11 @@ module token_messenger_minter::state {
 
     #[test_only]
     public fun init_test_state(caller: &signer) {
-        let resource_account_address = account::create_resource_address(&@deployer, b"test_seed_tmm");
+        let resource_account_address =
+            account::create_resource_address(&@deployer, b"test_seed_tmm");
         let resource_account_signer = create_signer_for_test(resource_account_address);
-        let constructor_ref = object::create_named_object(&resource_account_signer, SEED_NAME);
+        let constructor_ref =
+            object::create_named_object(&resource_account_signer, SEED_NAME);
         let signer = object::generate_signer(&constructor_ref);
         init_state(&signer, 1);
         ownable::new(&signer, signer::address_of(caller));
@@ -222,12 +256,16 @@ module token_messenger_minter::state {
 
     #[test_only]
     public fun set_paused(pauser: &signer) {
-        pausable::test_pause(pauser, object::address_to_object<PauseState>(get_object_address()));
+        pausable::test_pause(
+            pauser,
+            object::address_to_object<PauseState>(get_object_address())
+        );
     }
 
     #[test_only]
     public fun set_message_body_version(message_body_version: u32) acquires State {
-        borrow_global_mut<State>(get_object_address()).message_body_version = message_body_version;
+        borrow_global_mut<State>(get_object_address()).message_body_version =
+            message_body_version;
     }
 
     // -----------------------------
@@ -344,18 +382,22 @@ module token_messenger_minter::state {
     fun test_hash_remote_domain_and_token(owner: &signer) {
         init_test_state(owner);
         let hash = hash_remote_domain_and_token(4, @0xfac);
-        assert!(hash == @0x8ae28a8d79ea231bafe63fb643c45dce060b33a1c2e122d161c4d8b75997436, 0);
+        assert!(
+            hash == @0x8ae28a8d79ea231bafe63fb643c45dce060b33a1c2e122d161c4d8b75997436,
+            0
+        );
     }
 
     #[test(owner = @token_messenger_minter)]
     fun test_get_num_linked_tokens(owner: &signer) acquires State {
         init_test_state(owner);
         smart_table::add(
-            &mut borrow_global_mut<State>(get_object_address()).remote_tokens_to_local_tokens, @0x100, @0x101
+            &mut borrow_global_mut<State>(get_object_address()).remote_tokens_to_local_tokens,
+            @0x100,
+            @0x101
         );
         assert!(get_num_linked_tokens() == 1, 0)
     }
-
 
     // -----------------------------
     // ---------- Setters ----------
@@ -412,7 +454,10 @@ module token_messenger_minter::state {
         let limit = 300;
         set_max_burn_limit_per_message_for_token(token, limit);
         assert!(
-            *smart_table::borrow(&borrow_global<State>(get_object_address()).burn_limits_per_message, token) == limit,
+            *smart_table::borrow(
+                &borrow_global<State>(get_object_address()).burn_limits_per_message,
+                token
+            ) == limit,
             0
         )
     }

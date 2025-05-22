@@ -46,7 +46,8 @@ spec aptos_extensions::ownable {
     /// Post condition: There are no changes to the OwnerRole state.
     spec assert_is_owner {
         aborts_if !exists<object::ObjectCore>(obj_address);
-        aborts_if !exists<OwnerRole>(obj_address) || !object::spec_exists_at<OwnerRole>(obj_address);
+        aborts_if !exists<OwnerRole>(obj_address)
+            || !object::spec_exists_at<OwnerRole>(obj_address);
         aborts_if signer::address_of(caller) != global<OwnerRole>(obj_address).owner;
         ensures global<OwnerRole>(obj_address) == old(global<OwnerRole>(obj_address));
     }
@@ -58,7 +59,8 @@ spec aptos_extensions::ownable {
         let obj_address = signer::address_of(obj_signer);
         aborts_if !exists<object::ObjectCore>(obj_address);
         aborts_if exists<OwnerRole>(obj_address);
-        ensures global<OwnerRole>(obj_address) == OwnerRole { owner, pending_owner: option::spec_none() };
+        ensures global<OwnerRole>(obj_address)
+            == OwnerRole { owner, pending_owner: option::spec_none() };
     }
 
     /// Abort condition: The OwnerRole resource is missing.
@@ -69,8 +71,11 @@ spec aptos_extensions::ownable {
         let obj_address = object::object_address(obj);
         aborts_if !exists<OwnerRole>(obj_address);
         aborts_if signer::address_of(caller) != global<OwnerRole>(obj_address).owner;
-        ensures global<OwnerRole>(obj_address).owner == old(global<OwnerRole>(obj_address).owner);
-        ensures option::spec_contains(global<OwnerRole>(obj_address).pending_owner, new_owner);
+        ensures global<OwnerRole>(obj_address).owner
+            == old(global<OwnerRole>(obj_address).owner);
+        ensures option::spec_contains(
+            global<OwnerRole>(obj_address).pending_owner, new_owner
+        );
     }
 
     /// Abort condition: The OwnerRole resource is missing.
@@ -83,7 +88,8 @@ spec aptos_extensions::ownable {
         aborts_if !exists<OwnerRole>(obj_address);
         aborts_if option::is_none(global<OwnerRole>(obj_address).pending_owner);
         aborts_if !option::spec_contains(
-            global<OwnerRole>(obj_address).pending_owner, signer::address_of(caller)
+            global<OwnerRole>(obj_address).pending_owner,
+            signer::address_of(caller)
         );
         ensures global<OwnerRole>(obj_address).owner == signer::address_of(caller);
         ensures global<OwnerRole>(obj_address).pending_owner == option::spec_none();

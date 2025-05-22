@@ -432,7 +432,10 @@ module platform_secondary::storage {
                 ),
                 1
             );
-            assert!(!table::contains(&dispatcher.address_to_typeinfo, @platform_secondary), 1);
+            assert!(
+                !table::contains(&dispatcher.address_to_typeinfo, @platform_secondary),
+                1
+            );
             assert!(
                 !table::contains(
                     &dispatcher.dispatcher, type_info::type_of<TestProof2>()
@@ -449,7 +452,9 @@ module platform_secondary::storage {
                 1
             );
             assert!(
-                smart_table::contains(&dispatcher_v2.address_to_typeinfo, @platform_secondary),
+                smart_table::contains(
+                    &dispatcher_v2.address_to_typeinfo, @platform_secondary
+                ),
                 1
             );
             assert!(

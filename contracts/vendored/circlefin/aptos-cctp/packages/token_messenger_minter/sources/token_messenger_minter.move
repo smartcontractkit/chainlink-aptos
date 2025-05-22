@@ -42,7 +42,7 @@ module token_messenger_minter::token_messenger_minter {
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct ObjectController has key {
-        extend_ref: object::ExtendRef,
+        extend_ref: object::ExtendRef
     }
 
     #[view]
@@ -55,7 +55,9 @@ module token_messenger_minter::token_messenger_minter {
     // -----------------------------
 
     fun init_module(resource_acct_signer: &signer) {
-        let constructor_ref = object::create_named_object(resource_acct_signer, SEED_NAME);
+        let constructor_ref = object::create_named_object(
+            resource_acct_signer, SEED_NAME
+        );
         let token_messenger_minter_signer = &object::generate_signer(&constructor_ref);
         let extend_ref = object::generate_extend_ref(&constructor_ref);
         move_to(token_messenger_minter_signer, ObjectController { extend_ref });
@@ -63,7 +65,10 @@ module token_messenger_minter::token_messenger_minter {
         ownable::new(token_messenger_minter_signer, @deployer);
         pausable::new(token_messenger_minter_signer, @deployer);
 
-        let signer_cap = resource_account::retrieve_resource_account_cap(resource_acct_signer, @deployer);
+        let signer_cap =
+            resource_account::retrieve_resource_account_cap(
+                resource_acct_signer, @deployer
+            );
         manageable::new(resource_acct_signer, @deployer);
         upgradable::new(resource_acct_signer, signer_cap);
 
@@ -76,7 +81,7 @@ module token_messenger_minter::token_messenger_minter {
     entry fun initialize_token_messenger_minter(
         caller: &signer,
         message_body_version: u32,
-        token_controller: address,
+        token_controller: address
     ) acquires ObjectController {
         manageable::assert_is_admin(caller, @token_messenger_minter);
         assert!(!state::is_initialized(), error::already_exists(EALREADY_INITIALIZED));
@@ -92,9 +97,8 @@ module token_messenger_minter::token_messenger_minter {
     public(friend) fun get_signer(): signer acquires ObjectController {
         let object_address = state::get_object_address();
         let object_controller = borrow_global<ObjectController>(object_address);
-        let object_signer = object::generate_signer_for_extending(
-            &object_controller.extend_ref
-        );
+        let object_signer =
+            object::generate_signer_for_extending(&object_controller.extend_ref);
         object_signer
     }
 
@@ -125,17 +129,21 @@ module token_messenger_minter::token_messenger_minter {
             x"04746573740100000000000000000000000000", // empty BCS serialized PackageMetadata
             vector::empty()
         );
-        let resource_account_address = account::create_resource_address(&@deployer, TEST_SEED);
+        let resource_account_address =
+            account::create_resource_address(&@deployer, TEST_SEED);
         assert!(@token_messenger_minter == resource_account_address, 0);
         let resource_account_signer = create_signer_for_test(resource_account_address);
         init_module(&resource_account_signer);
     }
 
     #[test_only]
-    public fun initialize_test_token_messenger_minter(message_body_version: u32,
-                                                      token_controller: address,) acquires ObjectController {
+    public fun initialize_test_token_messenger_minter(
+        message_body_version: u32, token_controller: address
+    ) acquires ObjectController {
         init_test_token_messenger_minter_module();
-        initialize_token_messenger_minter(&create_signer_for_test(@deployer), message_body_version, token_controller);
+        initialize_token_messenger_minter(
+            &create_signer_for_test(@deployer), message_body_version, token_controller
+        );
     }
 
     // Token Messenger Minter Initialization Tests
@@ -145,16 +153,36 @@ module token_messenger_minter::token_messenger_minter {
         initialize_test_token_messenger_minter(1, @0xfac);
         assert!(state::is_initialized(), 0);
         assert!(state::get_token_controller() == @0xfac, 0);
-        assert!(exists<ObjectController>(state::get_object_address()), 0);
+        assert!(
+            exists<ObjectController>(state::get_object_address()),
+            0
+        );
         assert!(manageable::admin(@token_messenger_minter) == @deployer, 0);
-        assert!(ownable::owner(object::address_to_object<OwnerRole>(state::get_object_address())) == @deployer, 0);
-        assert!(pausable::pauser(object::address_to_object<PauseState>(state::get_object_address())) == @deployer, 0);
-        assert!(!pausable::is_paused(object::address_to_object<PauseState>(state::get_object_address())), 0);
+        assert!(
+            ownable::owner(
+                object::address_to_object<OwnerRole>(state::get_object_address())
+            ) == @deployer,
+            0
+        );
+        assert!(
+            pausable::pauser(
+                object::address_to_object<PauseState>(state::get_object_address())
+            ) == @deployer,
+            0
+        );
+        assert!(
+            !pausable::is_paused(
+                object::address_to_object<PauseState>(state::get_object_address())
+            ),
+            0
+        );
     }
 
     #[test(owner = @deployer)]
     #[expected_failure(abort_code = 0x80002, location = Self)]
-    fun test_init_token_messenger_minter_already_initialized(owner: &signer) acquires ObjectController {
+    fun test_init_token_messenger_minter_already_initialized(
+        owner: &signer
+    ) acquires ObjectController {
         initialize_test_token_messenger_minter(1, @0xfac);
         initialize_token_messenger_minter(owner, 2, @0xfab);
     }
