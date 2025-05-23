@@ -35,6 +35,7 @@ module ccip::fee_quoter {
 
     const CHAIN_FAMILY_SELECTOR_EVM: vector<u8> = x"2812d52c";
     const CHAIN_FAMILY_SELECTOR_SVM: vector<u8> = x"1e10bdc4";
+    const CHAIN_FAMILY_SELECTOR_TVM: vector<u8> = x"647e2ba9";
     const CHAIN_FAMILY_SELECTOR_APTOS: vector<u8> = x"ac77ffec";
 
     const EVM_PRECOMPILE_SPACE: u256 = 1024;
