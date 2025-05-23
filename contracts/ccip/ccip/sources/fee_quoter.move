@@ -23,6 +23,7 @@ module ccip::fee_quoter {
     const CHAIN_FAMILY_SELECTOR_SVM: vector<u8> = x"1e10bdc4";
     const CHAIN_FAMILY_SELECTOR_APTOS: vector<u8> = x"ac77ffec";
     const CHAIN_FAMILY_SELECTOR_SUI: vector<u8> = x"c4e05953";
+    const CHAIN_FAMILY_SELECTOR_TVM: vector<u8> = x"647e2ba9";
 
     /// @dev We disallow the first 1024 addresses to avoid calling into a range known for hosting precompiles. Calling
     /// into precompiles probably won't cause any issues, but to be safe we can disallow this range. It is extremely
