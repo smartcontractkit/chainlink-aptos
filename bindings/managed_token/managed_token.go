@@ -12,37 +12,37 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/contracts"
 )
 
-type LinkToken interface {
+type ManagedToken interface {
 	Address() aptos.AccountAddress
 
 	Allowlist() module_allowlist.AllowlistInterface
-	LinkToken() module_managed_token.ManagedTokenInterface
+	ManagedToken() module_managed_token.ManagedTokenInterface
 	Ownable() module_ownable.OwnableInterface
 }
 
-var _ LinkToken = LinkTokenContact{}
+var _ ManagedToken = ManagedTokenContact{}
 
-type LinkTokenContact struct {
+type ManagedTokenContact struct {
 	address aptos.AccountAddress
 
-	allowlist module_allowlist.AllowlistInterface
-	linkToken module_managed_token.ManagedTokenInterface
-	ownable   module_ownable.OwnableInterface
+	allowlist    module_allowlist.AllowlistInterface
+	managedToken module_managed_token.ManagedTokenInterface
+	ownable      module_ownable.OwnableInterface
 }
 
-func (l LinkTokenContact) Address() aptos.AccountAddress {
+func (l ManagedTokenContact) Address() aptos.AccountAddress {
 	return l.address
 }
 
-func (l LinkTokenContact) Allowlist() module_allowlist.AllowlistInterface {
+func (l ManagedTokenContact) Allowlist() module_allowlist.AllowlistInterface {
 	return l.allowlist
 }
 
-func (l LinkTokenContact) LinkToken() module_managed_token.ManagedTokenInterface {
-	return l.linkToken
+func (l ManagedTokenContact) ManagedToken() module_managed_token.ManagedTokenInterface {
+	return l.managedToken
 }
 
-func (l LinkTokenContact) Ownable() module_ownable.OwnableInterface {
+func (l ManagedTokenContact) Ownable() module_ownable.OwnableInterface {
 	return l.ownable
 }
 
@@ -59,12 +59,12 @@ func Compile(address aptos.AccountAddress) (compile.CompiledPackage, error) {
 	return compile.CompilePackage(contracts.ManagedToken, namedAddresses)
 }
 
-func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) LinkToken {
-	return LinkTokenContact{
-		address:   address,
-		allowlist: module_allowlist.NewAllowlist(address, client),
-		linkToken: module_managed_token.NewManagedToken(address, client),
-		ownable:   module_ownable.NewOwnable(address, client),
+func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) ManagedToken {
+	return ManagedTokenContact{
+		address:      address,
+		allowlist:    module_allowlist.NewAllowlist(address, client),
+		managedToken: module_managed_token.NewManagedToken(address, client),
+		ownable:      module_ownable.NewOwnable(address, client),
 	}
 }
 
@@ -73,7 +73,7 @@ func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) LinkToken {
 func DeployToObject(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
-) (aptos.AccountAddress, *api.PendingTransaction, LinkToken, error) {
+) (aptos.AccountAddress, *api.PendingTransaction, ManagedToken, error) {
 	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.ManagedToken, nil)
 	if err != nil {
 		return aptos.AccountAddress{}, nil, nil, err
@@ -99,25 +99,25 @@ func CompileMCMSRegistrar(
 	return compile.CompilePackage(contracts.MCMSRegistrar, namedAddresses)
 }
 
-// DeployMCMSRegistrarToExistingObject deploys the mcms-registrar package to an existing code object (linkAddress).
+// DeployMCMSRegistrarToExistingObject deploys the mcms-registrar package to an existing code object (managedTokenAddress).
 func DeployMCMSRegistrarToExistingObject(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
-	linkAddress,
+	managedTokenAddress aptos.AccountAddress,
 	mcmsAddress aptos.AccountAddress,
 	registerMCMSEntrypoints bool,
-) (*api.PendingTransaction, LinkToken, error) {
+) (*api.PendingTransaction, ManagedToken, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
-		"link":                      linkAddress,
+		"managed_token":             managedTokenAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
 	if registerMCMSEntrypoints {
 		namedAddresses["mcms_register_entrypoints"] = aptos.AccountOne
 	}
-	tx, err := bind.UpgradePackageToObject(auth, client, contracts.MCMSRegistrar, namedAddresses, linkAddress)
+	tx, err := bind.UpgradePackageToObject(auth, client, contracts.MCMSRegistrar, namedAddresses, managedTokenAddress)
 	if err != nil {
 		return nil, nil, err
 	}
-	return tx, Bind(linkAddress, client), nil
+	return tx, Bind(managedTokenAddress, client), nil
 }
