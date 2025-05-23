@@ -2,11 +2,11 @@
 # ------------------------------------------------------------------------------
 #  Data Feeds: Aptos test script for the Registry migration to support 2 Forwarders
 #  • Optional command tracing         :  DEBUG=1 ./test_registry_migration.sh
+#  • Skip local network auto-shutdown :  SKIP_SHUTDOWN=1 ./test_registry_migration.sh
 # ------------------------------------------------------------------------------
 
 set -euo pipefail
 if [[ "${DEBUG:-}" =~ ^(1|true|yes|y)$ ]]; then
-  echo "entered!!"
   set -x
 fi
 
@@ -178,6 +178,18 @@ TMP_KEY_FILE=test-key.tmp
 
 echo -e "e2e Data Feeds Registry Upgrade migration test starting! 🚀\n"
 
+if [[ "${DEBUG:-}" =~ ^(1|true|yes|y)$ ]]; then
+  echo -e "✅ DEBUG=1 set! Script will output command trace! 🚀"
+else
+  echo -e "🛑 DEBUG not set..\nYou can use DEBUG=1 to output the command trace! 🚀\n"
+fi
+
+if [[ "${SKIP_SHUTDOWN:-}" =~ ^(1|true|yes|y)$ ]]; then
+  echo -e "✅ SKIP_SHUTDOWN=1 set! Script will keep running the local network after the test!! 🚀\n"
+else
+  echo -e 🛑 "SKIP_SHUTDOWN not set..\nYou can use SKIP_SHUTDOWN=1 to keep the local network running after the test! 🚀\n"
+fi
+
 REST_PORT=8080
 FAUCET_PORT=8081
 LOG_FILE=/tmp/aptos-testnet.log
@@ -211,6 +223,9 @@ wait_for_ports() {
 if pgrep -f "aptos node run-local-testnet" >/dev/null; then
   echo "✅ Aptos local testnet process is already running."
 
+  APTOS_PID=$(pgrep -f "aptos node run-local-testnet")
+  echo "Aptos local network PID: $APTOS_PID"
+
   # Confirm both ports are listening
   if lsof -i :"$REST_PORT" -sTCP:LISTEN -t >/dev/null && \
      lsof -i :"$FAUCET_PORT" -sTCP:LISTEN -t >/dev/null; then
@@ -241,11 +256,14 @@ else
     wait_for_ports $REST_PORT $FAUCET_PORT
 fi
 
+
 # Kill the node when the script exits (normal or error)
 cleanup() {
   if [[ -n "${APTOS_PID:-}" ]]; then
-    echo "🛑 Cleaning up Aptos testnet (PID $APTOS_PID)"
-    kill "$APTOS_PID" 2>/dev/null || true
+    if ! [[ "${SKIP_SHUTDOWN:-}" =~ ^(1|true|yes|y)$ ]]; then
+      echo "🛑 Cleaning up Aptos testnet (PID ${APTOS_PID})"
+      kill "${APTOS_PID}" 2>/dev/null || true
+    fi
   fi
 }
 trap cleanup EXIT
