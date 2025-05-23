@@ -130,11 +130,11 @@ module usdc_token_pool::usdc_token_pool {
             publisher,
             USDCTokenPoolDeployment {
                 store_signer_cap,
-                ownable_state: ownable::new(publisher, @usdc_token_pool),
+                ownable_state: ownable::new(&store_signer, @usdc_token_pool),
                 token_pool_state: token_pool::initialize(
-                    publisher, @local_token, vector[]
+                    &store_signer, @local_token, vector[]
                 ),
-                domain_set_events: account::new_event_handle(publisher)
+                domain_set_events: account::new_event_handle(&store_signer)
             }
         );
     }
