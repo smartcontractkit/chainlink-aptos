@@ -65,11 +65,16 @@ module usdc_token_pool::usdc_token_pool {
     const E_NOT_PUBLISHER: u64 = 1;
     const E_ALREADY_INITIALIZED: u64 = 2;
     const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
-    const E_LOCAL_TOKEN_MISMATCH: u64 = 4;
-    const E_INVALID_ARGUMENTS: u64 = 5;
-    const E_DOMAIN_NOT_FOUND: u64 = 6;
-    const E_DOMAIN_ENABLED: u64 = 7;
-    const E_UNKNOWN_FUNCTION: u64 = 8;
+    const E_INVALID_ARGUMENTS: u64 = 4;
+    const E_DOMAIN_NOT_FOUND: u64 = 5;
+    const E_DOMAIN_ENABLED: u64 = 6;
+    const E_UNKNOWN_FUNCTION: u64 = 7;
+    const E_DOMAIN_MISMATCH: u64 = 8;
+    const E_NONCE_MISMATCH: u64 = 9;
+    const E_DESTINATION_MISMATCH: u64 = 10;
+    const E_DOMAIN_DISABLED: u64 = 11;
+    const E_ZERO_CHAIN_SELECTOR: u64 = 12;
+    const E_EMPTY_ALLOWED_CALLER: u64 = 13;
 
     // ================================================================
     // |                             Init                             |
@@ -107,6 +112,7 @@ module usdc_token_pool::usdc_token_pool {
             publisher,
             token_pool_module_name,
             @local_token,
+            @token_pool_administrator,
             CallbackProof {}
         );
 
@@ -133,17 +139,12 @@ module usdc_token_pool::usdc_token_pool {
         );
     }
 
-    public fun initialize(caller: &signer, local_token: address) acquires USDCTokenPoolDeployment {
+    public fun initialize(caller: &signer) acquires USDCTokenPoolDeployment {
         assert_can_initialize(signer::address_of(caller));
 
         assert!(
             exists<USDCTokenPoolDeployment>(@usdc_token_pool),
             error::invalid_argument(E_ALREADY_INITIALIZED)
-        );
-
-        assert!(
-            @local_token == local_token,
-            error::invalid_argument(E_LOCAL_TOKEN_MISMATCH)
         );
 
         let USDCTokenPoolDeployment {
@@ -329,7 +330,7 @@ module usdc_token_pool::usdc_token_pool {
 
         assert!(
             remote_domain_info.enabled,
-            error::invalid_argument(E_DOMAIN_ENABLED)
+            error::invalid_argument(E_DOMAIN_DISABLED)
         );
 
         let mint_recipient_bytes =
@@ -461,17 +462,17 @@ module usdc_token_pool::usdc_token_pool {
 
         assert!(
             source_domain == expected_source_domain,
-            error::invalid_argument(E_INVALID_ARGUMENTS)
+            error::invalid_argument(E_DOMAIN_MISMATCH)
         );
 
         assert!(
             nonce == expected_nonce,
-            error::invalid_argument(E_INVALID_ARGUMENTS)
+            error::invalid_argument(E_NONCE_MISMATCH)
         );
 
         assert!(
             destination_domain == expected_local_domain,
-            error::invalid_argument(E_INVALID_ARGUMENTS)
+            error::invalid_argument(E_DESTINATION_MISMATCH)
         );
     }
 
@@ -512,12 +513,12 @@ module usdc_token_pool::usdc_token_pool {
 
             assert!(
                 remote_chain_selector != 0,
-                error::invalid_argument(E_DOMAIN_ENABLED)
+                error::invalid_argument(E_ZERO_CHAIN_SELECTOR)
             );
 
             assert!(
                 allowed_caller.length() != 0,
-                error::invalid_argument(E_DOMAIN_NOT_FOUND)
+                error::invalid_argument(E_EMPTY_ALLOWED_CALLER)
             );
 
             pool.chain_to_domain.upsert(
@@ -617,7 +618,6 @@ module usdc_token_pool::usdc_token_pool {
     // |                      Storage helpers                         |
     // ================================================================
 
-    // TODO: separate functions due to deploy error, see ccip::state_object
     #[view]
     public fun get_store_address(): address {
         store_address()
@@ -660,14 +660,19 @@ module usdc_token_pool::usdc_token_pool {
 
     public entry fun transfer_ownership(caller: &signer, to: address) acquires USDCTokenPoolState {
         let pool = borrow_pool_mut();
-        ownable::transfer_ownership(
-            signer::address_of(caller), &mut pool.ownable_state, to
-        )
+        ownable::transfer_ownership(caller, &mut pool.ownable_state, to)
     }
 
     public entry fun accept_ownership(caller: &signer) acquires USDCTokenPoolState {
         let pool = borrow_pool_mut();
-        ownable::accept_ownership(signer::address_of(caller), &mut pool.ownable_state)
+        ownable::accept_ownership(caller, &mut pool.ownable_state)
+    }
+
+    public entry fun execute_ownership_transfer(
+        caller: &signer, to: address
+    ) acquires USDCTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::execute_ownership_transfer(caller, &mut pool.ownable_state, to)
     }
 
     // ================================================================
@@ -825,6 +830,10 @@ module usdc_token_pool::usdc_token_pool {
         } else if (function_bytes == b"accept_ownership") {
             bcs_stream::assert_is_consumed(&stream);
             accept_ownership(&caller);
+        } else if (function_bytes == b"execute_ownership_transfer") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            execute_ownership_transfer(&caller, to)
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };

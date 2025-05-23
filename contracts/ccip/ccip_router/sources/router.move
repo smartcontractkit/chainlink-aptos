@@ -42,6 +42,7 @@ module ccip_router::router {
     const E_UNSUPPORTED_DESTINATION_CHAIN: u64 = 2;
     const E_UNSUPPORTED_ON_RAMP_VERSION: u64 = 3;
     const E_INVALID_ON_RAMP_VERSION: u64 = 4;
+    const E_SET_ON_RAMP_VERSIONS_MISMATCH: u64 = 5;
 
     #[view]
     public fun type_and_version(): String {
@@ -239,12 +240,13 @@ module ccip_router::router {
 
     #[view]
     /// Returns the onRamp versions for the given destination chains.
+    /// For chain selectors that do not exist, an empty vector is returned.
     public fun get_on_ramp_versions(
         dest_chain_selectors: vector<u64>
     ): vector<vector<u8>> acquires RouterState {
         let state = borrow_state();
         dest_chain_selectors.map((|dest_chain_selector| {
-            *state.on_ramp_versions.borrow(dest_chain_selector)
+            *state.on_ramp_versions.borrow_with_default(dest_chain_selector, &vector[])
         }))
     }
 
@@ -259,6 +261,11 @@ module ccip_router::router {
         dest_chain_selectors: vector<u64>,
         on_ramp_versions: vector<vector<u8>>
     ) acquires RouterState {
+        assert!(
+            dest_chain_selectors.length() == on_ramp_versions.length(),
+            error::invalid_argument(E_SET_ON_RAMP_VERSIONS_MISMATCH)
+        );
+
         let state = borrow_state_mut();
 
         ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
@@ -299,14 +306,12 @@ module ccip_router::router {
 
     public entry fun transfer_ownership(caller: &signer, to: address) acquires RouterState {
         let state = borrow_state_mut();
-        ownable::transfer_ownership(
-            signer::address_of(caller), &mut state.ownable_state, to
-        )
+        ownable::transfer_ownership(caller, &mut state.ownable_state, to)
     }
 
     public entry fun accept_ownership(caller: &signer) acquires RouterState {
         let state = borrow_state_mut();
-        ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
+        ownable::accept_ownership(caller, &mut state.ownable_state)
     }
 
     public entry fun execute_ownership_transfer(
@@ -358,5 +363,14 @@ module ccip_router::router {
         };
 
         option::none()
+    }
+
+    // ================================================================
+    // |                          Tests                               |
+    // ================================================================
+
+    #[test_only]
+    public fun test_init_module(publisher: &signer) {
+        init_module(publisher);
     }
 }

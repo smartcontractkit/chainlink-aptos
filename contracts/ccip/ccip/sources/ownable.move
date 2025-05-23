@@ -80,28 +80,44 @@ module ccip::ownable {
         owner_internal(state)
     }
 
+    public fun pending_transfer_from(state: &OwnableState): Option<address> {
+        state.pending_transfer.map_ref(|pending_transfer| pending_transfer.from)
+    }
+
+    public fun pending_transfer_to(state: &OwnableState): Option<address> {
+        state.pending_transfer.map_ref(|pending_transfer| pending_transfer.to)
+    }
+
+    public fun pending_transfer_accepted(state: &OwnableState): Option<bool> {
+        state.pending_transfer.map_ref(|pending_transfer| pending_transfer.accepted)
+    }
+
     inline fun owner_internal(state: &OwnableState): address {
         object::owner(state.target_object)
     }
 
     public fun transfer_ownership(
-        caller: address, state: &mut OwnableState, to: address
+        caller: &signer, state: &mut OwnableState, to: address
     ) {
-        assert_only_owner_internal(caller, state);
-        assert!(caller != to, error::invalid_argument(E_CANNOT_TRANSFER_TO_SELF));
+        let caller_address = signer::address_of(caller);
+        assert_only_owner_internal(caller_address, state);
+        assert!(caller_address != to, error::invalid_argument(E_CANNOT_TRANSFER_TO_SELF));
 
         state.pending_transfer = option::some(
-            PendingTransfer { from: caller, to, accepted: false }
+            PendingTransfer { from: caller_address, to, accepted: false }
         );
 
-        event::emit(OwnershipTransferRequested { from: caller, to });
+        event::emit(OwnershipTransferRequested { from: caller_address, to });
         event::emit_event(
             &mut state.ownership_transfer_requested_events,
-            OwnershipTransferRequested { from: caller, to }
+            OwnershipTransferRequested { from: caller_address, to }
         );
     }
 
-    public fun accept_ownership(caller: address, state: &mut OwnableState) {
+    public fun accept_ownership(
+        caller: &signer, state: &mut OwnableState
+    ) {
+        let caller_address = signer::address_of(caller);
         assert!(
             state.pending_transfer.is_some(),
             error::permission_denied(E_NO_PENDING_TRANSFER)
@@ -117,7 +133,7 @@ module ccip::ownable {
             error::permission_denied(E_OWNER_CHANGED)
         );
         assert!(
-            pending_transfer.to == caller,
+            pending_transfer.to == caller_address,
             error::permission_denied(E_MUST_BE_PROPOSED_OWNER)
         );
         assert!(
@@ -127,10 +143,12 @@ module ccip::ownable {
 
         pending_transfer.accepted = true;
 
-        event::emit(OwnershipTransferAccepted { from: pending_transfer.from, to: caller });
+        event::emit(
+            OwnershipTransferAccepted { from: pending_transfer.from, to: caller_address }
+        );
         event::emit_event(
             &mut state.ownership_transfer_accepted_events,
-            OwnershipTransferAccepted { from: pending_transfer.from, to: caller }
+            OwnershipTransferAccepted { from: pending_transfer.from, to: caller_address }
         );
     }
 
@@ -178,5 +196,19 @@ module ccip::ownable {
             caller == owner_internal(state),
             error::permission_denied(E_ONLY_CALLABLE_BY_OWNER)
         );
+    }
+
+    public fun destroy(state: OwnableState) {
+        let OwnableState {
+            target_object: _,
+            pending_transfer: _,
+            ownership_transfer_requested_events,
+            ownership_transfer_accepted_events,
+            ownership_transferred_events
+        } = state;
+
+        event::destroy_handle(ownership_transfer_requested_events);
+        event::destroy_handle(ownership_transfer_accepted_events);
+        event::destroy_handle(ownership_transferred_events);
     }
 }

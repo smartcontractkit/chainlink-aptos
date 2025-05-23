@@ -139,7 +139,12 @@ func Convert(pkg, mod string, structs []parse.Struct, functions []parse.Func, ex
 			}
 			if typ.StdOption != nil {
 				if f.IsEntry {
-					panic(fmt.Sprintf("Function %v has unsupported option::Option parameter %q: %v", f.Name, param.Name, typ.MoveType))
+					// 0x1::option::Option parameters in entry functions will be represented by pointers to the underlying type.
+					//  0x1::option::Option<u32>                 -> *uint32
+					//  0x1::option::Option<0x1::string::String> -> *string
+					//  0x1::option::Option<u256>                -> **big.Int
+					// Note the double pointer on e.g. **big.Int - this is due to the bcs utils automatically dereferencing the pointer if it is set,
+					// which would lead to big.Int trying to be being serialized, which is currently unsupported.
 				} else {
 					log.Printf("WARNING: Ignoring function %v due to unsupported option::Option parameter %q: %v", f.Name, param.Name, typ.MoveType)
 					skip = true

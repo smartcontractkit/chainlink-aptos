@@ -195,7 +195,6 @@ module ccip_ping_pong_demo::ping_pong_demo {
         option::none()
     }
 
-    // TODO: separate functions due to deploy error, see ccip::state_object
     #[view]
     public fun get_store_address(): address {
         store_address()
@@ -251,13 +250,11 @@ module ccip_ping_pong_demo::ping_pong_demo {
 
     public entry fun transfer_ownership(caller: &signer, to: address) acquires PingPongDemo {
         let state = borrow_state_mut();
-        ownable::transfer_ownership(
-            signer::address_of(caller), &mut state.ownable_state, to
-        )
+        ownable::transfer_ownership(caller, &mut state.ownable_state, to)
     }
 
     public entry fun accept_ownership(caller: &signer) acquires PingPongDemo {
         let state = borrow_state_mut();
-        ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
+        ownable::accept_ownership(caller, &mut state.ownable_state)
     }
 }

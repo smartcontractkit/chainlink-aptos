@@ -69,7 +69,7 @@ module mcms::mcms_account {
     }
 
     /// Accepts ownership transfer. Can only be called by the pending owner.
-    public fun accept_ownership(caller: &signer) acquires AccountState {
+    public entry fun accept_ownership(caller: &signer) acquires AccountState {
         let state = borrow_state_mut();
 
         let caller_address = signer::address_of(caller);

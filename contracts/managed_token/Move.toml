@@ -1,14 +1,14 @@
 [package]
-name = "ChainlinkToken"
+name = "ManagedToken"
 version = "1.0.0"
 authors = []
 
 [addresses]
-link = "_"
+managed_token = "_"
 
 [dev-addresses]
 # Calculated with object::create_named_object()
-link = "0xec027d053a48066c79c442d3215e1b775c47f832ac18f8e0539bbd6667f76e85"
+managed_token = "0x121dfbc38157d675d96eef0bcc54e70e9801714138ce54028b5655459c6376ee"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }

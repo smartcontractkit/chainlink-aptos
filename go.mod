@@ -1,6 +1,6 @@
 module github.com/smartcontractkit/chainlink-aptos
 
-go 1.24.0
+go 1.24.1
 
 require (
 	github.com/aptos-labs/aptos-go-sdk v1.6.3-0.20250331001805-0680b714db6d
@@ -12,7 +12,7 @@ require (
 	github.com/jpillora/backoff v1.0.0
 	github.com/pelletier/go-toml/v2 v2.2.3
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
-	github.com/smartcontractkit/chainlink-common v0.7.1-0.20250418172423-6b24a042d134
+	github.com/smartcontractkit/chainlink-common v0.7.1-0.20250519161208-80bc8b13c0e7
 	github.com/stretchr/testify v1.10.0
 	github.com/valyala/fastjson v1.6.4
 	go.opentelemetry.io/otel v1.35.0
@@ -57,7 +57,6 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.0.1 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.1 // indirect
-	github.com/hashicorp/consul/sdk v0.16.1 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
@@ -100,6 +99,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1 // indirect
 	github.com/scylladb/go-reflectx v1.0.1 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
+	github.com/smartcontractkit/freeport v0.1.0 // indirect
 	github.com/smartcontractkit/grpc-proxy v0.0.0-20240830132753-a7e17fec5ab7 // indirect
 	github.com/smartcontractkit/libocr v0.0.0-20250220133800-f3b940c4f298 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
@@ -127,7 +127,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/mod v0.24.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
-	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/tools v0.31.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
