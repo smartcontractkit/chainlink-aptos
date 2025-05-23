@@ -85,11 +85,11 @@ module managed_token_pool::managed_token_pool {
         let store_signer = account::create_signer_with_capability(&store_signer_cap);
 
         let pool = ManagedTokenPoolState {
-            ownable_state: ownable::new(publisher, @managed_token_pool),
+            ownable_state: ownable::new(&store_signer, @managed_token_pool),
             store_signer_address: signer::address_of(&store_signer),
             store_signer_cap,
             token_pool_state: token_pool::initialize(
-                publisher, managed_token_address, vector[]
+                &store_signer, managed_token_address, vector[]
             )
         };
 
@@ -394,21 +394,6 @@ module managed_token_pool::managed_token_pool {
 
     inline fun store_address(): address {
         account::create_resource_address(&@managed_token_pool, STORE_OBJECT_SEED)
-    }
-
-    fun assert_can_initialize(caller_address: address) {
-        if (caller_address == @managed_token_pool) { return };
-
-        if (object::is_object(@managed_token_pool)) {
-            let managed_token_pool_object =
-                object::address_to_object<ObjectCore>(@managed_token_pool);
-            if (caller_address == object::owner(managed_token_pool_object)
-                || caller_address == object::root_owner(managed_token_pool_object)) {
-                return
-            };
-        };
-
-        abort error::permission_denied(E_NOT_PUBLISHER)
     }
 
     inline fun borrow_pool(): &ManagedTokenPoolState {
