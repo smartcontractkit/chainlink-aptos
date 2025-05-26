@@ -95,7 +95,7 @@ module ccip_token_pool::token_pool {
         remote_token_address: vector<u8>
     }
 
-    const E_NOT_PUBLISHER: u64 = 1;
+    const E_NOT_ALLOWED_CALLER: u64 = 1;
     const E_UNKNOWN_FUNGIBLE_ASSET: u64 = 2;
     const E_UNKNOWN_REMOTE_CHAIN_SELECTOR: u64 = 3;
     const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 4;
@@ -115,38 +115,23 @@ module ccip_token_pool::token_pool {
     /// This function should be called from the init_module function to ensure the events
     /// are created on the correct object.
     public fun initialize(
-        publisher: &signer, local_token: address, allowlist: vector<address>
+        event_account: &signer, local_token: address, allowlist: vector<address>
     ): TokenPoolState {
-        assert_can_initialize(signer::address_of(publisher));
-
         let fa_metadata = object::address_to_object<Metadata>(local_token);
 
         TokenPoolState {
-            allowlist_state: allowlist::new(publisher, allowlist),
+            allowlist_state: allowlist::new(event_account, allowlist),
             fa_metadata,
             remote_chain_configs: smart_table::new(),
-            rate_limiter_config: token_pool_rate_limiter::new(publisher),
-            locked_events: account::new_event_handle(publisher),
-            released_events: account::new_event_handle(publisher),
-            burned_events: account::new_event_handle(publisher),
-            minted_events: account::new_event_handle(publisher),
-            remote_pool_added_events: account::new_event_handle(publisher),
-            remote_pool_removed_events: account::new_event_handle(publisher),
-            chain_added_events: account::new_event_handle(publisher)
+            rate_limiter_config: token_pool_rate_limiter::new(event_account),
+            locked_events: account::new_event_handle(event_account),
+            released_events: account::new_event_handle(event_account),
+            burned_events: account::new_event_handle(event_account),
+            minted_events: account::new_event_handle(event_account),
+            remote_pool_added_events: account::new_event_handle(event_account),
+            remote_pool_removed_events: account::new_event_handle(event_account),
+            chain_added_events: account::new_event_handle(event_account)
         }
-    }
-
-    fun assert_can_initialize(caller_address: address) {
-        if (caller_address == @ccip_token_pool) { return };
-
-        if (object::is_object(@ccip_token_pool)) {
-            let token_pool_object =
-                object::address_to_object<ObjectCore>(@ccip_token_pool);
-            if (caller_address == object::owner(token_pool_object)
-                || caller_address == object::root_owner(token_pool_object)) { return };
-        };
-
-        abort error::permission_denied(E_NOT_PUBLISHER)
     }
 
     inline fun store_address(): address {
@@ -381,11 +366,11 @@ module ccip_token_pool::token_pool {
         );
 
         // Allowlist check
-        let _sender = token_admin_registry::get_lock_or_burn_sender(input);
         if (allowlist::get_allowlist_enabled(&state.allowlist_state)) {
+            let sender = token_admin_registry::get_lock_or_burn_sender(input);
             assert!(
-                allowlist::is_allowed(&state.allowlist_state, _sender),
-                error::permission_denied(E_NOT_PUBLISHER)
+                allowlist::is_allowed(&state.allowlist_state, sender),
+                error::permission_denied(E_NOT_ALLOWED_CALLER)
             );
         };
 

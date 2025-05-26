@@ -92,9 +92,9 @@ module lock_release_token_pool::lock_release_token_pool {
             publisher,
             LockReleaseTokenPoolDeployment {
                 store_signer_cap,
-                ownable_state: ownable::new(publisher, @lock_release_token_pool),
+                ownable_state: ownable::new(&store_signer, @lock_release_token_pool),
                 token_pool_state: token_pool::initialize(
-                    publisher, @lock_release_local_token, vector[]
+                    &store_signer, @lock_release_local_token, vector[]
                 )
             }
         );
