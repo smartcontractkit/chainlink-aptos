@@ -45,7 +45,10 @@ func TestOCR3Keystone(t *testing.T) {
 	err = deployer.DeployPlatform()
 	require.NoError(t, err, "Could not deploy Platform")
 
-	err = deployer.DeployDataFeeds(deployer.Contracts.KeystoneAddress)
+	err = deployer.DeployPlatformSecondary()
+	require.NoError(t, err, "Could not deploy Platform Secondary")
+
+	err = deployer.DeployDataFeeds(deployer.Contracts.KeystoneAddress, deployer.Contracts.KeystoneSecondaryAddress)
 	require.NoError(t, err, "Could not deploy Data Feeds")
 
 	err = deployer.SetWorkflowConfigs(deployer.Contracts.DataFeedsAddress, workflowOwner)

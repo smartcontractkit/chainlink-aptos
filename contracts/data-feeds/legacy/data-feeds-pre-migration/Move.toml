@@ -15,6 +15,6 @@ platform = "0xbaba"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
-ChainlinkPlatform = { local = "../../../../platform" }
+ChainlinkPlatform = { local = "../../../platform" }
 
 [dev-dependencies]

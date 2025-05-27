@@ -86,8 +86,9 @@ type PostgresClient struct {
 }
 
 type Contracts struct {
-	KeystoneAddress  string
-	DataFeedsAddress string
+	KeystoneAddress          string
+	KeystoneSecondaryAddress string
+	DataFeedsAddress         string
 }
 
 func New(lggr *zerolog.Logger) *Deployer {
