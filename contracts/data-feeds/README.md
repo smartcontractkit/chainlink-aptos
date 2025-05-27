@@ -6,9 +6,7 @@ The Registry receives and stores offchain reports from the Platform Forwader con
 
 The Registry contract also contains a `get_feeds` view function to allow retrieval of all feed configs and latest reports, without the use of the Router contract.
 
-The `dependencies` folder contains the previous version of the `data-feeds` contract folder, in `legacy/data-feeds-pre-migration`. This is used in e2e migration upgrade test, where we upgrade to support multiple Forwarders and the new single value benchmark report type.
-
-It also contains the temporarily required `platform_secondary` package.
+The `legacy` folder contains the previous version of the `data-feeds` contract folder. This is used in e2e migration upgrade test, where we upgrade to support multiple Forwarders and the new single value benchmark report type.
 
 ## Why the `platform_secondary` folder exists
 
