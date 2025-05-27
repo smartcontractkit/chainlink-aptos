@@ -3,7 +3,7 @@
 During an upgrade to the Data Feeds Registry contract, a test script was made to simulate the migration in full on a local testnet.
 
 cd contracts/data-feeds/scripts
-./scripts/test_registry_migration_e2e.sh
+./test_registry_migration_e2e.sh
 
 This script can be adapted to prove other future migrations, as well as a starting point for testing new development features.
 
