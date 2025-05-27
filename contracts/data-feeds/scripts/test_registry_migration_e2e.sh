@@ -339,7 +339,7 @@ run "Deploy Forwarder 2" OUT_FWD2 \
     --profile "$PUBLISHER_PROFILE" \
     --package-dir "$CONTRACTS_ROOT/platform_secondary" \
     --address-name platform_secondary \
-    --named-addresses owner="$PUBLISHER_ADDR" \
+    --named-addresses owner_secondary="$PUBLISHER_ADDR" \
     --max-gas 50000 --assume-yes
 
 PLATFORM_SECONDARY_FORWARDER_ADDR=$(print "$OUT_FWD2" | extract_addr)
