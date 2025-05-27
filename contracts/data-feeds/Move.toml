@@ -20,6 +20,6 @@ owner_secondary = "0x22"
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "ebdfadf4002c35e4095e23c6312eeb28beca8f72", subdir = "aptos-move/framework/aptos-framework" }
 ChainlinkPlatform = { local = "../platform" }
-ChainlinkPlatformB = { local = "dependencies/platform_secondary" }
+ChainlinkPlatformSecondary = { local = "dependencies/platform_secondary" }
 
 [dev-dependencies]
