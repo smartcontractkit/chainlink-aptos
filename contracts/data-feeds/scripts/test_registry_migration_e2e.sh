@@ -337,7 +337,7 @@ run "Set config on Forwarder 1" _out \
 run "Deploy Forwarder 2" OUT_FWD2 \
   aptos move create-object-and-publish-package \
     --profile "$PUBLISHER_PROFILE" \
-    --package-dir "$CONTRACTS_ROOT/platform_secondary" \
+    --package-dir "$CONTRACTS_ROOT/data-feeds/dependencies/platform_secondary" \
     --address-name platform_secondary \
     --named-addresses owner_secondary="$PUBLISHER_ADDR" \
     --max-gas 50000 --assume-yes
@@ -363,7 +363,7 @@ run "Set config on Forwarder 2" _out \
 run "Deploy data-feeds (legacy, pre-migration)" OUT_DF_LEGACY \
   aptos move create-object-and-publish-package \
     --profile "$PUBLISHER_PROFILE" \
-    --package-dir "$CONTRACTS_ROOT/legacy/data-feeds-pre-migration" \
+    --package-dir "$CONTRACTS_ROOT/data-feeds/dependencies/legacy/data-feeds-pre-migration" \
     --address-name data_feeds \
     --named-addresses platform="$PLATFORM_FORWARDER_ADDR",owner="$PUBLISHER_ADDR" \
     --max-gas 50000 --assume-yes
