@@ -8,12 +8,14 @@ data_feeds = "_"
 owner = "_"
 platform = "_"
 platform_secondary = "_"
+owner_secondary = "_"
 
 [dev-addresses]
 data_feeds = "0x100"
 owner = "0xcafe"
 platform = "0xbaba"
 platform_secondary = "0x200"
+owner_secondary = "0x22"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "ebdfadf4002c35e4095e23c6312eeb28beca8f72", subdir = "aptos-move/framework/aptos-framework" }

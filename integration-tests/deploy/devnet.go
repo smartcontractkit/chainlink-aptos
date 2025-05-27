@@ -157,7 +157,7 @@ func (d *Deployer) DeployPlatformSecondary() error {
 		"--package-dir=/contracts/platform_secondary",
 		"--address-name=platform_secondary",
 		"--named-addresses",
-		fmt.Sprintf("platform_secondary=%s,owner_=%s", DEVNET_ACC, DEVNET_ACC),
+		fmt.Sprintf("platform_secondary=%s,owner_secondary=%s", DEVNET_ACC, DEVNET_ACC),
 		"--profile=default",
 		"--assume-yes",
 	}
