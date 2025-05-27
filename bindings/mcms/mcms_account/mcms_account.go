@@ -27,6 +27,7 @@ type MCMSAccountInterface interface {
 
 	TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
 	TransferOwnershipToSelf(opts *bind.TransactOpts) (*api.PendingTransaction, error)
+	AcceptOwnership(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 
 	// Encoder returns the encoder implementation of this module.
 	Encoder() MCMSAccountEncoder
@@ -136,6 +137,15 @@ func (c MCMSAccountContract) TransferOwnership(opts *bind.TransactOpts, to aptos
 
 func (c MCMSAccountContract) TransferOwnershipToSelf(opts *bind.TransactOpts) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.mcmsAccountEncoder.TransferOwnershipToSelf()
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c MCMSAccountContract) AcceptOwnership(opts *bind.TransactOpts) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.mcmsAccountEncoder.AcceptOwnership()
 	if err != nil {
 		return nil, err
 	}

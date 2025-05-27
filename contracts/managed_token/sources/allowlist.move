@@ -1,4 +1,4 @@
-module link::allowlist {
+module managed_token::allowlist {
     use std::account;
     use std::event::{Self, EventHandle};
     use std::error;
@@ -145,13 +145,13 @@ module link::allowlist {
 }
 
 #[test_only]
-module link::allowlist_test {
+module managed_token::allowlist_test {
     use std::account;
     use std::event;
     use std::signer;
     use std::vector;
 
-    use link::allowlist;
+    use managed_token::allowlist;
 
     #[test(owner = @0x0)]
     fun init_empty_is_empty_and_disabled(owner: &signer) {

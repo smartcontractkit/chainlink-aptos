@@ -1,4 +1,4 @@
-module link::link_token {
+module managed_token::managed_token {
     use std::account;
     use std::event;
     use std::fungible_asset::{Self, BurnRef, Metadata, MintRef, TransferRef};
@@ -8,10 +8,10 @@ module link::link_token {
     use std::signer;
     use std::string::{Self, String};
 
-    use link::allowlist::{Self, AllowlistState};
-    use link::ownable::{Self, OwnableState};
+    use managed_token::allowlist::{Self, AllowlistState};
+    use managed_token::ownable::{Self, OwnableState};
 
-    const TOKEN_STATE_SEED: vector<u8> = b"link::link_token::token_state";
+    const TOKEN_STATE_SEED: vector<u8> = b"managed_token::managed_token::token_state";
 
     struct TokenStateDeployment has key {
         extend_ref: ExtendRef,
@@ -72,7 +72,7 @@ module link::link_token {
 
     #[view]
     public fun type_and_version(): String {
-        string::utf8(b"LinkToken 1.0.0")
+        string::utf8(b"ManagedToken 1.0.0")
     }
 
     #[view]
@@ -81,7 +81,7 @@ module link::link_token {
     }
 
     inline fun token_state_address_internal(): address {
-        object::create_object_address(&@link, TOKEN_STATE_SEED)
+        object::create_object_address(&@managed_token, TOKEN_STATE_SEED)
     }
 
     #[view]
@@ -129,7 +129,7 @@ module link::link_token {
 
     /// `publisher` is the code object, deployed through object_code_deployment
     fun init_module(publisher: &signer) {
-        assert!(object::is_object(@link), E_NOT_PUBLISHER);
+        assert!(object::is_object(@managed_token), E_NOT_PUBLISHER);
 
         // Create object owned by code object
         let constructor_ref = &object::create_named_object(publisher, TOKEN_STATE_SEED);
@@ -137,8 +137,8 @@ module link::link_token {
         let token_state_signer = &object::generate_signer(constructor_ref);
 
         // create an Account on the object for event handles.
-        account::create_account_if_does_not_exist(@link);
-        
+        account::create_account_if_does_not_exist(@managed_token);
+
         let allowed_minters =
             allowlist::new_with_name(publisher, vector[], string::utf8(b"minters"));
         allowlist::set_allowlist_enabled(&mut allowed_minters, true);
@@ -152,7 +152,7 @@ module link::link_token {
             TokenStateDeployment {
                 extend_ref,
                 transfer_ref: object::generate_transfer_ref(constructor_ref),
-                ownable_state: ownable::new(publisher, @link),
+                ownable_state: ownable::new(publisher, @managed_token),
                 allowed_minters,
                 allowed_burners
             }
@@ -348,7 +348,7 @@ module link::link_token {
     /// So we only extract the ownable state from the token state
     public entry fun transfer_ownership(caller: &signer, to: address) acquires TokenState {
         ownable::transfer_ownership(
-            signer::address_of(caller),
+            caller,
             &mut TokenState[token_state_address_internal()].ownable_state,
             to
         )
@@ -358,7 +358,7 @@ module link::link_token {
     /// that the caller is the pending owner
     public entry fun accept_ownership(caller: &signer) acquires TokenState {
         ownable::accept_ownership(
-            signer::address_of(caller),
+            caller,
             &mut TokenState[token_state_address_internal()].ownable_state
         )
     }

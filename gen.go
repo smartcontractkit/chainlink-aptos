@@ -1,5 +1,9 @@
 package aptos
 
+//go:generate go run ./cmd/bindgen --input ./contracts/managed_token/sources/allowlist.move --output ./bindings/managed_token/allowlist
+//go:generate go run ./cmd/bindgen --input ./contracts/managed_token/sources/managed_token.move --output ./bindings/managed_token/managed_token
+//go:generate go run ./cmd/bindgen --input ./contracts/managed_token/sources/ownable.move --output ./bindings/managed_token/ownable
+
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/auth.move --output ./bindings/ccip/auth
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/fee_quoter.move --output ./bindings/ccip/fee_quoter
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/receiver_registry.move --output ./bindings/ccip/receiver_registry
@@ -16,6 +20,7 @@ package aptos
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip_token_pools/burn_mint_token_pool/sources/burn_mint_token_pool.move --output ./bindings/ccip_token_pools/burn_mint_token_pool/burn_mint_token_pool
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip_token_pools/lock_release_token_pool/sources/lock_release_token_pool.move --output ./bindings/ccip_token_pools/lock_release_token_pool/lock_release_token_pool
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip_token_pools/usdc_token_pool/sources/usdc_token_pool.move --output ./bindings/ccip_token_pools/usdc_token_pool/usdc_token_pool
+//go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip_token_pools/managed_token_pool/sources/managed_token_pool.move --output ./bindings/ccip_token_pools/managed_token_pool/managed_token_pool
 
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip_token_pools/token_pool/sources/rate_limiter.move --output ./bindings/ccip_token_pools/token_pool/rate_limiter
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip_token_pools/token_pool/sources/token_pool.move --output ./bindings/ccip_token_pools/token_pool/token_pool

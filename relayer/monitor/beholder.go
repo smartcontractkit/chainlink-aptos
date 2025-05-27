@@ -97,3 +97,15 @@ func (e *protoEmitter) appendAttrsRequired(ctx context.Context, m proto.Message,
 	attrKVs = appendRequiredAttrDomain(m, attrKVs)
 	return attrKVs
 }
+
+type NoopProtoEmitter struct{}
+
+func (n NoopProtoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any) error {
+	return nil
+}
+
+func (n NoopProtoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs ...any) error {
+	return nil
+}
+
+var _ ProtoEmitter = (*NoopProtoEmitter)(nil)

@@ -1,19 +1,5 @@
 /// This module is responsible for storage and retrieval of fee token and token transfer
 /// information and pricing.
-///
-/// TODO:
-/// at the moment, this module updates prices from received OCR3 reports.
-/// on EVM, the FeeQuoter contract takes the newer value between the prices stored locally
-/// (which are from OCR3 reports or from keystone reports), and that of a configured OCR2
-/// data feed price value.
-/// on Aptos, we have keystone feeds only and could:
-/// - allow configuration of feed_ids to query the keystone feeds router/registry module
-/// - support dynamic dispatch registration with the keystone forwarder module to receive
-///   keystone reports directly.
-/// only one of the two should be necessary since the data source for both should be the same
-/// (ie. keystone reports) and contain the same data points.
-/// the first option should be preferred since it does not require additional complexity with
-/// dynamic dispatch and additional report deserialization.
 module ccip::fee_quoter {
     use std::account;
     use std::error;
@@ -27,6 +13,7 @@ module ccip::fee_quoter {
     use std::timestamp;
 
     use ccip::auth;
+    use ccip::client;
     use ccip::eth_abi;
     use ccip::state_object;
 
@@ -36,11 +23,23 @@ module ccip::fee_quoter {
     const CHAIN_FAMILY_SELECTOR_EVM: vector<u8> = x"2812d52c";
     const CHAIN_FAMILY_SELECTOR_SVM: vector<u8> = x"1e10bdc4";
     const CHAIN_FAMILY_SELECTOR_APTOS: vector<u8> = x"ac77ffec";
+    const CHAIN_FAMILY_SELECTOR_SUI: vector<u8> = x"c4e05953";
 
+    /// @dev We disallow the first 1024 addresses to avoid calling into a range known for hosting precompiles. Calling
+    /// into precompiles probably won't cause any issues, but to be safe we can disallow this range. It is extremely
+    /// unlikely that anyone would ever be able to generate an address in this range. There is no official range of
+    /// precompiles, but EIP-7587 proposes to reserve the range 0x100 to 0x1ff. Our range is more conservative, even
+    /// though it might not be exhaustive for all chains, which is OK. We also disallow the zero address, which is a
+    /// common practice.
     const EVM_PRECOMPILE_SPACE: u256 = 1024;
 
-    const SVM_EXTRA_ARGS_V1_TAG: vector<u8> = x"1f3b3aba";
-    const GENERIC_EXTRA_ARGS_V2_TAG: vector<u8> = x"181dcf10";
+    /// @dev According to the Aptos docs, the first 0xa addresses are reserved for precompiles.
+    /// https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/doc/account.md#function-create_framework_reserved_account-1
+    /// We use the same range for SUI, even though there is one documented reserved address outside of this range.
+    /// Since sending a message to this address would not cause any negative side effects, as it would never register
+    /// a callback with CCIP, there is no negative impact.
+    /// https://move-book.com/appendix/reserved-addresses.html
+    const MOVE_PRECOMPILE_SPACE: u256 = 0x0b;
 
     const GAS_PRICE_BITS: u8 = 112;
 
@@ -48,6 +47,30 @@ module ccip::fee_quoter {
     const MESSAGE_FIXED_BYTES_PER_TOKEN: u64 = 32 * (4 + (3 + 2));
 
     const CCIP_LOCK_OR_BURN_V1_RET_BYTES: u32 = 32;
+
+    /// The maximum number of accounts that can be passed in SVMExtraArgs.
+    const SVM_EXTRA_ARGS_MAX_ACCOUNTS: u64 = 64;
+
+    /// Number of overhead accounts needed for message execution on SVM.
+    /// These are message.receiver, and the OffRamp Signer PDA specific to the receiver.
+    const SVM_MESSAGING_ACCOUNTS_OVERHEAD: u64 = 2;
+
+    /// The size of each SVM account (in bytes).
+    const SVM_ACCOUNT_BYTE_SIZE: u64 = 32;
+
+    /// The expected static payload size of a token transfer when Borsh encoded and submitted to SVM.
+    /// TokenPool extra data and offchain data sizes are dynamic, and should be accounted for separately.
+    const SVM_TOKEN_TRANSFER_DATA_OVERHEAD: u64 = (4 + 32) // source_pool
+    + 32 // token_address
+    + 4 // gas_amount
+    + 4 // extra_data overhead
+    + 32 // amount
+    + 32 // size of the token lookup table account
+    + 32 // token-related accounts in the lookup table, over-estimated to 32, typically between 11 - 13
+    + 32 // token account belonging to the token receiver, e.g ATA, not included in the token lookup table
+    + 32 // per-chain token pool config, not included in the token lookup table
+    + 32 // per-chain token billing config, not always included in the token lookup table
+    + 32; // OffRamp pool signer PDA, not included in the token lookup table;
 
     const MAX_U64: u256 = 18446744073709551615;
     const MAX_U160: u256 = 1461501637330902918203684832716283019655932542975;
@@ -58,8 +81,14 @@ module ccip::fee_quoter {
     const VAL_1E16: u256 = 10_000_000_000_000_000;
     const VAL_1E18: u256 = 1_000_000_000_000_000_000;
 
+    // Link has 8 decimals on Aptos and 18 decimals on it's native chain, Ethereum. We want to emit
+    // the fee in juels (1e18) denomination for consistency across chains. This means we multiply
+    // the fee by 1e8 on Aptos before we emit it in the event.
+    const LOCAL_8_TO_18_DECIMALS_LINK_MULTIPLIER: u256 = 10_000_000_000;
+
     struct FeeQuoterState has key, store {
-        max_fee_juels_per_msg: u64,
+        // max_fee_juels_per_msg is in juels (1e18) denomination for consistency across chains.
+        max_fee_juels_per_msg: u256,
         link_token: address,
         token_price_staleness_threshold: u64,
         fee_tokens: vector<address>,
@@ -83,7 +112,7 @@ module ccip::fee_quoter {
     }
 
     struct StaticConfig has drop {
-        max_fee_juels_per_msg: u64,
+        max_fee_juels_per_msg: u256,
         link_token: address,
         token_price_staleness_threshold: u64
     }
@@ -105,7 +134,7 @@ module ccip::fee_quoter {
         default_token_fee_usd_cents: u16,
         default_token_dest_gas_overhead: u32,
         default_tx_gas_limit: u32,
-        // TODO: should this be octa per apt?
+        // Multiplier for gas costs, 1e18 based so 11e17 = 10% extra cost.
         gas_multiplier_wei_per_eth: u64,
         gas_price_staleness_threshold: u32,
         network_fee_usd_cents: u32
@@ -195,7 +224,7 @@ module ccip::fee_quoter {
     const E_MESSAGE_TOO_LARGE: u64 = 13;
     const E_UNSUPPORTED_NUMBER_OF_TOKENS: u64 = 14;
     const E_INVALID_EVM_ADDRESS: u64 = 15;
-    const E_INVALID_SVM_ADDRESS: u64 = 16;
+    const E_INVALID_32BYTES_ADDRESS: u64 = 16;
     const E_FEE_TOKEN_COST_TOO_HIGH: u64 = 17;
     const E_MESSAGE_GAS_LIMIT_TOO_HIGH: u64 = 18;
     const E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE: u64 = 19;
@@ -210,6 +239,9 @@ module ccip::fee_quoter {
     const E_INVALID_CHAIN_FAMILY_SELECTOR: u64 = 28;
     const E_TO_TOKEN_AMOUNT_TOO_LARGE: u64 = 29;
     const E_UNKNOWN_FUNCTION: u64 = 30;
+    const E_ZERO_TOKEN_PRICE: u64 = 31;
+    const E_TOO_MANY_SVM_EXTRA_ARGS_ACCOUNTS: u64 = 32;
+    const E_INVALID_SVM_EXTRA_ARGS_WRITABLE_BITMAP: u64 = 33;
 
     #[view]
     public fun type_and_version(): String {
@@ -227,7 +259,7 @@ module ccip::fee_quoter {
 
     public entry fun initialize(
         caller: &signer,
-        max_fee_juels_per_msg: u64,
+        max_fee_juels_per_msg: u256,
         link_token: address,
         token_price_staleness_threshold: u64,
         fee_tokens: vector<address>
@@ -380,17 +412,24 @@ module ccip::fee_quoter {
     inline fun get_token_transfer_fee_config_internal(
         state: &FeeQuoterState, dest_chain_selector: u64, token: address
     ): &TokenTransferFeeConfig {
-        assert!(
-            state.token_transfer_fee_configs.contains(dest_chain_selector),
-            error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
-        );
-        let dest_chain_fee_configs =
-            state.token_transfer_fee_configs.borrow(dest_chain_selector);
-        assert!(
-            dest_chain_fee_configs.contains(token),
-            error::invalid_argument(E_TOKEN_NOT_SUPPORTED)
-        );
-        dest_chain_fee_configs.borrow(token)
+        let empty_fee_config =
+            TokenTransferFeeConfig {
+                min_fee_usd_cents: 0,
+                max_fee_usd_cents: 0,
+                deci_bps: 0,
+                dest_gas_overhead: 0,
+                dest_bytes_overhead: 0,
+                is_enabled: false
+            };
+
+        if (!state.token_transfer_fee_configs.contains(dest_chain_selector)) {
+            &empty_fee_config
+        } else {
+            let dest_chain_fee_configs =
+                state.token_transfer_fee_configs.borrow(dest_chain_selector);
+
+            dest_chain_fee_configs.borrow_with_default(token, &empty_fee_config)
+        }
     }
 
     // Note that unlike EVM, this only allows changes for a single dest chain selector
@@ -585,7 +624,7 @@ module ccip::fee_quoter {
         _fee_token_store: address,
         extra_args: vector<u8>
     ): u64 acquires FeeQuoterState {
-        let state = borrow_state_mut();
+        let state = borrow_state();
 
         let dest_chain_config = get_dest_chain_config_internal(
             state, dest_chain_selector
@@ -607,26 +646,33 @@ module ccip::fee_quoter {
         validate_message(dest_chain_config, data_len, tokens_len);
 
         let gas_limit =
-            if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM) {
-                validate_evm_address(receiver);
-                resolve_generic_gas_limit(dest_chain_config, extra_args)
-            } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS) {
-                validate_32byte_address(receiver, true);
+            if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM
+                || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
+                || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI) {
                 resolve_generic_gas_limit(dest_chain_config, extra_args)
             } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
-                let require_valid_token_receiver = tokens_len > 0;
-                let svm_gas_limit =
-                    resolve_svm_gas_limit(
-                        dest_chain_config, extra_args, require_valid_token_receiver
-                    );
-                let must_be_non_zero = svm_gas_limit > 0;
-                validate_32byte_address(receiver, must_be_non_zero);
-                svm_gas_limit
+                resolve_svm_gas_limit(
+                    dest_chain_config,
+                    state,
+                    dest_chain_selector,
+                    extra_args,
+                    receiver,
+                    data_len,
+                    tokens_len,
+                    local_token_addresses
+                )
             } else {
                 abort error::invalid_argument(E_UNKNOWN_CHAIN_FAMILY_SELECTOR)
             };
 
+        validate_dest_family_address(chain_family_selector, receiver, gas_limit);
+
         let fee_token_price = get_token_price_internal(state, fee_token);
+        assert!(
+            fee_token_price.value > 0,
+            error::invalid_state(E_ZERO_TOKEN_PRICE)
+        );
+
         let packed_gas_price =
             get_validated_gas_price_internal(
                 state, dest_chain_config, dest_chain_selector
@@ -758,71 +804,136 @@ module ccip::fee_quoter {
     inline fun resolve_generic_gas_limit(
         dest_chain_config: &DestChainConfig, extra_args: vector<u8>
     ): u256 {
-        let extra_args_len = extra_args.length();
-        if (extra_args_len == 0) {
-            dest_chain_config.default_tx_gas_limit as u256
-        } else {
-            let (gas_limit, allow_out_of_order_execution) =
-                decode_generic_extra_args(extra_args);
-            assert!(
-                gas_limit <= (dest_chain_config.max_per_msg_gas_limit as u256),
-                error::invalid_argument(E_MESSAGE_GAS_LIMIT_TOO_HIGH)
-            );
-            assert!(
-                !dest_chain_config.enforce_out_of_order || allow_out_of_order_execution,
-                error::invalid_argument(E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE)
-            );
-            gas_limit
-        }
+        let (gas_limit, allow_out_of_order_execution) =
+            decode_generic_extra_args(dest_chain_config, extra_args);
+        assert!(
+            gas_limit <= (dest_chain_config.max_per_msg_gas_limit as u256),
+            error::invalid_argument(E_MESSAGE_GAS_LIMIT_TOO_HIGH)
+        );
+        assert!(
+            !dest_chain_config.enforce_out_of_order || allow_out_of_order_execution,
+            error::invalid_argument(E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE)
+        );
+        gas_limit
     }
 
     inline fun resolve_svm_gas_limit(
         dest_chain_config: &DestChainConfig,
+        state: &FeeQuoterState,
+        dest_chain_selector: u64,
         extra_args: vector<u8>,
-        require_valid_token_receiver: bool
+        receiver: vector<u8>,
+        data_len: u64,
+        tokens_len: u64,
+        local_token_addresses: vector<address>
     ): u256 {
         let extra_args_len = extra_args.length();
         assert!(extra_args_len > 0, error::invalid_argument(E_INVALID_EXTRA_ARGS_DATA));
+
         let (
             compute_units,
-            _account_is_writable_bitmap,
+            account_is_writable_bitmap,
             allow_out_of_order_execution,
             token_receiver,
-            _accounts
+            accounts
         ) = decode_svm_extra_args(extra_args);
+
+        let gas_limit = compute_units;
+
         assert!(
             !dest_chain_config.enforce_out_of_order || allow_out_of_order_execution,
             error::invalid_argument(E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE)
         );
         assert!(
-            compute_units <= dest_chain_config.max_per_msg_gas_limit,
+            gas_limit <= dest_chain_config.max_per_msg_gas_limit,
             error::invalid_argument(E_MESSAGE_COMPUTE_UNIT_LIMIT_TOO_HIGH)
         );
-        if (require_valid_token_receiver) {
+
+        let accounts_length = accounts.length();
+        // The max payload size for SVM is heavily dependent on the accounts passed into extra args and the number of
+        // tokens. Below, token and account overhead will count towards maxDataBytes.
+        let svm_expanded_data_length = data_len;
+
+        let receiver_uint = eth_abi::decode_u256_value(receiver);
+        if (receiver_uint == 0) {
+            // When message receiver is zero, CCIP receiver is not invoked on SVM.
+            // There should not be additional accounts specified for the receiver.
             assert!(
-                token_receiver.length() == 32,
-                error::invalid_argument(E_INVALID_TOKEN_RECEIVER)
+                accounts_length == 0,
+                error::invalid_argument(E_TOO_MANY_SVM_EXTRA_ARGS_ACCOUNTS)
             );
-            let token_receiver_uint = eth_abi::decode_u256_value(token_receiver);
+        } else {
+            // The messaging accounts needed for CCIP receiver on SVM are:
+            // message receiver, offramp PDA signer,
+            // plus remaining accounts specified in SVM extraArgs. Each account is 32 bytes.
+            svm_expanded_data_length +=((
+                accounts_length + SVM_MESSAGING_ACCOUNTS_OVERHEAD
+            ) * SVM_ACCOUNT_BYTE_SIZE);
+        };
+
+        if (tokens_len > 0) {
             assert!(
-                token_receiver_uint > 0,
+                token_receiver.length() == 32
+                    && eth_abi::decode_u256_value(token_receiver) != 0,
                 error::invalid_argument(E_INVALID_TOKEN_RECEIVER)
             );
         };
-        compute_units as u256
+        assert!(
+            accounts_length <= SVM_EXTRA_ARGS_MAX_ACCOUNTS,
+            error::invalid_argument(E_TOO_MANY_SVM_EXTRA_ARGS_ACCOUNTS)
+        );
+        assert!(
+            (account_is_writable_bitmap >> (accounts_length as u8)) == 0,
+            error::invalid_argument(E_INVALID_SVM_EXTRA_ARGS_WRITABLE_BITMAP)
+        );
+
+        svm_expanded_data_length += tokens_len * SVM_TOKEN_TRANSFER_DATA_OVERHEAD;
+
+        // The token destBytesOverhead can be very different per token so we have to take it into account as well.
+        for (i in 0..tokens_len) {
+            let local_token_address = local_token_addresses[i];
+            let destBytesOverhead =
+                get_token_transfer_fee_config_internal(
+                    state, dest_chain_selector, local_token_address
+                ).dest_bytes_overhead;
+
+            // Pools get CCIP_LOCK_OR_BURN_V1_RET_BYTES by default, but if an override is set we use that instead.
+            if (destBytesOverhead > 0) {
+                svm_expanded_data_length +=(destBytesOverhead as u64);
+            } else {
+                svm_expanded_data_length +=(CCIP_LOCK_OR_BURN_V1_RET_BYTES as u64);
+            }
+        };
+
+        assert!(
+            svm_expanded_data_length <= (dest_chain_config.max_data_bytes as u64),
+            error::invalid_argument(E_MESSAGE_TOO_LARGE)
+        );
+
+        gas_limit as u256
     }
 
-    inline fun decode_generic_extra_args(extra_args: vector<u8>): (u256, bool) {
-        // TODO: we need extra validation here. if extra_args length is less than tag length + data length,
-        // vector::slice will revert.
+    inline fun decode_generic_extra_args(
+        dest_chain_config: &DestChainConfig, extra_args: vector<u8>
+    ): (u256, bool) {
         let extra_args_len = extra_args.length();
-        let args_tag = extra_args.slice(0, 4);
-        let args_data = extra_args.slice(4, extra_args_len);
-
-        if (args_tag == GENERIC_EXTRA_ARGS_V2_TAG) {
-            decode_generic_extra_args_v2(args_data)
+        if (extra_args_len == 0) {
+            // If extra args are empty, generate default values.
+            (dest_chain_config.default_tx_gas_limit as u256, false)
         } else {
-            abort error::invalid_argument(E_INVALID_EXTRA_ARGS_TAG)
+            assert!(
+                extra_args_len >= 4,
+                error::invalid_argument(E_INVALID_EXTRA_ARGS_DATA)
+            );
+
+            let args_tag = extra_args.slice(0, 4);
+            assert!(
+                args_tag == client::generic_extra_args_v2_tag(),
+                error::invalid_argument(E_INVALID_EXTRA_ARGS_TAG)
+            );
+
+            let args_data = extra_args.slice(4, extra_args_len);
+            decode_generic_extra_args_v2(args_data)
         }
     }
 
@@ -833,25 +944,18 @@ module ccip::fee_quoter {
         (gas_limit, allow_out_of_order_execution)
     }
 
-    inline fun encode_generic_extra_args_v2(
-        gas_limit: u256, allow_out_of_order_execution: bool
-    ): vector<u8> {
-        let extra_args = vector[];
-        eth_abi::encode_selector(&mut extra_args, GENERIC_EXTRA_ARGS_V2_TAG);
-        eth_abi::encode_u256(&mut extra_args, gas_limit);
-        eth_abi::encode_bool(&mut extra_args, allow_out_of_order_execution);
-        extra_args
-    }
-
     inline fun decode_svm_extra_args(
         extra_args: vector<u8>
     ): (u32, u64, bool, vector<u8>, vector<vector<u8>>) {
-        // TODO: we need extra validation here. if extra_args length is less than tag length + data length,
-        // vector::slice will revert.
         let extra_args_len = extra_args.length();
+        assert!(
+            extra_args_len >= 4,
+            error::invalid_argument(E_INVALID_EXTRA_ARGS_DATA)
+        );
+
         let args_tag = extra_args.slice(0, 4);
         assert!(
-            args_tag == SVM_EXTRA_ARGS_V1_TAG,
+            args_tag == client::svm_extra_args_v1_tag(),
             error::invalid_argument(E_INVALID_EXTRA_ARGS_TAG)
         );
         let args_data = extra_args.slice(4, extra_args_len);
@@ -982,16 +1086,19 @@ module ccip::fee_quoter {
     }
 
     #[view]
+    /// @returns (msg_fee_juels, is_out_of_order_execution, converted_extra_args, dest_exec_data_per_token)
     public fun process_message_args(
         dest_chain_selector: u64,
         fee_token: address,
         fee_token_amount: u64,
         extra_args: vector<u8>,
+        local_token_addresses: vector<address>,
         dest_token_addresses: vector<vector<u8>>,
         dest_pool_datas: vector<vector<u8>>
-    ): (u64, bool, vector<u8>, vector<vector<u8>>) acquires FeeQuoterState {
+    ): (u256, bool, vector<u8>, vector<vector<u8>>) acquires FeeQuoterState {
         let state = borrow_state();
-        let msg_fee_juels =
+        // This is the fee in Aptos denomination. We convert it to juels (1e18 based) below.
+        let msg_fee_link_local_denomination =
             if (fee_token == state.link_token) {
                 fee_token_amount
             } else {
@@ -1003,6 +1110,13 @@ module ccip::fee_quoter {
                 )
             };
 
+        // We convert the local denomination to juels here. This means that the offchain monitoring will always
+        // get a consistent juels amount regardless of the token denomination on the chain.
+        let msg_fee_juels =
+            (msg_fee_link_local_denomination as u256)
+                * LOCAL_8_TO_18_DECIMALS_LINK_MULTIPLIER;
+
+        // max_fee_juels_per_msg is in juels denomination for consistency across chains.
         assert!(
             msg_fee_juels <= state.max_fee_juels_per_msg,
             error::invalid_argument(E_MESSAGE_FEE_TOO_HIGH)
@@ -1011,8 +1125,6 @@ module ccip::fee_quoter {
         let dest_chain_config = get_dest_chain_config_internal(
             state, dest_chain_selector
         );
-        let token_transfer_fee_config =
-            get_token_transfer_fee_config_internal(state, dest_chain_selector, fee_token);
 
         let (converted_extra_args, is_out_of_order_execution) =
             process_chain_family_selector(
@@ -1023,8 +1135,10 @@ module ccip::fee_quoter {
 
         let dest_exec_data_per_token =
             process_pool_return_data(
+                state,
                 dest_chain_config,
-                token_transfer_fee_config,
+                dest_chain_selector,
+                local_token_addresses,
                 dest_token_addresses,
                 dest_pool_datas
             );
@@ -1044,11 +1158,14 @@ module ccip::fee_quoter {
     ): (vector<u8>, bool) {
         let chain_family_selector = dest_chain_config.chain_family_selector;
         if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM
-            || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS) {
+            || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
+            || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI) {
             let (gas_limit, allow_out_of_order_execution) =
-                decode_generic_extra_args(extra_args);
+                decode_generic_extra_args(dest_chain_config, extra_args);
             let extra_args_v2 =
-                encode_generic_extra_args_v2(gas_limit, allow_out_of_order_execution);
+                client::encode_generic_extra_args_v2(
+                    gas_limit, allow_out_of_order_execution
+                );
             (extra_args_v2, allow_out_of_order_execution)
         } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
             let (
@@ -1076,8 +1193,10 @@ module ccip::fee_quoter {
     }
 
     inline fun process_pool_return_data(
+        state: &FeeQuoterState,
         dest_chain_config: &DestChainConfig,
-        token_transfer_fee_config: &TokenTransferFeeConfig,
+        dest_chain_selector: u64,
+        local_token_addresses: vector<address>,
         dest_token_addresses: vector<vector<u8>>,
         dest_pool_datas: vector<vector<u8>>
     ): vector<vector<u8>> {
@@ -1087,8 +1206,15 @@ module ccip::fee_quoter {
 
         let dest_exec_data_per_token = vector[];
         for (i in 0..tokens_len) {
+            let local_token_address = local_token_addresses[i];
             let dest_token_address = dest_token_addresses[i];
             let dest_pool_data_len = dest_pool_datas[i].length();
+
+            let token_transfer_fee_config =
+                get_token_transfer_fee_config_internal(
+                    state, dest_chain_selector, local_token_address
+                );
+
             if (dest_pool_data_len > (CCIP_LOCK_OR_BURN_V1_RET_BYTES as u64)) {
                 assert!(
                     dest_pool_data_len
@@ -1097,12 +1223,9 @@ module ccip::fee_quoter {
                 );
             };
 
-            if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM) {
-                validate_evm_address(dest_token_address);
-            } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM
-                || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS) {
-                validate_32byte_address(dest_token_address, /* must_be_non_zero= */ true);
-            };
+            // We pass in 1 as gas_limit as this only matters for SVM address validation. This ensures the address
+            // may not be 0x0.
+            validate_dest_family_address(chain_family_selector, dest_token_address, 1);
 
             let dest_gas_amount =
                 if (token_transfer_fee_config.is_enabled) {
@@ -1175,7 +1298,8 @@ module ccip::fee_quoter {
         assert!(
             chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM
                 || chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM
-                || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS,
+                || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
+                || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI,
             error::invalid_argument(E_INVALID_CHAIN_FAMILY_SELECTOR)
         );
 
@@ -1238,6 +1362,8 @@ module ccip::fee_quoter {
         borrow_global_mut<FeeQuoterState>(state_object::object_address())
     }
 
+    // Token prices can be stale. On EVM we have additional fallbacks to a price feed, if configured. Since these
+    // fallbacks don't exist on Aptos, we simply return the price as is.
     inline fun get_token_price_internal(
         state: &FeeQuoterState, token: address
     ): TimestampedPrice {
@@ -1306,6 +1432,25 @@ module ccip::fee_quoter {
         );
     }
 
+    inline fun validate_dest_family_address(
+        chain_family_selector: vector<u8>, encoded_address: vector<u8>, gas_limit: u256
+    ) {
+        if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM) {
+            validate_evm_address(encoded_address);
+        } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
+            // SVM addresses don't have a precompile space at the first X addresses, instead we validate that if the gasLimit
+            // is non-zero, the address must not be 0x0.
+            let min_address = 0;
+            if (gas_limit > 0) {
+                min_address = 1;
+            };
+            validate_32byte_address(encoded_address, min_address);
+        } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
+            || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI) {
+            validate_32byte_address(encoded_address, MOVE_PRECOMPILE_SPACE);
+        };
+    }
+
     inline fun validate_evm_address(encoded_address: vector<u8>) {
         assert!(
             encoded_address.length() == 32,
@@ -1325,20 +1470,18 @@ module ccip::fee_quoter {
     }
 
     inline fun validate_32byte_address(
-        encoded_address: vector<u8>, must_be_non_zero: bool
+        encoded_address: vector<u8>, min_value: u256
     ) {
         assert!(
             encoded_address.length() == 32,
-            error::invalid_argument(E_INVALID_SVM_ADDRESS)
+            error::invalid_argument(E_INVALID_32BYTES_ADDRESS)
         );
 
-        if (must_be_non_zero) {
-            let encoded_address_uint = eth_abi::decode_u256_value(encoded_address);
-            assert!(
-                encoded_address_uint > 0,
-                error::invalid_argument(E_INVALID_SVM_ADDRESS)
-            );
-        };
+        let encoded_address_uint = eth_abi::decode_u256_value(encoded_address);
+        assert!(
+            encoded_address_uint >= min_value,
+            error::invalid_argument(E_INVALID_32BYTES_ADDRESS)
+        );
     }
 
     // ================================================================
@@ -1357,7 +1500,7 @@ module ccip::fee_quoter {
         let stream = bcs_stream::new(data);
 
         if (function_bytes == b"initialize") {
-            let max_fee_juels_per_msg = bcs_stream::deserialize_u64(&mut stream);
+            let max_fee_juels_per_msg = bcs_stream::deserialize_u256(&mut stream);
             let link_token = bcs_stream::deserialize_address(&mut stream);
             let token_price_staleness_threshold = bcs_stream::deserialize_u64(
                 &mut stream
@@ -1536,5 +1679,81 @@ module ccip::fee_quoter {
         };
 
         option::none()
+    }
+
+    #[test]
+    fun test_decode_generic_extra_args_v2() {
+        let dest_chain_config = DestChainConfig {
+            is_enabled: true,
+            max_number_of_tokens_per_msg: 1000,
+            max_data_bytes: 1000,
+            max_per_msg_gas_limit: 1000,
+            dest_gas_overhead: 1000,
+            dest_gas_per_payload_byte_base: 10,
+            dest_gas_per_payload_byte_high: 10,
+            dest_gas_per_payload_byte_threshold: 1000,
+            dest_data_availability_overhead_gas: 1000,
+            dest_gas_per_data_availability_byte: 1000,
+            dest_data_availability_multiplier_bps: 1000,
+            chain_family_selector: b"test",
+            enforce_out_of_order: true,
+            default_token_fee_usd_cents: 1000,
+            default_token_dest_gas_overhead: 1000,
+            default_tx_gas_limit: 1000,
+            gas_multiplier_wei_per_eth: 1000,
+            gas_price_staleness_threshold: 1000,
+            network_fee_usd_cents: 1000
+        };
+
+        let expected_gas_limit = 101;
+        let expected_allow_out_of_order_execution = true;
+
+        let extra_args =
+            client::encode_generic_extra_args_v2(
+                expected_gas_limit,
+                expected_allow_out_of_order_execution
+            );
+
+        let (gas_limit, allow_out_of_order_execution) =
+            decode_generic_extra_args(&dest_chain_config, extra_args);
+
+        assert!(gas_limit == expected_gas_limit, 0);
+        assert!(allow_out_of_order_execution == expected_allow_out_of_order_execution, 0);
+    }
+
+    #[test]
+    fun test_decode_svm_extra_args_v1() {
+        let expected_compute_units = 101;
+        let expected_account_is_writable_bitmap = 102;
+        let expected_allow_out_of_order_execution = true;
+        let expected_token_receiver =
+            x"1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+        let expected_accounts = vector[
+            x"2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdea",
+            x"3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdeb"
+        ];
+
+        let extra_args =
+            client::encode_svm_extra_args_v1(
+                expected_compute_units,
+                expected_account_is_writable_bitmap,
+                expected_allow_out_of_order_execution,
+                expected_token_receiver,
+                expected_accounts
+            );
+
+        let (
+            compute_units,
+            account_is_writable_bitmap,
+            allow_out_of_order_execution,
+            token_receiver,
+            accounts
+        ) = decode_svm_extra_args(extra_args);
+
+        assert!(compute_units == expected_compute_units, 0);
+        assert!(account_is_writable_bitmap == expected_account_is_writable_bitmap, 0);
+        assert!(allow_out_of_order_execution == expected_allow_out_of_order_execution, 0);
+        assert!(token_receiver == expected_token_receiver, 0);
+        assert!(accounts == expected_accounts, 0);
     }
 }

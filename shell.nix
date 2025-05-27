@@ -11,10 +11,28 @@
       go_1_23
       gopls
       delve
-      (golangci-lint.override {buildGoModule = buildGo122Module;})
+      # override to lock 1.64 version that is currently used by CI
+      (golangci-lint.overrideAttrs (old: rec {
+          version = "1.64.8";
+          src = fetchFromGitHub {
+            owner = "golangci";
+            repo = "golangci-lint";
+            rev = "v${version}";
+            hash = "sha256-H7IdXAleyzJeDFviISitAVDNJmiwrMysYcGm6vAoWso=";
+          };
+         vendorHash = "sha256-i7ec4U4xXmRvHbsDiuBjbQ0xP7xRuilky3gi+dT1H10=";
+
+         ldflags = [
+             "-s"
+             "-X main.version=${version}"
+             "-X main.commit=v${version}"
+             "-X main.date=19700101-00:00:00"
+           ];
+        }))
       gotools
       # Official golang implementation of the Ethereum protocol (e.g., geth, abigen, rlpdump, etc.)
       go-ethereum
+      go-mockery
 
       # Protobuf + plugins/tools
       protobuf

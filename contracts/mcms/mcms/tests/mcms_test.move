@@ -323,9 +323,11 @@ module mcms::mcms_tests {
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
-    #[expected_failure(
-        abort_code = mcms::mcms::E_VALID_UNTIL_EXPIRED, location = mcms::mcms
-    )]
+    #[
+        expected_failure(
+            abort_code = mcms::mcms::E_VALID_UNTIL_EXPIRED, location = mcms::mcms
+        )
+    ]
     public fun test_set_root__valid_until_expired(
         deployer: &signer, owner: &signer, framework: &signer
     ) {
@@ -431,9 +433,11 @@ module mcms::mcms_tests {
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
-    #[expected_failure(
-        abort_code = mcms::mcms::E_WRONG_POST_OP_COUNT, location = mcms::mcms
-    )]
+    #[
+        expected_failure(
+            abort_code = mcms::mcms::E_WRONG_POST_OP_COUNT, location = mcms::mcms
+        )
+    ]
     public fun test_set_root__wrong_post_op_count(
         deployer: &signer, owner: &signer, framework: &signer
     ) {
@@ -630,9 +634,11 @@ module mcms::mcms_tests {
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
-    #[expected_failure(
-        abort_code = mcms::mcms::E_INVALID_NUM_SIGNERS, location = mcms::mcms
-    )]
+    #[
+        expected_failure(
+            abort_code = mcms::mcms::E_INVALID_NUM_SIGNERS, location = mcms::mcms
+        )
+    ]
     public fun test_set_config__invalid_number_of_signers(
         deployer: &signer, owner: &signer, framework: &signer
     ) {
@@ -1263,8 +1269,6 @@ module mcms::mcms_tests {
         call_execute(execute_args);
     }
 
-    // // todo: test send values
-
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     public fun test_ownable__transfer_ownership(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1716,9 +1720,11 @@ module mcms::mcms_tests {
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
-    #[expected_failure(
-        abort_code = mcms::mcms::E_OPERATION_NOT_READY, location = mcms::mcms
-    )]
+    #[
+        expected_failure(
+            abort_code = mcms::mcms::E_OPERATION_NOT_READY, location = mcms::mcms
+        )
+    ]
     public fun test_execute_batch_not_ready(
         deployer: &signer, owner: &signer, framework: &signer
     ) {
@@ -2137,9 +2143,11 @@ module mcms::mcms_tests {
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
-    #[expected_failure(
-        abort_code = mcms::mcms::E_UNKNOWN_MCMS_MODULE, location = mcms::mcms
-    )]
+    #[
+        expected_failure(
+            abort_code = mcms::mcms::E_UNKNOWN_MCMS_MODULE, location = mcms::mcms
+        )
+    ]
     public fun test_unknown_mcms_module(
         deployer: &signer, owner: &signer, framework: &signer
     ) {

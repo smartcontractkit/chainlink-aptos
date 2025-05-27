@@ -11,11 +11,18 @@ mcms = "_"
 mcms_register_entrypoints = "_"
 
 [dev-addresses]
-ccip_router = "0x1001"
+ccip_router = "0x824121a3a828f5b7371da004c96fd02d0319518642a9456ca4c36628b713b069"
 ccip_onramp = "0x1002"
 ccip = "0x1000"
 mcms = "0x4000"
 mcms_register_entrypoints = "0x4001"
+
+# For testing ccip_onramp
+ccip_token_pool = "0x8d62e11f76e6e92563c59e7a5e842a540f8c6c3a4ed8a32f40a5ad3425b55f86"
+burn_mint_token_pool = "0x8e03eb21315649c06acb9a860a72c2b8cef5bd36775402008b89af397756dad7"
+lock_release_token_pool = "0x2e1f4cc8fbc2c7ccd2c67ff453e00526919098304d70708ef504af944d6fede8"
+burn_mint_local_token = "0x15c084d10b071a4b180c8d050e421a533bd07d13f9d9386335709da567183768"
+lock_release_local_token = "0x6d1c246126d36fea774b12486de0a3737997f1b9b23806c67ca5ce72859ff5fa"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }

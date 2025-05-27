@@ -71,7 +71,7 @@ module ccip_onramp::onramp {
         extra_args: vector<u8>,
         fee_token: address,
         fee_token_amount: u64,
-        fee_value_juels: u64,
+        fee_value_juels: u256,
         token_amounts: vector<Aptos2AnyTokenTransfer>
     }
 
@@ -144,13 +144,13 @@ module ccip_onramp::onramp {
     const E_UNSUPPORTED_TOKEN: u64 = 10;
     const E_INVALID_FEE_TOKEN: u64 = 11;
     const E_CURSED_BY_RMN: u64 = 12;
-    const E_BAD_RMN_SIGNAL: u64 = 13;
-    const E_INVALID_TOKEN: u64 = 14;
-    const E_INVALID_TOKEN_STORE: u64 = 15;
-    const E_UNEXPECTED_WITHDRAW_AMOUNT: u64 = 16;
-    const E_UNEXPECTED_FUNGIBLE_ASSET: u64 = 17;
-    const E_FEE_AGGREGATOR_NOT_SET: u64 = 18;
-    const E_MUST_BE_CALLED_BY_ROUTER: u64 = 19;
+    const E_INVALID_TOKEN: u64 = 13;
+    const E_INVALID_TOKEN_STORE: u64 = 14;
+    const E_UNEXPECTED_WITHDRAW_AMOUNT: u64 = 15;
+    const E_UNEXPECTED_FUNGIBLE_ASSET: u64 = 16;
+    const E_FEE_AGGREGATOR_NOT_SET: u64 = 17;
+    const E_MUST_BE_CALLED_BY_ROUTER: u64 = 18;
+    const E_TOKEN_AMOUNT_MISMATCH: u64 = 19;
 
     #[view]
     public fun type_and_version(): String {
@@ -245,7 +245,9 @@ module ccip_onramp::onramp {
     }
 
     #[view]
-    public fun get_expected_next_sequence_number(dest_chain_selector: u64): u64 acquires OnRampState {
+    public fun get_expected_next_sequence_number(
+        dest_chain_selector: u64
+    ): u64 acquires OnRampState {
         let state = borrow_state();
         assert!(
             state.dest_chain_configs.contains(dest_chain_selector),
@@ -345,11 +347,7 @@ module ccip_onramp::onramp {
         fee_token_store: address,
         extra_args: vector<u8>
     ): vector<u8> acquires OnRampState {
-        assert!(
-            !rmn_remote::is_cursed_global(),
-            error::permission_denied(E_BAD_RMN_SIGNAL)
-        );
-
+        // get_fee_internal checks for curse status
         let fee_token_amount =
             get_fee_internal(
                 dest_chain_selector,
@@ -416,6 +414,11 @@ module ccip_onramp::onramp {
             account::create_signer_with_capability(&state.state_signer_cap);
 
         let tokens_len = token_addresses.length();
+        assert!(
+            tokens_len == token_store_addresses.length(),
+            error::invalid_argument(E_TOKEN_AMOUNT_MISMATCH)
+        );
+
         let token_transfers = vector[];
         for (i in 0..tokens_len) {
             let token = token_addresses[i];
@@ -484,6 +487,7 @@ module ccip_onramp::onramp {
                 fee_token,
                 fee_token_amount,
                 extra_args,
+                token_addresses,
                 dest_token_addresses,
                 dest_pool_datas
             );
@@ -522,7 +526,6 @@ module ccip_onramp::onramp {
             fee_value_juels,
             token_amounts: token_transfers
         };
-
         let metadata_hash =
             calculate_metadata_hash(state.chain_selector, dest_chain_selector);
         let message_id = calculate_message_hash(&message, metadata_hash);
@@ -936,14 +939,12 @@ module ccip_onramp::onramp {
 
     public entry fun transfer_ownership(caller: &signer, to: address) acquires OnRampState {
         let state = borrow_state_mut();
-        ownable::transfer_ownership(
-            signer::address_of(caller), &mut state.ownable_state, to
-        )
+        ownable::transfer_ownership(caller, &mut state.ownable_state, to)
     }
 
     public entry fun accept_ownership(caller: &signer) acquires OnRampState {
         let state = borrow_state_mut();
-        ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
+        ownable::accept_ownership(caller, &mut state.ownable_state)
     }
 
     public entry fun execute_ownership_transfer(
@@ -963,7 +964,7 @@ module ccip_onramp::onramp {
         _metadata: Object<T>
     ): option::Option<u128> acquires OnRampDeployment, OnRampState {
         let (caller, function, data) =
-            mcms_registry::get_callback_params(@ccip, McmsCallback {});
+            mcms_registry::get_callback_params(@ccip_onramp, McmsCallback {});
 
         let function_bytes = *function.bytes();
         let stream = bcs_stream::new(data);
@@ -1076,5 +1077,31 @@ module ccip_onramp::onramp {
         };
 
         option::none()
+    }
+
+    public fun dynamic_config_fee_aggregator(config: &DynamicConfig): address {
+        config.fee_aggregator
+    }
+
+    public fun dynamic_config_allowlist_admin(config: &DynamicConfig): address {
+        config.allowlist_admin
+    }
+
+    public fun static_config_chain_selector(config: &StaticConfig): u64 {
+        config.chain_selector
+    }
+
+    // ========================== TEST ONLY ==========================
+
+    #[test_only]
+    public fun test_init_module(publisher: &signer) {
+        init_module(publisher);
+    }
+
+    #[test_only]
+    public fun register_mcms_entrypoint(publisher: &signer) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(b"onramp"), McmsCallback {}
+        );
     }
 }

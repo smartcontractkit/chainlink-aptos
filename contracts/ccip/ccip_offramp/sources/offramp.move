@@ -238,6 +238,7 @@ module ccip_offramp::offramp {
     const E_FUNGIBLE_ASSET_AMOUNT_MISMATCH: u64 = 21;
     const E_SIGNATURE_VERIFICATION_REQUIRED_IN_COMMIT_PLUGIN: u64 = 22;
     const E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN: u64 = 23;
+    const E_RMN_BLESSING_MISMATCH: u64 = 24;
 
     #[view]
     public fun type_and_version(): String {
@@ -297,11 +298,6 @@ module ccip_offramp::offramp {
         let ownable_state = ownable::new(state_signer, @ccip_offramp);
 
         ownable::assert_only_owner(signer::address_of(caller), &ownable_state);
-
-        assert!(
-            source_chains_selector.length() == source_chains_is_enabled.length(),
-            error::invalid_argument(E_SOURCE_CHAIN_SELECTORS_MISMATCH)
-        );
 
         let state = OffRampState {
             state_signer_cap,
@@ -421,12 +417,6 @@ module ccip_offramp::offramp {
         };
 
         assert_source_chain_enabled(state, source_chain_selector);
-
-        assert!(
-            execution_report.message.header.source_chain_selector
-                == source_chain_selector,
-            error::invalid_argument(E_SOURCE_CHAIN_SELECTOR_MISMATCH)
-        );
         assert!(
             execution_report.message.header.dest_chain_selector == state.chain_selector,
             error::invalid_argument(E_DEST_CHAIN_SELECTOR_MISMATCH)
@@ -590,14 +580,20 @@ module ccip_offramp::offramp {
                     gas_usd_per_unit_gas
                 );
             } else {
+                // If no non-stale valid price updates are present and the report contains no merkle roots, either
+                // blessed or unblesssed, the entire report is stale and should be rejected.
                 assert!(
-                    commit_report.blessed_merkle_roots.length() > 0,
+                    commit_report.blessed_merkle_roots.length() > 0
+                        || commit_report.unblessed_merkle_roots.length() > 0,
                     error::invalid_argument(E_STALE_COMMIT_REPORT)
                 );
             }
         };
 
+        // Commit the roots that do require RMN blessing validation. The blessings are checked at the start of this
+        // function.
         commit_merkle_roots(state, commit_report.blessed_merkle_roots, true);
+        // Commit the roots that do not require RMN blessing validation.
         commit_merkle_roots(state, commit_report.unblessed_merkle_roots, false);
 
         event::emit(
@@ -630,12 +626,16 @@ module ccip_offramp::offramp {
         blessed_merkle_roots: &vector<MerkleRoot>, rmn_signatures: vector<vector<u8>>
     ) {
         let merkle_root_source_chains_selector = vector[];
+        let merkle_root_on_ramp_addresses = vector[];
         let merkle_root_min_seq_nrs = vector[];
         let merkle_root_max_seq_nrs = vector[];
         let merkle_root_values = vector[];
         blessed_merkle_roots.for_each_ref(|merkle_root| {
             let merkle_root: &MerkleRoot = merkle_root;
-            merkle_root_source_chains_selector.push_back(merkle_root.source_chain_selector);
+            merkle_root_source_chains_selector.push_back(
+                merkle_root.source_chain_selector
+            );
+            merkle_root_on_ramp_addresses.push_back(merkle_root.on_ramp_address);
             merkle_root_min_seq_nrs.push_back(merkle_root.min_seq_nr);
             merkle_root_max_seq_nrs.push_back(merkle_root.max_seq_nr);
             merkle_root_values.push_back(merkle_root.merkle_root);
@@ -643,6 +643,7 @@ module ccip_offramp::offramp {
 
         rmn_remote::verify(
             merkle_root_source_chains_selector,
+            merkle_root_on_ramp_addresses,
             merkle_root_min_seq_nrs,
             merkle_root_max_seq_nrs,
             merkle_root_values,
@@ -670,7 +671,10 @@ module ccip_offramp::offramp {
 
                 // If the root is blessed but RMN blessing is disabled for the source chain, or if the root is not
                 // blessed but RMN blessing is enabled, we revert.
-                assert!(is_blessed != source_chain_config.is_rmn_verification_disabled, 0);
+                assert!(
+                    is_blessed != source_chain_config.is_rmn_verification_disabled,
+                    error::invalid_state(E_RMN_BLESSING_MISMATCH)
+                );
 
                 assert!(
                     source_chain_config.on_ramp == root.on_ramp_address,
@@ -934,7 +938,7 @@ module ccip_offramp::offramp {
 
         // check that the amount deposited to the user's primary fungible store is exactly `local_amount`
         assert!(
-            after_balance > before_balance
+            after_balance >= before_balance
                 && (after_balance - before_balance) == local_amount,
             error::invalid_state(E_FUNGIBLE_ASSET_AMOUNT_MISMATCH)
         );
@@ -1241,14 +1245,12 @@ module ccip_offramp::offramp {
 
     public entry fun transfer_ownership(caller: &signer, to: address) acquires OffRampState {
         let state = borrow_state_mut();
-        ownable::transfer_ownership(
-            signer::address_of(caller), &mut state.ownable_state, to
-        )
+        ownable::transfer_ownership(caller, &mut state.ownable_state, to)
     }
 
     public entry fun accept_ownership(caller: &signer) acquires OffRampState {
         let state = borrow_state_mut();
-        ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
+        ownable::accept_ownership(caller, &mut state.ownable_state)
     }
 
     public entry fun execute_ownership_transfer(
@@ -1273,7 +1275,7 @@ module ccip_offramp::offramp {
     ) acquires OffRampState {
         let state = borrow_state_mut();
         ocr3_base::set_ocr3_config(
-            signer::address_of(caller),
+            caller,
             &mut state.ocr3_base_state,
             config_digest,
             ocr_plugin_type,

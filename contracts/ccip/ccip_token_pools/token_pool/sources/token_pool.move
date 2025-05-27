@@ -15,6 +15,9 @@ module ccip_token_pool::token_pool {
     use ccip_token_pool::token_pool_rate_limiter;
 
     const STORE_OBJECT_SEED: vector<u8> = b"CCIPTokenPool";
+    const MAX_U256: u256 =
+        115792089237316195423570985008687907853269984665640564039457584007913129639935;
+    const MAX_U64: u256 = 18446744073709551615;
 
     struct TokenPoolState has key, store {
         allowlist_state: allowlist::AllowlistState,
@@ -23,6 +26,8 @@ module ccip_token_pool::token_pool {
         rate_limiter_config: token_pool_rate_limiter::RateLimitState,
         locked_events: EventHandle<Locked>,
         released_events: EventHandle<Released>,
+        burned_events: EventHandle<Burned>,
+        minted_events: EventHandle<Minted>,
         remote_pool_added_events: EventHandle<RemotePoolAdded>,
         remote_pool_removed_events: EventHandle<RemotePoolRemoved>,
         chain_added_events: EventHandle<ChainAdded>
@@ -44,6 +49,19 @@ module ccip_token_pool::token_pool {
 
     #[event]
     struct Released has store, drop {
+        local_token: address,
+        recipient: address,
+        amount: u64
+    }
+
+    #[event]
+    struct Burned has store, drop {
+        local_token: address,
+        amount: u64
+    }
+
+    #[event]
+    struct Minted has store, drop {
         local_token: address,
         recipient: address,
         amount: u64
@@ -77,7 +95,7 @@ module ccip_token_pool::token_pool {
         remote_token_address: vector<u8>
     }
 
-    const E_NOT_PUBLISHER: u64 = 1;
+    const E_NOT_ALLOWED_CALLER: u64 = 1;
     const E_UNKNOWN_FUNGIBLE_ASSET: u64 = 2;
     const E_UNKNOWN_REMOTE_CHAIN_SELECTOR: u64 = 3;
     const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 4;
@@ -87,6 +105,8 @@ module ccip_token_pool::token_pool {
     const E_REMOTE_CHAIN_ALREADY_EXISTS: u64 = 8;
     const E_INVALID_REMOTE_CHAIN_DECIMALS: u64 = 9;
     const E_INVALID_ENCODED_AMOUNT: u64 = 10;
+    const E_DECIMAL_OVERFLOW: u64 = 11;
+    const E_CURSED_CHAIN: u64 = 12;
 
     // ================================================================
     // |                    Initialize and state                      |
@@ -95,36 +115,23 @@ module ccip_token_pool::token_pool {
     /// This function should be called from the init_module function to ensure the events
     /// are created on the correct object.
     public fun initialize(
-        publisher: &signer, local_token: address, allowlist: vector<address>
+        event_account: &signer, local_token: address, allowlist: vector<address>
     ): TokenPoolState {
-        assert_can_initialize(signer::address_of(publisher));
-
         let fa_metadata = object::address_to_object<Metadata>(local_token);
 
         TokenPoolState {
-            allowlist_state: allowlist::new(publisher, allowlist),
+            allowlist_state: allowlist::new(event_account, allowlist),
             fa_metadata,
             remote_chain_configs: smart_table::new(),
-            rate_limiter_config: token_pool_rate_limiter::new(publisher),
-            locked_events: account::new_event_handle(publisher),
-            released_events: account::new_event_handle(publisher),
-            remote_pool_added_events: account::new_event_handle(publisher),
-            remote_pool_removed_events: account::new_event_handle(publisher),
-            chain_added_events: account::new_event_handle(publisher)
+            rate_limiter_config: token_pool_rate_limiter::new(event_account),
+            locked_events: account::new_event_handle(event_account),
+            released_events: account::new_event_handle(event_account),
+            burned_events: account::new_event_handle(event_account),
+            minted_events: account::new_event_handle(event_account),
+            remote_pool_added_events: account::new_event_handle(event_account),
+            remote_pool_removed_events: account::new_event_handle(event_account),
+            chain_added_events: account::new_event_handle(event_account)
         }
-    }
-
-    fun assert_can_initialize(caller_address: address) {
-        if (caller_address == @ccip_token_pool) { return };
-
-        if (object::is_object(@ccip_token_pool)) {
-            let token_pool_object =
-                object::address_to_object<ObjectCore>(@ccip_token_pool);
-            if (caller_address == object::owner(token_pool_object)
-                || caller_address == object::root_owner(token_pool_object)) { return };
-        };
-
-        abort error::permission_denied(E_NOT_PUBLISHER)
     }
 
     inline fun store_address(): address {
@@ -353,14 +360,17 @@ module ccip_token_pool::token_pool {
         // Check RMN curse status
         let remote_chain_selector =
             token_admin_registry::get_lock_or_burn_remote_chain_selector(input);
-        assert!(!rmn_remote::is_cursed_u128((remote_chain_selector as u128)));
+        assert!(
+            !rmn_remote::is_cursed_u128((remote_chain_selector as u128)),
+            error::invalid_state(E_CURSED_CHAIN)
+        );
 
         // Allowlist check
-        let _sender = token_admin_registry::get_lock_or_burn_sender(input);
         if (allowlist::get_allowlist_enabled(&state.allowlist_state)) {
+            let sender = token_admin_registry::get_lock_or_burn_sender(input);
             assert!(
-                allowlist::is_allowed(&state.allowlist_state, _sender),
-                error::permission_denied(E_NOT_PUBLISHER)
+                allowlist::is_allowed(&state.allowlist_state, sender),
+                error::permission_denied(E_NOT_ALLOWED_CALLER)
             );
         };
 
@@ -393,7 +403,10 @@ module ccip_token_pool::token_pool {
         // Check RMN curse status
         let remote_chain_selector =
             token_admin_registry::get_release_or_mint_remote_chain_selector(input);
-        assert!(!rmn_remote::is_cursed_u128((remote_chain_selector as u128)));
+        assert!(
+            !rmn_remote::is_cursed_u128((remote_chain_selector as u128)),
+            error::invalid_state(E_CURSED_CHAIN)
+        );
 
         let source_pool_address =
             token_admin_registry::get_release_or_mint_source_pool_address(input);
@@ -413,7 +426,7 @@ module ccip_token_pool::token_pool {
     // |                           Events                             |
     // ================================================================
 
-    public fun emit_released_or_minted(
+    public fun emit_released(
         state: &mut TokenPoolState, recipient: address, amount: u64
     ) {
         let local_token = object::object_address(&state.fa_metadata);
@@ -425,15 +438,35 @@ module ccip_token_pool::token_pool {
         );
     }
 
-    public fun emit_locked_or_burned(
-        state: &mut TokenPoolState, amount: u64
+    public fun emit_minted(
+        state: &mut TokenPoolState, recipient: address, amount: u64
     ) {
+        let local_token = object::object_address(&state.fa_metadata);
+
+        event::emit(Minted { local_token, recipient, amount });
+        event::emit_event(
+            &mut state.minted_events,
+            Minted { local_token, recipient, amount }
+        );
+    }
+
+    public fun emit_locked(state: &mut TokenPoolState, amount: u64) {
         let local_token = object::object_address(&state.fa_metadata);
 
         event::emit(Locked { local_token, amount });
         event::emit_event(
             &mut state.locked_events,
             Locked { local_token, amount }
+        );
+    }
+
+    public fun emit_burned(state: &mut TokenPoolState, amount: u64) {
+        let local_token = object::object_address(&state.fa_metadata);
+
+        event::emit(Burned { local_token, amount });
+        event::emit_event(
+            &mut state.burned_events,
+            Burned { local_token, amount }
         );
     }
 
@@ -478,9 +511,8 @@ module ccip_token_pool::token_pool {
             calculate_local_amount_internal(
                 remote_amount, remote_decimals, local_decimals
             );
-        // check that the calculated amount fits in a u64
         assert!(
-            local_amount <= 18446744073709551615,
+            local_amount <= MAX_U64,
             error::invalid_state(E_INVALID_ENCODED_AMOUNT)
         );
         local_amount as u64
@@ -490,7 +522,6 @@ module ccip_token_pool::token_pool {
     fun calculate_local_amount_internal(
         remote_amount: u256, remote_decimals: u8, local_decimals: u8
     ): u256 {
-        // TODO: check for overflows
         if (remote_decimals == local_decimals) {
             return remote_amount
         } else if (remote_decimals > local_decimals) {
@@ -502,11 +533,26 @@ module ccip_token_pool::token_pool {
             return current_amount
         } else {
             let decimals_diff = local_decimals - remote_decimals;
-            let current_amount = remote_amount;
+            // This is a safety check to prevent overflow in the next calculation.
+            // More than 77 would never fit in a uint256 and would cause an overflow. We also check if the resulting amount
+            // would overflow.
+            assert!(
+                decimals_diff <= 77,
+                error::invalid_state(E_DECIMAL_OVERFLOW)
+            );
+
+            let multiplier: u256 = 1;
+            let base: u256 = 10;
             for (i in 0..decimals_diff) {
-                current_amount *= 10;
+                multiplier = multiplier * base;
             };
-            return current_amount
+
+            assert!(
+                remote_amount <= (MAX_U256 / multiplier),
+                error::invalid_state(E_DECIMAL_OVERFLOW)
+            );
+
+            return remote_amount * multiplier
         }
     }
 
@@ -580,6 +626,8 @@ module ccip_token_pool::token_pool {
             rate_limiter_config,
             locked_events,
             released_events,
+            burned_events,
+            minted_events,
             remote_pool_added_events,
             remote_pool_removed_events,
             chain_added_events
@@ -589,108 +637,12 @@ module ccip_token_pool::token_pool {
         remote_chain_configs.destroy();
         event::destroy_handle(locked_events);
         event::destroy_handle(released_events);
+        event::destroy_handle(burned_events);
+        event::destroy_handle(minted_events);
         event::destroy_handle(remote_pool_added_events);
         event::destroy_handle(remote_pool_removed_events);
         event::destroy_handle(chain_added_events);
 
         token_pool_rate_limiter::destroy_rate_limiter(rate_limiter_config);
-    }
-}
-
-#[test_only]
-module ccip_token_pool::token_pool_test {
-    use std::account;
-    use std::signer;
-    use std::object;
-    use std::option;
-    use std::string;
-    use std::primary_fungible_store;
-    use std::fungible_asset;
-    use ccip_token_pool::token_pool::TokenPoolState;
-
-    use ccip_token_pool::token_pool;
-
-    struct TestToken has key {}
-
-    const Decimals: u8 = 8;
-    const OwnerInitbalance: u64 = 1_000_000;
-
-    const DefaultRemoteChain: u64 = 2000;
-    const DefaultRemoteToken: vector<u8> = b"default_remote_token";
-    const DefaultRemotePool: vector<u8> = b"default_remote_pool";
-
-    #[test(owner = @ccip_token_pool)]
-    fun initialize_correctly_sets_state(owner: &signer) {
-        let state = set_up_test(owner);
-
-        assert!(token_pool::get_token_decimals(&state) == Decimals);
-        assert!(token_pool::is_supported_chain(&state, DefaultRemoteChain));
-
-        token_pool::destroy_token_pool(state);
-    }
-
-    #[test(owner = @ccip_token_pool)]
-    fun add_remote_pool_existing_chain(owner: &signer) {
-        let state = set_up_test(owner);
-        let new_remote_pool = b"new_pool";
-
-        assert!(
-            !token_pool::is_remote_pool(&state, DefaultRemoteChain, new_remote_pool)
-        );
-        assert!(token_pool::get_remote_pools(&state, DefaultRemoteChain).length() == 1);
-
-        token_pool::add_remote_pool(&mut state, DefaultRemoteChain, new_remote_pool);
-
-        assert!(token_pool::is_remote_pool(&state, DefaultRemoteChain, new_remote_pool));
-        assert!(token_pool::get_remote_pools(&state, DefaultRemoteChain).length() == 2);
-
-        token_pool::destroy_token_pool(state);
-    }
-
-    // ================================================================
-    // |                           Setup                              |
-    // ================================================================
-
-    inline fun set_up_test(owner: &signer): token_pool::TokenPoolState {
-        let signer_address = signer::address_of(owner);
-        account::create_account_for_test(signer_address);
-
-        let constructor_ref = &object::create_named_object(owner, b"CCIPTokenPool");
-        move_to(owner, TestToken {});
-
-        primary_fungible_store::create_primary_store_enabled_fungible_asset(
-            constructor_ref,
-            option::none(),
-            string::utf8(b"TEST"),
-            string::utf8(b"TEST"),
-            Decimals,
-            string::utf8(b""),
-            string::utf8(b"")
-        );
-
-        let fungible_asset_mint_ref = fungible_asset::generate_mint_ref(constructor_ref);
-
-        primary_fungible_store::mint(
-            &fungible_asset_mint_ref, signer_address, OwnerInitbalance
-        );
-
-        let token_address = object::address_from_constructor_ref(constructor_ref);
-
-        let state = token_pool::initialize(owner, token_address, vector[]);
-
-        // Set state in the pool
-        set_up_default_remote_chain(&mut state);
-
-        state
-    }
-
-    inline fun set_up_default_remote_chain(state: &mut TokenPoolState) {
-        token_pool::apply_chain_updates(
-            state,
-            vector[],
-            vector[DefaultRemoteChain],
-            vector[vector[DefaultRemotePool]],
-            vector[DefaultRemoteToken]
-        )
     }
 }

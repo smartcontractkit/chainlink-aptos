@@ -27,7 +27,8 @@ module lock_release_token_pool::lock_release_token_pool {
         store_signer_cap: SignerCapability,
         ownable_state: ownable::OwnableState,
         token_pool_state: token_pool::TokenPoolState,
-        store_signer_address: address
+        store_signer_address: address,
+        transfer_ref: TransferRef
     }
 
     const E_NOT_PUBLISHER: u64 = 1;
@@ -35,6 +36,7 @@ module lock_release_token_pool::lock_release_token_pool {
     const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
     const E_INVALID_ARGUMENTS: u64 = 4;
     const E_UNKNOWN_FUNCTION: u64 = 5;
+    const E_LOCAL_TOKEN_MISMATCH: u64 = 6;
 
     // ================================================================
     // |                             Init                             |
@@ -49,10 +51,13 @@ module lock_release_token_pool::lock_release_token_pool {
         // register the pool on deployment, because in the case of object code deployment,
         // this is the only time we have a signer ref to @ccip_lock_release_pool.
         assert!(
-            object::object_exists<Metadata>(@local_token),
+            object::object_exists<Metadata>(@lock_release_local_token),
             error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
         );
-        let metadata = object::address_to_object<Metadata>(@local_token);
+        let metadata = object::address_to_object<Metadata>(@lock_release_local_token);
+
+        // create an Account on the object for event handles.
+        account::create_account_if_does_not_exist(@lock_release_token_pool);
 
         // the name of this module. if incorrect, callbacks will fail to be registered and
         // register_pool will revert.
@@ -68,7 +73,8 @@ module lock_release_token_pool::lock_release_token_pool {
         token_admin_registry::register_pool(
             publisher,
             token_pool_module_name,
-            @local_token,
+            @lock_release_local_token,
+            @token_pool_administrator,
             CallbackProof {}
         );
 
@@ -86,20 +92,29 @@ module lock_release_token_pool::lock_release_token_pool {
             publisher,
             LockReleaseTokenPoolDeployment {
                 store_signer_cap,
-                ownable_state: ownable::new(publisher, @lock_release_token_pool),
+                ownable_state: ownable::new(&store_signer, @lock_release_token_pool),
                 token_pool_state: token_pool::initialize(
-                    publisher, @local_token, vector[]
+                    &store_signer, @lock_release_local_token, vector[]
                 )
             }
         );
     }
 
-    public fun initialize(caller: &signer) acquires LockReleaseTokenPoolDeployment {
+    public fun initialize(
+        caller: &signer, transfer_ref: TransferRef
+    ) acquires LockReleaseTokenPoolDeployment {
         assert_can_initialize(signer::address_of(caller));
 
         assert!(
             exists<LockReleaseTokenPoolDeployment>(@lock_release_token_pool),
             error::invalid_argument(E_ALREADY_INITIALIZED)
+        );
+
+        let metadata = object::address_to_object<Metadata>(@lock_release_local_token);
+        let transfer_ref_metadata = fungible_asset::transfer_ref_metadata(&transfer_ref);
+        assert!(
+            metadata == transfer_ref_metadata,
+            error::invalid_argument(E_LOCAL_TOKEN_MISMATCH)
         );
 
         let LockReleaseTokenPoolDeployment {
@@ -114,7 +129,8 @@ module lock_release_token_pool::lock_release_token_pool {
             ownable_state,
             store_signer_address: signer::address_of(&store_signer),
             store_signer_cap,
-            token_pool_state
+            token_pool_state,
+            transfer_ref
         };
         move_to(&store_signer, pool);
     }
@@ -261,7 +277,7 @@ module lock_release_token_pool::lock_release_token_pool {
         let pool = borrow_pool_mut();
         let fa_amount = fungible_asset::amount(&fa);
 
-        // This metod validates various aspects of the lock or burn operation. If any of the
+        // This method validates various aspects of the lock or burn operation. If any of the
         // validations fail, the transaction will abort.
         let dest_token_address =
             token_pool::validate_lock_or_burn(
@@ -275,7 +291,11 @@ module lock_release_token_pool::lock_release_token_pool {
         let dest_pool_data = token_pool::encode_local_decimals(&fa);
 
         // Lock the funds in the pool
-        primary_fungible_store::deposit(pool.store_signer_address, fa);
+        primary_fungible_store::deposit_with_ref(
+            &pool.transfer_ref,
+            pool.store_signer_address,
+            fa
+        );
 
         // set the output for this lock or burn operation.
         token_admin_registry::set_lock_or_burn_output_v1(
@@ -285,7 +305,7 @@ module lock_release_token_pool::lock_release_token_pool {
             dest_pool_data
         );
 
-        token_pool::emit_locked_or_burned(&mut pool.token_pool_state, fa_amount);
+        token_pool::emit_locked(&mut pool.token_pool_state, fa_amount);
     }
 
     public fun release_or_mint<T: key>(
@@ -305,12 +325,13 @@ module lock_release_token_pool::lock_release_token_pool {
             &mut pool.token_pool_state, &input, local_amount
         );
 
-        let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
-        let fa_metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
         // Withdraw the amount from the store for release. this will revert if the store has insufficient balance.
-        let fa = primary_fungible_store::withdraw(
-            &store_signer, fa_metadata, local_amount
-        );
+        let fa =
+            primary_fungible_store::withdraw_with_ref(
+                &pool.transfer_ref,
+                pool.store_signer_address,
+                local_amount
+            );
 
         // set the output for this release or mint operation.
         token_admin_registry::set_release_or_mint_output_v1(
@@ -319,7 +340,7 @@ module lock_release_token_pool::lock_release_token_pool {
 
         let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
 
-        token_pool::emit_released_or_minted(
+        token_pool::emit_released(
             &mut pool.token_pool_state,
             recipient,
             local_amount
@@ -401,7 +422,6 @@ module lock_release_token_pool::lock_release_token_pool {
     // |                      Storage helpers                         |
     // ================================================================
 
-    // TODO: separate functions due to deploy error, see ccip::state_object
     #[view]
     public fun get_store_address(): address {
         store_address()
@@ -448,14 +468,19 @@ module lock_release_token_pool::lock_release_token_pool {
         caller: &signer, to: address
     ) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
-        ownable::transfer_ownership(
-            signer::address_of(caller), &mut pool.ownable_state, to
-        )
+        ownable::transfer_ownership(caller, &mut pool.ownable_state, to)
     }
 
     public entry fun accept_ownership(caller: &signer) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
-        ownable::accept_ownership(signer::address_of(caller), &mut pool.ownable_state)
+        ownable::accept_ownership(caller, &mut pool.ownable_state)
+    }
+
+    public entry fun execute_ownership_transfer(
+        caller: &signer, to: address
+    ) acquires LockReleaseTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::execute_ownership_transfer(caller, &mut pool.ownable_state, to)
     }
 
     // ================================================================
@@ -588,10 +613,23 @@ module lock_release_token_pool::lock_release_token_pool {
         } else if (function_bytes == b"accept_ownership") {
             bcs_stream::assert_is_consumed(&stream);
             accept_ownership(&caller);
+        } else if (function_bytes == b"execute_ownership_transfer") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            execute_ownership_transfer(&caller, to)
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };
 
         option::none()
+    }
+
+    // ================================================================
+    // |                      Test functions                          |
+    // ================================================================
+
+    #[test_only]
+    public fun test_init_module(publisher: &signer) {
+        init_module(publisher);
     }
 }

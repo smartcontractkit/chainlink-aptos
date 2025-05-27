@@ -4,6 +4,7 @@ module ccip_offramp::ocr3_base {
     use std::bit_vector;
     use std::chain_id;
     use std::ed25519;
+    use std::signer;
     use std::error;
     use std::event::{Self, EventHandle};
     use std::table::{Self, Table};
@@ -101,7 +102,7 @@ module ccip_offramp::ocr3_base {
     }
 
     public fun set_ocr3_config(
-        caller: address,
+        caller: &signer,
         ocr3_state: &mut OCR3BaseState,
         config_digest: vector<u8>,
         ocr_plugin_type: u8,
@@ -110,7 +111,8 @@ module ccip_offramp::ocr3_base {
         signers: vector<vector<u8>>,
         transmitters: vector<address>
     ) {
-        auth::assert_only_owner(caller);
+        let caller_address = signer::address_of(caller);
+        auth::assert_only_owner(caller_address);
         assert!(big_f != 0, error::invalid_argument(E_BIG_F_MUST_BE_POSITIVE));
 
         let ocr_config =
@@ -320,9 +322,10 @@ module ccip_offramp::ocr3_base {
     inline fun hash_report(
         report: vector<u8>, config_digest: vector<u8>, sequence_bytes: vector<u8>
     ): vector<u8> {
-        report.append(config_digest);
-        report.append(sequence_bytes);
-        aptos_hash::blake2b_256(report)
+        let combined = copy report;
+        combined.append(config_digest);
+        combined.append(sequence_bytes);
+        aptos_hash::blake2b_256(combined)
     }
 
     inline fun verify_signature(

@@ -155,14 +155,12 @@ module ccip::auth {
 
     public entry fun transfer_ownership(caller: &signer, to: address) acquires AuthState {
         let state = borrow_state_mut();
-        ownable::transfer_ownership(
-            signer::address_of(caller), &mut state.ownable_state, to
-        )
+        ownable::transfer_ownership(caller, &mut state.ownable_state, to)
     }
 
     public entry fun accept_ownership(caller: &signer) acquires AuthState {
         let state = borrow_state_mut();
-        ownable::accept_ownership(signer::address_of(caller), &mut state.ownable_state)
+        ownable::accept_ownership(caller, &mut state.ownable_state)
     }
 
     public entry fun execute_ownership_transfer(
@@ -229,5 +227,12 @@ module ccip::auth {
         };
 
         option::none()
+    }
+
+    // ========================== TEST ONLY ==========================
+
+    #[test_only]
+    public fun test_init_module(publisher: &signer) {
+        init_module(publisher);
     }
 }

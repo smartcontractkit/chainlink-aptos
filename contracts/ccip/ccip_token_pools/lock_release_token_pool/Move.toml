@@ -7,17 +7,19 @@ authors = []
 ccip = "_"
 ccip_token_pool = "_"
 lock_release_token_pool = "_"
+token_pool_administrator = "_"
 mcms = "_"
 mcms_register_entrypoints = "_"
-local_token = "_"
+lock_release_local_token = "_"
 
 [dev-addresses]
 ccip = "0x1000"
 ccip_token_pool = "0x2000"
 lock_release_token_pool = "0x2002"
+token_pool_administrator = "0x2900"
 mcms = "0x4000"
 mcms_register_entrypoints = "0x4001"
-local_token = "0x9000"
+lock_release_local_token = "0x9000"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }
