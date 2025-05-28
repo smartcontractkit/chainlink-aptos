@@ -176,7 +176,7 @@ PUBLISHER_PROFILE=test_registry_migration_e2e
 NETWORK=local
 TMP_KEY_FILE=test-key.tmp
 
-echo -e "e2e Data Feeds Registry Upgrade migration test starting! 🚀\n"
+echo -e "e2e Data Feeds Registry Deployment test starting! 🚀\n"
 
 if [[ "${DEBUG:-}" =~ ^(1|true|yes|y)$ ]]; then
   echo -e "✅ DEBUG=1 set! Script will output command trace! 🚀"
