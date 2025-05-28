@@ -48,6 +48,7 @@ To send a message, call the `ccip_send` function on the Router module:
 
 ```move
 use ccip_router::router;
+use ccip::client;
 
 // Basic message without tokens
 public entry fun send_message(
@@ -56,9 +57,11 @@ public entry fun send_message(
     receiver: vector<u8>,
     message_data: vector<u8>,
     fee_token: address,
-    fee_token_store: address,
-    extra_args: vector<u8>
+    fee_token_store: address
 ) {
+    // Create extra_args based on destination chain type
+    let extra_args = client::encode_generic_extra_args_v2(100000, true);
+    
     router::ccip_send(
         caller,
         dest_chain_selector,
@@ -83,9 +86,11 @@ public entry fun send_message_with_tokens(
     token_amounts: vector<u64>,
     token_store_addresses: vector<address>,
     fee_token: address,
-    fee_token_store: address,
-    extra_args: vector<u8>
+    fee_token_store: address
 ) {
+    // Create extra_args based on destination chain type
+    let extra_args = client::encode_generic_extra_args_v2(100000, true);
+    
     router::ccip_send(
         caller,
         dest_chain_selector,
@@ -112,7 +117,42 @@ public entry fun send_message_with_tokens(
 - `token_store_addresses`: Store addresses for each token (empty if no tokens)
 - `fee_token`: Address of the token used to pay CCIP fees
 - `fee_token_store`: Store address for the fee token
-- `extra_args`: Additional arguments for the destination chain (e.g., gas limit)
+- `extra_args`: Additional arguments for the destination chain (created using client module functions)
+
+### Creating Extra Arguments
+
+The `extra_args` parameter must be created using the appropriate function from the `ccip::client` module based on the destination chain type:
+
+#### For EVM chains (Ethereum, Avalanche, etc.), Aptos, and Sui:
+
+```move
+use ccip::client;
+
+// Parameters:
+// - gas_limit: The gas limit to use for the transaction on the destination chain
+// - allow_out_of_order_execution: Whether to allow out-of-order execution of the message
+let extra_args = client::encode_generic_extra_args_v2(100000, true);
+```
+
+#### For Solana (SVM):
+
+```move
+use ccip::client;
+
+// Parameters:
+// - compute_units: The compute units to use for the transaction on Solana
+// - account_is_writable_bitmap: Bitmap indicating which accounts are writable
+// - allow_out_of_order_execution: Whether to allow out-of-order execution of the message
+// - token_receiver: The token receiver address (32 bytes)
+// - accounts: Additional accounts needed for the transaction
+let token_receiver = x"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+let accounts = vector[
+    x"fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+];
+let extra_args = client::encode_svm_extra_args_v1(200000, 1, true, token_receiver, accounts);
+```
+
+**Note**: If sending tokens to Solana, you must specify a valid `token_receiver` address.
 
 ### Handling Fees
 
