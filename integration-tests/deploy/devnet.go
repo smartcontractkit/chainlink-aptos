@@ -127,7 +127,7 @@ func (d *Deployer) DeployPlatform() error {
 		"--package-dir=/contracts/platform",
 		"--address-name=platform",
 		"--named-addresses",
-		fmt.Sprintf("owner=%s", DEVNET_ACC, DEVNET_ACC),
+		fmt.Sprintf("owner=%s", DEVNET_ACC),
 		"--profile=default",
 		"--assume-yes",
 	}
@@ -187,7 +187,7 @@ func (d *Deployer) DeployDataFeeds(platformAddress string) error {
 		"--package-dir=/contracts/data-feeds",
 		"--address-name=data_feeds",
 		"--named-addresses",
-		fmt.Sprintf("platform=%s,owner=%s", DEVNET_ACC, platformAddress, DEVNET_ACC),
+		fmt.Sprintf("platform=%s,owner=%s", platformAddress, DEVNET_ACC),
 		"--profile=default",
 		"--assume-yes",
 	}
