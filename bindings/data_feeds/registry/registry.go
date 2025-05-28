@@ -166,10 +166,6 @@ type OwnershipTransferred struct {
 	To   aptos.AccountAddress `move:"address"`
 }
 
-type CallbackRegistered struct {
-	ReceiverAddress aptos.AccountAddress `move:"address"`
-}
-
 type OnReceive struct {
 }
 
