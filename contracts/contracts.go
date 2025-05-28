@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 )
 
-//go:embed ccip large_packages mcms vendored data-feeds platform managed_token mcms-registrar
+//go:embed ccip large_packages mcms vendored data-feeds platform platform_secondary managed_token mcms-registrar
 var Embed embed.FS
 
 type Package string
