@@ -29,6 +29,9 @@ type LockReleaseTokenPoolInterface interface {
 	GetRemotePools(opts *bind.CallOpts, remoteChainSelector uint64) ([][]byte, error)
 	IsRemotePool(opts *bind.CallOpts, remoteChainSelector uint64, remotePoolAddress []byte) (bool, error)
 	GetRemoteToken(opts *bind.CallOpts, remoteChainSelector uint64) ([]byte, error)
+	PoolPrimaryStore(opts *bind.CallOpts) (aptos.AccountAddress, error)
+	Balance(opts *bind.CallOpts) (uint64, error)
+	DerivedBalance(opts *bind.CallOpts) (uint64, error)
 	IsSupportedChain(opts *bind.CallOpts, remoteChainSelector uint64) (bool, error)
 	GetSupportedChains(opts *bind.CallOpts) ([]uint64, error)
 	GetAllowlistEnabled(opts *bind.CallOpts) (bool, error)
@@ -56,6 +59,9 @@ type LockReleaseTokenPoolEncoder interface {
 	GetRemotePools(remoteChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	IsRemotePool(remoteChainSelector uint64, remotePoolAddress []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetRemoteToken(remoteChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PoolPrimaryStore() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	Balance() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	DerivedBalance() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	IsSupportedChain(remoteChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetSupportedChains() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetAllowlistEnabled() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -257,6 +263,69 @@ func (c LockReleaseTokenPoolContract) GetRemoteToken(opts *bind.CallOpts, remote
 
 	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
 		return *new([]byte), err
+	}
+	return r0, nil
+}
+
+func (c LockReleaseTokenPoolContract) PoolPrimaryStore(opts *bind.CallOpts) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.PoolPrimaryStore()
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	var (
+		r0 bind.StdObject
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+	return r0.Address(), nil
+}
+
+func (c LockReleaseTokenPoolContract) Balance(opts *bind.CallOpts) (uint64, error) {
+	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.Balance()
+	if err != nil {
+		return *new(uint64), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(uint64), err
+	}
+
+	var (
+		r0 uint64
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(uint64), err
+	}
+	return r0, nil
+}
+
+func (c LockReleaseTokenPoolContract) DerivedBalance(opts *bind.CallOpts) (uint64, error) {
+	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.DerivedBalance()
+	if err != nil {
+		return *new(uint64), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(uint64), err
+	}
+
+	var (
+		r0 uint64
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(uint64), err
 	}
 	return r0, nil
 }
@@ -497,6 +566,18 @@ func (c lockReleaseTokenPoolEncoder) GetRemoteToken(remoteChainSelector uint64) 
 	}, []any{
 		remoteChainSelector,
 	})
+}
+
+func (c lockReleaseTokenPoolEncoder) PoolPrimaryStore() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pool_primary_store", nil, []string{}, []any{})
+}
+
+func (c lockReleaseTokenPoolEncoder) Balance() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("balance", nil, []string{}, []any{})
+}
+
+func (c lockReleaseTokenPoolEncoder) DerivedBalance() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("derived_balance", nil, []string{}, []any{})
 }
 
 func (c lockReleaseTokenPoolEncoder) IsSupportedChain(remoteChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
