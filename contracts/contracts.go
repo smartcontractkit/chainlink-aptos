@@ -26,8 +26,9 @@ const (
 	ManagedToken  = Package("managed_token")
 	MCMSRegistrar = Package("mcms-registrar")
 
-	DataFeeds = Package("data_feeds")
-	Platform  = Package("platform")
+	DataFeeds         = Package("data_feeds")
+	Platform          = Package("platform")
+	PlatformSecondary = Package("platform_secondary")
 
 	MCMS     = Package("mcms")
 	MCMSTest = Package("mcms_test")
@@ -50,6 +51,7 @@ var Contracts map[Package]string = map[Package]string{
 	CCIPOnramp:           filepath.Join("ccip", "ccip_onramp"),
 	DataFeeds:            "data-feeds",
 	Platform:             "platform",
+	PlatformSecondary:    "platform_secondary",
 
 	ManagedToken:  filepath.Join("managed_token"),
 	MCMSRegistrar: filepath.Join("mcms-registrar"),
