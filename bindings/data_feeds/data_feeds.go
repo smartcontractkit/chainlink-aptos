@@ -42,10 +42,12 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 	module_router.FunctionInfo,
 )
 
-func Compile(ownerAddress aptos.AccountAddress, platformAddress aptos.AccountAddress) (compile.CompiledPackage, error) {
+func Compile(ownerAddress aptos.AccountAddress, platformAddress aptos.AccountAddress, ownerSecondaryAddress aptos.AccountAddress, platformSecondaryAddress aptos.AccountAddress) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
-		"owner":    ownerAddress,
-		"platform": platformAddress,
+		"owner":              ownerAddress,
+		"platform":           platformAddress,
+		"owner_secondary":    ownerSecondaryAddress,
+		"platform_secondary": platformSecondaryAddress,
 	}
 	// Compile using CLI
 	return compile.CompilePackage(contracts.DataFeeds, namedAddresses)
@@ -66,10 +68,14 @@ func DeployToObject(
 	client aptos.AptosRpcClient,
 	ownerAddress aptos.AccountAddress,
 	platformAddress aptos.AccountAddress,
+	ownerSecondaryAddress aptos.AccountAddress,
+	platformSecondaryAddress aptos.AccountAddress,
 ) (aptos.AccountAddress, *api.PendingTransaction, DataFeeds, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
-		"owner":    ownerAddress,
-		"platform": platformAddress,
+		"owner":              ownerAddress,
+		"platform":           platformAddress,
+		"owner_secondary":    ownerSecondaryAddress,
+		"platform_secondary": platformSecondaryAddress,
 	}
 	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.DataFeeds, namedAddresses)
 	if err != nil {
