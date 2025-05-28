@@ -127,7 +127,7 @@ func (d *Deployer) DeployPlatform() error {
 		"--package-dir=/contracts/platform",
 		"--address-name=platform",
 		"--named-addresses",
-		fmt.Sprintf("platform=%s,owner=%s", DEVNET_ACC, DEVNET_ACC),
+		fmt.Sprintf("owner=%s", DEVNET_ACC),
 		"--profile=default",
 		"--assume-yes",
 	}
@@ -157,7 +157,7 @@ func (d *Deployer) DeployPlatformSecondary() error {
 		"--package-dir=/contracts/platform_secondary",
 		"--address-name=platform_secondary",
 		"--named-addresses",
-		fmt.Sprintf("platform_secondary=%s,owner_secondary=%s", DEVNET_ACC, DEVNET_ACC),
+		fmt.Sprintf("owner_secondary=%s", DEVNET_ACC),
 		"--profile=default",
 		"--assume-yes",
 	}
@@ -187,7 +187,7 @@ func (d *Deployer) DeployDataFeeds(platformAddress string, platformSecondaryAddr
 		"--package-dir=/contracts/data-feeds",
 		"--address-name=data_feeds",
 		"--named-addresses",
-		fmt.Sprintf("data_feeds=%s,platform=%s,owner=%s,platform_secondary=%s,owner_secondary=%s", DEVNET_ACC, platformAddress, DEVNET_ACC, platformSecondaryAddress, DEVNET_ACC),
+		fmt.Sprintf("platform=%s,owner=%s,platform_secondary=%s,owner_secondary=%s", platformAddress, DEVNET_ACC, platformSecondaryAddress, DEVNET_ACC),
 		"--profile=default",
 		"--assume-yes",
 	}
