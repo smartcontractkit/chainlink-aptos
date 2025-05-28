@@ -619,13 +619,13 @@ module data_feeds::registry {
         else { 32 };
 
         let observation_timestamp: u256 =
-            to_u32be(
+            (to_u32be(
                 vector::slice(
                     &report_data,
                     observation_timestamp_ptr - 4,
                     observation_timestamp_ptr
                 )
-            ) as u256;
+            ) as u256);
 
         // NOTE: aptos has no signed integer types, so can't parse as i192, this is a raw representation
         let benchmark_price: u256 =
