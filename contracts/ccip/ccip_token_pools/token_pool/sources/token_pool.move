@@ -31,7 +31,8 @@ module ccip_token_pool::token_pool {
         remote_pool_removed_events: EventHandle<RemotePoolRemoved>,
         chain_added_events: EventHandle<ChainAdded>,
         liquidity_added_events: EventHandle<LiquidityAdded>,
-        liquidity_removed_events: EventHandle<LiquidityRemoved>
+        liquidity_removed_events: EventHandle<LiquidityRemoved>,
+        rebalancer_set_events: EventHandle<RebalancerSet>
     }
 
     struct RemoteChainConfig has store, drop, copy {
@@ -110,6 +111,12 @@ module ccip_token_pool::token_pool {
         amount: u64
     }
 
+    #[event]
+    struct RebalancerSet has store, drop {
+        old_rebalancer: address,
+        new_rebalancer: address
+    }
+
     const E_NOT_ALLOWED_CALLER: u64 = 1;
     const E_UNKNOWN_FUNGIBLE_ASSET: u64 = 2;
     const E_UNKNOWN_REMOTE_CHAIN_SELECTOR: u64 = 3;
@@ -147,7 +154,8 @@ module ccip_token_pool::token_pool {
             remote_pool_removed_events: account::new_event_handle(event_account),
             chain_added_events: account::new_event_handle(event_account),
             liquidity_added_events: account::new_event_handle(event_account),
-            liquidity_removed_events: account::new_event_handle(event_account)
+            liquidity_removed_events: account::new_event_handle(event_account),
+            rebalancer_set_events: account::new_event_handle(event_account)
         }
     }
 
@@ -511,6 +519,16 @@ module ccip_token_pool::token_pool {
         );
     }
 
+    public fun emit_rebalancer_set(
+        state: &mut TokenPoolState, old_rebalancer: address, new_rebalancer: address
+    ) {
+        event::emit(RebalancerSet { old_rebalancer, new_rebalancer });
+        event::emit_event(
+            &mut state.rebalancer_set_events,
+            RebalancerSet { old_rebalancer, new_rebalancer }
+        );
+    }
+
     // ================================================================
     // |                          Decimals                            |
     // ================================================================
@@ -673,7 +691,8 @@ module ccip_token_pool::token_pool {
             remote_pool_removed_events,
             chain_added_events,
             liquidity_added_events,
-            liquidity_removed_events
+            liquidity_removed_events,
+            rebalancer_set_events
         } = state;
 
         allowlist::destroy_allowlist(allowlist_state);
@@ -687,6 +706,7 @@ module ccip_token_pool::token_pool {
         event::destroy_handle(chain_added_events);
         event::destroy_handle(liquidity_added_events);
         event::destroy_handle(liquidity_removed_events);
+        event::destroy_handle(rebalancer_set_events);
 
         token_pool_rate_limiter::destroy_rate_limiter(rate_limiter_config);
     }

@@ -239,7 +239,7 @@ module lock_release_token_pool::lock_release_token_pool {
 
     inline fun pool_primary_store_inlined(
         pool: &LockReleaseTokenPoolState
-    ): Object<FungibleStore> acquires LockReleaseTokenPoolState {
+    ): Object<FungibleStore> {
         primary_fungible_store::primary_store(
             pool.store_signer_address,
             token_pool::get_fa_metadata(&pool.token_pool_state)
@@ -571,7 +571,13 @@ module lock_release_token_pool::lock_release_token_pool {
     ) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+
+        let old_rebalancer = pool.rebalancer;
         pool.rebalancer = rebalancer;
+
+        token_pool::emit_rebalancer_set(
+            &mut pool.token_pool_state, old_rebalancer, rebalancer
+        );
     }
 
     #[view]
@@ -586,9 +592,9 @@ module lock_release_token_pool::lock_release_token_pool {
     public fun migrate_transfer_ref(caller: &signer): TransferRef acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
-        assert!(option::is_some(&pool.transfer_ref), E_TRANSFER_REF_NOT_SET);
+        assert!(pool.transfer_ref.is_some(), E_TRANSFER_REF_NOT_SET);
 
-        option::extract(&mut pool.transfer_ref)
+        pool.transfer_ref.extract()
     }
 
     // ================================================================

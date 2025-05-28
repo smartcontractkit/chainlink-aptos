@@ -122,6 +122,11 @@ type LiquidityRemoved struct {
 	Amount     uint64               `move:"u64"`
 }
 
+type RebalancerSet struct {
+	OldRebalancer aptos.AccountAddress `move:"address"`
+	NewRebalancer aptos.AccountAddress `move:"address"`
+}
+
 type TokenPoolContract struct {
 	*bind.BoundContract
 	tokenPoolEncoder

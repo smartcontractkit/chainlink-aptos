@@ -297,8 +297,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
         let dest_pool_data = token_pool::encode_local_decimals(&fa);
 
         // Burn the funds
-        assert!(option::is_some(&pool.burn_ref), E_BURN_REF_NOT_SET);
-        fungible_asset::burn(option::borrow(&pool.burn_ref), fa);
+        assert!(pool.burn_ref.is_some(), E_BURN_REF_NOT_SET);
+        fungible_asset::burn(pool.burn_ref.borrow(), fa);
 
         // set the output for this lock or burn operation.
         token_admin_registry::set_lock_or_burn_output_v1(
@@ -329,8 +329,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
         );
 
         // Mint the amount for release.
-        assert!(option::is_some(&pool.mint_ref), E_MINT_REF_NOT_SET);
-        let fa = fungible_asset::mint(option::borrow(&pool.mint_ref), local_amount);
+        assert!(pool.mint_ref.is_some(), E_MINT_REF_NOT_SET);
+        let fa = fungible_asset::mint(pool.mint_ref.borrow(), local_amount);
 
         // set the output for this release or mint operation.
         token_admin_registry::set_release_or_mint_output_v1(
@@ -487,17 +487,17 @@ module burn_mint_token_pool::burn_mint_token_pool {
     public fun migrate_mint_ref(caller: &signer): MintRef acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
-        assert!(option::is_some(&pool.mint_ref), E_MINT_REF_NOT_SET);
+        assert!(pool.mint_ref.is_some(), E_MINT_REF_NOT_SET);
 
-        option::extract(&mut pool.mint_ref)
+        pool.mint_ref.extract()
     }
 
     public fun migrate_burn_ref(caller: &signer): BurnRef acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
-        assert!(option::is_some(&pool.burn_ref), E_BURN_REF_NOT_SET);
+        assert!(pool.burn_ref.is_some(), E_BURN_REF_NOT_SET);
 
-        option::extract(&mut pool.burn_ref)
+        pool.burn_ref.extract()
     }
 
     // ================================================================

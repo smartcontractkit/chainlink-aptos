@@ -235,4 +235,11 @@ module ccip::auth {
     public fun test_init_module(publisher: &signer) {
         init_module(publisher);
     }
+
+    #[test_only]
+    public fun test_register_mcms_entrypoint(publisher: &signer) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(b"auth"), McmsCallback {}
+        );
+    }
 }
