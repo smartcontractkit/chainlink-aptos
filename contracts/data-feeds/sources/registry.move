@@ -110,11 +110,6 @@ module data_feeds::registry {
         to: address
     }
 
-    #[event]
-    struct CallbackRegistered has drop, store {
-        receiver_address: address
-    }
-
     // Errors
     const ENOT_OWNER: u64 = 1;
     const EDUPLICATE_ELEMENTS: u64 = 2;
@@ -204,10 +199,6 @@ module data_feeds::registry {
             &object_signer,
             RegistryMigrationStatus { callback_registered: true }
         );
-
-        event::emit(
-            CallbackRegistered { receiver_address: signer::address_of(publisher) }
-        );
     }
 
     inline fun get_state_addr(): address {
@@ -242,10 +233,6 @@ module data_feeds::registry {
         move_to(
             &object_signer,
             RegistryMigrationStatus { callback_registered: true }
-        );
-
-        event::emit(
-            CallbackRegistered { receiver_address: signer::address_of(publisher) }
         );
     }
 
