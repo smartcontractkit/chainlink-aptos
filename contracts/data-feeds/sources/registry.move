@@ -530,22 +530,21 @@ module data_feeds::registry {
         );
         offset = offset + 32;
 
-        let count = to_u256be(vector::slice(data, offset, offset + 32));
-        let count_u64 = count as u64;
+        let count = (to_u256be(vector::slice(data, offset, offset + 32)) as u64);
         offset = offset + 32;
 
-        let is_v03: bool = data_len == count_u64 * 13 * 32 + 2 * 32;
-        let is_benchmark: bool = data_len == count_u64 * 3 * 32 + 64;
+        let is_v03: bool = data_len == count * 13 * 32 + 2 * 32;
+        let is_benchmark: bool = data_len == count * 3 * 32 + 64;
 
         let feed_ids;
         let reports;
 
         if (is_v03) {
             // skip offsets table
-            offset = offset + 32 * count_u64;
-            (feed_ids, reports) = parse_v03_reports(data, offset, count_u64);
+            offset = offset + 32 * count;
+            (feed_ids, reports) = parse_v03_reports(data, offset, count);
         } else if (is_benchmark) {
-            (feed_ids, reports) = parse_benchmark_reports(data, offset, count_u64);
+            (feed_ids, reports) = parse_benchmark_reports(data, offset, count);
         } else {
             abort error::invalid_argument(EINVALID_RAW_REPORT);
         };
