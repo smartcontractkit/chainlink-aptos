@@ -3,8 +3,7 @@ module ccip_token_pool::token_pool {
     use std::error;
     use std::event::{Self, EventHandle};
     use std::fungible_asset::{Self, FungibleAsset, Metadata};
-    use std::object::{Self, Object, ObjectCore};
-    use std::signer;
+    use std::object::{Self, Object};
     use std::smart_table::{Self, SmartTable};
 
     use ccip::eth_abi;
@@ -30,7 +29,9 @@ module ccip_token_pool::token_pool {
         minted_events: EventHandle<Minted>,
         remote_pool_added_events: EventHandle<RemotePoolAdded>,
         remote_pool_removed_events: EventHandle<RemotePoolRemoved>,
-        chain_added_events: EventHandle<ChainAdded>
+        chain_added_events: EventHandle<ChainAdded>,
+        liquidity_added_events: EventHandle<LiquidityAdded>,
+        liquidity_removed_events: EventHandle<LiquidityRemoved>
     }
 
     struct RemoteChainConfig has store, drop, copy {
@@ -95,6 +96,20 @@ module ccip_token_pool::token_pool {
         remote_token_address: vector<u8>
     }
 
+    #[event]
+    struct LiquidityAdded has store, drop {
+        local_token: address,
+        provider: address,
+        amount: u64
+    }
+
+    #[event]
+    struct LiquidityRemoved has store, drop {
+        local_token: address,
+        provider: address,
+        amount: u64
+    }
+
     const E_NOT_ALLOWED_CALLER: u64 = 1;
     const E_UNKNOWN_FUNGIBLE_ASSET: u64 = 2;
     const E_UNKNOWN_REMOTE_CHAIN_SELECTOR: u64 = 3;
@@ -130,7 +145,9 @@ module ccip_token_pool::token_pool {
             minted_events: account::new_event_handle(event_account),
             remote_pool_added_events: account::new_event_handle(event_account),
             remote_pool_removed_events: account::new_event_handle(event_account),
-            chain_added_events: account::new_event_handle(event_account)
+            chain_added_events: account::new_event_handle(event_account),
+            liquidity_added_events: account::new_event_handle(event_account),
+            liquidity_removed_events: account::new_event_handle(event_account)
         }
     }
 
@@ -470,6 +487,30 @@ module ccip_token_pool::token_pool {
         );
     }
 
+    public fun emit_liquidity_added(
+        state: &mut TokenPoolState, provider: address, amount: u64
+    ) {
+        let local_token = object::object_address(&state.fa_metadata);
+
+        event::emit(LiquidityAdded { local_token, provider, amount });
+        event::emit_event(
+            &mut state.liquidity_added_events,
+            LiquidityAdded { local_token, provider, amount }
+        );
+    }
+
+    public fun emit_liquidity_removed(
+        state: &mut TokenPoolState, provider: address, amount: u64
+    ) {
+        let local_token = object::object_address(&state.fa_metadata);
+
+        event::emit(LiquidityRemoved { local_token, provider, amount });
+        event::emit_event(
+            &mut state.liquidity_removed_events,
+            LiquidityRemoved { local_token, provider, amount }
+        );
+    }
+
     // ================================================================
     // |                          Decimals                            |
     // ================================================================
@@ -630,7 +671,9 @@ module ccip_token_pool::token_pool {
             minted_events,
             remote_pool_added_events,
             remote_pool_removed_events,
-            chain_added_events
+            chain_added_events,
+            liquidity_added_events,
+            liquidity_removed_events
         } = state;
 
         allowlist::destroy_allowlist(allowlist_state);
@@ -642,6 +685,8 @@ module ccip_token_pool::token_pool {
         event::destroy_handle(remote_pool_added_events);
         event::destroy_handle(remote_pool_removed_events);
         event::destroy_handle(chain_added_events);
+        event::destroy_handle(liquidity_added_events);
+        event::destroy_handle(liquidity_removed_events);
 
         token_pool_rate_limiter::destroy_rate_limiter(rate_limiter_config);
     }

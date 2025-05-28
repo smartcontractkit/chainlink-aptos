@@ -4,7 +4,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
     use std::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef};
     use std::primary_fungible_store;
     use std::object::{Self, Object, ObjectCore};
-    use std::option;
+    use std::option::{Self, Option};
     use std::signer;
     use std::string::{Self, String};
     use aptos_framework::fungible_asset::{BurnRef, MintRef};
@@ -29,8 +29,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
         ownable_state: ownable::OwnableState,
         token_pool_state: token_pool::TokenPoolState,
         store_signer_address: address,
-        burn_ref: BurnRef,
-        mint_ref: MintRef
+        burn_ref: Option<BurnRef>,
+        mint_ref: Option<MintRef>
     }
 
     const E_NOT_PUBLISHER: u64 = 1;
@@ -39,6 +39,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
     const E_LOCAL_TOKEN_MISMATCH: u64 = 4;
     const E_INVALID_ARGUMENTS: u64 = 5;
     const E_UNKNOWN_FUNCTION: u64 = 6;
+    const E_MINT_REF_NOT_SET: u64 = 7;
+    const E_BURN_REF_NOT_SET: u64 = 8;
 
     // ================================================================
     // |                             Init                             |
@@ -134,8 +136,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
             store_signer_address: signer::address_of(&store_signer),
             store_signer_cap,
             token_pool_state,
-            burn_ref,
-            mint_ref
+            burn_ref: option::some(burn_ref),
+            mint_ref: option::some(mint_ref)
         };
 
         move_to(&store_signer, pool);
@@ -295,7 +297,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
         let dest_pool_data = token_pool::encode_local_decimals(&fa);
 
         // Burn the funds
-        fungible_asset::burn(&pool.burn_ref, fa);
+        assert!(option::is_some(&pool.burn_ref), E_BURN_REF_NOT_SET);
+        fungible_asset::burn(option::borrow(&pool.burn_ref), fa);
 
         // set the output for this lock or burn operation.
         token_admin_registry::set_lock_or_burn_output_v1(
@@ -326,7 +329,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
         );
 
         // Mint the amount for release.
-        let fa = fungible_asset::mint(&pool.mint_ref, local_amount);
+        assert!(option::is_some(&pool.mint_ref), E_MINT_REF_NOT_SET);
+        let fa = fungible_asset::mint(option::borrow(&pool.mint_ref), local_amount);
 
         // set the output for this release or mint operation.
         token_admin_registry::set_release_or_mint_output_v1(
@@ -474,6 +478,26 @@ module burn_mint_token_pool::burn_mint_token_pool {
     ) acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::execute_ownership_transfer(caller, &mut pool.ownable_state, to)
+    }
+
+    // ================================================================
+    // |                    Ref Migration                              |
+    // ================================================================
+
+    public fun migrate_mint_ref(caller: &signer): MintRef acquires BurnMintTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+        assert!(option::is_some(&pool.mint_ref), E_MINT_REF_NOT_SET);
+
+        option::extract(&mut pool.mint_ref)
+    }
+
+    public fun migrate_burn_ref(caller: &signer): BurnRef acquires BurnMintTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+        assert!(option::is_some(&pool.burn_ref), E_BURN_REF_NOT_SET);
+
+        option::extract(&mut pool.burn_ref)
     }
 
     // ================================================================

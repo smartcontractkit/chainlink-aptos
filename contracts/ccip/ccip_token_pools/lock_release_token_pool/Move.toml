@@ -13,13 +13,13 @@ mcms_register_entrypoints = "_"
 lock_release_local_token = "_"
 
 [dev-addresses]
-ccip = "0x1000"
-ccip_token_pool = "0x2000"
-lock_release_token_pool = "0x2002"
+ccip = "0x85d5520ea6a8b1501502651040c6f61238b281142ccbafdc205d40258f0bec10"
+ccip_token_pool = "0x5e3f60cdec3a844938a0afb320fb644a96450070fea4280231b5062fc2aa16d2"
+lock_release_token_pool = "0x2e1f4cc8fbc2c7ccd2c67ff453e00526919098304d70708ef504af944d6fede8"
 token_pool_administrator = "0x2900"
 mcms = "0x4000"
 mcms_register_entrypoints = "0x4001"
-lock_release_local_token = "0x9000"
+lock_release_local_token = "0x6d1c246126d36fea774b12486de0a3737997f1b9b23806c67ca5ce72859ff5fa"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }
