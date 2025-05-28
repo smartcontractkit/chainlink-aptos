@@ -1,5 +1,4 @@
 module data_feeds::migration_helper {
-    use std::event;
     use std::signer;
 
     // Errors
