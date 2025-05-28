@@ -1438,122 +1438,194 @@ module ccip_offramp::offramp {
         option::none()
     }
 
-    #[test]
-    fun test_calculate_message_hash() {
-        let expected_hash =
-            x"c8d6cf666864a60dd6ecd89e5c294734c53b3218d3f83d2d19a3c3f9e200e00d";
+    // ======================= Getters ==========================
 
-        let message_id =
-            x"1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
-
-        let message = Any2AptosRampMessage {
-            header: RampMessageHeader {
-                message_id,
-                source_chain_selector: 1,
-                dest_chain_selector: 2,
-                sequence_number: 42,
-                nonce: 123
-            },
-            sender: x"8765432109fedcba8765432109fedcba87654321",
-            data: b"sample message data",
-            receiver: @0x1234,
-            gas_limit: 500000,
-            token_amounts: vector[
-                Any2AptosTokenTransfer {
-                    source_pool_address: x"abcdef1234567890abcdef1234567890abcdef12",
-                    dest_token_address: @0x5678,
-                    dest_gas_amount: 10000,
-                    extra_data: x"00112233",
-                    amount: 1000000
-                },
-                Any2AptosTokenTransfer {
-                    source_pool_address: x"123456789abcdef123456789abcdef123456789a",
-                    dest_token_address: @0x9abc,
-                    dest_gas_amount: 20000,
-                    extra_data: x"ffeeddcc",
-                    amount: 5000000
-                }
-            ]
-        };
-        let metadata_hash =
-            x"aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899";
-
-        let message_hash = calculate_message_hash(&message, metadata_hash);
-        assert!(message_hash == expected_hash);
+    public fun message(report: &ExecutionReport): &Any2AptosRampMessage {
+        &report.message
     }
 
-    #[test]
-    fun test_calculate_metadata_hash() {
-        let expected_hash =
-            x"812acb01df318f85be452cf6664891cf5481a69dac01e0df67102a295218dd17";
-        let expected_hash_alternate =
-            x"6caf8756ae02ee4f12b83b38e0f21b5e43e90d203bd06729486fd4a0fc8bcc5e";
-
-        let source_chain_selector = 123456789;
-        let dest_chain_selector = 987654321;
-        let on_ramp = b"source-onramp-address";
-
-        let metadata_hash =
-            calculate_metadata_hash(source_chain_selector, dest_chain_selector, on_ramp);
-        let metadata_hash_alternate =
-            calculate_metadata_hash(
-                source_chain_selector + 1, dest_chain_selector, on_ramp
-            );
-
-        assert!(metadata_hash == expected_hash);
-        assert!(metadata_hash_alternate == expected_hash_alternate);
+    public fun sender(message: &Any2AptosRampMessage): vector<u8> {
+        message.sender
     }
 
-    #[test]
-    fun test_deserialize_execution_report() {
-        let expected_sender = x"d87929a32cf0cbdc9e2d07ffc7c33344079de727";
-        let expected_data = x"68656c6c6f20434349505265636569766572";
-        let expected_receiver =
-            @0xbd8a1fb0af25dc8700d2d302cfbae718c3b2c3c61cfe47f58a45b1126c006490;
-        let expected_gas_limit = 100000;
-        let expected_message_id =
-            x"20865dcacbd6afb6a2288daa164caf75517009a289fa3135281fb1e4800b11bc";
-        let expected_source_chain_selector = 909606746561742123;
-        let expected_dest_chain_selector = 743186221051783445;
-        let expected_sequence_number = 1;
-        let expected_nonce = 0;
-        let expected_leaf_bytes =
-            x"258dc7f9ec033388ee50bf3e0debfc841a278054f5b2ce41728f7459267c719e";
+    public fun data(message: &Any2AptosRampMessage): vector<u8> {
+        message.data
+    }
 
-        let report_bytes =
-            x"2b851c4684929f0c20865dcacbd6afb6a2288daa164caf75517009a289fa3135281fb1e4800b11bc2b851c4684929f0c15a9c133ee53500a0100000000000000000000000000000014d87929a32cf0cbdc9e2d07ffc7c33344079de7271268656c6c6f20434349505265636569766572bd8a1fb0af25dc8700d2d302cfbae718c3b2c3c61cfe47f58a45b1126c006490a086010000000000000000000000000000000000000000000000000000000000000000";
-        let onramp = x"47a1f0a819457f01153f35c6b6b0d42e2e16e91e";
-        let execution_report = deserialize_execution_report(report_bytes);
-        std::debug::print(&execution_report);
+    public fun receiver(message: &Any2AptosRampMessage): address {
+        message.receiver
+    }
 
-        assert!(execution_report.message.sender == expected_sender);
-        assert!(execution_report.message.data == expected_data);
-        assert!(execution_report.message.receiver == expected_receiver);
-        assert!(execution_report.message.gas_limit == expected_gas_limit);
-        assert!(execution_report.message.header.message_id == expected_message_id);
-        assert!(
-            execution_report.message.header.source_chain_selector
-                == expected_source_chain_selector
-        );
-        assert!(
-            execution_report.message.header.dest_chain_selector
-                == expected_dest_chain_selector
-        );
-        assert!(
-            execution_report.message.header.sequence_number == expected_sequence_number
-        );
-        assert!(execution_report.message.header.nonce == expected_nonce);
+    public fun gas_limit(message: &Any2AptosRampMessage): u256 {
+        message.gas_limit
+    }
 
-        let metadata_hash =
-            calculate_metadata_hash(
-                execution_report.source_chain_selector,
-                execution_report.message.header.dest_chain_selector,
-                onramp
-            );
-        let hashed_leaf = calculate_message_hash(
-            &execution_report.message, metadata_hash
-        );
+    public fun header(message: &Any2AptosRampMessage): &RampMessageHeader {
+        &message.header
+    }
 
-        assert!(expected_leaf_bytes == hashed_leaf);
+    public fun header_source_chain_selector(header: &RampMessageHeader): u64 {
+        header.source_chain_selector
+    }
+
+    public fun header_dest_chain_selector(header: &RampMessageHeader): u64 {
+        header.dest_chain_selector
+    }
+
+    public fun header_message_id(header: &RampMessageHeader): vector<u8> {
+        header.message_id
+    }
+
+    public fun sequence_number(header: &RampMessageHeader): u64 {
+        header.sequence_number
+    }
+
+    public fun nonce(header: &RampMessageHeader): u64 {
+        header.nonce
+    }
+
+    public fun token_amounts(message: &Any2AptosRampMessage): &vector<Any2AptosTokenTransfer> {
+        &message.token_amounts
+    }
+
+    public fun chain_selector(config: &StaticConfig): u64 {
+        config.chain_selector
+    }
+
+    public fun permissionless_execution_threshold_seconds(
+        config: &DynamicConfig
+    ): u32 {
+        config.permissionless_execution_threshold_seconds
+    }
+
+    public fun is_enabled(config: &SourceChainConfig): bool {
+        config.is_enabled
+    }
+
+    public fun is_rmn_verification_disabled(config: &SourceChainConfig): bool {
+        config.is_rmn_verification_disabled
+    }
+
+    // ========================== Test Functions ========================== //
+
+    #[test_only]
+    public fun test_init_module(publisher: &signer) {
+        init_module(publisher);
+    }
+
+    #[test_only]
+    public fun test_register_mcms_entrypoint(publisher: &signer) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(b"offramp"), McmsCallback {}
+        );
+    }
+
+    #[test_only]
+    public fun test_execute_single_report(report: ExecutionReport) acquires OffRampState {
+        execute_single_report(
+            borrow_global_mut<OffRampState>(get_state_address_internal()),
+            report,
+            false
+        );
+    }
+
+    #[test_only]
+    public fun test_create_execution_report(
+        source_chain_selector: u64,
+        message: Any2AptosRampMessage,
+        offchain_token_data: vector<vector<u8>>,
+        proofs: vector<vector<u8>>
+    ): ExecutionReport {
+        ExecutionReport { source_chain_selector, message, offchain_token_data, proofs }
+    }
+
+    #[test_only]
+    public fun test_add_root(root: vector<u8>, timestamp: u64) acquires OffRampState {
+        let state = borrow_global_mut<OffRampState>(get_state_address_internal());
+        state.roots.add(root, timestamp);
+    }
+
+    #[test_only]
+    public fun test_deserialize_execution_report(
+        report_bytes: vector<u8>
+    ): ExecutionReport {
+        deserialize_execution_report(report_bytes)
+    }
+
+    #[test_only]
+    public fun test_calculate_metadata_hash(
+        source_chain_selector: u64, dest_chain_selector: u64, onramp: vector<u8>
+    ): vector<u8> {
+        calculate_metadata_hash(source_chain_selector, dest_chain_selector, onramp)
+    }
+
+    #[test_only]
+    public fun test_calculate_message_hash(
+        message: &Any2AptosRampMessage, metadata_hash: vector<u8>
+    ): vector<u8> {
+        calculate_message_hash(message, metadata_hash)
+    }
+
+    #[test_only]
+    public fun test_create_any2aptos_ramp_message(
+        header: RampMessageHeader,
+        sender: vector<u8>,
+        data: vector<u8>,
+        receiver: address,
+        gas_limit: u256,
+        token_amounts: vector<Any2AptosTokenTransfer>
+    ): Any2AptosRampMessage {
+        Any2AptosRampMessage { header, sender, data, receiver, gas_limit, token_amounts }
+    }
+
+    #[test_only]
+    public fun test_create_any2aptos_token_transfer(
+        source_pool_address: vector<u8>,
+        dest_token_address: address,
+        dest_gas_amount: u32,
+        extra_data: vector<u8>,
+        amount: u256
+    ): Any2AptosTokenTransfer {
+        Any2AptosTokenTransfer {
+            source_pool_address,
+            dest_token_address,
+            dest_gas_amount,
+            extra_data,
+            amount
+        }
+    }
+
+    #[test_only]
+    public fun test_create_ramp_message_header(
+        message_id: vector<u8>,
+        source_chain_selector: u64,
+        dest_chain_selector: u64,
+        sequence_number: u64,
+        nonce: u64
+    ): RampMessageHeader {
+        RampMessageHeader {
+            message_id,
+            source_chain_selector,
+            dest_chain_selector,
+            sequence_number,
+            nonce
+        }
+    }
+
+    #[test_only]
+    public fun test_create_merkle_root(
+        source_chain_selector: u64,
+        on_ramp_address: vector<u8>,
+        min_seq_nr: u64,
+        max_seq_nr: u64,
+        merkle_root: vector<u8>
+    ): MerkleRoot {
+        MerkleRoot {
+            source_chain_selector,
+            on_ramp_address,
+            min_seq_nr,
+            max_seq_nr,
+            merkle_root
+        }
     }
 }

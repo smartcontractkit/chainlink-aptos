@@ -373,11 +373,39 @@ module ccip_offramp::ocr3_base {
         found
     }
 
+    public fun config_signers(ocr_config: &OCRConfig): vector<vector<u8>> {
+        ocr_config.signers
+    }
+
+    public fun config_transmitters(ocr_config: &OCRConfig): vector<address> {
+        ocr_config.transmitters
+    }
+
     #[test]
     fun deserialize_sequence_number() {
         let report_context_one =
             x"0000000000000000000000000000000000000000000000000000000000000009";
         let ocr_sequence_number = deserialize_sequence_bytes(report_context_one);
         assert!(ocr_sequence_number == 9);
+    }
+
+    // ===================== Test functions =====================
+
+    #[test_only]
+    public fun destroy_ocr3_state(ocr3_state: OCR3BaseState) {
+        let OCR3BaseState {
+            chain_id: _,
+            ocr3_configs,
+            signer_oracles,
+            transmitter_oracles,
+            config_set_events,
+            transmitted_events
+        } = ocr3_state;
+
+        table::drop_unchecked(ocr3_configs);
+        table::drop_unchecked(signer_oracles);
+        table::drop_unchecked(transmitter_oracles);
+        event::destroy_handle(config_set_events);
+        event::destroy_handle(transmitted_events);
     }
 }
