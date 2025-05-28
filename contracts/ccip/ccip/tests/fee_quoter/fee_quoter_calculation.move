@@ -3,6 +3,7 @@ module ccip::fee_quoter_calculation {
     use std::object;
     use ccip::fee_quoter;
     use ccip::fee_quoter_setup;
+    use ccip::client;
 
     #[
         test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms),
@@ -259,7 +260,7 @@ module ccip::fee_quoter_calculation {
             x"7e5f4552091a69125d5dfcb7b8c2659029395bdf9c45bb0f8a496b606328c3ef";
 
         let svm_extra_args =
-            ccip::encode::encode_svm_extra_args_v1(
+            client::encode_svm_extra_args_v1(
                 500000, // compute_units - much higher than max_per_msg_gas_limit
                 0, // account_is_writable_bitmap
                 true, // allow_out_of_order_execution

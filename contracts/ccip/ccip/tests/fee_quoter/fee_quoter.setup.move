@@ -12,6 +12,7 @@ module ccip::fee_quoter_setup {
     use ccip::state_object;
     use ccip::auth;
     use ccip::fee_quoter;
+    use ccip::client;
 
     const APT_ADDRESS: address =
         @0x000000000000000000000000000000000000000000000000000000000000000a;
@@ -78,7 +79,6 @@ module ccip::fee_quoter_setup {
 
         // Create object for @ccip
         let _constructor_ref = object::create_named_object(owner, b"ccip");
-        std::debug::print(&object::address_from_constructor_ref(&_constructor_ref));
 
         state_object::init_module_for_testing(ccip);
         auth::test_init_module(owner);
@@ -202,7 +202,7 @@ module ccip::fee_quoter_setup {
 
     // Helper to create generic extra args with gas limit
     public fun create_extra_args(gas_limit: u64, strict_mode: bool): vector<u8> {
-        fee_quoter::test_encode_generic_extra_args_v2(gas_limit as u256, strict_mode)
+        client::encode_generic_extra_args_v2(gas_limit as u256, strict_mode)
     }
 
     // Helper to set up token and gas prices

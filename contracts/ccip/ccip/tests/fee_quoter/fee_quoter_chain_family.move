@@ -4,7 +4,9 @@ module ccip::fee_quoter_chain_family {
     use std::bcs;
     use ccip::fee_quoter;
     use ccip::fee_quoter_setup;
-    use ccip::encode;
+    use ccip::client;
+
+    const LOCAL_8_TO_18_DECIMALS_LINK_MULTIPLIER: u256 = 10_000_000_000;
 
     #[test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms)]
     fun test_svm_chain_support(
@@ -63,7 +65,7 @@ module ccip::fee_quoter_chain_family {
         let accounts = vector[];
 
         let svm_extra_args =
-            encode::encode_svm_extra_args_v1(
+            client::encode_svm_extra_args_v1(
                 compute_units,
                 account_is_writable_bitmap,
                 allow_out_of_order_execution,
@@ -158,7 +160,7 @@ module ccip::fee_quoter_chain_family {
     #[test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms)]
     fun test_decode_svm_extra_args() {
         let svm_extra_args =
-            encode::encode_svm_extra_args_v1(
+            client::encode_svm_extra_args_v1(
                 200000, // compute_units
                 0, // account_is_writable_bitmap
                 true, // allow_out_of_order_execution
@@ -238,7 +240,7 @@ module ccip::fee_quoter_chain_family {
         );
 
         let svm_extra_args =
-            encode::encode_svm_extra_args_v1(
+            client::encode_svm_extra_args_v1(
                 200000, // compute_units
                 0, // account_is_writable_bitmap
                 true, // allow_out_of_order_execution
@@ -256,11 +258,14 @@ module ccip::fee_quoter_chain_family {
                 token_addr,
                 1000, // fee_token_amount
                 svm_extra_args, // extra_args
+                vector[token_addr], // local_token_addresses,
                 vector[bcs::to_bytes(&fee_quoter_setup::get_mock_address_4())], // dest_token_addresses
                 vector[bcs::to_bytes(&fee_quoter_setup::get_mock_address_3())] // dest_pool_datas
             );
 
-        assert!(msg_fee_juels == 1000);
+        assert!(
+            msg_fee_juels == 1000 * LOCAL_8_TO_18_DECIMALS_LINK_MULTIPLIER
+        );
         assert!(is_out_of_order_execution == true);
         assert!(converted_extra_args == svm_extra_args);
         assert!(
@@ -282,8 +287,7 @@ module ccip::fee_quoter_chain_family {
         let gas_limit = 500000;
         let strict_mode = true;
 
-        let extra_args =
-            fee_quoter::test_encode_generic_extra_args_v2(gas_limit, strict_mode);
+        let extra_args = client::encode_generic_extra_args_v2(gas_limit, strict_mode);
 
         // Verify the encoding contains the tag and values
         // Generic extra args v2 tag is: 0x181dcf10
@@ -298,8 +302,7 @@ module ccip::fee_quoter_chain_family {
         assert!(extra_args[3] == 0x10);
 
         // Verify strict mode = false works too
-        let non_strict_args =
-            fee_quoter::test_encode_generic_extra_args_v2(gas_limit, false);
+        let non_strict_args = client::encode_generic_extra_args_v2(gas_limit, false);
         assert!(non_strict_args.length() > 0);
 
         // The first 4 bytes (tag) should be the same
@@ -541,7 +544,7 @@ module ccip::fee_quoter_chain_family {
 
     #[
         test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms),
-        expected_failure(abort_code = 65552, location = ccip::fee_quoter) // E_INVALID_SVM_ADDRESS
+        expected_failure(abort_code = 65541, location = ccip::eth_abi) // E_INVALID_U256_LENGTH
     ]
     fun test_invalid_svm_address(
         aptos_framework: &signer, ccip: &signer, owner: &signer
@@ -588,7 +591,7 @@ module ccip::fee_quoter_chain_family {
                 vector[], // token store addresses
                 token_addr, // fee token
                 @0x0, // fee token store
-                encode::encode_svm_extra_args_v1(500000, 0, true, vector[], vector[])
+                client::encode_svm_extra_args_v1(500000, 0, true, vector[], vector[])
             );
     }
 }

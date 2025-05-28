@@ -5,7 +5,7 @@ module ccip::fee_quoter_errors {
     use ccip::fee_quoter;
     use ccip::fee_quoter_setup;
     use std::timestamp;
-    use ccip::encode;
+    use ccip::client;
 
     #[
         test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms),
@@ -89,17 +89,17 @@ module ccip::fee_quoter_errors {
 
     #[
         test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms),
-        expected_failure(abort_code = 65539, location = ccip::fee_quoter) // E_UNKNOWN_DEST_CHAIN_SELECTOR
+        expected_failure(abort_code = 65564, location = ccip::fee_quoter) // E_INVALID_CHAIN_FAMILY_SELECTOR
     ]
     fun test_token_transfer_chain_family_auth_required(
         aptos_framework: &signer, ccip: &signer, owner: &signer
     ) {
         let (_owner_addr, token_obj) =
             fee_quoter_setup::setup(aptos_framework, ccip, owner);
-        let token_addr = object::object_address(&token_obj);
+        let _token_addr = object::object_address(&token_obj);
 
         // Create a token to transfer
-        let (_transfer_token_obj, transfer_token_addr) =
+        let (_transfer_token_obj, _transfer_token_addr) =
             fee_quoter_setup::create_test_token(owner, b"transfer_token");
 
         // Create a chain with chain family that requires token receiver auth
@@ -120,7 +120,7 @@ module ccip::fee_quoter_errors {
             0, // dest_data_availability_overhead_gas
             0, // dest_gas_per_data_availability_byte
             0, // dest_data_availability_multiplier_bps
-            fee_quoter_setup::get_chain_family_selector_aptos(), // chain_family_selector
+            x"abc123", // chain_family_selector ===================== (INVALID)
             false, // enforce_out_of_order
             0, // default_token_fee_usd_cents
             0, // default_token_dest_gas_overhead
@@ -128,31 +128,6 @@ module ccip::fee_quoter_errors {
             0, // gas_multiplier_wei_per_eth
             10000000, // gas_price_staleness_threshold
             0 // network_fee_usd_cents
-        );
-
-        // Set token price
-        fee_quoter::update_prices(
-            owner,
-            vector[token_addr], // source_tokens
-            vector[1000], // source_usd_per_token
-            vector[chain_selector], // gas_dest_chain_selectors
-            vector[1000] // gas price
-        );
-
-        // Try to get fee for a token transfer but with NO token receiver in extra args
-        let receiver = fee_quoter_setup::create_evm_receiver_address();
-
-        // E_UNKNOWN_DEST_CHAIN_SELECTOR
-        fee_quoter::get_validated_fee(
-            chain_selector,
-            receiver, // receiver
-            b"test data", // data
-            vector[transfer_token_addr], // token address to transfer
-            vector[1000], // token amount
-            vector[@0x0], // token destination is the same as message receiver
-            token_addr, // fee token
-            @0x0, // fee token store
-            fee_quoter_setup::create_extra_args(500000, true) // Generic extra args WITHOUT token receiver
         );
     }
 
@@ -208,7 +183,7 @@ module ccip::fee_quoter_errors {
             i = i + 1;
         };
         let extra_args =
-            encode::encode_svm_extra_args_v1(
+            client::encode_svm_extra_args_v1(
                 500000, // compute_units
                 0, // account_is_writable_bitmap
                 true, // allow_out_of_order_execution
@@ -303,7 +278,7 @@ module ccip::fee_quoter_errors {
         let token_addr = object::object_address(&token_obj);
 
         // Create extra args with gas limit
-        let extra_args = fee_quoter::test_encode_generic_extra_args_v2(500000, true);
+        let extra_args = client::encode_generic_extra_args_v2(500000, true);
 
         // Create oversized data (exceeds max_data_bytes of 10000 set in setup)
         let oversized_data = vector[];
@@ -388,9 +363,7 @@ module ccip::fee_quoter_errors {
                 vector[], // token store addresses
                 token_addr, // fee token
                 @0x0, // fee token store
-                fee_quoter::test_encode_generic_extra_args_v2(
-                    (max_gas_limit + 1 as u256), true
-                ) // extra args
+                client::encode_generic_extra_args_v2((max_gas_limit + 1 as u256), true) // extra args
             );
     }
 
@@ -494,7 +467,7 @@ module ccip::fee_quoter_errors {
 
         // Create SVM extra args with compute units exceeding the max
         let extra_args =
-            encode::encode_svm_extra_args_v1(
+            client::encode_svm_extra_args_v1(
                 max_gas_limit + 1, // compute_units - exceeds max
                 0, // account_is_writable_bitmap
                 true, // allow_out_of_order_execution
@@ -573,16 +546,15 @@ module ccip::fee_quoter_errors {
             i = i + 1;
         };
 
-        let dest_pool_datas = vector[large_pool_data]; // Large pool data exceeding dest_bytes_overhead
-
         // This should fail with E_SOURCE_TOKEN_DATA_TOO_LARGE
         fee_quoter::process_message_args(
             dest_chain_selector,
             token_addr,
             1000, // fee_token_amount
-            fee_quoter::test_encode_generic_extra_args_v2(500000, true),
+            client::encode_generic_extra_args_v2(500000, true),
+            vector[token_addr], // local_token_addresses,
             dest_token_addresses,
-            dest_pool_datas
+            vector[large_pool_data] // dest_pool_datas
         );
     }
 

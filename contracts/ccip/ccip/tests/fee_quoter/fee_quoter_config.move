@@ -161,10 +161,7 @@ module ccip::fee_quoter_config {
         assert!(min_fee_usd_cents == 50);
     }
 
-    #[
-        test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms),
-        expected_failure(abort_code = 65546, location = ccip::fee_quoter) // E_TOKEN_NOT_SUPPORTED
-    ]
+    #[test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms)]
     fun test_removed_fee_config_reverts(
         aptos_framework: &signer, ccip: &signer, owner: &signer
     ) {
@@ -192,11 +189,27 @@ module ccip::fee_quoter_config {
             vector[token_addr] // remove_tokens
         );
 
-        // Attempt to access the removed config - Fails with E_TOKEN_NOT_SUPPORTED
-        let _removed_config =
+        // Attempt to access the removed config
+        // This should return an empty config with default values
+        let default_config =
             fee_quoter::get_token_transfer_fee_config(
                 fee_quoter_setup::get_dest_chain_selector(), token_addr
             );
+        let (
+            default_min_fee_usd_cents,
+            default_max_fee_usd_cents,
+            default_deci_bps,
+            default_dest_gas_overhead,
+            default_dest_bytes_overhead,
+            default_is_enabled
+        ) = fee_quoter::token_transfer_fee_config_values(default_config);
+
+        assert!(default_min_fee_usd_cents == 0);
+        assert!(default_max_fee_usd_cents == 0);
+        assert!(default_deci_bps == 0);
+        assert!(default_dest_gas_overhead == 0);
+        assert!(default_dest_bytes_overhead == 0);
+        assert!(default_is_enabled == false);
     }
 
     #[test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms)]

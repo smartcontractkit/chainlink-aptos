@@ -316,11 +316,15 @@ module ccip::fee_quoter {
         get_token_price_internal(borrow_state(), token)
     }
 
-    public fun timestamped_price_value(timestamped_price: TimestampedPrice): u256 {
+    public fun timestamped_price_value(
+        timestamped_price: &TimestampedPrice
+    ): u256 {
         timestamped_price.value
     }
 
-    public fun timestamped_price_timestamp(timestamped_price: TimestampedPrice): u64 {
+    public fun timestamped_price_timestamp(
+        timestamped_price: &TimestampedPrice
+    ): u64 {
         timestamped_price.timestamp
     }
 
@@ -1762,12 +1766,5 @@ module ccip::fee_quoter {
         extra_args: vector<u8>
     ): (u32, u64, bool, vector<u8>, vector<vector<u8>>) {
         decode_svm_extra_args(extra_args)
-    }
-
-    #[test_only]
-    public fun test_encode_generic_extra_args_v2(
-        gas_limit: u256, allow_out_of_order_execution: bool
-    ): vector<u8> {
-        encode_generic_extra_args_v2(gas_limit, allow_out_of_order_execution)
     }
 }

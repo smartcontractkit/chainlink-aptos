@@ -132,7 +132,7 @@ module ccip::fee_quoter_mcms {
 
         // Verify the prices were updated
         let token_price = fee_quoter::get_token_price(token_addr);
-        assert!(fee_quoter::timestamped_price_value(token_price) == 1000);
+        assert!(fee_quoter::timestamped_price_value(&token_price) == 1000);
 
         // ============ fee_quoter::apply_premium_multiplier_wei_per_eth_updates ============
 

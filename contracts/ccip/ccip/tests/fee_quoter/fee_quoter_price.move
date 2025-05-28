@@ -3,6 +3,7 @@ module ccip::fee_quoter_price {
     use std::object;
     use ccip::fee_quoter;
     use ccip::fee_quoter_setup;
+    use ccip::client;
 
     #[test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms)]
     fun test_update_prices(
@@ -25,14 +26,14 @@ module ccip::fee_quoter_price {
 
         // Verify the token price was updated
         let token_price = fee_quoter::get_token_price(token_addr);
-        assert!(fee_quoter::timestamped_price_value(token_price) == new_token_price);
+        assert!(fee_quoter::timestamped_price_value(&token_price) == new_token_price);
 
         // Verify the gas price was updated
         let gas_price =
             fee_quoter::get_dest_chain_gas_price(
                 fee_quoter_setup::get_dest_chain_selector()
             );
-        assert!(fee_quoter::timestamped_price_value(gas_price) == new_gas_price);
+        assert!(fee_quoter::timestamped_price_value(&gas_price) == new_gas_price);
     }
 
     #[test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms)]
@@ -141,8 +142,8 @@ module ccip::fee_quoter_price {
 
         // Verify we got the right prices in the right order
         assert!(token_prices.length() == 2);
-        let first_price = fee_quoter::timestamped_price_value(token_prices[0]);
-        let second_price = fee_quoter::timestamped_price_value(token_prices[1]);
+        let first_price = fee_quoter::timestamped_price_value(&token_prices[0]);
+        let second_price = fee_quoter::timestamped_price_value(&token_prices[1]);
 
         assert!(first_price == 1000); // First token price
         assert!(second_price == 3000); // Third token price
@@ -353,7 +354,7 @@ module ccip::fee_quoter_price {
                 vector[@0x0, @0x0], // token_store_addresses
                 token_addr, // fee_token
                 @0x0, // fee_token_store
-                fee_quoter::test_encode_generic_extra_args_v2(500000, true) // extra args
+                client::encode_generic_extra_args_v2(500000, true) // extra args
             );
     }
 }

@@ -68,11 +68,11 @@ module ccip::fee_quoter_initialize {
         let token_price = fee_quoter::get_token_price(token_addr);
 
         // Verify the value function works
-        let price_value = fee_quoter::timestamped_price_value(token_price);
+        let price_value = fee_quoter::timestamped_price_value(&token_price);
         assert!(price_value == 1000);
 
         // Verify the timestamp function works
-        let price_timestamp = fee_quoter::timestamped_price_timestamp(token_price);
+        let price_timestamp = fee_quoter::timestamped_price_timestamp(&token_price);
         assert!(price_timestamp == std::timestamp::now_seconds());
     }
 }
