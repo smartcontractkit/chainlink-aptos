@@ -7,9 +7,11 @@ module ccip_onramp::onramp_test {
     use std::object::{Self, Object, ExtendRef, ObjectCore};
     use std::bcs;
     use std::account;
-    use aptos_framework::fungible_asset::{Self, Metadata, MintRef, BurnRef, TransferRef};
-    use aptos_framework::primary_fungible_store;
-    use aptos_framework::timestamp;
+    use std::fungible_asset::{Self, Metadata, MintRef, BurnRef, TransferRef};
+    use std::primary_fungible_store;
+    use std::timestamp;
+    use std::event;
+
     use ccip::token_admin_registry;
     use ccip::rmn_remote;
     use ccip::nonce_manager;
@@ -19,6 +21,7 @@ module ccip_onramp::onramp_test {
     use ccip::state_object::{Self};
     use ccip::fee_quoter::{Self};
 
+    use ccip_token_pool::token_pool;
     use burn_mint_token_pool::burn_mint_token_pool;
     use lock_release_token_pool::lock_release_token_pool;
 
@@ -78,7 +81,8 @@ module ccip_onramp::onramp_test {
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer,
         pool_type: u8, // 0 for burn_mint, 1 for lock_release
-        seed: vector<u8>
+        seed: vector<u8>,
+        is_dispatchable: bool
     ): (address, Object<Metadata>) {
         let owner_addr = signer::address_of(owner);
         account::create_account_for_test(signer::address_of(burn_mint_token_pool));
@@ -134,7 +138,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 pool_type,
-                seed
+                seed,
+                is_dispatchable
             );
 
         let one_e_18 = 1_000_000_000_000_000_000;
@@ -213,7 +218,8 @@ module ccip_onramp::onramp_test {
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer,
         pool_type: u8, // 0 for burn_mint, 1 for lock_release
-        seed: vector<u8>
+        seed: vector<u8>,
+        is_dispatchable: bool
     ): (Object<Metadata>, address) {
         let constructor_ref = object::create_named_object(owner, seed);
 
@@ -233,7 +239,12 @@ module ccip_onramp::onramp_test {
         let extend_ref = object::generate_extend_ref(&constructor_ref);
         let mint_ref = fungible_asset::generate_mint_ref(&constructor_ref);
         let burn_ref = fungible_asset::generate_burn_ref(&constructor_ref);
-        let transfer_ref = fungible_asset::generate_transfer_ref(&constructor_ref);
+        let transfer_ref =
+            if (is_dispatchable) {
+                option::some(fungible_asset::generate_transfer_ref(&constructor_ref))
+            } else {
+                option::none()
+            };
 
         // ======================== Create token pool ========================
         let token_addr = object::object_address(&metadata);
@@ -339,7 +350,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         let static_config = onramp::get_static_config();
@@ -391,7 +403,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         // Update dynamic config
@@ -442,7 +455,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         // Try to update dynamic config with unauthorized account
@@ -475,7 +489,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         let dest_chain_selectors = vector[DEST_CHAIN_SELECTOR];
@@ -551,7 +566,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         // First enable allowlist for destination chain
@@ -637,7 +653,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 BURN_MINT_TOKEN_POOL,
-                b"TestToken"
+                b"TestToken",
+                false
             );
 
         auth::apply_allowed_onramp_updates(
@@ -716,6 +733,10 @@ module ccip_onramp::onramp_test {
         let onramp_state_balance =
             primary_fungible_store::balance(onramp::get_state_address(), token.metadata);
         assert!(onramp_state_balance == fee_token_amount);
+
+        assert!(
+            event::emitted_events<token_pool::Burned>().length() == 1
+        );
     }
 
     #[
@@ -749,7 +770,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 LOCK_RELEASE_TOKEN_POOL,
-                b"LockReleaseToken"
+                b"LockReleaseToken",
+                false
             );
 
         auth::apply_allowed_onramp_updates(
@@ -833,8 +855,11 @@ module ccip_onramp::onramp_test {
         let token_pool_addr = lock_release_token_pool::get_store_address();
         let token_pool_balance =
             primary_fungible_store::balance(token_pool_addr, token.metadata);
-        std::debug::print(&token_pool_balance);
         assert!(token_pool_balance == sent_amount);
+
+        assert!(
+            event::emitted_events<token_pool::Locked>().length() == 1
+        );
     }
 
     #[
@@ -864,7 +889,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
         initialize_onramp(owner);
     }
@@ -897,7 +923,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 BURN_MINT_TOKEN_POOL,
-                b"TestToken"
+                b"TestToken",
+                false
             );
         let token_addr = object::object_address(&token_obj);
 
@@ -934,7 +961,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         assert!(onramp::is_chain_supported(DEST_CHAIN_SELECTOR));
@@ -969,7 +997,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         // After initialization, sequence number should be 0, so next expected is 1
@@ -1025,7 +1054,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         assert!(onramp::owner() == signer::address_of(owner));
@@ -1070,7 +1100,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         let nonce =
@@ -1105,7 +1136,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 BURN_MINT_TOKEN_POOL,
-                b"TestToken"
+                b"TestToken",
+                false
             );
 
         let token_addr = object::object_address(&token_obj);
@@ -1167,7 +1199,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         let dest_chain_selectors = vector[DEST_CHAIN_SELECTOR];
@@ -1220,7 +1253,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         onramp::apply_dest_chain_config_updates(
@@ -1267,7 +1301,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 BURN_MINT_TOKEN_POOL,
-                b"TestToken"
+                b"TestToken",
+                false
             );
 
         let type_version = onramp::type_and_version();
@@ -1342,7 +1377,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 BURN_MINT_TOKEN_POOL,
-                b"TestToken"
+                b"TestToken",
+                false
             );
         setup_mcms(mcms);
         onramp::register_mcms_entrypoint(ccip_onramp);
@@ -1405,7 +1441,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 BURN_MINT_TOKEN_POOL,
-                b"TestToken"
+                b"TestToken",
+                false
             );
         setup_mcms(mcms);
         onramp::register_mcms_entrypoint(ccip_onramp);
@@ -1476,7 +1513,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 BURN_MINT_TOKEN_POOL,
-                b"TestToken"
+                b"TestToken",
+                false
             );
         setup_mcms(mcms);
         onramp::register_mcms_entrypoint(ccip_onramp);
@@ -1555,7 +1593,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 BURN_MINT_TOKEN_POOL,
-                b"TestToken"
+                b"TestToken",
+                false
             );
         setup_mcms(mcms);
         onramp::register_mcms_entrypoint(ccip_onramp);
