@@ -22,6 +22,7 @@ var (
 )
 
 type RegistryInterface interface {
+	GetMigrationStatus(opts *bind.CallOpts) (bool, error)
 	GetWorkflowConfig(opts *bind.CallOpts) (WorkflowConfig, error)
 	GetFeeds(opts *bind.CallOpts) ([]FeedConfig, error)
 	GetFeedMetadata(opts *bind.CallOpts, feedIds [][]byte) ([]FeedMetadata, error)
@@ -40,6 +41,7 @@ type RegistryInterface interface {
 }
 
 type RegistryEncoder interface {
+	GetMigrationStatus() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetWorkflowConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetFeeds() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetFeedMetadata(feedIds [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -186,6 +188,27 @@ func (c RegistryContract) Encoder() RegistryEncoder {
 }
 
 // View Functions
+
+func (c RegistryContract) GetMigrationStatus(opts *bind.CallOpts) (bool, error) {
+	module, function, typeTags, args, err := c.registryEncoder.GetMigrationStatus()
+	if err != nil {
+		return *new(bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	var (
+		r0 bool
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(bool), err
+	}
+	return r0, nil
+}
 
 func (c RegistryContract) GetWorkflowConfig(opts *bind.CallOpts) (WorkflowConfig, error) {
 	module, function, typeTags, args, err := c.registryEncoder.GetWorkflowConfig()
@@ -339,6 +362,10 @@ func (c RegistryContract) AcceptOwnership(opts *bind.TransactOpts) (*api.Pending
 // Encoder
 type registryEncoder struct {
 	*bind.BoundContract
+}
+
+func (c registryEncoder) GetMigrationStatus() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_migration_status", nil, []string{}, []any{})
 }
 
 func (c registryEncoder) GetWorkflowConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {

@@ -21,7 +21,7 @@ This workaround allows the project to compile and function correctly while await
 
 📄 Discussion: [Aptos Developer Discussions #694 (comment)](https://github.com/aptos-labs/aptos-developer-discussions/discussions/694#discussioncomment-13250748)
 
-## How to run the Data Feeds Migration e2e Script
+## How to run the Data Feeds e2e Scripts
 
 During an upgrade to the Data Feeds Registry contract, a test script was made to simulate the migration in full on a local testnet.
 
@@ -31,3 +31,10 @@ cd contracts/data-feeds/scripts
 ```
 
 This script can be adapted to prove/validate other future migrations, as well as a starting point for testing new development features.
+
+There is also a vanilla, initial (non-upgrade) deploy script as well.
+
+```bash
+cd contracts/data-feeds/scripts
+./test_registry_deploy_e2e.sh
+```

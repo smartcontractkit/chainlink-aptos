@@ -13,8 +13,10 @@ module data_feeds::migration_helper {
     fun init_module(publisher: &signer) {
         assert!(signer::address_of(publisher) == @data_feeds, ENOT_OWNER);
 
-        data_feeds::registry::register_callbacks(publisher);
+        if (!data_feeds::registry::get_migration_status()) {
+            data_feeds::registry::register_callbacks(publisher);
 
-        event::emit(MigrationPerformed { publisher: signer::address_of(publisher) });
+            event::emit(MigrationPerformed { publisher: signer::address_of(publisher) });
+        }
     }
 }

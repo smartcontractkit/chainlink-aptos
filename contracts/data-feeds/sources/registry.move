@@ -215,13 +215,17 @@ module data_feeds::registry {
     }
 
     // This function can be called into to register callbacks in future Forwarders
-    public entry fun register_callbacks(publisher: &signer) {
+    public entry fun register_callbacks(publisher: &signer) acquires Registry {
         assert!(signer::address_of(publisher) == @data_feeds, ENOT_OWNER);
 
         assert!(
             !exists<RegistryMigrationStatus>(get_state_addr()),
             EALREADY_MIGRATED
         );
+
+        let registry = borrow_global_mut<Registry>(get_state_addr());
+        let extend_ref = &registry.extend_ref;
+        let object_signer = object::generate_signer_for_extending(extend_ref);
 
         // callback for on_report_secondary function
         let cb_secondary =
@@ -236,7 +240,7 @@ module data_feeds::registry {
         );
 
         move_to(
-            publisher,
+            &object_signer,
             RegistryMigrationStatus { callback_registered: true }
         );
 
@@ -484,6 +488,11 @@ module data_feeds::registry {
 
         registry.allowed_workflow_owners = allowed_workflow_owners;
         registry.allowed_workflow_names = allowed_workflow_names;
+    }
+
+    #[view]
+    public fun get_migration_status(): bool {
+        exists<RegistryMigrationStatus>(get_state_addr())
     }
 
     #[view]

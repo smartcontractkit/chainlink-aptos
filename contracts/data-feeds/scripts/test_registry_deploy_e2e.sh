@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ------------------------------------------------------------------------------
 #  Data Feeds: Aptos test script for the Registry migration to support 2 Forwarders
-#  • Optional command tracing         :  DEBUG=1 ./test_registry_migration_e2e.sh
-#  • Skip local network auto-shutdown :  SKIP_SHUTDOWN=1 ./test_registry_migration_e2e.sh
+#  • Optional command tracing         :  DEBUG=1 ./test_registry_deploy_e2e.sh
+#  • Skip local network auto-shutdown :  SKIP_SHUTDOWN=1 ./test_registry_deploy_e2e.sh
 # ------------------------------------------------------------------------------
 
 set -euo pipefail
@@ -360,20 +360,20 @@ run "Set config on Forwarder 2" _out \
 # ──────────────────────────────────────────────────────────────────────────────
 #  3.  Deploy legacy data-feeds package
 # ──────────────────────────────────────────────────────────────────────────────
-run "Deploy data-feeds (legacy, pre-migration)" OUT_DF_LEGACY \
+run "Deploy data-feeds (supports benchmark reports & 2 forwarders)" OUT_DF \
   aptos move create-object-and-publish-package \
     --profile "$PUBLISHER_PROFILE" \
-    --package-dir "$CONTRACTS_ROOT/data-feeds/legacy/data-feeds-pre-migration" \
+    --package-dir "$CONTRACTS_ROOT/data-feeds" \
     --address-name data_feeds \
-    --named-addresses platform="$PLATFORM_FORWARDER_ADDR",owner="$PUBLISHER_ADDR" \
+    --named-addresses platform="$PLATFORM_FORWARDER_ADDR",owner="$PUBLISHER_ADDR",platform_secondary="$PLATFORM_SECONDARY_FORWARDER_ADDR",owner_secondary="$PUBLISHER_ADDR" \
     --max-gas 50000 --assume-yes
 
-DATA_FEEDS_ADDR=$(print "$OUT_DF_LEGACY" | extract_addr)
+DATA_FEEDS_ADDR=$(print "$OUT_DF" | extract_addr)
 run "Registry: $DATA_FEEDS_ADDR" _out true
 
 # If address empty ⇒ show full CLI output before dying
 if [[ -z "$DATA_FEEDS_ADDR" ]]; then
-  fail "Could not extract Forwarder 1 contract address" <(print "$OUT_DF_LEGACY")
+  fail "Could not extract Forwarder 1 contract address" <(print "$OUT_DF")
   exit 1
 fi
 
@@ -416,29 +416,7 @@ BENCHMARK_1=$(print "$OUT_REPORT1_READ" | jq -r '.Result[0][0].feed.benchmark')
   || { fail "Benchmark 1 mismatch"; exit 1; }
 
 # ──────────────────────────────────────────────────────────────────────────────
-#  5.  Upgrade registry
-# ──────────────────────────────────────────────────────────────────────────────
-run "Upgrade registry contract (supports benchmark reports & 2 forwarders)" _out \
-  aptos move upgrade-object \
-    --profile "$PUBLISHER_PROFILE" \
-    --package-dir "$CONTRACTS_ROOT/data-feeds" \
-    --object-address "$DATA_FEEDS_ADDR" \
-    --address-name data_feeds \
-    --named-addresses data_feeds="$DATA_FEEDS_ADDR",platform="$PLATFORM_FORWARDER_ADDR",owner="$PUBLISHER_ADDR",platform_secondary="$PLATFORM_SECONDARY_FORWARDER_ADDR",owner_secondary="$PUBLISHER_ADDR" \
-    --max-gas 50000 --assume-yes
-
-run "Read report 1 after upgrade" OUT_REPORT1_POST \
-  aptos move view \
-    --profile "$PUBLISHER_PROFILE" \
-    --function-id "$DATA_FEEDS_ADDR::registry::get_feeds" --assume-yes
-
-BENCHMARK_1_POST=$(print "$OUT_REPORT1_POST" | jq -r '.Result[0][0].feed.benchmark')
-[[ "$BENCHMARK_1_POST" == "$EXPECTED_BENCHMARK_1" ]] \
-  && success "Benchmark 1 still correct after upgrade" \
-  || { fail "Benchmark 1 changed after upgrade"; exit 1; }
-
-# ──────────────────────────────────────────────────────────────────────────────
-#  6.  Report 2 – write & verify
+#  5.  Report 2 – write & verify
 # ──────────────────────────────────────────────────────────────────────────────
 run "Write report 2 (via Forwarder 1)" _out \
   aptos move run \
@@ -458,7 +436,7 @@ BENCHMARK_2=$(print "$OUT_REPORT2_READ" | jq -r '.Result[0][0].feed.benchmark')
   || { fail "Benchmark 2 mismatch"; exit 1; }
 
 # ──────────────────────────────────────────────────────────────────────────────
-#  7.  Report 3 – write (via 2nd forwarder) & verify
+#  6.  Report 3 – write (via 2nd forwarder) & verify
 # ──────────────────────────────────────────────────────────────────────────────
 run "Write report 3 (via Forwarder 2)" _out \
   aptos move run \
