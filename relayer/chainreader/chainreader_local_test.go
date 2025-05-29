@@ -942,6 +942,25 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 							"value": {NewName: "SingleUintValue"},
 						},
 					},
+					"ComplexStruct": {
+						EventHandleStructName: "EventStore",
+						EventHandleFieldName:  "complex_struct_events",
+						EventAccountAddress:   acctAddr.String() + "::echo::get_event_address",
+						EventFieldRenames: map[string]RenamedField{
+							"flag": {NewName: "RenamedFlag"},
+							"nested": {
+								NewName: "RenamedNested",
+								SubFieldRenames: map[string]RenamedField{
+									"id":          {NewName: "RenamedId"},
+									"description": {NewName: "RenamedDescription"},
+								},
+							},
+							"values": {NewName: "RenamedValues"},
+						},
+						EventFilterRenames: map[string]string{
+							"NestedID": "RenamedNested.RenamedId",
+						},
+					},
 				},
 			},
 		},
@@ -1083,6 +1102,30 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 			require.GreaterOrEqual(t, evt.SingleUintValue, uint64(3))
 			require.Less(t, evt.SingleUintValue, uint64(7))
 		}
+	})
+
+	t.Run("Filter by nested path via EventFilterRenames - single event", func(t *testing.T) {
+		filter := query.KeyFilter{
+			Key: "ComplexStruct",
+			Expressions: []query.Expression{
+				query.Comparator("NestedID",
+					primitives.ValueComparator{Value: uint64(10), Operator: primitives.Eq},
+				),
+			},
+		}
+
+		seqs, err := loopReader.QueryKey(
+			context.Background(),
+			binding,
+			filter,
+			query.LimitAndSort{Limit: query.CountLimit(1)},
+			&ComplexStruct{},
+		)
+		require.NoError(t, err)
+		require.Len(t, seqs, 1, "Expected exactly one matching event")
+
+		evt := seqs[0].Data.(*ComplexStruct)
+		require.Equal(t, uint64(10), evt.RenamedNested.RenamedId, "Event should have nested ID value of 10")
 	})
 
 	t.Run("QueryKey - Error Cases", func(t *testing.T) {

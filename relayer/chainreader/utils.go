@@ -2,6 +2,7 @@ package chainreader
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
@@ -100,6 +101,23 @@ func applyEventFilterRenames(exprs []query.Expression, renames map[string]string
 		}
 	}
 	return newExprs
+}
+
+// buildJsonPathExpr constructs a PostgreSQL JSON path expression for accessing nested fields
+// Example: "Header.SourceChainSelector" becomes data->'Header'->>'SourceChainSelector'
+func buildJsonPathExpr(baseField string, path string) string {
+	parts := strings.Split(path, ".")
+	expr := baseField
+
+	for i, part := range parts {
+		if i == len(parts)-1 {
+			expr = fmt.Sprintf("%s->>'%s'", expr, part)
+		} else {
+			expr = fmt.Sprintf("%s->'%s'", expr, part)
+		}
+	}
+
+	return expr
 }
 
 func isNumeric(value any) bool {

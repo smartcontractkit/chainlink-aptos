@@ -20,7 +20,6 @@ func NewDBStore(ds sqlutil.DataSource) *DBStore {
 
 func (store *DBStore) EnsureSchema(ctx context.Context) error {
 	schemaSQL := `
-DROP SCHEMA IF EXISTS aptos CASCADE;
 CREATE SCHEMA IF NOT EXISTS aptos;
 `
 	_, err := store.ds.ExecContext(ctx, schemaSQL)
@@ -141,18 +140,16 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 		if expr.IsPrimitive() {
 			switch v := expr.Primitive.(type) {
 			case *primitives.Comparator:
-				// temp fix, remove when selector available
-				if v.Name == "SourceChain" {
-					continue
-				}
-
 				for _, valueCmp := range v.ValueComparators {
+					jsonPath := buildJsonPathExpr("data", v.Name)
+
 					var condition string
 					if isNumeric(valueCmp.Value) {
-						condition = fmt.Sprintf("CAST(data->>'%s' AS numeric) %s $%d", v.Name, operatorSQL(valueCmp.Operator), argCount)
+						condition = fmt.Sprintf("CAST(%s AS numeric) %s $%d", jsonPath, operatorSQL(valueCmp.Operator), argCount)
 					} else {
-						condition = fmt.Sprintf("data->>'%s' %s $%d", v.Name, operatorSQL(valueCmp.Operator), argCount)
+						condition = fmt.Sprintf("%s %s $%d", jsonPath, operatorSQL(valueCmp.Operator), argCount)
 					}
+
 					baseSQL += " AND " + condition
 					args = append(args, valueCmp.Value)
 					argCount++
