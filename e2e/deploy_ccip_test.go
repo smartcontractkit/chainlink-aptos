@@ -28,12 +28,14 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_onramp"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_router"
-	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/burn_mint_token_pool"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/managed_token_pool"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/token_pool"
-	link_token "github.com/smartcontractkit/chainlink-aptos/bindings/link-token"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/managed_token"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/mcms"
 	module_mcms "github.com/smartcontractkit/chainlink-aptos/bindings/mcms/mcms"
 )
+
+var DestChainSelector = chain_selectors.ETHEREUM_TESTNET_SEPOLIA.Selector
 
 func Test_DeployCCIP(t *testing.T) {
 	localnet := false
@@ -62,7 +64,7 @@ func Test_DeployCCIP(t *testing.T) {
 	waitForTransaction := func(hash string) {
 		data, err := client.WaitForTransaction(hash)
 		require.NoError(t, err)
-		require.True(t, data.Success, data.VmStatus)
+		require.True(t, data.Success, "transaction %v failed: %v", hash, data.VmStatus)
 	}
 
 	// Deploy MCMS
@@ -115,8 +117,8 @@ func Test_DeployCCIP(t *testing.T) {
 		}).
 		SetAction(mcmstypes.TimelockActionBypass)
 
+	opCounter := 0
 	addToProposal := func(module bind.ModuleInformation, function string, _ []aptos.TypeTag, args [][]byte, err error) {
-		require.NoError(t, err)
 		transaction, err := aptossdk.NewTransaction(
 			module.PackageName,
 			module.ModuleName,
@@ -131,6 +133,8 @@ func Test_DeployCCIP(t *testing.T) {
 			ChainSelector: chainSelector,
 			Transactions:  []mcmstypes.Transaction{transaction},
 		})
+		fmt.Printf("Added operation %v to proposal: %v::%v\n", opCounter, module.ModuleName, function)
+		opCounter++
 	}
 
 	// Accept ownership of MCMS
@@ -141,13 +145,16 @@ func Test_DeployCCIP(t *testing.T) {
 	linkTokenObjectAddress, err := mcmsContract.MCMSRegistry().GetNewCodeObjectAddress(nil, []byte(linkTokenSeed))
 	require.NoError(t, err)
 	fmt.Printf("Deploying LINK token to: %v\n", linkTokenObjectAddress.StringLong())
+	linkTokenOwnerAddress, err := mcmsContract.MCMSRegistry().GetNewCodeObjectOwnerAddress(nil, []byte(linkTokenSeed))
+	require.NoError(t, err)
+	fmt.Printf("LINK token owner address: %v\n", linkTokenOwnerAddress.StringLong())
 
-	linkTokenStateAddress := linkTokenObjectAddress.NamedObjectAddress([]byte("link::link_token::token_state"))
+	linkTokenStateAddress := linkTokenObjectAddress.NamedObjectAddress([]byte("managed_token::managed_token::token_state"))
 	fmt.Printf("LINK Token State address: %v\n", linkTokenStateAddress.StringLong())
 	linkTokenMetadataAddress := linkTokenStateAddress.NamedObjectAddress([]byte("LINK"))
 	fmt.Printf("LINK Token Metadata address: %v\n", linkTokenMetadataAddress.StringLong())
 
-	linkTokenPayload, err := link_token.Compile(linkTokenObjectAddress)
+	linkTokenPayload, err := managed_token.Compile(linkTokenObjectAddress)
 	require.NoError(t, err)
 	chunks, err := bind.CreateChunks(linkTokenPayload, bind.ChunkSizeInBytes)
 	require.NoError(t, err)
@@ -160,7 +167,7 @@ func Test_DeployCCIP(t *testing.T) {
 	}
 
 	// Deploy LINK MCMS Registrar
-	mcmsRegistrarPayload, err := link_token.CompileMCMSRegistrar(linkTokenObjectAddress, mcmsAddress, true)
+	mcmsRegistrarPayload, err := managed_token.CompileMCMSRegistrar(linkTokenObjectAddress, mcmsAddress, true)
 	require.NoError(t, err)
 	chunks, err = bind.CreateChunks(mcmsRegistrarPayload, bind.ChunkSizeInBytes)
 	require.NoError(t, err)
@@ -173,9 +180,11 @@ func Test_DeployCCIP(t *testing.T) {
 	}
 
 	// Initialize LINK token
-	boundLinkToken := link_token.Bind(linkTokenObjectAddress, client)
+	linkTokenContract := managed_token.Bind(linkTokenObjectAddress, client)
 	maxSupply := big.NewInt(10000000000000)
-	addToProposal(boundLinkToken.LinkToken().Encoder().Initialize(&maxSupply, "LinkToken", "LINK", 8, "", ""))
+	addToProposal(linkTokenContract.ManagedToken().Encoder().Initialize(&maxSupply, "LinkToken", "LINK", 8, "", ""))
+	// Mint 10k LINK
+	addToProposal(linkTokenContract.ManagedToken().Encoder().Mint(deployerAccount.Address, 1000000000000))
 
 	// Deploy CCIP
 	ccipOwnerAddress, err := mcmsContract.MCMSRegistry().GetNewCodeObjectOwnerAddress(nil, []byte(ccip.DefaultSeed))
@@ -233,16 +242,17 @@ func Test_DeployCCIP(t *testing.T) {
 	evmFamilySelector, _ := hex.DecodeString("2812d52c")
 
 	addToProposal(ccipContract.RMNRemote().Encoder().Initialize(uint64(chainSelector)))
-	addToProposal(ccipContract.FeeQuoter().Encoder().Initialize(1000, token, 12400, []aptos.AccountAddress{token}))
-	addToProposal(onrampContract.Onramp().Encoder().Initialize(1234, deployerAccount.AccountAddress(), deployerAccount.AccountAddress(), []uint64{5678}, []aptos.AccountAddress{routerStateAddress}, []bool{false}))
-	addToProposal(routerContract.Router().Encoder().SetOnRampVersions([]uint64{5678}, [][]byte{{1, 6, 0}}))
+	addToProposal(ccipContract.FeeQuoter().Encoder().Initialize(big.NewInt(1000), token, 12400, []aptos.AccountAddress{token}))
+	addToProposal(onrampContract.Onramp().Encoder().Initialize(uint64(chainSelector), deployerAccount.AccountAddress(), deployerAccount.AccountAddress(), []uint64{DestChainSelector}, []aptos.AccountAddress{routerStateAddress}, []bool{false}))
+	addToProposal(routerContract.Router().Encoder().SetOnRampVersions([]uint64{DestChainSelector}, [][]byte{{1, 6, 0}}))
 	addToProposal(ccipContract.FeeQuoter().Encoder().ApplyFeeTokenUpdates(nil, []aptos.AccountAddress{token}))
-	addToProposal(ccipContract.FeeQuoter().Encoder().ApplyTokenTransferFeeConfigUpdates(5678, []aptos.AccountAddress{token}, []uint32{1}, []uint32{10000}, []uint16{0}, []uint32{1000}, []uint32{1000}, []bool{true}, nil))
-	addToProposal(ccipContract.FeeQuoter().Encoder().ApplyDestChainConfigUpdates(5678, true, 1, 10000, 7000000, 0, 0, 0, 0, 0, 0, 0, evmFamilySelector, false, 0, 0, 1000000, 0, 10000000, 0))
+	addToProposal(ccipContract.FeeQuoter().Encoder().ApplyTokenTransferFeeConfigUpdates(DestChainSelector, []aptos.AccountAddress{token}, []uint32{1}, []uint32{10000}, []uint16{0}, []uint32{1000}, []uint32{1000}, []bool{true}, nil))
+	addToProposal(ccipContract.FeeQuoter().Encoder().ApplyDestChainConfigUpdates(DestChainSelector, true, 1, 10000, 7000000, 0, 0, 0, 0, 0, 0, 0, evmFamilySelector, false, 0, 0, 1000000, 0, 10000000, 0))
 	addToProposal(ccipContract.FeeQuoter().Encoder().ApplyPremiumMultiplierWeiPerEthUpdates([]aptos.AccountAddress{token}, []uint64{1}))
 	// To be able to call fee_quoter::update_prices, need to register as an allowed offramp
 	addToProposal(ccipContract.Auth().Encoder().ApplyAllowedOfframpUpdates(nil, []aptos.AccountAddress{ccipOwnerAddress}))
-	addToProposal(ccipContract.FeeQuoter().Encoder().UpdatePrices([]aptos.AccountAddress{token}, []*big.Int{big.NewInt(1000)}, []uint64{5678}, []*big.Int{big.NewInt(0)}))
+	feeTokenPrice := big.NewInt(1).Mul(big.NewInt(100), big.NewInt(1e18))
+	addToProposal(ccipContract.FeeQuoter().Encoder().UpdatePrices([]aptos.AccountAddress{token}, []*big.Int{feeTokenPrice}, []uint64{DestChainSelector}, []*big.Int{big.NewInt(0)}))
 
 	// Deploy token pool on top of link token
 	tokenPoolPayload, err := token_pool.Compile(linkTokenObjectAddress, ccipObjectAddress, mcmsAddress)
@@ -257,10 +267,10 @@ func Test_DeployCCIP(t *testing.T) {
 		addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunk(chunk.Metadata, chunk.CodeIndices, chunk.Chunks))
 	}
 
-	// Deploy BurnMintTokenPool on top of link token
-	burnMintTokenPoolPayload, err := burn_mint_token_pool.Compile(linkTokenObjectAddress, ccipObjectAddress, mcmsAddress, linkTokenObjectAddress, linkTokenMetadataAddress, true)
+	// Deploy ManagedTokenPool on top of link token
+	managedTokenPoolPayload, err := managed_token_pool.Compile(linkTokenObjectAddress, ccipObjectAddress, mcmsAddress, linkTokenObjectAddress, linkTokenObjectAddress, linkTokenOwnerAddress, true)
 	require.NoError(t, err)
-	chunks, err = bind.CreateChunks(burnMintTokenPoolPayload, bind.ChunkSizeInBytes)
+	chunks, err = bind.CreateChunks(managedTokenPoolPayload, bind.ChunkSizeInBytes)
 	require.NoError(t, err)
 	for i, chunk := range chunks {
 		if i == len(chunks)-1 {
@@ -269,6 +279,38 @@ func Test_DeployCCIP(t *testing.T) {
 		}
 		addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunk(chunk.Metadata, chunk.CodeIndices, chunk.Chunks))
 	}
+	managedTokenPoolContract := managed_token_pool.Bind(linkTokenObjectAddress, client)
+	managedTokenPoolStoreAddress := linkTokenObjectAddress.ResourceAccount([]byte("CcipManagedTokenPool"))
+	fmt.Printf("Deployed Managed Token Pool to: %v\n", linkTokenObjectAddress)
+	fmt.Printf("\tStore resource account address: %v\n", managedTokenPoolStoreAddress)
+	addToProposal(linkTokenContract.ManagedToken().Encoder().ApplyAllowedMinterUpdates(nil, []aptos.AccountAddress{managedTokenPoolStoreAddress}))
+	addToProposal(linkTokenContract.ManagedToken().Encoder().ApplyAllowedBurnerUpdates(nil, []aptos.AccountAddress{managedTokenPoolStoreAddress}))
+
+	// Set up CCIP
+	addToProposal(ccipContract.FeeQuoter().Encoder().ApplyDestChainConfigUpdates(
+		DestChainSelector,
+		true,
+		10,
+		30_000,
+		3_000_000,
+		300_000,
+		16,
+		40,
+		3000,
+		100,
+		16,
+		1,
+		[]byte{0x28, 0x12, 0xd5, 0x2c},
+		false,
+		25,
+		90_000,
+		200_000,
+		11e8,
+		0,
+		10,
+	))
+	addToProposal(managedTokenPoolContract.ManagedTokenPool().Encoder().ApplyChainUpdates(nil, []uint64{DestChainSelector}, [][][]byte{{common.LeftPadBytes(common.HexToAddress("0x1111111B536498Bcd6326722E5Fd22D8234F1c7C").Bytes(), 32)}}, [][]byte{common.LeftPadBytes(common.HexToAddress("0x222222aF075ef84856A4DF03555E9777b2d227f6").Bytes(), 32)}))
+	addToProposal(managedTokenPoolContract.ManagedTokenPool().Encoder().SetChainRateLimiterConfig(DestChainSelector, false, 0, 0, false, 0, 0))
 
 	// Build, setRoot and execute proposal
 	timelockProposal, err := proposalBuilder.Build()
@@ -325,30 +367,51 @@ func Test_DeployCCIP(t *testing.T) {
 }
 
 func Test_CCIPSend(t *testing.T) {
-	client, err := aptos.NewNodeClient("https://api.testnet.aptoslabs.com/v1", 2)
-	require.NoError(t, err)
+	localnet := false
+
 	deployerKey := &crypto.Ed25519PrivateKey{}
 	require.NoError(t, deployerKey.FromHex(os.Getenv("DEPLOYER_KEY")))
 	deployerAccount, err := aptos.NewAccountFromSigner(deployerKey)
 	require.NoError(t, err)
 	opts := &bind.TransactOpts{Signer: deployerAccount}
 
+	var (
+		client *aptos.Client
+	)
+	if !localnet {
+		client, err = aptos.NewClient(aptos.TestnetConfig)
+		require.NoError(t, err)
+	} else {
+		client, err = aptos.NewClient(aptos.LocalnetConfig)
+		require.NoError(t, err)
+		err = client.Fund(deployerAccount.AccountAddress(), 10000000000)
+	}
+
 	ccipAddress := aptos.AccountAddress{}
-	_ = ccipAddress.ParseStringRelaxed("0xca89bf0a703a4c238ab49c50f94d8b0595b58e0dcbc78f6d1bc65871083ee6de")
+	_ = ccipAddress.ParseStringRelaxed("0x9b4d2a493e72ef2c2fa877220c405a0980fc7eb353cbd3a9546ad02721a09805")
 
 	feeTokenAddress := aptos.AccountAddress{}
 	_ = feeTokenAddress.ParseStringRelaxed("0xa")
 
+	linkTokenAddress := aptos.AccountAddress{}
+	_ = linkTokenAddress.ParseStringRelaxed("0x595ed92387173759ec1fa29ee9ebf4599775138f229662f7f8ec946d67dca3a0")
+
+	tokenStoreAddress := aptos.AccountAddress{}
+
 	toAddress := common.LeftPadBytes(common.HexToAddress("0x90392A1E8A941098a3C75E0BDB172cFdE7E4f1f4").Bytes(), 32)
 
-	extraArgs, _ := GetEVMExtraArgsV2(big.NewInt(1000000), false)
+	extraArgs, _ := GetEVMExtraArgsV2(big.NewInt(100), false)
 
 	ccipRouterContract := ccip_router.Bind(ccipAddress, client)
-	tx, err := ccipRouterContract.Router().CCIPSend(opts, 5678, toAddress, []byte("Hello, world!"), nil, nil, nil, feeTokenAddress, aptos.AccountZero, extraArgs)
+	fee, err := ccipRouterContract.Router().GetFee(nil, DestChainSelector, toAddress, []byte("Hello, world!"), []aptos.AccountAddress{linkTokenAddress}, []uint64{1e8}, []aptos.AccountAddress{tokenStoreAddress}, feeTokenAddress, aptos.AccountZero, extraArgs)
+	require.NoError(t, err)
+	fmt.Printf("Estimated fee: %v\n", fee)
+
+	tx, err := ccipRouterContract.Router().CCIPSend(opts, DestChainSelector, toAddress, []byte("Hello, world!"), []aptos.AccountAddress{linkTokenAddress}, []uint64{1e8}, []aptos.AccountAddress{tokenStoreAddress}, feeTokenAddress, aptos.AccountZero, extraArgs)
 	require.NoError(t, err)
 	data, err := client.WaitForTransaction(tx.Hash)
 	require.NoError(t, err)
-	require.True(t, data.Success, "transaction failed", data.VmStatus)
+	require.True(t, data.Success, "transaction %v failed: %v", tx.Hash, data.VmStatus)
 
 	fmt.Println("CCIP Message sent in transaction:", tx.Hash)
 
