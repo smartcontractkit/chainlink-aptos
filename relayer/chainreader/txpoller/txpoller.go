@@ -14,7 +14,7 @@ import (
 )
 
 type TxPollerConfig struct {
-	PollInterval  time.Duration
+	PollInterval          time.Duration
 	InitialSequenceNumber uint64
 
 	EventHandle    string
@@ -26,7 +26,7 @@ type TxPoller struct {
 	starter utils.StartStopOnce
 	quit    chan struct{}
 
-	config   TxPollerConfig
+	config         TxPollerConfig
 	sequenceNumber uint64
 
 	client aptos.AptosRpcClient
@@ -39,17 +39,17 @@ func New(logger logger.Logger, client aptos.AptosRpcClient, _ TxPollerConfig, ds
 	tpConfig := TxPollerConfig{
 		PollInterval: 10 * time.Second,
 
-		InitialSequenceNumber:  0,
-		EventHandle:    "test",
-		AccountAddress: *accAddress,
-		FunctionName: "0x1dd8925f10ca7b828b86a7b6bc8509ad02867577cc90f49033dcd6594bba1576::offramp::execute",
+		InitialSequenceNumber: 0,
+		EventHandle:           "test",
+		AccountAddress:        *accAddress,
+		FunctionName:          "0x1dd8925f10ca7b828b86a7b6bc8509ad02867577cc90f49033dcd6594bba1576::offramp::execute",
 	}
 
 	return &TxPoller{
 		client: client,
 		ds:     ds,
 
-		config:   tpConfig,
+		config:         tpConfig,
 		sequenceNumber: tpConfig.InitialSequenceNumber,
 
 		quit: make(chan struct{}),
@@ -91,7 +91,7 @@ func (tp *TxPoller) run(ctx context.Context) {
 func (tp *TxPoller) poll(ctx context.Context) error {
 	var records []chainreader.EventRecord
 	limit := uint64(25)
-	
+
 	for {
 		txns, err := tp.client.AccountTransactions(tp.config.AccountAddress, &tp.sequenceNumber, &limit)
 		if err != nil {
@@ -129,7 +129,7 @@ func (tp *TxPoller) poll(ctx context.Context) error {
 			record := chainreader.EventRecord{
 				EventAccountAddress: "",
 				EventHandle:         tp.config.EventHandle,
-				EventFieldName: "",
+				EventFieldName:      "",
 				EventOffset:         nil,
 				TxVersion:           userTxn.Version,
 				BlockHeight:         "",

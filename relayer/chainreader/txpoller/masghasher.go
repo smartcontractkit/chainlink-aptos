@@ -21,7 +21,7 @@ var (
 )
 
 type MessageHasherV1 struct {
-	lggr           logger.Logger
+	lggr logger.Logger
 }
 
 type any2AptosTokenTransfer struct {
@@ -34,61 +34,61 @@ type any2AptosTokenTransfer struct {
 
 func NewMessageHasherV1(lggr logger.Logger) *MessageHasherV1 {
 	return &MessageHasherV1{
-		lggr:           lggr,
+		lggr: lggr,
 	}
 }
 
 func (h *MessageHasherV1) Hash(ctx context.Context, report *ExecutionReport) ([32]byte, error) {
-    rampTokenAmounts := make([]any2AptosTokenTransfer, len(report.Message.TokenAmounts))
-    for i, rta := range report.Message.TokenAmounts {
-        destTokenAddress, err := addressBytesToBytes32(rta.DestTokenAddress)
-        if err != nil {
-            return [32]byte{}, fmt.Errorf("decode dest token address: %w", err)
-        }
-        
-        rampTokenAmounts[i] = any2AptosTokenTransfer{
-            SourcePoolAddress: rta.SourcePoolAddress,
-            DestTokenAddress:  destTokenAddress,
-            DestGasAmount:     rta.DestGasAmount,
-            ExtraData:         rta.ExtraData,
-            Amount:            rta.Amount,
-        }
-    }
-    
-    onRampAddress := []byte{} // todo
-    metaDataHash, err := computeMetadataHash(
-        report.SourceChainSelector, 
-        report.Message.Header.DestChainSelector,
-        onRampAddress,
-    )
-    if err != nil {
-        return [32]byte{}, fmt.Errorf("compute metadata hash: %w", err)
-    }
-    
-    var messageID [32]byte
-    copy(messageID[:], report.Message.Header.MessageID)
-    
-    receiverAddress, err := addressBytesToBytes32(report.Message.Receiver)
-    if err != nil {
-        return [32]byte{}, fmt.Errorf("convert receiver address: %w", err)
-    }
-    
-    msgHash, err := computeMessageDataHash(
-        metaDataHash,
-        messageID,
-        receiverAddress,
-        report.Message.Header.SequenceNumber,
-        report.Message.GasLimit,
-        report.Message.Header.Nonce,
-        report.Message.Sender,
-        report.Message.Data,
-        rampTokenAmounts,
-    )
-    if err != nil {
-        return [32]byte{}, fmt.Errorf("compute message hash: %w", err)
-    }
-    
-    return msgHash, nil
+	rampTokenAmounts := make([]any2AptosTokenTransfer, len(report.Message.TokenAmounts))
+	for i, rta := range report.Message.TokenAmounts {
+		destTokenAddress, err := addressBytesToBytes32(rta.DestTokenAddress)
+		if err != nil {
+			return [32]byte{}, fmt.Errorf("decode dest token address: %w", err)
+		}
+
+		rampTokenAmounts[i] = any2AptosTokenTransfer{
+			SourcePoolAddress: rta.SourcePoolAddress,
+			DestTokenAddress:  destTokenAddress,
+			DestGasAmount:     rta.DestGasAmount,
+			ExtraData:         rta.ExtraData,
+			Amount:            rta.Amount,
+		}
+	}
+
+	onRampAddress := []byte{} // todo
+	metaDataHash, err := computeMetadataHash(
+		report.SourceChainSelector,
+		report.Message.Header.DestChainSelector,
+		onRampAddress,
+	)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("compute metadata hash: %w", err)
+	}
+
+	var messageID [32]byte
+	copy(messageID[:], report.Message.Header.MessageID)
+
+	receiverAddress, err := addressBytesToBytes32(report.Message.Receiver)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("convert receiver address: %w", err)
+	}
+
+	msgHash, err := computeMessageDataHash(
+		metaDataHash,
+		messageID,
+		receiverAddress,
+		report.Message.Header.SequenceNumber,
+		report.Message.GasLimit,
+		report.Message.Header.Nonce,
+		report.Message.Sender,
+		report.Message.Data,
+		rampTokenAmounts,
+	)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("compute message hash: %w", err)
+	}
+
+	return msgHash, nil
 }
 
 func computeMessageDataHash(
@@ -247,4 +247,3 @@ func encodeBytes(b []byte) []byte {
 	copy(result[32:], b)
 	return result
 }
-

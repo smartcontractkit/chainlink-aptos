@@ -37,4 +37,3 @@ func TestFetchOneTransaction(t *testing.T) {
 
 	t.Logf("Fetched User Transaction:\n%s", data)
 }
-
