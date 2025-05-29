@@ -1,0 +1,17 @@
+[package]
+name = "ChainlinkPlatformSecondary"
+version = "1.0.0"
+authors = []
+
+[addresses]
+platform_secondary = "_"
+owner_secondary = "_"
+
+[dev-addresses]
+platform_secondary = "0x200"
+owner_secondary = "0x22"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
+
+[dev-dependencies]

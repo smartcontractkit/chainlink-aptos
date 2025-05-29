@@ -5,6 +5,7 @@ fmt: ## Format Move contracts.
 	movefmt --dir-path=contracts/large_packages
 	movefmt --dir-path=contracts/mcms
 	movefmt --dir-path=contracts/platform
+	movefmt --dir-path=contracts/platform_secondary
 	movefmt --dir-path=contracts/test
 
 .PHONY: wrappers

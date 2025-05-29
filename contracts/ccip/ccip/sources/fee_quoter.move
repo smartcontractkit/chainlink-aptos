@@ -13,6 +13,7 @@ module ccip::fee_quoter {
     use std::timestamp;
 
     use ccip::auth;
+    use ccip::client;
     use ccip::eth_abi;
     use ccip::state_object;
 
@@ -39,9 +40,6 @@ module ccip::fee_quoter {
     /// a callback with CCIP, there is no negative impact.
     /// https://move-book.com/appendix/reserved-addresses.html
     const MOVE_PRECOMPILE_SPACE: u256 = 0x0b;
-
-    const SVM_EXTRA_ARGS_V1_TAG: vector<u8> = x"1f3b3aba";
-    const GENERIC_EXTRA_ARGS_V2_TAG: vector<u8> = x"181dcf10";
 
     const GAS_PRICE_BITS: u8 = 112;
 
@@ -318,6 +316,18 @@ module ccip::fee_quoter {
         get_token_price_internal(borrow_state(), token)
     }
 
+    public fun timestamped_price_value(
+        timestamped_price: &TimestampedPrice
+    ): u256 {
+        timestamped_price.value
+    }
+
+    public fun timestamped_price_timestamp(
+        timestamped_price: &TimestampedPrice
+    ): u64 {
+        timestamped_price.timestamp
+    }
+
     #[view]
     public fun get_token_prices(
         tokens: vector<address>
@@ -502,7 +512,7 @@ module ccip::fee_quoter {
                 is_enabled
             };
 
-            token_transfer_fee_configs.add(token, token_transfer_fee_config);
+            token_transfer_fee_configs.upsert(token, token_transfer_fee_config);
 
             event::emit(
                 TokenTransferFeeConfigAdded {
@@ -929,13 +939,13 @@ module ccip::fee_quoter {
             );
 
             let args_tag = extra_args.slice(0, 4);
-            let args_data = extra_args.slice(4, extra_args_len);
+            assert!(
+                args_tag == client::generic_extra_args_v2_tag(),
+                error::invalid_argument(E_INVALID_EXTRA_ARGS_TAG)
+            );
 
-            if (args_tag == GENERIC_EXTRA_ARGS_V2_TAG) {
-                decode_generic_extra_args_v2(args_data)
-            } else {
-                abort error::invalid_argument(E_INVALID_EXTRA_ARGS_TAG)
-            }
+            let args_data = extra_args.slice(4, extra_args_len);
+            decode_generic_extra_args_v2(args_data)
         }
     }
 
@@ -944,16 +954,6 @@ module ccip::fee_quoter {
         let gas_limit = eth_abi::decode_u256(&mut stream);
         let allow_out_of_order_execution = eth_abi::decode_bool(&mut stream);
         (gas_limit, allow_out_of_order_execution)
-    }
-
-    inline fun encode_generic_extra_args_v2(
-        gas_limit: u256, allow_out_of_order_execution: bool
-    ): vector<u8> {
-        let extra_args = vector[];
-        eth_abi::encode_selector(&mut extra_args, GENERIC_EXTRA_ARGS_V2_TAG);
-        eth_abi::encode_u256(&mut extra_args, gas_limit);
-        eth_abi::encode_bool(&mut extra_args, allow_out_of_order_execution);
-        extra_args
     }
 
     inline fun decode_svm_extra_args(
@@ -967,7 +967,7 @@ module ccip::fee_quoter {
 
         let args_tag = extra_args.slice(0, 4);
         assert!(
-            args_tag == SVM_EXTRA_ARGS_V1_TAG,
+            args_tag == client::svm_extra_args_v1_tag(),
             error::invalid_argument(E_INVALID_EXTRA_ARGS_TAG)
         );
         let args_data = extra_args.slice(4, extra_args_len);
@@ -1175,7 +1175,9 @@ module ccip::fee_quoter {
             let (gas_limit, allow_out_of_order_execution) =
                 decode_generic_extra_args(dest_chain_config, extra_args);
             let extra_args_v2 =
-                encode_generic_extra_args_v2(gas_limit, allow_out_of_order_execution);
+                client::encode_generic_extra_args_v2(
+                    gas_limit, allow_out_of_order_execution
+                );
             (extra_args_v2, allow_out_of_order_execution)
         } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
             let (
@@ -1689,5 +1691,80 @@ module ccip::fee_quoter {
         };
 
         option::none()
+    }
+
+    public fun dest_chain_config_values(
+        config: DestChainConfig
+    ): (
+        bool,
+        u16,
+        u32,
+        u32,
+        u32,
+        u8,
+        u8,
+        u16,
+        u32,
+        u16,
+        u16,
+        vector<u8>,
+        bool,
+        u16,
+        u32,
+        u32,
+        u64,
+        u32,
+        u32
+    ) {
+        (
+            config.is_enabled,
+            config.max_number_of_tokens_per_msg,
+            config.max_data_bytes,
+            config.max_per_msg_gas_limit,
+            config.dest_gas_overhead,
+            config.dest_gas_per_payload_byte_base,
+            config.dest_gas_per_payload_byte_high,
+            config.dest_gas_per_payload_byte_threshold,
+            config.dest_data_availability_overhead_gas,
+            config.dest_gas_per_data_availability_byte,
+            config.dest_data_availability_multiplier_bps,
+            config.chain_family_selector,
+            config.enforce_out_of_order,
+            config.default_token_fee_usd_cents,
+            config.default_token_dest_gas_overhead,
+            config.default_tx_gas_limit,
+            config.gas_multiplier_wei_per_eth,
+            config.gas_price_staleness_threshold,
+            config.network_fee_usd_cents
+        )
+    }
+
+    public fun token_transfer_fee_config_values(
+        config: TokenTransferFeeConfig
+    ): (u32, u32, u16, u32, u32, bool) {
+        (
+            config.min_fee_usd_cents,
+            config.max_fee_usd_cents,
+            config.deci_bps,
+            config.dest_gas_overhead,
+            config.dest_bytes_overhead,
+            config.is_enabled
+        )
+    }
+
+    // ========================== TEST ONLY ==========================
+
+    #[test_only]
+    public fun test_register_mcms_entrypoint(publisher: &signer) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(b"fee_quoter"), McmsCallback {}
+        );
+    }
+
+    #[test_only]
+    public fun test_decode_svm_extra_args(
+        extra_args: vector<u8>
+    ): (u32, u64, bool, vector<u8>, vector<vector<u8>>) {
+        decode_svm_extra_args(extra_args)
     }
 }

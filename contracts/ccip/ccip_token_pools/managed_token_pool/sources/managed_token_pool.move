@@ -45,11 +45,6 @@ module managed_token_pool::managed_token_pool {
     fun init_module(publisher: &signer) {
         // register the pool on deployment, because in the case of object code deployment,
         // this is the only time we have a signer ref to @ccip_managed_pool.
-        assert!(
-            object::object_exists<Metadata>(@managed_token),
-            error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
-        );
-        let metadata = object::address_to_object<Metadata>(@managed_token);
 
         // create an Account on the object for event handles.
         account::create_account_if_does_not_exist(@managed_token_pool);
@@ -65,10 +60,12 @@ module managed_token_pool::managed_token_pool {
             );
         };
 
+        let managed_token_address = managed_token::token_metadata();
+
         token_admin_registry::register_pool(
             publisher,
             token_pool_module_name,
-            @managed_token,
+            managed_token_address,
             @token_pool_administrator,
             CallbackProof {}
         );
@@ -76,6 +73,8 @@ module managed_token_pool::managed_token_pool {
         // create a resource account to be the owner of the primary FungibleStore we will use.
         let (store_signer, store_signer_cap) =
             account::create_resource_account(publisher, STORE_OBJECT_SEED);
+
+        let metadata = object::address_to_object<Metadata>(managed_token_address);
 
         // make sure this is a valid fungible asset that is primary fungible store enabled,
         // ie. created with primary_fungible_store::create_primary_store_enabled_fungible_asset
@@ -86,11 +85,11 @@ module managed_token_pool::managed_token_pool {
         let store_signer = account::create_signer_with_capability(&store_signer_cap);
 
         let pool = ManagedTokenPoolState {
-            ownable_state: ownable::new(publisher, @managed_token_pool),
+            ownable_state: ownable::new(&store_signer, @managed_token_pool),
             store_signer_address: signer::address_of(&store_signer),
             store_signer_cap,
             token_pool_state: token_pool::initialize(
-                publisher, @managed_token_pool, vector[]
+                &store_signer, managed_token_address, vector[]
             )
         };
 
@@ -395,21 +394,6 @@ module managed_token_pool::managed_token_pool {
 
     inline fun store_address(): address {
         account::create_resource_address(&@managed_token_pool, STORE_OBJECT_SEED)
-    }
-
-    fun assert_can_initialize(caller_address: address) {
-        if (caller_address == @managed_token_pool) { return };
-
-        if (object::is_object(@managed_token_pool)) {
-            let managed_token_pool_object =
-                object::address_to_object<ObjectCore>(@managed_token_pool);
-            if (caller_address == object::owner(managed_token_pool_object)
-                || caller_address == object::root_owner(managed_token_pool_object)) {
-                return
-            };
-        };
-
-        abort error::permission_denied(E_NOT_PUBLISHER)
     }
 
     inline fun borrow_pool(): &ManagedTokenPoolState {
