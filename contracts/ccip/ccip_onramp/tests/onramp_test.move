@@ -735,7 +735,7 @@ module ccip_onramp::onramp_test {
         assert!(onramp_state_balance == fee_token_amount);
 
         assert!(
-            event::emitted_events<token_pool::Burned>().length() == 1
+            event::emitted_events<token_pool::LockedOrBurned>().length() == 1
         );
     }
 
@@ -858,7 +858,7 @@ module ccip_onramp::onramp_test {
         assert!(token_pool_balance == sent_amount);
 
         assert!(
-            event::emitted_events<token_pool::Locked>().length() == 1
+            event::emitted_events<token_pool::LockedOrBurned>().length() == 1
         );
     }
 
