@@ -11,7 +11,7 @@ module lock_release_token_pool::lock_release_token_pool {
 
     use ccip::ownable;
     use ccip::token_admin_registry;
-    use ccip_token_pool::token_pool::{Self, TokenPoolState};
+    use ccip_token_pool::token_pool::{Self};
 
     use mcms::mcms_registry;
     use mcms::bcs_stream;
@@ -347,7 +347,7 @@ module lock_release_token_pool::lock_release_token_pool {
             dest_pool_data
         );
 
-        token_pool::emit_locked(&mut pool.token_pool_state, fa_amount);
+        token_pool::emit_locked_or_burned(&mut pool.token_pool_state, fa_amount);
     }
 
     public fun release_or_mint<T: key>(
