@@ -411,18 +411,25 @@ module ccip_token_pool::token_pool {
     // ================================================================
 
     public fun emit_released_or_minted(
-        state: &mut TokenPoolState, recipient: address, amount: u64, remote_chain_selector: u64
+        state: &mut TokenPoolState,
+        recipient: address,
+        amount: u64,
+        remote_chain_selector: u64
     ) {
         let local_token = object::object_address(&state.fa_metadata);
 
-        event::emit(ReleasedOrMinted { remote_chain_selector, local_token, recipient, amount });
+        event::emit(
+            ReleasedOrMinted { remote_chain_selector, local_token, recipient, amount }
+        );
         event::emit_event(
             &mut state.released_events,
             ReleasedOrMinted { remote_chain_selector, local_token, recipient, amount }
         );
     }
 
-    public fun emit_locked_or_burned(state: &mut TokenPoolState, amount: u64,  remote_chain_selector: u64) {
+    public fun emit_locked_or_burned(
+        state: &mut TokenPoolState, amount: u64, remote_chain_selector: u64
+    ) {
         let local_token = object::object_address(&state.fa_metadata);
 
         event::emit(LockedOrBurned { remote_chain_selector, local_token, amount });
