@@ -8,16 +8,22 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"golang.org/x/crypto/sha3"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 )
+
+// Hasher implementation is copied from https://github.com/smartcontractkit/chainlink/pull/16576/files#diff-5abaaa7db8de3f4203e0daf104ab54b770d92dbf510346b7cb1ca13540eecb44
+// With the following modifications:
+// - GasLimit is parsed direclty from the message, no extraDataCoded dependency
+// - onRamp address is to be provided by the caller
 
 var (
 	// const LEAF_DOMAIN_SEPARATOR: vector<u8> = x"0000000000000000000000000000000000000000000000000000000000000000";
 	leafDomainSeparator = [32]byte{}
 
 	// see aptos_hash::keccak256(b"Any2AptosMessageHashV1") in calculate_metadata_hash
-	any2AptosMessageHash = utils.Keccak256Fixed([]byte("Any2AptosMessageHashV1"))
+	any2AptosMessageHash = keccak256Fixed([]byte("Any2AptosMessageHashV1"))
 )
 
 type MessageHasherV1 struct {
@@ -38,13 +44,10 @@ func NewMessageHasherV1(lggr logger.Logger) *MessageHasherV1 {
 	}
 }
 
-func (h *MessageHasherV1) Hash(ctx context.Context, report *ExecutionReport) ([32]byte, error) {
+func (h *MessageHasherV1) Hash(ctx context.Context, report *ExecutionReport, onRampAddress []byte) ([32]byte, error) {
 	rampTokenAmounts := make([]any2AptosTokenTransfer, len(report.Message.TokenAmounts))
 	for i, rta := range report.Message.TokenAmounts {
-		destTokenAddress, err := addressBytesToBytes32(rta.DestTokenAddress)
-		if err != nil {
-			return [32]byte{}, fmt.Errorf("decode dest token address: %w", err)
-		}
+		destTokenAddress := [32]byte(rta.DestTokenAddress)
 
 		rampTokenAmounts[i] = any2AptosTokenTransfer{
 			SourcePoolAddress: rta.SourcePoolAddress,
@@ -55,7 +58,6 @@ func (h *MessageHasherV1) Hash(ctx context.Context, report *ExecutionReport) ([3
 		}
 	}
 
-	onRampAddress := []byte{} // todo
 	metaDataHash, err := computeMetadataHash(
 		report.SourceChainSelector,
 		report.Message.Header.DestChainSelector,
@@ -68,10 +70,7 @@ func (h *MessageHasherV1) Hash(ctx context.Context, report *ExecutionReport) ([3
 	var messageID [32]byte
 	copy(messageID[:], report.Message.Header.MessageID)
 
-	receiverAddress, err := addressBytesToBytes32(report.Message.Receiver)
-	if err != nil {
-		return [32]byte{}, fmt.Errorf("convert receiver address: %w", err)
-	}
+	receiverAddress := [32]byte(report.Message.Receiver)
 
 	msgHash, err := computeMessageDataHash(
 		metaDataHash,
@@ -246,4 +245,14 @@ func encodeBytes(b []byte) []byte {
 	copy(result[:32], encodedLength)
 	copy(result[32:], b)
 	return result
+}
+
+func keccak256Fixed(in []byte) [32]byte {
+	hash := sha3.NewLegacyKeccak256()
+	// Note this Keccak256 cannot error https://github.com/golang/crypto/blob/master/sha3/sha3.go#L126
+	// if we start supporting hashing algos which do, we can change this API to include an error.
+	hash.Write(in)
+	var h [32]byte
+	copy(h[:], hash.Sum(nil))
+	return h
 }
