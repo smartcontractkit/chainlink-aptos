@@ -3,7 +3,7 @@ module github.com/smartcontractkit/chainlink-aptos
 go 1.24.1
 
 require (
-	github.com/aptos-labs/aptos-go-sdk v1.7.1-0.20250529194604-1300a629b2b8
+	github.com/aptos-labs/aptos-go-sdk v1.7.1-0.20250602153733-bb1facae1d43
 	github.com/aptos-labs/tree-sitter-move-on-aptos v0.0.0-20250321090037-c820eb4716e1
 	github.com/ethereum/go-ethereum v1.15.7
 	github.com/go-viper/mapstructure/v2 v2.2.1
@@ -136,5 +136,3 @@ require (
 	google.golang.org/grpc v1.71.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/aptos-labs/aptos-go-sdk => github.com/sdrug/aptos-go-sdk v0.0.0-20250529233842-3208f164637c

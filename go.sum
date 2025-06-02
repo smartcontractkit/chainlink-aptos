@@ -13,6 +13,8 @@ github.com/apache/arrow-go/v18 v18.0.0 h1:1dBDaSbH3LtulTyOVYaBCHO3yVRwjV+TZaqn3g
 github.com/apache/arrow-go/v18 v18.0.0/go.mod h1:t6+cWRSmKgdQ6HsxisQjok+jBpKGhRDiqcf3p0p/F+A=
 github.com/apache/thrift v0.21.0 h1:tdPmh/ptjE1IJnhbhrcl2++TauVjy242rkV/UzJChnE=
 github.com/apache/thrift v0.21.0/go.mod h1:W1H8aR/QRtYNvrPeFXBtobyRkd0/YVhTc6i07XIAgDw=
+github.com/aptos-labs/aptos-go-sdk v1.7.1-0.20250602153733-bb1facae1d43 h1:Mn2LI+fa8QzVmXQ/30MT76GYTQIxpSB3lzos0hat4qc=
+github.com/aptos-labs/aptos-go-sdk v1.7.1-0.20250602153733-bb1facae1d43/go.mod h1:vYm/yHr6cQpoUBMw/Q93SRR1IhP0mPTBrEGjShwUvXc=
 github.com/aptos-labs/tree-sitter-move-on-aptos v0.0.0-20250321090037-c820eb4716e1 h1:KD231JW9jSiu5m0J/w//3qJyGRdvrdabKAF+Fbwvzgo=
 github.com/aptos-labs/tree-sitter-move-on-aptos v0.0.0-20250321090037-c820eb4716e1/go.mod h1:+WZUlAOW0a0+7CrPgFVwmflo1LHH61uw4WSJtboIk48=
 github.com/bahlo/generic-list-go v0.2.0 h1:5sz/EEAK+ls5wF+NeqDpk5+iNdMDXrh3z3nPnH1Wvgk=
