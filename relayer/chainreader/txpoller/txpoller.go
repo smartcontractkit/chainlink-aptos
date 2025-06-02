@@ -23,6 +23,8 @@ type TxPollerConfig struct {
 }
 
 type TxPoller struct {
+	lgr logger.Logger
+
 	starter utils.StartStopOnce
 	quit    chan struct{}
 
@@ -90,7 +92,7 @@ func (tp *TxPoller) run(ctx context.Context) {
 
 func (tp *TxPoller) poll(ctx context.Context) error {
 	var records []chainreader.EventRecord
-	limit := uint64(25)
+	limit := uint64(100)
 
 	for {
 		txns, err := tp.client.AccountTransactions(tp.config.AccountAddress, &tp.sequenceNumber, &limit)

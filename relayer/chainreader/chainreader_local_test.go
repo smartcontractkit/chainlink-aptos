@@ -527,6 +527,8 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 				},
 			},
 		},
+		EventSyncInterval: 5 * time.Second,
+		EventSyncTimeout:  3 * time.Second,
 	}
 
 	// Create ChainReader with persistence enabled.
@@ -819,6 +821,8 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 					},
 				},
 			},
+			EventSyncInterval: 5 * time.Second,
+			EventSyncTimeout:  3 * time.Second,
 		}
 		chainReaderRenamed := NewChainReader(logger, rateLimitedClient, configRenamed, db)
 		bindingRenamed := commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()}
@@ -964,7 +968,9 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 				},
 			},
 		},
-		IsLoopPlugin: true,
+		IsLoopPlugin:      true,
+		EventSyncInterval: 5 * time.Second,
+		EventSyncTimeout:  3 * time.Second,
 	}
 
 	dsn := os.Getenv("TEST_DB_URL")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
@@ -11,18 +12,27 @@ import (
 )
 
 type DBStore struct {
-	ds sqlutil.DataSource
+	ds            sqlutil.DataSource
+	rwMutex       sync.RWMutex
+	schemaEnsured bool
 }
 
 func NewDBStore(ds sqlutil.DataSource) *DBStore {
 	return &DBStore{ds: ds}
 }
 
-func (store *DBStore) EnsureSchema(ctx context.Context) error {
+func (s *DBStore) EnsureSchema(ctx context.Context) error {
+	if s.schemaEnsured {
+		return nil
+	}
+
+	s.rwMutex.Lock()
+	defer s.rwMutex.Unlock()
+
 	schemaSQL := `
 CREATE SCHEMA IF NOT EXISTS aptos;
 `
-	_, err := store.ds.ExecContext(ctx, schemaSQL)
+	_, err := s.ds.ExecContext(ctx, schemaSQL)
 	if err != nil {
 		return fmt.Errorf("failed to create aptos schema: %w", err)
 	}
@@ -42,7 +52,7 @@ CREATE TABLE IF NOT EXISTS aptos.events (
 		UNIQUE (event_account_address, event_handle, event_field_name, tx_version)
 );
 `
-	_, err = store.ds.ExecContext(ctx, createTableSQL)
+	_, err = s.ds.ExecContext(ctx, createTableSQL)
 	if err != nil {
 		return fmt.Errorf("failed to create aptos.events table: %w", err)
 	}
@@ -51,11 +61,12 @@ CREATE TABLE IF NOT EXISTS aptos.events (
 CREATE INDEX IF NOT EXISTS idx_events_account_handle_offset
 ON aptos.events(event_account_address, event_handle, event_field_name, event_offset);
 `
-	_, err = store.ds.ExecContext(ctx, indexSQL)
+	_, err = s.ds.ExecContext(ctx, indexSQL)
 	if err != nil {
 		return fmt.Errorf("failed to create index on aptos.events: %w", err)
 	}
 
+	s.schemaEnsured = true
 	return nil
 }
 
@@ -72,10 +83,13 @@ type EventRecord struct {
 	Data                map[string]any
 }
 
-func (store *DBStore) InsertEvents(ctx context.Context, records []EventRecord) error {
+func (s *DBStore) InsertEvents(ctx context.Context, records []EventRecord) error {
 	if len(records) == 0 {
 		return nil
 	}
+
+	s.rwMutex.Lock()
+	defer s.rwMutex.Unlock()
 
 	insertSQL := `
 INSERT INTO aptos.events (
@@ -99,7 +113,7 @@ DO NOTHING;
 			return fmt.Errorf("failed to marshal event data for handle %s: %w", record.EventHandle, err)
 		}
 
-		_, err = store.ds.ExecContext(ctx, insertSQL,
+		_, err = s.ds.ExecContext(ctx, insertSQL,
 			record.EventAccountAddress,
 			record.EventHandle,
 			record.EventFieldName,
@@ -119,7 +133,10 @@ DO NOTHING;
 	return nil
 }
 
-func (store *DBStore) QueryEvents(ctx context.Context, eventAccountAddress, eventHandle, eventFieldName string, expressions []query.Expression, limitAndSort query.LimitAndSort) ([]EventRecord, error) {
+func (s *DBStore) QueryEvents(ctx context.Context, eventAccountAddress, eventHandle, eventFieldName string, expressions []query.Expression, limitAndSort query.LimitAndSort) ([]EventRecord, error) {
+	s.rwMutex.Lock()
+	defer s.rwMutex.Unlock()
+
 	baseSQL := `
 SELECT id, event_account_address, event_handle, event_field_name, event_offset, tx_version, block_height, block_hash, block_timestamp, data
 FROM aptos.events
@@ -170,7 +187,7 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 		baseSQL += fmt.Sprintf(" LIMIT %d", limitAndSort.Limit.Count)
 	}
 
-	rows, err := store.ds.QueryContext(ctx, baseSQL, args...)
+	rows, err := s.ds.QueryContext(ctx, baseSQL, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query events failed: %w", err)
 	}
@@ -196,14 +213,17 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 	return records, nil
 }
 
-func (store *DBStore) GetLatestOffset(ctx context.Context, eventAccountAddress, eventHandle, eventFieldName string) (uint64, error) {
+func (s *DBStore) GetLatestOffset(ctx context.Context, eventAccountAddress, eventHandle, eventFieldName string) (uint64, error) {
+	s.rwMutex.Lock()
+	defer s.rwMutex.Unlock()
+
 	querySQL := `
 SELECT COALESCE(MAX(event_offset), 0) FROM aptos.events
 WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 `
 
 	var offset uint64
-	err := store.ds.QueryRowxContext(ctx, querySQL, eventAccountAddress, eventHandle, eventFieldName).Scan(&offset)
+	err := s.ds.QueryRowxContext(ctx, querySQL, eventAccountAddress, eventHandle, eventFieldName).Scan(&offset)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get latest offset: %w", err)
 	}
@@ -211,14 +231,17 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 	return offset, nil
 }
 
-func (store *DBStore) GetTxVersionByID(ctx context.Context, id uint64) (uint64, error) {
+func (s *DBStore) GetTxVersionByID(ctx context.Context, id uint64) (uint64, error) {
+	s.rwMutex.Lock()
+	defer s.rwMutex.Unlock()
+
 	querySQL := `
 SELECT tx_version FROM aptos.events
 WHERE id = $1
 `
 
 	var txVersion uint64
-	err := store.ds.QueryRowxContext(ctx, querySQL, id).Scan(&txVersion)
+	err := s.ds.QueryRowxContext(ctx, querySQL, id).Scan(&txVersion)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch tx_version for id %d: %w", id, err)
 	}

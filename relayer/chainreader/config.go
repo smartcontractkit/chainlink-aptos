@@ -1,12 +1,17 @@
 package chainreader
 
 import (
+	"time"
+
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 )
 
 type ChainReaderConfig struct {
 	IsLoopPlugin bool
 	Modules      map[string]*ChainReaderModule
+
+	EventSyncInterval time.Duration
+	EventSyncTimeout  time.Duration
 }
 
 type ChainReaderModule struct {

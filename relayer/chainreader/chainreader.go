@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/go-viper/mapstructure/v2"
@@ -31,7 +32,9 @@ type aptosChainReader struct {
 	logger  logger.Logger
 	config  ChainReaderConfig
 	dbStore *DBStore
-	starter commonutils.StartStopOnce
+
+	starter             commonutils.StartStopOnce
+	eventSyncCancelFunc context.CancelFunc
 
 	moduleAddresses       map[string]aptos.AccountAddress
 	eventAccountAddresses map[string]aptos.AccountAddress
@@ -76,14 +79,58 @@ func (a *aptosChainReader) HealthReport() map[string]error {
 
 func (a *aptosChainReader) Start(ctx context.Context) error {
 	return a.starter.StartOnce(a.Name(), func() error {
+		if a.dbStore != nil {
+
+			var syncCtx context.Context
+			syncCtx, a.eventSyncCancelFunc = context.WithCancel(ctx)
+
+			go a.startEventPolling(syncCtx)
+			a.logger.Infow("AptosChainReader started event polling", "interval", a.config.EventSyncInterval)
+		}
+
 		return nil
 	})
 }
 
 func (a *aptosChainReader) Close() error {
 	return a.starter.StopOnce(a.Name(), func() error {
+		if a.eventSyncCancelFunc != nil {
+			a.eventSyncCancelFunc()
+		}
 		return nil
 	})
+}
+
+func (a *aptosChainReader) startEventPolling(ctx context.Context) {
+	ticker := time.NewTicker(a.config.EventSyncInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			syncCtx, cancel := context.WithTimeout(ctx, a.config.EventSyncTimeout)
+			start := time.Now()
+
+			err := a.SyncAllEvents(syncCtx)
+			elapsed := time.Since(start)
+
+			if err != nil && err != context.DeadlineExceeded {
+				a.logger.Warnw("EventSync completed with errors",
+					"error", err,
+					"duration", elapsed)
+			} else if err != nil {
+				a.logger.Warnw("EventSync timed out", "duration", elapsed)
+			} else {
+				a.logger.Debugw("Event sync completed successfully",
+					"duration", elapsed)
+			}
+
+			cancel()
+		case <-ctx.Done():
+			a.logger.Infow("Event polling stopped")
+			return
+		}
+	}
 }
 
 func (a *aptosChainReader) syncEvent(ctx context.Context, boundAddress aptos.AccountAddress, eventConfig *ChainReaderEvent, eventModuleName string) error {
@@ -98,65 +145,93 @@ func (a *aptosChainReader) syncEvent(ctx context.Context, boundAddress aptos.Acc
 
 	eventHandle := boundAddress.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
 	eventFieldName := eventConfig.EventHandleFieldName
+
 	latestOffset, err := a.dbStore.GetLatestOffset(ctx, eventAccountAddress.String(), eventHandle, eventFieldName)
 	if err != nil {
 		return fmt.Errorf("syncEvent: failed to get latest offset: %w", err)
 	}
 
 	var batchSize uint64 = 25
-	var records []EventRecord
+	var totalProcessed int = 0
+
 	for {
-		newEvents, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventFieldName, &latestOffset, &batchSize)
-		if err != nil {
-			a.logger.Errorw("syncEvent: failed to fetch new events", "error", err)
-			// If fetching fails, we continue with what is already in the DB
-			// todo: should we rather error out?
-			break
-		}
-
-		if len(newEvents) == 0 {
-			break
-		}
-
-		for _, event := range newEvents {
-			head, err := a.getBlockHead(event.Version)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			newEvents, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventFieldName, &latestOffset, &batchSize)
 			if err != nil {
-				a.logger.Errorw("syncEvent: failed to fetch block metadata", "version", event.Version, "error", err)
-				continue
+				a.logger.Errorw("syncEvent: failed to fetch new events", "error", err)
+				return fmt.Errorf("syncEvent: failed to fetch events: %w", err)
 			}
 
-			if err := renameMapFields(event.Data, eventConfig.EventFieldRenames); err != nil {
-				a.logger.Errorw("syncEvent: failed to rename event fields", "error", err)
-				continue
+			if len(newEvents) == 0 {
+				break
 			}
 
-			record := EventRecord{
-				EventAccountAddress: eventAccountAddress.String(),
-				EventHandle:         eventHandle,
-				EventFieldName:      eventFieldName,
-				EventOffset:         &event.SequenceNumber,
-				TxVersion:           event.Version,
-				BlockHeight:         head.Height,
-				BlockHash:           head.Hash,
-				BlockTimestamp:      head.Timestamp,
-				Data:                event.Data,
+			var batchRecords []EventRecord
+			for _, event := range newEvents {
+				head, err := a.getBlockHead(event.Version)
+				if err != nil {
+					a.logger.Errorw("syncEvent: failed to fetch block metadata", "version", event.Version, "error", err)
+					continue
+				}
+
+				if err := renameMapFields(event.Data, eventConfig.EventFieldRenames); err != nil {
+					a.logger.Errorw("syncEvent: failed to rename event fields", "error", err)
+					continue
+				}
+
+				record := EventRecord{
+					EventAccountAddress: eventAccountAddress.String(),
+					EventHandle:         eventHandle,
+					EventFieldName:      eventFieldName,
+					EventOffset:         &event.SequenceNumber,
+					TxVersion:           event.Version,
+					BlockHeight:         head.Height,
+					BlockHash:           head.Hash,
+					BlockTimestamp:      head.Timestamp,
+					Data:                event.Data,
+				}
+				batchRecords = append(batchRecords, record)
 			}
-			records = append(records, record)
-		}
 
-		latestOffset = newEvents[len(newEvents)-1].SequenceNumber + 1
-	}
+			if len(batchRecords) > 0 {
+				if err := a.dbStore.InsertEvents(ctx, batchRecords); err != nil {
+					return fmt.Errorf("syncEvent: failed to insert batch of events: %w", err)
+				}
 
-	if len(records) > 0 {
-		if err := a.dbStore.InsertEvents(ctx, records); err != nil {
-			return fmt.Errorf("syncEvent: failed to insert new events: %w", err)
+				totalProcessed += len(batchRecords)
+				a.logger.Debugw("syncEvent: saved batch of events",
+					"batch_count", len(batchRecords),
+					"total_processed", totalProcessed,
+					"handle", eventHandle)
+			}
+
+			latestOffset = newEvents[len(newEvents)-1].SequenceNumber + 1
+
+			// If we received fewer events than the batch size, we're caught up
+			if uint64(len(newEvents)) < batchSize {
+				break
+			}
 		}
 	}
 
 	return nil
 }
 
-func (a *aptosChainReader) InitEvents(ctx context.Context) error {
+func (a *aptosChainReader) SyncAllEvents(ctx context.Context) error {
+	if a.dbStore == nil {
+		return fmt.Errorf("SyncAllEvents only operates in persistent mode")
+	}
+
+	if err := a.dbStore.EnsureSchema(ctx); err != nil {
+		return fmt.Errorf("SyncAllEvents: failed to ensure schema: %w", err)
+	}
+
+	successCount := 0
+	errorCount := 0
+	var lastErr error
 	for moduleKey, moduleConfig := range a.config.Modules {
 		if moduleConfig.Events == nil {
 			continue
@@ -176,12 +251,31 @@ func (a *aptosChainReader) InitEvents(ctx context.Context) error {
 		}
 
 		for eventKey, eventConfig := range moduleConfig.Events {
-			if err := a.syncEvent(ctx, boundAddress, eventConfig, eventModuleName); err != nil {
-				return fmt.Errorf("InitEvents: module %s event %s: %w", moduleKey, eventKey, err)
+			select {
+			case <-ctx.Done():
+				if successCount > 0 {
+					a.logger.Infow("SyncAllEvents: interrupted, some events synced", "successCount", successCount, "errorCount", errorCount)
+				}
+				return ctx.Err()
+			default:
+				err := a.syncEvent(ctx, boundAddress, eventConfig, eventModuleName)
+				if err != nil {
+					errorCount++
+					lastErr = fmt.Errorf("SyncAllEvents: module %s event %s: %w", moduleKey, eventKey, err)
+					a.logger.Errorw("SyncAllEvents: error syncing event", "module", moduleKey, "event", eventKey, "error", err)
+				} else {
+					successCount++
+				}
 			}
 		}
 	}
 
+	if errorCount > 0 {
+		a.logger.Errorw("SyncAllEvents: completed with errors", "successCount", successCount, "errorCount", errorCount, "lastError", lastErr)
+		return lastErr
+	}
+
+	a.logger.Infow("SyncAllEvents: successfully synced all events", "count", successCount)
 	return nil
 }
 
@@ -458,6 +552,8 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	}
 
 	eventHandle := address.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
+
+	// Always sync event to get the latest data
 	if err := a.syncEvent(ctx, address, eventConfig, eventModuleName); err != nil {
 		return nil, fmt.Errorf("syncEvent error: %w", err)
 	}
