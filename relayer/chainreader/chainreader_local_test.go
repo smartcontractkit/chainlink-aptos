@@ -1,4 +1,4 @@
-//go:build integration
+// //go:build integration
 
 package chainreader
 
@@ -24,6 +24,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
+	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/loop"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
@@ -109,13 +110,13 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 	require.NoError(t, err)
 	waitForTx(t, txmgr, txId)
 
-	config := ChainReaderConfig{
-		Modules: map[string]*ChainReaderModule{
+	config := crconfig.ChainReaderConfig{
+		Modules: map[string]*crconfig.ChainReaderModule{
 			"testContract": {
 				Name: "echo",
-				Functions: map[string]*ChainReaderFunction{
+				Functions: map[string]*crconfig.ChainReaderFunction{
 					"echo_u64": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "u64",
@@ -123,7 +124,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"echo_u32_u64_tuple": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "u32",
@@ -136,7 +137,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						ResultTupleToStruct: []string{"first", "second"},
 					},
 					"echo_string": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "0x1::string::String",
@@ -144,7 +145,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"echo_byte_vector": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "vector<u8>",
@@ -152,7 +153,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"echo_u32_vector": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "vector<u32>",
@@ -160,7 +161,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"echo_byte_vector_vector": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "vector<vector<u8>>",
@@ -168,7 +169,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"echo_u256": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "u256",
@@ -176,7 +177,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"get_complex_struct": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Val",
 								Type: "u64",
@@ -186,13 +187,13 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 								Type: "0x1::string::String",
 							},
 						},
-						ResultFieldRenames: map[string]RenamedField{
+						ResultFieldRenames: map[string]crconfig.RenamedField{
 							"flag": {
 								NewName: "RenamedFlag",
 							},
 							"nested": {
 								NewName: "RenamedNested",
-								SubFieldRenames: map[string]RenamedField{
+								SubFieldRenames: map[string]crconfig.RenamedField{
 									"id":          {NewName: "RenamedId"},
 									"description": {NewName: "RenamedDescription"},
 								},
@@ -203,7 +204,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"get_complex_struct_array": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Val",
 								Type: "u64",
@@ -213,13 +214,13 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 								Type: "0x1::string::String",
 							},
 						},
-						ResultFieldRenames: map[string]RenamedField{
+						ResultFieldRenames: map[string]crconfig.RenamedField{
 							"flag": {
 								NewName: "RenamedFlag",
 							},
 							"nested": {
 								NewName: "RenamedNested",
-								SubFieldRenames: map[string]RenamedField{
+								SubFieldRenames: map[string]crconfig.RenamedField{
 									"id":          {NewName: "RenamedId"},
 									"description": {NewName: "RenamedDescription"},
 								},
@@ -231,7 +232,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 					},
 					"get_complex_struct_unwrapped": {
 						Name: "get_complex_struct",
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Val",
 								Type: "u64",
@@ -509,11 +510,11 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 	txId := deployContract(t, txmgr, accountAddress.String(), publicKeyHex, compilationResult)
 	waitForTx(t, txmgr, txId)
 
-	config := ChainReaderConfig{
-		Modules: map[string]*ChainReaderModule{
+	config := crconfig.ChainReaderConfig{
+		Modules: map[string]*crconfig.ChainReaderModule{
 			"testContract": {
 				Name: "echo",
-				Events: map[string]*ChainReaderEvent{
+				Events: map[string]*crconfig.ChainReaderEvent{
 					"DoubleValueEvent": {
 						EventHandleStructName: "EventStore",
 						EventHandleFieldName:  "double_value_events",
@@ -802,16 +803,16 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 	})
 
 	t.Run("Filter by renamed numeric value", func(t *testing.T) {
-		configRenamed := ChainReaderConfig{
-			Modules: map[string]*ChainReaderModule{
+		configRenamed := crconfig.ChainReaderConfig{
+			Modules: map[string]*crconfig.ChainReaderModule{
 				"testContract": {
 					Name: "echo",
-					Events: map[string]*ChainReaderEvent{
+					Events: map[string]*crconfig.ChainReaderEvent{
 						"DoubleValueEvent": {
 							EventHandleStructName: "EventStore",
 							EventHandleFieldName:  "double_value_events",
 							EventAccountAddress:   "", // defaults to bound contract address
-							EventFieldRenames: map[string]RenamedField{
+							EventFieldRenames: map[string]crconfig.RenamedField{
 								"number": {NewName: "RenamedNumber"},
 							},
 							EventFilterRenames: map[string]string{
@@ -911,18 +912,18 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 
 	emitManyEvents(t, txmgr, acctAddr.String(), publicKeyHex, 20)
 
-	config := ChainReaderConfig{
-		Modules: map[string]*ChainReaderModule{
+	config := crconfig.ChainReaderConfig{
+		Modules: map[string]*crconfig.ChainReaderModule{
 			"testContract": {
 				Name: "echo",
-				Functions: map[string]*ChainReaderFunction{
+				Functions: map[string]*crconfig.ChainReaderFunction{
 					"echo_u64": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{Name: "Value1", Type: "u64"},
 						},
 					},
 					"echo_u32_u64_tuple": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{Name: "Value1", Type: "u32"},
 							{Name: "Value2", Type: "u64"},
 						},
@@ -930,19 +931,19 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 					},
 					"get_complex_struct_unwrapped": {
 						Name: "get_complex_struct",
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{Name: "Val", Type: "u64"},
 							{Name: "Text", Type: "0x1::string::String"},
 						},
 						ResultUnwrapStruct: []string{"nested"},
 					},
 				},
-				Events: map[string]*ChainReaderEvent{
+				Events: map[string]*crconfig.ChainReaderEvent{
 					"SingleValueEvent": {
 						EventHandleStructName: "EventStore",
 						EventHandleFieldName:  "single_value_events",
 						EventAccountAddress:   acctAddr.String() + "::echo::get_event_address",
-						EventFieldRenames: map[string]RenamedField{
+						EventFieldRenames: map[string]crconfig.RenamedField{
 							"value": {NewName: "SingleUintValue"},
 						},
 					},
@@ -950,11 +951,11 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 						EventHandleStructName: "EventStore",
 						EventHandleFieldName:  "complex_struct_events",
 						EventAccountAddress:   acctAddr.String() + "::echo::get_event_address",
-						EventFieldRenames: map[string]RenamedField{
+						EventFieldRenames: map[string]crconfig.RenamedField{
 							"flag": {NewName: "RenamedFlag"},
 							"nested": {
 								NewName: "RenamedNested",
-								SubFieldRenames: map[string]RenamedField{
+								SubFieldRenames: map[string]crconfig.RenamedField{
 									"id":          {NewName: "RenamedId"},
 									"description": {NewName: "RenamedDescription"},
 								},

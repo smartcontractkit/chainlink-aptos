@@ -1,14 +1,16 @@
-package chainreader
+package utils
 
 import (
 	"fmt"
 	"strings"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
+
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 )
 
-func unwrapSlice(value any) ([]any, bool) {
+func UnwrapSlice(value any) ([]any, bool) {
 	sliceValue, ok := value.([]any)
 	if !ok {
 		return nil, false
@@ -23,7 +25,7 @@ func unwrapSlice(value any) ([]any, bool) {
 	return sliceValue, true
 }
 
-func extractTimestampFilter(expressions []query.Expression) (uint64, bool) {
+func ExtractTimestampFilter(expressions []query.Expression) (uint64, bool) {
 	for _, expr := range expressions {
 		if expr.IsPrimitive() {
 			if tsExpr, ok := expr.Primitive.(*primitives.Timestamp); ok {
@@ -36,20 +38,20 @@ func extractTimestampFilter(expressions []query.Expression) (uint64, bool) {
 	return 0, false
 }
 
-func maybeRenameFields(jsonValue any, renames map[string]RenamedField) error {
+func MaybeRenameFields(jsonValue any, renames map[string]config.RenamedField) error {
 	// no renames are provided, we don't put any constraint on jsonValue
 	if len(renames) == 0 {
 		return nil
 	}
 
 	if jsonMap, ok := jsonValue.(map[string]any); ok {
-		if err := renameMapFields(jsonMap, renames); err != nil {
+		if err := RenameMapFields(jsonMap, renames); err != nil {
 			return err
 		}
-	} else if jsonSlice, ok := unwrapSlice(jsonValue); ok {
+	} else if jsonSlice, ok := UnwrapSlice(jsonValue); ok {
 		for i, elem := range jsonSlice {
 			if elemMap, ok := elem.(map[string]any); ok {
-				if err := renameMapFields(elemMap, renames); err != nil {
+				if err := RenameMapFields(elemMap, renames); err != nil {
 					return err
 				}
 			} else {
@@ -63,7 +65,7 @@ func maybeRenameFields(jsonValue any, renames map[string]RenamedField) error {
 	return nil
 }
 
-func renameMapFields(jsonData map[string]any, renames map[string]RenamedField) error {
+func RenameMapFields(jsonData map[string]any, renames map[string]config.RenamedField) error {
 	for origName, rename := range renames {
 		subValue, ok := jsonData[origName]
 		if !ok {
@@ -76,14 +78,14 @@ func renameMapFields(jsonData map[string]any, renames map[string]RenamedField) e
 			delete(jsonData, origName)
 		}
 
-		if err := maybeRenameFields(subValue, rename.SubFieldRenames); err != nil {
+		if err := MaybeRenameFields(subValue, rename.SubFieldRenames); err != nil {
 			return fmt.Errorf("sub field renames failed for field %s: %+w", origName, err)
 		}
 	}
 	return nil
 }
 
-func applyEventFilterRenames(exprs []query.Expression, renames map[string]string) []query.Expression {
+func ApplyEventFilterRenames(exprs []query.Expression, renames map[string]string) []query.Expression {
 	newExprs := make([]query.Expression, len(exprs))
 	for i, expr := range exprs {
 		if expr.IsPrimitive() {
@@ -105,7 +107,7 @@ func applyEventFilterRenames(exprs []query.Expression, renames map[string]string
 
 // buildJsonPathExpr constructs a PostgreSQL JSON path expression for accessing nested fields
 // Example: "Header.SourceChainSelector" becomes data->'Header'->>'SourceChainSelector'
-func buildJsonPathExpr(baseField string, path string) string {
+func BuildJsonPathExpr(baseField string, path string) string {
 	parts := strings.Split(path, ".")
 	expr := baseField
 
@@ -120,7 +122,7 @@ func buildJsonPathExpr(baseField string, path string) string {
 	return expr
 }
 
-func isNumeric(value any) bool {
+func IsNumeric(value any) bool {
 	_, ok := value.(uint64)
 	return ok
 }

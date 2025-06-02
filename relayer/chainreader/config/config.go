@@ -1,7 +1,9 @@
-package chainreader
+package config
 
 import (
 	"time"
+
+	"github.com/aptos-labs/aptos-go-sdk"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 )
@@ -9,6 +11,8 @@ import (
 type ChainReaderConfig struct {
 	IsLoopPlugin bool
 	Modules      map[string]*ChainReaderModule
+
+	TxPollerConfig TxPollerConfig
 
 	EventSyncInterval time.Duration
 	EventSyncTimeout  time.Duration
@@ -31,6 +35,16 @@ type ChainReaderFunction struct {
 	ResultFieldRenames  map[string]RenamedField
 	ResultTupleToStruct []string
 	ResultUnwrapStruct  []string
+}
+
+type TxPollerConfig struct {
+	PollInterval time.Duration
+
+	OfframpStateAddress  aptos.AccountAddress
+	OCRConfigSetEvent    *ChainReaderEvent
+	GetSourceChainConfig *ChainReaderFunction
+
+	FunctionName string
 }
 
 type AptosFunctionParam struct {

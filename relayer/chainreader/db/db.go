@@ -1,10 +1,12 @@
-package chainreader
+package db
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
+
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
@@ -146,7 +148,7 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 	args := []interface{}{eventAccountAddress, eventHandle, eventFieldName}
 	argCount := 4
 
-	tsFilter, hasTSFilter := extractTimestampFilter(expressions)
+	tsFilter, hasTSFilter := utils.ExtractTimestampFilter(expressions)
 	if hasTSFilter {
 		baseSQL += fmt.Sprintf(" AND block_timestamp >= $%d", argCount)
 		args = append(args, tsFilter)
@@ -158,10 +160,10 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 			switch v := expr.Primitive.(type) {
 			case *primitives.Comparator:
 				for _, valueCmp := range v.ValueComparators {
-					jsonPath := buildJsonPathExpr("data", v.Name)
+					jsonPath := utils.BuildJsonPathExpr("data", v.Name)
 
 					var condition string
-					if isNumeric(valueCmp.Value) {
+					if utils.IsNumeric(valueCmp.Value) {
 						condition = fmt.Sprintf("CAST(%s AS numeric) %s $%d", jsonPath, operatorSQL(valueCmp.Operator), argCount)
 					} else {
 						condition = fmt.Sprintf("%s %s $%d", jsonPath, operatorSQL(valueCmp.Operator), argCount)
