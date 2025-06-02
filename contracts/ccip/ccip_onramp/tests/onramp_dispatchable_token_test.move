@@ -492,7 +492,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
         };
 
         state_object::init_module_for_testing(ccip);
-        auth::test_init_module(owner);
+        auth::test_init_module(ccip);
         rmn_remote::initialize(owner, SOURCE_CHAIN_SELECTOR);
 
         token_admin_registry::init_module_for_testing(ccip);

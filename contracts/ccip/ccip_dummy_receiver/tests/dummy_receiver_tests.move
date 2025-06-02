@@ -46,7 +46,7 @@ module ccip_dummy_receiver::dummy_receiver_tests {
         );
 
         state_object::init_module_for_testing(ccip);
-        auth::test_init_module(owner);
+        auth::test_init_module(ccip);
 
         receiver_registry::init_module_for_testing(owner);
 

@@ -41,7 +41,7 @@ module ccip_offramp::ocr3_base_test {
         state_object::init_module_for_testing(ccip);
 
         // Initialize auth module for testing
-        auth::test_init_module(owner);
+        auth::test_init_module(ccip);
 
         // Create new OCR3BaseState
         ocr3_base::new(owner)

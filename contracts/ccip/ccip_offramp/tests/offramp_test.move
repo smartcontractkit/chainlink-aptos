@@ -114,7 +114,7 @@ module ccip_offramp::offramp_test {
         };
 
         state_object::init_module_for_testing(ccip);
-        auth::test_init_module(owner);
+        auth::test_init_module(ccip);
         rmn_remote::initialize(owner, EVM_SOURCE_CHAIN_SELECTOR);
 
         token_admin_registry::init_module_for_testing(ccip);

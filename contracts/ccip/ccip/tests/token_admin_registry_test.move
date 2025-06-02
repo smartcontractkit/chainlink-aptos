@@ -49,7 +49,7 @@ module ccip::token_admin_registry_test {
         let mock_obj_signer = object::generate_signer(&constructor_ref);
 
         state_object::init_module_for_testing(ccip);
-        auth::test_init_module(owner);
+        auth::test_init_module(ccip);
 
         let (token_obj, _token_addr) = create_test_token(owner, b"test_token");
 
