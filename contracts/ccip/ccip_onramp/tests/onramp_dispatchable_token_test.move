@@ -2,11 +2,18 @@
 module ccip_onramp::onramp_dispatchable_token_test {
     use std::signer;
     use std::string::{Self};
-    use std::option;
+    use std::option::{Self};
     use std::vector;
     use std::object::{Self, Object, ExtendRef, ObjectCore};
     use std::account;
-    use std::fungible_asset::{Self, Metadata, MintRef, BurnRef, TransferRef, FungibleStore};
+    use std::fungible_asset::{
+        Self,
+        Metadata,
+        MintRef,
+        BurnRef,
+        TransferRef,
+        FungibleStore
+    };
     use std::primary_fungible_store;
     use std::timestamp;
     use std::event;
@@ -659,7 +666,11 @@ module ccip_onramp::onramp_dispatchable_token_test {
             );
         } else {
             lock_release_token_pool::test_init_module(lock_release_token_pool);
-            lock_release_token_pool::initialize(lock_release_token_pool, transfer_ref);
+            lock_release_token_pool::initialize(
+                lock_release_token_pool,
+                transfer_ref,
+                signer::address_of(owner)
+            );
             lock_release_token_pool::apply_chain_updates(
                 owner,
                 vector[],

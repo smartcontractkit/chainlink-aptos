@@ -11,7 +11,7 @@ module lock_release_token_pool::lock_release_token_pool {
 
     use ccip::ownable;
     use ccip::token_admin_registry;
-    use ccip_token_pool::token_pool::{Self};
+    use ccip_token_pool::token_pool;
 
     use mcms::mcms_registry;
     use mcms::bcs_stream;
@@ -29,7 +29,8 @@ module lock_release_token_pool::lock_release_token_pool {
         ownable_state: ownable::OwnableState,
         token_pool_state: token_pool::TokenPoolState,
         store_signer_address: address,
-        transfer_ref: Option<TransferRef>
+        transfer_ref: Option<TransferRef>,
+        rebalancer: address
     }
 
     const E_NOT_PUBLISHER: u64 = 1;
@@ -39,6 +40,9 @@ module lock_release_token_pool::lock_release_token_pool {
     const E_UNKNOWN_FUNCTION: u64 = 5;
     const E_LOCAL_TOKEN_MISMATCH: u64 = 6;
     const E_DISPATCHABLE_TOKEN_WITHOUT_TRANSFER_REF: u64 = 7;
+    const E_UNAUTHORIZED: u64 = 8;
+    const E_INSUFFICIENT_LIQUIDITY: u64 = 9;
+    const E_TRANSFER_REF_NOT_SET: u64 = 10;
 
     // ================================================================
     // |                             Init                             |
@@ -107,7 +111,7 @@ module lock_release_token_pool::lock_release_token_pool {
     /// You can still provide a transfer ref for tokens that don't have dynamic dispatch enabled
     /// if you choose to do so.
     public fun initialize(
-        caller: &signer, transfer_ref: Option<TransferRef>
+        caller: &signer, transfer_ref: Option<TransferRef>, rebalancer: address
     ) acquires LockReleaseTokenPoolDeployment {
         assert_can_initialize(signer::address_of(caller));
 
@@ -145,7 +149,8 @@ module lock_release_token_pool::lock_release_token_pool {
             ownable_state,
             token_pool_state,
             store_signer_address,
-            transfer_ref
+            transfer_ref,
+            rebalancer
         };
         move_to(&store_signer, pool);
     }
@@ -226,6 +231,15 @@ module lock_release_token_pool::lock_release_token_pool {
     #[view]
     public fun pool_primary_store(): Object<FungibleStore> acquires LockReleaseTokenPoolState {
         let pool = borrow_pool();
+        primary_fungible_store::primary_store(
+            pool.store_signer_address,
+            token_pool::get_fa_metadata(&pool.token_pool_state)
+        )
+    }
+
+    inline fun pool_primary_store_inlined(
+        pool: &LockReleaseTokenPoolState
+    ): Object<FungibleStore> {
         primary_fungible_store::primary_store(
             pool.store_signer_address,
             token_pool::get_fa_metadata(&pool.token_pool_state)
@@ -475,6 +489,123 @@ module lock_release_token_pool::lock_release_token_pool {
     }
 
     // ================================================================
+    // |                    Liquidity Management                      |
+    // ================================================================
+
+    /// @notice Adds liquidity to the pool. The tokens should be sent before calling this function
+    /// @param amount The amount of liquidity to add
+    public entry fun provide_liquidity(
+        caller: &signer, amount: u64
+    ) acquires LockReleaseTokenPoolState {
+        let pool = borrow_pool_mut();
+        let caller_address = assert_is_rebalancer(caller, pool);
+
+        let (caller_store, pool_store) = get_caller_and_pool_stores(
+            caller_address, pool
+        );
+
+        transfer_tokens(pool, caller, caller_store, pool_store, amount);
+
+        token_pool::emit_liquidity_added(
+            &mut pool.token_pool_state, caller_address, amount
+        );
+    }
+
+    /// @notice Removes liquidity from the pool
+    /// @param amount The amount of liquidity to remove
+    public entry fun withdraw_liquidity(
+        caller: &signer, amount: u64
+    ) acquires LockReleaseTokenPoolState {
+        let pool = borrow_pool_mut();
+        let caller_address = assert_is_rebalancer(caller, pool);
+
+        let (caller_store, pool_store) = get_caller_and_pool_stores(
+            caller_address, pool
+        );
+        assert!(fungible_asset::balance(pool_store) >= amount, E_INSUFFICIENT_LIQUIDITY);
+
+        let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
+
+        transfer_tokens(
+            pool,
+            &store_signer,
+            pool_store,
+            caller_store,
+            amount
+        );
+
+        token_pool::emit_liquidity_removed(
+            &mut pool.token_pool_state, caller_address, amount
+        );
+    }
+
+    inline fun assert_is_rebalancer(
+        caller: &signer, pool: &LockReleaseTokenPoolState
+    ): address {
+        let caller_address = signer::address_of(caller);
+        assert!(caller_address == pool.rebalancer, E_UNAUTHORIZED);
+        caller_address
+    }
+
+    inline fun get_caller_and_pool_stores(
+        caller_address: address, pool: &LockReleaseTokenPoolState
+    ): (Object<FungibleStore>, Object<FungibleStore>) {
+        let metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
+        let caller_store =
+            primary_fungible_store::ensure_primary_store_exists(
+                caller_address, metadata
+            );
+        let pool_store = pool_primary_store_inlined(pool);
+        (caller_store, pool_store)
+    }
+
+    inline fun transfer_tokens(
+        pool: &LockReleaseTokenPoolState,
+        from: &signer,
+        from_store: Object<FungibleStore>,
+        to_store: Object<FungibleStore>,
+        amount: u64
+    ) {
+        if (has_transfer_ref(pool)) {
+            let transfer_ref = pool.transfer_ref.borrow();
+            fungible_asset::transfer_with_ref(transfer_ref, from_store, to_store, amount);
+        } else {
+            fungible_asset::transfer(from, from_store, to_store, amount);
+        };
+    }
+
+    public entry fun set_rebalancer(
+        caller: &signer, rebalancer: address
+    ) acquires LockReleaseTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+
+        let old_rebalancer = pool.rebalancer;
+        pool.rebalancer = rebalancer;
+
+        token_pool::emit_rebalancer_set(
+            &mut pool.token_pool_state, old_rebalancer, rebalancer
+        );
+    }
+
+    #[view]
+    public fun get_rebalancer(): address acquires LockReleaseTokenPoolState {
+        borrow_pool().rebalancer
+    }
+
+    // ================================================================
+    // |                    Ref Migration                              |
+    // ================================================================
+
+    public fun migrate_transfer_ref(caller: &signer): TransferRef acquires LockReleaseTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+        assert!(pool.transfer_ref.is_some(), E_TRANSFER_REF_NOT_SET);
+
+        pool.transfer_ref.extract()
+    }
+
+    // ================================================================
     // |                      Storage helpers                         |
     // ================================================================
 
@@ -673,6 +804,18 @@ module lock_release_token_pool::lock_release_token_pool {
             let to = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
             execute_ownership_transfer(&caller, to)
+        } else if (function_bytes == b"set_rebalancer") {
+            let rebalancer = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            set_rebalancer(&caller, rebalancer);
+        } else if (function_bytes == b"provide_liquidity") {
+            let amount = bcs_stream::deserialize_u64(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            provide_liquidity(&caller, amount);
+        } else if (function_bytes == b"withdraw_liquidity") {
+            let amount = bcs_stream::deserialize_u64(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            withdraw_liquidity(&caller, amount);
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };
