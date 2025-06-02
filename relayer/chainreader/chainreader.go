@@ -42,6 +42,8 @@ type aptosChainReader struct {
 	moduleAddresses       map[string]aptos.AccountAddress
 	eventAccountAddresses map[string]aptos.AccountAddress
 
+	transmitters map[aptos.AccountAddress]uint64
+
 	client aptos.AptosRpcClient
 }
 
@@ -59,6 +61,7 @@ func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config confi
 		config:                config,
 		moduleAddresses:       map[string]aptos.AccountAddress{},
 		eventAccountAddresses: map[string]aptos.AccountAddress{},
+		transmitters:          map[aptos.AccountAddress]uint64{},
 	}
 
 	if ds != nil {
@@ -558,6 +561,38 @@ func (a *aptosChainReader) computeEventAccountAddress(boundAddress aptos.Account
 		a.eventAccountAddresses[cacheKey] = eventAccountAddress
 		return eventAccountAddress, nil
 	}
+}
+
+func (a *aptosChainReader) getEventConfig(moduleKey, eventKey string) (boundAddress aptos.AccountAddress, eventAccountAddress aptos.AccountAddress, eventHandle, eventFieldName string, err error) {
+	moduleConfig, ok := a.config.Modules[moduleKey]
+	if !ok {
+		return aptos.AccountAddress{}, aptos.AccountAddress{}, "", "", fmt.Errorf("no module config found for %s", moduleKey)
+	}
+
+	boundAddress, ok = a.moduleAddresses[moduleKey]
+	if !ok {
+		return aptos.AccountAddress{}, aptos.AccountAddress{}, "", "", fmt.Errorf("no bound address for module %s", moduleKey)
+	}
+
+	eventConfig, ok := moduleConfig.Events[eventKey]
+	if !ok {
+		return aptos.AccountAddress{}, aptos.AccountAddress{}, "", "", fmt.Errorf("no event config found for %s.%s", moduleKey, eventKey)
+	}
+
+	moduleName := moduleConfig.Name
+	if moduleName == "" {
+		moduleName = moduleKey
+	}
+
+	eventAccountAddress, err = a.computeEventAccountAddress(boundAddress, eventConfig)
+	if err != nil {
+		return aptos.AccountAddress{}, aptos.AccountAddress{}, "", "", fmt.Errorf("failed to compute event account address: %w", err)
+	}
+
+	eventHandle = boundAddress.String() + "::" + moduleName + "::" + eventConfig.EventHandleStructName
+	eventFieldName = eventConfig.EventHandleFieldName
+
+	return boundAddress, eventAccountAddress, eventHandle, eventFieldName, nil
 }
 
 func (a *aptosChainReader) getBlockHead(version uint64) (types.Head, error) {

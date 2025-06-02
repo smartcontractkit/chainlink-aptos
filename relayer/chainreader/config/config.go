@@ -10,8 +10,6 @@ type ChainReaderConfig struct {
 	IsLoopPlugin bool
 	Modules      map[string]*ChainReaderModule
 
-	TxPollerConfig TxPollerConfig
-
 	EventSyncInterval time.Duration
 	EventSyncTimeout  time.Duration
 
@@ -36,15 +34,6 @@ type ChainReaderFunction struct {
 	ResultFieldRenames  map[string]RenamedField
 	ResultTupleToStruct []string
 	ResultUnwrapStruct  []string
-}
-
-type TxPollerConfig struct {
-	PollInterval time.Duration
-
-	OCRConfigSetEvent    *ChainReaderEvent
-	GetSourceChainConfig *ChainReaderFunction
-
-	FunctionName string
 }
 
 type AptosFunctionParam struct {

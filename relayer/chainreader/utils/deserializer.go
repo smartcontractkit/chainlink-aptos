@@ -1,4 +1,4 @@
-package txpoller
+package utils
 
 import (
 	"fmt"
@@ -46,6 +46,19 @@ type ConfigSet struct {
 	Signers       [][]byte
 	Transmitters  []aptos.AccountAddress
 	BigF          byte
+}
+
+type SourceChainConfigSet struct {
+	SourceChainSelector uint64
+	SourceChainConfig   SourceChainConfig
+}
+
+type SourceChainConfig struct {
+	Router                    string
+	IsEnabled                 bool
+	MinSeqNr                  uint64
+	IsRMNVerificationDisabled bool
+	OnRamp                    []byte
 }
 
 func DeserializeExecutionReport(data []byte) (*ExecutionReport, error) {

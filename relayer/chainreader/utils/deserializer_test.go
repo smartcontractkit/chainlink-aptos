@@ -1,4 +1,4 @@
-package txpoller
+package utils
 
 import (
 	"encoding/hex"
