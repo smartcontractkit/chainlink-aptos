@@ -154,6 +154,7 @@ func (a *aptosChainReader) syncEvent(ctx context.Context, boundAddress aptos.Acc
 	var batchSize uint64 = 25
 	var totalProcessed int = 0
 
+	eventLoop:
 	for {
 		select {
 		case <-ctx.Done():
@@ -166,7 +167,7 @@ func (a *aptosChainReader) syncEvent(ctx context.Context, boundAddress aptos.Acc
 			}
 
 			if len(newEvents) == 0 {
-				break
+				break eventLoop
 			}
 
 			var batchRecords []EventRecord
@@ -212,7 +213,7 @@ func (a *aptosChainReader) syncEvent(ctx context.Context, boundAddress aptos.Acc
 
 			// If we received fewer events than the batch size, we're caught up
 			if uint64(len(newEvents)) < batchSize {
-				break
+				break eventLoop
 			}
 		}
 	}

@@ -134,8 +134,8 @@ DO NOTHING;
 }
 
 func (s *DBStore) QueryEvents(ctx context.Context, eventAccountAddress, eventHandle, eventFieldName string, expressions []query.Expression, limitAndSort query.LimitAndSort) ([]EventRecord, error) {
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
+	s.rwMutex.RLock()
+	defer s.rwMutex.RUnlock()
 
 	baseSQL := `
 SELECT id, event_account_address, event_handle, event_field_name, event_offset, tx_version, block_height, block_hash, block_timestamp, data
@@ -214,8 +214,8 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 }
 
 func (s *DBStore) GetLatestOffset(ctx context.Context, eventAccountAddress, eventHandle, eventFieldName string) (uint64, error) {
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
+	s.rwMutex.RLock()
+	defer s.rwMutex.RUnlock()
 
 	querySQL := `
 SELECT COALESCE(MAX(event_offset), 0) FROM aptos.events
@@ -232,8 +232,8 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 }
 
 func (s *DBStore) GetTxVersionByID(ctx context.Context, id uint64) (uint64, error) {
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
+	s.rwMutex.RLock()
+	defer s.rwMutex.RUnlock()
 
 	querySQL := `
 SELECT tx_version FROM aptos.events
