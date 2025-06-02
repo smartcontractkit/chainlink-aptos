@@ -62,7 +62,17 @@ func (a *aptosChainReader) syncEvent(ctx context.Context, boundAddress aptos.Acc
 		return fmt.Errorf("syncEvent: failed to get latest offset: %w", err)
 	}
 
-	var batchSize uint64 = 25
+	resource, err := a.client.AccountResource(eventAccountAddress, eventHandle)
+	if err != nil {
+		return fmt.Errorf("syncEvent: failed to fetch the resource: %w", err)
+	}
+
+	creationNumber, err := crutils.ExtractEventCreationNum(resource, eventFieldName)
+	if err != nil {
+		return fmt.Errorf("syncEvent: failed to extract creation_num for %s: %w", eventFieldName, err)
+	}
+
+	var batchSize uint64 = 100
 	var totalProcessed int = 0
 
 eventLoop:
@@ -71,7 +81,7 @@ eventLoop:
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			newEvents, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventFieldName, &latestOffset, &batchSize)
+			newEvents, err := a.client.EventsByCreationNumber(eventAccountAddress, creationNumber, &latestOffset, &batchSize)
 			if err != nil {
 				a.logger.Errorw("syncEvent: failed to fetch new events", "error", err)
 				return fmt.Errorf("syncEvent: failed to fetch events: %w", err)

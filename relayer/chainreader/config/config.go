@@ -52,6 +52,8 @@ type ChainReaderEvent struct {
 	EventHandleStructName string
 
 	// The name of the event handle field.
+	// This field can be defined as path to the nested 
+	// struct that stores the event, e.g. "token_pool_state.burned_events"
 	EventHandleFieldName string
 
 	// The event account address.

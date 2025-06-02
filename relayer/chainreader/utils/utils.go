@@ -126,3 +126,38 @@ func IsNumeric(value any) bool {
 	_, ok := value.(uint64)
 	return ok
 }
+
+func ExtractEventCreationNum(resourceData map[string]any, eventFieldPath string) (string, error) {
+	pathComponents := strings.Split(eventFieldPath, ".")
+
+	current, ok := resourceData["data"].(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("resource data missing 'data' field or not a map")
+	}
+
+	for i, component := range pathComponents {
+		nextLevel, ok := current[component].(map[string]any)
+		if !ok {
+			return "", fmt.Errorf("cannot navigate path at component %s (position %d): field missing or not a map",
+				component, i)
+		}
+		current = nextLevel
+	}
+
+	guid, ok := current["guid"].(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("event field missing 'guid' structure")
+	}
+
+	id, ok := guid["id"].(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("event field missing 'guid.id' structure")
+	}
+
+	creationNum, ok := id["creation_num"].(string)
+	if !ok {
+		return "", fmt.Errorf("event field missing 'guid.id.creation_num' value or not a string")
+	}
+
+	return creationNum, nil
+}
