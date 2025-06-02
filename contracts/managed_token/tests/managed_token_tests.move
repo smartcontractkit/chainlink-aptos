@@ -23,7 +23,8 @@ module managed_token::managed_token_tests {
         account::create_account_for_test(signer::address_of(owner));
         account::create_account_for_test(signer::address_of(managed_token));
 
-        let constructor_ref = &object::create_named_object(owner, b"managed_token_token_tests");
+        let constructor_ref =
+            &object::create_named_object(owner, b"managed_token_token_tests");
 
         let object_address =
             object::create_object_address(
@@ -56,7 +57,9 @@ module managed_token::managed_token_tests {
     }
 
     #[test_only]
-    public fun initialize_managed_token(owner: &signer, max_supply: Option<u128>) {
+    public fun initialize_managed_token(
+        owner: &signer, max_supply: Option<u128>
+    ) {
         managed_token::initialize(
             owner,
             max_supply,
@@ -69,7 +72,9 @@ module managed_token::managed_token_tests {
     }
 
     #[test(owner = @0x999, managed_token = @managed_token)]
-    public fun test_initialize_managed_token(owner: &signer, managed_token: &signer) {
+    public fun test_initialize_managed_token(
+        owner: &signer, managed_token: &signer
+    ) {
         setup(owner, managed_token);
 
         initialize_managed_token(owner, option::some(MAX_SUPPLY));
@@ -180,9 +185,14 @@ module managed_token::managed_token_tests {
         managed_token::burn(user, signer::address_of(user), 1000000);
     }
 
-    #[test(
-        owner = @0x999, recipient1 = @0xface, recipient2 = @0xbeef, managed_token = @managed_token
-    )]
+    #[
+        test(
+            owner = @0x999,
+            recipient1 = @0xface,
+            recipient2 = @0xbeef,
+            managed_token = @managed_token
+        )
+    ]
     public fun test_token_transfer(
         owner: &signer,
         recipient1: &signer,

@@ -209,14 +209,14 @@ module ccip_onramp::onramp_dispatchable_token_test {
         assert!(token_pool_balance == result.sent_amount);
 
         assert!(
-            event::emitted_events<token_pool::Locked>().length() == 1
+            event::emitted_events<token_pool::LockedOrBurned>().length() == 1
         );
     }
 
     fun assert_burn_mint_pool_success(result: &CCIPSendResult) {
         assert_ccip_send_success(result);
         assert!(
-            event::emitted_events<token_pool::Burned>().length() == 1
+            event::emitted_events<token_pool::LockedOrBurned>().length() == 1
         );
     }
 

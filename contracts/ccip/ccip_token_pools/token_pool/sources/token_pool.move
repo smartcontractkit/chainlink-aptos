@@ -23,10 +23,8 @@ module ccip_token_pool::token_pool {
         fa_metadata: Object<Metadata>,
         remote_chain_configs: SmartTable<u64, RemoteChainConfig>,
         rate_limiter_config: token_pool_rate_limiter::RateLimitState,
-        locked_events: EventHandle<Locked>,
-        released_events: EventHandle<Released>,
-        burned_events: EventHandle<Burned>,
-        minted_events: EventHandle<Minted>,
+        locked_events: EventHandle<LockedOrBurned>,
+        released_events: EventHandle<ReleasedOrMinted>,
         remote_pool_added_events: EventHandle<RemotePoolAdded>,
         remote_pool_removed_events: EventHandle<RemotePoolRemoved>,
         chain_added_events: EventHandle<ChainAdded>,
@@ -44,26 +42,15 @@ module ccip_token_pool::token_pool {
     struct CallbackProof has drop {}
 
     #[event]
-    struct Locked has store, drop {
+    struct LockedOrBurned has store, drop {
+        remote_chain_selector: u64,
         local_token: address,
         amount: u64
     }
 
     #[event]
-    struct Released has store, drop {
-        local_token: address,
-        recipient: address,
-        amount: u64
-    }
-
-    #[event]
-    struct Burned has store, drop {
-        local_token: address,
-        amount: u64
-    }
-
-    #[event]
-    struct Minted has store, drop {
+    struct ReleasedOrMinted has store, drop {
+        remote_chain_selector: u64,
         local_token: address,
         recipient: address,
         amount: u64
@@ -148,8 +135,6 @@ module ccip_token_pool::token_pool {
             rate_limiter_config: token_pool_rate_limiter::new(event_account),
             locked_events: account::new_event_handle(event_account),
             released_events: account::new_event_handle(event_account),
-            burned_events: account::new_event_handle(event_account),
-            minted_events: account::new_event_handle(event_account),
             remote_pool_added_events: account::new_event_handle(event_account),
             remote_pool_removed_events: account::new_event_handle(event_account),
             chain_added_events: account::new_event_handle(event_account),
@@ -451,47 +436,32 @@ module ccip_token_pool::token_pool {
     // |                           Events                             |
     // ================================================================
 
-    public fun emit_released(
-        state: &mut TokenPoolState, recipient: address, amount: u64
+    public fun emit_released_or_minted(
+        state: &mut TokenPoolState,
+        recipient: address,
+        amount: u64,
+        remote_chain_selector: u64
     ) {
         let local_token = object::object_address(&state.fa_metadata);
 
-        event::emit(Released { local_token, recipient, amount });
+        event::emit(
+            ReleasedOrMinted { remote_chain_selector, local_token, recipient, amount }
+        );
         event::emit_event(
             &mut state.released_events,
-            Released { local_token, recipient, amount }
+            ReleasedOrMinted { remote_chain_selector, local_token, recipient, amount }
         );
     }
 
-    public fun emit_minted(
-        state: &mut TokenPoolState, recipient: address, amount: u64
+    public fun emit_locked_or_burned(
+        state: &mut TokenPoolState, amount: u64, remote_chain_selector: u64
     ) {
         let local_token = object::object_address(&state.fa_metadata);
 
-        event::emit(Minted { local_token, recipient, amount });
-        event::emit_event(
-            &mut state.minted_events,
-            Minted { local_token, recipient, amount }
-        );
-    }
-
-    public fun emit_locked(state: &mut TokenPoolState, amount: u64) {
-        let local_token = object::object_address(&state.fa_metadata);
-
-        event::emit(Locked { local_token, amount });
+        event::emit(LockedOrBurned { remote_chain_selector, local_token, amount });
         event::emit_event(
             &mut state.locked_events,
-            Locked { local_token, amount }
-        );
-    }
-
-    public fun emit_burned(state: &mut TokenPoolState, amount: u64) {
-        let local_token = object::object_address(&state.fa_metadata);
-
-        event::emit(Burned { local_token, amount });
-        event::emit_event(
-            &mut state.burned_events,
-            Burned { local_token, amount }
+            LockedOrBurned { remote_chain_selector, local_token, amount }
         );
     }
 
@@ -685,8 +655,6 @@ module ccip_token_pool::token_pool {
             rate_limiter_config,
             locked_events,
             released_events,
-            burned_events,
-            minted_events,
             remote_pool_added_events,
             remote_pool_removed_events,
             chain_added_events,
@@ -699,8 +667,6 @@ module ccip_token_pool::token_pool {
         remote_chain_configs.destroy();
         event::destroy_handle(locked_events);
         event::destroy_handle(released_events);
-        event::destroy_handle(burned_events);
-        event::destroy_handle(minted_events);
         event::destroy_handle(remote_pool_added_events);
         event::destroy_handle(remote_pool_removed_events);
         event::destroy_handle(chain_added_events);

@@ -361,7 +361,12 @@ module lock_release_token_pool::lock_release_token_pool {
             dest_pool_data
         );
 
-        token_pool::emit_locked(&mut pool.token_pool_state, fa_amount);
+        let remote_chain_selector =
+            token_admin_registry::get_lock_or_burn_remote_chain_selector(&input);
+
+        token_pool::emit_locked_or_burned(
+            &mut pool.token_pool_state, fa_amount, remote_chain_selector
+        );
     }
 
     public fun release_or_mint<T: key>(
@@ -401,11 +406,14 @@ module lock_release_token_pool::lock_release_token_pool {
         );
 
         let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
+        let remote_chain_selector =
+            token_admin_registry::get_release_or_mint_remote_chain_selector(&input);
 
-        token_pool::emit_released(
+        token_pool::emit_released_or_minted(
             &mut pool.token_pool_state,
             recipient,
-            local_amount
+            local_amount,
+            remote_chain_selector
         );
 
         // return the withdrawn fungible asset.

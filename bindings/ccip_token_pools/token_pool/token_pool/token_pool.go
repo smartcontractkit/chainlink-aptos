@@ -65,26 +65,17 @@ type RemoteChainConfig struct {
 type CallbackProof struct {
 }
 
-type Locked struct {
-	LocalToken aptos.AccountAddress `move:"address"`
-	Amount     uint64               `move:"u64"`
+type LockedOrBurned struct {
+	RemoteChainSelector uint64               `move:"u64"`
+	LocalToken          aptos.AccountAddress `move:"address"`
+	Amount              uint64               `move:"u64"`
 }
 
-type Released struct {
-	LocalToken aptos.AccountAddress `move:"address"`
-	Recipient  aptos.AccountAddress `move:"address"`
-	Amount     uint64               `move:"u64"`
-}
-
-type Burned struct {
-	LocalToken aptos.AccountAddress `move:"address"`
-	Amount     uint64               `move:"u64"`
-}
-
-type Minted struct {
-	LocalToken aptos.AccountAddress `move:"address"`
-	Recipient  aptos.AccountAddress `move:"address"`
-	Amount     uint64               `move:"u64"`
+type ReleasedOrMinted struct {
+	RemoteChainSelector uint64               `move:"u64"`
+	LocalToken          aptos.AccountAddress `move:"address"`
+	Recipient           aptos.AccountAddress `move:"address"`
+	Amount              uint64               `move:"u64"`
 }
 
 type AllowlistRemove struct {
