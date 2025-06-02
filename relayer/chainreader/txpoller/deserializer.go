@@ -40,6 +40,14 @@ type ExecutionReport struct {
 	Proofs              [][]byte
 }
 
+type ConfigSet struct {
+	OcrPluginType byte
+	ConfigDigest  []byte
+	Signers       [][]byte
+	Transmitters  []aptos.AccountAddress
+	BigF          byte
+}
+
 func DeserializeExecutionReport(data []byte) (*ExecutionReport, error) {
 	deserializer := bcs.NewDeserializer(data)
 

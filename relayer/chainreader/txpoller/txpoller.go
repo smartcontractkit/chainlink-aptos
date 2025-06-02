@@ -2,7 +2,6 @@ package txpoller
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
@@ -74,7 +73,7 @@ func (tp *TxPoller) run(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			if err := tp.poll(ctx); err != nil {
-				 tp.lggr.Errorw("TxPoller poll error", "err", err)
+				tp.lggr.Errorw("TxPoller poll error", "err", err)
 			}
 		case <-tp.quit:
 			tp.lggr.Info("TxPoller stopped")
@@ -87,6 +86,7 @@ func (tp *TxPoller) run(ctx context.Context) {
 }
 
 func (tp *TxPoller) poll(ctx context.Context) error {
+
 	// var records []db.EventRecord
 	// limit := uint64(100)
 

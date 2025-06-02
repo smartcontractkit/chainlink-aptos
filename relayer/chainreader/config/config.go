@@ -3,8 +3,6 @@ package config
 import (
 	"time"
 
-	"github.com/aptos-labs/aptos-go-sdk"
-
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 )
 
@@ -16,6 +14,9 @@ type ChainReaderConfig struct {
 
 	EventSyncInterval time.Duration
 	EventSyncTimeout  time.Duration
+
+	TxSyncInterval time.Duration
+	TxSyncTimeout  time.Duration
 }
 
 type ChainReaderModule struct {
@@ -40,7 +41,6 @@ type ChainReaderFunction struct {
 type TxPollerConfig struct {
 	PollInterval time.Duration
 
-	OfframpStateAddress  aptos.AccountAddress
 	OCRConfigSetEvent    *ChainReaderEvent
 	GetSourceChainConfig *ChainReaderFunction
 
