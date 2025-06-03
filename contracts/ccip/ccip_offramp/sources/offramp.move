@@ -18,6 +18,7 @@ module ccip_offramp::offramp {
 
     use ccip_offramp::ocr3_base;
 
+    use ccip::address;
     use ccip::auth;
     use ccip::client;
     use ccip::eth_abi;
@@ -992,6 +993,8 @@ module ccip_offramp::offramp {
                 source_chain_selector != 0,
                 error::invalid_argument(E_ZERO_CHAIN_SELECTOR)
             );
+
+            address::assert_non_zero_address_vector(&on_ramp);
 
             if (!state.source_chain_configs.contains(source_chain_selector)) {
                 state.source_chain_configs.add(

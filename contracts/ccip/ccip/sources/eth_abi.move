@@ -53,11 +53,12 @@ module ccip::eth_abi {
         out: &mut vector<u8>, value: vector<u8>
     ) {
         assert!(value.length() <= 32, E_INVALID_BYTES32_LENGTH);
+
+        out.append(value);
         let padding_len = 32 - value.length();
         for (i in 0..padding_len) {
             out.push_back(0);
         };
-        out.append(value)
     }
 
     public inline fun encode_bytes(out: &mut vector<u8>, value: vector<u8>) {
@@ -93,7 +94,12 @@ module ccip::eth_abi {
         out: &mut vector<u8>, value: vector<u8>
     ) {
         assert!(value.length() <= 32, E_INVALID_BYTES32_LENGTH);
-        out.append(value)
+
+        out.append(value);
+        let padding_len = 32 - value.length();
+        for (i in 0..padding_len) {
+            out.push_back(0);
+        };
     }
 
     public inline fun encode_packed_u8(out: &mut vector<u8>, value: u8) {

@@ -11,6 +11,7 @@ module usdc_token_pool::usdc_token_pool {
     use std::smart_table::{Self, SmartTable};
     use std::string::{Self, String};
 
+    use ccip::address;
     use ccip::eth_abi;
     use ccip::ownable;
     use ccip::token_admin_registry;
@@ -79,6 +80,7 @@ module usdc_token_pool::usdc_token_pool {
     const E_ZERO_CHAIN_SELECTOR: u64 = 12;
     const E_EMPTY_ALLOWED_CALLER: u64 = 13;
     const E_INVALID_MESSAGE_VERSION: u64 = 14;
+    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 15;
 
     // ================================================================
     // |                             Init                             |
@@ -540,6 +542,8 @@ module usdc_token_pool::usdc_token_pool {
                 error::invalid_argument(E_EMPTY_ALLOWED_CALLER)
             );
 
+            address::assert_non_zero_address_vector(&allowed_caller);
+
             pool.chain_to_domain.upsert(
                 remote_chain_selector,
                 Domain { allowed_caller, domain_identifier, enabled }
@@ -702,14 +706,17 @@ module usdc_token_pool::usdc_token_pool {
 
     public fun mcms_entrypoint<T: key>(
         _metadata: object::Object<T>
-    ): option::Option<u128> acquires USDCTokenPoolState {
+    ): option::Option<u128> acquires USDCTokenPoolDeployment, USDCTokenPoolState {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@usdc_token_pool, McmsCallback {});
 
         let function_bytes = *function.bytes();
         let stream = bcs_stream::new(data);
 
-        if (function_bytes == b"add_remote_pool") {
+        if (function_bytes == b"initialize") {
+            bcs_stream::assert_is_consumed(&stream);
+            initialize(&caller);
+        } else if (function_bytes == b"add_remote_pool") {
             let remote_chain_selector = bcs_stream::deserialize_u64(&mut stream);
             let remote_pool_address = bcs_stream::deserialize_vector_u8(&mut stream);
             bcs_stream::assert_is_consumed(&stream);

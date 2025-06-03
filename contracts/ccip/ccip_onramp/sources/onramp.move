@@ -12,6 +12,7 @@ module ccip_onramp::onramp {
     use std::string::{Self, String};
     use std::smart_table::{Self, SmartTable};
 
+    use ccip::address;
     use ccip::auth;
     use ccip::eth_abi;
     use ccip::fee_quoter;
@@ -152,6 +153,7 @@ module ccip_onramp::onramp {
     const E_MUST_BE_CALLED_BY_ROUTER: u64 = 18;
     const E_TOKEN_AMOUNT_MISMATCH: u64 = 19;
     const E_CANNOT_SEND_ZERO_TOKENS: u64 = 20;
+    const E_ZERO_CHAIN_SELECTOR: u64 = 21;
 
     #[view]
     public fun type_and_version(): String {
@@ -198,6 +200,7 @@ module ccip_onramp::onramp {
         dest_chain_routers: vector<address>,
         dest_chain_allowlist_enabled: vector<bool>
     ) acquires OnRampDeployment {
+        assert!(chain_selector != 0, E_ZERO_CHAIN_SELECTOR);
         assert!(
             exists<OnRampDeployment>(@ccip_onramp),
             error::invalid_state(E_ALREADY_INITIALIZED)
@@ -785,6 +788,9 @@ module ccip_onramp::onramp {
     inline fun set_dynamic_config_internal(
         state: &mut OnRampState, fee_aggregator: address, allowlist_admin: address
     ) {
+        address::assert_non_zero_address(fee_aggregator);
+        address::assert_non_zero_address(allowlist_admin);
+
         state.fee_aggregator = fee_aggregator;
         state.allowlist_admin = allowlist_admin;
 
