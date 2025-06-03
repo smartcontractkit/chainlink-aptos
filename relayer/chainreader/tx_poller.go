@@ -3,6 +3,7 @@ package chainreader
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
@@ -12,8 +13,9 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/db"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
+	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
 func (a *aptosChainReader) startTxPolling(ctx context.Context) {
@@ -30,7 +32,7 @@ func (a *aptosChainReader) startTxPolling(ctx context.Context) {
 			elapsed := time.Since(start)
 
 			if err != nil && err != context.DeadlineExceeded {
-				a.logger.Warnw("Txsync completed with errors",
+				a.logger.Warnw("TxSync completed with errors",
 					"error", err,
 					"duration", elapsed)
 			} else if err != nil {
@@ -89,208 +91,211 @@ func (a *aptosChainReader) SyncTransmittersTxs(ctx context.Context) error {
 }
 
 func (a *aptosChainReader) syncTransmitterTxs(ctx context.Context, transmitter aptos.AccountAddress, batchSize uint64) (int, error) {
+	const (
+		moduleKey = "OffRamp"
+		eventKey  = "ExecutionStateChanged"
+	)
+
 	sequenceNumber := a.transmitters[transmitter]
 	totalProcessed := 0
 
-	for {
-		select {
-		case <-ctx.Done():
-			return totalProcessed, ctx.Err()
-		default:
-			txns, err := a.client.AccountTransactions(transmitter, &sequenceNumber, &batchSize)
-			if err != nil {
-				return totalProcessed, fmt.Errorf("failed to fetch transactions: %w", err)
-			}
+	eventAccountAddress, eventHandle, eventConfig, err := a.getEventConfig(moduleKey, eventKey)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get ExecutionStateChanged event config: %w", err)
+	}
 
-			if len(txns) == 0 {
-				return totalProcessed, nil
-			}
+	parts := strings.Split(eventHandle, "::")
+	if len(parts) < 2 {
+		return 0, fmt.Errorf("invalid event handle format: %s", eventHandle)
+	}
 
-			var records []db.EventRecord
-			for _, txn := range txns {
-				userTxn, err := txn.UserTransaction()
-				if err != nil {
-					a.logger.Errorw("Failed to get user transaction",
-						"transmitter", transmitter.String(), "error", err)
-					continue
-				}
+	boundAddress := parts[0]
+	moduleName := parts[1]
+	expectedFunction := fmt.Sprintf("%s::%s::execute", boundAddress, moduleName)
+	// if the vmStatus of the failed tx contains the following,
+	// we ignore the tx because if was reverted before the receiver
+	ignoredVmError := fmt.Sprintf("%s::%s", boundAddress, moduleName)
 
-				if userTxn.Success {
-					a.logger.Debugw("Skipping successful transaction",
-						"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber)
-					continue
-				}
-
-				a.logger.Infow("Found failed transaction", "transmitter", transmitter.String(),
-					"sequenceNumber", userTxn.SequenceNumber, "version", userTxn.Version, "vmStatus", userTxn.VmStatus)
-
-				payload := userTxn.Payload
-				if payload.Type != api.TransactionPayloadVariantEntryFunction {
-					a.logger.Debugw("Skipping non-entry function transaction",
-						"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber)
-					continue
-				}
-
-				entryFunc, ok := payload.Inner.(*api.TransactionPayloadEntryFunction)
-				if !ok {
-					a.logger.Errorw("Failed to cast payload to EntryFunction",
-						"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber)
-					continue
-				}
-
-				if entryFunc.Function != "0x1dd8925f10ca7b828b86a7b6bc8509ad02867577cc90f49033dcd6594bba1576::offramp::execute" {
-					a.logger.Debugw("Skipping transaction with different function",
-						"transmitter", transmitter.String(), "function", entryFunc.Function)
-					continue
-				}
-
-				if len(entryFunc.Arguments) != 2 {
-					a.logger.Errorw("Unexpected number of arguments in transaction",
-						"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber,
-						"expected", 2, "got", len(entryFunc.Arguments))
-					continue
-				}
-
-				report, ok := entryFunc.Arguments[1].([]byte)
-				if !ok {
-					a.logger.Errorw("failed to cast report to []byte", "transmitter", transmitter.String(),
-						"sequenceNumber", userTxn.SequenceNumber)
-					continue
-				}
-
-				execReport, err := utils.DeserializeExecutionReport(report)
-				if err != nil {
-					a.logger.Errorw("Failed to deserialize execution report",
-						"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber, "error", err)
-					continue
-				}
-
-				sourceChainSelector := execReport.Message.Header.SourceChainSelector
-				sourceChainConfig, err := a.getSourceChainConfig(ctx, sourceChainSelector)
-				if err != nil {
-					a.logger.Errorw("Failed to get source chain config",
-						"transmitter", transmitter.String(), "sourceChainSelector", sourceChainSelector, "error", err)
-					continue
-				}
-
-				if sourceChainConfig == nil {
-					a.logger.Debugw("No source chain config found for selector",
-						"transmitter", transmitter.String(), "sourceChainSelector", sourceChainSelector)
-					continue
-				}
-
-				hasher := utils.NewMessageHasherV1(a.logger)
-				messageHash, err := hasher.Hash(ctx, execReport, sourceChainConfig.OnRamp)
-				if err != nil {
-					a.logger.Errorw("Failed to calculate message hash",
-						"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber, "error", err)
-					continue
-				}
-
-				// Create synthetic ExecutionStateChanged event
-				// The fields map one-to-one the onchain event
-				executionStateChanged := map[string]any{
-					"source_chain_selector": sourceChainSelector,
-					"sequence_number":       execReport.Message.Header.SequenceNumber,
-					"message_id":            execReport.Message.Header.MessageID,
-					"message_hash":          messageHash[:],
-					"state":                 uint8(3), // 3 = FAILURE
-				}
-
-				head, err := a.getBlockHead(userTxn.Version)
-				if err != nil {
-					a.logger.Errorw("Failed to fetch block metadata", "version", userTxn.Version, "error", err)
-					continue
-				}
-
-				_, eventAccountAddress, eventHandle, eventFieldName, err := a.getEventConfig("OffRamp", "ExecutionStateChanged")
-				if err != nil {
-					a.logger.Errorw("Failed to get ExecutionStateChanged event config", "error", err)
-					continue
-				}
-
-				record := db.EventRecord{
-					EventAccountAddress: eventAccountAddress.String(),
-					EventHandle:         eventHandle,
-					EventFieldName:      eventFieldName,
-					EventOffset:         nil, // Synthetic events don't have offsets
-					TxVersion:           userTxn.Version,
-					BlockHeight:         head.Height,
-					BlockHash:           head.Hash,
-					BlockTimestamp:      head.Timestamp,
-					Data:                executionStateChanged,
-				}
-
-				records = append(records, record)
-				totalProcessed++
-			}
-
-			if len(records) > 0 {
-				if err := a.dbStore.InsertEvents(ctx, records); err != nil {
-					a.logger.Errorw("Failed to insert synthetic ExecutionStateChanged events", "error", err)
-					return totalProcessed, fmt.Errorf("failed to insert events: %w", err)
-				}
-
-				a.logger.Debugw("Inserted synthetic ExecutionStateChanged events",
-					"count", len(records), "transmitter", transmitter.String())
-			}
-
-			sequenceNumber += uint64(len(txns))
-			a.transmitters[transmitter] = sequenceNumber
-
-			if uint64(len(txns)) < batchSize {
-				return totalProcessed, nil
-			}
+	select {
+	case <-ctx.Done():
+		return totalProcessed, ctx.Err()
+	default:
+		txns, err := a.client.AccountTransactions(transmitter, &sequenceNumber, &batchSize)
+		if err != nil {
+			return totalProcessed, fmt.Errorf("failed to fetch transactions: %w", err)
 		}
+
+		if len(txns) == 0 {
+			return totalProcessed, nil
+		}
+
+		var records []db.EventRecord
+		for _, txn := range txns {
+			userTxn, err := txn.UserTransaction()
+			if err != nil {
+				a.logger.Errorw("Failed to get user transaction",
+					"transmitter", transmitter.String(), "error", err)
+				continue
+			}
+
+			if userTxn.Success {
+				a.logger.Debugw("Skipping successful transaction",
+					"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber)
+				continue
+			}
+
+			a.logger.Infow("Found failed transaction", "transmitter", transmitter.String(),
+				"sequenceNumber", userTxn.SequenceNumber, "version", userTxn.Version, "vmStatus", userTxn.VmStatus)
+
+			payload := userTxn.Payload
+			if payload.Type != api.TransactionPayloadVariantEntryFunction {
+				a.logger.Debugw("Skipping non-entry function transaction",
+					"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber)
+				continue
+			}
+
+			entryFunc, ok := payload.Inner.(*api.TransactionPayloadEntryFunction)
+			if !ok {
+				a.logger.Errorw("Failed to cast payload to EntryFunction",
+					"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber)
+				continue
+			}
+
+			if entryFunc.Function != expectedFunction {
+				a.logger.Debugw("Skipping transaction with different function",
+					"transmitter", transmitter.String(), "function", entryFunc.Function)
+				continue
+			}
+
+			if strings.Contains(userTxn.VmStatus, ignoredVmError) {
+				a.logger.Debugw("Skipping non-receiver originated transaction", "transmitter", transmitter.String(),
+					"sequenceNumber", userTxn.SequenceNumber, "vmStatus", userTxn.VmStatus)
+				continue
+			}
+
+			if len(entryFunc.Arguments) != 2 {
+				a.logger.Errorw("Unexpected number of arguments in transaction",
+					"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber,
+					"expected", 2, "got", len(entryFunc.Arguments))
+				continue
+			}
+
+			reportStr, ok := entryFunc.Arguments[1].(string)
+			if !ok {
+				a.logger.Errorw("Expected report to be a hex string", "transmitter", transmitter.String(),
+					"sequenceNumber", userTxn.SequenceNumber)
+				continue
+			}
+
+			report, err := utils.DecodeHexRelaxed(reportStr)
+			if err != nil {
+				a.logger.Errorw("failed to cast report to []byte", "transmitter", transmitter.String(),
+					"sequenceNumber", userTxn.SequenceNumber)
+				continue
+			}
+
+			execReport, err := crutils.DeserializeExecutionReport(report)
+			if err != nil {
+				a.logger.Errorw("Failed to deserialize execution report",
+					"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber, "error", err)
+				continue
+			}
+
+			sourceChainSelector := execReport.Message.Header.SourceChainSelector
+			sourceChainConfig, err := a.getSourceChainConfig(ctx, sourceChainSelector)
+			if err != nil {
+				a.logger.Errorw("Failed to get source chain config",
+					"transmitter", transmitter.String(), "sourceChainSelector", sourceChainSelector, "error", err)
+				continue
+			}
+
+			if sourceChainConfig == nil {
+				a.logger.Debugw("No source chain config found for selector",
+					"transmitter", transmitter.String(), "sourceChainSelector", sourceChainSelector)
+				continue
+			}
+
+			hasher := crutils.NewMessageHasherV1(a.logger)
+			messageHash, err := hasher.Hash(ctx, execReport, sourceChainConfig.OnRamp)
+			if err != nil {
+				a.logger.Errorw("Failed to calculate message hash",
+					"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber, "error", err)
+				continue
+			}
+
+			// Create synthetic ExecutionStateChanged event
+			// The fields map one-to-one the onchain event
+			executionStateChanged := map[string]any{
+				"source_chain_selector": sourceChainSelector,
+				"sequence_number":       execReport.Message.Header.SequenceNumber,
+				"message_id":            execReport.Message.Header.MessageID,
+				"message_hash":          messageHash[:],
+				"state":                 uint8(3), // 3 = FAILURE
+			}
+
+			head, err := a.getBlockHead(userTxn.Version)
+			if err != nil {
+				a.logger.Errorw("Failed to fetch block metadata", "version", userTxn.Version, "error", err)
+				continue
+			}
+
+			if eventConfig.EventFieldRenames != nil {
+				if err := crutils.RenameMapFields(executionStateChanged, eventConfig.EventFieldRenames); err != nil {
+					a.logger.Errorw("Failed to rename synthetic event fields", "error", err)
+					continue
+				}
+			}
+
+			record := db.EventRecord{
+				EventAccountAddress: eventAccountAddress.String(),
+				EventHandle:         eventHandle,
+				EventFieldName:      eventConfig.EventHandleFieldName,
+				EventOffset:         nil, // Synthetic events don't have offsets
+				TxVersion:           userTxn.Version,
+				BlockHeight:         head.Height,
+				BlockHash:           head.Hash,
+				BlockTimestamp:      head.Timestamp,
+				Data:                executionStateChanged,
+			}
+
+			records = append(records, record)
+			totalProcessed++
+		}
+
+		if len(records) > 0 {
+			if err := a.dbStore.InsertEvents(ctx, records); err != nil {
+				a.logger.Errorw("Failed to insert synthetic ExecutionStateChanged events", "error", err)
+				return totalProcessed, fmt.Errorf("failed to insert events: %w", err)
+			}
+
+			a.logger.Debugw("Inserted synthetic ExecutionStateChanged events",
+				"count", len(records), "transmitter", transmitter.String())
+		}
+
+		sequenceNumber += uint64(len(txns))
+		a.transmitters[transmitter] = sequenceNumber
+
+		return totalProcessed, nil
 	}
 }
 
 func (a *aptosChainReader) getTransmitters(ctx context.Context) ([]aptos.AccountAddress, error) {
 	const (
-		ocrModuleKey      = "OffRamp"
-		configSetEventKey = "OCRConfigSet"
+		moduleKey = "OffRamp"
+		eventKey  = "OCRConfigSet"
 	)
 
-	moduleConfig, ok := a.config.Modules[ocrModuleKey]
-	if !ok {
-		a.logger.Warnw("No module config found", "moduleKey", ocrModuleKey)
-		return nil, nil
-	}
-
-	boundAddress, ok := a.moduleAddresses[ocrModuleKey]
-	if !ok {
-		a.logger.Warnw("No bound address for module", "moduleKey", ocrModuleKey)
-		return nil, nil
-	}
-
-	configSetEvent, ok := moduleConfig.Events[configSetEventKey]
-	if !ok {
-		a.logger.Warnw("No event config found", "moduleKey", ocrModuleKey, "eventKey", configSetEventKey)
-		return nil, nil
-	}
-
-	moduleName := moduleConfig.Name
-	if moduleName == "" {
-		moduleName = ocrModuleKey
-	}
-
-	eventAccountAddress, err := a.computeEventAccountAddress(boundAddress, configSetEvent)
+	eventAccountAddress, eventHandle, eventConfig, err := a.getEventConfig(moduleKey, eventKey)
 	if err != nil {
-		a.logger.Errorw("Failed to compute event account address",
-			"moduleKey", ocrModuleKey,
-			"eventKey", configSetEventKey,
-			"error", err)
+		a.logger.Errorw("Failed to get OCRConfigSet event config", "error", err)
 		return nil, err
 	}
-
-	eventHandle := boundAddress.String() + "::" + moduleName + "::" + configSetEvent.EventHandleStructName
-	eventFieldName := configSetEvent.EventHandleFieldName
 
 	events, err := a.dbStore.QueryEvents(
 		ctx,
 		eventAccountAddress.String(),
 		eventHandle,
-		eventFieldName,
+		eventConfig.EventHandleFieldName,
 		nil,
 		query.LimitAndSort{
 			Limit: query.CountLimit(1),
@@ -310,14 +315,14 @@ func (a *aptosChainReader) getTransmitters(ctx context.Context) ([]aptos.Account
 		return nil, nil
 	}
 
-	var configSet utils.ConfigSet
+	var configSet crutils.ConfigSet
 	if err := codec.DecodeAptosJsonValue(events[0].Data, &configSet); err != nil {
 		a.logger.Errorw("Failed to decode ConfigSet event", "error", err)
 		return nil, fmt.Errorf("failed to decode ConfigSet event: %w", err)
 	}
 
 	transmitters := configSet.Transmitters
-	if len(configSet.Transmitters) == 0 {
+	if len(transmitters) == 0 {
 		a.logger.Warnw("No transmitters found in OCRConfigSet event")
 		return nil, nil
 	}
@@ -326,43 +331,17 @@ func (a *aptosChainReader) getTransmitters(ctx context.Context) ([]aptos.Account
 	return transmitters, nil
 }
 
-func (a *aptosChainReader) getSourceChainConfig(ctx context.Context, sourceChainSelector uint64) (*utils.SourceChainConfig, error) {
+func (a *aptosChainReader) getSourceChainConfig(ctx context.Context, sourceChainSelector uint64) (*crutils.SourceChainConfig, error) {
 	const (
-		ocrModuleKey        = "OffRamp"
-		sourceChainEventKey = "SourceChainConfigSet"
-		selector            = "SourceChainSelector"
+		moduleKey = "OffRamp"
+		eventKey  = "SourceChainConfigSet"
+		selector  = "SourceChainSelector"
 	)
 
-	moduleConfig, ok := a.config.Modules[ocrModuleKey]
-	if !ok {
-		a.logger.Warnw("No module config found", "moduleKey", ocrModuleKey)
-		return nil, nil
-	}
-
-	boundAddress, ok := a.moduleAddresses[ocrModuleKey]
-	if !ok {
-		a.logger.Warnw("No bound address for module", "moduleKey", ocrModuleKey)
-		return nil, nil
-	}
-
-	sourceChainEvent, ok := moduleConfig.Events[sourceChainEventKey]
-	if !ok {
-		a.logger.Warnw("No event config found", "moduleKey", ocrModuleKey, "eventKey", sourceChainEventKey)
-		return nil, nil
-	}
-
-	moduleName := moduleConfig.Name
-	if moduleName == "" {
-		moduleName = ocrModuleKey
-	}
-
-	eventAccountAddress, err := a.computeEventAccountAddress(boundAddress, sourceChainEvent)
+	eventAccountAddress, eventHandle, eventConfig, err := a.getEventConfig(moduleKey, eventKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compute event account address: %w", err)
+		return nil, fmt.Errorf("failed to get SourceChainConfigSet event config: %w", err)
 	}
-
-	eventHandle := boundAddress.String() + "::" + moduleName + "::" + sourceChainEvent.EventHandleStructName
-	eventFieldName := sourceChainEvent.EventHandleFieldName
 
 	filter := []query.Expression{
 		query.Comparator(selector,
@@ -374,7 +353,7 @@ func (a *aptosChainReader) getSourceChainConfig(ctx context.Context, sourceChain
 		ctx,
 		eventAccountAddress.String(),
 		eventHandle,
-		eventFieldName,
+		eventConfig.EventHandleFieldName,
 		filter,
 		query.LimitAndSort{
 			Limit: query.CountLimit(1),
@@ -393,7 +372,7 @@ func (a *aptosChainReader) getSourceChainConfig(ctx context.Context, sourceChain
 		return nil, nil
 	}
 
-	var configEvent utils.SourceChainConfigSet
+	var configEvent crutils.SourceChainConfigSet
 	if err := codec.DecodeAptosJsonValue(events[0].Data, &configEvent); err != nil {
 		return nil, fmt.Errorf("failed to decode SourceChainConfigSet event: %w", err)
 	}
