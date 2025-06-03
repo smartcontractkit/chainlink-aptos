@@ -25,6 +25,9 @@ module usdc_token_pool::usdc_token_pool {
 
     const STORE_OBJECT_SEED: vector<u8> = b"CcipUSDCTokenPool";
 
+    // We restrict to the first version. New pool may be required for subsequent versions.
+    const SUPPORTED_USDC_VERSION: u32 = 0;
+
     struct USDCTokenPoolDeployment has key {
         store_signer_cap: SignerCapability,
         ownable_state: ownable::OwnableState,
@@ -75,6 +78,7 @@ module usdc_token_pool::usdc_token_pool {
     const E_DOMAIN_DISABLED: u64 = 11;
     const E_ZERO_CHAIN_SELECTOR: u64 = 12;
     const E_EMPTY_ALLOWED_CALLER: u64 = 13;
+    const E_INVALID_MESSAGE_VERSION: u64 = 14;
 
     // ================================================================
     // |                             Init                             |
@@ -464,6 +468,13 @@ module usdc_token_pool::usdc_token_pool {
         expected_local_domain: u32
     ) {
         message::validate_message(usdc_message);
+
+        let version = message::get_message_version(usdc_message);
+        assert!(
+            version == SUPPORTED_USDC_VERSION,
+            error::invalid_argument(E_INVALID_MESSAGE_VERSION)
+        );
+
         let source_domain = message::get_src_domain_id(usdc_message);
         let nonce = message::get_nonce(usdc_message);
         let destination_domain = message::get_destination_domain_id(usdc_message);
