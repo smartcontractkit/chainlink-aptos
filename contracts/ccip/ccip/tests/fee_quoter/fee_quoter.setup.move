@@ -98,11 +98,11 @@ module ccip::fee_quoter_setup {
             owner,
             DEST_CHAIN_SELECTOR, // dest_chain_selector
             vector[token_addr], // add_tokens
-            vector[1], // add_min_fee_usd_cents
-            vector[1], // add_max_fee_usd_cents
-            vector[0], // add_deci_bps
-            vector[1], // add_dest_gas_overhead
-            vector[1], // add_dest_bytes_overhead
+            vector[50], // add_min_fee_usd_cents
+            vector[500], // add_max_fee_usd_cents
+            vector[10], // add_deci_bps - 0.01% (1 bps)
+            vector[5000], // add_dest_gas_overhead
+            vector[32], // add_dest_bytes_overhead
             vector[true], // add_is_enabled
             vector[] // remove_tokens
         );

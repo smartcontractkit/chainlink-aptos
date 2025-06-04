@@ -104,7 +104,7 @@ module ccip::fee_quoter_config {
             vector[second_token_addr], // add_tokens
             vector[50], // add_min_fee_usd_cents
             vector[500], // add_max_fee_usd_cents
-            vector[10], // add_deci_bps - 0.1%
+            vector[10], // add_deci_bps - 0.01% (1 bps)
             vector[5000], // add_dest_gas_overhead
             vector[64], // add_dest_bytes_overhead
             vector[true], // add_is_enabled

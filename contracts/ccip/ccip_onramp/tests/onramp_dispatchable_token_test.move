@@ -533,11 +533,11 @@ module ccip_onramp::onramp_dispatchable_token_test {
             owner,
             DEST_CHAIN_SELECTOR, // dest_chain_selector
             vector[token_addr], // add_tokens
-            vector[0], // add_min_fee_usd_cents
-            vector[0], // add_max_fee_usd_cents
-            vector[0], // add_deci_bps
-            vector[0], // add_dest_gas_overhead
-            vector[0], // add_dest_bytes_overhead
+            vector[50], // add_min_fee_usd_cents
+            vector[500], // add_max_fee_usd_cents
+            vector[25], // add_deci_bps
+            vector[5], // add_dest_gas_overhead
+            vector[100], // add_dest_bytes_overhead
             vector[true], // add_is_enabled
             vector[] // remove_tokens
         );

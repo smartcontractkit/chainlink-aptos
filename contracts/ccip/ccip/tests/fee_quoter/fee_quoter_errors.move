@@ -510,7 +510,9 @@ module ccip::fee_quoter_errors {
             true // is_enabled
         );
 
-        // Create a token transfer fee config with small dest_bytes_overhead
+        // 33 is 1 greater than CCIP_LOCK_OR_BURN_V1_RET_BYTES
+        let add_dest_bytes_overhead = 33;
+
         fee_quoter::apply_token_transfer_fee_config_updates(
             owner,
             dest_chain_selector,
@@ -518,8 +520,8 @@ module ccip::fee_quoter_errors {
             vector[50u32], // add_min_fee_usd_cents
             vector[500u32], // add_max_fee_usd_cents
             vector[25u16], // add_deci_bps
-            vector[5000u32], // add_dest_gas_overhead
-            vector[16u32], // Small dest_bytes_overhead (smaller than pool data will be)
+            vector[5u32], // add_dest_gas_overhead
+            vector[add_dest_bytes_overhead], // add_dest_bytes_overhead
             vector[true], // add_is_enabled
             vector[] // remove_tokens
         );
@@ -540,10 +542,8 @@ module ccip::fee_quoter_errors {
 
         // Create a large vector of zeros for pool data
         let large_pool_data = vector::empty<u8>();
-        let i = 0;
-        while (i < 64) {
+        for (i in 0..(add_dest_bytes_overhead + 1)) {
             vector::push_back(&mut large_pool_data, 0u8);
-            i = i + 1;
         };
 
         // This should fail with E_SOURCE_TOKEN_DATA_TOO_LARGE
@@ -558,5 +558,41 @@ module ccip::fee_quoter_errors {
         );
     }
 
-    // TODO: Add tests for E_SOURCE_TOKEN_DATA_TOO_LARGE
+    #[
+        test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms),
+        expected_failure(abort_code = 65571, location = ccip::fee_quoter) // E_INVALID_DEST_BYTES_OVERHEAD
+    ]
+    fun test_invalid_dest_bytes_overhead(
+        aptos_framework: &signer, ccip: &signer, owner: &signer
+    ) {
+        let (_owner_addr, token_obj) =
+            fee_quoter_setup::setup(aptos_framework, ccip, owner);
+        let token_addr = object::object_address(&token_obj);
+
+        // Set up destination chain config and token transfer fee config
+        let dest_chain_selector = fee_quoter_setup::get_dest_chain_selector();
+        fee_quoter_setup::setup_dest_chain_config(
+            owner,
+            dest_chain_selector,
+            fee_quoter_setup::get_chain_family_selector_evm(), // chain_family_selector
+            true // is_enabled
+        );
+
+        // 31 is less than CCIP_LOCK_OR_BURN_V1_RET_BYTES
+        let add_dest_bytes_overhead = 31;
+
+        // This should fail with E_INVALID_DEST_BYTES_OVERHEAD
+        fee_quoter::apply_token_transfer_fee_config_updates(
+            owner,
+            dest_chain_selector,
+            vector[token_addr], // add_tokens
+            vector[50u32], // add_min_fee_usd_cents
+            vector[500u32], // add_max_fee_usd_cents
+            vector[25u16], // add_deci_bps
+            vector[5u32], // add_dest_gas_overhead
+            vector[add_dest_bytes_overhead], // add_dest_bytes_overhead
+            vector[true], // add_is_enabled
+            vector[] // remove_tokens
+        );
+    }
 }
