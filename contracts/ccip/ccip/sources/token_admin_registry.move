@@ -409,7 +409,7 @@ module ccip::token_admin_registry {
         registry_owner_address: address,
         token_pool_address: address,
         local_token: address,
-        token_registrars: BigOrderedMap<address,address>
+        token_registrars: BigOrderedMap<address, address>
     ) {
         assert!(
             object::is_object(token_pool_address),
@@ -433,7 +433,7 @@ module ccip::token_admin_registry {
         if (token_pool_object_root_owner_address == fungible_asset_object_owner_address
             || token_pool_object_root_owner_address
                 == fungible_asset_object_root_owner_address) { return };
-        
+
         // Allow registration if a custom token registrar has been set for this local token
         // that matches the token pool (root) owner
         if (token_registrars.contains(&local_token)) {
