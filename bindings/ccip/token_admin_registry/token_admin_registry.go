@@ -139,6 +139,17 @@ type TokenUnregistered struct {
 	PreviousPoolAddress aptos.AccountAddress `move:"address"`
 }
 
+type TokenRegistrarSet struct {
+	LocalToken             aptos.AccountAddress  `move:"address"`
+	PreviousTokenRegistrar *aptos.AccountAddress `move:"0x1::option::Option<address>"`
+	NewTokenRegistrar      aptos.AccountAddress  `move:"address"`
+}
+
+type TokenRegistrarUnset struct {
+	LocalToken             aptos.AccountAddress `move:"address"`
+	PreviousTokenRegistrar aptos.AccountAddress `move:"address"`
+}
+
 type McmsCallback struct {
 }
 

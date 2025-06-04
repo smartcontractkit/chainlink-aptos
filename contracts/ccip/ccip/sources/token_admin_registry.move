@@ -114,6 +114,18 @@ module ccip::token_admin_registry {
         previous_pool_address: address
     }
 
+    #[event]
+    struct TokenRegistrarSet has store, drop {
+        local_token: address,
+        previous_token_registrar: Option<address>,
+        new_token_registrar: address
+    }
+
+    struct TokenRegistrarUnset has store, drop {
+        local_token: address,
+        previous_token_registrar: address
+    }
+
     const E_INVALID_FUNGIBLE_ASSET: u64 = 1;
     const E_NOT_FUNGIBLE_ASSET_OWNER: u64 = 2;
     const E_INVALID_TOKEN_POOL: u64 = 3;
@@ -497,7 +509,16 @@ module ccip::token_admin_registry {
         auth::assert_only_owner(signer::address_of(caller));
 
         let state = borrow_state_mut();
-        state.token_registrars.add(local_token, token_registrar)
+        let previous_token_registrar =
+            state.token_registrars.upsert(local_token, token_registrar);
+
+        event::emit(
+            TokenRegistrarSet {
+                local_token,
+                previous_token_registrar,
+                new_token_registrar: token_registrar
+            }
+        );
     }
 
     public entry fun unset_token_registrar(
@@ -506,7 +527,11 @@ module ccip::token_admin_registry {
         auth::assert_only_owner(signer::address_of(caller));
 
         let state = borrow_state_mut();
-        state.token_registrars.remove(&local_token);
+        let previous_token_registrar = state.token_registrars.remove(&local_token);
+
+        event::emit(
+            TokenRegistrarUnset { local_token, previous_token_registrar }
+        );
     }
 
     #[view]
