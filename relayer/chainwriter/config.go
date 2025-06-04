@@ -1,7 +1,7 @@
 package chainwriter
 
 import (
-	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
+	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 )
 
 type FeeStrategy int
@@ -33,5 +33,5 @@ type ChainWriterFunction struct {
 	// The account address (optional). When not provided, the address is calculated
 	// from the public key.
 	FromAddress string
-	Params      []chainreader.AptosFunctionParam
+	Params      []crconfig.AptosFunctionParam
 }

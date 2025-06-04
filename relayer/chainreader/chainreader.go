@@ -19,7 +19,10 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 	commonutils "github.com/smartcontractkit/chainlink-common/pkg/utils"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/db"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/loop"
+	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
@@ -29,12 +32,17 @@ type aptosChainReader struct {
 	types.UnimplementedContractReader
 
 	logger  logger.Logger
-	config  ChainReaderConfig
-	dbStore *DBStore
-	starter commonutils.StartStopOnce
+	config  config.ChainReaderConfig
+	dbStore *db.DBStore
+
+	starter             commonutils.StartStopOnce
+	eventSyncCancelFunc context.CancelFunc
+	txSyncCancelFunc    context.CancelFunc
 
 	moduleAddresses       map[string]aptos.AccountAddress
 	eventAccountAddresses map[string]aptos.AccountAddress
+
+	transmitters map[aptos.AccountAddress]uint64
 
 	client aptos.AptosRpcClient
 }
@@ -43,21 +51,21 @@ var _ types.ContractTypeProvider = &aptosChainReader{}
 
 type ExtendedContractReader interface {
 	types.ContractReader
-	InitEvents(ctx context.Context) error
-	QueryKeyWithMetadata(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]SequenceWithMetadata, error)
+	QueryKeyWithMetadata(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]config.SequenceWithMetadata, error)
 }
 
-func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config ChainReaderConfig, ds sqlutil.DataSource) types.ContractReader {
+func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config config.ChainReaderConfig, ds sqlutil.DataSource) types.ContractReader {
 	reader := &aptosChainReader{
 		logger:                logger.Named(lgr, "AptosChainReader"),
 		client:                client,
 		config:                config,
 		moduleAddresses:       map[string]aptos.AccountAddress{},
 		eventAccountAddresses: map[string]aptos.AccountAddress{},
+		transmitters:          map[aptos.AccountAddress]uint64{},
 	}
 
 	if ds != nil {
-		reader.dbStore = NewDBStore(ds)
+		reader.dbStore = db.NewDBStore(ds)
 	}
 
 	return reader
@@ -77,123 +85,35 @@ func (a *aptosChainReader) HealthReport() map[string]error {
 
 func (a *aptosChainReader) Start(ctx context.Context) error {
 	return a.starter.StartOnce(a.Name(), func() error {
+		if a.dbStore != nil {
+
+			var syncEventCtx context.Context
+			syncEventCtx, a.eventSyncCancelFunc = context.WithCancel(ctx)
+			go a.startEventPolling(syncEventCtx)
+			a.logger.Infow("AptosChainReader started event polling", "interval", a.config.EventSyncInterval)
+
+			var syncTxCtx context.Context
+			syncTxCtx, a.txSyncCancelFunc = context.WithCancel(ctx)
+			go a.startTxPolling(syncTxCtx)
+			a.logger.Infow("AptosChainReader started transaction polling", "interval", a.config.TxSyncInterval)
+		}
+
 		return nil
 	})
 }
 
 func (a *aptosChainReader) Close() error {
 	return a.starter.StopOnce(a.Name(), func() error {
+		if a.eventSyncCancelFunc != nil {
+			a.eventSyncCancelFunc()
+		}
+
+		if a.txSyncCancelFunc != nil {
+			a.txSyncCancelFunc()
+		}
+
 		return nil
 	})
-}
-
-func (a *aptosChainReader) syncEvent(ctx context.Context, boundAddress aptos.AccountAddress, eventConfig *ChainReaderEvent, eventModuleName string) error {
-	if err := a.dbStore.EnsureSchema(ctx); err != nil {
-		return fmt.Errorf("syncEvent: failed to ensure schema: %w", err)
-	}
-
-	eventAccountAddress, err := a.computeEventAccountAddress(boundAddress, eventConfig)
-	if err != nil {
-		return fmt.Errorf("syncEvent: %w", err)
-	}
-
-	eventHandle := boundAddress.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
-	eventFieldName := eventConfig.EventHandleFieldName
-	latestOffset, err := a.dbStore.GetLatestOffset(ctx, eventAccountAddress.String(), eventHandle, eventFieldName)
-	if err != nil {
-		return fmt.Errorf("syncEvent: failed to get latest offset: %w", err)
-	}
-
-	resource, err := a.client.AccountResource(eventAccountAddress, eventHandle)
-	if err != nil {
-		return fmt.Errorf("syncEvent: failed to fetch the resource: %w", err)
-	}
-
-	creationNumber, err := extractEventCreationNum(resource, eventFieldName)
-	if err != nil {
-		return fmt.Errorf("syncEvent: failed to extract creation_num for %s: %w", eventFieldName, err)
-	}
-
-	var batchSize uint64 = 100
-	for {
-		var records []EventRecord
-		newEvents, err := a.client.EventsByCreationNumber(eventAccountAddress, creationNumber, &latestOffset, &batchSize)
-		if err != nil {
-			a.logger.Errorw("syncEvent: failed to fetch new events", "error", err)
-			// If fetching fails, we continue with what is already in the DB
-			// todo: should we rather error out?
-			break
-		}
-
-		if len(newEvents) == 0 {
-			break
-		}
-
-		for _, event := range newEvents {
-			head, err := a.getBlockHead(event.Version)
-			if err != nil {
-				a.logger.Errorw("syncEvent: failed to fetch block metadata", "version", event.Version, "error", err)
-				continue
-			}
-
-			if err := renameMapFields(event.Data, eventConfig.EventFieldRenames); err != nil {
-				a.logger.Errorw("syncEvent: failed to rename event fields", "error", err)
-				continue
-			}
-
-			record := EventRecord{
-				EventAccountAddress: eventAccountAddress.String(),
-				EventHandle:         eventHandle,
-				EventFieldName:      eventFieldName,
-				EventOffset:         &event.SequenceNumber,
-				TxVersion:           event.Version,
-				BlockHeight:         head.Height,
-				BlockHash:           head.Hash,
-				BlockTimestamp:      head.Timestamp,
-				Data:                event.Data,
-			}
-			records = append(records, record)
-		}
-
-		latestOffset = newEvents[len(newEvents)-1].SequenceNumber + 1
-
-		if len(records) > 0 {
-			if err := a.dbStore.InsertEvents(ctx, records); err != nil {
-				return fmt.Errorf("syncEvent: failed to insert new events: %w", err)
-			}
-		}
-	}
-
-	return nil
-}
-
-func (a *aptosChainReader) InitEvents(ctx context.Context) error {
-	for moduleKey, moduleConfig := range a.config.Modules {
-		if moduleConfig.Events == nil {
-			continue
-		}
-
-		boundAddress, ok := a.moduleAddresses[moduleKey]
-		if !ok {
-			a.logger.Warnw("InitEvents: no bound address for module", "module", moduleKey)
-			continue
-		}
-
-		var eventModuleName string
-		if moduleConfig.Name != "" {
-			eventModuleName = moduleConfig.Name
-		} else {
-			eventModuleName = moduleKey
-		}
-
-		for eventKey, eventConfig := range moduleConfig.Events {
-			if err := a.syncEvent(ctx, boundAddress, eventConfig, eventModuleName); err != nil {
-				return fmt.Errorf("InitEvents: module %s event %s: %w", moduleKey, eventKey, err)
-			}
-		}
-	}
-
-	return nil
 }
 
 func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier string, confidenceLevel primitives.ConfidenceLevel, params, returnVal any) error {
@@ -305,7 +225,7 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		return fmt.Errorf("failed to call view function: %+w", err)
 	}
 
-	if err := maybeRenameFields(data, functionConfig.ResultFieldRenames); err != nil {
+	if err := crutils.MaybeRenameFields(data, functionConfig.ResultFieldRenames); err != nil {
 		return fmt.Errorf("failed to rename function return value fields: %+w", err)
 	}
 
@@ -469,8 +389,14 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	}
 
 	eventHandle := address.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
+
+	// Always sync event to get the latest data
 	if err := a.syncEvent(ctx, address, eventConfig, eventModuleName); err != nil {
 		return nil, fmt.Errorf("syncEvent error: %w", err)
+	}
+
+	if eventConfig.EventFilterRenames != nil {
+		expressions = crutils.ApplyEventFilterRenames(expressions, eventConfig.EventFilterRenames)
 	}
 
 	dbRecords, err := a.dbStore.QueryEvents(ctx, eventAccountAddress.String(), eventHandle, eventConfig.EventHandleFieldName, expressions, limitAndSort)
@@ -513,13 +439,13 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	return sequences, nil
 }
 
-func (a *aptosChainReader) QueryKeyWithMetadata(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]SequenceWithMetadata, error) {
+func (a *aptosChainReader) QueryKeyWithMetadata(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]config.SequenceWithMetadata, error) {
 	seqs, err := a.QueryKey(ctx, contract, filter, limitAndSort, sequenceDataType)
 	if err != nil {
 		return nil, err
 	}
 
-	var enriched []SequenceWithMetadata
+	var enriched []config.SequenceWithMetadata
 	for _, seq := range seqs {
 		eventID, err := strconv.ParseUint(seq.Cursor, 10, 64)
 		if err != nil {
@@ -536,7 +462,7 @@ func (a *aptosChainReader) QueryKeyWithMetadata(ctx context.Context, contract ty
 			return nil, fmt.Errorf("failed to get tx details for version %d: %w", txVersion, err)
 		}
 
-		enriched = append(enriched, SequenceWithMetadata{
+		enriched = append(enriched, config.SequenceWithMetadata{
 			Sequence:  seq,
 			TxVersion: txVersion,
 			TxHash:    tx.Hash(),
@@ -582,7 +508,7 @@ func (a *aptosChainReader) CreateContractType(readName string, forEncoding bool)
 	return &[]byte{}, nil
 }
 
-func (a *aptosChainReader) computeEventAccountAddress(boundAddress aptos.AccountAddress, eventConfig *ChainReaderEvent) (aptos.AccountAddress, error) {
+func (a *aptosChainReader) computeEventAccountAddress(boundAddress aptos.AccountAddress, eventConfig *config.ChainReaderEvent) (aptos.AccountAddress, error) {
 	var eventAccountAddress aptos.AccountAddress
 	if len(eventConfig.EventAccountAddress) == 0 {
 		return boundAddress, nil
@@ -635,6 +561,39 @@ func (a *aptosChainReader) computeEventAccountAddress(boundAddress aptos.Account
 		a.eventAccountAddresses[cacheKey] = eventAccountAddress
 		return eventAccountAddress, nil
 	}
+}
+
+func (a *aptosChainReader) getEventConfig(moduleKey, eventKey string) (eventAccountAddress aptos.AccountAddress, eventHandle string, eventConfig *config.ChainReaderEvent, err error) {
+	moduleConfig, ok := a.config.Modules[moduleKey]
+	if !ok {
+		return aptos.AccountAddress{}, "", nil, fmt.Errorf("no module config found for key: %s", moduleKey)
+	}
+
+	boundAddress, ok := a.moduleAddresses[moduleKey]
+	if !ok {
+		return aptos.AccountAddress{}, "", nil, fmt.Errorf("no bound address for module: %s", moduleKey)
+	}
+
+	eventConfig, ok = moduleConfig.Events[eventKey]
+	if !ok {
+		return aptos.AccountAddress{}, "", nil, fmt.Errorf("no event config found for module %s, event %s", moduleKey, eventKey)
+	}
+
+	var eventModuleName string
+	if moduleConfig.Name != "" {
+		eventModuleName = moduleConfig.Name
+	} else {
+		eventModuleName = moduleKey
+	}
+
+	eventAccountAddress, err = a.computeEventAccountAddress(boundAddress, eventConfig)
+	if err != nil {
+		return aptos.AccountAddress{}, "", nil, fmt.Errorf("failed to compute event account address: %w", err)
+	}
+
+	eventHandle = boundAddress.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
+
+	return eventAccountAddress, eventHandle, eventConfig, nil
 }
 
 func (a *aptosChainReader) getBlockHead(version uint64) (types.Head, error) {
