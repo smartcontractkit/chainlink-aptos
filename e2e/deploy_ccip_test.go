@@ -254,34 +254,47 @@ func Test_DeployCCIP(t *testing.T) {
 	feeTokenPrice := big.NewInt(1).Mul(big.NewInt(100), big.NewInt(1e18))
 	addToProposal(ccipContract.FeeQuoter().Encoder().UpdatePrices([]aptos.AccountAddress{token}, []*big.Int{feeTokenPrice}, []uint64{DestChainSelector}, []*big.Int{big.NewInt(0)}))
 
-	// Deploy token pool on top of link token
-	tokenPoolPayload, err := token_pool.Compile(linkTokenObjectAddress, ccipObjectAddress, mcmsAddress)
+	// Deploy token pool to a separate object
+	// Deploy LINK token
+	tokenPoolSeed := "LINK_TOKEN_POOL"
+	tokenPoolObjectAddress, err := mcmsContract.MCMSRegistry().GetNewCodeObjectAddress(nil, []byte(tokenPoolSeed))
+	require.NoError(t, err)
+	fmt.Printf("Deploying Token Pool token to: %v\n", tokenPoolObjectAddress.StringLong())
+	tokenPoolOwnerAddress, err := mcmsContract.MCMSRegistry().GetNewCodeObjectOwnerAddress(nil, []byte(tokenPoolSeed))
+	require.NoError(t, err)
+	fmt.Printf("Token Pool owner address: %v\n", tokenPoolOwnerAddress.StringLong())
+
+	// Register the token pool owner as a custom token registrar
+	addToProposal(ccipContract.TokenAdminRegistry().Encoder().SetTokenRegistrar(linkTokenMetadataAddress, tokenPoolOwnerAddress))
+
+	// Deploy token pool to a new object
+	tokenPoolPayload, err := token_pool.Compile(tokenPoolObjectAddress, ccipObjectAddress, mcmsAddress)
 	require.NoError(t, err)
 	chunks, err = bind.CreateChunks(tokenPoolPayload, bind.ChunkSizeInBytes)
 	require.NoError(t, err)
 	for i, chunk := range chunks {
 		if i == len(chunks)-1 {
-			addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunkAndUpgradeObjectCode(chunk.Metadata, chunk.CodeIndices, chunk.Chunks, linkTokenObjectAddress))
+			addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunkAndPublishToObject(chunk.Metadata, chunk.CodeIndices, chunk.Chunks, []byte(tokenPoolSeed)))
 			break
 		}
 		addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunk(chunk.Metadata, chunk.CodeIndices, chunk.Chunks))
 	}
 
 	// Deploy ManagedTokenPool on top of link token
-	managedTokenPoolPayload, err := managed_token_pool.Compile(linkTokenObjectAddress, ccipObjectAddress, mcmsAddress, linkTokenObjectAddress, linkTokenObjectAddress, linkTokenOwnerAddress, true)
+	managedTokenPoolPayload, err := managed_token_pool.Compile(tokenPoolObjectAddress, ccipObjectAddress, mcmsAddress, tokenPoolObjectAddress, linkTokenObjectAddress, linkTokenOwnerAddress, true)
 	require.NoError(t, err)
 	chunks, err = bind.CreateChunks(managedTokenPoolPayload, bind.ChunkSizeInBytes)
 	require.NoError(t, err)
 	for i, chunk := range chunks {
 		if i == len(chunks)-1 {
-			addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunkAndUpgradeObjectCode(chunk.Metadata, chunk.CodeIndices, chunk.Chunks, linkTokenObjectAddress))
+			addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunkAndUpgradeObjectCode(chunk.Metadata, chunk.CodeIndices, chunk.Chunks, tokenPoolObjectAddress))
 			break
 		}
 		addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunk(chunk.Metadata, chunk.CodeIndices, chunk.Chunks))
 	}
-	managedTokenPoolContract := managed_token_pool.Bind(linkTokenObjectAddress, client)
-	managedTokenPoolStoreAddress := linkTokenObjectAddress.ResourceAccount([]byte("CcipManagedTokenPool"))
-	fmt.Printf("Deployed Managed Token Pool to: %v\n", linkTokenObjectAddress)
+	managedTokenPoolContract := managed_token_pool.Bind(tokenPoolObjectAddress, client)
+	managedTokenPoolStoreAddress := tokenPoolObjectAddress.ResourceAccount([]byte("CcipManagedTokenPool"))
+	fmt.Printf("Deployed Managed Token Pool to: %v\n", tokenPoolObjectAddress.StringLong())
 	fmt.Printf("\tStore resource account address: %v\n", managedTokenPoolStoreAddress)
 	addToProposal(linkTokenContract.ManagedToken().Encoder().ApplyAllowedMinterUpdates(nil, []aptos.AccountAddress{managedTokenPoolStoreAddress}))
 	addToProposal(linkTokenContract.ManagedToken().Encoder().ApplyAllowedBurnerUpdates(nil, []aptos.AccountAddress{managedTokenPoolStoreAddress}))
