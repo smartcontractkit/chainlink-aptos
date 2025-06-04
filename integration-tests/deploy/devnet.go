@@ -179,7 +179,7 @@ func (d *Deployer) DeployPlatformSecondary() error {
 	return nil
 }
 
-func (d *Deployer) DeployDataFeeds(platformAddress string) error {
+func (d *Deployer) DeployDataFeeds(platformAddress string, platformSecondaryAddress string) error {
 	cmdStr := []string{
 		"aptos",
 		"move",
@@ -187,7 +187,7 @@ func (d *Deployer) DeployDataFeeds(platformAddress string) error {
 		"--package-dir=/contracts/data-feeds",
 		"--address-name=data_feeds",
 		"--named-addresses",
-		fmt.Sprintf("platform=%s,owner=%s", platformAddress, DEVNET_ACC),
+		fmt.Sprintf("platform=%s,owner=%s,platform_secondary=%s,owner_secondary=%s", platformAddress, DEVNET_ACC, platformSecondaryAddress, DEVNET_ACC),
 		"--profile=default",
 		"--assume-yes",
 	}

@@ -43,6 +43,7 @@ var _ types.ContractTypeProvider = &aptosChainReader{}
 
 type ExtendedContractReader interface {
 	types.ContractReader
+	InitEvents(ctx context.Context) error
 	QueryKeyWithMetadata(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]SequenceWithMetadata, error)
 }
 
@@ -103,10 +104,20 @@ func (a *aptosChainReader) syncEvent(ctx context.Context, boundAddress aptos.Acc
 		return fmt.Errorf("syncEvent: failed to get latest offset: %w", err)
 	}
 
-	var batchSize uint64 = 25
-	var records []EventRecord
+	resource, err := a.client.AccountResource(eventAccountAddress, eventHandle)
+	if err != nil {
+		return fmt.Errorf("syncEvent: failed to fetch the resource: %w", err)
+	}
+
+	creationNumber, err := extractEventCreationNum(resource, eventFieldName)
+	if err != nil {
+		return fmt.Errorf("syncEvent: failed to extract creation_num for %s: %w", eventFieldName, err)
+	}
+
+	var batchSize uint64 = 100
 	for {
-		newEvents, err := a.client.EventsByHandle(eventAccountAddress, eventHandle, eventFieldName, &latestOffset, &batchSize)
+		var records []EventRecord
+		newEvents, err := a.client.EventsByCreationNumber(eventAccountAddress, creationNumber, &latestOffset, &batchSize)
 		if err != nil {
 			a.logger.Errorw("syncEvent: failed to fetch new events", "error", err)
 			// If fetching fails, we continue with what is already in the DB
@@ -145,11 +156,11 @@ func (a *aptosChainReader) syncEvent(ctx context.Context, boundAddress aptos.Acc
 		}
 
 		latestOffset = newEvents[len(newEvents)-1].SequenceNumber + 1
-	}
 
-	if len(records) > 0 {
-		if err := a.dbStore.InsertEvents(ctx, records); err != nil {
-			return fmt.Errorf("syncEvent: failed to insert new events: %w", err)
+		if len(records) > 0 {
+			if err := a.dbStore.InsertEvents(ctx, records); err != nil {
+				return fmt.Errorf("syncEvent: failed to insert new events: %w", err)
+			}
 		}
 	}
 

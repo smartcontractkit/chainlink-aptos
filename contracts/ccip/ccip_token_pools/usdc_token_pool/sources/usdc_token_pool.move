@@ -25,6 +25,9 @@ module usdc_token_pool::usdc_token_pool {
 
     const STORE_OBJECT_SEED: vector<u8> = b"CcipUSDCTokenPool";
 
+    // We restrict to the first version. New pool may be required for subsequent versions.
+    const SUPPORTED_USDC_VERSION: u32 = 0;
+
     struct USDCTokenPoolDeployment has key {
         store_signer_cap: SignerCapability,
         ownable_state: ownable::OwnableState,
@@ -75,6 +78,7 @@ module usdc_token_pool::usdc_token_pool {
     const E_DOMAIN_DISABLED: u64 = 11;
     const E_ZERO_CHAIN_SELECTOR: u64 = 12;
     const E_EMPTY_ALLOWED_CALLER: u64 = 13;
+    const E_INVALID_MESSAGE_VERSION: u64 = 14;
 
     // ================================================================
     // |                             Init                             |
@@ -355,7 +359,12 @@ module usdc_token_pool::usdc_token_pool {
             dest_pool_data
         );
 
-        token_pool::emit_burned(&mut pool.token_pool_state, fa_amount);
+        let remote_chain_selector =
+            token_admin_registry::get_lock_or_burn_remote_chain_selector(&input);
+
+        token_pool::emit_locked_or_burned(
+            &mut pool.token_pool_state, fa_amount, remote_chain_selector
+        );
     }
 
     public fun release_or_mint<T: key>(
@@ -407,11 +416,14 @@ module usdc_token_pool::usdc_token_pool {
         );
 
         let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
+        let remote_chain_selector =
+            token_admin_registry::get_release_or_mint_remote_chain_selector(&input);
 
-        token_pool::emit_minted(
+        token_pool::emit_released_or_minted(
             &mut pool.token_pool_state,
             recipient,
-            local_amount
+            local_amount,
+            remote_chain_selector
         );
 
         let fa_metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
@@ -456,6 +468,13 @@ module usdc_token_pool::usdc_token_pool {
         expected_local_domain: u32
     ) {
         message::validate_message(usdc_message);
+
+        let version = message::get_message_version(usdc_message);
+        assert!(
+            version == SUPPORTED_USDC_VERSION,
+            error::invalid_argument(E_INVALID_MESSAGE_VERSION)
+        );
+
         let source_domain = message::get_src_domain_id(usdc_message);
         let nonce = message::get_nonce(usdc_message);
         let destination_domain = message::get_destination_domain_id(usdc_message);

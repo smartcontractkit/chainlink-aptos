@@ -57,6 +57,21 @@ func (c *rateLimitedClient) EventsByHandle(address aptos.AccountAddress, eventHa
 	return result, err
 }
 
+func (c *rateLimitedClient) EventsByCreationNumber(
+	account aptos.AccountAddress,
+	creationNumber string,
+	start *uint64,
+	limit *uint64,
+) ([]*api.Event, error) {
+	var result []*api.Event
+	err := c.withRateLimit(func() error {
+		var err error
+		result, err = c.client.EventsByCreationNumber(account, creationNumber, start, limit)
+		return err
+	})
+	return result, err
+}
+
 func (c *rateLimitedClient) Info() (aptos.NodeInfo, error) {
 	var result aptos.NodeInfo
 	err := c.withRateLimit(func() error {

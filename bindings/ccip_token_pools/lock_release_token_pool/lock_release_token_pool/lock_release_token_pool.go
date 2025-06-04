@@ -36,6 +36,7 @@ type LockReleaseTokenPoolInterface interface {
 	GetSupportedChains(opts *bind.CallOpts) ([]uint64, error)
 	GetAllowlistEnabled(opts *bind.CallOpts) (bool, error)
 	GetAllowlist(opts *bind.CallOpts) ([]aptos.AccountAddress, error)
+	GetRebalancer(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	GetStoreAddress(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
 
@@ -43,6 +44,9 @@ type LockReleaseTokenPoolInterface interface {
 	RemoveRemotePool(opts *bind.TransactOpts, remoteChainSelector uint64, remotePoolAddress []byte) (*api.PendingTransaction, error)
 	ApplyChainUpdates(opts *bind.TransactOpts, remoteChainSelectorsToRemove []uint64, remoteChainSelectorsToAdd []uint64, remotePoolAddressesToAdd [][][]byte, remoteTokenAddressesToAdd [][]byte) (*api.PendingTransaction, error)
 	ApplyAllowlistUpdates(opts *bind.TransactOpts, removes []aptos.AccountAddress, adds []aptos.AccountAddress) (*api.PendingTransaction, error)
+	ProvideLiquidity(opts *bind.TransactOpts, amount uint64) (*api.PendingTransaction, error)
+	WithdrawLiquidity(opts *bind.TransactOpts, amount uint64) (*api.PendingTransaction, error)
+	SetRebalancer(opts *bind.TransactOpts, rebalancer aptos.AccountAddress) (*api.PendingTransaction, error)
 	TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
 	AcceptOwnership(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 	ExecuteOwnershipTransfer(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
@@ -66,12 +70,16 @@ type LockReleaseTokenPoolEncoder interface {
 	GetSupportedChains() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetAllowlistEnabled() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetAllowlist() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetRebalancer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStoreAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AddRemotePool(remoteChainSelector uint64, remotePoolAddress []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	RemoveRemotePool(remoteChainSelector uint64, remotePoolAddress []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplyChainUpdates(remoteChainSelectorsToRemove []uint64, remoteChainSelectorsToAdd []uint64, remotePoolAddressesToAdd [][][]byte, remoteTokenAddressesToAdd [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplyAllowlistUpdates(removes []aptos.AccountAddress, adds []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ProvideLiquidity(amount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	WithdrawLiquidity(amount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	SetRebalancer(rebalancer aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TransferOwnership(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -82,7 +90,7 @@ type LockReleaseTokenPoolEncoder interface {
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"accept_ownership","parameters":null},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"add_remote_pool","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"remote_pool_address","type":"vector\u003cu8\u003e"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"apply_allowlist_updates","parameters":[{"name":"removes","type":"vector\u003caddress\u003e"},{"name":"adds","type":"vector\u003caddress\u003e"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"apply_chain_updates","parameters":[{"name":"remote_chain_selectors_to_remove","type":"vector\u003cu64\u003e"},{"name":"remote_chain_selectors_to_add","type":"vector\u003cu64\u003e"},{"name":"remote_pool_addresses_to_add","type":"vector\u003cvector\u003cvector\u003cu8\u003e\u003e\u003e"},{"name":"remote_token_addresses_to_add","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"assert_can_initialize","parameters":[{"name":"caller_address","type":"address"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"remove_remote_pool","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"remote_pool_address","type":"vector\u003cu8\u003e"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"set_chain_rate_limiter_config","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"outbound_is_enabled","type":"bool"},{"name":"outbound_capacity","type":"u64"},{"name":"outbound_rate","type":"u64"},{"name":"inbound_is_enabled","type":"bool"},{"name":"inbound_capacity","type":"u64"},{"name":"inbound_rate","type":"u64"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"set_chain_rate_limiter_configs","parameters":[{"name":"remote_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"outbound_is_enableds","type":"vector\u003cbool\u003e"},{"name":"outbound_capacities","type":"vector\u003cu64\u003e"},{"name":"outbound_rates","type":"vector\u003cu64\u003e"},{"name":"inbound_is_enableds","type":"vector\u003cbool\u003e"},{"name":"inbound_capacities","type":"vector\u003cu64\u003e"},{"name":"inbound_rates","type":"vector\u003cu64\u003e"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"store_address","parameters":null},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
+const FunctionInfo = `[{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"accept_ownership","parameters":null},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"add_remote_pool","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"remote_pool_address","type":"vector\u003cu8\u003e"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"apply_allowlist_updates","parameters":[{"name":"removes","type":"vector\u003caddress\u003e"},{"name":"adds","type":"vector\u003caddress\u003e"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"apply_chain_updates","parameters":[{"name":"remote_chain_selectors_to_remove","type":"vector\u003cu64\u003e"},{"name":"remote_chain_selectors_to_add","type":"vector\u003cu64\u003e"},{"name":"remote_pool_addresses_to_add","type":"vector\u003cvector\u003cvector\u003cu8\u003e\u003e\u003e"},{"name":"remote_token_addresses_to_add","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"assert_can_initialize","parameters":[{"name":"caller_address","type":"address"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"provide_liquidity","parameters":[{"name":"amount","type":"u64"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"remove_remote_pool","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"remote_pool_address","type":"vector\u003cu8\u003e"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"set_chain_rate_limiter_config","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"outbound_is_enabled","type":"bool"},{"name":"outbound_capacity","type":"u64"},{"name":"outbound_rate","type":"u64"},{"name":"inbound_is_enabled","type":"bool"},{"name":"inbound_capacity","type":"u64"},{"name":"inbound_rate","type":"u64"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"set_chain_rate_limiter_configs","parameters":[{"name":"remote_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"outbound_is_enableds","type":"vector\u003cbool\u003e"},{"name":"outbound_capacities","type":"vector\u003cu64\u003e"},{"name":"outbound_rates","type":"vector\u003cu64\u003e"},{"name":"inbound_is_enableds","type":"vector\u003cbool\u003e"},{"name":"inbound_capacities","type":"vector\u003cu64\u003e"},{"name":"inbound_rates","type":"vector\u003cu64\u003e"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"set_rebalancer","parameters":[{"name":"rebalancer","type":"address"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"store_address","parameters":null},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"lock_release_token_pool","module":"lock_release_token_pool","name":"withdraw_liquidity","parameters":[{"name":"amount","type":"u64"}]}]`
 
 func NewLockReleaseTokenPool(address aptos.AccountAddress, client aptos.AptosRpcClient) LockReleaseTokenPoolInterface {
 	contract := bind.NewBoundContract(address, "lock_release_token_pool", "lock_release_token_pool", client)
@@ -99,6 +107,7 @@ type LockReleaseTokenPoolDeployment struct {
 
 type LockReleaseTokenPoolState struct {
 	StoreSignerAddress aptos.AccountAddress `move:"address"`
+	Rebalancer         aptos.AccountAddress `move:"address"`
 }
 
 type CallbackProof struct {
@@ -414,6 +423,27 @@ func (c LockReleaseTokenPoolContract) GetAllowlist(opts *bind.CallOpts) ([]aptos
 	return r0, nil
 }
 
+func (c LockReleaseTokenPoolContract) GetRebalancer(opts *bind.CallOpts) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.GetRebalancer()
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	var (
+		r0 aptos.AccountAddress
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+	return r0, nil
+}
+
 func (c LockReleaseTokenPoolContract) GetStoreAddress(opts *bind.CallOpts) (aptos.AccountAddress, error) {
 	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.GetStoreAddress()
 	if err != nil {
@@ -487,6 +517,33 @@ func (c LockReleaseTokenPoolContract) ApplyChainUpdates(opts *bind.TransactOpts,
 
 func (c LockReleaseTokenPoolContract) ApplyAllowlistUpdates(opts *bind.TransactOpts, removes []aptos.AccountAddress, adds []aptos.AccountAddress) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.ApplyAllowlistUpdates(removes, adds)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c LockReleaseTokenPoolContract) ProvideLiquidity(opts *bind.TransactOpts, amount uint64) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.ProvideLiquidity(amount)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c LockReleaseTokenPoolContract) WithdrawLiquidity(opts *bind.TransactOpts, amount uint64) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.WithdrawLiquidity(amount)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c LockReleaseTokenPoolContract) SetRebalancer(opts *bind.TransactOpts, rebalancer aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.SetRebalancer(rebalancer)
 	if err != nil {
 		return nil, err
 	}
@@ -600,6 +657,10 @@ func (c lockReleaseTokenPoolEncoder) GetAllowlist() (bind.ModuleInformation, str
 	return c.BoundContract.Encode("get_allowlist", nil, []string{}, []any{})
 }
 
+func (c lockReleaseTokenPoolEncoder) GetRebalancer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_rebalancer", nil, []string{}, []any{})
+}
+
 func (c lockReleaseTokenPoolEncoder) GetStoreAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("get_store_address", nil, []string{}, []any{})
 }
@@ -649,6 +710,30 @@ func (c lockReleaseTokenPoolEncoder) ApplyAllowlistUpdates(removes []aptos.Accou
 	}, []any{
 		removes,
 		adds,
+	})
+}
+
+func (c lockReleaseTokenPoolEncoder) ProvideLiquidity(amount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("provide_liquidity", nil, []string{
+		"u64",
+	}, []any{
+		amount,
+	})
+}
+
+func (c lockReleaseTokenPoolEncoder) WithdrawLiquidity(amount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("withdraw_liquidity", nil, []string{
+		"u64",
+	}, []any{
+		amount,
+	})
+}
+
+func (c lockReleaseTokenPoolEncoder) SetRebalancer(rebalancer aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("set_rebalancer", nil, []string{
+		"address",
+	}, []any{
+		rebalancer,
 	})
 }
 

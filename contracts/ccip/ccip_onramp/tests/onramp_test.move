@@ -274,7 +274,11 @@ module ccip_onramp::onramp_test {
             );
         } else {
             lock_release_token_pool::test_init_module(lock_release_token_pool);
-            lock_release_token_pool::initialize(lock_release_token_pool, transfer_ref);
+            lock_release_token_pool::initialize(
+                lock_release_token_pool,
+                transfer_ref,
+                signer::address_of(owner)
+            );
             lock_release_token_pool::apply_chain_updates(
                 owner,
                 vector[],
@@ -735,7 +739,7 @@ module ccip_onramp::onramp_test {
         assert!(onramp_state_balance == fee_token_amount);
 
         assert!(
-            event::emitted_events<token_pool::Burned>().length() == 1
+            event::emitted_events<token_pool::LockedOrBurned>().length() == 1
         );
     }
 
@@ -858,7 +862,7 @@ module ccip_onramp::onramp_test {
         assert!(token_pool_balance == sent_amount);
 
         assert!(
-            event::emitted_events<token_pool::Locked>().length() == 1
+            event::emitted_events<token_pool::LockedOrBurned>().length() == 1
         );
     }
 
