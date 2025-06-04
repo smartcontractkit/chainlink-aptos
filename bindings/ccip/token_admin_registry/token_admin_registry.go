@@ -27,9 +27,12 @@ type TokenAdminRegistryInterface interface {
 	GetPool(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, error)
 	GetTokenConfig(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, aptos.AccountAddress, aptos.AccountAddress, error)
 	GetAllConfiguredTokens(opts *bind.CallOpts, startKey aptos.AccountAddress, maxCount uint64) ([]aptos.AccountAddress, aptos.AccountAddress, bool, error)
+	GetTokenRegistrar(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, error)
 	IsAdministrator(opts *bind.CallOpts, localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bool, error)
 
 	UnregisterPool(opts *bind.TransactOpts, localToken aptos.AccountAddress) (*api.PendingTransaction, error)
+	SetTokenRegistrar(opts *bind.TransactOpts, localToken aptos.AccountAddress, tokenRegistrar aptos.AccountAddress) (*api.PendingTransaction, error)
+	UnsetTokenRegistrar(opts *bind.TransactOpts, localToken aptos.AccountAddress) (*api.PendingTransaction, error)
 	SetPool(opts *bind.TransactOpts, localToken aptos.AccountAddress, tokenPoolAddress aptos.AccountAddress) (*api.PendingTransaction, error)
 	TransferAdminRole(opts *bind.TransactOpts, localToken aptos.AccountAddress, newAdmin aptos.AccountAddress) (*api.PendingTransaction, error)
 	AcceptAdminRole(opts *bind.TransactOpts, localToken aptos.AccountAddress) (*api.PendingTransaction, error)
@@ -44,19 +47,21 @@ type TokenAdminRegistryEncoder interface {
 	GetPool(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetTokenConfig(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetAllConfiguredTokens(startKey aptos.AccountAddress, maxCount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetTokenRegistrar(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	IsAdministrator(localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	UnregisterPool(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	SetTokenRegistrar(localToken aptos.AccountAddress, tokenRegistrar aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	UnsetTokenRegistrar(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	SetPool(localToken aptos.AccountAddress, tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TransferAdminRole(localToken aptos.AccountAddress, newAdmin aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AcceptAdminRole(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	AssertCanRegister(registryOwnerAddress aptos.AccountAddress, tokenPoolAddress aptos.AccountAddress, fungibleAssetMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	StartLockOrBurn(tokenPoolAddress aptos.AccountAddress, sender aptos.AccountAddress, remoteChainSelector uint64, receiver []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	FinishLockOrBurn(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	FinishReleaseOrMint(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"token_admin_registry","name":"accept_admin_role","parameters":[{"name":"local_token","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"assert_can_register","parameters":[{"name":"registry_owner_address","type":"address"},{"name":"token_pool_address","type":"address"},{"name":"fungible_asset_metadata","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"finish_lock_or_burn","parameters":[{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"finish_release_or_mint","parameters":[{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"set_pool","parameters":[{"name":"local_token","type":"address"},{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"start_lock_or_burn","parameters":[{"name":"token_pool_address","type":"address"},{"name":"sender","type":"address"},{"name":"remote_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"token_admin_registry","name":"transfer_admin_role","parameters":[{"name":"local_token","type":"address"},{"name":"new_admin","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"unregister_pool","parameters":[{"name":"local_token","type":"address"}]}]`
+const FunctionInfo = `[{"package":"ccip","module":"token_admin_registry","name":"accept_admin_role","parameters":[{"name":"local_token","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"finish_lock_or_burn","parameters":[{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"finish_release_or_mint","parameters":[{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"set_pool","parameters":[{"name":"local_token","type":"address"},{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"set_token_registrar","parameters":[{"name":"local_token","type":"address"},{"name":"token_registrar","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"start_lock_or_burn","parameters":[{"name":"token_pool_address","type":"address"},{"name":"sender","type":"address"},{"name":"remote_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"token_admin_registry","name":"transfer_admin_role","parameters":[{"name":"local_token","type":"address"},{"name":"new_admin","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"unregister_pool","parameters":[{"name":"local_token","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"unset_token_registrar","parameters":[{"name":"local_token","type":"address"}]}]`
 
 func NewTokenAdminRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) TokenAdminRegistryInterface {
 	contract := bind.NewBoundContract(address, "ccip", "token_admin_registry", client)
@@ -132,6 +137,17 @@ type AdministratorTransferred struct {
 type TokenUnregistered struct {
 	LocalToken          aptos.AccountAddress `move:"address"`
 	PreviousPoolAddress aptos.AccountAddress `move:"address"`
+}
+
+type TokenRegistrarSet struct {
+	LocalToken             aptos.AccountAddress  `move:"address"`
+	PreviousTokenRegistrar *aptos.AccountAddress `move:"0x1::option::Option<address>"`
+	NewTokenRegistrar      aptos.AccountAddress  `move:"address"`
+}
+
+type TokenRegistrarUnset struct {
+	LocalToken             aptos.AccountAddress `move:"address"`
+	PreviousTokenRegistrar aptos.AccountAddress `move:"address"`
 }
 
 type McmsCallback struct {
@@ -259,6 +275,27 @@ func (c TokenAdminRegistryContract) GetAllConfiguredTokens(opts *bind.CallOpts, 
 	return r0, r1, r2, nil
 }
 
+func (c TokenAdminRegistryContract) GetTokenRegistrar(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.GetTokenRegistrar(localToken)
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	var (
+		r0 aptos.AccountAddress
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+	return r0, nil
+}
+
 func (c TokenAdminRegistryContract) IsAdministrator(opts *bind.CallOpts, localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bool, error) {
 	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.IsAdministrator(localToken, administrator)
 	if err != nil {
@@ -284,6 +321,24 @@ func (c TokenAdminRegistryContract) IsAdministrator(opts *bind.CallOpts, localTo
 
 func (c TokenAdminRegistryContract) UnregisterPool(opts *bind.TransactOpts, localToken aptos.AccountAddress) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.UnregisterPool(localToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c TokenAdminRegistryContract) SetTokenRegistrar(opts *bind.TransactOpts, localToken aptos.AccountAddress, tokenRegistrar aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.SetTokenRegistrar(localToken, tokenRegistrar)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c TokenAdminRegistryContract) UnsetTokenRegistrar(opts *bind.TransactOpts, localToken aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.UnsetTokenRegistrar(localToken)
 	if err != nil {
 		return nil, err
 	}
@@ -361,6 +416,14 @@ func (c tokenAdminRegistryEncoder) GetAllConfiguredTokens(startKey aptos.Account
 	})
 }
 
+func (c tokenAdminRegistryEncoder) GetTokenRegistrar(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_token_registrar", nil, []string{
+		"address",
+	}, []any{
+		localToken,
+	})
+}
+
 func (c tokenAdminRegistryEncoder) IsAdministrator(localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("is_administrator", nil, []string{
 		"address",
@@ -373,6 +436,24 @@ func (c tokenAdminRegistryEncoder) IsAdministrator(localToken aptos.AccountAddre
 
 func (c tokenAdminRegistryEncoder) UnregisterPool(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("unregister_pool", nil, []string{
+		"address",
+	}, []any{
+		localToken,
+	})
+}
+
+func (c tokenAdminRegistryEncoder) SetTokenRegistrar(localToken aptos.AccountAddress, tokenRegistrar aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("set_token_registrar", nil, []string{
+		"address",
+		"address",
+	}, []any{
+		localToken,
+		tokenRegistrar,
+	})
+}
+
+func (c tokenAdminRegistryEncoder) UnsetTokenRegistrar(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("unset_token_registrar", nil, []string{
 		"address",
 	}, []any{
 		localToken,
@@ -404,18 +485,6 @@ func (c tokenAdminRegistryEncoder) AcceptAdminRole(localToken aptos.AccountAddre
 		"address",
 	}, []any{
 		localToken,
-	})
-}
-
-func (c tokenAdminRegistryEncoder) AssertCanRegister(registryOwnerAddress aptos.AccountAddress, tokenPoolAddress aptos.AccountAddress, fungibleAssetMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("assert_can_register", nil, []string{
-		"address",
-		"address",
-		"address",
-	}, []any{
-		registryOwnerAddress,
-		tokenPoolAddress,
-		fungibleAssetMetadata,
 	})
 }
 
