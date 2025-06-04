@@ -12,7 +12,6 @@ module ccip::token_admin_registry {
     use std::big_ordered_map::{Self, BigOrderedMap};
     use std::string::{Self, String};
     use std::type_info::{Self, TypeInfo};
-    use aptos_std::ordered_map::OrderedMap;
 
     use ccip::auth;
     use ccip::state_object;
