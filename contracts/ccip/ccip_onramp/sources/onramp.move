@@ -420,6 +420,9 @@ module ccip_onramp::onramp {
             error::invalid_argument(E_TOKEN_AMOUNT_MISMATCH)
         );
 
+        let token_receiver =
+            fee_quoter::get_token_receiver(dest_chain_selector, extra_args, receiver);
+
         let token_transfers = vector[];
         for (i in 0..tokens_len) {
             let token = token_addresses[i];
@@ -458,7 +461,7 @@ module ccip_onramp::onramp {
                     fa,
                     sender,
                     dest_chain_selector,
-                    receiver
+                    token_receiver
                 );
 
             dest_token_addresses.push_back(dest_token_address);
