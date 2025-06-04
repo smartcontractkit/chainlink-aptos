@@ -121,6 +121,7 @@ module ccip::token_admin_registry {
         new_token_registrar: address
     }
 
+    #[event]
     struct TokenRegistrarUnset has store, drop {
         local_token: address,
         previous_token_registrar: address
@@ -529,9 +530,7 @@ module ccip::token_admin_registry {
         let state = borrow_state_mut();
         let previous_token_registrar = state.token_registrars.remove(&local_token);
 
-        event::emit(
-            TokenRegistrarUnset { local_token, previous_token_registrar }
-        );
+        event::emit(TokenRegistrarUnset { local_token, previous_token_registrar });
     }
 
     #[view]
