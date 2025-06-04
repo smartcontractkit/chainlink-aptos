@@ -1,12 +1,20 @@
-package chainreader
+package config
 
 import (
+	"time"
+
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 )
 
 type ChainReaderConfig struct {
 	IsLoopPlugin bool
 	Modules      map[string]*ChainReaderModule
+
+	EventSyncInterval time.Duration
+	EventSyncTimeout  time.Duration
+
+	TxSyncInterval time.Duration
+	TxSyncTimeout  time.Duration
 }
 
 type ChainReaderModule struct {
@@ -44,7 +52,7 @@ type ChainReaderEvent struct {
 	EventHandleStructName string
 
 	// The name of the event handle field.
-	// This field can be defined as path to the nested 
+	// This field can be defined as path to the nested
 	// struct that stores the event, e.g. "token_pool_state.burned_events"
 	EventHandleFieldName string
 
@@ -61,6 +69,9 @@ type ChainReaderEvent struct {
 
 	// Renames of event field names (optional). When not provided, the field names are used as-is.
 	EventFieldRenames map[string]RenamedField
+
+	// Renames provided filters to match the event field names (optional). When not provided, the filters are used as-is.
+	EventFilterRenames map[string]string
 }
 
 type RenamedField struct {

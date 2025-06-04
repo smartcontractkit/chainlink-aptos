@@ -1,8 +1,10 @@
-package chainreader
+package utils
 
 import (
 	"reflect"
 	"testing"
+
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 )
 
 // TestRenameFields contains multiple sub-tests to verify the behavior
@@ -12,7 +14,7 @@ func TestRenameFields(t *testing.T) {
 	tests := []struct {
 		name     string
 		jsonData map[string]any
-		renames  map[string]RenamedField
+		renames  map[string]config.RenamedField
 		expected map[string]any // expected result after renameMapFields is applied
 		wantErr  bool
 		errMsg   string // expected error message (if any)
@@ -27,7 +29,7 @@ func TestRenameFields(t *testing.T) {
 		{
 			name:     "simple rename",
 			jsonData: map[string]any{"a": 123, "b": "stuff"},
-			renames: map[string]RenamedField{
+			renames: map[string]config.RenamedField{
 				"a": {NewName: "alpha", SubFieldRenames: nil},
 			},
 			expected: map[string]any{"alpha": 123, "b": "stuff"},
@@ -36,7 +38,7 @@ func TestRenameFields(t *testing.T) {
 		{
 			name:     "non-existing field",
 			jsonData: map[string]any{"a": 1, "b": 2},
-			renames: map[string]RenamedField{
+			renames: map[string]config.RenamedField{
 				"c": {NewName: "gamma", SubFieldRenames: nil},
 			},
 			expected: nil,
@@ -46,7 +48,7 @@ func TestRenameFields(t *testing.T) {
 		{
 			name:     "empty renames",
 			jsonData: map[string]any{"a": 1, "b": 2},
-			renames:  map[string]RenamedField{},
+			renames:  map[string]config.RenamedField{},
 			expected: map[string]any{"a": 1, "b": 2},
 			wantErr:  false,
 		},
@@ -56,10 +58,10 @@ func TestRenameFields(t *testing.T) {
 				"a": map[string]any{"x": 1, "y": 2},
 				"b": "hello",
 			},
-			renames: map[string]RenamedField{
+			renames: map[string]config.RenamedField{
 				"a": {
 					NewName: "alpha",
-					SubFieldRenames: map[string]RenamedField{
+					SubFieldRenames: map[string]config.RenamedField{
 						"x": {NewName: "x_new", SubFieldRenames: nil},
 					},
 				},
@@ -73,10 +75,10 @@ func TestRenameFields(t *testing.T) {
 		{
 			name:     "subfield non-map error (top-level)",
 			jsonData: map[string]any{"a": "not a map"},
-			renames: map[string]RenamedField{
+			renames: map[string]config.RenamedField{
 				"a": {
 					NewName: "alpha",
-					SubFieldRenames: map[string]RenamedField{
+					SubFieldRenames: map[string]config.RenamedField{
 						"x": {NewName: "x_new", SubFieldRenames: nil},
 					},
 				},
@@ -91,13 +93,13 @@ func TestRenameFields(t *testing.T) {
 			jsonData: map[string]any{
 				"a": map[string]any{"x": 100},
 			},
-			renames: map[string]RenamedField{
+			renames: map[string]config.RenamedField{
 				"a": {
 					NewName: "alpha",
-					SubFieldRenames: map[string]RenamedField{
+					SubFieldRenames: map[string]config.RenamedField{
 						"x": {
 							NewName: "x_new",
-							SubFieldRenames: map[string]RenamedField{
+							SubFieldRenames: map[string]config.RenamedField{
 								"inner": {NewName: "inner_new", SubFieldRenames: nil},
 							},
 						},
@@ -117,10 +119,10 @@ func TestRenameFields(t *testing.T) {
 					map[string]any{"id": 2, "name": "item2"},
 				},
 			},
-			renames: map[string]RenamedField{
+			renames: map[string]config.RenamedField{
 				"items": {
 					NewName: "elements",
-					SubFieldRenames: map[string]RenamedField{
+					SubFieldRenames: map[string]config.RenamedField{
 						"id":   {NewName: "itemId", SubFieldRenames: nil},
 						"name": {NewName: "itemName", SubFieldRenames: nil},
 					},
@@ -139,10 +141,10 @@ func TestRenameFields(t *testing.T) {
 			jsonData: map[string]any{
 				"items": []any{},
 			},
-			renames: map[string]RenamedField{
+			renames: map[string]config.RenamedField{
 				"items": {
 					NewName: "elements",
-					SubFieldRenames: map[string]RenamedField{
+					SubFieldRenames: map[string]config.RenamedField{
 						"id": {NewName: "itemId", SubFieldRenames: nil},
 					},
 				},
@@ -168,17 +170,17 @@ func TestRenameFields(t *testing.T) {
 					},
 				},
 			},
-			renames: map[string]RenamedField{
+			renames: map[string]config.RenamedField{
 				"parent": {
 					NewName: "family",
-					SubFieldRenames: map[string]RenamedField{
+					SubFieldRenames: map[string]config.RenamedField{
 						"children": {
 							NewName: "kids",
-							SubFieldRenames: map[string]RenamedField{
+							SubFieldRenames: map[string]config.RenamedField{
 								"childId": {NewName: "id", SubFieldRenames: nil},
 								"details": {
 									NewName: "info",
-									SubFieldRenames: map[string]RenamedField{
+									SubFieldRenames: map[string]config.RenamedField{
 										"grade": {NewName: "level", SubFieldRenames: nil},
 									},
 								},
@@ -208,10 +210,10 @@ func TestRenameFields(t *testing.T) {
 			jsonData: map[string]any{
 				"items": []any{1, 2, 3},
 			},
-			renames: map[string]RenamedField{
+			renames: map[string]config.RenamedField{
 				"items": {
 					NewName: "numbers",
-					SubFieldRenames: map[string]RenamedField{
+					SubFieldRenames: map[string]config.RenamedField{
 						"value": {NewName: "val", SubFieldRenames: nil},
 					},
 				},
@@ -228,10 +230,10 @@ func TestRenameFields(t *testing.T) {
 					"not a map",
 				},
 			},
-			renames: map[string]RenamedField{
+			renames: map[string]config.RenamedField{
 				"items": {
 					NewName: "elements",
-					SubFieldRenames: map[string]RenamedField{
+					SubFieldRenames: map[string]config.RenamedField{
 						"id": {NewName: "itemId", SubFieldRenames: nil},
 					},
 				},
@@ -245,7 +247,7 @@ func TestRenameFields(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			err := renameMapFields(tc.jsonData, tc.renames)
+			err := RenameMapFields(tc.jsonData, tc.renames)
 			if tc.wantErr {
 				if err == nil {
 					t.Errorf("%q: expected error but got nil", tc.name)

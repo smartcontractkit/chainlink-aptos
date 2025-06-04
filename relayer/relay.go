@@ -15,6 +15,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
+	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainwriter"
 	write_target "github.com/smartcontractkit/chainlink-aptos/relayer/write_target/aptos"
 )
@@ -107,7 +108,7 @@ func (r *relayer) NewContractWriter(ctx context.Context, configBytes []byte) (ty
 }
 
 func (r *relayer) NewContractReader(ctx context.Context, configBytes []byte) (types.ContractReader, error) {
-	cfg := chainreader.ChainReaderConfig{}
+	cfg := crconfig.ChainReaderConfig{}
 	if err := json.Unmarshal(configBytes, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshall chain reader config err: %s", err)
 	}

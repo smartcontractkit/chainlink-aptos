@@ -1,17 +1,16 @@
-package chainreader
+package utils
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
+
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
-
-	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 )
 
-func unwrapSlice(value any) ([]any, bool) {
+func UnwrapSlice(value any) ([]any, bool) {
 	sliceValue, ok := value.([]any)
 	if !ok {
 		return nil, false
@@ -26,7 +25,7 @@ func unwrapSlice(value any) ([]any, bool) {
 	return sliceValue, true
 }
 
-func extractTimestampFilter(expressions []query.Expression) (uint64, bool) {
+func ExtractTimestampFilter(expressions []query.Expression) (uint64, bool) {
 	for _, expr := range expressions {
 		if expr.IsPrimitive() {
 			if tsExpr, ok := expr.Primitive.(*primitives.Timestamp); ok {
@@ -39,20 +38,20 @@ func extractTimestampFilter(expressions []query.Expression) (uint64, bool) {
 	return 0, false
 }
 
-func maybeRenameFields(jsonValue any, renames map[string]RenamedField) error {
+func MaybeRenameFields(jsonValue any, renames map[string]config.RenamedField) error {
 	// no renames are provided, we don't put any constraint on jsonValue
 	if len(renames) == 0 {
 		return nil
 	}
 
 	if jsonMap, ok := jsonValue.(map[string]any); ok {
-		if err := renameMapFields(jsonMap, renames); err != nil {
+		if err := RenameMapFields(jsonMap, renames); err != nil {
 			return err
 		}
-	} else if jsonSlice, ok := unwrapSlice(jsonValue); ok {
+	} else if jsonSlice, ok := UnwrapSlice(jsonValue); ok {
 		for i, elem := range jsonSlice {
 			if elemMap, ok := elem.(map[string]any); ok {
-				if err := renameMapFields(elemMap, renames); err != nil {
+				if err := RenameMapFields(elemMap, renames); err != nil {
 					return err
 				}
 			} else {
@@ -66,7 +65,7 @@ func maybeRenameFields(jsonValue any, renames map[string]RenamedField) error {
 	return nil
 }
 
-func renameMapFields(jsonData map[string]any, renames map[string]RenamedField) error {
+func RenameMapFields(jsonData map[string]any, renames map[string]config.RenamedField) error {
 	for origName, rename := range renames {
 		subValue, ok := jsonData[origName]
 		if !ok {
@@ -79,14 +78,56 @@ func renameMapFields(jsonData map[string]any, renames map[string]RenamedField) e
 			delete(jsonData, origName)
 		}
 
-		if err := maybeRenameFields(subValue, rename.SubFieldRenames); err != nil {
+		if err := MaybeRenameFields(subValue, rename.SubFieldRenames); err != nil {
 			return fmt.Errorf("sub field renames failed for field %s: %+w", origName, err)
 		}
 	}
 	return nil
 }
 
-func extractEventCreationNum(resourceData map[string]any, eventFieldPath string) (string, error) {
+func ApplyEventFilterRenames(exprs []query.Expression, renames map[string]string) []query.Expression {
+	newExprs := make([]query.Expression, len(exprs))
+	for i, expr := range exprs {
+		if expr.IsPrimitive() {
+			if comp, ok := expr.Primitive.(*primitives.Comparator); ok {
+				newName := comp.Name
+				if renamed, exists := renames[comp.Name]; exists {
+					newName = renamed
+				}
+				newExprs[i] = query.Comparator(newName, comp.ValueComparators...)
+			} else {
+				newExprs[i] = expr
+			}
+		} else {
+			newExprs[i] = expr
+		}
+	}
+	return newExprs
+}
+
+// buildJsonPathExpr constructs a PostgreSQL JSON path expression for accessing nested fields
+// Example: "Header.SourceChainSelector" becomes data->'Header'->>'SourceChainSelector'
+func BuildJsonPathExpr(baseField string, path string) string {
+	parts := strings.Split(path, ".")
+	expr := baseField
+
+	for i, part := range parts {
+		if i == len(parts)-1 {
+			expr = fmt.Sprintf("%s->>'%s'", expr, part)
+		} else {
+			expr = fmt.Sprintf("%s->'%s'", expr, part)
+		}
+	}
+
+	return expr
+}
+
+func IsNumeric(value any) bool {
+	_, ok := value.(uint64)
+	return ok
+}
+
+func ExtractEventCreationNum(resourceData map[string]any, eventFieldPath string) (string, error) {
 	pathComponents := strings.Split(eventFieldPath, ".")
 
 	current, ok := resourceData["data"].(map[string]any)
@@ -119,83 +160,4 @@ func extractEventCreationNum(resourceData map[string]any, eventFieldPath string)
 	}
 
 	return creationNum, nil
-}
-
-func compareValue(fieldValue, compareValue any, operator primitives.ComparisonOperator) bool {
-	// If the field value is a string and the comparator is numeric, try to parse it.
-	if fieldStr, ok := fieldValue.(string); ok {
-		if cmpNum, ok := compareValue.(uint64); ok {
-			num, err := strconv.ParseUint(fieldStr, 10, 64)
-			if err != nil {
-				return false
-			}
-			var result bool
-			switch operator {
-			case primitives.Eq:
-				result = num == cmpNum
-			case primitives.Neq:
-				result = num != cmpNum
-			case primitives.Gt:
-				result = num > cmpNum
-			case primitives.Lt:
-				result = num < cmpNum
-			case primitives.Gte:
-				result = num >= cmpNum
-			case primitives.Lte:
-				result = num <= cmpNum
-			default:
-				return false
-			}
-			return result
-		}
-
-		// Fallback: if both values are strings, do string comparison.
-		if compareStr, ok := compareValue.(string); ok {
-			switch operator {
-			case primitives.Eq:
-				return fieldStr == compareStr
-			case primitives.Neq:
-				return fieldStr != compareStr
-			default:
-				return false
-			}
-		}
-		return false
-	}
-
-	// Fallback: try decoding the field value to a uint64.
-	var fieldNum uint64
-	if err := codec.DecodeAptosJsonValue(fieldValue, &fieldNum); err != nil {
-		return false
-	}
-
-	cmpNum, ok := compareValue.(uint64)
-	if !ok {
-		return false
-	}
-
-	var result bool
-	switch operator {
-	case primitives.Eq:
-		result = fieldNum == cmpNum
-	case primitives.Neq:
-		result = fieldNum != cmpNum
-	case primitives.Gt:
-		result = fieldNum > cmpNum
-	case primitives.Lt:
-		result = fieldNum < cmpNum
-	case primitives.Gte:
-		result = fieldNum >= cmpNum
-	case primitives.Lte:
-		result = fieldNum <= cmpNum
-	default:
-		result = false
-	}
-
-	return result
-}
-
-func isNumeric(value any) bool {
-	_, ok := value.(uint64)
-	return ok
 }

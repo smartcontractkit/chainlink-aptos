@@ -10,6 +10,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
+	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainwriter"
 	aptosconfig "github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
@@ -48,13 +49,13 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	}
 
 	// Initialize a reader to check whether a value was already transmitted on chain
-	cr := chainreader.NewChainReader(lggr, client, chainreader.ChainReaderConfig{
-		Modules: map[string]*chainreader.ChainReaderModule{
+	cr := chainreader.NewChainReader(lggr, client, crconfig.ChainReaderConfig{
+		Modules: map[string]*crconfig.ChainReaderModule{
 			"forwarder": {
-				Functions: map[string]*chainreader.ChainReaderFunction{
+				Functions: map[string]*crconfig.ChainReaderFunction{
 					"getTransmissionState": {
 						Name: "get_transmission_state",
-						Params: []chainreader.AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name:     "Receiver",
 								Type:     "address",
@@ -74,7 +75,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 					},
 					"getTransmitter": {
 						Name: "get_transmitter",
-						Params: []chainreader.AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name:     "Receiver",
 								Type:     "address",
@@ -111,7 +112,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 				Functions: map[string]*chainwriter.ChainWriterFunction{
 					"report": {
 						PublicKey: config.Workflow.PublicKey,
-						Params: []chainreader.AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name:     "Receiver",
 								Type:     "address",

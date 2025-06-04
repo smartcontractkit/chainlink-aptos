@@ -13,7 +13,7 @@ import (
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
-	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
+	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
 
@@ -63,7 +63,7 @@ func (a *aptosChainWriter) Close() error {
 	})
 }
 
-func convertFunctionParams(argMap map[string]interface{}, params []chainreader.AptosFunctionParam) ([]string, []any, error) {
+func convertFunctionParams(argMap map[string]interface{}, params []crconfig.AptosFunctionParam) ([]string, []any, error) {
 	types := make([]string, len(params))
 	values := make([]any, len(params))
 
