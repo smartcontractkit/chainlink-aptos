@@ -302,11 +302,16 @@ module ccip::token_admin_registry {
 
         let state = borrow_state_mut();
 
+        let token_registrar = option::none<address>();
+        if (state.token_registrars.contains(&local_token)) {
+            token_registrar.fill(*state.token_registrars.borrow(&local_token))
+        };
+
         assert_can_register(
             auth::owner(),
             signer::address_of(token_pool_account),
             local_token,
-            state.token_registrars
+            token_registrar
         );
 
         assert!(
@@ -408,7 +413,7 @@ module ccip::token_admin_registry {
         registry_owner_address: address,
         token_pool_address: address,
         local_token: address,
-        token_registrars: BigOrderedMap<address, address>
+        token_registrar: Option<address>
     ) {
         assert!(
             object::is_object(token_pool_address),
@@ -435,8 +440,8 @@ module ccip::token_admin_registry {
 
         // Allow registration if a custom token registrar has been set for this local token
         // that matches the token pool (root) owner
-        if (token_registrars.contains(&local_token)) {
-            let token_registrar = *token_registrars.borrow(&local_token);
+        if (token_registrar.is_some()) {
+            let token_registrar = *token_registrar.borrow();
             if (token_registrar == token_pool_object_owner_address
                 || token_registrar == token_pool_object_root_owner_address) { return };
         };
@@ -501,7 +506,7 @@ module ccip::token_admin_registry {
         auth::assert_only_owner(signer::address_of(caller));
 
         let state = borrow_state_mut();
-        state.token_registrars.remove(&local_token)
+        state.token_registrars.remove(&local_token);
     }
 
     #[view]
