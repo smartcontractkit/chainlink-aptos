@@ -151,6 +151,7 @@ module ccip_onramp::onramp {
     const E_FEE_AGGREGATOR_NOT_SET: u64 = 17;
     const E_MUST_BE_CALLED_BY_ROUTER: u64 = 18;
     const E_TOKEN_AMOUNT_MISMATCH: u64 = 19;
+    const E_CANNOT_SEND_ZERO_TOKENS: u64 = 20;
 
     #[view]
     public fun type_and_version(): String {
@@ -424,6 +425,8 @@ module ccip_onramp::onramp {
             let token = token_addresses[i];
             let amount = token_amounts[i];
             let token_store = token_store_addresses[i];
+
+            assert!(amount > 0, error::invalid_argument(E_CANNOT_SEND_ZERO_TOKENS));
 
             let fa_metadata = resolve_fungible_asset(token);
             let resolved_store = resolve_fungible_store(sender, fa_metadata, token_store);
