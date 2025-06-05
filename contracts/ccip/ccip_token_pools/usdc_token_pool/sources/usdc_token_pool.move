@@ -382,9 +382,7 @@ module usdc_token_pool::usdc_token_pool {
         let local_amount =
             token_admin_registry::get_release_or_mint_source_amount(&input) as u64;
 
-        token_pool::validate_release_or_mint(
-            &mut pool.token_pool_state, &input, local_amount
-        );
+        token_pool::validate_release_or_mint(&mut pool.token_pool_state, &input);
 
         let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
 

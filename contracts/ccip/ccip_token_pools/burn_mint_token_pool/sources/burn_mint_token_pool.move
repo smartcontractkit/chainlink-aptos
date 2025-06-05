@@ -329,9 +329,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
         let local_amount =
             token_pool::calculate_release_or_mint_amount(&pool.token_pool_state, &input);
 
-        token_pool::validate_release_or_mint(
-            &mut pool.token_pool_state, &input, local_amount
-        );
+        token_pool::validate_release_or_mint(&mut pool.token_pool_state, &input);
 
         // Mint the amount for release.
         assert!(pool.mint_ref.is_some(), E_MINT_REF_NOT_SET);

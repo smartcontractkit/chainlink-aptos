@@ -287,9 +287,7 @@ module managed_token_pool::managed_token_pool {
         let local_amount =
             token_pool::calculate_release_or_mint_amount(&pool.token_pool_state, &input);
 
-        token_pool::validate_release_or_mint(
-            &mut pool.token_pool_state, &input, local_amount
-        );
+        token_pool::validate_release_or_mint(&mut pool.token_pool_state, &input);
 
         // Mint the amount for release.
         let local_token = token_admin_registry::get_release_or_mint_local_token(&input);

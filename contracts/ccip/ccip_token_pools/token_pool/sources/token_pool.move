@@ -393,9 +393,7 @@ module ccip_token_pool::token_pool {
     }
 
     public fun validate_release_or_mint(
-        state: &mut TokenPoolState,
-        input: &token_admin_registry::ReleaseOrMintInputV1,
-        local_amount: u64
+        state: &mut TokenPoolState, input: &token_admin_registry::ReleaseOrMintInputV1
     ) {
         // Validate the fungible asset
         let local_token = token_admin_registry::get_release_or_mint_local_token(input);
@@ -424,8 +422,15 @@ module ccip_token_pool::token_pool {
             error::invalid_argument(E_UNKNOWN_REMOTE_POOL)
         );
 
+        let source_amount_u256 =
+            token_admin_registry::get_release_or_mint_source_amount(input);
+        assert!(
+            source_amount_u256 <= MAX_U64,
+            error::invalid_argument(E_INVALID_ENCODED_AMOUNT)
+        );
+        let source_amount = source_amount_u256 as u64;
         token_pool_rate_limiter::consume_inbound(
-            &mut state.rate_limiter_config, remote_chain_selector, local_amount
+            &mut state.rate_limiter_config, remote_chain_selector, source_amount
         );
     }
 

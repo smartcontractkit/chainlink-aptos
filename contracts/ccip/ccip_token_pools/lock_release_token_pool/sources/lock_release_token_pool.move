@@ -382,9 +382,7 @@ module lock_release_token_pool::lock_release_token_pool {
         let local_amount =
             token_pool::calculate_release_or_mint_amount(&pool.token_pool_state, &input);
 
-        token_pool::validate_release_or_mint(
-            &mut pool.token_pool_state, &input, local_amount
-        );
+        token_pool::validate_release_or_mint(&mut pool.token_pool_state, &input);
 
         let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
         let metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
