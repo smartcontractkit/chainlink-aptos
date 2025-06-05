@@ -49,15 +49,30 @@ module ccip::eth_abi {
         out.append(if (value) ENCODED_BOOL_TRUE else ENCODED_BOOL_FALSE)
     }
 
-    public inline fun encode_bytes32(
+    /// For numeric types (address, uint, int) - left padded with zeros
+    public inline fun encode_left_padded_bytes32(
         out: &mut vector<u8>, value: vector<u8>
     ) {
-        assert!(value.length() <= 32, E_INVALID_BYTES32_LENGTH);
+        assert!(value.length() <= 32, error::invalid_argument(E_INVALID_U256_LENGTH));
+
         let padding_len = 32 - value.length();
         for (i in 0..padding_len) {
             out.push_back(0);
         };
-        out.append(value)
+        out.append(value);
+    }
+
+    /// For byte array types (bytes32, bytes4, etc.) - right padded with zeros
+    public inline fun encode_right_padded_bytes32(
+        out: &mut vector<u8>, value: vector<u8>
+    ) {
+        assert!(value.length() <= 32, E_INVALID_BYTES32_LENGTH);
+
+        out.append(value);
+        let padding_len = 32 - value.length();
+        for (i in 0..padding_len) {
+            out.push_back(0);
+        };
     }
 
     public inline fun encode_bytes(out: &mut vector<u8>, value: vector<u8>) {
@@ -93,7 +108,12 @@ module ccip::eth_abi {
         out: &mut vector<u8>, value: vector<u8>
     ) {
         assert!(value.length() <= 32, E_INVALID_BYTES32_LENGTH);
-        out.append(value)
+
+        out.append(value);
+        let padding_len = 32 - value.length();
+        for (i in 0..padding_len) {
+            out.push_back(0);
+        };
     }
 
     public inline fun encode_packed_u8(out: &mut vector<u8>, value: u8) {
@@ -114,7 +134,9 @@ module ccip::eth_abi {
         out.append(value_bytes)
     }
 
-    public inline fun encode_packed_u256(out: &mut vector<u8>, value: u256) {
+    public inline fun encode_packed_u256(
+        out: &mut vector<u8>, value: u256
+    ) {
         let value_bytes = bcs::to_bytes(&value);
         // little endian to big endian
         value_bytes.reverse();

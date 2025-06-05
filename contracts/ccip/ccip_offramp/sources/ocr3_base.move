@@ -9,6 +9,7 @@ module ccip_offramp::ocr3_base {
     use std::event::{Self, EventHandle};
     use std::table::{Self, Table};
 
+    use ccip::address;
     use ccip::auth;
 
     const MAX_NUM_ORACLES: u64 = 256;
@@ -81,6 +82,7 @@ module ccip_offramp::ocr3_base {
     const E_UNAUTHORIZED_SIGNER: u64 = 17;
     const E_NON_UNIQUE_SIGNATURES: u64 = 18;
     const E_INVALID_SIGNATURE: u64 = 19;
+    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 20;
 
     public fun new(event_account: &signer): OCR3BaseState {
         OCR3BaseState {
@@ -201,6 +203,10 @@ module ccip_offramp::ocr3_base {
         ocr_plugin_type: u8,
         signers: &vector<vector<u8>>
     ) {
+        signers.for_each_ref(|signer_key| {
+            address::assert_non_zero_address_vector(signer_key);
+        });
+
         assert!(!has_duplicates(signers), error::invalid_argument(E_REPEATED_SIGNERS));
 
         let validated_signers =
@@ -222,6 +228,10 @@ module ccip_offramp::ocr3_base {
         ocr_plugin_type: u8,
         transmitters: &vector<address>
     ) {
+        transmitters.for_each_ref(|transmitter_addr| {
+            address::assert_non_zero_address(*transmitter_addr);
+        });
+
         assert!(
             !has_duplicates(transmitters),
             error::invalid_argument(E_REPEATED_TRANSMITTERS)

@@ -18,6 +18,7 @@ module ccip_offramp::offramp {
 
     use ccip_offramp::ocr3_base;
 
+    use ccip::address;
     use ccip::auth;
     use ccip::client;
     use ccip::eth_abi;
@@ -993,6 +994,8 @@ module ccip_offramp::offramp {
                 error::invalid_argument(E_ZERO_CHAIN_SELECTOR)
             );
 
+            address::assert_non_zero_address_vector(&on_ramp);
+
             if (!state.source_chain_configs.contains(source_chain_selector)) {
                 state.source_chain_configs.add(
                     source_chain_selector,
@@ -1030,12 +1033,12 @@ module ccip_offramp::offramp {
         source_chain_selector: u64, dest_chain_selector: u64, on_ramp: vector<u8>
     ): vector<u8> {
         let packed = vector[];
-        eth_abi::encode_bytes32(
+        eth_abi::encode_right_padded_bytes32(
             &mut packed, aptos_hash::keccak256(b"Any2AptosMessageHashV1")
         );
         eth_abi::encode_u64(&mut packed, source_chain_selector);
         eth_abi::encode_u64(&mut packed, dest_chain_selector);
-        eth_abi::encode_bytes32(&mut packed, aptos_hash::keccak256(on_ramp));
+        eth_abi::encode_right_padded_bytes32(&mut packed, aptos_hash::keccak256(on_ramp));
         aptos_hash::keccak256(packed)
     }
 
@@ -1043,19 +1046,27 @@ module ccip_offramp::offramp {
         message: &Any2AptosRampMessage, metadata_hash: vector<u8>
     ): vector<u8> {
         let outer_hash = vector[];
-        eth_abi::encode_bytes32(&mut outer_hash, merkle_proof::leaf_domain_separator());
-        eth_abi::encode_bytes32(&mut outer_hash, metadata_hash);
+        eth_abi::encode_right_padded_bytes32(
+            &mut outer_hash, merkle_proof::leaf_domain_separator()
+        );
+        eth_abi::encode_right_padded_bytes32(&mut outer_hash, metadata_hash);
 
         let inner_hash = vector[];
-        eth_abi::encode_bytes32(&mut inner_hash, message.header.message_id);
+        eth_abi::encode_right_padded_bytes32(&mut inner_hash, message.header.message_id);
         eth_abi::encode_address(&mut inner_hash, message.receiver);
         eth_abi::encode_u64(&mut inner_hash, message.header.sequence_number);
         eth_abi::encode_u256(&mut inner_hash, message.gas_limit);
         eth_abi::encode_u64(&mut inner_hash, message.header.nonce);
-        eth_abi::encode_bytes32(&mut outer_hash, aptos_hash::keccak256(inner_hash));
+        eth_abi::encode_right_padded_bytes32(
+            &mut outer_hash, aptos_hash::keccak256(inner_hash)
+        );
 
-        eth_abi::encode_bytes32(&mut outer_hash, aptos_hash::keccak256(message.sender));
-        eth_abi::encode_bytes32(&mut outer_hash, aptos_hash::keccak256(message.data));
+        eth_abi::encode_right_padded_bytes32(
+            &mut outer_hash, aptos_hash::keccak256(message.sender)
+        );
+        eth_abi::encode_right_padded_bytes32(
+            &mut outer_hash, aptos_hash::keccak256(message.data)
+        );
 
         let token_hash = vector[];
         eth_abi::encode_u256(&mut token_hash, message.token_amounts.length() as u256);
@@ -1071,7 +1082,9 @@ module ccip_offramp::offramp {
                 eth_abi::encode_u256(&mut token_hash, token_transfer.amount);
             }
         );
-        eth_abi::encode_bytes32(&mut outer_hash, aptos_hash::keccak256(token_hash));
+        eth_abi::encode_right_padded_bytes32(
+            &mut outer_hash, aptos_hash::keccak256(token_hash)
+        );
 
         aptos_hash::keccak256(outer_hash)
     }
@@ -1112,6 +1125,8 @@ module ccip_offramp::offramp {
                 |stream| { bcs_stream::deserialize_fixed_vector_u8(stream, 64) }
             );
 
+        bcs_stream::assert_is_consumed(&stream);
+
         CommitReport {
             price_updates: PriceUpdates { token_price_updates, gas_price_updates },
             blessed_merkle_roots,
@@ -1131,18 +1146,6 @@ module ccip_offramp::offramp {
                     max_seq_nr: bcs_stream::deserialize_u64(stream),
                     merkle_root: bcs_stream::deserialize_fixed_vector_u8(stream, 32)
                 }
-            }
-        )
-    }
-
-    inline fun deserialize_execution_reports(reports_bytes: vector<u8>):
-        vector<ExecutionReport> {
-        let stream = bcs_stream::new(reports_bytes);
-        bcs_stream::deserialize_vector(
-            &mut stream,
-            |stream| {
-                let report_bytes = bcs_stream::deserialize_vector_u8(stream);
-                deserialize_execution_report(report_bytes)
             }
         )
     }

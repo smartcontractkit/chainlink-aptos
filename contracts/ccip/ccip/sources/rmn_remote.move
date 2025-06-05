@@ -140,12 +140,14 @@ module ccip::rmn_remote {
 
     inline fun calculate_digest(report: &Report): vector<u8> {
         let digest = vector[];
-        eth_abi::encode_bytes32(&mut digest, get_report_digest_header());
+        eth_abi::encode_right_padded_bytes32(&mut digest, get_report_digest_header());
         eth_abi::encode_u64(&mut digest, report.dest_chain_id);
         eth_abi::encode_u64(&mut digest, report.dest_chain_selector);
         eth_abi::encode_address(&mut digest, report.rmn_remote_contract_address);
         eth_abi::encode_address(&mut digest, report.off_ramp_address);
-        eth_abi::encode_bytes32(&mut digest, report.rmn_home_contract_config_digest);
+        eth_abi::encode_right_padded_bytes32(
+            &mut digest, report.rmn_home_contract_config_digest
+        );
         report.merkle_roots.for_each_ref(
             |merkle_root| {
                 let merkle_root: &MerkleRoot = merkle_root;
@@ -153,7 +155,7 @@ module ccip::rmn_remote {
                 eth_abi::encode_bytes(&mut digest, merkle_root.on_ramp_address);
                 eth_abi::encode_u64(&mut digest, merkle_root.min_seq_nr);
                 eth_abi::encode_u64(&mut digest, merkle_root.max_seq_nr);
-                eth_abi::encode_bytes32(&mut digest, merkle_root.merkle_root);
+                eth_abi::encode_right_padded_bytes32(&mut digest, merkle_root.merkle_root);
             }
         );
         aptos_hash::keccak256(digest)
