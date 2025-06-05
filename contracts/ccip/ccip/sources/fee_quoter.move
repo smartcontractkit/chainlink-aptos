@@ -242,6 +242,8 @@ module ccip::fee_quoter {
     const E_ZERO_TOKEN_PRICE: u64 = 31;
     const E_TOO_MANY_SVM_EXTRA_ARGS_ACCOUNTS: u64 = 32;
     const E_INVALID_SVM_EXTRA_ARGS_WRITABLE_BITMAP: u64 = 33;
+    const E_INVALID_FEE_RANGE: u64 = 34;
+    const E_INVALID_DEST_BYTES_OVERHEAD: u64 = 35;
 
     #[view]
     public fun type_and_version(): String {
@@ -510,6 +512,15 @@ module ccip::fee_quoter {
                 dest_gas_overhead,
                 dest_bytes_overhead,
                 is_enabled
+            };
+
+            if (token_transfer_fee_config.min_fee_usd_cents
+                >= token_transfer_fee_config.max_fee_usd_cents) {
+                abort error::invalid_argument(E_INVALID_FEE_RANGE);
+            };
+            if (token_transfer_fee_config.dest_bytes_overhead
+                < CCIP_LOCK_OR_BURN_V1_RET_BYTES) {
+                abort error::invalid_argument(E_INVALID_DEST_BYTES_OVERHEAD);
             };
 
             token_transfer_fee_configs.upsert(token, token_transfer_fee_config);
@@ -1098,6 +1109,30 @@ module ccip::fee_quoter {
     }
 
     #[view]
+    public fun get_token_receiver(
+        dest_chain_selector: u64, extra_args: vector<u8>, message_receiver: vector<u8>
+    ): vector<u8> acquires FeeQuoterState {
+        let chain_family_selector =
+            get_dest_chain_config_internal(borrow_state(), dest_chain_selector).chain_family_selector;
+        if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM
+            || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
+            || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI) {
+            message_receiver
+        } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
+            let (
+                _compute_units,
+                _account_is_writable_bitmap,
+                _allow_out_of_order_execution,
+                token_receiver,
+                _accounts
+            ) = decode_svm_extra_args(extra_args);
+            token_receiver
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_CHAIN_FAMILY_SELECTOR)
+        }
+    }
+
+    #[view]
     /// @returns (msg_fee_juels, is_out_of_order_execution, converted_extra_args, dest_exec_data_per_token)
     public fun process_message_args(
         dest_chain_selector: u64,
@@ -1226,7 +1261,6 @@ module ccip::fee_quoter {
                 get_token_transfer_fee_config_internal(
                     state, dest_chain_selector, local_token_address
                 );
-
             if (dest_pool_data_len > (CCIP_LOCK_OR_BURN_V1_RET_BYTES as u64)) {
                 assert!(
                     dest_pool_data_len

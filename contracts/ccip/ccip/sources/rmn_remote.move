@@ -140,12 +140,14 @@ module ccip::rmn_remote {
 
     inline fun calculate_digest(report: &Report): vector<u8> {
         let digest = vector[];
-        eth_abi::encode_bytes32(&mut digest, get_report_digest_header());
+        eth_abi::encode_right_padded_bytes32(&mut digest, get_report_digest_header());
         eth_abi::encode_u64(&mut digest, report.dest_chain_id);
         eth_abi::encode_u64(&mut digest, report.dest_chain_selector);
         eth_abi::encode_address(&mut digest, report.rmn_remote_contract_address);
         eth_abi::encode_address(&mut digest, report.off_ramp_address);
-        eth_abi::encode_bytes32(&mut digest, report.rmn_home_contract_config_digest);
+        eth_abi::encode_right_padded_bytes32(
+            &mut digest, report.rmn_home_contract_config_digest
+        );
         report.merkle_roots.for_each_ref(
             |merkle_root| {
                 let merkle_root: &MerkleRoot = merkle_root;
@@ -153,7 +155,7 @@ module ccip::rmn_remote {
                 eth_abi::encode_bytes(&mut digest, merkle_root.on_ramp_address);
                 eth_abi::encode_u64(&mut digest, merkle_root.min_seq_nr);
                 eth_abi::encode_u64(&mut digest, merkle_root.max_seq_nr);
-                eth_abi::encode_bytes32(&mut digest, merkle_root.merkle_root);
+                eth_abi::encode_right_padded_bytes32(&mut digest, merkle_root.merkle_root);
             }
         );
         aptos_hash::keccak256(digest)
@@ -161,6 +163,7 @@ module ccip::rmn_remote {
 
     #[view]
     public fun verify(
+        off_ramp_address: address,
         merkle_root_source_chain_selectors: vector<u64>,
         merkle_root_on_ramp_addresses: vector<vector<u8>>,
         merkle_root_min_seq_nrs: vector<u64>,
@@ -219,7 +222,7 @@ module ccip::rmn_remote {
             dest_chain_id: (chain_id::get() as u64),
             dest_chain_selector: state.local_chain_selector,
             rmn_remote_contract_address: @ccip,
-            off_ramp_address: @ccip,
+            off_ramp_address,
             rmn_home_contract_config_digest: state.config.rmn_home_contract_config_digest,
             merkle_roots
         };

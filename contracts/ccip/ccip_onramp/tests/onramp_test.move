@@ -908,9 +908,12 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool = @burn_mint_token_pool,
             lock_release_token_pool = @lock_release_token_pool
         ),
-        expected_failure(abort_code = 196625, location = ccip_onramp::onramp) // E_FEE_AGGREGATOR_NOT_SET error with corrected code
+        expected_failure(
+            abort_code = ccip::address::E_ZERO_ADDRESS_NOT_ALLOWED,
+            location = ccip::address
+        )
     ]
-    fun test_withdraw_fee_tokens_failure_when_fee_aggregator_not_set(
+    fun test_set_dynamic_config_failure_when_fee_aggregator_is_zero_address(
         aptos_framework: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
@@ -918,7 +921,7 @@ module ccip_onramp::onramp_test {
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer
     ) {
-        let (_, token_obj) =
+        let (_, _) =
             setup(
                 aptos_framework,
                 ccip,
@@ -930,13 +933,9 @@ module ccip_onramp::onramp_test {
                 b"TestToken",
                 false
             );
-        let token_addr = object::object_address(&token_obj);
 
-        // Set fee_aggregator to 0
+        // Set fee_aggregator to 0, this should revert with E_ZERO_ADDRESS_NOT_ALLOWED
         onramp::set_dynamic_config(owner, @0x0, ALLOWLIST_ADMIN);
-
-        // This should fail because fee_aggregator is not set
-        onramp::withdraw_fee_tokens(vector[token_addr]);
     }
 
     #[

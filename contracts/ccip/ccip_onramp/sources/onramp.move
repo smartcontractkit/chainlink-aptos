@@ -12,6 +12,7 @@ module ccip_onramp::onramp {
     use std::string::{Self, String};
     use std::smart_table::{Self, SmartTable};
 
+    use ccip::address;
     use ccip::auth;
     use ccip::eth_abi;
     use ccip::fee_quoter;
@@ -152,6 +153,7 @@ module ccip_onramp::onramp {
     const E_MUST_BE_CALLED_BY_ROUTER: u64 = 18;
     const E_TOKEN_AMOUNT_MISMATCH: u64 = 19;
     const E_CANNOT_SEND_ZERO_TOKENS: u64 = 20;
+    const E_ZERO_CHAIN_SELECTOR: u64 = 21;
 
     #[view]
     public fun type_and_version(): String {
@@ -198,6 +200,7 @@ module ccip_onramp::onramp {
         dest_chain_routers: vector<address>,
         dest_chain_allowlist_enabled: vector<bool>
     ) acquires OnRampDeployment {
+        assert!(chain_selector != 0, E_ZERO_CHAIN_SELECTOR);
         assert!(
             exists<OnRampDeployment>(@ccip_onramp),
             error::invalid_state(E_ALREADY_INITIALIZED)
@@ -420,6 +423,9 @@ module ccip_onramp::onramp {
             error::invalid_argument(E_TOKEN_AMOUNT_MISMATCH)
         );
 
+        let token_receiver =
+            fee_quoter::get_token_receiver(dest_chain_selector, extra_args, receiver);
+
         let token_transfers = vector[];
         for (i in 0..tokens_len) {
             let token = token_addresses[i];
@@ -458,7 +464,7 @@ module ccip_onramp::onramp {
                     fa,
                     sender,
                     dest_chain_selector,
-                    receiver
+                    token_receiver
                 );
 
             dest_token_addresses.push_back(dest_token_address);
@@ -785,6 +791,9 @@ module ccip_onramp::onramp {
     inline fun set_dynamic_config_internal(
         state: &mut OnRampState, fee_aggregator: address, allowlist_admin: address
     ) {
+        address::assert_non_zero_address(fee_aggregator);
+        address::assert_non_zero_address(allowlist_admin);
+
         state.fee_aggregator = fee_aggregator;
         state.allowlist_admin = allowlist_admin;
 
@@ -803,12 +812,12 @@ module ccip_onramp::onramp {
         source_chain_selector: u64, dest_chain_selector: u64
     ): vector<u8> {
         let packed = vector[];
-        eth_abi::encode_bytes32(
+        eth_abi::encode_right_padded_bytes32(
             &mut packed, aptos_hash::keccak256(b"Aptos2AnyMessageHashV1")
         );
         eth_abi::encode_u64(&mut packed, source_chain_selector);
         eth_abi::encode_u64(&mut packed, dest_chain_selector);
-        eth_abi::encode_address(&mut packed, @ccip);
+        eth_abi::encode_address(&mut packed, @ccip_onramp);
         aptos_hash::keccak256(packed)
     }
 
@@ -816,8 +825,10 @@ module ccip_onramp::onramp {
         message: &Aptos2AnyRampMessage, metadata_hash: vector<u8>
     ): vector<u8> {
         let outer_hash = vector[];
-        eth_abi::encode_bytes32(&mut outer_hash, merkle_proof::leaf_domain_separator());
-        eth_abi::encode_bytes32(&mut outer_hash, metadata_hash);
+        eth_abi::encode_right_padded_bytes32(
+            &mut outer_hash, merkle_proof::leaf_domain_separator()
+        );
+        eth_abi::encode_right_padded_bytes32(&mut outer_hash, metadata_hash);
 
         let inner_hash = vector[];
         eth_abi::encode_address(&mut inner_hash, message.sender);
@@ -825,12 +836,16 @@ module ccip_onramp::onramp {
         eth_abi::encode_u64(&mut inner_hash, message.header.nonce);
         eth_abi::encode_address(&mut inner_hash, message.fee_token);
         eth_abi::encode_u64(&mut inner_hash, message.fee_token_amount);
-        eth_abi::encode_bytes32(&mut outer_hash, aptos_hash::keccak256(inner_hash));
+        eth_abi::encode_right_padded_bytes32(
+            &mut outer_hash, aptos_hash::keccak256(inner_hash)
+        );
 
-        eth_abi::encode_bytes32(
+        eth_abi::encode_right_padded_bytes32(
             &mut outer_hash, aptos_hash::keccak256(message.receiver)
         );
-        eth_abi::encode_bytes32(&mut outer_hash, aptos_hash::keccak256(message.data));
+        eth_abi::encode_right_padded_bytes32(
+            &mut outer_hash, aptos_hash::keccak256(message.data)
+        );
 
         let token_hash = vector[];
         eth_abi::encode_u256(&mut token_hash, message.token_amounts.length() as u256);
@@ -846,9 +861,11 @@ module ccip_onramp::onramp {
                 eth_abi::encode_bytes(&mut token_hash, token_transfer.dest_exec_data);
             }
         );
-        eth_abi::encode_bytes32(&mut outer_hash, aptos_hash::keccak256(token_hash));
+        eth_abi::encode_right_padded_bytes32(
+            &mut outer_hash, aptos_hash::keccak256(token_hash)
+        );
 
-        eth_abi::encode_bytes32(
+        eth_abi::encode_right_padded_bytes32(
             &mut outer_hash, aptos_hash::keccak256(message.extra_args)
         );
 

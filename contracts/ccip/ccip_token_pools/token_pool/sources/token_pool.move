@@ -6,6 +6,7 @@ module ccip_token_pool::token_pool {
     use std::object::{Self, Object};
     use std::smart_table::{Self, SmartTable};
 
+    use ccip::address;
     use ccip::eth_abi;
     use ccip::token_admin_registry;
     use ccip::rmn_remote;
@@ -217,10 +218,7 @@ module ccip_token_pool::token_pool {
             );
             let remote_pool_addresses = remote_pool_addresses_to_add[i];
             let remote_token_address = remote_token_addresses_to_add[i];
-            assert!(
-                !remote_token_address.is_empty(),
-                error::invalid_argument(E_ZERO_ADDRESS_NOT_ALLOWED)
-            );
+            address::assert_non_zero_address_vector(&remote_token_address);
 
             let remote_chain_config = RemoteChainConfig {
                 remote_token_address,
@@ -230,6 +228,8 @@ module ccip_token_pool::token_pool {
             remote_pool_addresses.for_each(
                 |remote_pool_address| {
                     let remote_pool_address: vector<u8> = remote_pool_address;
+                    address::assert_non_zero_address_vector(&remote_pool_address);
+
                     let (found, _) =
                         remote_chain_config.remote_pools.index_of(&remote_pool_address);
                     assert!(!found, error::invalid_argument(E_REMOTE_POOL_ALREADY_ADDED));
@@ -297,10 +297,7 @@ module ccip_token_pool::token_pool {
         remote_chain_selector: u64,
         remote_pool_address: vector<u8>
     ) {
-        assert!(
-            !remote_pool_address.is_empty(),
-            error::invalid_argument(E_ZERO_ADDRESS_NOT_ALLOWED)
-        );
+        address::assert_non_zero_address_vector(&remote_pool_address);
 
         assert!(
             state.remote_chain_configs.contains(remote_chain_selector),
