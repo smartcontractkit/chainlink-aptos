@@ -1,0 +1,16 @@
+[package]
+name = "Faucet"
+version = "1.0.0"
+authors = []
+
+[addresses]
+managed_token = "_"
+
+[dev-addresses]
+managed_token = "0x9000"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }
+ManagedToken = { local = "../managed_token" }
+
+[dev-dependencies]
