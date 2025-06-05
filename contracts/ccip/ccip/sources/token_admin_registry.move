@@ -121,6 +121,7 @@ module ccip::token_admin_registry {
         new_token_registrar: address
     }
 
+    #[event]
     struct TokenRegistrarUnset has store, drop {
         local_token: address,
         previous_token_registrar: address
