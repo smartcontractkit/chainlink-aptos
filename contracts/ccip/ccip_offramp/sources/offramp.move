@@ -240,6 +240,7 @@ module ccip_offramp::offramp {
     const E_SIGNATURE_VERIFICATION_REQUIRED_IN_COMMIT_PLUGIN: u64 = 22;
     const E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN: u64 = 23;
     const E_RMN_BLESSING_MISMATCH: u64 = 24;
+    const E_INVALID_ON_RAMP_UPDATE: u64 = 25;
 
     #[view]
     public fun type_and_version(): String {
@@ -1009,6 +1010,16 @@ module ccip_offramp::offramp {
                     }
                 );
                 state.execution_states.add(source_chain_selector, smart_table::new());
+            } else {
+                // OnRamp updates should only happen due to a misconfiguration.
+                // If an OnRamp is misconfigured, no reports should have been
+                // committed and no messages should have been executed.
+                let existing_config =
+                    state.source_chain_configs.borrow(source_chain_selector);
+                if (existing_config.min_seq_nr != 1
+                    && existing_config.on_ramp != on_ramp) {
+                    abort error::invalid_argument(E_INVALID_ON_RAMP_UPDATE)
+                };
             };
 
             let config = state.source_chain_configs.borrow_mut(source_chain_selector);
