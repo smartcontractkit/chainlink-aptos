@@ -32,6 +32,7 @@ type FeeQuoterInterface interface {
 	GetTokenTransferFeeConfig(opts *bind.CallOpts, destChainSelector uint64, token aptos.AccountAddress) (TokenTransferFeeConfig, error)
 	GetValidatedFee(opts *bind.CallOpts, destChainSelector uint64, receiver []byte, data []byte, localTokenAddresses []aptos.AccountAddress, localTokenAmounts []uint64, TokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, FeeTokenStore aptos.AccountAddress, extraArgs []byte) (uint64, error)
 	GetPremiumMultiplierWeiPerEth(opts *bind.CallOpts, token aptos.AccountAddress) (uint64, error)
+	GetTokenReceiver(opts *bind.CallOpts, destChainSelector uint64, extraArgs []byte, messageReceiver []byte) ([]byte, error)
 	ProcessMessageArgs(opts *bind.CallOpts, destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, localTokenAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, destPoolDatas [][]byte) (*big.Int, bool, []byte, [][]byte, error)
 	GetDestChainConfig(opts *bind.CallOpts, destChainSelector uint64) (DestChainConfig, error)
 	GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error)
@@ -57,6 +58,7 @@ type FeeQuoterEncoder interface {
 	GetTokenTransferFeeConfig(destChainSelector uint64, token aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetValidatedFee(destChainSelector uint64, receiver []byte, data []byte, localTokenAddresses []aptos.AccountAddress, localTokenAmounts []uint64, TokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, FeeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetPremiumMultiplierWeiPerEth(token aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetTokenReceiver(destChainSelector uint64, extraArgs []byte, messageReceiver []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ProcessMessageArgs(destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, localTokenAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, destPoolDatas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetDestChainConfig(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStaticConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -412,6 +414,27 @@ func (c FeeQuoterContract) GetPremiumMultiplierWeiPerEth(opts *bind.CallOpts, to
 	return r0, nil
 }
 
+func (c FeeQuoterContract) GetTokenReceiver(opts *bind.CallOpts, destChainSelector uint64, extraArgs []byte, messageReceiver []byte) ([]byte, error) {
+	module, function, typeTags, args, err := c.feeQuoterEncoder.GetTokenReceiver(destChainSelector, extraArgs, messageReceiver)
+	if err != nil {
+		return *new([]byte), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new([]byte), err
+	}
+
+	var (
+		r0 []byte
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new([]byte), err
+	}
+	return r0, nil
+}
+
 func (c FeeQuoterContract) ProcessMessageArgs(opts *bind.CallOpts, destChainSelector uint64, feeToken aptos.AccountAddress, feeTokenAmount uint64, extraArgs []byte, localTokenAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, destPoolDatas [][]byte) (*big.Int, bool, []byte, [][]byte, error) {
 	module, function, typeTags, args, err := c.feeQuoterEncoder.ProcessMessageArgs(destChainSelector, feeToken, feeTokenAmount, extraArgs, localTokenAddresses, destTokenAddresses, destPoolDatas)
 	if err != nil {
@@ -623,6 +646,18 @@ func (c feeQuoterEncoder) GetPremiumMultiplierWeiPerEth(token aptos.AccountAddre
 		"address",
 	}, []any{
 		token,
+	})
+}
+
+func (c feeQuoterEncoder) GetTokenReceiver(destChainSelector uint64, extraArgs []byte, messageReceiver []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_token_receiver", nil, []string{
+		"u64",
+		"vector<u8>",
+		"vector<u8>",
+	}, []any{
+		destChainSelector,
+		extraArgs,
+		messageReceiver,
 	})
 }
 
