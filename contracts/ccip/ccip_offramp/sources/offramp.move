@@ -643,6 +643,7 @@ module ccip_offramp::offramp {
         });
 
         rmn_remote::verify(
+            @ccip_offramp,
             merkle_root_source_chains_selector,
             merkle_root_on_ramp_addresses,
             merkle_root_min_seq_nrs,

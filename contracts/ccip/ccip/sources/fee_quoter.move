@@ -242,6 +242,8 @@ module ccip::fee_quoter {
     const E_ZERO_TOKEN_PRICE: u64 = 31;
     const E_TOO_MANY_SVM_EXTRA_ARGS_ACCOUNTS: u64 = 32;
     const E_INVALID_SVM_EXTRA_ARGS_WRITABLE_BITMAP: u64 = 33;
+    const E_INVALID_FEE_RANGE: u64 = 34;
+    const E_INVALID_DEST_BYTES_OVERHEAD: u64 = 35;
 
     #[view]
     public fun type_and_version(): String {
@@ -510,6 +512,15 @@ module ccip::fee_quoter {
                 dest_gas_overhead,
                 dest_bytes_overhead,
                 is_enabled
+            };
+
+            if (token_transfer_fee_config.min_fee_usd_cents
+                >= token_transfer_fee_config.max_fee_usd_cents) {
+                abort error::invalid_argument(E_INVALID_FEE_RANGE);
+            };
+            if (token_transfer_fee_config.dest_bytes_overhead
+                < CCIP_LOCK_OR_BURN_V1_RET_BYTES) {
+                abort error::invalid_argument(E_INVALID_DEST_BYTES_OVERHEAD);
             };
 
             token_transfer_fee_configs.upsert(token, token_transfer_fee_config);
@@ -1226,7 +1237,6 @@ module ccip::fee_quoter {
                 get_token_transfer_fee_config_internal(
                     state, dest_chain_selector, local_token_address
                 );
-
             if (dest_pool_data_len > (CCIP_LOCK_OR_BURN_V1_RET_BYTES as u64)) {
                 assert!(
                     dest_pool_data_len

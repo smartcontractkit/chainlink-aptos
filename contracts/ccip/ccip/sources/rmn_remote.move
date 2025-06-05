@@ -163,6 +163,7 @@ module ccip::rmn_remote {
 
     #[view]
     public fun verify(
+        off_ramp_address: address,
         merkle_root_source_chain_selectors: vector<u64>,
         merkle_root_on_ramp_addresses: vector<vector<u8>>,
         merkle_root_min_seq_nrs: vector<u64>,
@@ -221,7 +222,7 @@ module ccip::rmn_remote {
             dest_chain_id: (chain_id::get() as u64),
             dest_chain_selector: state.local_chain_selector,
             rmn_remote_contract_address: @ccip,
-            off_ramp_address: @ccip,
+            off_ramp_address,
             rmn_home_contract_config_digest: state.config.rmn_home_contract_config_digest,
             merkle_roots
         };

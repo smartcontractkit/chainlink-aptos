@@ -814,7 +814,7 @@ module ccip_onramp::onramp {
         );
         eth_abi::encode_u64(&mut packed, source_chain_selector);
         eth_abi::encode_u64(&mut packed, dest_chain_selector);
-        eth_abi::encode_address(&mut packed, @ccip);
+        eth_abi::encode_address(&mut packed, @ccip_onramp);
         aptos_hash::keccak256(packed)
     }
 
