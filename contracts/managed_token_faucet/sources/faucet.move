@@ -24,7 +24,7 @@ module managed_token::faucet {
     }
 
     #[view]
-    fun state_address(): address {
+    public fun state_address(): address {
         object::create_object_address(&@managed_token, FAUCET_OBJECT_SEED)
     }
 
