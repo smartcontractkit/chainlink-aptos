@@ -3,6 +3,8 @@ fmt: ## Format Move contracts.
 	movefmt --dir-path=contracts/ccip
 	movefmt --dir-path=contracts/data-feeds
 	movefmt --dir-path=contracts/large_packages
+	movefmt --dir-path=contracts/managed_token
+	movefmt --dir-path=contracts/managed_token_faucet
 	movefmt --dir-path=contracts/mcms
 	movefmt --dir-path=contracts/platform
 	movefmt --dir-path=contracts/platform_secondary

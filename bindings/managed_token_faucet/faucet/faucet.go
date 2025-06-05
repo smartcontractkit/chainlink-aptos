@@ -22,7 +22,7 @@ var (
 )
 
 type FaucetInterface interface {
-	StoreAddress(opts *bind.CallOpts) (aptos.AccountAddress, error)
+	StateAddress(opts *bind.CallOpts) (aptos.AccountAddress, error)
 
 	Drip(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
 
@@ -31,7 +31,7 @@ type FaucetInterface interface {
 }
 
 type FaucetEncoder interface {
-	StoreAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	StateAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Drip(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
@@ -63,8 +63,8 @@ func (c FaucetContract) Encoder() FaucetEncoder {
 
 // View Functions
 
-func (c FaucetContract) StoreAddress(opts *bind.CallOpts) (aptos.AccountAddress, error) {
-	module, function, typeTags, args, err := c.faucetEncoder.StoreAddress()
+func (c FaucetContract) StateAddress(opts *bind.CallOpts) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.faucetEncoder.StateAddress()
 	if err != nil {
 		return *new(aptos.AccountAddress), err
 	}
@@ -100,8 +100,8 @@ type faucetEncoder struct {
 	*bind.BoundContract
 }
 
-func (c faucetEncoder) StoreAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("store_address", nil, []string{}, []any{})
+func (c faucetEncoder) StateAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("state_address", nil, []string{}, []any{})
 }
 
 func (c faucetEncoder) Drip(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
