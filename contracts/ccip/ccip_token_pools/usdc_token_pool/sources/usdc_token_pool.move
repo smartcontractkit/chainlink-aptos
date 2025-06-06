@@ -446,19 +446,17 @@ module usdc_token_pool::usdc_token_pool {
     inline fun encode_dest_pool_data(
         local_domain_identifier: u32, nonce: u64
     ): vector<u8> {
-        // This manually packs the values into a single slot, which mirrors EVM struct packing.
-        let abi_encoded_data = ((nonce as u256) << 32) + (local_domain_identifier as u256);
         let dest_pool_data = vector[];
-        eth_abi::encode_u256(&mut dest_pool_data, abi_encoded_data);
+        eth_abi::encode_u64(&mut dest_pool_data, nonce);
+        eth_abi::encode_u32(&mut dest_pool_data, local_domain_identifier);
+
         dest_pool_data
     }
 
     inline fun decode_dest_pool_data(dest_pool_data: vector<u8>): (u32, u64) {
         let stream = eth_abi::new_stream(dest_pool_data);
-        let abi_encoded_data = eth_abi::decode_u256(&mut stream);
-
-        let local_domain_identifier = abi_encoded_data as u32;
-        let nonce = (abi_encoded_data >> 32) as u64;
+        let nonce = eth_abi::decode_u64(&mut stream);
+        let local_domain_identifier = eth_abi::decode_u32(&mut stream);
 
         (local_domain_identifier, nonce)
     }
