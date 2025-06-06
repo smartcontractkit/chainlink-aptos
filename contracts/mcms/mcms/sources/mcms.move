@@ -203,7 +203,6 @@ module mcms::mcms {
     const E_NOT_CANCELLER_ROLE: u64 = 50;
     const E_NOT_TIMELOCK_ROLE: u64 = 51;
     const E_UNKNOWN_MCMS_MODULE: u64 = 52;
-    const E_ZERO_MIN_DELAY_NOT_ALLOWED: u64 = 53;
 
     fun init_module(publisher: &signer) {
         let bypasser = create_multisig(publisher, BYPASSER_ROLE);
@@ -1444,8 +1443,6 @@ module mcms::mcms {
     }
 
     inline fun timelock_update_min_delay(new_min_delay: u64) {
-        assert!(new_min_delay > 0, E_ZERO_MIN_DELAY_NOT_ALLOWED);
-
         let timelock = borrow_mut_timelock();
         let old_min_delay = timelock.min_delay;
         timelock.min_delay = new_min_delay;
