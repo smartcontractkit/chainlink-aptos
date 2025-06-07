@@ -24,6 +24,11 @@ module ccip_offramp::ocr3_base_test {
     const SIGNER3: vector<u8> = x"1122334455667788990011223344556677889900112233445566778899001122";
     const SIGNER4: vector<u8> = x"aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899";
 
+    const VALID_CONFIG_DIGEST: vector<u8> = x"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    const VALID_BIG_F: u8 = 1;
+    const SIGNATURE_VERIFICATION_ENABLED: bool = true;
+    const SIGNATURE_VERIFICATION_DISABLED: bool = false;
+
     fun setup(aptos_framework: &signer, owner: &signer, ccip: &signer):
         ocr3_base::OCR3BaseState {
         account::create_account_for_test(signer::address_of(owner));
@@ -61,11 +66,10 @@ module ccip_offramp::ocr3_base_test {
     ) {
         let state = setup(aptos_framework, owner, ccip);
 
-        let config_digest =
-            x"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let config_digest = VALID_CONFIG_DIGEST;
         let ocr_plugin_type = ocr3_base::ocr_plugin_type_commit();
-        let big_f = 1;
-        let is_signature_verification_enabled = true;
+        let big_f = VALID_BIG_F;
+        let is_signature_verification_enabled = SIGNATURE_VERIFICATION_ENABLED;
 
         let signers = vector[SIGNER1, SIGNER2, SIGNER3, SIGNER4];
         let transmitters = vector[TRANSMITTER1, TRANSMITTER2, TRANSMITTER3, TRANSMITTER4];
@@ -82,7 +86,7 @@ module ccip_offramp::ocr3_base_test {
         );
 
         let ocr_plugin_type = ocr3_base::ocr_plugin_type_execution();
-        let is_signature_verification_enabled = true;
+        let is_signature_verification_enabled = SIGNATURE_VERIFICATION_ENABLED;
 
         ocr3_base::set_ocr3_config(
             owner,
@@ -151,10 +155,35 @@ module ccip_offramp::ocr3_base_test {
         ocr3_base::set_ocr3_config(
             owner,
             &mut state,
-            x"00",
+            VALID_CONFIG_DIGEST,
             ocr3_base::ocr_plugin_type_commit(),
-            1,
-            true,
+            VALID_BIG_F,
+            SIGNATURE_VERIFICATION_ENABLED,
+            signers,
+            transmitters
+        );
+
+        ocr3_base::destroy_ocr3_state(state);
+    }
+
+    #[test(aptos_framework = @aptos_framework, owner = @0x100, ccip = @ccip)]
+    #[expected_failure(abort_code = 65551, location = ccip_offramp::ocr3_base)]
+    fun test_set_ocr3_config_invalid_config_digest_length(
+        aptos_framework: &signer, owner: &signer, ccip: &signer
+    ) {
+        let state = setup(aptos_framework, owner, ccip);
+
+        let signers = vector[SIGNER1, SIGNER2, SIGNER3, SIGNER4];
+        let transmitters = vector[TRANSMITTER1, TRANSMITTER2, TRANSMITTER3, TRANSMITTER4];
+
+        // This should fail with E_INVALID_CONFIG_DIGEST_LENGTH because config_digest is not 32 bytes
+        ocr3_base::set_ocr3_config(
+            owner,
+            &mut state,
+            x"00", // Only 1 byte instead of 32
+            ocr3_base::ocr_plugin_type_commit(),
+            VALID_BIG_F,
+            SIGNATURE_VERIFICATION_ENABLED,
             signers,
             transmitters
         );
@@ -183,10 +212,10 @@ module ccip_offramp::ocr3_base_test {
         ocr3_base::set_ocr3_config(
             owner,
             &mut state,
-            x"00",
+            VALID_CONFIG_DIGEST,
             ocr3_base::ocr_plugin_type_commit(),
-            1,
-            true,
+            VALID_BIG_F,
+            SIGNATURE_VERIFICATION_ENABLED,
             signers,
             transmitters
         );
@@ -208,10 +237,10 @@ module ccip_offramp::ocr3_base_test {
         ocr3_base::set_ocr3_config(
             owner,
             &mut state,
-            x"00",
+            VALID_CONFIG_DIGEST,
             ocr3_base::ocr_plugin_type_commit(),
-            1,
-            true,
+            VALID_BIG_F,
+            SIGNATURE_VERIFICATION_ENABLED,
             signers,
             transmitters
         );
@@ -233,10 +262,10 @@ module ccip_offramp::ocr3_base_test {
         ocr3_base::set_ocr3_config(
             owner,
             &mut state,
-            x"00",
+            VALID_CONFIG_DIGEST,
             ocr3_base::ocr_plugin_type_commit(),
             0, // big_f = 0
-            true,
+            SIGNATURE_VERIFICATION_ENABLED,
             signers,
             transmitters
         );
@@ -258,10 +287,10 @@ module ccip_offramp::ocr3_base_test {
         ocr3_base::set_ocr3_config(
             owner,
             &mut state,
-            x"00",
+            VALID_CONFIG_DIGEST,
             ocr3_base::ocr_plugin_type_commit(),
             1, // big_f = 1, so need at least 4 signers
-            true,
+            SIGNATURE_VERIFICATION_ENABLED,
             signers,
             transmitters
         );
@@ -284,10 +313,10 @@ module ccip_offramp::ocr3_base_test {
         ocr3_base::set_ocr3_config(
             owner,
             &mut state,
-            x"00",
+            VALID_CONFIG_DIGEST,
             ocr3_base::ocr_plugin_type_commit(),
-            1,
-            true,
+            VALID_BIG_F,
+            SIGNATURE_VERIFICATION_ENABLED,
             signers,
             transmitters
         );
@@ -310,10 +339,10 @@ module ccip_offramp::ocr3_base_test {
         ocr3_base::set_ocr3_config(
             owner,
             &mut state,
-            x"00",
+            VALID_CONFIG_DIGEST,
             ocr3_base::ocr_plugin_type_commit(),
-            1,
-            true,
+            VALID_BIG_F,
+            SIGNATURE_VERIFICATION_ENABLED,
             signers,
             transmitters
         );
@@ -335,10 +364,10 @@ module ccip_offramp::ocr3_base_test {
         ocr3_base::set_ocr3_config(
             owner,
             &mut state,
-            x"00",
+            VALID_CONFIG_DIGEST,
             ocr3_base::ocr_plugin_type_commit(),
-            1,
-            true,
+            VALID_BIG_F,
+            SIGNATURE_VERIFICATION_ENABLED,
             signers,
             transmitters
         );

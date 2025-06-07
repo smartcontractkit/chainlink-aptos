@@ -246,7 +246,7 @@ module managed_token_pool::managed_token_pool {
             );
 
         // Construct lock_or_burn output before we lose access to fa
-        let dest_pool_data = token_pool::encode_local_decimals(&fa);
+        let dest_pool_data = token_pool::encode_local_decimals(&pool.token_pool_state);
 
         // Burn the funds
         let store =
