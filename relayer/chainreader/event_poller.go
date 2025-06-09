@@ -26,19 +26,19 @@ func (a *aptosChainReader) startEventPolling(ctx context.Context) {
 			elapsed := time.Since(start)
 
 			if err != nil && err != context.DeadlineExceeded {
-				a.logger.Warnw("EventSync completed with errors",
+				a.lggr.Warnw("EventSync completed with errors",
 					"error", err,
 					"duration", elapsed)
 			} else if err != nil {
-				a.logger.Warnw("EventSync timed out", "duration", elapsed)
+				a.lggr.Warnw("EventSync timed out", "duration", elapsed)
 			} else {
-				a.logger.Debugw("Event sync completed successfully",
+				a.lggr.Debugw("Event sync completed successfully",
 					"duration", elapsed)
 			}
 
 			cancel()
 		case <-ctx.Done():
-			a.logger.Infow("Event polling stopped")
+			a.lggr.Infow("Event polling stopped")
 			return
 		}
 	}
@@ -83,7 +83,7 @@ eventLoop:
 		default:
 			newEvents, err := a.client.EventsByCreationNumber(eventAccountAddress, creationNumber, &latestOffset, &batchSize)
 			if err != nil {
-				a.logger.Errorw("syncEvent: failed to fetch new events", "error", err)
+				a.lggr.Errorw("syncEvent: failed to fetch new events", "error", err)
 				return fmt.Errorf("syncEvent: failed to fetch events: %w", err)
 			}
 
@@ -95,12 +95,12 @@ eventLoop:
 			for _, event := range newEvents {
 				head, err := a.getBlockHead(event.Version)
 				if err != nil {
-					a.logger.Errorw("syncEvent: failed to fetch block metadata", "version", event.Version, "error", err)
+					a.lggr.Errorw("syncEvent: failed to fetch block metadata", "version", event.Version, "error", err)
 					continue
 				}
 
 				if err := crutils.RenameMapFields(event.Data, eventConfig.EventFieldRenames); err != nil {
-					a.logger.Errorw("syncEvent: failed to rename event fields", "error", err)
+					a.lggr.Errorw("syncEvent: failed to rename event fields", "error", err)
 					continue
 				}
 
@@ -124,7 +124,7 @@ eventLoop:
 				}
 
 				totalProcessed += len(batchRecords)
-				a.logger.Debugw("syncEvent: saved batch of events",
+				a.lggr.Debugw("syncEvent: saved batch of events",
 					"batch_count", len(batchRecords),
 					"total_processed", totalProcessed,
 					"handle", eventHandle)
@@ -161,7 +161,7 @@ func (a *aptosChainReader) SyncAllEvents(ctx context.Context) error {
 
 		boundAddress, ok := a.moduleAddresses[moduleKey]
 		if !ok {
-			a.logger.Warnw("SyncAllEvents: no bound address for module", "module", moduleKey)
+			a.lggr.Warnw("SyncAllEvents: no bound address for module", "module", moduleKey)
 			continue
 		}
 
@@ -176,7 +176,7 @@ func (a *aptosChainReader) SyncAllEvents(ctx context.Context) error {
 			select {
 			case <-ctx.Done():
 				if successCount > 0 {
-					a.logger.Infow("SyncAllEvents: interrupted, some events synced", "successCount", successCount, "errorCount", errorCount)
+					a.lggr.Infow("SyncAllEvents: interrupted, some events synced", "successCount", successCount, "errorCount", errorCount)
 				}
 				return ctx.Err()
 			default:
@@ -184,7 +184,7 @@ func (a *aptosChainReader) SyncAllEvents(ctx context.Context) error {
 				if err != nil {
 					errorCount++
 					lastErr = fmt.Errorf("SyncAllEvents: module %s event %s: %w", moduleKey, eventKey, err)
-					a.logger.Errorw("SyncAllEvents: error syncing event", "module", moduleKey, "event", eventKey, "error", err)
+					a.lggr.Errorw("SyncAllEvents: error syncing event", "module", moduleKey, "event", eventKey, "error", err)
 				} else {
 					successCount++
 				}
@@ -193,10 +193,10 @@ func (a *aptosChainReader) SyncAllEvents(ctx context.Context) error {
 	}
 
 	if errorCount > 0 {
-		a.logger.Errorw("SyncAllEvents: completed with errors", "successCount", successCount, "errorCount", errorCount, "lastError", lastErr)
+		a.lggr.Errorw("SyncAllEvents: completed with errors", "successCount", successCount, "errorCount", errorCount, "lastError", lastErr)
 		return lastErr
 	}
 
-	a.logger.Infow("SyncAllEvents: successfully synced all events", "count", successCount)
+	a.lggr.Infow("SyncAllEvents: successfully synced all events", "count", successCount)
 	return nil
 }
