@@ -993,6 +993,9 @@ module ccip::fee_quoter {
         let account_is_writable_bitmap = eth_abi::decode_u64(&mut stream);
         let allow_out_of_order_execution = eth_abi::decode_bool(&mut stream);
         let token_receiver = eth_abi::decode_bytes32(&mut stream);
+
+        // Move current position in stream to the offset of the accounts array.
+        let _accounts_offset = eth_abi::decode_u256(&mut stream);
         let accounts =
             eth_abi::decode_vector(
                 &mut stream,

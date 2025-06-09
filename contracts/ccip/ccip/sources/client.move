@@ -40,6 +40,10 @@ module ccip::client {
         eth_abi::encode_u64(&mut extra_args, account_is_writable_bitmap);
         eth_abi::encode_bool(&mut extra_args, allow_out_of_order_execution);
         eth_abi::encode_left_padded_bytes32(&mut extra_args, token_receiver);
+
+        // Encode offset to dynamic data
+        // Offset = 5*32 (4 fixed fields + offset field) = 160 bytes from args_data start
+        eth_abi::encode_u256(&mut extra_args, 160 as u256);
         eth_abi::encode_u256(&mut extra_args, accounts.length() as u256);
         for (i in 0..accounts.length()) {
             eth_abi::encode_left_padded_bytes32(&mut extra_args, accounts[i]);
