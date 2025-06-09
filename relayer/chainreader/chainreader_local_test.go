@@ -1141,6 +1141,60 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 		require.Equal(t, uint64(10), evt.RenamedNested.RenamedId, "Event should have nested ID value of 10")
 	})
 
+	t.Run("QueryKey - Complex Boolean Filter with Nested AND/OR", func(t *testing.T) {
+		// Create a complex filter like:
+		// (SingleUintValue >= 2 AND SingleUintValue < 5) OR (SingleUintValue >= 15 AND SingleUintValue < 18)
+		// This should match events with values 2,3,4,15,16,17
+		filter := query.KeyFilter{
+			Key: "SingleValueEvent",
+			Expressions: []query.Expression{
+				query.Or(
+					query.And(
+						query.Comparator("SingleUintValue",
+							primitives.ValueComparator{Value: uint64(2), Operator: primitives.Gte},
+						),
+						query.Comparator("SingleUintValue",
+							primitives.ValueComparator{Value: uint64(5), Operator: primitives.Lt},
+						),
+					),
+					query.And(
+						query.Comparator("SingleUintValue",
+							primitives.ValueComparator{Value: uint64(15), Operator: primitives.Gte},
+						),
+						query.Comparator("SingleUintValue",
+							primitives.ValueComparator{Value: uint64(18), Operator: primitives.Lt},
+						),
+					),
+				),
+			},
+		}
+
+		seqs, err := loopReader.QueryKey(
+			context.Background(),
+			binding,
+			filter,
+			query.LimitAndSort{
+				Limit: query.CountLimit(100),
+				SortBy: []query.SortBy{
+					query.NewSortBySequence(query.Asc),
+				},
+			},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, seqs)
+
+		var values []uint64
+		for _, seq := range seqs {
+			evt := seq.Data.(*SingleValueEvent)
+			values = append(values, evt.SingleUintValue)
+		}
+
+		expectedValues := []uint64{2, 3, 4, 15, 16, 17}
+		require.Len(t, seqs, len(expectedValues))
+		require.ElementsMatch(t, expectedValues, values)
+	})
+
 	t.Run("QueryKey - Error Cases", func(t *testing.T) {
 		// Filtering on a non-existent field returns empty results.
 		invalidFilter := query.KeyFilter{

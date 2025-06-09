@@ -32,19 +32,19 @@ func (a *aptosChainReader) startTxPolling(ctx context.Context) {
 			elapsed := time.Since(start)
 
 			if err != nil && err != context.DeadlineExceeded {
-				a.logger.Warnw("TxSync completed with errors",
+				a.lggr.Warnw("TxSync completed with errors",
 					"error", err,
 					"duration", elapsed)
 			} else if err != nil {
-				a.logger.Warnw("Transaction sync timed out", "duration", elapsed)
+				a.lggr.Warnw("Transaction sync timed out", "duration", elapsed)
 			} else {
-				a.logger.Debugw("Transaction sync completed successfully",
+				a.lggr.Debugw("Transaction sync completed successfully",
 					"duration", elapsed)
 			}
 
 			cancel()
 		case <-ctx.Done():
-			a.logger.Infow("Transaction polling stopped")
+			a.lggr.Infow("Transaction polling stopped")
 			return
 		}
 	}
@@ -69,13 +69,13 @@ func (a *aptosChainReader) SyncTransmittersTxs(ctx context.Context) error {
 			return ctx.Err()
 		default:
 			if _, exists := a.transmitters[transmitter]; !exists {
-				a.logger.Debugw("Initializing sequence number for transmitter", "transmitter", transmitter.String())
+				a.lggr.Debugw("Initializing sequence number for transmitter", "transmitter", transmitter.String())
 				a.transmitters[transmitter] = 0
 			}
 
 			processed, err := a.syncTransmitterTxs(ctx, transmitter, batchSize)
 			if err != nil {
-				a.logger.Errorw("Failed to sync transmitter transactions",
+				a.lggr.Errorw("Failed to sync transmitter transactions",
 					"transmitter", transmitter.String(), "error", err)
 				continue
 			}
@@ -84,7 +84,7 @@ func (a *aptosChainReader) SyncTransmittersTxs(ctx context.Context) error {
 	}
 
 	if totalProcessed > 0 {
-		a.logger.Debugw("Transaction sync completed", "totalProcessed", totalProcessed)
+		a.lggr.Debugw("Transaction sync completed", "totalProcessed", totalProcessed)
 	}
 
 	return nil
@@ -133,48 +133,48 @@ func (a *aptosChainReader) syncTransmitterTxs(ctx context.Context, transmitter a
 		for _, txn := range txns {
 			userTxn, err := txn.UserTransaction()
 			if err != nil {
-				a.logger.Errorw("Failed to get user transaction",
+				a.lggr.Errorw("Failed to get user transaction",
 					"transmitter", transmitter.String(), "error", err)
 				continue
 			}
 
 			if userTxn.Success {
-				a.logger.Debugw("Skipping successful transaction",
+				a.lggr.Debugw("Skipping successful transaction",
 					"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber)
 				continue
 			}
 
-			a.logger.Infow("Found failed transaction", "transmitter", transmitter.String(),
+			a.lggr.Infow("Found failed transaction", "transmitter", transmitter.String(),
 				"sequenceNumber", userTxn.SequenceNumber, "version", userTxn.Version, "vmStatus", userTxn.VmStatus)
 
 			payload := userTxn.Payload
 			if payload.Type != api.TransactionPayloadVariantEntryFunction {
-				a.logger.Debugw("Skipping non-entry function transaction",
+				a.lggr.Debugw("Skipping non-entry function transaction",
 					"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber)
 				continue
 			}
 
 			entryFunc, ok := payload.Inner.(*api.TransactionPayloadEntryFunction)
 			if !ok {
-				a.logger.Errorw("Failed to cast payload to EntryFunction",
+				a.lggr.Errorw("Failed to cast payload to EntryFunction",
 					"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber)
 				continue
 			}
 
 			if entryFunc.Function != expectedFunction {
-				a.logger.Debugw("Skipping transaction with different function",
+				a.lggr.Debugw("Skipping transaction with different function",
 					"transmitter", transmitter.String(), "function", entryFunc.Function)
 				continue
 			}
 
 			if strings.Contains(userTxn.VmStatus, ignoredVmError) {
-				a.logger.Debugw("Skipping non-receiver originated transaction", "transmitter", transmitter.String(),
+				a.lggr.Debugw("Skipping non-receiver originated transaction", "transmitter", transmitter.String(),
 					"sequenceNumber", userTxn.SequenceNumber, "vmStatus", userTxn.VmStatus)
 				continue
 			}
 
 			if len(entryFunc.Arguments) != 2 {
-				a.logger.Errorw("Unexpected number of arguments in transaction",
+				a.lggr.Errorw("Unexpected number of arguments in transaction",
 					"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber,
 					"expected", 2, "got", len(entryFunc.Arguments))
 				continue
@@ -182,21 +182,21 @@ func (a *aptosChainReader) syncTransmitterTxs(ctx context.Context, transmitter a
 
 			reportStr, ok := entryFunc.Arguments[1].(string)
 			if !ok {
-				a.logger.Errorw("Expected report to be a hex string", "transmitter", transmitter.String(),
+				a.lggr.Errorw("Expected report to be a hex string", "transmitter", transmitter.String(),
 					"sequenceNumber", userTxn.SequenceNumber)
 				continue
 			}
 
 			report, err := utils.DecodeHexRelaxed(reportStr)
 			if err != nil {
-				a.logger.Errorw("failed to cast report to []byte", "transmitter", transmitter.String(),
+				a.lggr.Errorw("failed to cast report to []byte", "transmitter", transmitter.String(),
 					"sequenceNumber", userTxn.SequenceNumber)
 				continue
 			}
 
 			execReport, err := crutils.DeserializeExecutionReport(report)
 			if err != nil {
-				a.logger.Errorw("Failed to deserialize execution report",
+				a.lggr.Errorw("Failed to deserialize execution report",
 					"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber, "error", err)
 				continue
 			}
@@ -204,21 +204,21 @@ func (a *aptosChainReader) syncTransmitterTxs(ctx context.Context, transmitter a
 			sourceChainSelector := execReport.Message.Header.SourceChainSelector
 			sourceChainConfig, err := a.getSourceChainConfig(ctx, sourceChainSelector)
 			if err != nil {
-				a.logger.Errorw("Failed to get source chain config",
+				a.lggr.Errorw("Failed to get source chain config",
 					"transmitter", transmitter.String(), "sourceChainSelector", sourceChainSelector, "error", err)
 				continue
 			}
 
 			if sourceChainConfig == nil {
-				a.logger.Debugw("No source chain config found for selector",
+				a.lggr.Debugw("No source chain config found for selector",
 					"transmitter", transmitter.String(), "sourceChainSelector", sourceChainSelector)
 				continue
 			}
 
-			hasher := crutils.NewMessageHasherV1(a.logger)
+			hasher := crutils.NewMessageHasherV1(a.lggr)
 			messageHash, err := hasher.Hash(ctx, execReport, sourceChainConfig.OnRamp)
 			if err != nil {
-				a.logger.Errorw("Failed to calculate message hash",
+				a.lggr.Errorw("Failed to calculate message hash",
 					"transmitter", transmitter.String(), "sequenceNumber", userTxn.SequenceNumber, "error", err)
 				continue
 			}
@@ -235,13 +235,13 @@ func (a *aptosChainReader) syncTransmitterTxs(ctx context.Context, transmitter a
 
 			head, err := a.getBlockHead(userTxn.Version)
 			if err != nil {
-				a.logger.Errorw("Failed to fetch block metadata", "version", userTxn.Version, "error", err)
+				a.lggr.Errorw("Failed to fetch block metadata", "version", userTxn.Version, "error", err)
 				continue
 			}
 
 			if eventConfig.EventFieldRenames != nil {
 				if err := crutils.RenameMapFields(executionStateChanged, eventConfig.EventFieldRenames); err != nil {
-					a.logger.Errorw("Failed to rename synthetic event fields", "error", err)
+					a.lggr.Errorw("Failed to rename synthetic event fields", "error", err)
 					continue
 				}
 			}
@@ -264,11 +264,11 @@ func (a *aptosChainReader) syncTransmitterTxs(ctx context.Context, transmitter a
 
 		if len(records) > 0 {
 			if err := a.dbStore.InsertEvents(ctx, records); err != nil {
-				a.logger.Errorw("Failed to insert synthetic ExecutionStateChanged events", "error", err)
+				a.lggr.Errorw("Failed to insert synthetic ExecutionStateChanged events", "error", err)
 				return totalProcessed, fmt.Errorf("failed to insert events: %w", err)
 			}
 
-			a.logger.Debugw("Inserted synthetic ExecutionStateChanged events",
+			a.lggr.Debugw("Inserted synthetic ExecutionStateChanged events",
 				"count", len(records), "transmitter", transmitter.String())
 		}
 
@@ -287,7 +287,7 @@ func (a *aptosChainReader) getTransmitters(ctx context.Context) ([]aptos.Account
 
 	eventAccountAddress, eventHandle, eventConfig, err := a.getEventConfig(moduleKey, eventKey)
 	if err != nil {
-		a.logger.Errorw("Failed to get OCRConfigSet event config", "error", err)
+		a.lggr.Errorw("Failed to get OCRConfigSet event config", "error", err)
 		return nil, err
 	}
 
@@ -306,28 +306,28 @@ func (a *aptosChainReader) getTransmitters(ctx context.Context) ([]aptos.Account
 	)
 
 	if err != nil {
-		a.logger.Errorw("Failed to query OCRConfigSet events", "error", err)
+		a.lggr.Errorw("Failed to query OCRConfigSet events", "error", err)
 		return nil, err
 	}
 
 	if len(events) == 0 {
-		a.logger.Warnw("No OCRConfigSet events found")
+		a.lggr.Warnw("No OCRConfigSet events found")
 		return nil, nil
 	}
 
 	var configSet crutils.ConfigSet
 	if err := codec.DecodeAptosJsonValue(events[0].Data, &configSet); err != nil {
-		a.logger.Errorw("Failed to decode ConfigSet event", "error", err)
+		a.lggr.Errorw("Failed to decode ConfigSet event", "error", err)
 		return nil, fmt.Errorf("failed to decode ConfigSet event: %w", err)
 	}
 
 	transmitters := configSet.Transmitters
 	if len(transmitters) == 0 {
-		a.logger.Warnw("No transmitters found in OCRConfigSet event")
+		a.lggr.Warnw("No transmitters found in OCRConfigSet event")
 		return nil, nil
 	}
 
-	a.logger.Infow("Found transmitters in OCRConfigSet event", "count", len(transmitters))
+	a.lggr.Infow("Found transmitters in OCRConfigSet event", "count", len(transmitters))
 	return transmitters, nil
 }
 
@@ -368,7 +368,7 @@ func (a *aptosChainReader) getSourceChainConfig(ctx context.Context, sourceChain
 	}
 
 	if len(events) == 0 {
-		a.logger.Debugw("No SourceChainConfigSet event found", "sourceChainSelector", sourceChainSelector)
+		a.lggr.Debugw("No SourceChainConfigSet event found", "sourceChainSelector", sourceChainSelector)
 		return nil, nil
 	}
 

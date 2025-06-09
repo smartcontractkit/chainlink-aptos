@@ -31,7 +31,7 @@ import (
 type aptosChainReader struct {
 	types.UnimplementedContractReader
 
-	logger  logger.Logger
+	lggr    logger.Logger
 	config  config.ChainReaderConfig
 	dbStore *db.DBStore
 
@@ -55,8 +55,9 @@ type ExtendedContractReader interface {
 }
 
 func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config config.ChainReaderConfig, ds sqlutil.DataSource) types.ContractReader {
+	lggr := logger.Named(lgr, "AptosChainReader")
 	reader := &aptosChainReader{
-		logger:                logger.Named(lgr, "AptosChainReader"),
+		lggr:                  lggr,
 		client:                client,
 		config:                config,
 		moduleAddresses:       map[string]aptos.AccountAddress{},
@@ -65,14 +66,14 @@ func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config confi
 	}
 
 	if ds != nil {
-		reader.dbStore = db.NewDBStore(ds)
+		reader.dbStore = db.NewDBStore(ds, lggr)
 	}
 
 	return reader
 }
 
 func (a *aptosChainReader) Name() string {
-	return a.logger.Name()
+	return a.lggr.Name()
 }
 
 func (a *aptosChainReader) Ready() error {
@@ -90,12 +91,12 @@ func (a *aptosChainReader) Start(ctx context.Context) error {
 			var syncEventCtx context.Context
 			syncEventCtx, a.eventSyncCancelFunc = context.WithCancel(ctx)
 			go a.startEventPolling(syncEventCtx)
-			a.logger.Infow("AptosChainReader started event polling", "interval", a.config.EventSyncInterval)
+			a.lggr.Infow("AptosChainReader started event polling", "interval", a.config.EventSyncInterval)
 
 			var syncTxCtx context.Context
 			syncTxCtx, a.txSyncCancelFunc = context.WithCancel(ctx)
 			go a.startTxPolling(syncTxCtx)
-			a.logger.Infow("AptosChainReader started transaction polling", "interval", a.config.TxSyncInterval)
+			a.lggr.Infow("AptosChainReader started transaction polling", "interval", a.config.TxSyncInterval)
 		}
 
 		return nil
@@ -359,6 +360,12 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		expressions = convertedExpressions
 	}
 
+	a.lggr.Debugw("QueryKey received request",
+		"contract", address.String(),
+		"key", filter.Key,
+		"expressions", expressions,
+		"limitAndSort", limitAndSort)
+
 	moduleConfig, ok := a.config.Modules[contractName]
 	if !ok {
 		return nil, fmt.Errorf("no such module: %s", contractName)
@@ -435,6 +442,11 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		}
 		sequences = append(sequences, sequence)
 	}
+
+	a.lggr.Debugw("QueryKey returning results",
+		"contract", address.String(),
+		"key", filter.Key,
+		"resultCount", len(sequences))
 
 	return sequences, nil
 }

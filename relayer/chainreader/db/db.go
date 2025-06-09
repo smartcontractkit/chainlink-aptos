@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
 
+	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
@@ -15,12 +17,16 @@ import (
 
 type DBStore struct {
 	ds            sqlutil.DataSource
+	lggr          logger.Logger
 	rwMutex       sync.RWMutex
 	schemaEnsured bool
 }
 
-func NewDBStore(ds sqlutil.DataSource) *DBStore {
-	return &DBStore{ds: ds}
+func NewDBStore(ds sqlutil.DataSource, logger logger.Logger) *DBStore {
+	return &DBStore{
+		ds:   ds,
+		lggr: logger,
+	}
 }
 
 func (s *DBStore) EnsureSchema(ctx context.Context) error {
@@ -148,32 +154,23 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 	args := []interface{}{eventAccountAddress, eventHandle, eventFieldName}
 	argCount := 4
 
-	tsFilter, hasTSFilter := utils.ExtractTimestampFilter(expressions)
-	if hasTSFilter {
-		baseSQL += fmt.Sprintf(" AND block_timestamp >= $%d", argCount)
-		args = append(args, tsFilter)
-		argCount++
-	}
+	s.lggr.Debugw("Building SQL query from expressions",
+		"event", eventAccountAddress+"/"+eventHandle+"/"+eventFieldName,
+		"expressionCount", len(expressions),
+		"expressions", expressions)
 
-	for _, expr := range expressions {
-		if expr.IsPrimitive() {
-			switch v := expr.Primitive.(type) {
-			case *primitives.Comparator:
-				for _, valueCmp := range v.ValueComparators {
-					jsonPath := utils.BuildJsonPathExpr("data", v.Name)
-
-					var condition string
-					if utils.IsNumeric(valueCmp.Value) {
-						condition = fmt.Sprintf("CAST(%s AS numeric) %s $%d", jsonPath, operatorSQL(valueCmp.Operator), argCount)
-					} else {
-						condition = fmt.Sprintf("%s %s $%d", jsonPath, operatorSQL(valueCmp.Operator), argCount)
-					}
-
-					baseSQL += " AND " + condition
-					args = append(args, valueCmp.Value)
-					argCount++
-				}
+	if len(expressions) > 0 {
+		var conditions []string
+		for _, expr := range expressions {
+			sqlCondition, err := s.buildSQLCondition(expr, &args, &argCount)
+			if err != nil {
+				return nil, fmt.Errorf("failed to build SQL condition: %w", err)
 			}
+			conditions = append(conditions, sqlCondition)
+		}
+
+		if len(conditions) > 0 {
+			baseSQL += " AND " + strings.Join(conditions, " AND ")
 		}
 	}
 
@@ -188,6 +185,12 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 	if limitAndSort.Limit.Count > 0 {
 		baseSQL += fmt.Sprintf(" LIMIT %d", limitAndSort.Limit.Count)
 	}
+
+	s.lggr.Debugw("Executing SQL query",
+		"sql", baseSQL,
+		"paramCount", len(args),
+		"params", args,
+		"limitCount", limitAndSort.Limit.Count)
 
 	rows, err := s.ds.QueryContext(ctx, baseSQL, args...)
 	if err != nil {
@@ -249,6 +252,63 @@ WHERE id = $1
 	}
 
 	return txVersion, nil
+}
+
+func (s *DBStore) buildSQLCondition(expr query.Expression, args *[]any, argCount *int) (string, error) {
+	if expr.IsPrimitive() {
+		switch v := expr.Primitive.(type) {
+		case *primitives.Comparator:
+			conditions := []string{}
+			for _, valueCmp := range v.ValueComparators {
+				jsonPath := utils.BuildJsonPathExpr("data", v.Name)
+
+				var condition string
+				if utils.IsNumeric(valueCmp.Value) {
+					condition = fmt.Sprintf("CAST(%s AS numeric) %s $%d", jsonPath, operatorSQL(valueCmp.Operator), *argCount)
+				} else {
+					condition = fmt.Sprintf("%s %s $%d", jsonPath, operatorSQL(valueCmp.Operator), *argCount)
+				}
+
+				*args = append(*args, valueCmp.Value)
+				*argCount++
+				conditions = append(conditions, condition)
+			}
+			return "(" + strings.Join(conditions, " AND ") + ")", nil
+
+		case *primitives.Timestamp:
+			condition := fmt.Sprintf("block_timestamp %s $%d", operatorSQL(v.Operator), *argCount)
+			*args = append(*args, v.Timestamp)
+			*argCount++
+			return condition, nil
+
+		case *primitives.Confidence:
+			// Confidence filter isn't applicable in the context of Aptos
+			return "TRUE", nil
+
+		default:
+			return "", fmt.Errorf("unsupported primitive type: %T", expr.Primitive)
+		}
+	} else {
+		if len(expr.BoolExpression.Expressions) < 2 {
+			return "", fmt.Errorf("boolean expression must have at least 2 expressions")
+		}
+
+		var subConditions []string
+		for _, subExpr := range expr.BoolExpression.Expressions {
+			subCond, err := s.buildSQLCondition(subExpr, args, argCount)
+			if err != nil {
+				return "", err
+			}
+			subConditions = append(subConditions, subCond)
+		}
+
+		operator := " AND "
+		if expr.BoolExpression.BoolOperator == query.OR {
+			operator = " OR "
+		}
+
+		return "(" + strings.Join(subConditions, operator) + ")", nil
+	}
 }
 
 func operatorSQL(op primitives.ComparisonOperator) string {
