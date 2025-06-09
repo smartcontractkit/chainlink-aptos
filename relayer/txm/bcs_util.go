@@ -102,10 +102,16 @@ func CreateTypeTag(typeName string) (aptos.TypeTag, error) {
 
 func CreateBcsValue(typeTag aptos.TypeTag, typeValue any) ([]byte, error) {
 	serializer := &bcs.Serializer{}
+
 	err := serializeArg(typeValue, typeTag, serializer)
 	if err != nil {
 		return nil, err
 	}
+
+	if err := serializer.Error(); err != nil {
+		return nil, err
+	}
+
 	return serializer.ToBytes(), nil
 }
 
@@ -328,10 +334,19 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 		if rv.Kind() != reflect.Array && rv.Kind() != reflect.Slice {
 			return errors.New("invalid vector args")
 		}
+
 		length := rv.Len()
 		serializer.Uleb128(uint32(length))
+		if err := serializer.Error(); err != nil {
+			return err
+		}
+
 		for i := 0; i < length; i++ {
 			if err := serializeArg(rv.Index(i).Interface(), itemType, serializer); err != nil {
+				return err
+			}
+
+			if err := serializer.Error(); err != nil {
 				return err
 			}
 		}
@@ -384,6 +399,10 @@ func GetBcsValues(data []byte, typeTags ...aptos.TypeTag) ([]any, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
 	}
 	return returns, nil
 }
@@ -412,11 +431,19 @@ func deserializeArg(argType aptos.TypeTag, deserializer *bcs.Deserializer) (any,
 		return address, nil
 	case aptos.TypeTagVector:
 		length := deserializer.Uleb128()
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
+
 		elementType := getType(argType.Value.(*aptos.VectorTag).TypeParam)
 		returns := reflect.MakeSlice(reflect.SliceOf(elementType), 0, int(length))
 		for range length {
 			elem, err := deserializeArg(argType.Value.(*aptos.VectorTag).TypeParam, deserializer)
 			if err != nil {
+				return nil, err
+			}
+
+			if err := deserializer.Error(); err != nil {
 				return nil, err
 			}
 			returns = reflect.Append(returns, reflect.ValueOf(elem))
