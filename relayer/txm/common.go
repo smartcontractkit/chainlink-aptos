@@ -737,6 +737,12 @@ func ScheduleBatchOperationsAsDeployer(
 }
 
 func HashOperationBatch(targets []aptos.AccountAddress, moduleNames, functionNames []string, datas [][]byte, predecessor, salt []byte) (common.Hash, error) {
+	// Verify all arrays have the same length
+	if len(targets) != len(moduleNames) || len(targets) != len(functionNames) || len(targets) != len(datas) {
+		return common.Hash{}, fmt.Errorf("mismatched array lengths: targets=%d, moduleNames=%d, functionNames=%d, datas=%d",
+			len(targets), len(moduleNames), len(functionNames), len(datas))
+	}
+
 	ser := bcs.Serializer{}
 	//nolint:gosec
 	ser.Uleb128(uint32(len(targets)))
