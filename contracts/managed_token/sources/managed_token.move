@@ -1,6 +1,6 @@
 module managed_token::managed_token {
     use std::account;
-    use std::event;
+    use std::event::{Self, EventHandle};
     use std::fungible_asset::{Self, BurnRef, Metadata, MintRef, TransferRef};
     use std::object::{Self, ExtendRef, Object, TransferRef as ObjectTransferRef};
     use std::option::{Option};
@@ -18,7 +18,10 @@ module managed_token::managed_token {
         transfer_ref: ObjectTransferRef,
         ownable_state: OwnableState,
         allowed_minters: AllowlistState,
-        allowed_burners: AllowlistState
+        allowed_burners: AllowlistState,
+        initialize_events: EventHandle<Initialize>,
+        mint_events: EventHandle<Mint>,
+        burn_events: EventHandle<Burn>
     }
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
@@ -28,7 +31,10 @@ module managed_token::managed_token {
         ownable_state: OwnableState,
         allowed_minters: AllowlistState,
         allowed_burners: AllowlistState,
-        token: Object<Metadata>
+        token: Object<Metadata>,
+        initialize_events: EventHandle<Initialize>,
+        mint_events: EventHandle<Mint>,
+        burn_events: EventHandle<Burn>
     }
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
@@ -86,15 +92,15 @@ module managed_token::managed_token {
 
     #[view]
     public fun token_metadata(): address acquires TokenState {
-        token_metadata_internal()
-    }
-
-    inline fun token_metadata_internal(): address {
         assert!(
             exists<TokenState>(token_state_address_internal()),
             E_TOKEN_NOT_INITIALIZED
         );
-        object::object_address(&TokenState[token_state_address_internal()].token)
+        token_metadata_internal(&TokenState[token_state_address_internal()])
+    }
+
+    inline fun token_metadata_internal(state: &TokenState): address {
+        object::object_address(&state.token)
     }
 
     #[view]
@@ -154,7 +160,10 @@ module managed_token::managed_token {
                 transfer_ref: object::generate_transfer_ref(constructor_ref),
                 ownable_state: ownable::new(publisher, @managed_token),
                 allowed_minters,
-                allowed_burners
+                allowed_burners,
+                initialize_events: account::new_event_handle(publisher),
+                mint_events: account::new_event_handle(publisher),
+                burn_events: account::new_event_handle(publisher)
             }
         );
     }
@@ -186,7 +195,10 @@ module managed_token::managed_token {
             transfer_ref,
             ownable_state,
             allowed_minters,
-            allowed_burners
+            allowed_burners,
+            initialize_events,
+            mint_events,
+            burn_events
         } = move_from<TokenStateDeployment>(token_state_address);
 
         assert_only_owner(signer::address_of(publisher), &ownable_state);
@@ -219,17 +231,6 @@ module managed_token::managed_token {
         );
 
         let token = object::object_from_constructor_ref(constructor_ref);
-        move_to(
-            token_state_signer,
-            TokenState {
-                extend_ref,
-                transfer_ref,
-                ownable_state,
-                allowed_minters,
-                allowed_burners,
-                token
-            }
-        );
 
         event::emit(
             Initialize {
@@ -239,6 +240,32 @@ module managed_token::managed_token {
                 decimals,
                 icon,
                 project
+            }
+        );
+        event::emit_event(
+            &mut initialize_events,
+            Initialize {
+                publisher: publisher_addr,
+                token,
+                max_supply,
+                decimals,
+                icon,
+                project
+            }
+        );
+
+        move_to(
+            token_state_signer,
+            TokenState {
+                extend_ref,
+                transfer_ref,
+                ownable_state,
+                allowed_minters,
+                allowed_burners,
+                token,
+                initialize_events,
+                mint_events,
+                burn_events
             }
         );
     }
@@ -281,54 +308,64 @@ module managed_token::managed_token {
         minter: &signer, to: address, amount: u64
     ) acquires TokenMetadataRefs, TokenState {
         let minter_addr = signer::address_of(minter);
-        assert_is_allowed_minter(minter_addr);
+        let state = &mut TokenState[token_state_address_internal()];
+        assert_is_allowed_minter(minter_addr, state);
 
         if (amount == 0) { return };
 
-        primary_fungible_store::mint(&borrow_token_metadata_refs().mint_ref, to, amount);
+        primary_fungible_store::mint(
+            &borrow_token_metadata_refs(state).mint_ref, to, amount
+        );
 
         event::emit(Mint { minter: minter_addr, to, amount });
+        event::emit_event(
+            &mut state.mint_events,
+            Mint { minter: minter_addr, to, amount }
+        );
     }
 
     public entry fun burn(
         burner: &signer, from: address, amount: u64
     ) acquires TokenMetadataRefs, TokenState {
         let burner_addr = signer::address_of(burner);
-        assert_is_allowed_burner(burner_addr);
+        let state = &mut TokenState[token_state_address_internal()];
+        assert_is_allowed_burner(burner_addr, state);
 
         if (amount == 0) { return };
 
         primary_fungible_store::burn(
-            &borrow_token_metadata_refs().burn_ref, from, amount
+            &borrow_token_metadata_refs(state).burn_ref, from, amount
         );
 
         event::emit(Burn { burner: burner_addr, from, amount });
+        event::emit_event(
+            &mut state.burn_events,
+            Burn { burner: burner_addr, from, amount }
+        );
     }
 
-    inline fun assert_is_allowed_minter(caller: address) {
+    inline fun assert_is_allowed_minter(
+        caller: address, state: &TokenState
+    ) {
         assert!(
-            caller == owner()
-                || allowlist::is_allowed(
-                    &TokenState[token_state_address_internal()].allowed_minters,
-                    caller
-                ),
+            caller == owner_internal(state)
+                || allowlist::is_allowed(&state.allowed_minters, caller),
             E_NOT_ALLOWED_MINTER
         );
     }
 
-    inline fun assert_is_allowed_burner(caller: address) {
+    inline fun assert_is_allowed_burner(
+        caller: address, state: &TokenState
+    ) {
         assert!(
-            caller == owner()
-                || allowlist::is_allowed(
-                    &TokenState[token_state_address_internal()].allowed_burners,
-                    caller
-                ),
+            caller == owner_internal(state)
+                || allowlist::is_allowed(&state.allowed_burners, caller),
             E_NOT_ALLOWED_BURNER
         );
     }
 
-    inline fun borrow_token_metadata_refs(): &TokenMetadataRefs {
-        &TokenMetadataRefs[token_metadata_internal()]
+    inline fun borrow_token_metadata_refs(state: &TokenState): &TokenMetadataRefs {
+        &TokenMetadataRefs[token_metadata_internal(state)]
     }
 
     // ================================================================
@@ -337,7 +374,11 @@ module managed_token::managed_token {
 
     #[view]
     public fun owner(): address acquires TokenState {
-        ownable::owner(&TokenState[token_state_address_internal()].ownable_state)
+        owner_internal(&TokenState[token_state_address_internal()])
+    }
+
+    inline fun owner_internal(state: &TokenState): address {
+        ownable::owner(&state.ownable_state)
     }
 
     fun assert_only_owner(caller: address, ownable_state: &OwnableState) {
