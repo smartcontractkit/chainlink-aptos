@@ -73,6 +73,7 @@ module data_feeds::router {
         registry::get_benchmarks_unchecked(feed_ids)
     }
 
+    // @deprecated This function is no longer supported
     public fun get_reports(
         _authority: &signer, feed_ids: vector<vector<u8>>, _billing_data: vector<u8>
     ): vector<Report> {
