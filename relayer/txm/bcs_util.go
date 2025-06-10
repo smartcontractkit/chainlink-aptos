@@ -225,11 +225,11 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 			serializer.U64(v)
 			return nil
 		}
-		if v, ok := argVal.(int); ok && v >= 0 {
+		if v, ok := argVal.(int); ok && v >= 0 && v == int(uint64(v)) {
 			serializer.U64(uint64(v))
 			return nil
 		}
-		if v, ok := argVal.(float64); ok && v >= 0 {
+		if v, ok := argVal.(float64); ok && v >= 0 && v == float64(uint64(v)) {
 			serializer.U64(uint64(v))
 			return nil
 		}
@@ -251,12 +251,12 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 			serializer.U128(*b)
 			return nil
 		}
-		if v, ok := argVal.(int); ok && v >= 0 {
+		if v, ok := argVal.(int); ok && v >= 0 && v == int(int64(v)) {
 			b := big.NewInt(int64(v))
 			serializer.U128(*b)
 			return nil
 		}
-		if v, ok := argVal.(float64); ok && v >= 0 {
+		if v, ok := argVal.(float64); ok && v >= 0 && v == float64(int64(v)) {
 			b := big.NewInt(int64(v))
 			serializer.U128(*b)
 			return nil
@@ -277,12 +277,12 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 			serializer.U256(*b)
 			return nil
 		}
-		if v, ok := argVal.(int); ok && v >= 0 {
+		if v, ok := argVal.(int); ok && v >= 0 && v == int(int64(v)) {
 			b := big.NewInt(int64(v))
 			serializer.U256(*b)
 			return nil
 		}
-		if v, ok := argVal.(float64); ok && v >= 0 {
+		if v, ok := argVal.(float64); ok && v >= 0 && v == float64(int64(v)) {
 			b := big.NewInt(int64(v))
 			serializer.U256(*b)
 			return nil
