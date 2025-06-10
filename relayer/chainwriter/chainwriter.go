@@ -51,13 +51,13 @@ func (a *aptosChainWriter) HealthReport() map[string]error {
 }
 
 func (a *aptosChainWriter) Start(ctx context.Context) error {
-	return a.starter.StartOnce("aptosChainWriter", func() error {
+	return a.starter.StartOnce(a.Name(), func() error {
 		return nil
 	})
 }
 
 func (a *aptosChainWriter) Close() error {
-	return a.starter.StopOnce("aptosChainWriter", func() error {
+	return a.starter.StopOnce(a.Name(), func() error {
 		close(a.stop)
 		return nil
 	})

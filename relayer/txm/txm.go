@@ -79,7 +79,7 @@ func (a *AptosTxm) HealthReport() map[string]error {
 }
 
 func (a *AptosTxm) Start(ctx context.Context) error {
-	return a.starter.StartOnce("AptosTxm", func() error {
+	return a.starter.StartOnce(a.Name(), func() error {
 		a.done.Add(2)
 		go a.broadcastLoop()
 		go a.confirmLoop()
@@ -88,7 +88,7 @@ func (a *AptosTxm) Start(ctx context.Context) error {
 }
 
 func (a *AptosTxm) Close() error {
-	return a.starter.StopOnce("AptosTxm", func() error {
+	return a.starter.StopOnce(a.Name(), func() error {
 		close(a.stop)
 		a.done.Wait()
 		return nil
