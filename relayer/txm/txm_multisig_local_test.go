@@ -300,7 +300,8 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		ops := TimelockOpToMultipleOps(scheduleTimelockOps, predecessor, salt, delay, role, chainIdBig, mcmsAccount, getNextNonce)
 
 		// Log hashRootMetadata and contents
-		metadataHash := HashRootMetadata(rootMetadata)
+		metadataHash, err := HashRootMetadata(rootMetadata)
+		require.NoError(t, err)
 		logger.Debugw("hashRootMetadata", "value", hex.EncodeToString(metadataHash[:]))
 		logger.Debugw("ops", "value", ops)
 
@@ -313,7 +314,9 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		// Schedule operations through MCMS -> MCMS Timelock
 		for i, op := range scheduleTimelockOps {
 			proof := merkleTree.GetProof(i + 1)
-			require.True(t, merkleTree.VerifyProof(proof, HashOp(&ops[i])))
+			hashOp, err := HashOp(&ops[i])
+			require.NoError(t, err)
+			require.True(t, merkleTree.VerifyProof(proof, hashOp))
 			txId := ScheduleSingleOperationAsDeployer(t, logger, txm, mcmsAccount, deployerAddress, deployerPublicKeyHex,
 				[]TimelockOperation{op}, predecessor, salt, delay, role, chainIdBig, ops[i].Nonce, proof, false)
 			WaitForTxmId(t, txm, txId, time.Second*30)
@@ -479,7 +482,8 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 			proof := merkleTree.GetProof(1)
 
 			// Calculate the hash of our single operation (for verification)
-			opHash := HashOp(&op)
+			opHash, err := HashOp(&op)
+			require.NoError(t, err)
 			logger.Debugw("Leaf hash for operation", "hash", hex.EncodeToString(opHash[:]))
 
 			// Verify that the proof is valid for our operation
@@ -655,7 +659,8 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		proof := merkleTree.GetProof(1)
 
 		// Calculate the hash of our single operation (for verification)
-		opHash := HashOp(&op)
+		opHash, err := HashOp(&op)
+		require.NoError(t, err)
 		logger.Debugw("Leaf hash for operation", "hash", hex.EncodeToString(opHash[:]))
 
 		// Verify that the proof is valid for our operation

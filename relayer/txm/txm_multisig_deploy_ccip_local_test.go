@@ -200,7 +200,9 @@ func scheduleAndExecuteOperations(
 	// Schedule each operation through MCMS
 	for i, op := range operations {
 		proof := merkleTree.GetProof(i + 1)
-		require.True(t, merkleTree.VerifyProof(proof, HashOp(&ops[i])))
+		hashOp, err := HashOp(&ops[i])
+		require.NoError(t, err)
+		require.True(t, merkleTree.VerifyProof(proof, hashOp))
 		txId := ScheduleSingleOperationAsDeployer(t, logger, txm, deployMcmsAccount,
 			deployerAddress, deployerPublicKeyHex, []TimelockOperation{op},
 			predecessor, salt, delay, role, chainID, ops[i].Nonce, proof, simulateTx)
