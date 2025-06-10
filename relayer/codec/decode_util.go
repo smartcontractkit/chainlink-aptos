@@ -99,7 +99,11 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 			// hex.DecodeString does not support odd length strings
 			str = "0" + str
 		}
-		return hex.DecodeString(str)
+		bytes, err := hex.DecodeString(str)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode hex string %q: %w", str, err)
+		}
+		return bytes, nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		val, err := strconv.ParseUint(str, 16, 64)
 		if err != nil {
