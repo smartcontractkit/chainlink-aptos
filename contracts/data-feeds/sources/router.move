@@ -207,6 +207,10 @@ module data_feeds::router {
 
         assert!(get_owner() == @owner, 1);
 
-        get_reports(owner, vector::empty<vector<u8>>(), vector::empty<u8>());
+        get_reports(
+            owner,
+            vector::empty<vector<u8>>(),
+            vector::empty<u8>()
+        );
     }
 }
