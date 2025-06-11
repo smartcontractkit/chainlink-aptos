@@ -115,10 +115,18 @@ ON CONFLICT (event_account_address, event_handle, event_field_name, tx_version)
 DO NOTHING;
 `
 
+	var allErrors []error
 	for _, record := range records {
 		data, err := json.Marshal(record.Data)
 		if err != nil {
-			return fmt.Errorf("failed to marshal event data for handle %s: %w", record.EventHandle, err)
+			errMsg := fmt.Errorf("failed to marshal event data for handle %s: %w", record.EventHandle, err)
+			s.lggr.Errorw("Event marshaling failed",
+				"error", errMsg,
+				"handle", record.EventHandle,
+				"fieldName", record.EventFieldName,
+				"offset", record.EventOffset)
+			allErrors = append(allErrors, errMsg)
+			continue
 		}
 
 		_, err = s.ds.ExecContext(ctx, insertSQL,
@@ -134,8 +142,21 @@ DO NOTHING;
 		)
 
 		if err != nil {
-			return fmt.Errorf("failed to insert event (handle: %s, field_name: %s, offset: %v): %w", record.EventHandle, record.EventFieldName, record.EventOffset, err)
+			errMsg := fmt.Errorf("failed to insert event (handle: %s, field_name: %s, offset: %v): %w",
+				record.EventHandle, record.EventFieldName, record.EventOffset, err)
+			s.lggr.Errorw("Event insertion failed",
+				"error", errMsg,
+				"account", record.EventAccountAddress,
+				"handle", record.EventHandle,
+				"fieldName", record.EventFieldName,
+				"txVersion", record.TxVersion)
+			allErrors = append(allErrors, errMsg)
+			continue
 		}
+	}
+
+	if len(allErrors) > 0 {
+		return fmt.Errorf("failed to insert %d events: %v", len(allErrors), allErrors)
 	}
 
 	return nil

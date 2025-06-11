@@ -73,7 +73,7 @@ func RenameMapFields(jsonData map[string]any, renames map[string]config.RenamedF
 		}
 
 		// it's possible we don't want to rename this field, but only want the sub fields to be renamed.
-		if rename.NewName != "" {
+		if rename.NewName != "" && rename.NewName != origName {
 			jsonData[rename.NewName] = subValue
 			delete(jsonData, origName)
 		}
