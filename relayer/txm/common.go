@@ -486,10 +486,10 @@ func EnqueueSetRoot(
 
 	// The first leaf is the metadata
 	metadataProof := merkleTree.GetProof(0)
-	rootHash, err := HashRootMetadata(rootMetadata)
+	hashedRootMetadata, err := HashRootMetadata(rootMetadata)
 	require.NoError(t, err)
 
-	require.True(t, merkleTree.VerifyProof(metadataProof, rootHash))
+	require.True(t, merkleTree.VerifyProof(metadataProof, hashedRootMetadata))
 
 	// Log all values needed for Move e2e test
 	logger.Debugw("============= BEGIN VALUES FOR MOVE E2E TEST =============")
