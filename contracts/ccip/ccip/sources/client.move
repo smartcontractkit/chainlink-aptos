@@ -1,9 +1,12 @@
 /// This module defines messages for end users to interact with Aptos CCIP.
 module ccip::client {
-    use ccip::eth_abi;
+    use std::bcs;
+    use std::error;
 
     const GENERIC_EXTRA_ARGS_V2_TAG: vector<u8> = x"181dcf10";
     const SVM_EXTRA_ARGS_V1_TAG: vector<u8> = x"1f3b3aba";
+
+    const E_INVALID_SVM_TOKEN_RECEIVER_LENGTH: u64 = 1;
 
     #[view]
     public fun generic_extra_args_v2_tag(): vector<u8> {
@@ -20,9 +23,9 @@ module ccip::client {
         gas_limit: u256, allow_out_of_order_execution: bool
     ): vector<u8> {
         let extra_args = vector[];
-        eth_abi::encode_selector(&mut extra_args, GENERIC_EXTRA_ARGS_V2_TAG);
-        eth_abi::encode_u256(&mut extra_args, gas_limit);
-        eth_abi::encode_bool(&mut extra_args, allow_out_of_order_execution);
+        extra_args.append(GENERIC_EXTRA_ARGS_V2_TAG);
+        extra_args.append(bcs::to_bytes(&gas_limit));
+        extra_args.append(bcs::to_bytes(&allow_out_of_order_execution));
         extra_args
     }
 
@@ -35,15 +38,23 @@ module ccip::client {
         accounts: vector<vector<u8>>
     ): vector<u8> {
         let extra_args = vector[];
-        eth_abi::encode_selector(&mut extra_args, SVM_EXTRA_ARGS_V1_TAG);
-        eth_abi::encode_u32(&mut extra_args, compute_units);
-        eth_abi::encode_u64(&mut extra_args, account_is_writable_bitmap);
-        eth_abi::encode_bool(&mut extra_args, allow_out_of_order_execution);
-        eth_abi::encode_left_padded_bytes32(&mut extra_args, token_receiver);
-        eth_abi::encode_u256(&mut extra_args, accounts.length() as u256);
-        for (i in 0..accounts.length()) {
-            eth_abi::encode_left_padded_bytes32(&mut extra_args, accounts[i]);
+        extra_args.append(SVM_EXTRA_ARGS_V1_TAG);
+        extra_args.append(bcs::to_bytes(&compute_units));
+        extra_args.append(bcs::to_bytes(&account_is_writable_bitmap));
+        extra_args.append(bcs::to_bytes(&allow_out_of_order_execution));
+        if (token_receiver.length() < 32) {
+            token_receiver.reverse();
+            while (token_receiver.length() < 32) {
+                token_receiver.push_back(0);
+            };
+            token_receiver.reverse();
         };
+        assert!(
+            token_receiver.length() == 32,
+            error::invalid_argument(E_INVALID_SVM_TOKEN_RECEIVER_LENGTH)
+        );
+        extra_args.append(bcs::to_bytes(&token_receiver));
+        extra_args.append(bcs::to_bytes(&accounts));
         extra_args
     }
 
@@ -117,5 +128,15 @@ module ccip::client {
 
     public fun get_amount(input: &Any2AptosTokenAmount): u64 {
         input.amount
+    }
+
+    #[test]
+    fun test_encode_decode_vector_u8() {
+        let input = vector[1, 2, 3, 4, 5];
+        let encoded = bcs::to_bytes(&input);
+
+        let decode_stream = mcms::bcs_stream::new(encoded);
+        let decoded = mcms::bcs_stream::deserialize_vector_u8(&mut decode_stream);
+        assert!(input == decoded, 0);
     }
 }
