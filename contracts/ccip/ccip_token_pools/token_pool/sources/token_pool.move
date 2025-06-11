@@ -205,7 +205,7 @@ module ccip_token_pool::token_pool {
                 error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
             );
             state.remote_chain_configs.remove(remote_chain_selector);
-            
+
             event::emit(ChainRemoved { remote_chain_selector });
             event::emit_event(
                 &mut state.chain_removed_events, ChainRemoved { remote_chain_selector }

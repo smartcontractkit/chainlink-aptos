@@ -143,14 +143,18 @@ module managed_token::managed_token {
         let token_state_signer = &object::generate_signer(constructor_ref);
 
         // create an Account on the object for event handles.
-        account::create_account_if_does_not_exist(@managed_token);
+        account::create_account_if_does_not_exist(signer::address_of(token_state_signer));
 
         let allowed_minters =
-            allowlist::new_with_name(publisher, vector[], string::utf8(b"minters"));
+            allowlist::new_with_name(
+                token_state_signer, vector[], string::utf8(b"minters")
+            );
         allowlist::set_allowlist_enabled(&mut allowed_minters, true);
 
         let allowed_burners =
-            allowlist::new_with_name(publisher, vector[], string::utf8(b"burners"));
+            allowlist::new_with_name(
+                token_state_signer, vector[], string::utf8(b"burners")
+            );
         allowlist::set_allowlist_enabled(&mut allowed_burners, true);
 
         move_to(
@@ -158,12 +162,12 @@ module managed_token::managed_token {
             TokenStateDeployment {
                 extend_ref,
                 transfer_ref: object::generate_transfer_ref(constructor_ref),
-                ownable_state: ownable::new(publisher, @managed_token),
+                ownable_state: ownable::new(token_state_signer, @managed_token),
                 allowed_minters,
                 allowed_burners,
-                initialize_events: account::new_event_handle(publisher),
-                mint_events: account::new_event_handle(publisher),
-                burn_events: account::new_event_handle(publisher)
+                initialize_events: account::new_event_handle(token_state_signer),
+                mint_events: account::new_event_handle(token_state_signer),
+                burn_events: account::new_event_handle(token_state_signer)
             }
         );
     }
