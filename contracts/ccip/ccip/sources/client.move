@@ -1,7 +1,6 @@
 /// This module defines messages for end users to interact with Aptos CCIP.
 module ccip::client {
     use std::bcs;
-    use std::error;
 
     const GENERIC_EXTRA_ARGS_V2_TAG: vector<u8> = x"181dcf10";
     const SVM_EXTRA_ARGS_V1_TAG: vector<u8> = x"1f3b3aba";
@@ -49,10 +48,7 @@ module ccip::client {
             };
             token_receiver.reverse();
         };
-        assert!(
-            token_receiver.length() == 32,
-            error::invalid_argument(E_INVALID_SVM_TOKEN_RECEIVER_LENGTH)
-        );
+        assert!(token_receiver.length() == 32, E_INVALID_SVM_TOKEN_RECEIVER_LENGTH);
         extra_args.append(bcs::to_bytes(&token_receiver));
         extra_args.append(bcs::to_bytes(&accounts));
         extra_args
@@ -128,15 +124,5 @@ module ccip::client {
 
     public fun get_amount(input: &Any2AptosTokenAmount): u64 {
         input.amount
-    }
-
-    #[test]
-    fun test_encode_decode_vector_u8() {
-        let input = vector[1, 2, 3, 4, 5];
-        let encoded = bcs::to_bytes(&input);
-
-        let decode_stream = mcms::bcs_stream::new(encoded);
-        let decoded = mcms::bcs_stream::deserialize_vector_u8(&mut decode_stream);
-        assert!(input == decoded, 0);
     }
 }

@@ -1810,62 +1810,67 @@ module ccip::fee_quoter {
         decode_svm_extra_args(extra_args)
     }
 
-    #[test]
-    fun test_extra_args_bcs_encoding_decoding() {
-        // Test GenericExtraArgsV2
-        let gas_limit_v2 = 123456u256;
-        let allow_ooo_v2 = true;
+    #[test_only]
+    public fun test_decode_generic_extra_args(
+        dest_chain_config: &DestChainConfig, extra_args: vector<u8>
+    ): (u256, bool) {
+        decode_generic_extra_args(dest_chain_config, extra_args)
+    }
 
-        let encoded_v2 = client::encode_generic_extra_args_v2(
-            gas_limit_v2, allow_ooo_v2
-        );
+    #[test_only]
+    public fun test_decode_generic_extra_args_v2(extra_args: vector<u8>): (u256, bool) {
+        decode_generic_extra_args_v2(extra_args)
+    }
 
-        let extra_args_len = encoded_v2.length();
-        let args_tag = encoded_v2.slice(0, 4);
-        assert!(args_tag == client::generic_extra_args_v2_tag(), 0);
-        let args_data = encoded_v2.slice(4, extra_args_len);
-        let (decoded_gas_limit, decoded_allow_ooo) =
-            decode_generic_extra_args_v2(args_data);
+    #[test_only]
+    public fun test_decode_svm_extra_args_v1(
+        extra_args: vector<u8>
+    ): (u32, u64, bool, vector<u8>, vector<vector<u8>>) {
+        decode_svm_extra_args_v1(extra_args)
+    }
 
-        assert!(decoded_gas_limit == gas_limit_v2, 1);
-        assert!(decoded_allow_ooo == allow_ooo_v2, 2);
-
-        // Test SvmExtraArgsV1
-        let compute_units = 100u32;
-        let bitmap = 200u64;
-        let allow_ooo_svm = false;
-        let token_receiver = vector[
-            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-            22, 23, 24, 25, 26, 27, 28, 29, 30, 31
-        ];
-        let accounts = vector[vector[1, 2, 3, 4, 5], vector[5, 4, 3, 2, 1]];
-
-        let encoded_svm =
-            client::encode_svm_extra_args_v1(
-                compute_units,
-                bitmap,
-                allow_ooo_svm,
-                token_receiver,
-                accounts
-            );
-
-        let extra_args_svm_len = encoded_svm.length();
-        let args_svm_tag = encoded_svm.slice(0, 4);
-        assert!(args_svm_tag == client::svm_extra_args_v1_tag(), 3);
-        let args_svm_data = encoded_svm.slice(4, extra_args_svm_len);
-
-        let (
-            decoded_cu,
-            decoded_bitmap,
-            decoded_allow_ooo_svm,
-            decoded_token_receiver,
-            decoded_accounts
-        ) = decode_svm_extra_args_v1(args_svm_data);
-
-        assert!(decoded_cu == compute_units, 4);
-        assert!(decoded_bitmap == bitmap, 5);
-        assert!(decoded_allow_ooo_svm == allow_ooo_svm, 6);
-        assert!(decoded_token_receiver == token_receiver, 7);
-        assert!(decoded_accounts == accounts, 8);
+    #[test_only]
+    public fun test_create_dest_chain_config(
+        is_enabled: bool,
+        max_number_of_tokens_per_msg: u16,
+        max_data_bytes: u32,
+        max_per_msg_gas_limit: u32,
+        dest_gas_overhead: u32,
+        dest_gas_per_payload_byte_base: u8,
+        dest_gas_per_payload_byte_high: u8,
+        dest_gas_per_payload_byte_threshold: u16,
+        dest_data_availability_overhead_gas: u32,
+        dest_gas_per_data_availability_byte: u16,
+        dest_data_availability_multiplier_bps: u16,
+        chain_family_selector: vector<u8>,
+        enforce_out_of_order: bool,
+        default_token_fee_usd_cents: u16,
+        default_token_dest_gas_overhead: u32,
+        default_tx_gas_limit: u32,
+        gas_multiplier_wei_per_eth: u64,
+        gas_price_staleness_threshold: u32,
+        network_fee_usd_cents: u32
+    ): DestChainConfig {
+        DestChainConfig {
+            is_enabled,
+            max_number_of_tokens_per_msg,
+            max_data_bytes,
+            max_per_msg_gas_limit,
+            dest_gas_overhead,
+            dest_gas_per_payload_byte_base,
+            dest_gas_per_payload_byte_high,
+            dest_gas_per_payload_byte_threshold,
+            dest_data_availability_overhead_gas,
+            dest_gas_per_data_availability_byte,
+            dest_data_availability_multiplier_bps,
+            chain_family_selector,
+            enforce_out_of_order,
+            default_token_fee_usd_cents,
+            default_token_dest_gas_overhead,
+            default_tx_gas_limit,
+            gas_multiplier_wei_per_eth,
+            gas_price_staleness_threshold,
+            network_fee_usd_cents
+        }
     }
 }
