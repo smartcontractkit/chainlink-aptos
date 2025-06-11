@@ -269,10 +269,7 @@ module ccip::fee_quoter_chain_family {
         assert!(is_out_of_order_execution == true);
         assert!(converted_extra_args == svm_extra_args);
         assert!(
-            dest_exec_data_per_token
-                == vector[
-                    x"00000000000000000000000000000000000000000000000000000000000002bc"
-                ]
+            dest_exec_data_per_token == vector[x"bc020000"]
         );
     }
 
@@ -544,7 +541,7 @@ module ccip::fee_quoter_chain_family {
 
     #[
         test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms),
-        expected_failure(abort_code = 65541, location = ccip::eth_abi) // E_INVALID_U256_LENGTH
+        expected_failure(abort_code = 65572, location = ccip::fee_quoter) // E_INVALID_SVM_RECEIVER_LENGTH
     ]
     fun test_invalid_svm_address(
         aptos_framework: &signer, ccip: &signer, owner: &signer
@@ -580,7 +577,7 @@ module ccip::fee_quoter_chain_family {
         // Create an invalid SVM address (not the right length)
         let invalid_svm_addr = x"0102030405060708090a0b0c0d0e0f"; // Too short for SVM
 
-        // This should fail with E_INVALID_SVM_ADDRESS
+        // This should fail with E_INVALID_SVM_RECEIVER_LENGTH
         let _ =
             fee_quoter::get_validated_fee(
                 fee_quoter_setup::get_dest_chain_selector(),
