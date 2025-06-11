@@ -268,9 +268,7 @@ module ccip::fee_quoter_chain_family {
         );
         assert!(is_out_of_order_execution == true);
         assert!(converted_extra_args == svm_extra_args);
-        assert!(
-            dest_exec_data_per_token == vector[x"bc020000"]
-        );
+        assert!(dest_exec_data_per_token == vector[x"bc020000"]);
     }
 
     #[test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms)]
