@@ -101,6 +101,10 @@ type ChainAdded struct {
 	RemoteTokenAddress  []byte `move:"vector<u8>"`
 }
 
+type ChainRemoved struct {
+	RemoteChainSelector uint64 `move:"u64"`
+}
+
 type LiquidityAdded struct {
 	LocalToken aptos.AccountAddress `move:"address"`
 	Provider   aptos.AccountAddress `move:"address"`
