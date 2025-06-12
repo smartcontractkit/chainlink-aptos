@@ -250,6 +250,23 @@ module ccip_router::router {
         }))
     }
 
+    #[view]
+    /// Returns the address of the onRamp that's set for the specified version.
+    /// Aborts if an invalid or unknown version is specified.
+    public fun get_on_ramp_for_version(on_ramp_version: vector<u8>): address {
+        if (on_ramp_version == vector[1, 6, 0]) {
+            return @ccip_onramp;
+        };
+        abort error::invalid_argument(E_INVALID_ON_RAMP_VERSION)
+    }
+
+    #[view]
+    /// Returns a list of configured destination chain selectors.
+    public fun get_dest_chains(): vector<u64> acquires RouterState {
+        let state = borrow_state();
+        state.on_ramp_versions.keys()
+    }
+
     /// Sets the onRamp versions for the given destination chains.
     /// This function will overwrite the existing versions.
     /// This function can only be called by the owner of the contract.
