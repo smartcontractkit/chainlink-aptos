@@ -10,11 +10,12 @@ Tokens with dynamic dispatch are supported for both pools, however the deposit a
 
 ## Pool Types
 
-There are **3 types** of token pools available on Aptos:
+There are **4 types** of token pools available on Aptos:
 
 1. **Lock/Release Token Pool** (`lock_release_token_pool`)
 2. **Burn/Mint Token Pool** (`burn_mint_token_pool`)
 3. **USDC Token Pool** (`usdc_token_pool`)
+4. **Managed Token Pool** (`managed_token_pool`)
 
 ### 1. Lock/Release Token Pool (`lock_release_token_pool`)
 
@@ -84,6 +85,31 @@ There are **3 types** of token pools available on Aptos:
 
 - Specifically for USDC token transfers
 
+### 4. Managed Token Pool (`managed_token_pool`)
+
+- Designed specifically for tokens deployed with the managed token package
+- Uses allowlist-based permission system for secure mint/burn operations
+- **Does not support dynamic dispatch** - calls `fungible_asset` module functions directly
+- Managed token uses internal refs, not dynamic dispatch mechanisms
+
+**Operation Modes**:
+
+- Pool's resource account must be added to managed token's allowlists before operation
+- Pool calls `managed_token::mint()` and `managed_token::burn()` functions directly
+- Managed token validates permissions via allowlist checks
+
+**Mechanism**:
+
+- **Outbound**: Pool calls managed token to burn tokens from total supply
+- **Inbound**: Pool calls managed token to mint new tokens to recipient
+
+**When to Use**:
+
+- For tokens deployed with the managed token package
+- When you need allowlist-based control over token operations
+- Multiple protocol integrations while retaining developer control
+- **Cannot be used with existing standard fungible assets**
+
 ## Deployment Guide
 
 ### Prerequisites
@@ -139,6 +165,49 @@ token_messenger_minter=<TOKEN_MESSENGER_MINTER_ADDRESS>,\
 deployer=<DEPLOYER_ADDRESS>
 ```
 
+For **Managed Token Pool**:
+
+```bash
+aptos move deploy-object \
+  --package-dir contracts/ccip/ccip_token_pools/managed_token_pool \
+  --address-name managed_token_pool \
+  --named-addresses managed_token=<MANAGED_TOKEN_ADDRESS>,\
+managed_token=<MANAGED_TOKEN_ADDRESS>,\
+ccip=<CCIP_ADDRESS>,\
+ccip_token_pool=<CCIP_TOKEN_POOL_ADDRESS>,\
+token_pool_administrator=<TOKEN_POOL_ADMINISTRATOR_ADDRESS>,\
+mcms=<MCMS_ADDRESS>,\
+mcms_register_entrypoints=<MCMS_REGISTER_ENTRYPOINTS_ADDRESS>
+```
+
+### ⚠️ **CRITICAL: Token Pool Administrator Configuration**
+
+**Before deploying**, carefully verify the `token_pool_administrator` address configuration:
+
+- **Risk**: If set to an address you don't control, the token pool becomes **permanently locked** with no recovery mechanism
+- **Recommendation**: Use your deployer address, a multisig you control, or another address where you definitely hold the private key
+- **Common Mistakes to Avoid**:
+  - Using `@0x0` (zero address)
+  - Typos in the address configuration
+  - Using test addresses in production deployments
+  - Copy-pasting addresses from different environments
+
+**Example Safe Configuration:**
+
+```toml
+# In your Move.toml or deployment command
+token_pool_administrator = "0x123...abc"  # ✅ Your controlled address
+```
+
+**What the Administrator Controls:**
+
+- Pool initialization and configuration
+- Cross-chain settings and rate limits
+- Pool upgrades and parameter changes
+- Administrative role transfers
+
+**There is no recovery mechanism if the administrator address is set incorrectly.** Double-check this address before deployment.
+
 ### Initialize Pool
 
 **Lock/Release Pool**:
@@ -161,6 +230,27 @@ burn_mint_token_pool::initialize(admin_signer, burn_ref, mint_ref);
 
 ```move
 usdc_token_pool::initialize(admin_signer);
+```
+
+**Managed Token Pool**:
+
+```move
+// No initialization required - pool is ready after deployment
+// However, you MUST add the pool to managed token allowlists:
+
+let pool_store_address = managed_token_pool::get_store_address();
+
+managed_token::apply_allowed_minter_updates(
+    token_owner,
+    vector[], // remove
+    vector[pool_store_address] // add pool as minter
+);
+
+managed_token::apply_allowed_burner_updates(
+    token_owner,
+    vector[], // remove
+    vector[pool_store_address] // add pool as burner
+);
 ```
 
 ### Configure Cross-Chain Support
@@ -403,6 +493,15 @@ apply_chain_updates(admin, vector[], chain_selectors, remote_pools, remote_token
 - **Cause**: Token is not associated with any pool in Token Admin Registry
 - **Solution**: Deploy and register a pool for the token
 
+**"Not allowed minter/burner" (Managed Token Pool)**
+
+- **Cause**: Pool not added to managed token's allowlists
+- **Solution**: Add pool's store address to managed token allowlists:
+  ```move
+  managed_token::apply_allowed_minter_updates(token_owner, vector[], vector[pool_store_address]);
+  managed_token::apply_allowed_burner_updates(token_owner, vector[], vector[pool_store_address]);
+  ```
+
 ### Diagnostic Commands
 
 ```move
@@ -414,6 +513,11 @@ pool::get_remote_pools(chain_selector);
 // Check token admin registry
 token_admin_registry::get_pool(token_address);
 token_admin_registry::get_administrator(token_address);
+
+// For managed token pool specifically
+managed_token_pool::get_store_address(); // Get pool's resource account address
+managed_token::is_minter_allowed(pool_store_address); // Check minter permission
+managed_token::is_burner_allowed(pool_store_address); // Check burner permission
 ```
 
 ## Migration from Other Chains
