@@ -61,7 +61,13 @@ module ccip::fee_quoter_bcs {
         assert!(decoded_bitmap == bitmap);
         assert!(decoded_allow_ooo_svm == allow_ooo_svm);
         assert!(decoded_token_receiver == token_receiver);
-        assert!(decoded_accounts == accounts);
+
+        // SVM addresses are padded to 32 bytes during encoding, so decoded accounts will be 32 bytes
+        let expected_accounts = vector[
+            x"0000000000000000000000000000000000000000000000000000000102030405",
+            x"0000000000000000000000000000000000000000000000000000000504030201"
+        ];
+        assert!(decoded_accounts == expected_accounts);
     }
 
     #[test]
@@ -139,17 +145,35 @@ module ccip::fee_quoter_bcs {
                 100u32, 200u64, false, token_receiver, accounts
             );
 
-        // Expected size breakdown:
-        // 4 bytes (SVM_EXTRA_ARGS_V1_TAG)
-        // 4 bytes (u32 compute_units = 100)
-        // 8 bytes (u64 bitmap = 200)
-        // 1 byte (bool allow_ooo = false)
-        // 33 bytes (BCS-encoded token_receiver: 1 byte length + 32 bytes data)
-        // 9 bytes (BCS-encoded accounts: 1 byte outer length + 4 bytes first inner + 4 bytes second inner)
-        //   where accounts = vector[vector[1,2,3], vector[4,5,6]]
-        //   = 02 030102030 0304050 6 (in hex)
-        // Total: 4 + 4 + 8 + 1 + 33 + 9 = 59 bytes
-        assert!(svm_encoded.length() == 59); // Exact expected size
+        // Expected size breakdown for BCS encoding:
+        //
+        // 1. Fixed-size fields:
+        //    - 4 bytes: SVM_EXTRA_ARGS_V1_TAG
+        //    - 4 bytes: u32 compute_units = 100
+        //    - 8 bytes: u64 bitmap = 200
+        //    - 1 byte:  bool allow_ooo = false
+        //    Subtotal: 17 bytes
+        //
+        // 2. BCS-encoded token_receiver (vector<u8>):
+        //    - 1 byte: vector length (32)
+        //    - 32 bytes: actual data (already 32 bytes, no padding needed)
+        //    Subtotal: 33 bytes
+        //
+        // 3. BCS-encoded accounts (vector<vector<u8>>):
+        //    Original accounts: [vector[1,2,3], vector[4,5,6]] (2 accounts of 3 bytes each)
+        //    After SVM padding: [32-byte account1, 32-byte account2]
+        //
+        //    BCS encoding structure:
+        //    - 1 byte: outer vector length (2 accounts)
+        //    - For each account (BCS-encoded vector<u8>):
+        //      - 1 byte: inner vector length (32)
+        //      - 32 bytes: padded account data
+        //
+        //    Calculation: 1 + (1 + 32) + (1 + 32) = 1 + 33 + 33 = 67 bytes
+        //    Subtotal: 67 bytes
+        //
+        // Total: 17 + 33 + 67 = 117 bytes
+        assert!(svm_encoded.length() == 117); // Exact expected size with 32-byte SVM addresses
     }
 
     #[test]
@@ -297,7 +321,14 @@ module ccip::fee_quoter_bcs {
         assert!(decoded_bitmap2 == bitmap2, 6);
         assert!(decoded_ooo2 == allow_ooo2, 7);
         assert!(decoded_receiver2 == token_receiver2, 8);
-        assert!(decoded_accounts2 == accounts2, 9);
+
+        // SVM addresses are padded to 32 bytes during encoding
+        let expected_accounts2 = vector[
+            x"0000000000000000000000000000000000000000000000000000000000010203",
+            x"0000000000000000000000000000000000000000000000000000000000040506",
+            x"0000000000000000000000000000000000000000000000000000000000070809"
+        ];
+        assert!(decoded_accounts2 == expected_accounts2, 9);
 
         // Test case 3: Zero receiver case
         let compute_units3 = 1000000u32;
