@@ -12,6 +12,7 @@ module ccip_token_pool::token_pool {
     use ccip::rmn_remote;
     use ccip::allowlist;
 
+    use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool_rate_limiter;
 
     const STORE_OBJECT_SEED: vector<u8> = b"CCIPTokenPool";
@@ -620,6 +621,22 @@ module ccip_token_pool::token_pool {
             inbound_capacity,
             inbound_rate
         );
+    }
+
+    public fun get_current_inbound_rate_limiter_state(
+        state: &TokenPoolState, remote_chain_selector: u64
+    ): rate_limiter::TokenBucket {
+        token_pool_rate_limiter::get_current_inbound_rate_limiter_state(
+            &state.rate_limiter_config, remote_chain_selector
+        )
+    }
+
+    public fun get_current_outbound_rate_limiter_state(
+        state: &TokenPoolState, remote_chain_selector: u64
+    ): rate_limiter::TokenBucket {
+        token_pool_rate_limiter::get_current_outbound_rate_limiter_state(
+            &state.rate_limiter_config, remote_chain_selector
+        )
     }
 
     // ================================================================

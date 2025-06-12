@@ -3,7 +3,7 @@ module managed_token_pool::managed_token_pool {
     use std::error;
     use std::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef};
     use std::primary_fungible_store;
-    use std::object::{Self, Object, ObjectCore};
+    use std::object::{Self, Object};
     use std::option;
     use std::signer;
     use std::string::{Self, String};
@@ -12,6 +12,7 @@ module managed_token_pool::managed_token_pool {
 
     use ccip::ownable;
     use ccip::token_admin_registry;
+    use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
 
     use mcms::mcms_registry;
@@ -326,7 +327,7 @@ module managed_token_pool::managed_token_pool {
     // |                    Rate limit config                         |
     // ================================================================
 
-    public fun set_chain_rate_limiter_configs(
+    public entry fun set_chain_rate_limiter_configs(
         caller: &signer,
         remote_chain_selectors: vector<u64>,
         outbound_is_enableds: vector<bool>,
@@ -365,7 +366,7 @@ module managed_token_pool::managed_token_pool {
         };
     }
 
-    public fun set_chain_rate_limiter_config(
+    public entry fun set_chain_rate_limiter_config(
         caller: &signer,
         remote_chain_selector: u64,
         outbound_is_enabled: bool,
@@ -388,6 +389,24 @@ module managed_token_pool::managed_token_pool {
             inbound_capacity,
             inbound_rate
         );
+    }
+
+    #[view]
+    public fun get_current_inbound_rate_limiter_state(
+        remote_chain_selector: u64
+    ): rate_limiter::TokenBucket acquires ManagedTokenPoolState {
+        token_pool::get_current_inbound_rate_limiter_state(
+            &borrow_pool().token_pool_state, remote_chain_selector
+        )
+    }
+
+    #[view]
+    public fun get_current_outbound_rate_limiter_state(
+        remote_chain_selector: u64
+    ): rate_limiter::TokenBucket acquires ManagedTokenPoolState {
+        token_pool::get_current_outbound_rate_limiter_state(
+            &borrow_pool().token_pool_state, remote_chain_selector
+        )
     }
 
     // ================================================================
