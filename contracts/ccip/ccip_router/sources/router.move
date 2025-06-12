@@ -263,8 +263,7 @@ module ccip_router::router {
     #[view]
     /// Returns a list of configured destination chain selectors.
     public fun get_dest_chains(): vector<u64> acquires RouterState {
-        let state = borrow_state();
-        state.on_ramp_versions.keys()
+        borrow_state().on_ramp_versions.keys()
     }
 
     /// Sets the onRamp versions for the given destination chains.
