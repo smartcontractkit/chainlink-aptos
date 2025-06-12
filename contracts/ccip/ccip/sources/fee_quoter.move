@@ -903,9 +903,8 @@ module ccip::fee_quoter {
         };
 
         for (i in 0..accounts_length) {
-            let account = accounts.borrow(i);
             assert!(
-                account.length() == 32,
+                accounts[i].length() == 32,
                 error::invalid_argument(E_INVALID_SVM_ACCOUNT_LENGTH)
             );
         };
