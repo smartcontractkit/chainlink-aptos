@@ -6,6 +6,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
     use std::vector;
     use std::object::{Self, Object, ExtendRef, ObjectCore};
     use std::account;
+    use std::bcs;
     use std::fungible_asset::{
         Self,
         Metadata,
@@ -713,20 +714,9 @@ module ccip_onramp::onramp_dispatchable_token_test {
 
     fun create_valid_extra_args(): vector<u8> {
         let extra_args = vector[];
-
-        // Add the V2 tag as first 4 bytes
         vector::append(&mut extra_args, GENERIC_EXTRA_ARGS_V2_TAG);
-
-        // Add eth_abi encoded gas limit (100000 as u256)
-        let gas_limit_data = vector[];
-        eth_abi::encode_u256(&mut gas_limit_data, (GAS_LIMIT as u256));
-        vector::append(&mut extra_args, gas_limit_data);
-
-        // Add eth_abi encoded boolean (true) for allow_out_of_order_execution
-        let execution_flag_data = vector[];
-        eth_abi::encode_bool(&mut execution_flag_data, ALLOW_OUT_OF_ORDER_EXECUTION);
-        vector::append(&mut extra_args, execution_flag_data);
-
+        vector::append(&mut extra_args, bcs::to_bytes(&(GAS_LIMIT as u256)));
+        vector::append(&mut extra_args, bcs::to_bytes(&ALLOW_OUT_OF_ORDER_EXECUTION));
         extra_args
     }
 }

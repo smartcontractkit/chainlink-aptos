@@ -2,6 +2,7 @@
 /// information and pricing.
 module ccip::fee_quoter {
     use std::account;
+    use std::bcs;
     use std::error;
     use std::event::{Self, EventHandle};
     use std::fungible_asset::Metadata;
@@ -244,6 +245,7 @@ module ccip::fee_quoter {
     const E_INVALID_SVM_EXTRA_ARGS_WRITABLE_BITMAP: u64 = 33;
     const E_INVALID_FEE_RANGE: u64 = 34;
     const E_INVALID_DEST_BYTES_OVERHEAD: u64 = 35;
+    const E_INVALID_SVM_RECEIVER_LENGTH: u64 = 36;
 
     #[view]
     public fun type_and_version(): String {
@@ -877,6 +879,11 @@ module ccip::fee_quoter {
         // tokens. Below, token and account overhead will count towards maxDataBytes.
         let svm_expanded_data_length = data_len;
 
+        // The receiver length has not yet been validated before this point.
+        assert!(
+            receiver.length() == 32,
+            error::invalid_argument(E_INVALID_SVM_RECEIVER_LENGTH)
+        );
         let receiver_uint = eth_abi::decode_u256_value(receiver);
         if (receiver_uint == 0) {
             // When message receiver is zero, CCIP receiver is not invoked on SVM.
@@ -961,9 +968,10 @@ module ccip::fee_quoter {
     }
 
     inline fun decode_generic_extra_args_v2(extra_args: vector<u8>): (u256, bool) {
-        let stream = eth_abi::new_stream(extra_args);
-        let gas_limit = eth_abi::decode_u256(&mut stream);
-        let allow_out_of_order_execution = eth_abi::decode_bool(&mut stream);
+        let stream = bcs_stream::new(extra_args);
+        let gas_limit = bcs_stream::deserialize_u256(&mut stream);
+        let allow_out_of_order_execution = bcs_stream::deserialize_bool(&mut stream);
+        bcs_stream::assert_is_consumed(&stream);
         (gas_limit, allow_out_of_order_execution)
     }
 
@@ -988,16 +996,17 @@ module ccip::fee_quoter {
     inline fun decode_svm_extra_args_v1(
         extra_args: vector<u8>
     ): (u32, u64, bool, vector<u8>, vector<vector<u8>>) {
-        let stream = eth_abi::new_stream(extra_args);
-        let compute_units = eth_abi::decode_u32(&mut stream);
-        let account_is_writable_bitmap = eth_abi::decode_u64(&mut stream);
-        let allow_out_of_order_execution = eth_abi::decode_bool(&mut stream);
-        let token_receiver = eth_abi::decode_bytes32(&mut stream);
+        let stream = bcs_stream::new(extra_args);
+        let compute_units = bcs_stream::deserialize_u32(&mut stream);
+        let account_is_writable_bitmap = bcs_stream::deserialize_u64(&mut stream);
+        let allow_out_of_order_execution = bcs_stream::deserialize_bool(&mut stream);
+        let token_receiver = bcs_stream::deserialize_vector_u8(&mut stream);
         let accounts =
-            eth_abi::decode_vector(
+            bcs_stream::deserialize_vector(
                 &mut stream,
-                |stream| { eth_abi::decode_bytes32(stream) }
+                |stream| bcs_stream::deserialize_vector_u8(stream)
             );
+        bcs_stream::assert_is_consumed(&stream);
         (
             compute_units,
             account_is_writable_bitmap,
@@ -1280,8 +1289,7 @@ module ccip::fee_quoter {
                     dest_chain_config.default_token_dest_gas_overhead
                 };
 
-            let dest_exec_data = vector[];
-            eth_abi::encode_u32(&mut dest_exec_data, dest_gas_amount);
+            let dest_exec_data = bcs::to_bytes(&dest_gas_amount);
             dest_exec_data_per_token.push_back(dest_exec_data);
         };
 
@@ -1800,5 +1808,69 @@ module ccip::fee_quoter {
         extra_args: vector<u8>
     ): (u32, u64, bool, vector<u8>, vector<vector<u8>>) {
         decode_svm_extra_args(extra_args)
+    }
+
+    #[test_only]
+    public fun test_decode_generic_extra_args(
+        dest_chain_config: &DestChainConfig, extra_args: vector<u8>
+    ): (u256, bool) {
+        decode_generic_extra_args(dest_chain_config, extra_args)
+    }
+
+    #[test_only]
+    public fun test_decode_generic_extra_args_v2(extra_args: vector<u8>): (u256, bool) {
+        decode_generic_extra_args_v2(extra_args)
+    }
+
+    #[test_only]
+    public fun test_decode_svm_extra_args_v1(
+        extra_args: vector<u8>
+    ): (u32, u64, bool, vector<u8>, vector<vector<u8>>) {
+        decode_svm_extra_args_v1(extra_args)
+    }
+
+    #[test_only]
+    public fun test_create_dest_chain_config(
+        is_enabled: bool,
+        max_number_of_tokens_per_msg: u16,
+        max_data_bytes: u32,
+        max_per_msg_gas_limit: u32,
+        dest_gas_overhead: u32,
+        dest_gas_per_payload_byte_base: u8,
+        dest_gas_per_payload_byte_high: u8,
+        dest_gas_per_payload_byte_threshold: u16,
+        dest_data_availability_overhead_gas: u32,
+        dest_gas_per_data_availability_byte: u16,
+        dest_data_availability_multiplier_bps: u16,
+        chain_family_selector: vector<u8>,
+        enforce_out_of_order: bool,
+        default_token_fee_usd_cents: u16,
+        default_token_dest_gas_overhead: u32,
+        default_tx_gas_limit: u32,
+        gas_multiplier_wei_per_eth: u64,
+        gas_price_staleness_threshold: u32,
+        network_fee_usd_cents: u32
+    ): DestChainConfig {
+        DestChainConfig {
+            is_enabled,
+            max_number_of_tokens_per_msg,
+            max_data_bytes,
+            max_per_msg_gas_limit,
+            dest_gas_overhead,
+            dest_gas_per_payload_byte_base,
+            dest_gas_per_payload_byte_high,
+            dest_gas_per_payload_byte_threshold,
+            dest_data_availability_overhead_gas,
+            dest_gas_per_data_availability_byte,
+            dest_data_availability_multiplier_bps,
+            chain_family_selector,
+            enforce_out_of_order,
+            default_token_fee_usd_cents,
+            default_token_dest_gas_overhead,
+            default_tx_gas_limit,
+            gas_multiplier_wei_per_eth,
+            gas_price_staleness_threshold,
+            network_fee_usd_cents
+        }
     }
 }
