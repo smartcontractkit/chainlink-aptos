@@ -151,6 +151,22 @@ module ccip_token_pool::token_pool_rate_limiter {
         );
     }
 
+    public fun get_current_inbound_rate_limiter_state(
+        state: &RateLimitState, remote_chain_selector: u64
+    ): rate_limiter::TokenBucket {
+        rate_limiter::get_current_token_bucket_state(
+            state.inbound_rate_limiter_config.borrow(remote_chain_selector)
+        )
+    }
+
+    public fun get_current_outbound_rate_limiter_state(
+        state: &RateLimitState, remote_chain_selector: u64
+    ): rate_limiter::TokenBucket {
+        rate_limiter::get_current_token_bucket_state(
+            state.outbound_rate_limiter_config.borrow(remote_chain_selector)
+        )
+    }
+
     public fun destroy_rate_limiter(state: RateLimitState) {
         let RateLimitState {
             outbound_rate_limiter_config,
