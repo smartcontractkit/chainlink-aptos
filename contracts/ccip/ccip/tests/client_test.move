@@ -156,12 +156,8 @@ module ccip::client_test {
     }
 
     #[test]
-    #[
-        expected_failure(
-            abort_code = client::E_INVALID_SVM_TOKEN_RECEIVER_LENGTH,
-            location = ccip::client
-        )
-    ]
+    #[expected_failure(abort_code = 65537, location = ccip::client)]
+    // E_INVALID_SVM_TOKEN_RECEIVER_LENGTH
     fun test_svm_args_rejects_long_token_receiver() {
         // Test that token receivers longer than 32 bytes are rejected
         let long_receiver =
