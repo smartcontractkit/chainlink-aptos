@@ -32,14 +32,10 @@ module ccip::token_admin_registry {
 
         // fungible asset metadata address -> TokenConfig
         token_configs: BigOrderedMap<address, TokenConfig>,
-        // local token address -> token registrar address
-        token_registrars: BigOrderedMap<address, address>,
         pool_set_events: EventHandle<PoolSet>,
         administrator_transfer_requested_events: EventHandle<AdministratorTransferRequested>,
         administrator_transferred_events: EventHandle<AdministratorTransferred>,
-        token_unregistered_events: EventHandle<TokenUnregistered>,
-        token_registrar_set_events: EventHandle<TokenRegistrarSet>,
-        token_registrar_unset_events: EventHandle<TokenRegistrarUnset>
+        token_unregistered_events: EventHandle<TokenUnregistered>
     }
 
     struct TokenConfig has store, drop, copy {
@@ -177,9 +173,7 @@ module ccip::token_admin_registry {
             administrator_transferred_events: account::new_event_handle(
                 &state_object_signer
             ),
-            token_unregistered_events: account::new_event_handle(&state_object_signer),
-            token_registrar_set_events: account::new_event_handle(&state_object_signer),
-            token_registrar_unset_events: account::new_event_handle(&state_object_signer)
+            token_unregistered_events: account::new_event_handle(&state_object_signer)
         };
 
         move_to(&state_object_signer, state);
@@ -452,12 +446,10 @@ module ccip::token_admin_registry {
         let token_owner = object::owner(metadata);
         let caller_addr = signer::address_of(caller);
 
-        // Assert caller is token owner or ccip signer
         assert!(
             caller_addr == token_owner || caller_addr == auth::owner(),
             error::permission_denied(E_NOT_AUTHORIZED)
         );
-        // Assert token pool is registered for the local token
         assert!(
             get_registration(token_pool_address).local_token == local_token,
             error::invalid_argument(E_INVALID_TOKEN_FOR_POOL)

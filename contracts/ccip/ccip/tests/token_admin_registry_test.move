@@ -138,7 +138,7 @@ module ccip::token_admin_registry_test {
         );
 
         let new_administrator = signer::address_of(owner);
-        mock_pool::register_pool(
+        mock_pool::register_and_set_pool(
             owner,
             &mock_obj_signer,
             token_addr,
@@ -153,6 +153,93 @@ module ccip::token_admin_registry_test {
         // Verify admin has been updated (should be the new pool address)
         let (_, new_admin, _) = token_admin_registry::get_token_config(token_addr);
         assert!(new_admin == new_administrator);
+    }
+
+    // This tests if create_sticky_object() works properly and allows re-registration
+    #[test(ccip = @ccip, owner = @mcms)]
+    fun test_unregister_and_reregister_same_pool_address(
+        ccip: &signer, owner: &signer
+    ) {
+        let (ccip_obj_signer, _mock_obj_signer, token_obj) = setup(ccip, owner);
+        let token_addr = object::object_address(&token_obj);
+        let ccip_pool_addr = signer::address_of(&ccip_obj_signer);
+        let administrator = signer::address_of(owner);
+
+        token_admin_registry::register_pool<TestProof>(
+            &ccip_obj_signer,
+            TOKEN_ADMIN_REGISTRY_TEST_MODULE_NAME,
+            token_addr,
+            TestProof {}
+        );
+
+        token_admin_registry::set_pool(
+            owner,
+            token_addr,
+            ccip_pool_addr,
+            administrator
+        );
+
+        let pool_addr = token_admin_registry::get_pool(token_addr);
+        assert!(pool_addr == ccip_pool_addr);
+
+        token_admin_registry::unregister_pool(owner, token_addr);
+
+        let pool_addr = token_admin_registry::get_pool(token_addr);
+        assert!(pool_addr == @0x0);
+
+        // Now try to register the SAME pool address again
+        // This should work if create_sticky_object() handles conflicts properly
+        token_admin_registry::register_pool<TestProof>(
+            &ccip_obj_signer,
+            TOKEN_ADMIN_REGISTRY_TEST_MODULE_NAME,
+            token_addr,
+            TestProof {}
+        );
+
+        token_admin_registry::set_pool(
+            owner,
+            token_addr,
+            ccip_pool_addr,
+            administrator
+        );
+
+        // Verify re-registration worked
+        let pool_addr = token_admin_registry::get_pool(token_addr);
+        assert!(pool_addr == ccip_pool_addr);
+    }
+
+    #[test(ccip = @ccip, owner = @mcms)]
+    #[expected_failure(abort_code = 65562, location = ccip::token_admin_registry)]
+    fun test_wrong_token_for_pool(ccip: &signer, owner: &signer) {
+        let (ccip_obj_signer, mock_obj_signer, token1_obj) = setup(ccip, owner);
+        let token1_addr = object::object_address(&token1_obj);
+        let (_token2_obj, token2_addr) = create_test_token(owner, b"test_token_2");
+        let administrator = signer::address_of(owner);
+
+        // Register token1 with ccip pool
+        token_admin_registry::register_pool<TestProof>(
+            &ccip_obj_signer,
+            TOKEN_ADMIN_REGISTRY_TEST_MODULE_NAME,
+            token1_addr,
+            TestProof {}
+        );
+
+        token_admin_registry::set_pool(
+            owner,
+            token1_addr,
+            signer::address_of(&ccip_obj_signer),
+            administrator
+        );
+
+        mock_pool::register_pool(&mock_obj_signer, token2_addr);
+
+        // Point Mock Pool to Token1 - Fails with E_INVALID_TOKEN_FOR_POOL
+        token_admin_registry::set_pool(
+            owner,
+            token1_addr,
+            signer::address_of(&mock_obj_signer),
+            administrator
+        );
     }
 
     #[test(ccip = @ccip, owner = @mcms)]
@@ -209,7 +296,7 @@ module ccip::token_admin_registry_test {
         // Register another pool (for a different token)
         let (_token2, token2_addr) = create_test_token(owner, b"test_token_2");
 
-        mock_pool::register_pool(
+        mock_pool::register_and_set_pool(
             owner,
             &mock_obj_signer,
             token2_addr,
@@ -405,7 +492,7 @@ module ccip::token_admin_registry_test {
             owner_address
         );
 
-        mock_pool::register_pool(
+        mock_pool::register_and_set_pool(
             owner,
             &mock_obj_signer,
             token2_addr,

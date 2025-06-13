@@ -62,11 +62,10 @@ module managed_token_pool::managed_token_pool {
         };
 
         let managed_token_address = managed_token::token_metadata();
-
         token_admin_registry::register_pool(
             publisher,
             token_pool_module_name,
-            @managed_token,
+            managed_token_address,
             CallbackProof {}
         );
 
@@ -96,11 +95,16 @@ module managed_token_pool::managed_token_pool {
         move_to(&store_signer, pool);
     }
 
-    public fun initialize(caller: &signer, administrator: address) acquires ManagedTokenPoolState {
-        ownable::assert_only_owner(
-            signer::address_of(caller), &borrow_pool().ownable_state
-        );
-
+    /// Convenience function to register this managed token pool with CCIP Token Admin Registry.
+    ///
+    /// Must be called by the token owner to enable cross-chain transfers
+    /// for the managed token through this pool.
+    ///
+    /// Alternative: Call `token_admin_registry::set_pool()` directly with the same parameters.
+    ///
+    /// @param caller - Token owner or CCIP owner
+    /// @param administrator - Address with admin privileges for this token-pool mapping
+    public fun initialize(caller: &signer, administrator: address) {
         token_admin_registry::set_pool(
             caller,
             managed_token::token_metadata(),

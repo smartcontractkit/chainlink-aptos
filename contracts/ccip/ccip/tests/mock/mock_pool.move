@@ -9,11 +9,23 @@ module 0x662d86e29929eb0637ba20d8926e91ffc74f59580cf18874b366b3150300561f::mock_
 
     struct TestProof has drop {}
 
-    public fun register_pool(
+    public fun register_and_set_pool(
         owner: &signer,
         mock_obj_signer: &signer,
         local_token: address,
-        initial_administrator: address
+        administrator: address
+    ) {
+        register_pool(mock_obj_signer, local_token);
+        set_pool(
+            owner,
+            local_token,
+            signer::address_of(mock_obj_signer),
+            administrator
+        );
+    }
+
+    public fun register_pool(
+        mock_obj_signer: &signer, local_token: address
     ) {
         token_admin_registry::register_pool<TestProof>(
             mock_obj_signer,
@@ -21,11 +33,19 @@ module 0x662d86e29929eb0637ba20d8926e91ffc74f59580cf18874b366b3150300561f::mock_
             local_token,
             TestProof {}
         );
+    }
+
+    public fun set_pool(
+        owner: &signer,
+        local_token: address,
+        token_pool_address: address,
+        administrator: address
+    ) {
         token_admin_registry::set_pool(
             owner,
             local_token,
-            signer::address_of(mock_obj_signer),
-            initial_administrator
+            token_pool_address,
+            administrator
         );
     }
 
