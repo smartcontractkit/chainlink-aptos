@@ -30,6 +30,7 @@ module ccip_token_pool::token_pool {
         remote_pool_added_events: EventHandle<RemotePoolAdded>,
         remote_pool_removed_events: EventHandle<RemotePoolRemoved>,
         chain_added_events: EventHandle<ChainAdded>,
+        chain_removed_events: EventHandle<ChainRemoved>,
         liquidity_added_events: EventHandle<LiquidityAdded>,
         liquidity_removed_events: EventHandle<LiquidityRemoved>,
         rebalancer_set_events: EventHandle<RebalancerSet>
@@ -87,6 +88,11 @@ module ccip_token_pool::token_pool {
     }
 
     #[event]
+    struct ChainRemoved has store, drop {
+        remote_chain_selector: u64
+    }
+
+    #[event]
     struct LiquidityAdded has store, drop {
         local_token: address,
         provider: address,
@@ -140,6 +146,7 @@ module ccip_token_pool::token_pool {
             remote_pool_added_events: account::new_event_handle(event_account),
             remote_pool_removed_events: account::new_event_handle(event_account),
             chain_added_events: account::new_event_handle(event_account),
+            chain_removed_events: account::new_event_handle(event_account),
             liquidity_added_events: account::new_event_handle(event_account),
             liquidity_removed_events: account::new_event_handle(event_account),
             rebalancer_set_events: account::new_event_handle(event_account)
@@ -199,6 +206,11 @@ module ccip_token_pool::token_pool {
                 error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
             );
             state.remote_chain_configs.remove(remote_chain_selector);
+
+            event::emit(ChainRemoved { remote_chain_selector });
+            event::emit_event(
+                &mut state.chain_removed_events, ChainRemoved { remote_chain_selector }
+            );
         });
 
         let add_len = remote_chain_selectors_to_add.length();
@@ -672,6 +684,7 @@ module ccip_token_pool::token_pool {
             remote_pool_added_events,
             remote_pool_removed_events,
             chain_added_events,
+            chain_removed_events,
             liquidity_added_events,
             liquidity_removed_events,
             rebalancer_set_events
@@ -684,6 +697,7 @@ module ccip_token_pool::token_pool {
         event::destroy_handle(remote_pool_added_events);
         event::destroy_handle(remote_pool_removed_events);
         event::destroy_handle(chain_added_events);
+        event::destroy_handle(chain_removed_events);
         event::destroy_handle(liquidity_added_events);
         event::destroy_handle(liquidity_removed_events);
         event::destroy_handle(rebalancer_set_events);

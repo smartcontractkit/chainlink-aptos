@@ -169,35 +169,6 @@ module ccip::token_admin_registry_test {
         assert!(pending_admin == @0x0);
     }
 
-    #[test(ccip = @ccip, owner = @mcms)]
-    fun test_set_pool(ccip: &signer, owner: &signer) {
-        let (ccip_obj_signer, mock_obj_signer, token_obj) = setup(ccip, owner);
-        let token_addr = object::object_address(&token_obj);
-
-        token_admin_registry::register_pool<TestProof>(
-            &ccip_obj_signer,
-            TOKEN_ADMIN_REGISTRY_TEST_MODULE_NAME,
-            token_addr,
-            signer::address_of(owner),
-            TestProof {}
-        );
-
-        // Register another pool (for a different token)
-        let (_token2, token2_addr) = create_test_token(owner, b"test_token_2");
-
-        mock_pool::register_pool(
-            &mock_obj_signer, token2_addr, signer::address_of(owner)
-        );
-
-        // Now change the pool for token1 to the mock pool
-        let mock_pool_addr = signer::address_of(&mock_obj_signer);
-        token_admin_registry::set_pool(owner, token_addr, mock_pool_addr);
-
-        // Verify the pool was updated
-        let pool_addr = token_admin_registry::get_pool(token_addr);
-        assert!(pool_addr == mock_pool_addr);
-    }
-
     #[test(ccip = @ccip, owner = @mcms, not_owner = @0x300)]
     #[expected_failure(abort_code = 327682, location = ccip::token_admin_registry)]
     fun test_not_fungible_asset_owner(

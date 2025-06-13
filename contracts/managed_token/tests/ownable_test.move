@@ -5,7 +5,6 @@ module managed_token::ownable_test {
     use std::account;
     use std::option;
     use std::event;
-    use managed_token::managed_token;
 
     use managed_token::ownable::{
         Self,
