@@ -87,6 +87,7 @@ There are **4 types** of token pools available on Aptos:
 
 ### 4. Managed Token Pool (`managed_token_pool`)
 
+- **Requires token owner to register pool with CCIP Token Admin Registry** after deployment
 - Designed specifically for tokens deployed with the managed token package
 - Uses allowlist-based permission system for secure mint/burn operations
 - **Does not support dynamic dispatch** - calls `fungible_asset` module functions directly
@@ -94,9 +95,10 @@ There are **4 types** of token pools available on Aptos:
 
 **Operation Modes**:
 
-- Pool's resource account must be added to managed token's allowlists before operation
+- Pool's address must be added to managed token's allowlists before operation
 - Pool calls `managed_token::mint()` and `managed_token::burn()` functions directly
 - Managed token validates permissions via allowlist checks
+- Token owner must call `managed_token_pool::initialize() OR token_admin_registry::set_pool()` to enable CCIP functionality
 
 **Mechanism**:
 
@@ -235,9 +237,21 @@ usdc_token_pool::initialize(admin_signer);
 **Managed Token Pool**:
 
 ```move
-// No initialization required - pool is ready after deployment
-// However, you MUST add the pool to managed token allowlists:
+// 1. Deploy managed token pool (automatically registers with CCIP)
 
+// 2. Register pool with CCIP Token Admin Registry
+// Must be called by token owner to enable CCIP
+managed_token_pool::initialize(token_owner, administrator_address);
+
+// Or call `token_admin_registry` directly.
+token_admin_registry::set_pool(
+    token_owner,
+    managed_token::token_metadata(), // `managed_token` you deployed
+    @managed_token_pool, // `managed_token_pool` you deployed
+    administrator_address
+);
+
+// 3. Add pool to token allowlists
 let pool_store_address = managed_token_pool::get_store_address();
 
 managed_token::apply_allowed_minter_updates(

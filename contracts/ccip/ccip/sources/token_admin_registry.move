@@ -295,11 +295,6 @@ module ccip::token_admin_registry {
     // |                       Register Pool                          |
     // ================================================================
 
-    /// Registers a token pool with the Token Admin Registry, establishing a 1:1 mapping
-    /// between the local token and the pool address.
-    ///
-    /// WARNING: The `initial_administrator` parameter cannot be changed after registration.
-    /// Ensure you control this address, as it will have full administrative control over the pool.
     public fun register_pool<ProofType: drop>(
         token_pool_account: &signer,
         token_pool_module_name: vector<u8>,

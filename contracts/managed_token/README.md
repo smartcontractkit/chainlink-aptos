@@ -270,13 +270,36 @@ public entry fun burn(burner: &signer, from: address, amount: u64)
 
 ## Comparison with Alternatives
 
-| Feature                    | Managed Token                  | Standard FA + Burn/Mint Pool  | Lock/Release Pool                 |
-| -------------------------- | ------------------------------ | ----------------------------- | --------------------------------- |
-| **Developer Control**      | ✅ Full control via allowlists | ❌ Refs transferred to pool   | ✅ Full control retained          |
-| **Multiple Protocols**     | ✅ Via allowlist management    | ❌ Single pool only           | ✅ Via transfer ref sharing       |
-| **Supply Model**           | 🔥 Burn/Mint (supply changes)  | 🔥 Burn/Mint (supply changes) | 🔒 Lock/Release (supply constant) |
-| **Existing Token Support** | ❌ New tokens only             | ❌ New tokens only            | ✅ Can use existing tokens        |
-| **Emergency Controls**     | ✅ Can revoke permissions      | ❌ Limited control            | ✅ Can revoke transfer ref        |
+| Feature                    | Managed Token                  | Standard FA + Burn/Mint Pool  | Lock/Release Pool                    |
+| -------------------------- | ------------------------------ | ----------------------------- | ------------------------------------ |
+| **Developer Control**      | ✅ Full control via allowlists | ❌ Refs transferred to pool   | ✅ Full control retained             |
+| **Multiple Protocols**     | ✅ Via allowlist management    | ❌ Single pool only           | ✅ Via transfer ref sharing          |
+| **Supply Model**           | 🔥 Burn/Mint (supply changes)  | 🔥 Burn/Mint (supply changes) | 🔒 Lock/Release (supply constant)    |
+| **Existing Token Support** | ❌ New tokens only             | ❌ New tokens only            | ✅ Can use existing tokens           |
+| **Emergency Controls**     | ✅ Can revoke permissions      | ❌ Limited control            | ✅ Can revoke transfer ref           |
+| **Liquidity Management**   | ✅ No liquidity required       | ✅ No liquidity required      | ❌ **Requires constant rebalancing** |
+| **Operational Complexity** | ✅ Set-and-forget              | ✅ Set-and-forget             | ❌ **Active monitoring required**    |
+| **Capital Efficiency**     | ✅ 100% efficient              | ✅ 100% efficient             | ❌ **Must over-provision liquidity** |
+| **Transfer Reliability**   | ✅ Always succeeds             | ✅ Always succeeds            | ❌ **Fails when liquidity depleted** |
+
+### Lock/Release Pool Challenges
+
+**Liquidity Fragmentation**
+
+- Each destination chain needs sufficient locked tokens for outbound transfers
+- Popular chains can become liquidity-depleted, blocking transfers
+
+**Rebalancing Overhead**
+
+- Requires active monitoring of liquidity levels across all chains
+- Manual intervention needed to move liquidity between chains
+- Operational costs and complexity increase with chain count
+
+**Capital Inefficiency**
+
+- Total locked liquidity must exceed circulating supply significantly
+- Much higher capital requirements than burn/mint models
+- Unused liquidity generates no yield
 
 ## Troubleshooting
 
