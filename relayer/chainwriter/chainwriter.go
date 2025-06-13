@@ -223,12 +223,19 @@ func adjustTxMetaForCCIPExecute(meta *commontypes.TxMeta, moduleName, functionNa
 		return meta, fmt.Errorf("execution report gas limit is nil")
 	}
 
+	totalGasLimit := new(big.Int).Set(report.Message.GasLimit)
+
+	for _, tokenAmount := range report.Message.TokenAmounts {
+		destGasAmount := new(big.Int).SetUint64(uint64(tokenAmount.DestGasAmount))
+		totalGasLimit.Add(totalGasLimit, destGasAmount)
+	}
+
 	if meta == nil {
 		meta = &commontypes.TxMeta{
-			GasLimit: report.Message.GasLimit,
+			GasLimit: totalGasLimit,
 		}
 	} else {
-		meta.GasLimit = report.Message.GasLimit
+		meta.GasLimit = totalGasLimit
 	}
 
 	return meta, nil
