@@ -15,7 +15,6 @@ func TestCompile(t *testing.T) {
 		aptos.AccountFour,
 		aptos.AccountTen,
 		aptos.AccountTen,
-		aptos.AccountFour,
 		aptos.AccountOne,
 		aptos.AccountTwo,
 		aptos.AccountFour,

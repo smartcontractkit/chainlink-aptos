@@ -104,7 +104,6 @@ aptos move deploy-object \
   --named-addresses lock_release_local_token=<YOUR_TOKEN_ADDRESS>,\
 ccip=<CCIP_ADDRESS>,\
 ccip_token_pool=<CCIP_TOKEN_POOL_ADDRESS>,\
-token_pool_administrator=<TOKEN_POOL_ADMINISTRATOR_ADDRESS>,\
 mcms=<MCMS_ADDRESS>,\
 mcms_register_entrypoints=<MCMS_REGISTER_ENTRYPOINTS_ADDRESS>
 ```
@@ -118,7 +117,6 @@ aptos move deploy-object \
   --named-addresses burn_mint_local_token=<YOUR_TOKEN_ADDRESS>,\
 ccip=<CCIP_ADDRESS>,\
 ccip_token_pool=<CCIP_TOKEN_POOL_ADDRESS>,\
-token_pool_administrator=<TOKEN_POOL_ADMINISTRATOR_ADDRESS>,\
 mcms=<MCMS_ADDRESS>,\
 mcms_register_entrypoints=<MCMS_REGISTER_ENTRYPOINTS_ADDRESS>
 ```
@@ -132,7 +130,6 @@ aptos move deploy-object \
   --named-addresses local_token=<YOUR_TOKEN_ADDRESS>,\
 ccip=<CCIP_ADDRESS>,\
 ccip_token_pool=<CCIP_TOKEN_POOL_ADDRESS>,\
-token_pool_administrator=<TOKEN_POOL_ADMINISTRATOR_ADDRESS>,\
 mcms=<MCMS_ADDRESS>,\
 message_transmitter=<MESSAGE_TRANSMITTER_ADDRESS>,\
 token_messenger_minter=<TOKEN_MESSENGER_MINTER_ADDRESS>,\
@@ -286,7 +283,6 @@ aptos move upgrade-object \
   --named-addresses lock_release_local_token=<YOUR_TOKEN_ADDRESS>,\
 ccip=<CCIP_ADDRESS>,\
 ccip_token_pool=<CCIP_TOKEN_POOL_ADDRESS>,\
-token_pool_administrator=<TOKEN_POOL_ADMINISTRATOR_ADDRESS>,\
 mcms=<MCMS_ADDRESS>,\
 mcms_register_entrypoints=<MCMS_REGISTER_ENTRYPOINTS_ADDRESS>
 ```
