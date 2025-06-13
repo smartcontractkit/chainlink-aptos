@@ -119,7 +119,6 @@ module usdc_token_pool::usdc_token_pool {
             publisher,
             token_pool_module_name,
             @local_token,
-            @token_pool_administrator,
             CallbackProof {}
         );
 
@@ -174,6 +173,13 @@ module usdc_token_pool::usdc_token_pool {
         };
 
         move_to(&store_signer, pool);
+
+        token_admin_registry::set_pool(
+            caller,
+            @local_token,
+            @usdc_token_pool,
+            signer::address_of(caller)
+        );
     }
 
     // ================================================================

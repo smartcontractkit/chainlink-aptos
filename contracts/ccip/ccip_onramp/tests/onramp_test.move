@@ -254,7 +254,12 @@ module ccip_onramp::onramp_test {
 
         if (pool_type == BURN_MINT_TOKEN_POOL) {
             burn_mint_token_pool::test_init_module(burn_mint_token_pool);
-            burn_mint_token_pool::initialize(burn_mint_token_pool, burn_ref, mint_ref);
+            burn_mint_token_pool::initialize(
+                owner,
+                burn_ref,
+                mint_ref,
+                signer::address_of(owner)
+            );
             burn_mint_token_pool::apply_chain_updates(
                 owner,
                 vector[],
@@ -275,8 +280,9 @@ module ccip_onramp::onramp_test {
         } else {
             lock_release_token_pool::test_init_module(lock_release_token_pool);
             lock_release_token_pool::initialize(
-                lock_release_token_pool,
+                owner,
                 transfer_ref,
+                signer::address_of(owner),
                 signer::address_of(owner)
             );
             lock_release_token_pool::apply_chain_updates(

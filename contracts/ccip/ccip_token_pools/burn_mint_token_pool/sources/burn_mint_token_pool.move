@@ -79,7 +79,6 @@ module burn_mint_token_pool::burn_mint_token_pool {
             publisher,
             token_pool_module_name,
             @burn_mint_local_token,
-            @token_pool_administrator,
             CallbackProof {}
         );
 
@@ -106,7 +105,10 @@ module burn_mint_token_pool::burn_mint_token_pool {
     }
 
     public fun initialize(
-        caller: &signer, burn_ref: BurnRef, mint_ref: MintRef
+        caller: &signer,
+        burn_ref: BurnRef,
+        mint_ref: MintRef,
+        administrator: address
     ) acquires BurnMintTokenPoolDeployment {
         assert_can_initialize(signer::address_of(caller));
 
@@ -142,6 +144,13 @@ module burn_mint_token_pool::burn_mint_token_pool {
         };
 
         move_to(&store_signer, pool);
+
+        token_admin_registry::set_pool(
+            caller,
+            @burn_mint_local_token,
+            @burn_mint_token_pool,
+            administrator
+        );
     }
 
     // ================================================================

@@ -81,7 +81,6 @@ module lock_release_token_pool::lock_release_token_pool {
             publisher,
             token_pool_module_name,
             @lock_release_local_token,
-            @token_pool_administrator,
             CallbackProof {}
         );
 
@@ -112,7 +111,10 @@ module lock_release_token_pool::lock_release_token_pool {
     /// You can still provide a transfer ref for tokens that don't have dynamic dispatch enabled
     /// if you choose to do so.
     public fun initialize(
-        caller: &signer, transfer_ref: Option<TransferRef>, rebalancer: address
+        caller: &signer,
+        transfer_ref: Option<TransferRef>,
+        rebalancer: address,
+        administrator: address
     ) acquires LockReleaseTokenPoolDeployment {
         assert_can_initialize(signer::address_of(caller));
 
@@ -154,6 +156,13 @@ module lock_release_token_pool::lock_release_token_pool {
             rebalancer
         };
         move_to(&store_signer, pool);
+
+        token_admin_registry::set_pool(
+            caller,
+            @lock_release_local_token,
+            @lock_release_token_pool,
+            administrator
+        );
     }
 
     // ================================================================

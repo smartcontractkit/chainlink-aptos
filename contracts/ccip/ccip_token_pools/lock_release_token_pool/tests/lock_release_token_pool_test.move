@@ -109,12 +109,13 @@ module lock_release_token_pool::lock_release_token_pool_test {
     }
 
     fun initialize_pool_with_rebalancer(
-        lock_release_token_pool: &signer, rebalancer_addr: address
+        owner: &signer, rebalancer_addr: address
     ) {
         lock_release_token_pool::initialize(
-            lock_release_token_pool,
+            owner,
             option::none(),
-            rebalancer_addr
+            rebalancer_addr,
+            signer::address_of(owner)
         );
     }
 
@@ -128,7 +129,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
         let token_metadata = setup_test_environment(owner, ccip, lock_release_token_pool);
         let rebalancer_addr = signer::address_of(rebalancer);
 
-        initialize_pool_with_rebalancer(lock_release_token_pool, rebalancer_addr);
+        initialize_pool_with_rebalancer(owner, rebalancer_addr);
         mint_tokens_to_address(token_metadata, rebalancer_addr, liquidity_amount);
         lock_release_token_pool::provide_liquidity(rebalancer, liquidity_amount);
 
@@ -152,7 +153,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
         let token_metadata = setup_test_environment(owner, ccip, lock_release_token_pool);
         let rebalancer_addr = signer::address_of(rebalancer);
 
-        initialize_pool_with_rebalancer(lock_release_token_pool, rebalancer_addr);
+        initialize_pool_with_rebalancer(owner, rebalancer_addr);
         mint_tokens_to_address(token_metadata, rebalancer_addr, INITIAL_LIQUIDITY * 2);
         lock_release_token_pool::provide_liquidity(rebalancer, INITIAL_LIQUIDITY);
 
@@ -189,7 +190,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
         let rebalancer_addr = signer::address_of(rebalancer);
         let user_addr = signer::address_of(user);
 
-        initialize_pool_with_rebalancer(lock_release_token_pool, rebalancer_addr);
+        initialize_pool_with_rebalancer(owner, rebalancer_addr);
         mint_tokens_to_address(token_metadata, user_addr, INITIAL_LIQUIDITY);
 
         lock_release_token_pool::provide_liquidity(user, INITIAL_LIQUIDITY);
@@ -316,7 +317,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
         let rebalancer_addr = signer::address_of(rebalancer);
         let new_rebalancer_addr = signer::address_of(new_rebalancer);
 
-        initialize_pool_with_rebalancer(lock_release_token_pool, rebalancer_addr);
+        initialize_pool_with_rebalancer(owner, rebalancer_addr);
         assert!(lock_release_token_pool::get_rebalancer() == rebalancer_addr);
 
         lock_release_token_pool::set_rebalancer(owner, new_rebalancer_addr);
@@ -340,7 +341,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
         setup_test_environment(owner, ccip, lock_release_token_pool);
         let rebalancer_addr = signer::address_of(rebalancer);
 
-        initialize_pool_with_rebalancer(lock_release_token_pool, rebalancer_addr);
+        initialize_pool_with_rebalancer(owner, rebalancer_addr);
         lock_release_token_pool::set_rebalancer(owner, @0x0);
 
         assert!(lock_release_token_pool::get_rebalancer() == @0x0);
@@ -425,7 +426,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
         setup_test_environment(owner, ccip, lock_release_token_pool);
         let user_addr = signer::address_of(user);
 
-        initialize_pool_with_rebalancer(lock_release_token_pool, user_addr);
+        initialize_pool_with_rebalancer(owner, user_addr);
 
         // Error E_ONLY_CALLABLE_BY_OWNER
         lock_release_token_pool::set_rebalancer(user, @0x0);
@@ -460,9 +461,10 @@ module lock_release_token_pool::lock_release_token_pool_test {
         let transfer_ref = extract_transfer_ref(token_metadata);
         // Initialize pool with the transfer ref
         lock_release_token_pool::initialize(
-            lock_release_token_pool,
+            owner,
             option::some(transfer_ref),
-            rebalancer_addr
+            rebalancer_addr,
+            signer::address_of(owner)
         );
 
         // Verify the pool was initialized with transfer ref
@@ -526,9 +528,10 @@ module lock_release_token_pool::lock_release_token_pool_test {
 
         // Initialize pool without transfer ref
         lock_release_token_pool::initialize(
-            lock_release_token_pool,
+            owner,
             option::none(), // No transfer ref
-            rebalancer_addr
+            rebalancer_addr,
+            signer::address_of(owner)
         );
 
         // This should fail with E_TRANSFER_REF_NOT_SET
@@ -560,9 +563,10 @@ module lock_release_token_pool::lock_release_token_pool_test {
 
         // Initialize pool with the transfer ref
         lock_release_token_pool::initialize(
-            lock_release_token_pool,
+            owner,
             option::some(transfer_ref),
-            rebalancer_addr
+            rebalancer_addr,
+            signer::address_of(owner)
         );
 
         // Try to migrate as non-owner (should fail with E_ONLY_CALLABLE_BY_OWNER)
@@ -591,9 +595,10 @@ module lock_release_token_pool::lock_release_token_pool_test {
 
         // Initialize pool with the transfer ref
         lock_release_token_pool::initialize(
-            lock_release_token_pool,
+            owner,
             option::some(transfer_ref),
-            rebalancer_addr
+            rebalancer_addr,
+            signer::address_of(owner)
         );
 
         // Add some liquidity first

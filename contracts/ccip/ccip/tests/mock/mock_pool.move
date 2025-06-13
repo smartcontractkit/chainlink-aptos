@@ -3,20 +3,29 @@ module 0x662d86e29929eb0637ba20d8926e91ffc74f59580cf18874b366b3150300561f::mock_
     use std::fungible_asset::{Self, FungibleAsset, TransferRef};
     use std::object::{Object};
     use ccip::token_admin_registry;
+    use std::signer;
 
     const MOCK_POOL_MODULE_NAME: vector<u8> = b"mock_pool";
 
     struct TestProof has drop {}
 
     public fun register_pool(
-        mock_obj_signer: &signer, local_token: address, initial_administrator: address
+        owner: &signer,
+        mock_obj_signer: &signer,
+        local_token: address,
+        initial_administrator: address
     ) {
         token_admin_registry::register_pool<TestProof>(
             mock_obj_signer,
             MOCK_POOL_MODULE_NAME,
             local_token,
-            initial_administrator,
             TestProof {}
+        );
+        token_admin_registry::set_pool(
+            owner,
+            local_token,
+            signer::address_of(mock_obj_signer),
+            initial_administrator
         );
     }
 

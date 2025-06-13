@@ -66,8 +66,7 @@ module managed_token_pool::managed_token_pool {
         token_admin_registry::register_pool(
             publisher,
             token_pool_module_name,
-            managed_token_address,
-            @token_pool_administrator,
+            @managed_token,
             CallbackProof {}
         );
 
@@ -95,6 +94,19 @@ module managed_token_pool::managed_token_pool {
         };
 
         move_to(&store_signer, pool);
+    }
+
+    public fun initialize(caller: &signer, administrator: address) acquires ManagedTokenPoolState {
+        ownable::assert_only_owner(
+            signer::address_of(caller), &borrow_pool().ownable_state
+        );
+
+        token_admin_registry::set_pool(
+            caller,
+            managed_token::token_metadata(),
+            @managed_token_pool,
+            administrator
+        );
     }
 
     // ================================================================
