@@ -14,6 +14,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
 	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
+	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
 
@@ -125,6 +126,13 @@ func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, 
 
 	ctxLogger := txm.GetContexedTxLogger(a.logger, transactionID, meta)
 
+	// temp: extract and set gas limit for CCIP offramp:execute
+	meta, err = adjustTxMetaForCCIPExecute(meta, moduleName, functionName, paramValues)
+	if err != nil {
+		ctxLogger.Errorw("failed to adjust transaction meta for CCIP offramp::execute", "toAddress", toAddress, "error", err)
+		return fmt.Errorf("failed to adjust transaction meta for CCIP offramp::execute: %+w", err)
+	}
+
 	err = a.txm.Enqueue(
 		transactionID,
 		meta,
@@ -180,4 +188,48 @@ func (a *aptosChainWriter) GetFeeComponents(ctx context.Context) (*commontypes.C
 
 func (a *aptosChainWriter) GetEstimateFee(ctx context.Context, contract, method string, args any, toAddress string, meta *commontypes.TxMeta, val *big.Int) (commontypes.EstimateFee, error) {
 	return commontypes.EstimateFee{}, errors.New("not implemented")
+}
+
+func adjustTxMetaForCCIPExecute(meta *commontypes.TxMeta, moduleName, functionName string, paramValues []any) (*commontypes.TxMeta, error) {
+	// Skip non-CCIP offramp:execute tx
+	if moduleName != "offramp" && functionName != "execute" {
+		return meta, nil
+	}
+
+	// Skip gas limit already set
+	if meta != nil && meta.GasLimit != nil {
+		return meta, nil
+	}
+
+	if len(paramValues) < 2 {
+		return meta, fmt.Errorf("expected 2 parameters for %s::%s, got %d", moduleName, functionName, len(paramValues))
+	}
+
+	reportBytes, ok := paramValues[1].([]byte)
+	if !ok {
+		return meta, fmt.Errorf("expected report parameter to be []byte, got %T", paramValues[1])
+	}
+
+	report, err := crutils.DeserializeExecutionReport(reportBytes)
+	if err != nil {
+		return meta, fmt.Errorf("failed to deserialize execution report: %+w", err)
+	}
+
+	if report == nil {
+		return meta, fmt.Errorf("execution report is nil")
+	}
+
+	if report.Message.GasLimit == nil {
+		return meta, fmt.Errorf("execution report gas limit is nil")
+	}
+
+	if meta == nil {
+		meta = &commontypes.TxMeta{
+			GasLimit: report.Message.GasLimit,
+		}
+	} else {
+		meta.GasLimit = report.Message.GasLimit
+	}
+
+	return meta, nil
 }
