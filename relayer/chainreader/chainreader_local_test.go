@@ -1337,7 +1337,7 @@ func getSampleTxMetadata() *commontypes.TxMeta {
 	workflowID := "sample-workflow-id"
 	return &commontypes.TxMeta{
 		WorkflowExecutionID: &workflowID,
-		GasLimit:            big.NewInt(21000),
+		GasLimit:            big.NewInt(210000),
 	}
 }
 

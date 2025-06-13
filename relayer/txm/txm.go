@@ -318,15 +318,27 @@ func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, nonce u
 
 	ctxLogger := GetContexedTxLogger(a.baseLogger, tx.ID, tx.Metadata)
 
+	if tx.Metadata != nil && tx.Metadata.GasLimit != nil {
+		rawTx.MaxGasAmount = tx.Metadata.GasLimit.Uint64()
+		ctxLogger.Debugw("using gas limit from metadata", "maxGasAmount", rawTx.MaxGasAmount)
+	}
+
 	// (if enabled for tx) simulate tx to estimate gas
 	if tx.Simulate {
 		simulatedTx, err := a.simulateTransaction(client, *rawTx, tx.FromAddress, tx.PublicKey)
 		if err == nil {
 			ctxLogger.Debugw("simulate tx successful", "gasUsed", simulatedTx.GasUsed, "gasUnitPrice", simulatedTx.GasUnitPrice)
 
-			// todo: configurable multiplier?
-			// fixed multiplier of 1.25 to account for potential discrepancies in gas estimation
-			rawTx.MaxGasAmount = uint64(float64(simulatedTx.GasUsed) * 1.25)
+			if tx.Metadata != nil && tx.Metadata.GasLimit != nil {
+				if simulatedTx.GasUsed > rawTx.MaxGasAmount {
+					ctxLogger.Warnw("simulated gas used exceeds gas limit from metadata", "gasUsed", simulatedTx.GasUsed, "maxGasAmount", rawTx.MaxGasAmount)
+				}
+			} else {
+				// todo: configurable multiplier?
+				// fixed multiplier of 1.25 to account for potential discrepancies in gas estimation
+				rawTx.MaxGasAmount = uint64(float64(simulatedTx.GasUsed) * 1.25)
+			}
+
 			rawTx.GasUnitPrice = simulatedTx.GasUnitPrice
 		} else {
 			// do not error on failed estimate gas as it could fail due to conflicting in-flight txs
