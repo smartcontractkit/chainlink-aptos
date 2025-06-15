@@ -10,7 +10,7 @@ module ccip::fee_quoter {
     use std::option;
     use std::signer;
     use std::string::{Self, String};
-    use std::smart_table::{Self, SmartTable};
+    use std::big_ordered_map::{Self, BigOrderedMap};
     use std::timestamp;
 
     use ccip::auth;
@@ -87,19 +87,25 @@ module ccip::fee_quoter {
     // the fee by 1e8 on Aptos before we emit it in the event.
     const LOCAL_8_TO_18_DECIMALS_LINK_MULTIPLIER: u256 = 10_000_000_000;
 
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct FeeQuoterState has key, store {
         // max_fee_juels_per_msg is in juels (1e18) denomination for consistency across chains.
         max_fee_juels_per_msg: u256,
         link_token: address,
         token_price_staleness_threshold: u64,
         fee_tokens: vector<address>,
-        usd_per_unit_gas_by_dest_chain: SmartTable<u64, TimestampedPrice>,
-        usd_per_token: SmartTable<address, TimestampedPrice>,
-        dest_chain_configs: SmartTable<u64, DestChainConfig>,
+        usd_per_unit_gas_by_dest_chain: BigOrderedMap<u64, TimestampedPrice>,
+        usd_per_token: BigOrderedMap<address, TimestampedPrice>,
+        dest_chain_configs: BigOrderedMap<u64, DestChainConfig>,
         // dest chain selector -> local token -> TokenTransferFeeConfig
-        token_transfer_fee_configs: SmartTable<u64, SmartTable<address, TokenTransferFeeConfig>>,
+        token_transfer_fee_configs: BigOrderedMap<u64, BigOrderedMap<address, TokenTransferFeeConfig>>,
         // TODO: update calculations - should this be octa per apt?
-        premium_multiplier_wei_per_eth: SmartTable<address, u64>,
+        premium_multiplier_wei_per_eth: BigOrderedMap<address, u64>
+    }
+
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+    /// Separate struct to avoid hitting `layout_max_size` limit in VM.
+    struct FeeQuoterEvents has key, store {
         fee_token_added_events: EventHandle<FeeTokenAdded>,
         fee_token_removed_events: EventHandle<FeeTokenRemoved>,
         token_transfer_fee_config_added_events: EventHandle<TokenTransferFeeConfigAdded>,
@@ -287,11 +293,15 @@ module ccip::fee_quoter {
             link_token,
             token_price_staleness_threshold,
             fee_tokens,
-            usd_per_unit_gas_by_dest_chain: smart_table::new(),
-            usd_per_token: smart_table::new(),
-            dest_chain_configs: smart_table::new(),
-            token_transfer_fee_configs: smart_table::new(),
-            premium_multiplier_wei_per_eth: smart_table::new(),
+            usd_per_unit_gas_by_dest_chain: big_ordered_map::new_with_config(0, 0, false),
+            usd_per_token: big_ordered_map::new_with_config(0, 0, false),
+            dest_chain_configs: big_ordered_map::new_with_config(0, 0, false),
+            token_transfer_fee_configs: big_ordered_map::new_with_config(0, 0, false),
+            premium_multiplier_wei_per_eth: big_ordered_map::new_with_config(0, 0, false)
+        };
+        move_to(&state_object_signer, state);
+
+        let events = FeeQuoterEvents {
             fee_token_added_events: account::new_event_handle(&state_object_signer),
             fee_token_removed_events: account::new_event_handle(&state_object_signer),
             token_transfer_fee_config_added_events: account::new_event_handle(
@@ -312,7 +322,7 @@ module ccip::fee_quoter {
                 &state_object_signer
             )
         };
-        move_to(&state_object_signer, state);
+        move_to(&state_object_signer, events);
     }
 
     #[view]
@@ -384,7 +394,7 @@ module ccip::fee_quoter {
         caller: &signer,
         fee_tokens_to_remove: vector<address>,
         fee_tokens_to_add: vector<address>
-    ) acquires FeeQuoterState {
+    ) acquires FeeQuoterState, FeeQuoterEvents {
         auth::assert_only_owner(signer::address_of(caller));
 
         let state = borrow_state_mut();
@@ -397,7 +407,8 @@ module ccip::fee_quoter {
                 state.fee_tokens.remove(index);
                 event::emit(FeeTokenRemoved { fee_token });
                 event::emit_event(
-                    &mut state.fee_token_removed_events, FeeTokenRemoved { fee_token }
+                    &mut borrow_events_mut().fee_token_removed_events,
+                    FeeTokenRemoved { fee_token }
                 );
             };
         });
@@ -410,7 +421,8 @@ module ccip::fee_quoter {
                 state.fee_tokens.push_back(fee_token);
                 event::emit(FeeTokenAdded { fee_token });
                 event::emit_event(
-                    &mut state.fee_token_added_events, FeeTokenAdded { fee_token }
+                    &mut borrow_events_mut().fee_token_added_events,
+                    FeeTokenAdded { fee_token }
                 );
             };
         });
@@ -438,13 +450,16 @@ module ccip::fee_quoter {
                 is_enabled: false
             };
 
-        if (!state.token_transfer_fee_configs.contains(dest_chain_selector)) {
+        if (!state.token_transfer_fee_configs.contains(&dest_chain_selector)) {
             &empty_fee_config
         } else {
             let dest_chain_fee_configs =
-                state.token_transfer_fee_configs.borrow(dest_chain_selector);
-
-            dest_chain_fee_configs.borrow_with_default(token, &empty_fee_config)
+                state.token_transfer_fee_configs.borrow(&dest_chain_selector);
+            if (dest_chain_fee_configs.contains(&token)) {
+                dest_chain_fee_configs.borrow(&token)
+            } else {
+                &empty_fee_config
+            }
         }
     }
 
@@ -461,16 +476,18 @@ module ccip::fee_quoter {
         add_dest_bytes_overhead: vector<u32>,
         add_is_enabled: vector<bool>,
         remove_tokens: vector<address>
-    ) acquires FeeQuoterState {
+    ) acquires FeeQuoterState, FeeQuoterEvents {
         auth::assert_only_owner(signer::address_of(caller));
 
         let state = borrow_state_mut();
 
-        if (!state.token_transfer_fee_configs.contains(dest_chain_selector)) {
-            state.token_transfer_fee_configs.add(dest_chain_selector, smart_table::new());
-        };
         let token_transfer_fee_configs =
-            state.token_transfer_fee_configs.borrow_mut(dest_chain_selector);
+            if (state.token_transfer_fee_configs.contains(&dest_chain_selector)) {
+                // Use `remove` and `add` instead of mutable borrow.
+                state.token_transfer_fee_configs.remove(&dest_chain_selector)
+            } else {
+                big_ordered_map::new_with_config(0, 0, false)
+            };
 
         let add_tokens_len = add_tokens.length();
         assert!(
@@ -535,7 +552,7 @@ module ccip::fee_quoter {
                 }
             );
             event::emit_event(
-                &mut state.token_transfer_fee_config_added_events,
+                &mut borrow_events_mut().token_transfer_fee_config_added_events,
                 TokenTransferFeeConfigAdded {
                     dest_chain_selector,
                     token,
@@ -547,18 +564,22 @@ module ccip::fee_quoter {
         remove_tokens.for_each_ref(
             |token| {
                 let token: address = *token;
-                if (token_transfer_fee_configs.contains(token)) {
-                    token_transfer_fee_configs.remove(token);
+                if (token_transfer_fee_configs.contains(&token)) {
+                    token_transfer_fee_configs.remove(&token);
 
                     event::emit(
                         TokenTransferFeeConfigRemoved { dest_chain_selector, token }
                     );
                     event::emit_event(
-                        &mut state.token_transfer_fee_config_removed_events,
+                        &mut borrow_events_mut().token_transfer_fee_config_removed_events,
                         TokenTransferFeeConfigRemoved { dest_chain_selector, token }
                     );
                 }
             }
+        );
+
+        state.token_transfer_fee_configs.add(
+            dest_chain_selector, token_transfer_fee_configs
         );
     }
 
@@ -568,7 +589,7 @@ module ccip::fee_quoter {
         source_usd_per_token: vector<u256>,
         gas_dest_chain_selectors: vector<u64>,
         gas_usd_per_unit_gas: vector<u256>
-    ) acquires FeeQuoterState {
+    ) acquires FeeQuoterState, FeeQuoterEvents {
         auth::assert_is_allowed_offramp(signer::address_of(caller));
 
         assert!(
@@ -599,7 +620,7 @@ module ccip::fee_quoter {
                     }
                 );
                 event::emit_event(
-                    &mut state.usd_per_token_updated_events,
+                    &mut borrow_events_mut().usd_per_token_updated_events,
                     UsdPerTokenUpdated {
                         token: *token,
                         usd_per_token: *usd_per_token,
@@ -626,7 +647,7 @@ module ccip::fee_quoter {
                     }
                 );
                 event::emit_event(
-                    &mut state.usd_per_unit_gas_updated_events,
+                    &mut borrow_events_mut().usd_per_unit_gas_updated_events,
                     UsdPerUnitGasUpdated {
                         dest_chain_selector: *dest_chain_selector,
                         usd_per_unit_gas: *usd_per_unit_gas,
@@ -780,7 +801,7 @@ module ccip::fee_quoter {
         caller: &signer,
         tokens: vector<address>,
         premium_multiplier_wei_per_eth: vector<u64>
-    ) acquires FeeQuoterState {
+    ) acquires FeeQuoterState, FeeQuoterEvents {
         auth::assert_only_owner(signer::address_of(caller));
 
         let state = borrow_state_mut();
@@ -800,7 +821,7 @@ module ccip::fee_quoter {
                     }
                 );
                 event::emit_event(
-                    &mut state.premium_multiplier_wei_per_eth_updated_events,
+                    &mut borrow_events_mut().premium_multiplier_wei_per_eth_updated_events,
                     PremiumMultiplierWeiPerEthUpdated {
                         token,
                         premium_multiplier_wei_per_eth
@@ -820,10 +841,10 @@ module ccip::fee_quoter {
         state: &FeeQuoterState, token: address
     ): u64 {
         assert!(
-            state.premium_multiplier_wei_per_eth.contains(token),
+            state.premium_multiplier_wei_per_eth.contains(&token),
             error::invalid_argument(E_UNKNOWN_TOKEN)
         );
-        *state.premium_multiplier_wei_per_eth.borrow(token)
+        *state.premium_multiplier_wei_per_eth.borrow(&token)
     }
 
     inline fun resolve_generic_gas_limit(
@@ -1307,10 +1328,10 @@ module ccip::fee_quoter {
         state: &FeeQuoterState, dest_chain_selector: u64
     ): &DestChainConfig {
         assert!(
-            state.dest_chain_configs.contains(dest_chain_selector),
+            state.dest_chain_configs.contains(&dest_chain_selector),
             error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
         );
-        state.dest_chain_configs.borrow(dest_chain_selector)
+        state.dest_chain_configs.borrow(&dest_chain_selector)
     }
 
     public entry fun apply_dest_chain_config_updates(
@@ -1335,7 +1356,7 @@ module ccip::fee_quoter {
         gas_multiplier_wei_per_eth: u64,
         gas_price_staleness_threshold: u32,
         network_fee_usd_cents: u32
-    ) acquires FeeQuoterState {
+    ) acquires FeeQuoterState, FeeQuoterEvents {
         auth::assert_only_owner(signer::address_of(caller));
 
         let state = borrow_state_mut();
@@ -1379,20 +1400,19 @@ module ccip::fee_quoter {
             network_fee_usd_cents
         };
 
-        if (state.dest_chain_configs.contains(dest_chain_selector)) {
-            let dest_chain_config_ref =
-                state.dest_chain_configs.borrow_mut(dest_chain_selector);
-            *dest_chain_config_ref = dest_chain_config;
+        if (state.dest_chain_configs.contains(&dest_chain_selector)) {
+            // Use upsert pattern since DestChainConfig has variable-size field (chain_family_selector: vector<u8>)
+            state.dest_chain_configs.upsert(dest_chain_selector, dest_chain_config);
             event::emit(DestChainConfigUpdated { dest_chain_selector, dest_chain_config });
             event::emit_event(
-                &mut state.dest_chain_config_updated_events,
+                &mut borrow_events_mut().dest_chain_config_updated_events,
                 DestChainConfigUpdated { dest_chain_selector, dest_chain_config }
             );
         } else {
             state.dest_chain_configs.add(dest_chain_selector, dest_chain_config);
             event::emit(DestChainAdded { dest_chain_selector, dest_chain_config });
             event::emit_event(
-                &mut state.dest_chain_added_events,
+                &mut borrow_events_mut().dest_chain_added_events,
                 DestChainAdded { dest_chain_selector, dest_chain_config }
             );
         }
@@ -1416,26 +1436,30 @@ module ccip::fee_quoter {
         borrow_global_mut<FeeQuoterState>(state_object::object_address())
     }
 
+    inline fun borrow_events_mut(): &mut FeeQuoterEvents {
+        borrow_global_mut<FeeQuoterEvents>(state_object::object_address())
+    }
+
     // Token prices can be stale. On EVM we have additional fallbacks to a price feed, if configured. Since these
     // fallbacks don't exist on Aptos, we simply return the price as is.
     inline fun get_token_price_internal(
         state: &FeeQuoterState, token: address
     ): TimestampedPrice {
         assert!(
-            state.usd_per_token.contains(token),
+            state.usd_per_token.contains(&token),
             error::invalid_argument(E_UNKNOWN_TOKEN)
         );
-        *state.usd_per_token.borrow(token)
+        *state.usd_per_token.borrow(&token)
     }
 
     inline fun get_dest_chain_gas_price_internal(
         state: &FeeQuoterState, dest_chain_selector: u64
     ): TimestampedPrice {
         assert!(
-            state.usd_per_unit_gas_by_dest_chain.contains(dest_chain_selector),
+            state.usd_per_unit_gas_by_dest_chain.contains(&dest_chain_selector),
             error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
         );
-        *state.usd_per_unit_gas_by_dest_chain.borrow(dest_chain_selector)
+        *state.usd_per_unit_gas_by_dest_chain.borrow(&dest_chain_selector)
     }
 
     inline fun get_validated_gas_price_internal(
@@ -1546,7 +1570,7 @@ module ccip::fee_quoter {
 
     public fun mcms_entrypoint<T: key>(
         _metadata: object::Object<T>
-    ): option::Option<u128> acquires FeeQuoterState {
+    ): option::Option<u128> acquires FeeQuoterState, FeeQuoterEvents {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip, McmsCallback {});
 

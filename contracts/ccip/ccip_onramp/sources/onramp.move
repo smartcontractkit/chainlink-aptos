@@ -10,7 +10,7 @@ module ccip_onramp::onramp {
     use std::primary_fungible_store;
     use std::signer;
     use std::string::{Self, String};
-    use std::smart_table::{Self, SmartTable};
+    use std::big_ordered_map::{Self, BigOrderedMap};
 
     use ccip::address;
     use ccip::auth;
@@ -40,7 +40,7 @@ module ccip_onramp::onramp {
         allowlist_admin: address,
 
         // dest chain selector -> config
-        dest_chain_configs: SmartTable<u64, DestChainConfig>,
+        dest_chain_configs: BigOrderedMap<u64, DestChainConfig>,
         config_set_events: EventHandle<ConfigSet>,
         dest_chain_config_set_events: EventHandle<DestChainConfigSet>,
         ccip_message_sent_events: EventHandle<CCIPMessageSent>,
@@ -221,7 +221,7 @@ module ccip_onramp::onramp {
             chain_selector,
             fee_aggregator: @0x0,
             allowlist_admin: @0x0,
-            dest_chain_configs: smart_table::new(),
+            dest_chain_configs: big_ordered_map::new_with_config(0, 0, false),
             config_set_events: account::new_event_handle(state_signer),
             dest_chain_config_set_events: account::new_event_handle(state_signer),
             ccip_message_sent_events: account::new_event_handle(state_signer),
@@ -245,7 +245,7 @@ module ccip_onramp::onramp {
     #[view]
     public fun is_chain_supported(dest_chain_selector: u64): bool acquires OnRampState {
         let state = borrow_state();
-        state.dest_chain_configs.contains(dest_chain_selector)
+        state.dest_chain_configs.contains(&dest_chain_selector)
     }
 
     #[view]
@@ -254,10 +254,10 @@ module ccip_onramp::onramp {
     ): u64 acquires OnRampState {
         let state = borrow_state();
         assert!(
-            state.dest_chain_configs.contains(dest_chain_selector),
+            state.dest_chain_configs.contains(&dest_chain_selector),
             error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
         );
-        let dest_chain_config = state.dest_chain_configs.borrow(dest_chain_selector);
+        let dest_chain_config = state.dest_chain_configs.borrow(&dest_chain_selector);
         dest_chain_config.sequence_number + 1
     }
 
@@ -391,11 +391,13 @@ module ccip_onramp::onramp {
 
         let state = borrow_state_mut();
         assert!(
-            state.dest_chain_configs.contains(dest_chain_selector),
+            state.dest_chain_configs.contains(&dest_chain_selector),
             error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
         );
 
-        let dest_chain_config = state.dest_chain_configs.borrow_mut(dest_chain_selector);
+        // Use remove and add pattern due to variable size struct
+        // https://github.com/aptos-labs/aptos-core/blob/96fa267/aptos-move/framework/aptos-framework/sources/datastructures/big_ordered_map.move#L450
+        let dest_chain_config = state.dest_chain_configs.borrow(&dest_chain_selector);
 
         if (dest_chain_config.allowlist_enabled) {
             assert!(
@@ -481,9 +483,15 @@ module ccip_onramp::onramp {
             );
         };
 
-        dest_chain_config.sequence_number += 1;
+        let sequence_number = dest_chain_config.sequence_number + 1;
 
-        let sequence_number = dest_chain_config.sequence_number;
+        let updated_config = DestChainConfig {
+            sequence_number,
+            router: dest_chain_config.router,
+            allowlist_enabled: dest_chain_config.allowlist_enabled,
+            allowed_senders: dest_chain_config.allowed_senders
+        };
+        state.dest_chain_configs.upsert(dest_chain_selector, updated_config);
 
         let (
             fee_value_juels,
@@ -581,11 +589,11 @@ module ccip_onramp::onramp {
         let state = borrow_state();
 
         assert!(
-            state.dest_chain_configs.contains(dest_chain_selector),
+            state.dest_chain_configs.contains(&dest_chain_selector),
             error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
         );
 
-        let dest_chain_config = state.dest_chain_configs.borrow(dest_chain_selector);
+        let dest_chain_config = state.dest_chain_configs.borrow(&dest_chain_selector);
 
         (
             dest_chain_config.sequence_number,
@@ -601,11 +609,11 @@ module ccip_onramp::onramp {
         let state = borrow_state();
 
         assert!(
-            state.dest_chain_configs.contains(dest_chain_selector),
+            state.dest_chain_configs.contains(&dest_chain_selector),
             error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
         );
 
-        let dest_chain_config = state.dest_chain_configs.borrow(dest_chain_selector);
+        let dest_chain_config = state.dest_chain_configs.borrow(&dest_chain_selector);
 
         (dest_chain_config.allowlist_enabled, dest_chain_config.allowed_senders)
     }
@@ -641,7 +649,7 @@ module ccip_onramp::onramp {
         for (i in 0..dest_chains_len) {
             let dest_chain_selector = dest_chain_selectors[i];
             assert!(
-                state.dest_chain_configs.contains(dest_chain_selector),
+                state.dest_chain_configs.contains(&dest_chain_selector),
                 error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
             );
 
@@ -649,9 +657,10 @@ module ccip_onramp::onramp {
             let add_allowed_senders = dest_chain_add_allowed_senders[i];
             let remove_allowed_senders = dest_chain_remove_allowed_senders[i];
 
-            let dest_chain_config =
-                state.dest_chain_configs.borrow_mut(dest_chain_selector);
-            dest_chain_config.allowlist_enabled = allowlist_enabled;
+            // Use remove and add pattern due to variable size struct
+            // https://github.com/aptos-labs/aptos-core/blob/96fa267/aptos-move/framework/aptos-framework/sources/datastructures/big_ordered_map.move#L450
+            let dest_chain_config = state.dest_chain_configs.borrow(&dest_chain_selector);
+            let updated_allowed_senders = dest_chain_config.allowed_senders;
 
             if (add_allowed_senders.length() > 0) {
                 assert!(
@@ -665,10 +674,9 @@ module ccip_onramp::onramp {
                         error::invalid_argument(E_INVALID_ALLOWLIST_ADDRESS)
                     );
 
-                    let (found, _) =
-                        dest_chain_config.allowed_senders.index_of(&sender_address);
+                    let (found, _) = updated_allowed_senders.index_of(&sender_address);
                     if (!found) {
-                        dest_chain_config.allowed_senders.push_back(sender_address);
+                        updated_allowed_senders.push_back(sender_address);
                     };
                 });
 
@@ -689,10 +697,9 @@ module ccip_onramp::onramp {
 
             if (remove_allowed_senders.length() > 0) {
                 remove_allowed_senders.for_each_ref(|sender_address| {
-                    let (found, i) =
-                        dest_chain_config.allowed_senders.index_of(sender_address);
+                    let (found, i) = updated_allowed_senders.index_of(sender_address);
                     if (found) {
-                        dest_chain_config.allowed_senders.swap_remove(i);
+                        updated_allowed_senders.swap_remove(i);
                     }
                 });
 
@@ -710,6 +717,14 @@ module ccip_onramp::onramp {
                     }
                 );
             };
+
+            let updated_config = DestChainConfig {
+                sequence_number: dest_chain_config.sequence_number,
+                router: dest_chain_config.router,
+                allowlist_enabled,
+                allowed_senders: updated_allowed_senders
+            };
+            state.dest_chain_configs.upsert(dest_chain_selector, updated_config);
         };
     }
 
@@ -898,23 +913,27 @@ module ccip_onramp::onramp {
             let router = dest_chain_routers[i];
             let allowlist_enabled = dest_chain_allowlist_enabled[i];
 
-            if (!state.dest_chain_configs.contains(dest_chain_selector)) {
-                state.dest_chain_configs.add(
-                    dest_chain_selector,
+            let updated_config =
+                if (!state.dest_chain_configs.contains(&dest_chain_selector)) {
                     DestChainConfig {
                         sequence_number: 0,
-                        router: @0x0,
-                        allowlist_enabled: false,
+                        router,
+                        allowlist_enabled,
                         allowed_senders: vector[]
                     }
-                );
-            };
+                } else {
+                    let existing_config =
+                        state.dest_chain_configs.borrow(&dest_chain_selector);
+                    DestChainConfig {
+                        sequence_number: existing_config.sequence_number,
+                        router,
+                        allowlist_enabled,
+                        allowed_senders: existing_config.allowed_senders
+                    }
+                };
 
-            let dest_chain_config =
-                state.dest_chain_configs.borrow_mut(dest_chain_selector);
-
-            dest_chain_config.router = router;
-            dest_chain_config.allowlist_enabled = allowlist_enabled;
+            state.dest_chain_configs.upsert(dest_chain_selector, updated_config);
+            let dest_chain_config = state.dest_chain_configs.borrow(&dest_chain_selector);
 
             event::emit(
                 DestChainConfigSet {

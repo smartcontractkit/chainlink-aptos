@@ -4,7 +4,7 @@ module ccip_token_pool::token_pool {
     use std::event::{Self, EventHandle};
     use std::fungible_asset::{Self, FungibleAsset, Metadata};
     use std::object::{Self, Object};
-    use std::smart_table::{Self, SmartTable};
+    use std::big_ordered_map::{Self, BigOrderedMap};
 
     use ccip::address;
     use ccip::eth_abi;
@@ -23,7 +23,7 @@ module ccip_token_pool::token_pool {
     struct TokenPoolState has key, store {
         allowlist_state: allowlist::AllowlistState,
         fa_metadata: Object<Metadata>,
-        remote_chain_configs: SmartTable<u64, RemoteChainConfig>,
+        remote_chain_configs: BigOrderedMap<u64, RemoteChainConfig>,
         rate_limiter_config: token_pool_rate_limiter::RateLimitState,
         locked_events: EventHandle<LockedOrBurned>,
         released_events: EventHandle<ReleasedOrMinted>,
@@ -139,7 +139,7 @@ module ccip_token_pool::token_pool {
         TokenPoolState {
             allowlist_state: allowlist::new(event_account, allowlist),
             fa_metadata,
-            remote_chain_configs: smart_table::new(),
+            remote_chain_configs: big_ordered_map::new_with_config(0, 0, false),
             rate_limiter_config: token_pool_rate_limiter::new(event_account),
             locked_events: account::new_event_handle(event_account),
             released_events: account::new_event_handle(event_account),
@@ -189,7 +189,7 @@ module ccip_token_pool::token_pool {
     public fun is_supported_chain(
         state: &TokenPoolState, remote_chain_selector: u64
     ): bool {
-        state.remote_chain_configs.contains(remote_chain_selector)
+        state.remote_chain_configs.contains(&remote_chain_selector)
     }
 
     public fun apply_chain_updates(
@@ -202,10 +202,10 @@ module ccip_token_pool::token_pool {
         remote_chain_selectors_to_remove.for_each_ref(|remote_chain_selector| {
             let remote_chain_selector: u64 = *remote_chain_selector;
             assert!(
-                state.remote_chain_configs.contains(remote_chain_selector),
+                state.remote_chain_configs.contains(&remote_chain_selector),
                 error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
             );
-            state.remote_chain_configs.remove(remote_chain_selector);
+            state.remote_chain_configs.remove(&remote_chain_selector);
 
             event::emit(ChainRemoved { remote_chain_selector });
             event::emit_event(
@@ -226,7 +226,7 @@ module ccip_token_pool::token_pool {
         for (i in 0..add_len) {
             let remote_chain_selector = remote_chain_selectors_to_add[i];
             assert!(
-                !state.remote_chain_configs.contains(remote_chain_selector),
+                !state.remote_chain_configs.contains(&remote_chain_selector),
                 error::invalid_argument(E_REMOTE_CHAIN_ALREADY_EXISTS)
             );
             let remote_pool_addresses = remote_pool_addresses_to_add[i];
@@ -277,11 +277,11 @@ module ccip_token_pool::token_pool {
         state: &TokenPoolState, remote_chain_selector: u64
     ): vector<vector<u8>> {
         assert!(
-            state.remote_chain_configs.contains(remote_chain_selector),
+            state.remote_chain_configs.contains(&remote_chain_selector),
             error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
         );
         let remote_chain_config =
-            state.remote_chain_configs.borrow(remote_chain_selector);
+            state.remote_chain_configs.borrow(&remote_chain_selector);
         remote_chain_config.remote_pools
     }
 
@@ -297,11 +297,11 @@ module ccip_token_pool::token_pool {
         state: &TokenPoolState, remote_chain_selector: u64
     ): vector<u8> {
         assert!(
-            state.remote_chain_configs.contains(remote_chain_selector),
+            state.remote_chain_configs.contains(&remote_chain_selector),
             error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
         );
         let remote_chain_config =
-            state.remote_chain_configs.borrow(remote_chain_selector);
+            state.remote_chain_configs.borrow(&remote_chain_selector);
         remote_chain_config.remote_token_address
     }
 
@@ -313,16 +313,24 @@ module ccip_token_pool::token_pool {
         address::assert_non_zero_address_vector(&remote_pool_address);
 
         assert!(
-            state.remote_chain_configs.contains(remote_chain_selector),
+            state.remote_chain_configs.contains(&remote_chain_selector),
             error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
         );
+
+        // Use remove and add pattern due to variable size struct
+        // https://github.com/aptos-labs/aptos-core/blob/96fa267/aptos-move/framework/aptos-framework/sources/datastructures/big_ordered_map.move#L450
         let remote_chain_config =
-            state.remote_chain_configs.borrow_mut(remote_chain_selector);
+            state.remote_chain_configs.remove(&remote_chain_selector);
 
         let (found, _) = remote_chain_config.remote_pools.index_of(&remote_pool_address);
         assert!(!found, error::invalid_argument(E_REMOTE_POOL_ALREADY_ADDED));
 
         remote_chain_config.remote_pools.push_back(remote_pool_address);
+        let updated_config = RemoteChainConfig {
+            remote_token_address: remote_chain_config.remote_token_address,
+            remote_pools: remote_chain_config.remote_pools
+        };
+        state.remote_chain_configs.add(remote_chain_selector, updated_config);
 
         event::emit(RemotePoolAdded { remote_chain_selector, remote_pool_address });
         event::emit_event(
@@ -337,17 +345,25 @@ module ccip_token_pool::token_pool {
         remote_pool_address: vector<u8>
     ) {
         assert!(
-            state.remote_chain_configs.contains(remote_chain_selector),
+            state.remote_chain_configs.contains(&remote_chain_selector),
             error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
         );
+
+        // Use remove and add pattern due to variable size struct
         let remote_chain_config =
-            state.remote_chain_configs.borrow_mut(remote_chain_selector);
+            state.remote_chain_configs.remove(&remote_chain_selector);
 
         let (found, i) = remote_chain_config.remote_pools.index_of(&remote_pool_address);
         assert!(found, error::invalid_argument(E_UNKNOWN_REMOTE_POOL));
 
         // remove instead of swap_remove for readability, so the newest added pool is always at the end.
         remote_chain_config.remote_pools.remove(i);
+
+        let updated_config = RemoteChainConfig {
+            remote_token_address: remote_chain_config.remote_token_address,
+            remote_pools: remote_chain_config.remote_pools
+        };
+        state.remote_chain_configs.add(remote_chain_selector, updated_config);
 
         event::emit(RemotePoolRemoved { remote_chain_selector, remote_pool_address });
         event::emit_event(
@@ -691,7 +707,7 @@ module ccip_token_pool::token_pool {
         } = state;
 
         allowlist::destroy_allowlist(allowlist_state);
-        remote_chain_configs.destroy();
+        remote_chain_configs.destroy(|_dv| {});
         event::destroy_handle(locked_events);
         event::destroy_handle(released_events);
         event::destroy_handle(remote_pool_added_events);

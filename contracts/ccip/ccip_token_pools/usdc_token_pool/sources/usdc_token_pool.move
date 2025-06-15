@@ -8,7 +8,7 @@ module usdc_token_pool::usdc_token_pool {
     use std::object::{Self, Object, ObjectCore};
     use std::option;
     use std::signer;
-    use std::smart_table::{Self, SmartTable};
+    use std::big_ordered_map::{Self, BigOrderedMap};
     use std::string::{Self, String};
 
     use ccip::address;
@@ -41,7 +41,7 @@ module usdc_token_pool::usdc_token_pool {
         store_signer_cap: SignerCapability,
         ownable_state: ownable::OwnableState,
         token_pool_state: token_pool::TokenPoolState,
-        chain_to_domain: SmartTable<u64, Domain>,
+        chain_to_domain: BigOrderedMap<u64, Domain>,
         local_domain_identifier: u32,
         store_signer_address: address,
         domain_set_events: EventHandle<DomainsSet>
@@ -166,7 +166,7 @@ module usdc_token_pool::usdc_token_pool {
         let pool = USDCTokenPoolState {
             ownable_state,
             store_signer_address: signer::address_of(&store_signer),
-            chain_to_domain: smart_table::new(),
+            chain_to_domain: big_ordered_map::new_with_config(0, 0, false),
             local_domain_identifier: message_transmitter::local_domain(),
             store_signer_cap,
             token_pool_state,
@@ -329,11 +329,11 @@ module usdc_token_pool::usdc_token_pool {
         let remote_chain_selector =
             token_admin_registry::get_lock_or_burn_remote_chain_selector(&input);
         assert!(
-            smart_table::contains(&pool.chain_to_domain, remote_chain_selector),
+            pool.chain_to_domain.contains(&remote_chain_selector),
             error::invalid_argument(E_DOMAIN_NOT_FOUND)
         );
 
-        let remote_domain_info = pool.chain_to_domain.borrow(remote_chain_selector);
+        let remote_domain_info = pool.chain_to_domain.borrow(&remote_chain_selector);
 
         assert!(
             remote_domain_info.enabled,
@@ -503,7 +503,7 @@ module usdc_token_pool::usdc_token_pool {
     #[view]
     public fun get_domain(chain_selector: u64): Domain acquires USDCTokenPoolState {
         let pool = borrow_pool();
-        *pool.chain_to_domain.borrow(chain_selector)
+        *pool.chain_to_domain.borrow(&chain_selector)
     }
 
     public fun set_domains(

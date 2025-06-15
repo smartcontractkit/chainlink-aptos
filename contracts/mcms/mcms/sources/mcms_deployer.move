@@ -3,7 +3,7 @@
 module mcms::mcms_deployer {
     use std::code::PackageRegistry;
     use std::error;
-    use std::smart_table::{Self, SmartTable};
+    use std::big_ordered_map::{Self, BigOrderedMap};
     use std::object;
     use std::object_code_deployment;
 
@@ -14,7 +14,7 @@ module mcms::mcms_deployer {
 
     struct StagingArea has key {
         metadata_serialized: vector<u8>,
-        code: SmartTable<u64, vector<u8>>,
+        code: BigOrderedMap<u64, vector<u8>>,
         last_module_idx: u64
     }
 
@@ -105,7 +105,7 @@ module mcms::mcms_deployer {
                 &mcms_account::get_signer(),
                 StagingArea {
                     metadata_serialized: vector[],
-                    code: smart_table::new(),
+                    code: big_ordered_map::new_with_config(0, 0, false),
                     last_module_idx: 0
                 }
             );
@@ -121,8 +121,11 @@ module mcms::mcms_deployer {
             let inner_code = code_chunks[i];
             let idx = (code_indices[i] as u64);
 
-            if (staging_area.code.contains(idx)) {
-                staging_area.code.borrow_mut(idx).append(inner_code);
+            if (staging_area.code.contains(&idx)) {
+                // Use remove-modify-add pattern instead of borrow_mut for variable-sized values
+                let existing_code = staging_area.code.remove(&idx);
+                existing_code.append(inner_code);
+                staging_area.code.add(idx, existing_code);
             } else {
                 staging_area.code.add(idx, inner_code);
                 if (idx > staging_area.last_module_idx) {
@@ -138,7 +141,7 @@ module mcms::mcms_deployer {
         let last_module_idx = staging_area.last_module_idx;
         let code = vector[];
         for (i in 0..(last_module_idx + 1)) {
-            code.push_back(*staging_area.code.borrow(i));
+            code.push_back(*staging_area.code.borrow(&i));
         };
         code
     }
@@ -146,6 +149,6 @@ module mcms::mcms_deployer {
     inline fun cleanup_staging_area_internal() {
         let StagingArea { metadata_serialized: _, code, last_module_idx: _ } =
             move_from<StagingArea>(@mcms);
-        code.destroy();
+        code.destroy(|_dv| {});
     }
 }

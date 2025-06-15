@@ -1,6 +1,5 @@
 module ccip_token_pool::token_pool_rate_limiter {
-    use std::smart_table;
-    use std::smart_table::SmartTable;
+    use std::big_ordered_map::{Self, BigOrderedMap};
     use std::account;
     use std::error;
     use std::event;
@@ -9,8 +8,8 @@ module ccip_token_pool::token_pool_rate_limiter {
     use ccip_token_pool::rate_limiter;
 
     struct RateLimitState has store {
-        outbound_rate_limiter_config: SmartTable<u64, rate_limiter::TokenBucket>,
-        inbound_rate_limiter_config: SmartTable<u64, rate_limiter::TokenBucket>,
+        outbound_rate_limiter_config: BigOrderedMap<u64, rate_limiter::TokenBucket>,
+        inbound_rate_limiter_config: BigOrderedMap<u64, rate_limiter::TokenBucket>,
         tokens_consumed_events: EventHandle<TokensConsumed>,
         config_changed_events: EventHandle<ConfigChanged>
     }
@@ -36,8 +35,8 @@ module ccip_token_pool::token_pool_rate_limiter {
 
     public fun new(event_account: &signer): RateLimitState {
         RateLimitState {
-            outbound_rate_limiter_config: smart_table::new(),
-            inbound_rate_limiter_config: smart_table::new(),
+            outbound_rate_limiter_config: big_ordered_map::new_with_config(0, 0, false),
+            inbound_rate_limiter_config: big_ordered_map::new_with_config(0, 0, false),
             tokens_consumed_events: account::new_event_handle(event_account),
             config_changed_events: account::new_event_handle(event_account)
         }
@@ -67,16 +66,16 @@ module ccip_token_pool::token_pool_rate_limiter {
 
     inline fun consume_from_bucket(
         tokens_consumed_events: &mut EventHandle<TokensConsumed>,
-        rate_limiter: &mut SmartTable<u64, rate_limiter::TokenBucket>,
+        rate_limiter: &mut BigOrderedMap<u64, rate_limiter::TokenBucket>,
         dest_chain_selector: u64,
         requested_tokens: u64
     ) {
         assert!(
-            rate_limiter.contains(dest_chain_selector),
+            rate_limiter.contains(&dest_chain_selector),
             error::invalid_argument(E_BUCKET_NOT_FOUND)
         );
 
-        let bucket = rate_limiter.borrow_mut(dest_chain_selector);
+        let bucket = rate_limiter.borrow_mut(&dest_chain_selector);
         rate_limiter::consume(bucket, requested_tokens);
 
         event::emit(
@@ -104,10 +103,13 @@ module ccip_token_pool::token_pool_rate_limiter {
         inbound_capacity: u64,
         inbound_rate: u64
     ) {
-        let outbound_config =
-            state.outbound_rate_limiter_config.borrow_mut_with_default(
+        if (!state.outbound_rate_limiter_config.contains(&remote_chain_selector)) {
+            state.outbound_rate_limiter_config.add(
                 remote_chain_selector, rate_limiter::new(false, 0, 0)
             );
+        };
+        let outbound_config =
+            state.outbound_rate_limiter_config.borrow_mut(&remote_chain_selector);
         rate_limiter::set_token_bucket_config(
             outbound_config,
             outbound_is_enabled,
@@ -115,10 +117,13 @@ module ccip_token_pool::token_pool_rate_limiter {
             outbound_rate
         );
 
-        let inbound_config =
-            state.inbound_rate_limiter_config.borrow_mut_with_default(
+        if (!state.inbound_rate_limiter_config.contains(&remote_chain_selector)) {
+            state.inbound_rate_limiter_config.add(
                 remote_chain_selector, rate_limiter::new(false, 0, 0)
             );
+        };
+        let inbound_config =
+            state.inbound_rate_limiter_config.borrow_mut(&remote_chain_selector);
         rate_limiter::set_token_bucket_config(
             inbound_config,
             inbound_is_enabled,
@@ -155,7 +160,7 @@ module ccip_token_pool::token_pool_rate_limiter {
         state: &RateLimitState, remote_chain_selector: u64
     ): rate_limiter::TokenBucket {
         rate_limiter::get_current_token_bucket_state(
-            state.inbound_rate_limiter_config.borrow(remote_chain_selector)
+            state.inbound_rate_limiter_config.borrow(&remote_chain_selector)
         )
     }
 
@@ -163,7 +168,7 @@ module ccip_token_pool::token_pool_rate_limiter {
         state: &RateLimitState, remote_chain_selector: u64
     ): rate_limiter::TokenBucket {
         rate_limiter::get_current_token_bucket_state(
-            state.outbound_rate_limiter_config.borrow(remote_chain_selector)
+            state.outbound_rate_limiter_config.borrow(&remote_chain_selector)
         )
     }
 
@@ -175,8 +180,8 @@ module ccip_token_pool::token_pool_rate_limiter {
             config_changed_events
         } = state;
 
-        outbound_rate_limiter_config.destroy();
-        inbound_rate_limiter_config.destroy();
+        outbound_rate_limiter_config.destroy(|_dv| {});
+        inbound_rate_limiter_config.destroy(|_dv| {});
         event::destroy_handle(tokens_consumed_events);
         event::destroy_handle(config_changed_events);
     }

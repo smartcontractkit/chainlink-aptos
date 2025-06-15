@@ -10,7 +10,7 @@ module ccip::rmn_remote {
     use std::secp256k1;
     use std::signer;
     use std::string::{Self, String};
-    use std::smart_table::{Self, SmartTable};
+    use std::big_ordered_map::{Self, BigOrderedMap};
 
     use ccip::auth;
     use ccip::eth_abi;
@@ -26,8 +26,8 @@ module ccip::rmn_remote {
         local_chain_selector: u64,
         config: Config,
         config_count: u32,
-        signers: SmartTable<vector<u8>, bool>,
-        cursed_subjects: SmartTable<vector<u8>, bool>,
+        signers: BigOrderedMap<vector<u8>, bool>,
+        cursed_subjects: BigOrderedMap<vector<u8>, bool>,
         config_set_events: EventHandle<ConfigSet>,
         cursed_events: EventHandle<Cursed>,
         uncursed_events: EventHandle<Uncursed>
@@ -128,8 +128,8 @@ module ccip::rmn_remote {
                 f_sign: 0
             },
             config_count: 0,
-            signers: smart_table::new(),
-            cursed_subjects: smart_table::new(),
+            signers: big_ordered_map::new_with_config(0, 0, false),
+            cursed_subjects: big_ordered_map::new_with_config(0, 0, false),
             config_set_events: account::new_event_handle(&state_object_signer),
             cursed_events: account::new_event_handle(&state_object_signer),
             uncursed_events: account::new_event_handle(&state_object_signer)
@@ -248,7 +248,7 @@ module ccip::rmn_remote {
             let eth_address = aptos_hash::keccak256(public_key_bytes).trim(12);
 
             assert!(
-                state.signers.contains(eth_address),
+                state.signers.contains(&eth_address),
                 error::invalid_argument(E_UNEXPECTED_SIGNER)
             );
             if (i > 0) {
@@ -309,7 +309,7 @@ module ccip::rmn_remote {
             error::invalid_argument(E_NOT_ENOUGH_SIGNERS)
         );
 
-        state.signers.clear();
+        state.signers.for_each_and_clear(|_k, _v| {});
 
         let signers =
             signer_onchain_public_keys.zip_map_ref(
@@ -323,7 +323,7 @@ module ccip::rmn_remote {
                         error::invalid_argument(E_INVALID_PUBLIC_KEY_LENGTH)
                     );
                     assert!(
-                        !state.signers.contains(signer_public_key_bytes),
+                        !state.signers.contains(&signer_public_key_bytes),
                         error::invalid_argument(E_DUPLICATE_SIGNER)
                     );
                     state.signers.add(signer_public_key_bytes, true);
@@ -380,7 +380,7 @@ module ccip::rmn_remote {
                     error::invalid_argument(E_INVALID_SUBJECT_LENGTH)
                 );
                 assert!(
-                    !state.cursed_subjects.contains(subject),
+                    !state.cursed_subjects.contains(&subject),
                     error::invalid_argument(E_ALREADY_CURSED)
                 );
                 state.cursed_subjects.add(subject, true);
@@ -404,10 +404,10 @@ module ccip::rmn_remote {
         subjects.for_each_ref(|subject| {
             let subject: vector<u8> = *subject;
             assert!(
-                state.cursed_subjects.contains(subject),
+                state.cursed_subjects.contains(&subject),
                 error::invalid_argument(E_NOT_CURSED)
             );
-            state.cursed_subjects.remove(subject);
+            state.cursed_subjects.remove(&subject);
         });
         event::emit(Uncursed { subjects });
         event::emit_event(&mut state.uncursed_events, Uncursed { subjects });
@@ -420,12 +420,12 @@ module ccip::rmn_remote {
 
     #[view]
     public fun is_cursed_global(): bool acquires RMNRemoteState {
-        borrow_state().cursed_subjects.contains(GLOBAL_CURSE_SUBJECT)
+        borrow_state().cursed_subjects.contains(&GLOBAL_CURSE_SUBJECT)
     }
 
     #[view]
     public fun is_cursed(subject: vector<u8>): bool acquires RMNRemoteState {
-        borrow_state().cursed_subjects.contains(subject) || is_cursed_global()
+        borrow_state().cursed_subjects.contains(&subject) || is_cursed_global()
     }
 
     #[view]

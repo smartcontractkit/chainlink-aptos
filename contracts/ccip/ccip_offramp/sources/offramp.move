@@ -12,7 +12,7 @@ module ccip_offramp::offramp {
     use std::primary_fungible_store;
     use std::signer;
     use std::string::{Self, String};
-    use std::smart_table::{Self, SmartTable};
+    use std::big_ordered_map::{Self, BigOrderedMap};
     use std::timestamp;
     use std::vector;
 
@@ -62,12 +62,12 @@ module ccip_offramp::offramp {
 
         // State
         // source chain selector -> config
-        source_chain_configs: SmartTable<u64, SourceChainConfig>,
+        source_chain_configs: BigOrderedMap<u64, SourceChainConfig>,
         // source chain selector -> seq num -> execution state
-        execution_states: SmartTable<u64, SmartTable<u64, u8>>,
+        execution_states: BigOrderedMap<u64, BigOrderedMap<u64, u8>>,
 
         // merkle root -> timestamp,
-        roots: SmartTable<vector<u8>, u64>,
+        roots: BigOrderedMap<vector<u8>, u64>,
         // This is the OCR sequence number, not to be confused with the CCIP message sequence number.
         latest_price_sequence_number: u64,
 
@@ -307,9 +307,9 @@ module ccip_offramp::offramp {
             ocr3_base_state: ocr3_base::new(state_signer),
             chain_selector,
             permissionless_execution_threshold_seconds: 0,
-            source_chain_configs: smart_table::new(),
-            execution_states: smart_table::new(),
-            roots: smart_table::new(),
+            source_chain_configs: big_ordered_map::new_with_config(0, 0, false),
+            execution_states: big_ordered_map::new_with_config(0, 0, false),
+            roots: big_ordered_map::new_with_config(0, 0, false),
             latest_price_sequence_number: 0,
             static_config_set_events: account::new_event_handle(state_signer),
             dynamic_config_set_events: account::new_event_handle(state_signer),
@@ -347,11 +347,11 @@ module ccip_offramp::offramp {
     ) {
         // assert that the source chain is enabled.
         assert!(
-            state.source_chain_configs.contains(source_chain_selector),
+            state.source_chain_configs.contains(&source_chain_selector),
             error::invalid_argument(E_UNKNOWN_SOURCE_CHAIN_SELECTOR)
         );
         let source_chain_config =
-            state.source_chain_configs.borrow(source_chain_selector);
+            state.source_chain_configs.borrow(&source_chain_selector);
         assert!(
             source_chain_config.is_enabled,
             error::permission_denied(E_SOURCE_CHAIN_NOT_ENABLED)
@@ -393,12 +393,12 @@ module ccip_offramp::offramp {
         let state = borrow_state();
 
         assert!(
-            state.execution_states.contains(source_chain_selector),
+            state.execution_states.contains(&source_chain_selector),
             error::invalid_argument(E_UNKNOWN_SOURCE_CHAIN_SELECTOR)
         );
         let source_chain_execution_states =
-            state.execution_states.borrow(source_chain_selector);
-        let execution_state = source_chain_execution_states.borrow(sequence_number);
+            state.execution_states.borrow(&source_chain_selector);
+        let execution_state = source_chain_execution_states.borrow(&sequence_number);
         *execution_state
     }
 
@@ -425,7 +425,7 @@ module ccip_offramp::offramp {
         );
 
         let source_chain_config =
-            state.source_chain_configs.borrow(source_chain_selector);
+            state.source_chain_configs.borrow(&source_chain_selector);
         let metadata_hash =
             calculate_metadata_hash(
                 source_chain_selector,
@@ -451,16 +451,19 @@ module ccip_offramp::offramp {
         };
 
         let source_chain_execution_states =
-            state.execution_states.borrow_mut(source_chain_selector);
+            state.execution_states.borrow(&source_chain_selector);
 
         let message = &execution_report.message;
         let sequence_number = message.header.sequence_number;
-        let execution_state_ref =
-            source_chain_execution_states.borrow_mut_with_default(
-                sequence_number, EXECUTION_STATE_UNTOUCHED
-            );
 
-        if (*execution_state_ref != EXECUTION_STATE_UNTOUCHED) {
+        let execution_state =
+            if (source_chain_execution_states.contains(&sequence_number)) {
+                *source_chain_execution_states.borrow(&sequence_number)
+            } else {
+                EXECUTION_STATE_UNTOUCHED
+            };
+
+        if (execution_state != EXECUTION_STATE_UNTOUCHED) {
             event::emit(SkippedAlreadyExecuted { source_chain_selector, sequence_number });
             event::emit_event(
                 &mut state.skipped_already_executed_events,
@@ -484,8 +487,13 @@ module ccip_offramp::offramp {
         // Execute the message
         execute_single_message(state, message, &execution_report.offchain_token_data);
 
-        // Since Aptos only supports success of reverts, when it reaches this it has succeeded.
-        *execution_state_ref = EXECUTION_STATE_SUCCESS;
+        // Since Aptos only supports success or reverts, when it reaches this it has succeeded.
+        // Use remove and add pattern due to variable size struct
+        // https://github.com/aptos-labs/aptos-core/blob/96fa267/aptos-move/framework/aptos-framework/sources/datastructures/big_ordered_map.move#L450
+        let source_chain_execution_states =
+            state.execution_states.remove(&source_chain_selector);
+        source_chain_execution_states.upsert(sequence_number, EXECUTION_STATE_SUCCESS);
+        state.execution_states.add(source_chain_selector, source_chain_execution_states);
 
         event::emit(
             ExecutionStateChanged {
@@ -514,10 +522,10 @@ module ccip_offramp::offramp {
         state: &mut OffRampState, root: vector<u8>
     ): bool {
         assert!(
-            state.roots.contains(root),
+            state.roots.contains(&root),
             error::invalid_argument(E_ROOT_NOT_COMMITTED)
         );
-        let timestamp_committed_secs = *state.roots.borrow(root);
+        let timestamp_committed_secs = *state.roots.borrow(&root);
 
         (timestamp::now_seconds() - timestamp_committed_secs)
             > (state.permissionless_execution_threshold_seconds as u64)
@@ -669,8 +677,9 @@ module ccip_offramp::offramp {
 
                 assert_source_chain_enabled(state, source_chain_selector);
 
+                // Use borrow, copy, then upsert pattern due to variable size in SourceChainConfig `on_ramp`
                 let source_chain_config =
-                    state.source_chain_configs.borrow_mut(source_chain_selector);
+                    state.source_chain_configs.borrow(&source_chain_selector);
 
                 // If the root is blessed but RMN blessing is disabled for the source chain, or if the root is not
                 // blessed but RMN blessing is enabled, we revert.
@@ -696,11 +705,20 @@ module ccip_offramp::offramp {
                 );
 
                 assert!(
-                    !state.roots.contains(merkle_root),
+                    !state.roots.contains(&merkle_root),
                     error::invalid_argument(E_ROOT_ALREADY_COMMITTED)
                 );
 
-                source_chain_config.min_seq_nr = root.max_seq_nr + 1;
+                // Update the config with new min_seq_nr and upsert back
+                let updated_config =
+                    SourceChainConfig {
+                        router: source_chain_config.router,
+                        is_enabled: source_chain_config.is_enabled,
+                        min_seq_nr: root.max_seq_nr + 1,
+                        is_rmn_verification_disabled: source_chain_config.is_rmn_verification_disabled,
+                        on_ramp: source_chain_config.on_ramp
+                    };
+                state.source_chain_configs.upsert(source_chain_selector, updated_config);
                 state.roots.add(merkle_root, timestamp::now_seconds());
             }
         );
@@ -715,11 +733,11 @@ module ccip_offramp::offramp {
     public fun get_merkle_root(root: vector<u8>): u64 acquires OffRampState {
         let state = borrow_state();
         assert!(
-            state.roots.contains(root),
+            state.roots.contains(&root),
             error::invalid_argument(E_INVALID_ROOT)
         );
 
-        *state.roots.borrow(root)
+        *state.roots.borrow(&root)
     }
 
     #[view]
@@ -727,9 +745,9 @@ module ccip_offramp::offramp {
         source_chain_selector: u64
     ): SourceChainConfig acquires OffRampState {
         let state = borrow_state();
-        if (state.source_chain_configs.contains(source_chain_selector)) {
+        if (state.source_chain_configs.contains(&source_chain_selector)) {
             let source_chain_config =
-                state.source_chain_configs.borrow(source_chain_selector);
+                state.source_chain_configs.borrow(&source_chain_selector);
             *source_chain_config
         } else {
             SourceChainConfig {
@@ -745,7 +763,7 @@ module ccip_offramp::offramp {
     #[view]
     public fun get_all_source_chain_configs(): (vector<u64>, vector<SourceChainConfig>) acquires OffRampState {
         let state = borrow_state();
-        state.source_chain_configs.to_simple_map().to_vec_pair()
+        state.source_chain_configs.to_ordered_map().to_vec_pair()
     }
 
     // ================================================================
@@ -998,7 +1016,7 @@ module ccip_offramp::offramp {
 
             address::assert_non_zero_address_vector(&on_ramp);
 
-            if (!state.source_chain_configs.contains(source_chain_selector)) {
+            if (!state.source_chain_configs.contains(&source_chain_selector)) {
                 state.source_chain_configs.add(
                     source_chain_selector,
                     SourceChainConfig {
@@ -1009,30 +1027,34 @@ module ccip_offramp::offramp {
                         on_ramp: vector[]
                     }
                 );
-                state.execution_states.add(source_chain_selector, smart_table::new());
+                state.execution_states.add(
+                    source_chain_selector, big_ordered_map::new_with_config(0, 0, false)
+                );
             } else {
                 // OnRamp updates should only happen due to a misconfiguration.
                 // If an OnRamp is misconfigured, no reports should have been
                 // committed and no messages should have been executed.
                 let existing_config =
-                    state.source_chain_configs.borrow(source_chain_selector);
+                    state.source_chain_configs.borrow(&source_chain_selector);
                 if (existing_config.min_seq_nr != 1
                     && existing_config.on_ramp != on_ramp) {
                     abort error::invalid_argument(E_INVALID_ON_RAMP_UPDATE)
                 };
             };
 
-            let config = state.source_chain_configs.borrow_mut(source_chain_selector);
+            // Use borrow, copy, then upsert pattern due to variable size
+            let config = *state.source_chain_configs.borrow(&source_chain_selector);
             config.is_enabled = is_enabled;
             config.on_ramp = on_ramp;
             config.is_rmn_verification_disabled = is_rmn_verification_disabled;
+            state.source_chain_configs.upsert(source_chain_selector, config);
 
             event::emit(
-                SourceChainConfigSet { source_chain_selector, source_chain_config: *config }
+                SourceChainConfigSet { source_chain_selector, source_chain_config: config }
             );
             event::emit_event(
                 &mut state.source_chain_config_set_events,
-                SourceChainConfigSet { source_chain_selector, source_chain_config: *config }
+                SourceChainConfigSet { source_chain_selector, source_chain_config: config }
             );
         }
     }

@@ -6,12 +6,13 @@ module mcms::mcms {
     use std::signer;
     use std::simple_map::{Self, SimpleMap};
     use std::string::{String};
-    use aptos_std::smart_table::{Self, SmartTable};
-    use aptos_std::smart_vector::{Self, SmartVector};
-    use aptos_framework::chain_id;
-    use aptos_framework::object::{Self, ExtendRef, Object};
-    use aptos_framework::timestamp;
-    use aptos_std::secp256k1;
+    use std::big_ordered_map::{Self, BigOrderedMap};
+    use std::smart_vector::{Self, SmartVector};
+    use std::chain_id;
+    use std::object::{Self, ExtendRef, Object};
+    use std::timestamp;
+    use std::secp256k1;
+
     use mcms::bcs_stream::{Self, BCSStream};
     use mcms::mcms_account;
     use mcms::mcms_deployer;
@@ -220,7 +221,7 @@ module mcms::mcms {
             publisher,
             Timelock {
                 min_delay: 0,
-                timestamps: smart_table::new(),
+                timestamps: big_ordered_map::new_with_config(0, 0, false),
                 blocked_functions: smart_vector::new()
             }
         );
@@ -1048,7 +1049,7 @@ module mcms::mcms {
     struct Timelock has key {
         min_delay: u64,
         /// hashed batch of hashed calls -> timestamp
-        timestamps: SmartTable<vector<u8>, u64>,
+        timestamps: BigOrderedMap<vector<u8>, u64>,
         /// blocked functions
         blocked_functions: SmartVector<Function>
     }
@@ -1187,7 +1188,9 @@ module mcms::mcms {
 
     inline fun timelock_after_call(id: vector<u8>) {
         assert!(timelock_is_operation_ready(id), E_OPERATION_NOT_READY);
-        *borrow_mut_timelock().timestamps.borrow_mut(id) = DONE_TIMESTAMP;
+        let timelock = borrow_mut_timelock();
+        timelock.timestamps.remove(&id);
+        timelock.timestamps.add(id, DONE_TIMESTAMP);
     }
 
     /// Anyone can call this as it checks if the operation was scheduled by a bypasser or proposer.
@@ -1438,7 +1441,7 @@ module mcms::mcms {
     inline fun timelock_cancel(id: vector<u8>) {
         assert!(timelock_is_operation_pending(id), E_OPERATION_CANNOT_BE_CANCELLED);
 
-        borrow_mut_timelock().timestamps.remove(id);
+        borrow_mut_timelock().timestamps.remove(&id);
         event::emit(Cancelled { id });
     }
 
@@ -1513,39 +1516,39 @@ module mcms::mcms {
     inline fun timelock_is_operation_internal(
         timelock: &Timelock, id: vector<u8>
     ): bool {
-        timelock.timestamps.contains(id) && *timelock.timestamps.borrow(id) > 0
+        timelock.timestamps.contains(&id) && *timelock.timestamps.borrow(&id) > 0
     }
 
     #[view]
     public fun timelock_is_operation_pending(id: vector<u8>): bool acquires Timelock {
         let timelock = borrow_timelock();
-        timelock.timestamps.contains(id)
-            && *timelock.timestamps.borrow(id) > DONE_TIMESTAMP
+        timelock.timestamps.contains(&id)
+            && *timelock.timestamps.borrow(&id) > DONE_TIMESTAMP
     }
 
     #[view]
     public fun timelock_is_operation_ready(id: vector<u8>): bool acquires Timelock {
         let timelock = borrow_timelock();
-        if (!timelock.timestamps.contains(id)) {
+        if (!timelock.timestamps.contains(&id)) {
             return false
         };
 
-        let timestamp_value = *timelock.timestamps.borrow(id);
+        let timestamp_value = *timelock.timestamps.borrow(&id);
         timestamp_value > DONE_TIMESTAMP && timestamp_value <= timestamp::now_seconds()
     }
 
     #[view]
     public fun timelock_is_operation_done(id: vector<u8>): bool acquires Timelock {
         let timelock = borrow_timelock();
-        timelock.timestamps.contains(id)
-            && *timelock.timestamps.borrow(id) == DONE_TIMESTAMP
+        timelock.timestamps.contains(&id)
+            && *timelock.timestamps.borrow(&id) == DONE_TIMESTAMP
     }
 
     #[view]
     public fun timelock_get_timestamp(id: vector<u8>): u64 acquires Timelock {
         let timelock = borrow_timelock();
-        if (timelock.timestamps.contains(id)) {
-            *timelock.timestamps.borrow(id)
+        if (timelock.timestamps.contains(&id)) {
+            *timelock.timestamps.borrow(&id)
         } else { 0 }
     }
 

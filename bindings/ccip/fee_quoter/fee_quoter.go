@@ -99,6 +99,9 @@ type FeeQuoterState struct {
 	FeeTokens                    []aptos.AccountAddress `move:"vector<address>"`
 }
 
+type FeeQuoterEvents struct {
+}
+
 type StaticConfig struct {
 	MaxFeeJuelsPerMsg            *big.Int             `move:"u256"`
 	LinkToken                    aptos.AccountAddress `move:"address"`

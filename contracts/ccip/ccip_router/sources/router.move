@@ -14,7 +14,7 @@ module ccip_router::router {
     use std::option::{Self, Option};
     use std::signer;
     use std::string::{Self, String};
-    use std::smart_table::{Self, SmartTable};
+    use std::big_ordered_map::{Self, BigOrderedMap};
     use std::event::EventHandle;
 
     use ccip::ownable;
@@ -28,7 +28,7 @@ module ccip_router::router {
     struct RouterState has key {
         state_signer_cap: SignerCapability,
         ownable_state: ownable::OwnableState,
-        on_ramp_versions: SmartTable<u64, vector<u8>>,
+        on_ramp_versions: BigOrderedMap<u64, vector<u8>>,
         on_ramp_set_events: EventHandle<OnRampSet>
     }
 
@@ -58,7 +58,7 @@ module ccip_router::router {
             RouterState {
                 state_signer_cap,
                 ownable_state: ownable::new(&state_signer, @ccip_router),
-                on_ramp_versions: smart_table::new(),
+                on_ramp_versions: big_ordered_map::new_with_config(0, 0, false),
                 on_ramp_set_events: account::new_event_handle(&state_signer)
             }
         );
@@ -82,7 +82,7 @@ module ccip_router::router {
     /// @return True if the chain is supported, false otherwise.
     public fun is_chain_supported(dest_chain_selector: u64): bool acquires RouterState {
         let state = borrow_state();
-        state.on_ramp_versions.contains(dest_chain_selector)
+        state.on_ramp_versions.contains(&dest_chain_selector)
     }
 
     #[view]
@@ -94,11 +94,11 @@ module ccip_router::router {
         let state = borrow_state();
 
         assert!(
-            state.on_ramp_versions.contains(dest_chain_selector),
+            state.on_ramp_versions.contains(&dest_chain_selector),
             error::invalid_argument(E_UNSUPPORTED_DESTINATION_CHAIN)
         );
 
-        let on_ramp_version = *state.on_ramp_versions.borrow(dest_chain_selector);
+        let on_ramp_version = *state.on_ramp_versions.borrow(&dest_chain_selector);
 
         if (on_ramp_version == vector[1, 6, 0]) {
             @ccip_onramp
@@ -124,11 +124,11 @@ module ccip_router::router {
         let state = borrow_state();
 
         assert!(
-            state.on_ramp_versions.contains(dest_chain_selector),
+            state.on_ramp_versions.contains(&dest_chain_selector),
             error::invalid_argument(E_UNSUPPORTED_DESTINATION_CHAIN)
         );
 
-        let on_ramp_version = *state.on_ramp_versions.borrow(dest_chain_selector);
+        let on_ramp_version = *state.on_ramp_versions.borrow(&dest_chain_selector);
 
         if (on_ramp_version == vector[1, 6, 0]) {
             onramp_1_6_0::get_fee(
@@ -193,11 +193,11 @@ module ccip_router::router {
         let state = borrow_state();
 
         assert!(
-            state.on_ramp_versions.contains(dest_chain_selector),
+            state.on_ramp_versions.contains(&dest_chain_selector),
             error::invalid_argument(E_UNSUPPORTED_DESTINATION_CHAIN)
         );
 
-        let on_ramp_version = *state.on_ramp_versions.borrow(dest_chain_selector);
+        let on_ramp_version = *state.on_ramp_versions.borrow(&dest_chain_selector);
 
         let state_signer =
             account::create_signer_with_capability(&state.state_signer_cap);
@@ -246,7 +246,11 @@ module ccip_router::router {
     ): vector<vector<u8>> acquires RouterState {
         let state = borrow_state();
         dest_chain_selectors.map((|dest_chain_selector| {
-            *state.on_ramp_versions.borrow_with_default(dest_chain_selector, &vector[])
+            if (state.on_ramp_versions.contains(&dest_chain_selector)) {
+                *state.on_ramp_versions.borrow(&dest_chain_selector)
+            } else {
+                vector[]
+            }
         }))
     }
 
@@ -291,8 +295,8 @@ module ccip_router::router {
             |dest_chain_selector, on_ramp_version| {
                 let version_len = on_ramp_version.length();
                 if (version_len == 0) {
-                    if (state.on_ramp_versions.contains(dest_chain_selector)) {
-                        state.on_ramp_versions.remove(dest_chain_selector);
+                    if (state.on_ramp_versions.contains(&dest_chain_selector)) {
+                        state.on_ramp_versions.remove(&dest_chain_selector);
                     };
                 } else {
                     assert!(
