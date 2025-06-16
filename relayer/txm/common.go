@@ -79,7 +79,7 @@ func GetSampleTxMetadata() *commontypes.TxMeta {
 	workflowID := "sample-workflow-id"
 	return &commontypes.TxMeta{
 		WorkflowExecutionID: &workflowID,
-		GasLimit:            big.NewInt(21000),
+		GasLimit:            big.NewInt(210000),
 	}
 }
 
@@ -315,7 +315,7 @@ func NewMerkleTree(leaves [][32]byte) (MerkleTree, error) {
 	return tree, nil
 }
 
-func HashRootMetadata(metadata RootMetadata) common.Hash {
+func HashRootMetadata(metadata RootMetadata) (common.Hash, error) {
 	MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA := crypto.Keccak256([]byte("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA_APTOS"))
 	ser := bcs.Serializer{}
 	ser.FixedBytes(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA)
@@ -326,10 +326,14 @@ func HashRootMetadata(metadata RootMetadata) common.Hash {
 	ser.U64(metadata.PostOpCount)
 	ser.Bool(metadata.OverridePreviousRoot)
 
-	return crypto.Keccak256Hash(ser.ToBytes())
+	if err := ser.Error(); err != nil {
+		return common.Hash{}, err
+	}
+
+	return crypto.Keccak256Hash(ser.ToBytes()), nil
 }
 
-func HashOp(op *Op) common.Hash {
+func HashOp(op *Op) (common.Hash, error) {
 	MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP := crypto.Keccak256([]byte("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP_APTOS"))
 	ser := bcs.Serializer{}
 	ser.FixedBytes(MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP)
@@ -342,7 +346,11 @@ func HashOp(op *Op) common.Hash {
 	ser.WriteString(op.FunctionName)
 	ser.WriteBytes(op.Data)
 
-	return crypto.Keccak256Hash(ser.ToBytes())
+	if err := ser.Error(); err != nil {
+		return common.Hash{}, err
+	}
+
+	return crypto.Keccak256Hash(ser.ToBytes()), nil
 }
 
 func CalculateSignedHash(rootHash [32]byte, validUntil uint64) [32]byte {
@@ -381,9 +389,17 @@ func GenerateSignatures(t *testing.T, signers []Signer, signedHash [32]byte) [][
 
 func GenerateMerkleTree(ops []Op, rootMetadata RootMetadata) (MerkleTree, error) {
 	leaves := make([][32]byte, len(ops)+1)
-	leaves[0] = HashRootMetadata(rootMetadata)
+	rootHash, err := HashRootMetadata(rootMetadata)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash root metadata: %w", err)
+	}
+	leaves[0] = rootHash
 	for i, op := range ops {
-		leaves[i+1] = HashOp(&op)
+		hashOp, err := HashOp(&op)
+		if err != nil {
+			return nil, fmt.Errorf("failed to hash operation: %w", err)
+		}
+		leaves[i+1] = hashOp
 	}
 	return NewMerkleTree(leaves)
 }
@@ -470,8 +486,10 @@ func EnqueueSetRoot(
 
 	// The first leaf is the metadata
 	metadataProof := merkleTree.GetProof(0)
+	hashedRootMetadata, err := HashRootMetadata(rootMetadata)
+	require.NoError(t, err)
 
-	require.True(t, merkleTree.VerifyProof(metadataProof, HashRootMetadata(rootMetadata)))
+	require.True(t, merkleTree.VerifyProof(metadataProof, hashedRootMetadata))
 
 	// Log all values needed for Move e2e test
 	logger.Debugw("============= BEGIN VALUES FOR MOVE E2E TEST =============")
@@ -501,7 +519,7 @@ func EnqueueSetRoot(
 
 	setRootId := uuid.New().String()
 
-	err := txm.Enqueue(
+	err = txm.Enqueue(
 		setRootId,
 		GetSampleTxMetadata(),
 		deployerAddress,
@@ -576,7 +594,8 @@ func ScheduleSingleOperationAsDeployer(
 	)
 
 	// Compute and log the leaf hash
-	leafHash := HashOp(&op)
+	leafHash, err := HashOp(&op)
+	require.NoError(t, err)
 	logger.Debugw("Leaf hash", "value", hex.EncodeToString(leafHash[:]))
 
 	// Log each proof element
@@ -666,7 +685,8 @@ func ScheduleBatchOperationsAsDeployer(
 	)
 
 	// Compute and log the leaf hash
-	leafHash := HashOp(&op)
+	leafHash, err := HashOp(&op)
+	require.NoError(t, err)
 	logger.Debugw("Leaf hash", "value", hex.EncodeToString(leafHash[:]))
 
 	// Verify that the provided proof matches our calculated leaf hash
@@ -717,6 +737,12 @@ func ScheduleBatchOperationsAsDeployer(
 }
 
 func HashOperationBatch(targets []aptos.AccountAddress, moduleNames, functionNames []string, datas [][]byte, predecessor, salt []byte) (common.Hash, error) {
+	// Verify all arrays have the same length
+	if len(targets) != len(moduleNames) || len(targets) != len(functionNames) || len(targets) != len(datas) {
+		return common.Hash{}, fmt.Errorf("mismatched array lengths: targets=%d, moduleNames=%d, functionNames=%d, datas=%d",
+			len(targets), len(moduleNames), len(functionNames), len(datas))
+	}
+
 	ser := bcs.Serializer{}
 	//nolint:gosec
 	ser.Uleb128(uint32(len(targets)))

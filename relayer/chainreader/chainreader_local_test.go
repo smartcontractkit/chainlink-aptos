@@ -1,4 +1,4 @@
-//go:build integration
+// //go:build integration
 
 package chainreader
 
@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 
@@ -25,6 +24,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
+	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/loop"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
@@ -110,13 +110,13 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 	require.NoError(t, err)
 	waitForTx(t, txmgr, txId)
 
-	config := ChainReaderConfig{
-		Modules: map[string]*ChainReaderModule{
+	config := crconfig.ChainReaderConfig{
+		Modules: map[string]*crconfig.ChainReaderModule{
 			"testContract": {
 				Name: "echo",
-				Functions: map[string]*ChainReaderFunction{
+				Functions: map[string]*crconfig.ChainReaderFunction{
 					"echo_u64": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "u64",
@@ -124,7 +124,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"echo_u32_u64_tuple": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "u32",
@@ -137,7 +137,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						ResultTupleToStruct: []string{"first", "second"},
 					},
 					"echo_string": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "0x1::string::String",
@@ -145,7 +145,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"echo_byte_vector": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "vector<u8>",
@@ -153,7 +153,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"echo_u32_vector": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "vector<u32>",
@@ -161,7 +161,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"echo_byte_vector_vector": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "vector<vector<u8>>",
@@ -169,7 +169,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"echo_u256": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Value1",
 								Type: "u256",
@@ -177,7 +177,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"get_complex_struct": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Val",
 								Type: "u64",
@@ -187,13 +187,13 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 								Type: "0x1::string::String",
 							},
 						},
-						ResultFieldRenames: map[string]RenamedField{
+						ResultFieldRenames: map[string]crconfig.RenamedField{
 							"flag": {
 								NewName: "RenamedFlag",
 							},
 							"nested": {
 								NewName: "RenamedNested",
-								SubFieldRenames: map[string]RenamedField{
+								SubFieldRenames: map[string]crconfig.RenamedField{
 									"id":          {NewName: "RenamedId"},
 									"description": {NewName: "RenamedDescription"},
 								},
@@ -204,7 +204,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 						},
 					},
 					"get_complex_struct_array": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Val",
 								Type: "u64",
@@ -214,13 +214,13 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 								Type: "0x1::string::String",
 							},
 						},
-						ResultFieldRenames: map[string]RenamedField{
+						ResultFieldRenames: map[string]crconfig.RenamedField{
 							"flag": {
 								NewName: "RenamedFlag",
 							},
 							"nested": {
 								NewName: "RenamedNested",
-								SubFieldRenames: map[string]RenamedField{
+								SubFieldRenames: map[string]crconfig.RenamedField{
 									"id":          {NewName: "RenamedId"},
 									"description": {NewName: "RenamedDescription"},
 								},
@@ -232,7 +232,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 					},
 					"get_complex_struct_unwrapped": {
 						Name: "get_complex_struct",
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{
 								Name: "Val",
 								Type: "u64",
@@ -490,7 +490,7 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 		t.Skip("Skipping persistent tests as TEST_DB_URL is not set in CI")
 	}
 	db := sqltest.NewDB(t, dsn)
-	
+
 	keystore := testutils.NewTestKeystore(t)
 	keystore.AddKey(privateKey)
 
@@ -510,19 +510,28 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 	txId := deployContract(t, txmgr, accountAddress.String(), publicKeyHex, compilationResult)
 	waitForTx(t, txmgr, txId)
 
-	config := ChainReaderConfig{
-		Modules: map[string]*ChainReaderModule{
+	config := crconfig.ChainReaderConfig{
+		Modules: map[string]*crconfig.ChainReaderModule{
 			"testContract": {
 				Name: "echo",
-				Events: map[string]*ChainReaderEvent{
+				Events: map[string]*crconfig.ChainReaderEvent{
 					"DoubleValueEvent": {
 						EventHandleStructName: "EventStore",
 						EventHandleFieldName:  "double_value_events",
 						EventAccountAddress:   "",
 					},
+					"SingleValueEvent": {
+						EventHandleStructName: "EventStore",
+						EventHandleFieldName:  "single_value_events",
+						EventAccountAddress:   "",
+					},
 				},
 			},
 		},
+		EventSyncInterval: 3 * time.Second,
+		EventSyncTimeout:  1 * time.Second,
+		TxSyncInterval:    3 * time.Second,
+		TxSyncTimeout:     1 * time.Second,
 	}
 
 	// Create ChainReader with persistence enabled.
@@ -543,6 +552,38 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 		)
 		require.NoError(t, err)
 		require.NotEmpty(t, seqs)
+	})
+
+	t.Run("Events stored separately", func(t *testing.T) {
+		doubleSeqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "DoubleValueEvent"},
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&DoubleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, doubleSeqs, "Expected DoubleValueEvent events")
+
+		singleSeqs, err := chainReader.QueryKey(
+			context.Background(),
+			binding,
+			query.KeyFilter{Key: "SingleValueEvent"},
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, singleSeqs, "Expected SingleValueEvent events")
+
+		for _, seq := range doubleSeqs {
+			_, ok := seq.Data.(*DoubleValueEvent)
+			require.True(t, ok, "Expected DoubleValueEvent type")
+		}
+
+		for _, seq := range singleSeqs {
+			_, ok := seq.Data.(*SingleValueEvent)
+			require.True(t, ok, "Expected SingleValueEvent type")
+		}
 	})
 
 	t.Run("Filter by numeric value", func(t *testing.T) {
@@ -597,7 +638,10 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 	})
 
 	t.Run("Sorted results descending", func(t *testing.T) {
-		seqs, err := chainReader.QueryKey(
+		extReader, ok := chainReader.(ExtendedContractReader)
+		require.True(t, ok, "chainReader does not implement ExtendedContractReader")
+
+		enrichedSeqs, err := extReader.QueryKeyWithMetadata(
 			context.Background(),
 			binding,
 			query.KeyFilter{Key: "DoubleValueEvent"},
@@ -610,14 +654,12 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 			&DoubleValueEvent{},
 		)
 		require.NoError(t, err)
-		require.Len(t, seqs, 10)
+		require.Len(t, enrichedSeqs, 10)
 
-		for i := 0; i < len(seqs)-1; i++ {
-			curr, err := strconv.ParseUint(seqs[i].Cursor, 10, 64)
-			require.NoError(t, err)
-			next, err := strconv.ParseUint(seqs[i+1].Cursor, 10, 64)
-			require.NoError(t, err)
-			require.GreaterOrEqual(t, curr, next)
+		for i := 0; i < len(enrichedSeqs)-1; i++ {
+			curr := enrichedSeqs[i].TxVersion
+			next := enrichedSeqs[i+1].TxVersion
+			require.Greater(t, curr, next, "Expected tx_version in descending order")
 		}
 	})
 
@@ -741,37 +783,51 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 		}
 	})
 
-	t.Run("Sync multiple batches", func(t *testing.T) {
-		extraCount := 30
-		emitManyEvents(t, txmgr, accountAddress.String(), publicKeyHex, extraCount)
-		seqs, err := chainReader.QueryKey(
+	t.Run("QueryKeyWithMetadata - Enriched event metadata", func(t *testing.T) {
+		extReader, ok := chainReader.(ExtendedContractReader)
+		require.True(t, ok, "chainReader does not implement ExtendedContractReader")
+
+		enrichedSeqs, err := extReader.QueryKeyWithMetadata(
 			context.Background(),
 			binding,
 			query.KeyFilter{Key: "DoubleValueEvent"},
-			query.LimitAndSort{Limit: query.CountLimit(1000)},
+			query.LimitAndSort{Limit: query.CountLimit(10)},
 			&DoubleValueEvent{},
 		)
 		require.NoError(t, err)
-		require.GreaterOrEqual(t, len(seqs), 20+extraCount)
+		require.NotEmpty(t, enrichedSeqs, "expected at least one enriched event")
+
+		for _, seqMeta := range enrichedSeqs {
+			require.NotEmpty(t, seqMeta.Sequence.Cursor, "cursor should be set")
+			require.NotEqual(t, uint64(0), seqMeta.TxVersion, "tx version must be non zero")
+			require.NotEmpty(t, seqMeta.TxHash, "tx hash must not be empty")
+		}
 	})
 
 	t.Run("Filter by renamed numeric value", func(t *testing.T) {
-		configRenamed := ChainReaderConfig{
-			Modules: map[string]*ChainReaderModule{
+		configRenamed := crconfig.ChainReaderConfig{
+			Modules: map[string]*crconfig.ChainReaderModule{
 				"testContract": {
 					Name: "echo",
-					Events: map[string]*ChainReaderEvent{
+					Events: map[string]*crconfig.ChainReaderEvent{
 						"DoubleValueEvent": {
 							EventHandleStructName: "EventStore",
 							EventHandleFieldName:  "double_value_events",
 							EventAccountAddress:   "", // defaults to bound contract address
-							EventFieldRenames: map[string]RenamedField{
+							EventFieldRenames: map[string]crconfig.RenamedField{
 								"number": {NewName: "RenamedNumber"},
+							},
+							EventFilterRenames: map[string]string{
+								"RandomFilterName": "RenamedNumber",
 							},
 						},
 					},
 				},
 			},
+			EventSyncInterval: 3 * time.Second,
+			EventSyncTimeout:  1 * time.Second,
+			TxSyncInterval:    3 * time.Second,
+			TxSyncTimeout:     1 * time.Second,
 		}
 		chainReaderRenamed := NewChainReader(logger, rateLimitedClient, configRenamed, db)
 		bindingRenamed := commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()}
@@ -796,12 +852,13 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 		filter := query.KeyFilter{
 			Key: "DoubleValueEvent",
 			Expressions: []query.Expression{
-				query.Comparator("RenamedNumber",
+				query.Comparator("RandomFilterName",
 					primitives.ValueComparator{Value: uint64(5), Operator: primitives.Gte},
 					primitives.ValueComparator{Value: uint64(10), Operator: primitives.Lt},
 				),
 			},
 		}
+
 		seqs, err := chainReaderRenamed.QueryKey(
 			context.Background(),
 			bindingRenamed,
@@ -810,7 +867,7 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 			&DoubleValueEventRenamed{},
 		)
 		require.NoError(t, err)
-		// Expect exactly one event (the one we just emitted).
+
 		require.Len(t, seqs, 1)
 		evt := seqs[0].Data.(*DoubleValueEventRenamed)
 		require.Equal(t, uint64(7), evt.RenamedNumber)
@@ -859,18 +916,18 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 
 	emitManyEvents(t, txmgr, acctAddr.String(), publicKeyHex, 20)
 
-	config := ChainReaderConfig{
-		Modules: map[string]*ChainReaderModule{
+	config := crconfig.ChainReaderConfig{
+		Modules: map[string]*crconfig.ChainReaderModule{
 			"testContract": {
 				Name: "echo",
-				Functions: map[string]*ChainReaderFunction{
+				Functions: map[string]*crconfig.ChainReaderFunction{
 					"echo_u64": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{Name: "Value1", Type: "u64"},
 						},
 					},
 					"echo_u32_u64_tuple": {
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{Name: "Value1", Type: "u32"},
 							{Name: "Value2", Type: "u64"},
 						},
@@ -878,26 +935,49 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 					},
 					"get_complex_struct_unwrapped": {
 						Name: "get_complex_struct",
-						Params: []AptosFunctionParam{
+						Params: []crconfig.AptosFunctionParam{
 							{Name: "Val", Type: "u64"},
 							{Name: "Text", Type: "0x1::string::String"},
 						},
 						ResultUnwrapStruct: []string{"nested"},
 					},
 				},
-				Events: map[string]*ChainReaderEvent{
+				Events: map[string]*crconfig.ChainReaderEvent{
 					"SingleValueEvent": {
 						EventHandleStructName: "EventStore",
 						EventHandleFieldName:  "single_value_events",
 						EventAccountAddress:   acctAddr.String() + "::echo::get_event_address",
-						EventFieldRenames: map[string]RenamedField{
+						EventFieldRenames: map[string]crconfig.RenamedField{
 							"value": {NewName: "SingleUintValue"},
+						},
+					},
+					"ComplexStruct": {
+						EventHandleStructName: "EventStore",
+						EventHandleFieldName:  "complex_struct_events",
+						EventAccountAddress:   acctAddr.String() + "::echo::get_event_address",
+						EventFieldRenames: map[string]crconfig.RenamedField{
+							"flag": {NewName: "RenamedFlag"},
+							"nested": {
+								NewName: "RenamedNested",
+								SubFieldRenames: map[string]crconfig.RenamedField{
+									"id":          {NewName: "RenamedId"},
+									"description": {NewName: "RenamedDescription"},
+								},
+							},
+							"values": {NewName: "RenamedValues"},
+						},
+						EventFilterRenames: map[string]string{
+							"NestedID": "RenamedNested.RenamedId",
 						},
 					},
 				},
 			},
 		},
-		IsLoopPlugin: true,
+		IsLoopPlugin:      true,
+		EventSyncInterval: 3 * time.Second,
+		EventSyncTimeout:  1 * time.Second,
+		TxSyncInterval:    3 * time.Second,
+		TxSyncTimeout:     1 * time.Second,
 	}
 
 	dsn := os.Getenv("TEST_DB_URL")
@@ -1035,6 +1115,84 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 			require.GreaterOrEqual(t, evt.SingleUintValue, uint64(3))
 			require.Less(t, evt.SingleUintValue, uint64(7))
 		}
+	})
+
+	t.Run("Filter by nested path via EventFilterRenames - single event", func(t *testing.T) {
+		filter := query.KeyFilter{
+			Key: "ComplexStruct",
+			Expressions: []query.Expression{
+				query.Comparator("NestedID",
+					primitives.ValueComparator{Value: uint64(10), Operator: primitives.Eq},
+				),
+			},
+		}
+
+		seqs, err := loopReader.QueryKey(
+			context.Background(),
+			binding,
+			filter,
+			query.LimitAndSort{Limit: query.CountLimit(1)},
+			&ComplexStruct{},
+		)
+		require.NoError(t, err)
+		require.Len(t, seqs, 1, "Expected exactly one matching event")
+
+		evt := seqs[0].Data.(*ComplexStruct)
+		require.Equal(t, uint64(10), evt.RenamedNested.RenamedId, "Event should have nested ID value of 10")
+	})
+
+	t.Run("QueryKey - Complex Boolean Filter with Nested AND/OR", func(t *testing.T) {
+		// Create a complex filter like:
+		// (SingleUintValue >= 2 AND SingleUintValue < 5) OR (SingleUintValue >= 15 AND SingleUintValue < 18)
+		// This should match events with values 2,3,4,15,16,17
+		filter := query.KeyFilter{
+			Key: "SingleValueEvent",
+			Expressions: []query.Expression{
+				query.Or(
+					query.And(
+						query.Comparator("SingleUintValue",
+							primitives.ValueComparator{Value: uint64(2), Operator: primitives.Gte},
+						),
+						query.Comparator("SingleUintValue",
+							primitives.ValueComparator{Value: uint64(5), Operator: primitives.Lt},
+						),
+					),
+					query.And(
+						query.Comparator("SingleUintValue",
+							primitives.ValueComparator{Value: uint64(15), Operator: primitives.Gte},
+						),
+						query.Comparator("SingleUintValue",
+							primitives.ValueComparator{Value: uint64(18), Operator: primitives.Lt},
+						),
+					),
+				),
+			},
+		}
+
+		seqs, err := loopReader.QueryKey(
+			context.Background(),
+			binding,
+			filter,
+			query.LimitAndSort{
+				Limit: query.CountLimit(100),
+				SortBy: []query.SortBy{
+					query.NewSortBySequence(query.Asc),
+				},
+			},
+			&SingleValueEvent{},
+		)
+		require.NoError(t, err)
+		require.NotEmpty(t, seqs)
+
+		var values []uint64
+		for _, seq := range seqs {
+			evt := seq.Data.(*SingleValueEvent)
+			values = append(values, evt.SingleUintValue)
+		}
+
+		expectedValues := []uint64{2, 3, 4, 15, 16, 17}
+		require.Len(t, seqs, len(expectedValues))
+		require.ElementsMatch(t, expectedValues, values)
 	})
 
 	t.Run("QueryKey - Error Cases", func(t *testing.T) {
@@ -1179,7 +1337,7 @@ func getSampleTxMetadata() *commontypes.TxMeta {
 	workflowID := "sample-workflow-id"
 	return &commontypes.TxMeta{
 		WorkflowExecutionID: &workflowID,
-		GasLimit:            big.NewInt(21000),
+		GasLimit:            big.NewInt(210000),
 	}
 }
 

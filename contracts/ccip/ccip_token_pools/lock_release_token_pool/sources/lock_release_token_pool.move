@@ -1,15 +1,17 @@
 module lock_release_token_pool::lock_release_token_pool {
     use std::account::{Self, SignerCapability};
     use std::error;
-    use std::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef};
+    use std::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef, FungibleStore};
+    use std::dispatchable_fungible_asset;
     use std::primary_fungible_store;
     use std::object::{Self, Object, ObjectCore};
-    use std::option;
+    use std::option::{Self, Option};
     use std::signer;
     use std::string::{Self, String};
 
     use ccip::ownable;
     use ccip::token_admin_registry;
+    use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
 
     use mcms::mcms_registry;
@@ -28,7 +30,8 @@ module lock_release_token_pool::lock_release_token_pool {
         ownable_state: ownable::OwnableState,
         token_pool_state: token_pool::TokenPoolState,
         store_signer_address: address,
-        transfer_ref: TransferRef
+        transfer_ref: Option<TransferRef>,
+        rebalancer: address
     }
 
     const E_NOT_PUBLISHER: u64 = 1;
@@ -37,6 +40,10 @@ module lock_release_token_pool::lock_release_token_pool {
     const E_INVALID_ARGUMENTS: u64 = 4;
     const E_UNKNOWN_FUNCTION: u64 = 5;
     const E_LOCAL_TOKEN_MISMATCH: u64 = 6;
+    const E_DISPATCHABLE_TOKEN_WITHOUT_TRANSFER_REF: u64 = 7;
+    const E_UNAUTHORIZED: u64 = 8;
+    const E_INSUFFICIENT_LIQUIDITY: u64 = 9;
+    const E_TRANSFER_REF_NOT_SET: u64 = 10;
 
     // ================================================================
     // |                             Init                             |
@@ -74,6 +81,7 @@ module lock_release_token_pool::lock_release_token_pool {
             publisher,
             token_pool_module_name,
             @lock_release_local_token,
+            @token_pool_administrator,
             CallbackProof {}
         );
 
@@ -91,29 +99,26 @@ module lock_release_token_pool::lock_release_token_pool {
             publisher,
             LockReleaseTokenPoolDeployment {
                 store_signer_cap,
-                ownable_state: ownable::new(publisher, @lock_release_token_pool),
+                ownable_state: ownable::new(&store_signer, @lock_release_token_pool),
                 token_pool_state: token_pool::initialize(
-                    publisher, @lock_release_local_token, vector[]
+                    &store_signer, @lock_release_local_token, vector[]
                 )
             }
         );
     }
 
+    /// Tokens that have dynamic dispatch enabled must provide a `TransferRef`
+    /// Tokens that do not have dynamic dispatch enabled can provide `option::none()`
+    /// You can still provide a transfer ref for tokens that don't have dynamic dispatch enabled
+    /// if you choose to do so.
     public fun initialize(
-        caller: &signer, transfer_ref: TransferRef
+        caller: &signer, transfer_ref: Option<TransferRef>, rebalancer: address
     ) acquires LockReleaseTokenPoolDeployment {
         assert_can_initialize(signer::address_of(caller));
 
         assert!(
             exists<LockReleaseTokenPoolDeployment>(@lock_release_token_pool),
             error::invalid_argument(E_ALREADY_INITIALIZED)
-        );
-
-        let metadata = object::address_to_object<Metadata>(@lock_release_local_token);
-        let transfer_ref_metadata = fungible_asset::transfer_ref_metadata(&transfer_ref);
-        assert!(
-            metadata == transfer_ref_metadata,
-            error::invalid_argument(E_LOCAL_TOKEN_MISMATCH)
         );
 
         let LockReleaseTokenPoolDeployment {
@@ -123,13 +128,30 @@ module lock_release_token_pool::lock_release_token_pool {
         } = move_from<LockReleaseTokenPoolDeployment>(@lock_release_token_pool);
 
         let store_signer = account::create_signer_with_capability(&store_signer_cap);
+        let store_signer_address = signer::address_of(&store_signer);
+
+        // If transfer ref is not provided, tokens with dynamic dispatch on deposit and withdraw
+        // are not allowed for this pool
+        if (transfer_ref.is_none()) {
+            let store =
+                primary_fungible_store::primary_store(
+                    store_signer_address,
+                    token_pool::get_fa_metadata(&token_pool_state)
+                );
+            assert!(
+                fungible_asset::deposit_dispatch_function(store).is_none()
+                    && fungible_asset::withdraw_dispatch_function(store).is_none(),
+                E_DISPATCHABLE_TOKEN_WITHOUT_TRANSFER_REF
+            );
+        };
 
         let pool = LockReleaseTokenPoolState {
-            ownable_state,
-            store_signer_address: signer::address_of(&store_signer),
             store_signer_cap,
+            ownable_state,
             token_pool_state,
-            transfer_ref
+            store_signer_address,
+            transfer_ref,
+            rebalancer
         };
         move_to(&store_signer, pool);
     }
@@ -201,6 +223,38 @@ module lock_release_token_pool::lock_release_token_pool {
         token_pool::remove_remote_pool(
             &mut pool.token_pool_state, remote_chain_selector, remote_pool_address
         );
+    }
+
+    inline fun has_transfer_ref(pool: &LockReleaseTokenPoolState): bool {
+        pool.transfer_ref.is_some()
+    }
+
+    #[view]
+    public fun pool_primary_store(): Object<FungibleStore> acquires LockReleaseTokenPoolState {
+        let pool = borrow_pool();
+        primary_fungible_store::primary_store(
+            pool.store_signer_address,
+            token_pool::get_fa_metadata(&pool.token_pool_state)
+        )
+    }
+
+    inline fun pool_primary_store_inlined(
+        pool: &LockReleaseTokenPoolState
+    ): Object<FungibleStore> {
+        primary_fungible_store::primary_store(
+            pool.store_signer_address,
+            token_pool::get_fa_metadata(&pool.token_pool_state)
+        )
+    }
+
+    #[view]
+    public fun balance(): u64 acquires LockReleaseTokenPoolState {
+        fungible_asset::balance(pool_primary_store())
+    }
+
+    #[view]
+    public fun derived_balance(): u64 acquires LockReleaseTokenPoolState {
+        dispatchable_fungible_asset::derived_balance(pool_primary_store())
     }
 
     #[view]
@@ -288,13 +342,17 @@ module lock_release_token_pool::lock_release_token_pool {
 
         // Construct lock_or_burn output before we lose access to fa
         let dest_pool_data = token_pool::encode_local_decimals(&fa);
+        let metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
+        let store =
+            primary_fungible_store::primary_store(pool.store_signer_address, metadata);
 
         // Lock the funds in the pool
-        primary_fungible_store::deposit_with_ref(
-            &pool.transfer_ref,
-            pool.store_signer_address,
-            fa
-        );
+        if (has_transfer_ref(pool)) {
+            let transfer_ref = pool.transfer_ref.borrow();
+            fungible_asset::deposit_with_ref(transfer_ref, store, fa);
+        } else {
+            fungible_asset::deposit(store, fa);
+        };
 
         // set the output for this lock or burn operation.
         token_admin_registry::set_lock_or_burn_output_v1(
@@ -304,7 +362,12 @@ module lock_release_token_pool::lock_release_token_pool {
             dest_pool_data
         );
 
-        token_pool::emit_locked(&mut pool.token_pool_state, fa_amount);
+        let remote_chain_selector =
+            token_admin_registry::get_lock_or_burn_remote_chain_selector(&input);
+
+        token_pool::emit_locked_or_burned(
+            &mut pool.token_pool_state, fa_amount, remote_chain_selector
+        );
     }
 
     public fun release_or_mint<T: key>(
@@ -324,13 +387,19 @@ module lock_release_token_pool::lock_release_token_pool {
             &mut pool.token_pool_state, &input, local_amount
         );
 
+        let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
+        let metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
+        let store =
+            primary_fungible_store::primary_store(pool.store_signer_address, metadata);
+
         // Withdraw the amount from the store for release. this will revert if the store has insufficient balance.
         let fa =
-            primary_fungible_store::withdraw_with_ref(
-                &pool.transfer_ref,
-                pool.store_signer_address,
-                local_amount
-            );
+            if (has_transfer_ref(pool)) {
+                let transfer_ref = pool.transfer_ref.borrow();
+                fungible_asset::withdraw_with_ref(transfer_ref, store, local_amount)
+            } else {
+                fungible_asset::withdraw(&store_signer, store, local_amount)
+            };
 
         // set the output for this release or mint operation.
         token_admin_registry::set_release_or_mint_output_v1(
@@ -338,11 +407,14 @@ module lock_release_token_pool::lock_release_token_pool {
         );
 
         let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
+        let remote_chain_selector =
+            token_admin_registry::get_release_or_mint_remote_chain_selector(&input);
 
-        token_pool::emit_released(
+        token_pool::emit_released_or_minted(
             &mut pool.token_pool_state,
             recipient,
-            local_amount
+            local_amount,
+            remote_chain_selector
         );
 
         // return the withdrawn fungible asset.
@@ -353,7 +425,7 @@ module lock_release_token_pool::lock_release_token_pool {
     // |                    Rate limit config                         |
     // ================================================================
 
-    public fun set_chain_rate_limiter_configs(
+    public entry fun set_chain_rate_limiter_configs(
         caller: &signer,
         remote_chain_selectors: vector<u64>,
         outbound_is_enableds: vector<bool>,
@@ -392,7 +464,7 @@ module lock_release_token_pool::lock_release_token_pool {
         };
     }
 
-    public fun set_chain_rate_limiter_config(
+    public entry fun set_chain_rate_limiter_config(
         caller: &signer,
         remote_chain_selector: u64,
         outbound_is_enabled: bool,
@@ -417,11 +489,145 @@ module lock_release_token_pool::lock_release_token_pool {
         );
     }
 
+    #[view]
+    public fun get_current_inbound_rate_limiter_state(
+        remote_chain_selector: u64
+    ): rate_limiter::TokenBucket acquires LockReleaseTokenPoolState {
+        token_pool::get_current_inbound_rate_limiter_state(
+            &borrow_pool().token_pool_state, remote_chain_selector
+        )
+    }
+
+    #[view]
+    public fun get_current_outbound_rate_limiter_state(
+        remote_chain_selector: u64
+    ): rate_limiter::TokenBucket acquires LockReleaseTokenPoolState {
+        token_pool::get_current_outbound_rate_limiter_state(
+            &borrow_pool().token_pool_state, remote_chain_selector
+        )
+    }
+
+    // ================================================================
+    // |                    Liquidity Management                      |
+    // ================================================================
+
+    /// @notice Adds liquidity to the pool. The tokens should be sent before calling this function
+    /// @param amount The amount of liquidity to add
+    public entry fun provide_liquidity(
+        caller: &signer, amount: u64
+    ) acquires LockReleaseTokenPoolState {
+        let pool = borrow_pool_mut();
+        let caller_address = assert_is_rebalancer(caller, pool);
+
+        let (caller_store, pool_store) = get_caller_and_pool_stores(
+            caller_address, pool
+        );
+
+        transfer_tokens(pool, caller, caller_store, pool_store, amount);
+
+        token_pool::emit_liquidity_added(
+            &mut pool.token_pool_state, caller_address, amount
+        );
+    }
+
+    /// @notice Removes liquidity from the pool
+    /// @param amount The amount of liquidity to remove
+    public entry fun withdraw_liquidity(
+        caller: &signer, amount: u64
+    ) acquires LockReleaseTokenPoolState {
+        let pool = borrow_pool_mut();
+        let caller_address = assert_is_rebalancer(caller, pool);
+
+        let (caller_store, pool_store) = get_caller_and_pool_stores(
+            caller_address, pool
+        );
+        assert!(fungible_asset::balance(pool_store) >= amount, E_INSUFFICIENT_LIQUIDITY);
+
+        let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
+
+        transfer_tokens(
+            pool,
+            &store_signer,
+            pool_store,
+            caller_store,
+            amount
+        );
+
+        token_pool::emit_liquidity_removed(
+            &mut pool.token_pool_state, caller_address, amount
+        );
+    }
+
+    inline fun assert_is_rebalancer(
+        caller: &signer, pool: &LockReleaseTokenPoolState
+    ): address {
+        let caller_address = signer::address_of(caller);
+        assert!(caller_address == pool.rebalancer, E_UNAUTHORIZED);
+        caller_address
+    }
+
+    inline fun get_caller_and_pool_stores(
+        caller_address: address, pool: &LockReleaseTokenPoolState
+    ): (Object<FungibleStore>, Object<FungibleStore>) {
+        let metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
+        let caller_store =
+            primary_fungible_store::ensure_primary_store_exists(
+                caller_address, metadata
+            );
+        let pool_store = pool_primary_store_inlined(pool);
+        (caller_store, pool_store)
+    }
+
+    inline fun transfer_tokens(
+        pool: &LockReleaseTokenPoolState,
+        from: &signer,
+        from_store: Object<FungibleStore>,
+        to_store: Object<FungibleStore>,
+        amount: u64
+    ) {
+        if (has_transfer_ref(pool)) {
+            let transfer_ref = pool.transfer_ref.borrow();
+            fungible_asset::transfer_with_ref(transfer_ref, from_store, to_store, amount);
+        } else {
+            fungible_asset::transfer(from, from_store, to_store, amount);
+        };
+    }
+
+    public entry fun set_rebalancer(
+        caller: &signer, rebalancer: address
+    ) acquires LockReleaseTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+
+        let old_rebalancer = pool.rebalancer;
+        pool.rebalancer = rebalancer;
+
+        token_pool::emit_rebalancer_set(
+            &mut pool.token_pool_state, old_rebalancer, rebalancer
+        );
+    }
+
+    #[view]
+    public fun get_rebalancer(): address acquires LockReleaseTokenPoolState {
+        borrow_pool().rebalancer
+    }
+
+    // ================================================================
+    // |                    Ref Migration                              |
+    // ================================================================
+
+    public fun migrate_transfer_ref(caller: &signer): TransferRef acquires LockReleaseTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+        assert!(pool.transfer_ref.is_some(), E_TRANSFER_REF_NOT_SET);
+
+        pool.transfer_ref.extract()
+    }
+
     // ================================================================
     // |                      Storage helpers                         |
     // ================================================================
 
-    // TODO: separate functions due to deploy error, see ccip::state_object
     #[view]
     public fun get_store_address(): address {
         store_address()
@@ -468,14 +674,19 @@ module lock_release_token_pool::lock_release_token_pool {
         caller: &signer, to: address
     ) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
-        ownable::transfer_ownership(
-            signer::address_of(caller), &mut pool.ownable_state, to
-        )
+        ownable::transfer_ownership(caller, &mut pool.ownable_state, to)
     }
 
     public entry fun accept_ownership(caller: &signer) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
-        ownable::accept_ownership(signer::address_of(caller), &mut pool.ownable_state)
+        ownable::accept_ownership(caller, &mut pool.ownable_state)
+    }
+
+    public entry fun execute_ownership_transfer(
+        caller: &signer, to: address
+    ) acquires LockReleaseTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::execute_ownership_transfer(caller, &mut pool.ownable_state, to)
     }
 
     // ================================================================
@@ -608,6 +819,22 @@ module lock_release_token_pool::lock_release_token_pool {
         } else if (function_bytes == b"accept_ownership") {
             bcs_stream::assert_is_consumed(&stream);
             accept_ownership(&caller);
+        } else if (function_bytes == b"execute_ownership_transfer") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            execute_ownership_transfer(&caller, to)
+        } else if (function_bytes == b"set_rebalancer") {
+            let rebalancer = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            set_rebalancer(&caller, rebalancer);
+        } else if (function_bytes == b"provide_liquidity") {
+            let amount = bcs_stream::deserialize_u64(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            provide_liquidity(&caller, amount);
+        } else if (function_bytes == b"withdraw_liquidity") {
+            let amount = bcs_stream::deserialize_u64(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            withdraw_liquidity(&caller, amount);
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };

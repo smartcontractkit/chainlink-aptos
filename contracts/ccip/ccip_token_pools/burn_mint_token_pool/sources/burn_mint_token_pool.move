@@ -4,13 +4,14 @@ module burn_mint_token_pool::burn_mint_token_pool {
     use std::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef};
     use std::primary_fungible_store;
     use std::object::{Self, Object, ObjectCore};
-    use std::option;
+    use std::option::{Self, Option};
     use std::signer;
     use std::string::{Self, String};
     use aptos_framework::fungible_asset::{BurnRef, MintRef};
 
     use ccip::ownable;
     use ccip::token_admin_registry;
+    use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
 
     use mcms::mcms_registry;
@@ -29,8 +30,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
         ownable_state: ownable::OwnableState,
         token_pool_state: token_pool::TokenPoolState,
         store_signer_address: address,
-        burn_ref: BurnRef,
-        mint_ref: MintRef
+        burn_ref: Option<BurnRef>,
+        mint_ref: Option<MintRef>
     }
 
     const E_NOT_PUBLISHER: u64 = 1;
@@ -39,6 +40,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
     const E_LOCAL_TOKEN_MISMATCH: u64 = 4;
     const E_INVALID_ARGUMENTS: u64 = 5;
     const E_UNKNOWN_FUNCTION: u64 = 6;
+    const E_MINT_REF_NOT_SET: u64 = 7;
+    const E_BURN_REF_NOT_SET: u64 = 8;
 
     // ================================================================
     // |                             Init                             |
@@ -76,6 +79,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
             publisher,
             token_pool_module_name,
             @burn_mint_local_token,
+            @token_pool_administrator,
             CallbackProof {}
         );
 
@@ -93,9 +97,9 @@ module burn_mint_token_pool::burn_mint_token_pool {
             publisher,
             BurnMintTokenPoolDeployment {
                 store_signer_cap,
-                ownable_state: ownable::new(publisher, @burn_mint_token_pool),
+                ownable_state: ownable::new(&store_signer, @burn_mint_token_pool),
                 token_pool_state: token_pool::initialize(
-                    publisher, @burn_mint_local_token, vector[]
+                    &store_signer, @burn_mint_local_token, vector[]
                 )
             }
         );
@@ -133,8 +137,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
             store_signer_address: signer::address_of(&store_signer),
             store_signer_cap,
             token_pool_state,
-            burn_ref,
-            mint_ref
+            burn_ref: option::some(burn_ref),
+            mint_ref: option::some(mint_ref)
         };
 
         move_to(&store_signer, pool);
@@ -294,7 +298,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
         let dest_pool_data = token_pool::encode_local_decimals(&fa);
 
         // Burn the funds
-        fungible_asset::burn(&pool.burn_ref, fa);
+        assert!(pool.burn_ref.is_some(), E_BURN_REF_NOT_SET);
+        fungible_asset::burn(pool.burn_ref.borrow(), fa);
 
         // set the output for this lock or burn operation.
         token_admin_registry::set_lock_or_burn_output_v1(
@@ -304,7 +309,12 @@ module burn_mint_token_pool::burn_mint_token_pool {
             dest_pool_data
         );
 
-        token_pool::emit_burned(&mut pool.token_pool_state, fa_amount);
+        let remote_chain_selector =
+            token_admin_registry::get_lock_or_burn_remote_chain_selector(&input);
+
+        token_pool::emit_locked_or_burned(
+            &mut pool.token_pool_state, fa_amount, remote_chain_selector
+        );
     }
 
     public fun release_or_mint<T: key>(
@@ -325,7 +335,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
         );
 
         // Mint the amount for release.
-        let fa = fungible_asset::mint(&pool.mint_ref, local_amount);
+        assert!(pool.mint_ref.is_some(), E_MINT_REF_NOT_SET);
+        let fa = fungible_asset::mint(pool.mint_ref.borrow(), local_amount);
 
         // set the output for this release or mint operation.
         token_admin_registry::set_release_or_mint_output_v1(
@@ -333,11 +344,14 @@ module burn_mint_token_pool::burn_mint_token_pool {
         );
 
         let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
+        let remote_chain_selector =
+            token_admin_registry::get_release_or_mint_remote_chain_selector(&input);
 
-        token_pool::emit_minted(
+        token_pool::emit_released_or_minted(
             &mut pool.token_pool_state,
             recipient,
-            local_amount
+            local_amount,
+            remote_chain_selector
         );
 
         // return the withdrawn fungible asset.
@@ -348,7 +362,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
     // |                    Rate limit config                         |
     // ================================================================
 
-    public fun set_chain_rate_limiter_configs(
+    public entry fun set_chain_rate_limiter_configs(
         caller: &signer,
         remote_chain_selectors: vector<u64>,
         outbound_is_enableds: vector<bool>,
@@ -387,7 +401,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
         };
     }
 
-    public fun set_chain_rate_limiter_config(
+    public entry fun set_chain_rate_limiter_config(
         caller: &signer,
         remote_chain_selector: u64,
         outbound_is_enabled: bool,
@@ -412,11 +426,28 @@ module burn_mint_token_pool::burn_mint_token_pool {
         );
     }
 
+    #[view]
+    public fun get_current_inbound_rate_limiter_state(
+        remote_chain_selector: u64
+    ): rate_limiter::TokenBucket acquires BurnMintTokenPoolState {
+        token_pool::get_current_inbound_rate_limiter_state(
+            &borrow_pool().token_pool_state, remote_chain_selector
+        )
+    }
+
+    #[view]
+    public fun get_current_outbound_rate_limiter_state(
+        remote_chain_selector: u64
+    ): rate_limiter::TokenBucket acquires BurnMintTokenPoolState {
+        token_pool::get_current_outbound_rate_limiter_state(
+            &borrow_pool().token_pool_state, remote_chain_selector
+        )
+    }
+
     // ================================================================
     // |                      Storage helpers                         |
     // ================================================================
 
-    // TODO: separate functions due to deploy error, see ccip::state_object
     #[view]
     public fun get_store_address(): address {
         store_address()
@@ -461,14 +492,39 @@ module burn_mint_token_pool::burn_mint_token_pool {
 
     public entry fun transfer_ownership(caller: &signer, to: address) acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();
-        ownable::transfer_ownership(
-            signer::address_of(caller), &mut pool.ownable_state, to
-        )
+        ownable::transfer_ownership(caller, &mut pool.ownable_state, to)
     }
 
     public entry fun accept_ownership(caller: &signer) acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();
-        ownable::accept_ownership(signer::address_of(caller), &mut pool.ownable_state)
+        ownable::accept_ownership(caller, &mut pool.ownable_state)
+    }
+
+    public entry fun execute_ownership_transfer(
+        caller: &signer, to: address
+    ) acquires BurnMintTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::execute_ownership_transfer(caller, &mut pool.ownable_state, to)
+    }
+
+    // ================================================================
+    // |                    Ref Migration                              |
+    // ================================================================
+
+    public fun migrate_mint_ref(caller: &signer): MintRef acquires BurnMintTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+        assert!(pool.mint_ref.is_some(), E_MINT_REF_NOT_SET);
+
+        pool.mint_ref.extract()
+    }
+
+    public fun migrate_burn_ref(caller: &signer): BurnRef acquires BurnMintTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+        assert!(pool.burn_ref.is_some(), E_BURN_REF_NOT_SET);
+
+        pool.burn_ref.extract()
     }
 
     // ================================================================
@@ -601,6 +657,10 @@ module burn_mint_token_pool::burn_mint_token_pool {
         } else if (function_bytes == b"accept_ownership") {
             bcs_stream::assert_is_consumed(&stream);
             accept_ownership(&caller);
+        } else if (function_bytes == b"execute_ownership_transfer") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            execute_ownership_transfer(&caller, to)
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };

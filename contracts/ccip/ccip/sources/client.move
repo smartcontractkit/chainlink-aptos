@@ -1,5 +1,59 @@
 /// This module defines messages for end users to interact with Aptos CCIP.
 module ccip::client {
+    use std::bcs;
+
+    const GENERIC_EXTRA_ARGS_V2_TAG: vector<u8> = x"181dcf10";
+    const SVM_EXTRA_ARGS_V1_TAG: vector<u8> = x"1f3b3aba";
+
+    const E_INVALID_SVM_TOKEN_RECEIVER_LENGTH: u64 = 1;
+
+    #[view]
+    public fun generic_extra_args_v2_tag(): vector<u8> {
+        GENERIC_EXTRA_ARGS_V2_TAG
+    }
+
+    #[view]
+    public fun svm_extra_args_v1_tag(): vector<u8> {
+        SVM_EXTRA_ARGS_V1_TAG
+    }
+
+    #[view]
+    public fun encode_generic_extra_args_v2(
+        gas_limit: u256, allow_out_of_order_execution: bool
+    ): vector<u8> {
+        let extra_args = vector[];
+        extra_args.append(GENERIC_EXTRA_ARGS_V2_TAG);
+        extra_args.append(bcs::to_bytes(&gas_limit));
+        extra_args.append(bcs::to_bytes(&allow_out_of_order_execution));
+        extra_args
+    }
+
+    #[view]
+    public fun encode_svm_extra_args_v1(
+        compute_units: u32,
+        account_is_writable_bitmap: u64,
+        allow_out_of_order_execution: bool,
+        token_receiver: vector<u8>,
+        accounts: vector<vector<u8>>
+    ): vector<u8> {
+        let extra_args = vector[];
+        extra_args.append(SVM_EXTRA_ARGS_V1_TAG);
+        extra_args.append(bcs::to_bytes(&compute_units));
+        extra_args.append(bcs::to_bytes(&account_is_writable_bitmap));
+        extra_args.append(bcs::to_bytes(&allow_out_of_order_execution));
+        if (token_receiver.length() < 32) {
+            token_receiver.reverse();
+            while (token_receiver.length() < 32) {
+                token_receiver.push_back(0);
+            };
+            token_receiver.reverse();
+        };
+        assert!(token_receiver.length() == 32, E_INVALID_SVM_TOKEN_RECEIVER_LENGTH);
+        extra_args.append(bcs::to_bytes(&token_receiver));
+        extra_args.append(bcs::to_bytes(&accounts));
+        extra_args
+    }
+
     struct Any2AptosMessage has store, drop, copy {
         message_id: vector<u8>,
         source_chain_selector: u64,

@@ -7,14 +7,19 @@ authors = []
 data_feeds = "_"
 owner = "_"
 platform = "_"
+platform_secondary = "_"
+owner_secondary = "_"
 
 [dev-addresses]
 data_feeds = "0x100"
 owner = "0xcafe"
 platform = "0xbaba"
+platform_secondary = "0x200"
+owner_secondary = "0x22"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
 ChainlinkPlatform = { local = "../platform" }
+ChainlinkPlatformSecondary = { local = "../platform_secondary" }
 
 [dev-dependencies]

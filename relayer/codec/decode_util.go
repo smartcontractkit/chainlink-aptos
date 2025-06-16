@@ -99,19 +99,36 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 			// hex.DecodeString does not support odd length strings
 			str = "0" + str
 		}
-		return hex.DecodeString(str)
+		bytes, err := hex.DecodeString(str)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode hex string %q: %w", str, err)
+		}
+		return bytes, nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return strconv.ParseUint(str, 16, 64)
+		val, err := strconv.ParseUint(str, 16, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse hex to uint: %w", err)
+		}
+		if overflowUint(t, val) {
+			return nil, fmt.Errorf("value %d overflows %v", val, t)
+		}
+		return reflect.ValueOf(val).Convert(t).Interface(), nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		val, err := strconv.ParseInt(str, 16, 64)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse hex to int: %w", err)
 		}
+		if overflowInt(t, val) {
+			return nil, fmt.Errorf("value %d overflows %v", val, t)
+		}
 		return reflect.ValueOf(val).Convert(t).Interface(), nil
 	case reflect.Ptr:
 		if t == reflect.TypeOf((*big.Int)(nil)) {
 			bi := new(big.Int)
-			bi.SetString(str, 16)
+			_, ok := bi.SetString(str, 16)
+			if !ok {
+				return nil, fmt.Errorf("failed to parse hex string as big.Int: %s", str)
+			}
 			return bi, nil
 		}
 		if t == reflect.TypeOf((*common.Address)(nil)) {

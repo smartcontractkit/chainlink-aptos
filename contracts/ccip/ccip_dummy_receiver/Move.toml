@@ -10,7 +10,7 @@ mcms = "_"
 mcms_register_entrypoints = "_"
 
 [dev-addresses]
-ccip = "0x1000"
+ccip = "0x85d5520ea6a8b1501502651040c6f61238b281142ccbafdc205d40258f0bec10"
 ccip_dummy_receiver = "0x3010"
 mcms = "0x4000"
 mcms_register_entrypoints = "0x4001"

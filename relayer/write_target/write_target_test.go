@@ -33,6 +33,7 @@ func TestNewWriteTargetID(t *testing.T) {
 		networkName     string
 		chainID         string
 		version         string
+		tag             string
 		expected        string
 		expectError     bool
 	}{
@@ -99,17 +100,40 @@ func TestNewWriteTargetID(t *testing.T) {
 			expected:        "write_aptos-testnet@1.0.3",
 			expectError:     false,
 		},
+		{
+			name:            "Valid input with unknown network name and tag",
+			chainFamilyName: "aptos",
+			networkName:     "unknown",
+			chainID:         "1",
+			tag:             "region-b",
+			version:         "2.0.1",
+			expected:        "write_aptos-1:region-b@2.0.1",
+			expectError:     false,
+		},
+		{
+			name:            "Valid input with network name (testnet)",
+			chainFamilyName: "aptos",
+			networkName:     "testnet",
+			chainID:         "2",
+			tag:             "region-b",
+			version:         "1.0.3",
+			expected:        "write_aptos-testnet:region-b@1.0.3",
+			expectError:     false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result, err := NewWriteTargetID(tt.chainFamilyName, tt.networkName, tt.chainID, tt.version)
+			result, err := NewWriteTargetID(tt.chainFamilyName, tt.networkName, tt.chainID, tt.tag, tt.version)
 			if tt.expectError {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, tt.expected, result)
+				// ensure we meet capabilities requirements for the ID
+				_, err := capabilities.NewCapabilityInfo(result, capabilities.CapabilityTypeTarget, CapabilityName)
+				require.NoError(t, err)
 			}
 		})
 	}

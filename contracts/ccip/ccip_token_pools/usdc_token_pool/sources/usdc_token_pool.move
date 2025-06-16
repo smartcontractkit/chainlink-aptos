@@ -11,9 +11,11 @@ module usdc_token_pool::usdc_token_pool {
     use std::smart_table::{Self, SmartTable};
     use std::string::{Self, String};
 
+    use ccip::address;
     use ccip::eth_abi;
     use ccip::ownable;
     use ccip::token_admin_registry;
+    use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
 
     use mcms::bcs_stream;
@@ -24,6 +26,9 @@ module usdc_token_pool::usdc_token_pool {
     use token_messenger_minter::token_messenger;
 
     const STORE_OBJECT_SEED: vector<u8> = b"CcipUSDCTokenPool";
+
+    // We restrict to the first version. New pool may be required for subsequent versions.
+    const SUPPORTED_USDC_VERSION: u32 = 0;
 
     struct USDCTokenPoolDeployment has key {
         store_signer_cap: SignerCapability,
@@ -65,11 +70,18 @@ module usdc_token_pool::usdc_token_pool {
     const E_NOT_PUBLISHER: u64 = 1;
     const E_ALREADY_INITIALIZED: u64 = 2;
     const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
-    const E_LOCAL_TOKEN_MISMATCH: u64 = 4;
-    const E_INVALID_ARGUMENTS: u64 = 5;
-    const E_DOMAIN_NOT_FOUND: u64 = 6;
-    const E_DOMAIN_ENABLED: u64 = 7;
-    const E_UNKNOWN_FUNCTION: u64 = 8;
+    const E_INVALID_ARGUMENTS: u64 = 4;
+    const E_DOMAIN_NOT_FOUND: u64 = 5;
+    const E_DOMAIN_ENABLED: u64 = 6;
+    const E_UNKNOWN_FUNCTION: u64 = 7;
+    const E_DOMAIN_MISMATCH: u64 = 8;
+    const E_NONCE_MISMATCH: u64 = 9;
+    const E_DESTINATION_MISMATCH: u64 = 10;
+    const E_DOMAIN_DISABLED: u64 = 11;
+    const E_ZERO_CHAIN_SELECTOR: u64 = 12;
+    const E_EMPTY_ALLOWED_CALLER: u64 = 13;
+    const E_INVALID_MESSAGE_VERSION: u64 = 14;
+    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 15;
 
     // ================================================================
     // |                             Init                             |
@@ -107,6 +119,7 @@ module usdc_token_pool::usdc_token_pool {
             publisher,
             token_pool_module_name,
             @local_token,
+            @token_pool_administrator,
             CallbackProof {}
         );
 
@@ -124,26 +137,21 @@ module usdc_token_pool::usdc_token_pool {
             publisher,
             USDCTokenPoolDeployment {
                 store_signer_cap,
-                ownable_state: ownable::new(publisher, @usdc_token_pool),
+                ownable_state: ownable::new(&store_signer, @usdc_token_pool),
                 token_pool_state: token_pool::initialize(
-                    publisher, @local_token, vector[]
+                    &store_signer, @local_token, vector[]
                 ),
-                domain_set_events: account::new_event_handle(publisher)
+                domain_set_events: account::new_event_handle(&store_signer)
             }
         );
     }
 
-    public fun initialize(caller: &signer, local_token: address) acquires USDCTokenPoolDeployment {
+    public fun initialize(caller: &signer) acquires USDCTokenPoolDeployment {
         assert_can_initialize(signer::address_of(caller));
 
         assert!(
             exists<USDCTokenPoolDeployment>(@usdc_token_pool),
             error::invalid_argument(E_ALREADY_INITIALIZED)
-        );
-
-        assert!(
-            @local_token == local_token,
-            error::invalid_argument(E_LOCAL_TOKEN_MISMATCH)
         );
 
         let USDCTokenPoolDeployment {
@@ -329,7 +337,7 @@ module usdc_token_pool::usdc_token_pool {
 
         assert!(
             remote_domain_info.enabled,
-            error::invalid_argument(E_DOMAIN_ENABLED)
+            error::invalid_argument(E_DOMAIN_DISABLED)
         );
 
         let mint_recipient_bytes =
@@ -354,7 +362,12 @@ module usdc_token_pool::usdc_token_pool {
             dest_pool_data
         );
 
-        token_pool::emit_burned(&mut pool.token_pool_state, fa_amount);
+        let remote_chain_selector =
+            token_admin_registry::get_lock_or_burn_remote_chain_selector(&input);
+
+        token_pool::emit_locked_or_burned(
+            &mut pool.token_pool_state, fa_amount, remote_chain_selector
+        );
     }
 
     public fun release_or_mint<T: key>(
@@ -406,11 +419,14 @@ module usdc_token_pool::usdc_token_pool {
         );
 
         let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
+        let remote_chain_selector =
+            token_admin_registry::get_release_or_mint_remote_chain_selector(&input);
 
-        token_pool::emit_minted(
+        token_pool::emit_released_or_minted(
             &mut pool.token_pool_state,
             recipient,
-            local_amount
+            local_amount,
+            remote_chain_selector
         );
 
         let fa_metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
@@ -431,19 +447,17 @@ module usdc_token_pool::usdc_token_pool {
     inline fun encode_dest_pool_data(
         local_domain_identifier: u32, nonce: u64
     ): vector<u8> {
-        // This manually packs the values into a single slot, which mirrors EVM struct packing.
-        let abi_encoded_data = ((nonce as u256) << 32) + (local_domain_identifier as u256);
         let dest_pool_data = vector[];
-        eth_abi::encode_u256(&mut dest_pool_data, abi_encoded_data);
+        eth_abi::encode_u64(&mut dest_pool_data, nonce);
+        eth_abi::encode_u32(&mut dest_pool_data, local_domain_identifier);
+
         dest_pool_data
     }
 
     inline fun decode_dest_pool_data(dest_pool_data: vector<u8>): (u32, u64) {
         let stream = eth_abi::new_stream(dest_pool_data);
-        let abi_encoded_data = eth_abi::decode_u256(&mut stream);
-
-        let local_domain_identifier = abi_encoded_data as u32;
-        let nonce = (abi_encoded_data >> 32) as u64;
+        let nonce = eth_abi::decode_u64(&mut stream);
+        let local_domain_identifier = eth_abi::decode_u32(&mut stream);
 
         (local_domain_identifier, nonce)
     }
@@ -455,23 +469,30 @@ module usdc_token_pool::usdc_token_pool {
         expected_local_domain: u32
     ) {
         message::validate_message(usdc_message);
+
+        let version = message::get_message_version(usdc_message);
+        assert!(
+            version == SUPPORTED_USDC_VERSION,
+            error::invalid_argument(E_INVALID_MESSAGE_VERSION)
+        );
+
         let source_domain = message::get_src_domain_id(usdc_message);
         let nonce = message::get_nonce(usdc_message);
         let destination_domain = message::get_destination_domain_id(usdc_message);
 
         assert!(
             source_domain == expected_source_domain,
-            error::invalid_argument(E_INVALID_ARGUMENTS)
+            error::invalid_argument(E_DOMAIN_MISMATCH)
         );
 
         assert!(
             nonce == expected_nonce,
-            error::invalid_argument(E_INVALID_ARGUMENTS)
+            error::invalid_argument(E_NONCE_MISMATCH)
         );
 
         assert!(
             destination_domain == expected_local_domain,
-            error::invalid_argument(E_INVALID_ARGUMENTS)
+            error::invalid_argument(E_DESTINATION_MISMATCH)
         );
     }
 
@@ -512,13 +533,15 @@ module usdc_token_pool::usdc_token_pool {
 
             assert!(
                 remote_chain_selector != 0,
-                error::invalid_argument(E_DOMAIN_ENABLED)
+                error::invalid_argument(E_ZERO_CHAIN_SELECTOR)
             );
 
             assert!(
                 allowed_caller.length() != 0,
-                error::invalid_argument(E_DOMAIN_NOT_FOUND)
+                error::invalid_argument(E_EMPTY_ALLOWED_CALLER)
             );
+
+            address::assert_non_zero_address_vector(&allowed_caller);
 
             pool.chain_to_domain.upsert(
                 remote_chain_selector,
@@ -549,7 +572,7 @@ module usdc_token_pool::usdc_token_pool {
     // |                    Rate limit config                         |
     // ================================================================
 
-    public fun set_chain_rate_limiter_configs(
+    public entry fun set_chain_rate_limiter_configs(
         caller: &signer,
         remote_chain_selectors: vector<u64>,
         outbound_is_enableds: vector<bool>,
@@ -588,7 +611,7 @@ module usdc_token_pool::usdc_token_pool {
         };
     }
 
-    public fun set_chain_rate_limiter_config(
+    public entry fun set_chain_rate_limiter_config(
         caller: &signer,
         remote_chain_selector: u64,
         outbound_is_enabled: bool,
@@ -613,11 +636,28 @@ module usdc_token_pool::usdc_token_pool {
         );
     }
 
+    #[view]
+    public fun get_current_inbound_rate_limiter_state(
+        remote_chain_selector: u64
+    ): rate_limiter::TokenBucket acquires USDCTokenPoolState {
+        token_pool::get_current_inbound_rate_limiter_state(
+            &borrow_pool().token_pool_state, remote_chain_selector
+        )
+    }
+
+    #[view]
+    public fun get_current_outbound_rate_limiter_state(
+        remote_chain_selector: u64
+    ): rate_limiter::TokenBucket acquires USDCTokenPoolState {
+        token_pool::get_current_outbound_rate_limiter_state(
+            &borrow_pool().token_pool_state, remote_chain_selector
+        )
+    }
+
     // ================================================================
     // |                      Storage helpers                         |
     // ================================================================
 
-    // TODO: separate functions due to deploy error, see ccip::state_object
     #[view]
     public fun get_store_address(): address {
         store_address()
@@ -660,14 +700,19 @@ module usdc_token_pool::usdc_token_pool {
 
     public entry fun transfer_ownership(caller: &signer, to: address) acquires USDCTokenPoolState {
         let pool = borrow_pool_mut();
-        ownable::transfer_ownership(
-            signer::address_of(caller), &mut pool.ownable_state, to
-        )
+        ownable::transfer_ownership(caller, &mut pool.ownable_state, to)
     }
 
     public entry fun accept_ownership(caller: &signer) acquires USDCTokenPoolState {
         let pool = borrow_pool_mut();
-        ownable::accept_ownership(signer::address_of(caller), &mut pool.ownable_state)
+        ownable::accept_ownership(caller, &mut pool.ownable_state)
+    }
+
+    public entry fun execute_ownership_transfer(
+        caller: &signer, to: address
+    ) acquires USDCTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::execute_ownership_transfer(caller, &mut pool.ownable_state, to)
     }
 
     // ================================================================
@@ -678,14 +723,17 @@ module usdc_token_pool::usdc_token_pool {
 
     public fun mcms_entrypoint<T: key>(
         _metadata: object::Object<T>
-    ): option::Option<u128> acquires USDCTokenPoolState {
+    ): option::Option<u128> acquires USDCTokenPoolDeployment, USDCTokenPoolState {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@usdc_token_pool, McmsCallback {});
 
         let function_bytes = *function.bytes();
         let stream = bcs_stream::new(data);
 
-        if (function_bytes == b"add_remote_pool") {
+        if (function_bytes == b"initialize") {
+            bcs_stream::assert_is_consumed(&stream);
+            initialize(&caller);
+        } else if (function_bytes == b"add_remote_pool") {
             let remote_chain_selector = bcs_stream::deserialize_u64(&mut stream);
             let remote_pool_address = bcs_stream::deserialize_vector_u8(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
@@ -825,6 +873,10 @@ module usdc_token_pool::usdc_token_pool {
         } else if (function_bytes == b"accept_ownership") {
             bcs_stream::assert_is_consumed(&stream);
             accept_ownership(&caller);
+        } else if (function_bytes == b"execute_ownership_transfer") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            execute_ownership_transfer(&caller, to)
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };

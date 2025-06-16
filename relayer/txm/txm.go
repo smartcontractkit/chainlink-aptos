@@ -79,7 +79,7 @@ func (a *AptosTxm) HealthReport() map[string]error {
 }
 
 func (a *AptosTxm) Start(ctx context.Context) error {
-	return a.starter.StartOnce("AptosTxm", func() error {
+	return a.starter.StartOnce(a.Name(), func() error {
 		a.done.Add(2)
 		go a.broadcastLoop()
 		go a.confirmLoop()
@@ -88,7 +88,7 @@ func (a *AptosTxm) Start(ctx context.Context) error {
 }
 
 func (a *AptosTxm) Close() error {
-	return a.starter.StopOnce("AptosTxm", func() error {
+	return a.starter.StopOnce(a.Name(), func() error {
 		close(a.stop)
 		a.done.Wait()
 		return nil
@@ -198,7 +198,7 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 			if (currentTimestamp - tx.Timestamp) < a.config.PruneTxExpirationSecs {
 				continue
 			}
-			a.baseLogger.Debugw("Pruning transaction", "txID", txID, "status", tx.Status)
+			ctxLogger.Debugw("Pruning transaction", "status", tx.Status)
 			delete(a.transactions, txID)
 		}
 		a.transactionsLastPruneTime = currentTimestamp
@@ -318,15 +318,27 @@ func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, nonce u
 
 	ctxLogger := GetContexedTxLogger(a.baseLogger, tx.ID, tx.Metadata)
 
+	if tx.Metadata != nil && tx.Metadata.GasLimit != nil {
+		rawTx.MaxGasAmount = tx.Metadata.GasLimit.Uint64()
+		ctxLogger.Debugw("using gas limit from metadata", "maxGasAmount", rawTx.MaxGasAmount)
+	}
+
 	// (if enabled for tx) simulate tx to estimate gas
 	if tx.Simulate {
 		simulatedTx, err := a.simulateTransaction(client, *rawTx, tx.FromAddress, tx.PublicKey)
 		if err == nil {
 			ctxLogger.Debugw("simulate tx successful", "gasUsed", simulatedTx.GasUsed, "gasUnitPrice", simulatedTx.GasUnitPrice)
 
-			// todo: configurable multiplier?
-			// fixed multiplier of 1.25 to account for potential discrepancies in gas estimation
-			rawTx.MaxGasAmount = uint64(float64(simulatedTx.GasUsed) * 1.25)
+			if tx.Metadata != nil && tx.Metadata.GasLimit != nil {
+				if simulatedTx.GasUsed > rawTx.MaxGasAmount {
+					ctxLogger.Warnw("simulated gas used exceeds gas limit from metadata", "gasUsed", simulatedTx.GasUsed, "maxGasAmount", rawTx.MaxGasAmount)
+				}
+			} else {
+				// todo: configurable multiplier?
+				// fixed multiplier of 1.25 to account for potential discrepancies in gas estimation
+				rawTx.MaxGasAmount = uint64(float64(simulatedTx.GasUsed) * 1.25)
+			}
+
 			rawTx.GasUnitPrice = simulatedTx.GasUnitPrice
 		} else {
 			// do not error on failed estimate gas as it could fail due to conflicting in-flight txs
@@ -416,7 +428,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	if tx.Attempt > 0 {
 		// If we're retrying a failed transaction that we caught in the confirm loop, resync the nonce again
 		// first.
-		_ = a.resyncNonce(client, tx.FromAddress)
+		_ = a.resyncNonce(client, tx)
 	}
 
 	// broadcast with basic retry to try get the tx included in the mempool
@@ -477,7 +489,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			httpErrorBody := string(httpError.Body)
 			if strings.Contains(httpErrorBody, "SEQUENCE_NUMBER_TOO_OLD") || strings.Contains(httpErrorBody, "SEQUENCE_NUMBER_TOO_NEW") {
 				// Try to resync the nonce before the next attempt.
-				_ = a.resyncNonce(client, tx.FromAddress)
+				_ = a.resyncNonce(client, tx)
 			}
 		}
 	}
@@ -645,13 +657,15 @@ func (a *AptosTxm) getSequenceNumber(client aptos.AptosRpcClient, address aptos.
 	return sequenceNumber, nil
 }
 
-func (a *AptosTxm) resyncNonce(client aptos.AptosRpcClient, address aptos.AccountAddress) error {
+func (a *AptosTxm) resyncNonce(client aptos.AptosRpcClient, tx *AptosTx) error {
+	address := tx.FromAddress
 	sequenceNumber, err := a.getSequenceNumber(client, address)
 	if err != nil {
 		return fmt.Errorf("failed to resync nonce for address %s: %w", address.String(), err)
 	}
 
 	txStore := a.accountStore.GetTxStore(address.String())
+	ctxLogger := GetContexedTxLogger(a.baseLogger, tx.ID, tx.Metadata)
 
 	previousNextNonce := txStore.GetNextNonce()
 	previousLastOnchainNonce := txStore.GetLastResyncedNonce()
@@ -659,7 +673,7 @@ func (a *AptosTxm) resyncNonce(client aptos.AptosRpcClient, address aptos.Accoun
 	updatedNextNonce := txStore.GetNextNonce()
 	updatedLastOnchainNonce := txStore.GetLastResyncedNonce()
 
-	a.baseLogger.Infow("resynced nonce", "address", address.String(), "sequenceNumber", sequenceNumber, "previousLastOnchainNonce", previousLastOnchainNonce, "updatedLastOnchainNonce", updatedLastOnchainNonce, "previousNextNonce", previousNextNonce, "updatedNextNonce", updatedNextNonce)
+	ctxLogger.Infow("resynced nonce", "address", address.String(), "sequenceNumber", sequenceNumber, "previousLastOnchainNonce", previousLastOnchainNonce, "updatedLastOnchainNonce", updatedLastOnchainNonce, "previousNextNonce", previousNextNonce, "updatedNextNonce", updatedNextNonce)
 	return nil
 }
 

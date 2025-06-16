@@ -7,9 +7,11 @@ module ccip_onramp::onramp_test {
     use std::object::{Self, Object, ExtendRef, ObjectCore};
     use std::bcs;
     use std::account;
-    use aptos_framework::fungible_asset::{Self, Metadata, MintRef, BurnRef, TransferRef};
-    use aptos_framework::primary_fungible_store;
-    use aptos_framework::timestamp;
+    use std::fungible_asset::{Self, Metadata, MintRef, BurnRef, TransferRef};
+    use std::primary_fungible_store;
+    use std::timestamp;
+    use std::event;
+
     use ccip::token_admin_registry;
     use ccip::rmn_remote;
     use ccip::nonce_manager;
@@ -19,6 +21,7 @@ module ccip_onramp::onramp_test {
     use ccip::state_object::{Self};
     use ccip::fee_quoter::{Self};
 
+    use ccip_token_pool::token_pool;
     use burn_mint_token_pool::burn_mint_token_pool;
     use lock_release_token_pool::lock_release_token_pool;
 
@@ -78,7 +81,8 @@ module ccip_onramp::onramp_test {
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer,
         pool_type: u8, // 0 for burn_mint, 1 for lock_release
-        seed: vector<u8>
+        seed: vector<u8>,
+        is_dispatchable: bool
     ): (address, Object<Metadata>) {
         let owner_addr = signer::address_of(owner);
         account::create_account_for_test(signer::address_of(burn_mint_token_pool));
@@ -134,12 +138,15 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 pool_type,
-                seed
+                seed,
+                is_dispatchable
             );
+
+        let one_e_18 = 1_000_000_000_000_000_000;
 
         fee_quoter::initialize(
             owner,
-            20000000000000,
+            200 * one_e_18, // 200 link
             token_addr,
             12400,
             vector[token_addr]
@@ -149,27 +156,15 @@ module ccip_onramp::onramp_test {
         assert!(onramp::owner() == owner_addr);
 
         fee_quoter::apply_fee_token_updates(owner, vector[], vector[token_addr]);
-        fee_quoter::apply_token_transfer_fee_config_updates(
-            owner,
-            DEST_CHAIN_SELECTOR, // dest_chain_selector
-            vector[token_addr], // add_tokens
-            vector[1], // add_min_fee_usd_cents
-            vector[1], // add_max_fee_usd_cents
-            vector[0], // add_deci_bps
-            vector[1], // add_dest_gas_overhead
-            vector[1], // add_dest_bytes_overhead
-            vector[true], // add_is_enabled
-            vector[] // remove_tokens
-        );
         fee_quoter::apply_dest_chain_config_updates(
             owner,
             DEST_CHAIN_SELECTOR, // dest_chain_selector
             true, // is_enabled
             1, // max_number_of_tokens_per_msg
-            10000, // max_data_bytes
-            7000000, // max_per_msg_gas_limit
-            0, // dest_gas_overhead
-            0, // dest_gas_per_payload_byte_base
+            30_000, // max_data_bytes
+            30_000_000, // max_per_msg_gas_limit
+            250_000, // dest_gas_overhead
+            16, // dest_gas_per_payload_byte_base
             0, // dest_gas_per_payload_byte_high
             0, // dest_gas_per_payload_byte_threshold
             0, // dest_data_availability_overhead_gas
@@ -177,17 +172,18 @@ module ccip_onramp::onramp_test {
             0, // dest_data_availability_multiplier_bps
             CHAIN_FAMILY_SELECTOR_EVM, // chain_family_selector
             false, // enforce_out_of_order
-            0, // default_token_fee_usd_cents
-            0, // default_token_dest_gas_overhead
-            1000000, // default_tx_gas_limit
-            0, // gas_multiplier_wei_per_eth
-            10000000, // gas_price_staleness_threshold
-            0 // network_fee_usd_cents
+            50, // default_token_fee_usd_cents
+            90_000, // default_token_dest_gas_overhead
+            200_000, // default_tx_gas_limit
+            one_e_18 as u64, // gas_multiplier_wei_per_eth
+            1_000_000, // gas_price_staleness_threshold
+            50 // network_fee_usd_cents
         );
         fee_quoter::apply_premium_multiplier_wei_per_eth_updates(
             owner,
             vector[token_addr], // tokens
-            vector[1] // premium_multiplier_wei_per_eth
+            // 900_000_000_000_000_000 = 90%
+            vector[900_000_000_000_000_000] // premium_multiplier_wei_per_eth
         );
 
         // To be able to call token_admin_dispatcher::dispatch_lock_or_burn
@@ -208,9 +204,10 @@ module ccip_onramp::onramp_test {
         fee_quoter::update_prices(
             owner,
             vector[token_addr], // source_tokens
-            vector[1000], // source_usd_per_token
+            // 1e18 per 1e18 tokens. A token with 8 decimals that's worth $15 would be $15e10 * 1e18 = $15e28
+            vector[150_000_000_000 * one_e_18], // source_usd_per_token
             vector[DEST_CHAIN_SELECTOR], // gas_dest_chain_selectors
-            vector[0] // gas_usd_per_unit_gas
+            vector[1_000_000_000_000] // gas_usd_per_unit_gas
         );
 
         (owner_addr, token_obj)
@@ -221,7 +218,8 @@ module ccip_onramp::onramp_test {
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer,
         pool_type: u8, // 0 for burn_mint, 1 for lock_release
-        seed: vector<u8>
+        seed: vector<u8>,
+        is_dispatchable: bool
     ): (Object<Metadata>, address) {
         let constructor_ref = object::create_named_object(owner, seed);
 
@@ -241,7 +239,12 @@ module ccip_onramp::onramp_test {
         let extend_ref = object::generate_extend_ref(&constructor_ref);
         let mint_ref = fungible_asset::generate_mint_ref(&constructor_ref);
         let burn_ref = fungible_asset::generate_burn_ref(&constructor_ref);
-        let transfer_ref = fungible_asset::generate_transfer_ref(&constructor_ref);
+        let transfer_ref =
+            if (is_dispatchable) {
+                option::some(fungible_asset::generate_transfer_ref(&constructor_ref))
+            } else {
+                option::none()
+            };
 
         // ======================== Create token pool ========================
         let token_addr = object::object_address(&metadata);
@@ -271,7 +274,11 @@ module ccip_onramp::onramp_test {
             );
         } else {
             lock_release_token_pool::test_init_module(lock_release_token_pool);
-            lock_release_token_pool::initialize(lock_release_token_pool, transfer_ref);
+            lock_release_token_pool::initialize(
+                lock_release_token_pool,
+                transfer_ref,
+                signer::address_of(owner)
+            );
             lock_release_token_pool::apply_chain_updates(
                 owner,
                 vector[],
@@ -347,7 +354,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         let static_config = onramp::get_static_config();
@@ -399,7 +407,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         // Update dynamic config
@@ -450,7 +459,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         // Try to update dynamic config with unauthorized account
@@ -483,7 +493,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         let dest_chain_selectors = vector[DEST_CHAIN_SELECTOR];
@@ -559,7 +570,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         // First enable allowlist for destination chain
@@ -645,7 +657,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 BURN_MINT_TOKEN_POOL,
-                b"TestToken"
+                b"TestToken",
+                false
             );
 
         auth::apply_allowed_onramp_updates(
@@ -724,6 +737,10 @@ module ccip_onramp::onramp_test {
         let onramp_state_balance =
             primary_fungible_store::balance(onramp::get_state_address(), token.metadata);
         assert!(onramp_state_balance == fee_token_amount);
+
+        assert!(
+            event::emitted_events<token_pool::LockedOrBurned>().length() == 1
+        );
     }
 
     #[
@@ -757,7 +774,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 LOCK_RELEASE_TOKEN_POOL,
-                b"LockReleaseToken"
+                b"LockReleaseToken",
+                false
             );
 
         auth::apply_allowed_onramp_updates(
@@ -841,8 +859,11 @@ module ccip_onramp::onramp_test {
         let token_pool_addr = lock_release_token_pool::get_store_address();
         let token_pool_balance =
             primary_fungible_store::balance(token_pool_addr, token.metadata);
-        std::debug::print(&token_pool_balance);
         assert!(token_pool_balance == sent_amount);
+
+        assert!(
+            event::emitted_events<token_pool::LockedOrBurned>().length() == 1
+        );
     }
 
     #[
@@ -872,7 +893,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
         initialize_onramp(owner);
     }
@@ -886,9 +908,12 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool = @burn_mint_token_pool,
             lock_release_token_pool = @lock_release_token_pool
         ),
-        expected_failure(abort_code = 196626, location = ccip_onramp::onramp) // E_FEE_AGGREGATOR_NOT_SET error with corrected code
+        expected_failure(
+            abort_code = ccip::address::E_ZERO_ADDRESS_NOT_ALLOWED,
+            location = ccip::address
+        )
     ]
-    fun test_withdraw_fee_tokens_failure_when_fee_aggregator_not_set(
+    fun test_set_dynamic_config_failure_when_fee_aggregator_is_zero_address(
         aptos_framework: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
@@ -896,7 +921,7 @@ module ccip_onramp::onramp_test {
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer
     ) {
-        let (_, token_obj) =
+        let (_, _) =
             setup(
                 aptos_framework,
                 ccip,
@@ -905,15 +930,12 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 BURN_MINT_TOKEN_POOL,
-                b"TestToken"
+                b"TestToken",
+                false
             );
-        let token_addr = object::object_address(&token_obj);
 
-        // Set fee_aggregator to 0
+        // Set fee_aggregator to 0, this should revert with E_ZERO_ADDRESS_NOT_ALLOWED
         onramp::set_dynamic_config(owner, @0x0, ALLOWLIST_ADMIN);
-
-        // This should fail because fee_aggregator is not set
-        onramp::withdraw_fee_tokens(vector[token_addr]);
     }
 
     #[
@@ -942,7 +964,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         assert!(onramp::is_chain_supported(DEST_CHAIN_SELECTOR));
@@ -977,7 +1000,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         // After initialization, sequence number should be 0, so next expected is 1
@@ -1033,7 +1057,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         assert!(onramp::owner() == signer::address_of(owner));
@@ -1078,7 +1103,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         let nonce =
@@ -1113,7 +1139,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 BURN_MINT_TOKEN_POOL,
-                b"TestToken"
+                b"TestToken",
+                false
             );
 
         let token_addr = object::object_address(&token_obj);
@@ -1175,7 +1202,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         let dest_chain_selectors = vector[DEST_CHAIN_SELECTOR];
@@ -1228,7 +1256,8 @@ module ccip_onramp::onramp_test {
             burn_mint_token_pool,
             lock_release_token_pool,
             BURN_MINT_TOKEN_POOL,
-            b"TestToken"
+            b"TestToken",
+            false
         );
 
         onramp::apply_dest_chain_config_updates(
@@ -1275,7 +1304,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 BURN_MINT_TOKEN_POOL,
-                b"TestToken"
+                b"TestToken",
+                false
             );
 
         let type_version = onramp::type_and_version();
@@ -1350,7 +1380,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 BURN_MINT_TOKEN_POOL,
-                b"TestToken"
+                b"TestToken",
+                false
             );
         setup_mcms(mcms);
         onramp::register_mcms_entrypoint(ccip_onramp);
@@ -1413,7 +1444,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 BURN_MINT_TOKEN_POOL,
-                b"TestToken"
+                b"TestToken",
+                false
             );
         setup_mcms(mcms);
         onramp::register_mcms_entrypoint(ccip_onramp);
@@ -1484,7 +1516,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 BURN_MINT_TOKEN_POOL,
-                b"TestToken"
+                b"TestToken",
+                false
             );
         setup_mcms(mcms);
         onramp::register_mcms_entrypoint(ccip_onramp);
@@ -1563,7 +1596,8 @@ module ccip_onramp::onramp_test {
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 BURN_MINT_TOKEN_POOL,
-                b"TestToken"
+                b"TestToken",
+                false
             );
         setup_mcms(mcms);
         onramp::register_mcms_entrypoint(ccip_onramp);
@@ -1708,20 +1742,9 @@ module ccip_onramp::onramp_test {
 
     fun create_valid_extra_args(): vector<u8> {
         let extra_args = vector[];
-
-        // Add the V2 tag as first 4 bytes
         vector::append(&mut extra_args, GENERIC_EXTRA_ARGS_V2_TAG);
-
-        // Add eth_abi encoded gas limit (100000 as u256)
-        let gas_limit_data = vector[];
-        eth_abi::encode_u256(&mut gas_limit_data, (GAS_LIMIT as u256));
-        vector::append(&mut extra_args, gas_limit_data);
-
-        // Add eth_abi encoded boolean (true) for allow_out_of_order_execution
-        let execution_flag_data = vector[];
-        eth_abi::encode_bool(&mut execution_flag_data, ALLOW_OUT_OF_ORDER_EXECUTION);
-        vector::append(&mut extra_args, execution_flag_data);
-
+        vector::append(&mut extra_args, bcs::to_bytes(&(GAS_LIMIT as u256)));
+        vector::append(&mut extra_args, bcs::to_bytes(&ALLOW_OUT_OF_ORDER_EXECUTION));
         extra_args
     }
 }

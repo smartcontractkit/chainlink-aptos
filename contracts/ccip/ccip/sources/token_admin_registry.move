@@ -21,9 +21,11 @@ module ccip::token_admin_registry {
 
     friend ccip::token_admin_dispatcher;
 
-    const EXECUTION_STATE_IDLE: u8 = 1;
-    const EXECUTION_STATE_LOCK_OR_BURN: u8 = 2;
-    const EXECUTION_STATE_RELEASE_OR_MINT: u8 = 3;
+    enum ExecutionState has store, drop, copy {
+        IDLE,
+        LOCK_OR_BURN,
+        RELEASE_OR_MINT
+    }
 
     struct TokenAdminRegistryState has key, store {
         extend_ref: ExtendRef,
@@ -31,9 +33,14 @@ module ccip::token_admin_registry {
 
         // fungible asset metadata address -> TokenConfig
         token_configs: BigOrderedMap<address, TokenConfig>,
+        // local token address -> token registrar address
+        token_registrars: BigOrderedMap<address, address>,
         pool_set_events: EventHandle<PoolSet>,
         administrator_transfer_requested_events: EventHandle<AdministratorTransferRequested>,
-        administrator_transferred_events: EventHandle<AdministratorTransferred>
+        administrator_transferred_events: EventHandle<AdministratorTransferred>,
+        token_unregistered_events: EventHandle<TokenUnregistered>,
+        token_registrar_set_events: EventHandle<TokenRegistrarSet>,
+        token_registrar_unset_events: EventHandle<TokenRegistrarUnset>
     }
 
     struct TokenConfig has store, drop, copy {
@@ -51,7 +58,7 @@ module ccip::token_admin_registry {
         dispatch_extend_ref: ExtendRef,
         dispatch_transfer_ref: TransferRef,
         dispatch_fa_transfer_ref: fungible_asset::TransferRef,
-        execution_state: u8,
+        execution_state: ExecutionState,
         executing_lock_or_burn_input_v1: Option<LockOrBurnInputV1>,
         executing_release_or_mint_input_v1: Option<ReleaseOrMintInputV1>,
         executing_lock_or_burn_output_v1: Option<LockOrBurnOutputV1>,
@@ -80,7 +87,6 @@ module ccip::token_admin_registry {
         offchain_token_data: vector<u8>
     }
 
-    // TODO: consider removing ReleaseOrMintOutput, it exists only for a consistent UX across lock and release.
     struct ReleaseOrMintOutputV1 has store, drop {
         destination_amount: u64
     }
@@ -88,8 +94,7 @@ module ccip::token_admin_registry {
     #[event]
     struct PoolSet has store, drop {
         local_token: address,
-        previous_pool_address: address,
-        new_pool_address: address
+        pool_address: address
     }
 
     #[event]
@@ -103,6 +108,25 @@ module ccip::token_admin_registry {
     struct AdministratorTransferred has store, drop {
         local_token: address,
         new_admin: address
+    }
+
+    #[event]
+    struct TokenUnregistered has store, drop {
+        local_token: address,
+        previous_pool_address: address
+    }
+
+    #[event]
+    struct TokenRegistrarSet has store, drop {
+        local_token: address,
+        previous_token_registrar: Option<address>,
+        new_token_registrar: address
+    }
+
+    #[event]
+    struct TokenRegistrarUnset has store, drop {
+        local_token: address,
+        previous_token_registrar: address
     }
 
     const E_INVALID_FUNGIBLE_ASSET: u64 = 1;
@@ -156,13 +180,17 @@ module ccip::token_admin_registry {
             extend_ref,
             transfer_ref,
             token_configs: big_ordered_map::new(),
+            token_registrars: big_ordered_map::new(),
             pool_set_events: account::new_event_handle(&state_object_signer),
             administrator_transfer_requested_events: account::new_event_handle(
                 &state_object_signer
             ),
             administrator_transferred_events: account::new_event_handle(
                 &state_object_signer
-            )
+            ),
+            token_unregistered_events: account::new_event_handle(&state_object_signer),
+            token_registrar_set_events: account::new_event_handle(&state_object_signer),
+            token_registrar_unset_events: account::new_event_handle(&state_object_signer)
         };
 
         move_to(&state_object_signer, state);
@@ -276,6 +304,7 @@ module ccip::token_admin_registry {
         token_pool_account: &signer,
         token_pool_module_name: vector<u8>,
         local_token: address,
+        initial_administrator: address,
         _proof: ProofType
     ) acquires TokenAdminRegistryState {
         assert!(
@@ -291,10 +320,16 @@ module ccip::token_admin_registry {
 
         let state = borrow_state_mut();
 
+        let token_registrar = option::none<address>();
+        if (state.token_registrars.contains(&local_token)) {
+            token_registrar.fill(*state.token_registrars.borrow(&local_token))
+        };
+
         assert_can_register(
             auth::owner(),
             signer::address_of(token_pool_account),
-            object::address_to_object<Metadata>(local_token)
+            local_token,
+            token_registrar
         );
 
         assert!(
@@ -302,12 +337,9 @@ module ccip::token_admin_registry {
             error::invalid_argument(E_FUNGIBLE_ASSET_ALREADY_REGISTERED)
         );
 
-        // the initial administrator will always be the token pool account.
-        // callers can immediately propose a new administrator afterwards if
-        // needed.
         let token_config = TokenConfig {
             token_pool_address,
-            administrator: token_pool_address,
+            administrator: initial_administrator,
             pending_administrator: @0x0
         };
 
@@ -386,25 +418,33 @@ module ccip::token_admin_registry {
                 dispatch_extend_ref,
                 dispatch_transfer_ref,
                 dispatch_fa_transfer_ref,
-                execution_state: EXECUTION_STATE_IDLE,
+                execution_state: ExecutionState::IDLE,
                 executing_lock_or_burn_input_v1: option::none(),
                 executing_release_or_mint_input_v1: option::none(),
                 executing_lock_or_burn_output_v1: option::none(),
                 executing_release_or_mint_output_v1: option::none()
             }
         );
+
+        event::emit(PoolSet { local_token, pool_address: token_pool_address });
+        event::emit_event(
+            &mut state.pool_set_events,
+            PoolSet { local_token, pool_address: token_pool_address }
+        );
     }
 
     fun assert_can_register(
         registry_owner_address: address,
         token_pool_address: address,
-        fungible_asset_metadata: Object<Metadata>
+        local_token: address,
+        token_registrar: Option<address>
     ) {
         assert!(
             object::is_object(token_pool_address),
             error::invalid_argument(E_TOKEN_POOL_NOT_OBJECT)
         );
         let token_pool_object = object::address_to_object<ObjectCore>(token_pool_address);
+        let fungible_asset_metadata = object::address_to_object<Metadata>(local_token);
 
         let fungible_asset_object_owner_address = object::owner(fungible_asset_metadata);
         let fungible_asset_object_root_owner_address =
@@ -422,51 +462,111 @@ module ccip::token_admin_registry {
             || token_pool_object_root_owner_address
                 == fungible_asset_object_root_owner_address) { return };
 
+        // Allow registration if a custom token registrar has been set for this local token
+        // that matches the token pool (root) owner
+        if (token_registrar.is_some()) {
+            let token_registrar = *token_registrar.borrow();
+            if (token_registrar == token_pool_object_owner_address
+                || token_registrar == token_pool_object_root_owner_address) { return };
+        };
+
         abort error::permission_denied(E_NOT_FUNGIBLE_ASSET_OWNER)
     }
 
-    public entry fun set_pool(
-        caller: &signer, local_token: address, token_pool_address: address
-    ) acquires TokenAdminRegistryState {
-        assert!(
-            exists<TokenPoolRegistration>(token_pool_address),
-            error::invalid_argument(E_INVALID_TOKEN_POOL)
-        );
-
+    public entry fun unregister_pool(
+        caller: &signer, local_token: address
+    ) acquires TokenAdminRegistryState, TokenPoolRegistration {
         let state = borrow_state_mut();
-
         assert!(
             state.token_configs.contains(&local_token),
             error::invalid_argument(E_FUNGIBLE_ASSET_NOT_REGISTERED)
         );
 
-        let token_config = state.token_configs.borrow_mut(&local_token);
-
+        let token_config = state.token_configs.remove(&local_token);
         assert!(
             token_config.administrator == signer::address_of(caller),
             error::permission_denied(E_NOT_ADMINISTRATOR)
         );
 
         let previous_pool_address = token_config.token_pool_address;
-        if (previous_pool_address != token_pool_address) {
-            token_config.token_pool_address = token_pool_address;
+        if (exists<TokenPoolRegistration>(previous_pool_address)) {
+            let TokenPoolRegistration {
+                lock_or_burn_function: _,
+                release_or_mint_function: _,
+                proof_typeinfo: _,
+                dispatch_metadata: _,
+                dispatch_deposit_fungible_store: _,
+                dispatch_extend_ref: _,
+                dispatch_transfer_ref: _,
+                dispatch_fa_transfer_ref: _,
+                execution_state: _,
+                executing_lock_or_burn_input_v1: _,
+                executing_release_or_mint_input_v1: _,
+                executing_lock_or_burn_output_v1: _,
+                executing_release_or_mint_output_v1: _
+            } = move_from<TokenPoolRegistration>(previous_pool_address);
+        };
 
-            event::emit(
-                PoolSet {
-                    local_token,
-                    previous_pool_address,
-                    new_pool_address: token_pool_address
-                }
-            );
-            event::emit_event(
-                &mut state.pool_set_events,
-                PoolSet {
-                    local_token,
-                    previous_pool_address,
-                    new_pool_address: token_pool_address
-                }
-            );
-        }
+        event::emit(
+            TokenUnregistered {
+                local_token,
+                previous_pool_address: token_config.token_pool_address
+            }
+        );
+        event::emit_event(
+            &mut state.token_unregistered_events,
+            TokenUnregistered {
+                local_token,
+                previous_pool_address: token_config.token_pool_address
+            }
+        );
+    }
+
+    public entry fun set_token_registrar(
+        caller: &signer, local_token: address, token_registrar: address
+    ) acquires TokenAdminRegistryState {
+        auth::assert_only_owner(signer::address_of(caller));
+
+        let state = borrow_state_mut();
+        let previous_token_registrar =
+            state.token_registrars.upsert(local_token, token_registrar);
+
+        event::emit(
+            TokenRegistrarSet {
+                local_token,
+                previous_token_registrar,
+                new_token_registrar: token_registrar
+            }
+        );
+        event::emit_event(
+            &mut state.token_registrar_set_events,
+            TokenRegistrarSet {
+                local_token,
+                previous_token_registrar,
+                new_token_registrar: token_registrar
+            }
+        );
+    }
+
+    public entry fun unset_token_registrar(
+        caller: &signer, local_token: address
+    ) acquires TokenAdminRegistryState {
+        auth::assert_only_owner(signer::address_of(caller));
+
+        let state = borrow_state_mut();
+        let previous_token_registrar = state.token_registrars.remove(&local_token);
+
+        event::emit(TokenRegistrarUnset { local_token, previous_token_registrar });
+        event::emit_event(
+            &mut state.token_registrar_unset_events,
+            TokenRegistrarUnset { local_token, previous_token_registrar }
+        );
+    }
+
+    #[view]
+    public fun get_token_registrar(local_token: address): address acquires TokenAdminRegistryState {
+        let state = borrow_state_mut();
+        *state.token_registrars.borrow(&local_token)
     }
 
     public entry fun transfer_admin_role(
@@ -564,7 +664,7 @@ module ccip::token_admin_registry {
         );
 
         assert!(
-            registration.execution_state == EXECUTION_STATE_LOCK_OR_BURN,
+            registration.execution_state is ExecutionState::LOCK_OR_BURN,
             error::invalid_state(E_NOT_IN_LOCK_OR_BURN_STATE)
         );
         assert!(
@@ -601,7 +701,7 @@ module ccip::token_admin_registry {
         );
 
         assert!(
-            registration.execution_state == EXECUTION_STATE_LOCK_OR_BURN,
+            registration.execution_state is ExecutionState::LOCK_OR_BURN,
             error::invalid_state(E_NOT_IN_LOCK_OR_BURN_STATE)
         );
         assert!(
@@ -637,7 +737,7 @@ module ccip::token_admin_registry {
         );
 
         assert!(
-            registration.execution_state == EXECUTION_STATE_RELEASE_OR_MINT,
+            registration.execution_state is ExecutionState::RELEASE_OR_MINT,
             error::invalid_state(E_NOT_IN_RELEASE_OR_MINT_STATE)
         );
         assert!(
@@ -671,7 +771,7 @@ module ccip::token_admin_registry {
         );
 
         assert!(
-            registration.execution_state == EXECUTION_STATE_RELEASE_OR_MINT,
+            registration.execution_state is ExecutionState::RELEASE_OR_MINT,
             error::invalid_state(E_NOT_IN_RELEASE_OR_MINT_STATE)
         );
         assert!(
@@ -769,7 +869,7 @@ module ccip::token_admin_registry {
         let registration = get_registration_mut(token_pool_address);
 
         assert!(
-            registration.execution_state == EXECUTION_STATE_IDLE,
+            registration.execution_state is ExecutionState::IDLE,
             error::invalid_state(E_NOT_IN_IDLE_STATE)
         );
         assert!(
@@ -789,7 +889,7 @@ module ccip::token_admin_registry {
             error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT)
         );
 
-        registration.execution_state = EXECUTION_STATE_LOCK_OR_BURN;
+        registration.execution_state = ExecutionState::LOCK_OR_BURN;
         registration.executing_lock_or_burn_input_v1.fill(
             LockOrBurnInputV1 { sender, remote_chain_selector, receiver }
         );
@@ -803,7 +903,7 @@ module ccip::token_admin_registry {
         let registration = get_registration_mut(token_pool_address);
 
         assert!(
-            registration.execution_state == EXECUTION_STATE_LOCK_OR_BURN,
+            registration.execution_state is ExecutionState::LOCK_OR_BURN,
             error::invalid_state(E_NOT_IN_LOCK_OR_BURN_STATE)
         );
         assert!(
@@ -823,7 +923,7 @@ module ccip::token_admin_registry {
             error::invalid_state(E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT)
         );
 
-        registration.execution_state = EXECUTION_STATE_IDLE;
+        registration.execution_state = ExecutionState::IDLE;
 
         // the dispatch callback is passed a fungible_asset::TransferRef reference which could allow the store to be frozen,
         // causing future deposit/withdraw callbacks to fail. note that this fungible store is only used as part of the dispatch
@@ -859,7 +959,7 @@ module ccip::token_admin_registry {
         let registration = get_registration_mut(token_pool_address);
 
         assert!(
-            registration.execution_state == EXECUTION_STATE_IDLE,
+            registration.execution_state is ExecutionState::IDLE,
             error::invalid_state(E_NOT_IN_IDLE_STATE)
         );
         assert!(
@@ -879,7 +979,7 @@ module ccip::token_admin_registry {
             error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_OUTPUT)
         );
 
-        registration.execution_state = EXECUTION_STATE_RELEASE_OR_MINT;
+        registration.execution_state = ExecutionState::RELEASE_OR_MINT;
         registration.executing_release_or_mint_input_v1.fill(
             ReleaseOrMintInputV1 {
                 sender,
@@ -905,7 +1005,7 @@ module ccip::token_admin_registry {
         let registration = get_registration_mut(token_pool_address);
 
         assert!(
-            registration.execution_state == EXECUTION_STATE_RELEASE_OR_MINT,
+            registration.execution_state is ExecutionState::RELEASE_OR_MINT,
             error::invalid_state(E_NOT_IN_RELEASE_OR_MINT_STATE)
         );
         assert!(
@@ -925,7 +1025,7 @@ module ccip::token_admin_registry {
             error::invalid_state(E_NON_EMPTY_LOCK_OR_BURN_OUTPUT)
         );
 
-        registration.execution_state = EXECUTION_STATE_IDLE;
+        registration.execution_state = ExecutionState::IDLE;
 
         // the dispatch callback is passed a fungible_asset::TransferRef reference which could allow the store to be frozen,
         // causing future deposit/withdraw callbacks to fail. note that this fungible store is only used as part of the dispatch
@@ -975,12 +1075,7 @@ module ccip::token_admin_registry {
         let function_bytes = *function.bytes();
         let stream = bcs_stream::new(data);
 
-        if (function_bytes == b"set_pool") {
-            let local_token = bcs_stream::deserialize_address(&mut stream);
-            let token_pool_address = bcs_stream::deserialize_address(&mut stream);
-            bcs_stream::assert_is_consumed(&stream);
-            set_pool(&caller, local_token, token_pool_address)
-        } else if (function_bytes == b"transfer_admin_role") {
+        if (function_bytes == b"transfer_admin_role") {
             let local_token = bcs_stream::deserialize_address(&mut stream);
             let new_admin = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
@@ -989,6 +1084,15 @@ module ccip::token_admin_registry {
             let local_token = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
             accept_admin_role(&caller, local_token)
+        } else if (function_bytes == b"set_token_registrar") {
+            let local_token = bcs_stream::deserialize_address(&mut stream);
+            let token_registrar = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            set_token_registrar(&caller, local_token, token_registrar)
+        } else if (function_bytes == b"unset_token_registrar") {
+            let local_token = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            unset_token_registrar(&caller, local_token)
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };

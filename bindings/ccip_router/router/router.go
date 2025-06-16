@@ -28,6 +28,8 @@ type RouterInterface interface {
 	GetOnRamp(opts *bind.CallOpts, destChainSelector uint64) (aptos.AccountAddress, error)
 	GetFee(opts *bind.CallOpts, destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (uint64, error)
 	GetOnRampVersions(opts *bind.CallOpts, destChainSelectors []uint64) ([][]byte, error)
+	GetOnRampForVersion(opts *bind.CallOpts, onRampVersion []byte) (aptos.AccountAddress, error)
+	GetDestChains(opts *bind.CallOpts) ([]uint64, error)
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
 
 	CCIPSend(opts *bind.TransactOpts, destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (*api.PendingTransaction, error)
@@ -47,6 +49,8 @@ type RouterEncoder interface {
 	GetOnRamp(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetFee(destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetOnRampVersions(destChainSelectors []uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetOnRampForVersion(onRampVersion []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetDestChains() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CCIPSend(destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	SetOnRampVersions(destChainSelectors []uint64, onRampVersions [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -220,6 +224,48 @@ func (c RouterContract) GetOnRampVersions(opts *bind.CallOpts, destChainSelector
 	return r0, nil
 }
 
+func (c RouterContract) GetOnRampForVersion(opts *bind.CallOpts, onRampVersion []byte) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.routerEncoder.GetOnRampForVersion(onRampVersion)
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	var (
+		r0 aptos.AccountAddress
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+	return r0, nil
+}
+
+func (c RouterContract) GetDestChains(opts *bind.CallOpts) ([]uint64, error) {
+	module, function, typeTags, args, err := c.routerEncoder.GetDestChains()
+	if err != nil {
+		return *new([]uint64), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new([]uint64), err
+	}
+
+	var (
+		r0 []uint64
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new([]uint64), err
+	}
+	return r0, nil
+}
+
 func (c RouterContract) Owner(opts *bind.CallOpts) (aptos.AccountAddress, error) {
 	module, function, typeTags, args, err := c.routerEncoder.Owner()
 	if err != nil {
@@ -347,6 +393,18 @@ func (c routerEncoder) GetOnRampVersions(destChainSelectors []uint64) (bind.Modu
 	}, []any{
 		destChainSelectors,
 	})
+}
+
+func (c routerEncoder) GetOnRampForVersion(onRampVersion []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_on_ramp_for_version", nil, []string{
+		"vector<u8>",
+	}, []any{
+		onRampVersion,
+	})
+}
+
+func (c routerEncoder) GetDestChains() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_dest_chains", nil, []string{}, []any{})
 }
 
 func (c routerEncoder) Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {

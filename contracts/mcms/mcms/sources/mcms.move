@@ -1170,7 +1170,7 @@ module mcms::mcms {
         );
         assert!(delay >= timelock.min_delay, E_INSUFFICIENT_DELAY);
 
-        let timestamp = timestamp::now_seconds() + timelock.min_delay + delay;
+        let timestamp = timestamp::now_seconds() + delay;
         timelock.timestamps.add(id, timestamp);
 
     }

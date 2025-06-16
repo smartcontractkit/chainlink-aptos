@@ -52,20 +52,6 @@ module ccip::state_object {
         move_to(&object_signer, StateObjectRefs { extend_ref, transfer_ref });
     }
 
-    // TODO: this was previous a single function:
-    //
-    //   #[view]
-    //   public fun object_address(): address {
-    //       // hard code the object seed directly in order to keep the function inline.
-    //       object::create_object_address(&@ccip, b"CCIPStateObject")
-    //   }
-    //
-    // but it was failing to deploy with the following error:
-    //
-    //   "Error": "Simulation failed with status: CONSTRAINT_NOT_SATISFIED\n
-    //             Execution failed with message: metadata and code bundle mismatch: Unknown attribute (1) for key: object_address"
-    //
-    // Investigate whether this is a compiler issue and if we can revert to a single function.
     #[view]
     public fun get_object_address(): address {
         object_address()

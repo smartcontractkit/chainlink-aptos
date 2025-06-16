@@ -49,6 +49,9 @@ type ReceivedMessage struct {
 	Data []byte `move:"vector<u8>"`
 }
 
+type CCIPReceiverState struct {
+}
+
 type DummyReceiverProof struct {
 }
 

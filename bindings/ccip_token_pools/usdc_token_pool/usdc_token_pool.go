@@ -36,11 +36,13 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 	module_usdc_token_pool.FunctionInfo,
 )
 
-func Compile(address,
+func Compile(
+	address,
 	ccipAddress,
 	mcmsAddress,
 	ccipTokenPoolAddress,
 	localTokenAddress,
+	tokenPoolAdministrator,
 	messageTransmitter,
 	tokenMessengerMinter,
 	aptosExtensions,
@@ -52,6 +54,7 @@ func Compile(address,
 		"ccip":                      ccipAddress,
 		"ccip_token_pool":           ccipTokenPoolAddress,
 		"local_token":               localTokenAddress,
+		"token_pool_administrator":  tokenPoolAdministrator,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 		"message_transmitter":       messageTransmitter,
@@ -75,6 +78,7 @@ func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) USDCTokenPo
 }
 
 // DeployToObject deploys the USDCTokenPool to a new named object.
+// The token pool's administrator will be set to the deployer's account address.
 func DeployToObject(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
@@ -92,6 +96,7 @@ func DeployToObject(
 		"ccip":                      ccipAddress,
 		"ccip_token_pool":           ccipTokenPoolAddress,
 		"local_token":               localTokenAddress,
+		"token_pool_administrator":  auth.AccountAddress(),
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 		"message_transmitter":       messageTransmitter,

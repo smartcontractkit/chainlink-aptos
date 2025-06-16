@@ -4,10 +4,12 @@ module ccip_offramp::ocr3_base {
     use std::bit_vector;
     use std::chain_id;
     use std::ed25519;
+    use std::signer;
     use std::error;
     use std::event::{Self, EventHandle};
     use std::table::{Self, Table};
 
+    use ccip::address;
     use ccip::auth;
 
     const MAX_NUM_ORACLES: u64 = 256;
@@ -80,6 +82,7 @@ module ccip_offramp::ocr3_base {
     const E_UNAUTHORIZED_SIGNER: u64 = 17;
     const E_NON_UNIQUE_SIGNATURES: u64 = 18;
     const E_INVALID_SIGNATURE: u64 = 19;
+    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 20;
 
     public fun new(event_account: &signer): OCR3BaseState {
         OCR3BaseState {
@@ -101,7 +104,7 @@ module ccip_offramp::ocr3_base {
     }
 
     public fun set_ocr3_config(
-        caller: address,
+        caller: &signer,
         ocr3_state: &mut OCR3BaseState,
         config_digest: vector<u8>,
         ocr_plugin_type: u8,
@@ -110,7 +113,8 @@ module ccip_offramp::ocr3_base {
         signers: vector<vector<u8>>,
         transmitters: vector<address>
     ) {
-        auth::assert_only_owner(caller);
+        let caller_address = signer::address_of(caller);
+        auth::assert_only_owner(caller_address);
         assert!(big_f != 0, error::invalid_argument(E_BIG_F_MUST_BE_POSITIVE));
 
         let ocr_config =
@@ -199,6 +203,10 @@ module ccip_offramp::ocr3_base {
         ocr_plugin_type: u8,
         signers: &vector<vector<u8>>
     ) {
+        signers.for_each_ref(|signer_key| {
+            address::assert_non_zero_address_vector(signer_key);
+        });
+
         assert!(!has_duplicates(signers), error::invalid_argument(E_REPEATED_SIGNERS));
 
         let validated_signers =
@@ -220,6 +228,10 @@ module ccip_offramp::ocr3_base {
         ocr_plugin_type: u8,
         transmitters: &vector<address>
     ) {
+        transmitters.for_each_ref(|transmitter_addr| {
+            address::assert_non_zero_address(*transmitter_addr);
+        });
+
         assert!(
             !has_duplicates(transmitters),
             error::invalid_argument(E_REPEATED_TRANSMITTERS)
@@ -320,9 +332,10 @@ module ccip_offramp::ocr3_base {
     inline fun hash_report(
         report: vector<u8>, config_digest: vector<u8>, sequence_bytes: vector<u8>
     ): vector<u8> {
-        report.append(config_digest);
-        report.append(sequence_bytes);
-        aptos_hash::blake2b_256(report)
+        let combined = copy report;
+        combined.append(config_digest);
+        combined.append(sequence_bytes);
+        aptos_hash::blake2b_256(combined)
     }
 
     inline fun verify_signature(
@@ -370,11 +383,39 @@ module ccip_offramp::ocr3_base {
         found
     }
 
+    public fun config_signers(ocr_config: &OCRConfig): vector<vector<u8>> {
+        ocr_config.signers
+    }
+
+    public fun config_transmitters(ocr_config: &OCRConfig): vector<address> {
+        ocr_config.transmitters
+    }
+
     #[test]
     fun deserialize_sequence_number() {
         let report_context_one =
             x"0000000000000000000000000000000000000000000000000000000000000009";
         let ocr_sequence_number = deserialize_sequence_bytes(report_context_one);
         assert!(ocr_sequence_number == 9);
+    }
+
+    // ===================== Test functions =====================
+
+    #[test_only]
+    public fun destroy_ocr3_state(ocr3_state: OCR3BaseState) {
+        let OCR3BaseState {
+            chain_id: _,
+            ocr3_configs,
+            signer_oracles,
+            transmitter_oracles,
+            config_set_events,
+            transmitted_events
+        } = ocr3_state;
+
+        table::drop_unchecked(ocr3_configs);
+        table::drop_unchecked(signer_oracles);
+        table::drop_unchecked(transmitter_oracles);
+        event::destroy_handle(config_set_events);
+        event::destroy_handle(transmitted_events);
     }
 }

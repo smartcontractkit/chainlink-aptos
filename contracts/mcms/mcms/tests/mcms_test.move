@@ -323,9 +323,11 @@ module mcms::mcms_tests {
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
-    #[expected_failure(
-        abort_code = mcms::mcms::E_VALID_UNTIL_EXPIRED, location = mcms::mcms
-    )]
+    #[
+        expected_failure(
+            abort_code = mcms::mcms::E_VALID_UNTIL_EXPIRED, location = mcms::mcms
+        )
+    ]
     public fun test_set_root__valid_until_expired(
         deployer: &signer, owner: &signer, framework: &signer
     ) {
@@ -431,9 +433,11 @@ module mcms::mcms_tests {
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
-    #[expected_failure(
-        abort_code = mcms::mcms::E_WRONG_POST_OP_COUNT, location = mcms::mcms
-    )]
+    #[
+        expected_failure(
+            abort_code = mcms::mcms::E_WRONG_POST_OP_COUNT, location = mcms::mcms
+        )
+    ]
     public fun test_set_root__wrong_post_op_count(
         deployer: &signer, owner: &signer, framework: &signer
     ) {
@@ -630,9 +634,11 @@ module mcms::mcms_tests {
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
-    #[expected_failure(
-        abort_code = mcms::mcms::E_INVALID_NUM_SIGNERS, location = mcms::mcms
-    )]
+    #[
+        expected_failure(
+            abort_code = mcms::mcms::E_INVALID_NUM_SIGNERS, location = mcms::mcms
+        )
+    ]
     public fun test_set_config__invalid_number_of_signers(
         deployer: &signer, owner: &signer, framework: &signer
     ) {
@@ -1263,8 +1269,6 @@ module mcms::mcms_tests {
         call_execute(execute_args);
     }
 
-    // // todo: test send values
-
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     public fun test_ownable__transfer_ownership(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1716,9 +1720,11 @@ module mcms::mcms_tests {
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
-    #[expected_failure(
-        abort_code = mcms::mcms::E_OPERATION_NOT_READY, location = mcms::mcms
-    )]
+    #[
+        expected_failure(
+            abort_code = mcms::mcms::E_OPERATION_NOT_READY, location = mcms::mcms
+        )
+    ]
     public fun test_execute_batch_not_ready(
         deployer: &signer, owner: &signer, framework: &signer
     ) {
@@ -2067,7 +2073,8 @@ module mcms::mcms_tests {
         let targets_2 = vector[@mcms];
         let module_names_2 = vector[string::utf8(b"mcms")];
         let function_names_2 = vector[string::utf8(b"timelock_update_min_delay")];
-        let data = bcs::to_bytes(&0);
+        let new_delay = 2;
+        let data = bcs::to_bytes(&new_delay);
         let datas_2 = vector[data];
         let predecessor_2 = id_1; // Use first operation as predecessor
         let salt_2 = x"efab";
@@ -2082,8 +2089,8 @@ module mcms::mcms_tests {
             delay
         );
 
-        // Fast forward time
-        timestamp::update_global_time_for_test_secs(TIMESTAMP + delay + 10);
+        // Update timestamp as min delay is updated
+        timestamp::update_global_time_for_test_secs(TIMESTAMP + delay);
 
         // Execute first operation
         mcms::timelock_execute_batch(
@@ -2096,7 +2103,10 @@ module mcms::mcms_tests {
         );
 
         // Verify min delay was updated
-        assert!(mcms::timelock_min_delay() == MIN_DELAY, 0);
+        assert!(mcms::timelock_min_delay() == MIN_DELAY);
+
+        // Update timestamp as min delay is updated
+        timestamp::update_global_time_for_test_secs(TIMESTAMP + MIN_DELAY);
 
         // Execute second operation
         mcms::timelock_execute_batch(
@@ -2109,7 +2119,7 @@ module mcms::mcms_tests {
         );
 
         // Verify min delay was updated
-        assert!(mcms::timelock_min_delay() == 0, 1);
+        assert!(mcms::timelock_min_delay() == new_delay);
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
@@ -2137,9 +2147,11 @@ module mcms::mcms_tests {
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
-    #[expected_failure(
-        abort_code = mcms::mcms::E_UNKNOWN_MCMS_MODULE, location = mcms::mcms
-    )]
+    #[
+        expected_failure(
+            abort_code = mcms::mcms::E_UNKNOWN_MCMS_MODULE, location = mcms::mcms
+        )
+    ]
     public fun test_unknown_mcms_module(
         deployer: &signer, owner: &signer, framework: &signer
     ) {
@@ -2442,7 +2454,7 @@ module mcms::mcms_tests {
         let datas = vector[data];
         let predecessor = mcms::zero_hash();
         let salt = vector[1u8];
-        let delay = 0;
+        let delay = 1;
 
         dispatch_timelock_schedule_batch(
             targets,
@@ -2453,6 +2465,8 @@ module mcms::mcms_tests {
             salt,
             delay
         );
+
+        timestamp::update_global_time_for_test_secs(TIMESTAMP + delay);
 
         // timelock_execute_batch
         let timelock_execute_batch_data = bcs::to_bytes(&targets);
@@ -2511,17 +2525,15 @@ module mcms::mcms_tests {
             vector[bcs::to_bytes(&100)],
             mcms::zero_hash(), // predecessor
             vector[1u8], // salt
-            0 // delay
+            delay // delay
         );
+        let new_delay = 2;
         mcms::test_timelock_dispatch(
             target,
             string::utf8(b"mcms"),
             string::utf8(b"timelock_update_min_delay"),
-            bcs::to_bytes(&100)
+            bcs::to_bytes(&new_delay)
         );
-
-        // reset delay
-        mcms::test_timelock_update_min_delay(0);
 
         let data = bcs::to_bytes(&@mcms);
         data.append(bcs::to_bytes(&string::utf8(b"mcms")));
@@ -2533,7 +2545,7 @@ module mcms::mcms_tests {
             vector[data],
             mcms::zero_hash(), // predecessor
             vector[1u8], // salt
-            0 // delay
+            new_delay // delay
         );
         mcms::test_timelock_dispatch(
             target,
@@ -2549,7 +2561,7 @@ module mcms::mcms_tests {
             vector[data],
             mcms::zero_hash(), // predecessor
             vector[1u8], // salt
-            0 // delay
+            new_delay // delay
         );
         mcms::test_timelock_dispatch(
             @mcms,
