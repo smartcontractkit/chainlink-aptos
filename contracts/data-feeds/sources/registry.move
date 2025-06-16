@@ -645,7 +645,11 @@ module data_feeds::registry {
 
         feed.observation_timestamp = observation_timestamp;
         feed.benchmark = benchmark_price;
-        feed.report = report_data;
+
+        if (vector::length(&feed.report) != 0) {
+            // Set to empty as value, as reports are deprecated.
+            feed.report = vector::empty<u8>();
+        };
 
         event::emit(
             FeedUpdated {
