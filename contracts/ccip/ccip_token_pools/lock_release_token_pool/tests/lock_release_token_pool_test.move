@@ -111,12 +111,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
     fun initialize_pool_with_rebalancer(
         owner: &signer, rebalancer_addr: address
     ) {
-        lock_release_token_pool::initialize(
-            owner,
-            option::none(),
-            rebalancer_addr,
-            signer::address_of(owner)
-        );
+        lock_release_token_pool::initialize(owner, option::none(), rebalancer_addr);
     }
 
     fun setup_pool_with_liquidity(
@@ -463,8 +458,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
         lock_release_token_pool::initialize(
             owner,
             option::some(transfer_ref),
-            rebalancer_addr,
-            signer::address_of(owner)
+            rebalancer_addr
         );
 
         // Verify the pool was initialized with transfer ref
@@ -530,8 +524,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
         lock_release_token_pool::initialize(
             owner,
             option::none(), // No transfer ref
-            rebalancer_addr,
-            signer::address_of(owner)
+            rebalancer_addr
         );
 
         // This should fail with E_TRANSFER_REF_NOT_SET
@@ -565,8 +558,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
         lock_release_token_pool::initialize(
             owner,
             option::some(transfer_ref),
-            rebalancer_addr,
-            signer::address_of(owner)
+            rebalancer_addr
         );
 
         // Try to migrate as non-owner (should fail with E_ONLY_CALLABLE_BY_OWNER)
@@ -597,8 +589,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
         lock_release_token_pool::initialize(
             owner,
             option::some(transfer_ref),
-            rebalancer_addr,
-            signer::address_of(owner)
+            rebalancer_addr
         );
 
         // Add some liquidity first

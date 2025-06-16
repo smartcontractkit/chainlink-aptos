@@ -285,7 +285,7 @@ module ccip::token_admin_registry {
 
     /// Registers pool with `TokenPoolRegistration` and sets up dynamic dispatch for a token pool
     /// Registry token config mapping must be done separately via `set_pool()`
-    /// with token owner signer or ccip signer.
+    /// by token owner or ccip owner.
     public fun register_pool<ProofType: drop>(
         token_pool_account: &signer,
         token_pool_module_name: vector<u8>,
@@ -430,7 +430,6 @@ module ccip::token_admin_registry {
         );
     }
 
-    /// Set pool with token owner consent - Only callable by token owner
     public entry fun set_pool(
         caller: &signer,
         local_token: address,
@@ -443,11 +442,10 @@ module ccip::token_admin_registry {
         );
 
         let metadata = object::address_to_object<Metadata>(local_token);
-        let token_owner = object::owner(metadata);
         let caller_addr = signer::address_of(caller);
 
         assert!(
-            caller_addr == token_owner || caller_addr == auth::owner(),
+            object::owns(metadata, caller_addr) || caller_addr == auth::owner(),
             error::permission_denied(E_NOT_AUTHORIZED)
         );
         assert!(
