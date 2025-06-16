@@ -8,6 +8,7 @@ package aptos
 
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/auth.move --output ./bindings/ccip/auth
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/fee_quoter.move --output ./bindings/ccip/fee_quoter
+//go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/nonce_manager.move --output ./bindings/ccip/nonce_manager
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/receiver_registry.move --output ./bindings/ccip/receiver_registry
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/rmn_remote.move --output ./bindings/ccip/rmn_remote
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/token_admin_registry.move --output ./bindings/ccip/token_admin_registry
