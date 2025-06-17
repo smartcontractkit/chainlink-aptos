@@ -1454,55 +1454,6 @@ module ccip_offramp::offramp {
     }
 
     // ======================= Getters ==========================
-
-    public fun message(report: &ExecutionReport): &Any2AptosRampMessage {
-        &report.message
-    }
-
-    public fun sender(message: &Any2AptosRampMessage): vector<u8> {
-        message.sender
-    }
-
-    public fun data(message: &Any2AptosRampMessage): vector<u8> {
-        message.data
-    }
-
-    public fun receiver(message: &Any2AptosRampMessage): address {
-        message.receiver
-    }
-
-    public fun gas_limit(message: &Any2AptosRampMessage): u256 {
-        message.gas_limit
-    }
-
-    public fun header(message: &Any2AptosRampMessage): &RampMessageHeader {
-        &message.header
-    }
-
-    public fun header_source_chain_selector(header: &RampMessageHeader): u64 {
-        header.source_chain_selector
-    }
-
-    public fun header_dest_chain_selector(header: &RampMessageHeader): u64 {
-        header.dest_chain_selector
-    }
-
-    public fun header_message_id(header: &RampMessageHeader): vector<u8> {
-        header.message_id
-    }
-
-    public fun sequence_number(header: &RampMessageHeader): u64 {
-        header.sequence_number
-    }
-
-    public fun nonce(header: &RampMessageHeader): u64 {
-        header.nonce
-    }
-
-    public fun token_amounts(message: &Any2AptosRampMessage): &vector<Any2AptosTokenTransfer> {
-        &message.token_amounts
-    }
-
     public fun chain_selector(config: &StaticConfig): u64 {
         config.chain_selector
     }
@@ -1522,7 +1473,6 @@ module ccip_offramp::offramp {
     }
 
     // ========================== Test Functions ========================== //
-
     #[test_only]
     public fun test_init_module(publisher: &signer) {
         init_module(publisher);
@@ -1558,6 +1508,11 @@ module ccip_offramp::offramp {
     public fun test_add_root(root: vector<u8>, timestamp: u64) acquires OffRampState {
         let state = borrow_global_mut<OffRampState>(get_state_address_internal());
         state.roots.add(root, timestamp);
+    }
+
+    #[test_only]
+    public fun test_deserialize_commit_report(report_bytes: vector<u8>): CommitReport {
+        deserialize_commit_report(report_bytes)
     }
 
     #[test_only]
@@ -1642,5 +1597,134 @@ module ccip_offramp::offramp {
             max_seq_nr,
             merkle_root
         }
+    }
+
+    #[test_only]
+    public fun message(report: &ExecutionReport): &Any2AptosRampMessage {
+        &report.message
+    }
+
+    #[test_only]
+    public fun sender(message: &Any2AptosRampMessage): vector<u8> {
+        message.sender
+    }
+
+    #[test_only]
+    public fun data(message: &Any2AptosRampMessage): vector<u8> {
+        message.data
+    }
+
+    #[test_only]
+    public fun receiver(message: &Any2AptosRampMessage): address {
+        message.receiver
+    }
+
+    #[test_only]
+    public fun gas_limit(message: &Any2AptosRampMessage): u256 {
+        message.gas_limit
+    }
+
+    #[test_only]
+    public fun header(message: &Any2AptosRampMessage): &RampMessageHeader {
+        &message.header
+    }
+
+    #[test_only]
+    public fun header_source_chain_selector(header: &RampMessageHeader): u64 {
+        header.source_chain_selector
+    }
+
+    #[test_only]
+    public fun header_dest_chain_selector(header: &RampMessageHeader): u64 {
+        header.dest_chain_selector
+    }
+
+    #[test_only]
+    public fun header_message_id(header: &RampMessageHeader): vector<u8> {
+        header.message_id
+    }
+
+    #[test_only]
+    public fun sequence_number(header: &RampMessageHeader): u64 {
+        header.sequence_number
+    }
+
+    #[test_only]
+    public fun nonce(header: &RampMessageHeader): u64 {
+        header.nonce
+    }
+
+    #[test_only]
+    public fun token_amounts(message: &Any2AptosRampMessage): &vector<Any2AptosTokenTransfer> {
+        &message.token_amounts
+    }
+
+    #[test_only]
+    public fun commit_report_price_updates(report: &CommitReport): &PriceUpdates {
+        &report.price_updates
+    }
+
+    #[test_only]
+    public fun commit_report_blessed_merkle_roots(report: &CommitReport): &vector<MerkleRoot> {
+        &report.blessed_merkle_roots
+    }
+
+    #[test_only]
+    public fun commit_report_unblessed_merkle_roots(report: &CommitReport):
+        &vector<MerkleRoot> {
+        &report.unblessed_merkle_roots
+    }
+
+    #[test_only]
+    public fun commit_report_rmn_signatures(report: &CommitReport): &vector<vector<u8>> {
+        &report.rmn_signatures
+    }
+
+    #[test_only]
+    public fun price_updates_token_price_updates(
+        updates: &PriceUpdates
+    ): &vector<TokenPriceUpdate> {
+        &updates.token_price_updates
+    }
+
+    #[test_only]
+    public fun price_updates_gas_price_updates(updates: &PriceUpdates):
+        &vector<GasPriceUpdate> {
+        &updates.gas_price_updates
+    }
+
+    #[test_only]
+    public fun token_price_update_source_token(update: &TokenPriceUpdate): address {
+        update.source_token
+    }
+
+    #[test_only]
+    public fun token_price_update_usd_per_token(update: &TokenPriceUpdate): u256 {
+        update.usd_per_token
+    }
+
+    #[test_only]
+    public fun merkle_root_source_chain_selector(root: &MerkleRoot): u64 {
+        root.source_chain_selector
+    }
+
+    #[test_only]
+    public fun merkle_root_on_ramp_address(root: &MerkleRoot): vector<u8> {
+        root.on_ramp_address
+    }
+
+    #[test_only]
+    public fun merkle_root_min_seq_nr(root: &MerkleRoot): u64 {
+        root.min_seq_nr
+    }
+
+    #[test_only]
+    public fun merkle_root_max_seq_nr(root: &MerkleRoot): u64 {
+        root.max_seq_nr
+    }
+
+    #[test_only]
+    public fun merkle_root_merkle_root(root: &MerkleRoot): vector<u8> {
+        root.merkle_root
     }
 }

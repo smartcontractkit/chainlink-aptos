@@ -521,6 +521,71 @@ module ccip_offramp::offramp_test {
         assert!(expected_leaf_bytes == hashed_leaf);
     }
 
+    #[test]
+    fun test_deserialize_commit_report() {
+        let expected_source_token = @0xa;
+        let expected_usd_per_token = 500000000000000000000;
+        let expected_source_chain_selector = 909606746561742123;
+        let expected_on_ramp_address = x"47a1f0a819457f01153f35c6b6b0d42e2e16e91e";
+        let expected_min_seq_nr = 1;
+        let expected_max_seq_nr = 1;
+        let expected_merkle_root =
+            x"258dc7f9ec033388ee50bf3e0debfc841a278054f5b2ce41728f7459267c719e";
+
+        let commit_report_bytes =
+            x"01000000000000000000000000000000000000000000000000000000000000000a000050efe2d6e41a1b00000000000000000000000000000000000000000000000000012b851c4684929f0c1447a1f0a819457f01153f35c6b6b0d42e2e16e91e01000000000000000100000000000000258dc7f9ec033388ee50bf3e0debfc841a278054f5b2ce41728f7459267c719e00";
+
+        let commit_report = offramp::test_deserialize_commit_report(commit_report_bytes);
+
+        // PriceUpdates
+        let price_updates = offramp::commit_report_price_updates(&commit_report);
+        let token_price_updates =
+            offramp::price_updates_token_price_updates(price_updates);
+        assert!(token_price_updates.length() == 1);
+        let token_price_update = &token_price_updates[0];
+        assert!(
+            offramp::token_price_update_source_token(token_price_update)
+                == expected_source_token
+        );
+        assert!(
+            offramp::token_price_update_usd_per_token(token_price_update)
+                == expected_usd_per_token
+        );
+        let gas_price_updates = offramp::price_updates_gas_price_updates(price_updates);
+        assert!(gas_price_updates.is_empty());
+
+        // Merkle Roots
+        let blessed_merkle_roots =
+            offramp::commit_report_blessed_merkle_roots(&commit_report);
+        assert!(blessed_merkle_roots.is_empty());
+
+        let unblessed_merkle_roots =
+            offramp::commit_report_unblessed_merkle_roots(&commit_report);
+        assert!(unblessed_merkle_roots.length() == 1);
+        let merkle_root_struct = &unblessed_merkle_roots[0];
+        assert!(
+            offramp::merkle_root_source_chain_selector(merkle_root_struct)
+                == expected_source_chain_selector
+        );
+        assert!(
+            offramp::merkle_root_on_ramp_address(merkle_root_struct)
+                == expected_on_ramp_address
+        );
+        assert!(
+            offramp::merkle_root_min_seq_nr(merkle_root_struct) == expected_min_seq_nr
+        );
+        assert!(
+            offramp::merkle_root_max_seq_nr(merkle_root_struct) == expected_max_seq_nr
+        );
+        assert!(
+            offramp::merkle_root_merkle_root(merkle_root_struct)
+                == expected_merkle_root
+        );
+
+        let rmn_signatures = offramp::commit_report_rmn_signatures(&commit_report);
+        assert!(rmn_signatures.is_empty());
+    }
+
     #[test(aptos_framework = @aptos_framework)]
     fun test_create_serialized_execution_report(
         aptos_framework: &signer
