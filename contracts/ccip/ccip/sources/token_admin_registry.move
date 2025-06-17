@@ -133,12 +133,15 @@ module ccip::token_admin_registry {
     const E_MISSING_RELEASE_OR_MINT_INPUT: u64 = 18;
     const E_MISSING_RELEASE_OR_MINT_OUTPUT: u64 = 19;
     const E_TOKEN_POOL_NOT_OBJECT: u64 = 20;
-    const E_FUNGIBLE_ASSET_ALREADY_REGISTERED: u64 = 21;
+    const E_ADMIN_FOR_TOKEN_ALREADY_SET: u64 = 21;
     const E_FUNGIBLE_ASSET_NOT_REGISTERED: u64 = 22;
     const E_NOT_ADMINISTRATOR: u64 = 23;
     const E_NOT_PENDING_ADMINISTRATOR: u64 = 24;
     const E_NOT_AUTHORIZED: u64 = 25;
     const E_INVALID_TOKEN_FOR_POOL: u64 = 26;
+    const E_ADMIN_NOT_SET_FOR_TOKEN: u64 = 27;
+    const E_ADMIN_ALREADY_SET_FOR_TOKEN: u64 = 28;
+    const E_ZERO_ADDRESS: u64 = 29;
 
     #[view]
     public fun type_and_version(): String {
@@ -431,48 +434,34 @@ module ccip::token_admin_registry {
     }
 
     public entry fun set_pool(
-        caller: &signer,
-        local_token: address,
-        token_pool_address: address,
-        administrator: address
+        caller: &signer, local_token: address, token_pool_address: address
     ) acquires TokenAdminRegistryState, TokenPoolRegistration {
         assert!(
             object::object_exists<Metadata>(local_token),
             error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
         );
 
-        let metadata = object::address_to_object<Metadata>(local_token);
         let caller_addr = signer::address_of(caller);
 
-        assert!(
-            object::owns(metadata, caller_addr) || caller_addr == auth::owner(),
-            error::permission_denied(E_NOT_AUTHORIZED)
-        );
         assert!(
             get_registration(token_pool_address).local_token == local_token,
             error::invalid_argument(E_INVALID_TOKEN_FOR_POOL)
         );
 
         let state = borrow_state_mut();
+        assert!(
+            state.token_configs.contains(&local_token),
+            error::invalid_argument(E_ADMIN_NOT_SET_FOR_TOKEN)
+        );
 
-        let previous_pool_address =
-            if (state.token_configs.contains(&local_token)) {
-                let token_config = state.token_configs.borrow_mut(&local_token);
-                let previous = token_config.token_pool_address;
-                token_config.token_pool_address = token_pool_address;
-                token_config.administrator = administrator;
-                previous
-            } else {
-                state.token_configs.add(
-                    local_token,
-                    TokenConfig {
-                        token_pool_address,
-                        administrator,
-                        pending_administrator: @0x0
-                    }
-                );
-                @0x0
-            };
+        let config = state.token_configs.borrow_mut(&local_token);
+        assert!(
+            config.administrator == caller_addr,
+            error::permission_denied(E_NOT_ADMINISTRATOR)
+        );
+
+        let previous_pool_address = config.token_pool_address;
+        config.token_pool_address = token_pool_address;
 
         if (previous_pool_address != token_pool_address) {
             event::emit(
@@ -491,6 +480,61 @@ module ccip::token_admin_registry {
                 }
             );
         }
+    }
+
+    public entry fun propose_administrator(
+        caller: &signer, local_token: address, administrator: address
+    ) acquires TokenAdminRegistryState {
+        assert!(
+            object::object_exists<Metadata>(local_token),
+            error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
+        );
+
+        let metadata = object::address_to_object<Metadata>(local_token);
+        let caller_addr = signer::address_of(caller);
+
+        // Allow CCIP owner or token owner to propose administrator
+        assert!(
+            object::owns(metadata, caller_addr) || caller_addr == auth::owner(),
+            error::permission_denied(E_NOT_AUTHORIZED)
+        );
+
+        assert!(administrator != @0x0, error::invalid_argument(E_ZERO_ADDRESS));
+
+        let state = borrow_state_mut();
+        if (state.token_configs.contains(&local_token)) {
+            let config = state.token_configs.borrow_mut(&local_token);
+            assert!(
+                config.administrator == @0x0,
+                error::invalid_argument(E_ADMIN_FOR_TOKEN_ALREADY_SET)
+            );
+            config.pending_administrator = administrator;
+        } else {
+            state.token_configs.add(
+                local_token,
+                TokenConfig {
+                    token_pool_address: @0x0,
+                    administrator: @0x0,
+                    pending_administrator: administrator
+                }
+            );
+        };
+
+        event::emit(
+            AdministratorTransferRequested {
+                local_token,
+                current_admin: @0x0,
+                new_admin: administrator
+            }
+        );
+        event::emit_event(
+            &mut state.administrator_transfer_requested_events,
+            AdministratorTransferRequested {
+                local_token,
+                current_admin: @0x0,
+                new_admin: administrator
+            }
+        );
     }
 
     public entry fun transfer_admin_role(
@@ -1006,14 +1050,13 @@ module ccip::token_admin_registry {
         if (function_bytes == b"set_pool") {
             let local_token = bcs_stream::deserialize_address(&mut stream);
             let token_pool_address = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            set_pool(&caller, local_token, token_pool_address)
+        } else if (function_bytes == b"propose_administrator") {
+            let local_token = bcs_stream::deserialize_address(&mut stream);
             let administrator = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            set_pool(
-                &caller,
-                local_token,
-                token_pool_address,
-                administrator
-            )
+            propose_administrator(&caller, local_token, administrator)
         } else if (function_bytes == b"transfer_admin_role") {
             let local_token = bcs_stream::deserialize_address(&mut stream);
             let new_admin = bcs_stream::deserialize_address(&mut stream);

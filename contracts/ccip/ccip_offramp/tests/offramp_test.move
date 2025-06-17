@@ -200,11 +200,15 @@ module ccip_offramp::offramp_test {
                 INBOUND_CAPACITY,
                 INBOUND_RATE
             );
+            // Set admin for token
+            token_admin_registry::propose_administrator(
+                owner, token_addr, signer::address_of(owner)
+            );
+            token_admin_registry::accept_admin_role(owner, token_addr);
             token_admin_registry::set_pool(
                 owner,
                 token_addr,
-                signer::address_of(burn_mint_token_pool),
-                signer::address_of(owner)
+                signer::address_of(burn_mint_token_pool)
             );
         } else {
             lock_release_token_pool::test_init_module(lock_release_token_pool);
@@ -230,11 +234,15 @@ module ccip_offramp::offramp_test {
                 INBOUND_CAPACITY,
                 INBOUND_RATE
             );
+            // Set admin for token
+            token_admin_registry::propose_administrator(
+                owner, token_addr, signer::address_of(owner)
+            );
+            token_admin_registry::accept_admin_role(owner, token_addr);
             token_admin_registry::set_pool(
                 owner,
                 token_addr,
-                signer::address_of(lock_release_token_pool),
-                signer::address_of(owner)
+                signer::address_of(lock_release_token_pool)
             );
         };
 

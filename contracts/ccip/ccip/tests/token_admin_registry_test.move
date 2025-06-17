@@ -3,7 +3,7 @@ module ccip::token_admin_registry_test {
     use std::signer;
     use std::string;
     use std::option;
-    use std::object::{Self, Object, ExtendRef};
+    use std::object::{Self, Object, ExtendRef, ObjectCore};
     use std::fungible_asset::{
         Self,
         Metadata,
@@ -105,11 +105,12 @@ module ccip::token_admin_registry_test {
             TestProof {}
         );
 
+        set_admin(owner, token_addr);
+
         token_admin_registry::set_pool(
             owner,
             token_addr,
-            signer::address_of(&ccip_obj_signer),
-            initial_administrator
+            signer::address_of(&ccip_obj_signer)
         );
 
         // Verify the pool is registered
@@ -138,12 +139,7 @@ module ccip::token_admin_registry_test {
         );
 
         let new_administrator = signer::address_of(owner);
-        mock_pool::register_and_set_pool(
-            owner,
-            &mock_obj_signer,
-            token_addr,
-            new_administrator
-        );
+        mock_pool::register_and_set_pool(owner, &mock_obj_signer, token_addr);
 
         // Verify the pool has been updated
         let mock_pool_addr = signer::address_of(&mock_obj_signer);
@@ -163,7 +159,6 @@ module ccip::token_admin_registry_test {
         let (ccip_obj_signer, _mock_obj_signer, token_obj) = setup(ccip, owner);
         let token_addr = object::object_address(&token_obj);
         let ccip_pool_addr = signer::address_of(&ccip_obj_signer);
-        let administrator = signer::address_of(owner);
 
         token_admin_registry::register_pool<TestProof>(
             &ccip_obj_signer,
@@ -172,12 +167,9 @@ module ccip::token_admin_registry_test {
             TestProof {}
         );
 
-        token_admin_registry::set_pool(
-            owner,
-            token_addr,
-            ccip_pool_addr,
-            administrator
-        );
+        set_admin(owner, token_addr);
+
+        token_admin_registry::set_pool(owner, token_addr, ccip_pool_addr);
 
         let pool_addr = token_admin_registry::get_pool(token_addr);
         assert!(pool_addr == ccip_pool_addr);
@@ -196,12 +188,9 @@ module ccip::token_admin_registry_test {
             TestProof {}
         );
 
-        token_admin_registry::set_pool(
-            owner,
-            token_addr,
-            ccip_pool_addr,
-            administrator
-        );
+        set_admin(owner, token_addr);
+
+        token_admin_registry::set_pool(owner, token_addr, ccip_pool_addr);
 
         // Verify re-registration worked
         let pool_addr = token_admin_registry::get_pool(token_addr);
@@ -214,7 +203,6 @@ module ccip::token_admin_registry_test {
         let (ccip_obj_signer, mock_obj_signer, token1_obj) = setup(ccip, owner);
         let token1_addr = object::object_address(&token1_obj);
         let (_token2_obj, token2_addr) = create_test_token(owner, b"test_token_2");
-        let administrator = signer::address_of(owner);
 
         // Register token1 with ccip pool
         token_admin_registry::register_pool<TestProof>(
@@ -224,11 +212,12 @@ module ccip::token_admin_registry_test {
             TestProof {}
         );
 
+        set_admin(owner, token1_addr);
+
         token_admin_registry::set_pool(
             owner,
             token1_addr,
-            signer::address_of(&ccip_obj_signer),
-            administrator
+            signer::address_of(&ccip_obj_signer)
         );
 
         mock_pool::register_pool(&mock_obj_signer, token2_addr);
@@ -237,8 +226,7 @@ module ccip::token_admin_registry_test {
         token_admin_registry::set_pool(
             owner,
             token1_addr,
-            signer::address_of(&mock_obj_signer),
-            administrator
+            signer::address_of(&mock_obj_signer)
         );
     }
 
@@ -255,11 +243,12 @@ module ccip::token_admin_registry_test {
             TestProof {}
         );
 
+        set_admin(owner, token_addr);
+
         token_admin_registry::set_pool(
             owner,
             token_addr,
-            signer::address_of(&ccip_obj_signer),
-            initial_administrator
+            signer::address_of(&ccip_obj_signer)
         );
         // Verify the pool is registered
         let pool_addr = token_admin_registry::get_pool(token_addr);
@@ -285,32 +274,22 @@ module ccip::token_admin_registry_test {
             TestProof {}
         );
 
-        let owner_address = signer::address_of(owner);
+        set_admin(owner, token_addr);
+
         token_admin_registry::set_pool(
             owner,
             token_addr,
-            signer::address_of(&ccip_obj_signer),
-            owner_address
+            signer::address_of(&ccip_obj_signer)
         );
 
         // Register another pool (for a different token)
         let (_token2, token2_addr) = create_test_token(owner, b"test_token_2");
 
-        mock_pool::register_and_set_pool(
-            owner,
-            &mock_obj_signer,
-            token2_addr,
-            owner_address
-        );
+        mock_pool::register_and_set_pool(owner, &mock_obj_signer, token2_addr);
 
         // Now change the pool for token1 to the mock pool
         let mock_pool_addr = signer::address_of(&mock_obj_signer);
-        token_admin_registry::set_pool(
-            owner,
-            token2_addr,
-            mock_pool_addr,
-            owner_address
-        );
+        token_admin_registry::set_pool(owner, token2_addr, mock_pool_addr);
 
         // Verify the pool was updated
         let pool_addr = token_admin_registry::get_pool(token2_addr);
@@ -318,7 +297,7 @@ module ccip::token_admin_registry_test {
     }
 
     #[test(ccip = @ccip, owner = @mcms, not_owner = @0x300)]
-    #[expected_failure(abort_code = 327705, location = ccip::token_admin_registry)]
+    #[expected_failure(abort_code = 327703, location = ccip::token_admin_registry)]
     fun test_not_token_owner(
         ccip: &signer, owner: &signer, not_owner: &signer
     ) {
@@ -333,12 +312,13 @@ module ccip::token_admin_registry_test {
             TestProof {}
         );
 
-        // E_NOT_AUTHORIZED
+        set_admin(owner, token_addr);
+
+        // E_NOT_ADMINISTRATOR
         token_admin_registry::set_pool(
             not_owner,
             token_addr,
-            signer::address_of(&ccip_obj_signer),
-            signer::address_of(owner)
+            signer::address_of(&ccip_obj_signer)
         );
     }
 
@@ -359,12 +339,12 @@ module ccip::token_admin_registry_test {
             TestProof {}
         );
 
-        let owner_address = signer::address_of(owner);
+        set_admin(owner, token_addr);
+
         token_admin_registry::set_pool(
             owner,
             token_addr,
-            signer::address_of(&ccip_obj_signer),
-            owner_address
+            signer::address_of(&ccip_obj_signer)
         );
 
         // Try to unregister the token with a non-admin signer
@@ -398,12 +378,12 @@ module ccip::token_admin_registry_test {
             TestProof {}
         );
 
-        let owner_address = signer::address_of(owner);
+        set_admin(owner, token_addr);
+
         token_admin_registry::set_pool(
             owner,
             token_addr,
-            signer::address_of(&ccip_obj_signer),
-            owner_address
+            signer::address_of(&ccip_obj_signer)
         );
 
         // Try to register the same token pool again
@@ -432,12 +412,12 @@ module ccip::token_admin_registry_test {
             TestProof {}
         );
 
-        let owner_address = signer::address_of(owner);
+        set_admin(owner, token_addr);
+
         token_admin_registry::set_pool(
             owner,
             token_addr,
-            signer::address_of(&ccip_obj_signer),
-            owner_address
+            signer::address_of(&ccip_obj_signer)
         );
 
         // Request transfer of admin role
@@ -484,26 +464,321 @@ module ccip::token_admin_registry_test {
             TestProof {}
         );
 
-        let owner_address = signer::address_of(owner);
+        set_admin(owner, token1_addr);
+
         token_admin_registry::set_pool(
             owner,
             token1_addr,
-            signer::address_of(&ccip_obj_signer),
-            owner_address
+            signer::address_of(&ccip_obj_signer)
         );
 
-        mock_pool::register_and_set_pool(
-            owner,
-            &mock_obj_signer,
-            token2_addr,
-            owner_address
-        );
+        mock_pool::register_and_set_pool(owner, &mock_obj_signer, token2_addr);
 
         // Get all tokens with pagination
         let (tokens, _next_key, has_more) =
             token_admin_registry::get_all_configured_tokens(@0x0, 2);
         assert!(tokens.length() == 2);
         assert!(!has_more);
+    }
+
+    #[test(
+        ccip = @ccip, owner = @mcms, token_owner = @0x123, new_admin = @0x456
+    )]
+    fun test_propose_administrator_by_token_owner(
+        ccip: &signer,
+        owner: &signer,
+        token_owner: &signer,
+        new_admin: &signer
+    ) {
+        account::create_account_for_test(signer::address_of(token_owner));
+        account::create_account_for_test(signer::address_of(new_admin));
+
+        let (ccip_obj_signer, _mock_obj_signer, _token_obj) = setup(ccip, owner);
+
+        // Create a token owned by token_owner
+        let (_token_metadata, token_address) =
+            create_test_token(token_owner, b"test_token_owner");
+
+        // Register a pool first
+        token_admin_registry::register_pool<TestProof>(
+            &ccip_obj_signer,
+            TOKEN_ADMIN_REGISTRY_TEST_MODULE_NAME,
+            token_address,
+            TestProof {}
+        );
+
+        token_admin_registry::propose_administrator(
+            token_owner,
+            token_address,
+            signer::address_of(new_admin)
+        );
+
+        let (_, _, pending_admin) = token_admin_registry::get_token_config(token_address);
+        assert!(pending_admin == signer::address_of(new_admin));
+    }
+
+    #[
+        test(
+            ccip = @ccip,
+            owner = @mcms,
+            new_ccip_owner = @0x555,
+            token_owner = @0x123,
+            new_admin = @0x456
+        )
+    ]
+    fun test_propose_administrator_by_ccip_owner(
+        ccip: &signer,
+        owner: &signer,
+        new_ccip_owner: &signer,
+        token_owner: &signer,
+        new_admin: &signer
+    ) {
+        account::create_account_for_test(signer::address_of(token_owner));
+        account::create_account_for_test(signer::address_of(new_admin));
+        account::create_account_for_test(signer::address_of(new_ccip_owner));
+
+        let (ccip_obj_signer, _mock_obj_signer, _token_obj) = setup(ccip, owner);
+
+        let (_token_metadata, token_address) =
+            create_test_token(token_owner, b"test_token_ccip");
+
+        token_admin_registry::register_pool<TestProof>(
+            &ccip_obj_signer,
+            TOKEN_ADMIN_REGISTRY_TEST_MODULE_NAME,
+            token_address,
+            TestProof {}
+        );
+
+        let ccip_object =
+            object::address_to_object<ObjectCore>(signer::address_of(&ccip_obj_signer));
+
+        object::transfer(owner, ccip_object, signer::address_of(new_ccip_owner));
+
+        // New CCIP owner should be able to propose administrator
+        token_admin_registry::propose_administrator(
+            new_ccip_owner,
+            token_address,
+            signer::address_of(new_admin)
+        );
+
+        let (_, _, pending_admin) = token_admin_registry::get_token_config(token_address);
+        assert!(pending_admin == signer::address_of(new_admin));
+    }
+
+    #[
+        test(
+            ccip = @ccip,
+            owner = @mcms,
+            token_owner = @0x123,
+            unauthorized = @0x789,
+            new_admin = @0x456
+        )
+    ]
+    #[expected_failure(abort_code = 327705, location = ccip::token_admin_registry)]
+    fun test_propose_administrator_unauthorized(
+        ccip: &signer,
+        owner: &signer,
+        token_owner: &signer,
+        unauthorized: &signer,
+        new_admin: &signer
+    ) {
+        account::create_account_for_test(signer::address_of(token_owner));
+        account::create_account_for_test(signer::address_of(unauthorized));
+        account::create_account_for_test(signer::address_of(new_admin));
+
+        let (ccip_obj_signer, _mock_obj_signer, _token_obj) = setup(ccip, owner);
+
+        // Create a token owned by token_owner
+        let (_token_metadata, token_address) =
+            create_test_token(token_owner, b"test_token_unauth");
+
+        // Register a pool first
+        token_admin_registry::register_pool<TestProof>(
+            &ccip_obj_signer,
+            TOKEN_ADMIN_REGISTRY_TEST_MODULE_NAME,
+            token_address,
+            TestProof {}
+        );
+
+        set_admin(token_owner, token_address);
+
+        token_admin_registry::set_pool(
+            token_owner, // Token owner sets the pool
+            token_address,
+            signer::address_of(&ccip_obj_signer)
+        );
+
+        // Unauthorized user should not be able to propose administrator
+        // Should fail with E_NOT_AUTHORIZED (327705)
+        token_admin_registry::propose_administrator(
+            unauthorized,
+            token_address,
+            signer::address_of(new_admin)
+        );
+    }
+
+    inline fun set_admin(owner: &signer, token_address: address) {
+        let admin = signer::address_of(owner);
+        token_admin_registry::propose_administrator(owner, token_address, admin);
+        token_admin_registry::accept_admin_role(owner, token_address);
+    }
+
+    #[test(ccip = @ccip, owner = @mcms, token_owner = @0x123)]
+    #[expected_failure(abort_code = 65563, location = ccip::token_admin_registry)]
+    fun test_set_pool_without_admin_set(
+        ccip: &signer, owner: &signer, token_owner: &signer
+    ) {
+        account::create_account_for_test(signer::address_of(token_owner));
+
+        let (ccip_obj_signer, _mock_obj_signer, _token_obj) = setup(ccip, owner);
+
+        // Create a token owned by token_owner
+        let (_token_metadata, token_address) =
+            create_test_token(token_owner, b"test_token_no_admin");
+
+        // Register a pool first
+        token_admin_registry::register_pool<TestProof>(
+            &ccip_obj_signer,
+            TOKEN_ADMIN_REGISTRY_TEST_MODULE_NAME,
+            token_address,
+            TestProof {}
+        );
+
+        // Try to set pool without setting admin first
+        // Should fail with E_ADMIN_NOT_SET_FOR_TOKEN (65563)
+        token_admin_registry::set_pool(
+            token_owner,
+            token_address,
+            signer::address_of(&ccip_obj_signer)
+        );
+    }
+
+    #[
+        test(
+            ccip = @ccip,
+            owner = @mcms,
+            token_owner = @0x123,
+            first_admin = @0x456,
+            second_admin = @0x789
+        )
+    ]
+    fun test_propose_administrator_second_time_if_first_admin_incorrect(
+        ccip: &signer,
+        owner: &signer,
+        token_owner: &signer,
+        first_admin: &signer,
+        second_admin: &signer
+    ) {
+        account::create_account_for_test(signer::address_of(token_owner));
+        account::create_account_for_test(signer::address_of(first_admin));
+        account::create_account_for_test(signer::address_of(second_admin));
+
+        let (_ccip_obj_signer, _mock_obj_signer, _token_obj) = setup(ccip, owner);
+
+        // Create a token owned by token_owner
+        let (_token_metadata, token_address) =
+            create_test_token(token_owner, b"test_token_double_admin");
+
+        // Set admin for the first time
+        token_admin_registry::propose_administrator(
+            token_owner,
+            token_address,
+            signer::address_of(first_admin)
+        );
+
+        token_admin_registry::propose_administrator(
+            token_owner,
+            token_address,
+            signer::address_of(second_admin)
+        );
+
+        let (_, _, pending_admin) = token_admin_registry::get_token_config(token_address);
+        assert!(pending_admin == signer::address_of(second_admin));
+    }
+
+    #[test(ccip = @ccip, owner = @mcms, token_owner = @0x123)]
+    #[expected_failure(abort_code = 65565, location = ccip::token_admin_registry)]
+    fun test_propose_administrator_zero_address(
+        ccip: &signer, owner: &signer, token_owner: &signer
+    ) {
+        account::create_account_for_test(signer::address_of(token_owner));
+
+        let (_ccip_obj_signer, _mock_obj_signer, _token_obj) = setup(ccip, owner);
+
+        // Create a token owned by token_owner
+        let (_token_metadata, token_address) =
+            create_test_token(token_owner, b"test_token_zero_admin");
+
+        // Try to propose zero address as administrator
+        // Should fail with E_ZERO_ADDRESS (65565)
+        token_admin_registry::propose_administrator(token_owner, token_address, @0x0);
+    }
+
+    #[test(
+        ccip = @ccip, owner = @mcms, token_owner = @0x123, admin = @0x456
+    )]
+    fun test_complete_flow_propose_accept_set_pool(
+        ccip: &signer,
+        owner: &signer,
+        token_owner: &signer,
+        admin: &signer
+    ) {
+        account::create_account_for_test(signer::address_of(token_owner));
+        account::create_account_for_test(signer::address_of(admin));
+
+        let (ccip_obj_signer, _mock_obj_signer, _token_obj) = setup(ccip, owner);
+
+        // Create a token owned by token_owner
+        let (_token_metadata, token_address) =
+            create_test_token(token_owner, b"test_token_complete_flow");
+
+        // Register a pool first
+        token_admin_registry::register_pool<TestProof>(
+            &ccip_obj_signer,
+            TOKEN_ADMIN_REGISTRY_TEST_MODULE_NAME,
+            token_address,
+            TestProof {}
+        );
+
+        // Step 1: Propose administrator
+        token_admin_registry::propose_administrator(
+            token_owner,
+            token_address,
+            signer::address_of(admin)
+        );
+
+        // Verify pending admin is set
+        let (pool_addr, current_admin, pending_admin) =
+            token_admin_registry::get_token_config(token_address);
+        assert!(pool_addr == @0x0); // No pool set yet
+        assert!(current_admin == @0x0); // No current admin yet
+        assert!(pending_admin == signer::address_of(admin));
+
+        // Step 2: Accept admin role
+        token_admin_registry::accept_admin_role(admin, token_address);
+
+        // Verify admin is now set
+        let (pool_addr, current_admin, pending_admin) =
+            token_admin_registry::get_token_config(token_address);
+        assert!(pool_addr == @0x0); // Still no pool set
+        assert!(current_admin == signer::address_of(admin));
+        assert!(pending_admin == @0x0); // No pending admin
+
+        // Step 3: Set pool (only admin can do this)
+        token_admin_registry::set_pool(
+            admin, // Admin sets the pool
+            token_address,
+            signer::address_of(&ccip_obj_signer)
+        );
+
+        let (pool_addr, current_admin, pending_admin) =
+            token_admin_registry::get_token_config(token_address);
+        assert!(pool_addr == signer::address_of(&ccip_obj_signer));
+        assert!(current_admin == signer::address_of(admin));
+        assert!(pending_admin == @0x0);
+
+        let retrieved_pool = token_admin_registry::get_pool(token_address);
+        assert!(retrieved_pool == signer::address_of(&ccip_obj_signer));
     }
 
     // =========================== Mock Pool Implementation ===========================
