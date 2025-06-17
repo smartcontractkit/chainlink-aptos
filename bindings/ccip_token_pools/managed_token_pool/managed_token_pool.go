@@ -36,7 +36,7 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 	module_managed_token_pool.FunctionInfo,
 )
 
-func Compile(address, ccipAddress, mcmsAddress, ccipTokenPoolAddress, managedTokenAddress, tokenPoolAdministrator aptos.AccountAddress, registerMCMSEntrypoints bool) (compile.CompiledPackage, error) {
+func Compile(address, ccipAddress, mcmsAddress, ccipTokenPoolAddress, managedTokenAddress aptos.AccountAddress, registerMCMSEntrypoints bool) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"managed_token_pool":        address,
 		"ccip":                      ccipAddress,
