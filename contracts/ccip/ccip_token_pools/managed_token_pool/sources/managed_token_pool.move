@@ -62,12 +62,10 @@ module managed_token_pool::managed_token_pool {
         };
 
         let managed_token_address = managed_token::token_metadata();
-
         token_admin_registry::register_pool(
             publisher,
             token_pool_module_name,
             managed_token_address,
-            @token_pool_administrator,
             CallbackProof {}
         );
 

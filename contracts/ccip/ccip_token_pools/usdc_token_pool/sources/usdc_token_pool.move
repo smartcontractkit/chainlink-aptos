@@ -119,7 +119,6 @@ module usdc_token_pool::usdc_token_pool {
             publisher,
             token_pool_module_name,
             @local_token,
-            @token_pool_administrator,
             CallbackProof {}
         );
 

@@ -81,7 +81,6 @@ module lock_release_token_pool::lock_release_token_pool {
             publisher,
             token_pool_module_name,
             @lock_release_local_token,
-            @token_pool_administrator,
             CallbackProof {}
         );
 

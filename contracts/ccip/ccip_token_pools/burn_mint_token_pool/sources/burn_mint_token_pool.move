@@ -79,7 +79,6 @@ module burn_mint_token_pool::burn_mint_token_pool {
             publisher,
             token_pool_module_name,
             @burn_mint_local_token,
-            @token_pool_administrator,
             CallbackProof {}
         );
 

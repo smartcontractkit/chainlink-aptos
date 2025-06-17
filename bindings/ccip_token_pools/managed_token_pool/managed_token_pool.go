@@ -42,7 +42,6 @@ func Compile(address, ccipAddress, mcmsAddress, ccipTokenPoolAddress, managedTok
 		"ccip":                      ccipAddress,
 		"ccip_token_pool":           ccipTokenPoolAddress,
 		"managed_token":             managedTokenAddress,
-		"token_pool_administrator":  tokenPoolAdministrator,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
@@ -74,7 +73,6 @@ func DeployToObject(
 		"ccip":                      ccipAddress,
 		"ccip_token_pool":           ccipTokenPoolAddress,
 		"burn_mint_local_token":     localTokenAddress,
-		"token_pool_administrator":  auth.AccountAddress(),
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
