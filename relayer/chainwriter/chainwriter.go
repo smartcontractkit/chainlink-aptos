@@ -25,7 +25,6 @@ type aptosChainWriter struct {
 	config    ChainWriterConfig
 
 	starter utils.StartStopOnce
-	stop    chan struct{}
 }
 
 func NewChainWriter(lgr logger.Logger, feeClient aptos.AptosRpcClient, txm *txm.AptosTxm, config ChainWriterConfig) commontypes.ContractWriter {
@@ -36,7 +35,6 @@ func NewChainWriter(lgr logger.Logger, feeClient aptos.AptosRpcClient, txm *txm.
 
 		// TODO: validate config
 		config: config,
-		stop:   make(chan struct{}),
 	}
 }
 
@@ -60,7 +58,6 @@ func (a *aptosChainWriter) Start(ctx context.Context) error {
 
 func (a *aptosChainWriter) Close() error {
 	return a.starter.StopOnce(a.Name(), func() error {
-		close(a.stop)
 		return nil
 	})
 }
