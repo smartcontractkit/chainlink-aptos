@@ -17,6 +17,7 @@ module ccip::fee_quoter {
     use ccip::client;
     use ccip::eth_abi;
     use ccip::state_object;
+    use ccip::safe_big_ordered_map;
 
     use mcms::bcs_stream;
     use mcms::mcms_registry;
@@ -440,26 +441,24 @@ module ccip::fee_quoter {
     inline fun get_token_transfer_fee_config_internal(
         state: &FeeQuoterState, dest_chain_selector: u64, token: address
     ): &TokenTransferFeeConfig {
-        let empty_fee_config =
-            TokenTransferFeeConfig {
-                min_fee_usd_cents: 0,
-                max_fee_usd_cents: 0,
-                deci_bps: 0,
-                dest_gas_overhead: 0,
-                dest_bytes_overhead: 0,
-                is_enabled: false
-            };
+        let empty_fee_config = TokenTransferFeeConfig {
+            min_fee_usd_cents: 0,
+            max_fee_usd_cents: 0,
+            deci_bps: 0,
+            dest_gas_overhead: 0,
+            dest_bytes_overhead: 0,
+            is_enabled: false
+        };
 
         if (!state.token_transfer_fee_configs.contains(&dest_chain_selector)) {
             &empty_fee_config
         } else {
-            let dest_chain_fee_configs =
-                state.token_transfer_fee_configs.borrow(&dest_chain_selector);
-            if (dest_chain_fee_configs.contains(&token)) {
-                dest_chain_fee_configs.borrow(&token)
-            } else {
+            safe_big_ordered_map::nested_borrow_with_default(
+                &state.token_transfer_fee_configs,
+                &dest_chain_selector,
+                &token,
                 &empty_fee_config
-            }
+            )
         }
     }
 
@@ -480,14 +479,6 @@ module ccip::fee_quoter {
         auth::assert_only_owner(signer::address_of(caller));
 
         let state = borrow_state_mut();
-
-        let token_transfer_fee_configs =
-            if (state.token_transfer_fee_configs.contains(&dest_chain_selector)) {
-                // Use `remove` and `add` instead of mutable borrow.
-                state.token_transfer_fee_configs.remove(&dest_chain_selector)
-            } else {
-                big_ordered_map::new_with_config(0, 0, false)
-            };
 
         let add_tokens_len = add_tokens.length();
         assert!(
@@ -515,71 +506,76 @@ module ccip::fee_quoter {
             error::invalid_argument(E_TOKEN_TRANSFER_FEE_CONFIG_MISMATCH)
         );
 
-        for (i in 0..add_tokens_len) {
-            let token = add_tokens[i];
-            let min_fee_usd_cents = add_min_fee_usd_cents[i];
-            let max_fee_usd_cents = add_max_fee_usd_cents[i];
-            let deci_bps = add_deci_bps[i];
-            let dest_gas_overhead = add_dest_gas_overhead[i];
-            let dest_bytes_overhead = add_dest_bytes_overhead[i];
-            let is_enabled = add_is_enabled[i];
+        // Modify token_transfer_fee_configs, safely using the wrapper which removes and re-adds the inner map
+        safe_big_ordered_map::nested_modify_inner_map(
+            &mut state.token_transfer_fee_configs,
+            dest_chain_selector,
+            |token_configs| {
+                // Add new token configurations
+                for (i in 0..add_tokens_len) {
+                    let token = add_tokens[i];
+                    let min_fee_usd_cents = add_min_fee_usd_cents[i];
+                    let max_fee_usd_cents = add_max_fee_usd_cents[i];
+                    let deci_bps = add_deci_bps[i];
+                    let dest_gas_overhead = add_dest_gas_overhead[i];
+                    let dest_bytes_overhead = add_dest_bytes_overhead[i];
+                    let is_enabled = add_is_enabled[i];
 
-            let token_transfer_fee_config = TokenTransferFeeConfig {
-                min_fee_usd_cents,
-                max_fee_usd_cents,
-                deci_bps,
-                dest_gas_overhead,
-                dest_bytes_overhead,
-                is_enabled
-            };
+                    let token_transfer_fee_config = TokenTransferFeeConfig {
+                        min_fee_usd_cents,
+                        max_fee_usd_cents,
+                        deci_bps,
+                        dest_gas_overhead,
+                        dest_bytes_overhead,
+                        is_enabled
+                    };
 
-            if (token_transfer_fee_config.min_fee_usd_cents
-                >= token_transfer_fee_config.max_fee_usd_cents) {
-                abort error::invalid_argument(E_INVALID_FEE_RANGE);
-            };
-            if (token_transfer_fee_config.dest_bytes_overhead
-                < CCIP_LOCK_OR_BURN_V1_RET_BYTES) {
-                abort error::invalid_argument(E_INVALID_DEST_BYTES_OVERHEAD);
-            };
+                    if (token_transfer_fee_config.min_fee_usd_cents
+                        >= token_transfer_fee_config.max_fee_usd_cents) {
+                        abort error::invalid_argument(E_INVALID_FEE_RANGE);
+                    };
+                    if (token_transfer_fee_config.dest_bytes_overhead
+                        < CCIP_LOCK_OR_BURN_V1_RET_BYTES) {
+                        abort error::invalid_argument(E_INVALID_DEST_BYTES_OVERHEAD);
+                    };
 
-            token_transfer_fee_configs.upsert(token, token_transfer_fee_config);
-
-            event::emit(
-                TokenTransferFeeConfigAdded {
-                    dest_chain_selector,
-                    token,
-                    token_transfer_fee_config
-                }
-            );
-            event::emit_event(
-                &mut borrow_events_mut().token_transfer_fee_config_added_events,
-                TokenTransferFeeConfigAdded {
-                    dest_chain_selector,
-                    token,
-                    token_transfer_fee_config
-                }
-            );
-        };
-
-        remove_tokens.for_each_ref(
-            |token| {
-                let token: address = *token;
-                if (token_transfer_fee_configs.contains(&token)) {
-                    token_transfer_fee_configs.remove(&token);
+                    token_configs.upsert(token, token_transfer_fee_config);
 
                     event::emit(
-                        TokenTransferFeeConfigRemoved { dest_chain_selector, token }
+                        TokenTransferFeeConfigAdded {
+                            dest_chain_selector,
+                            token,
+                            token_transfer_fee_config
+                        }
                     );
                     event::emit_event(
-                        &mut borrow_events_mut().token_transfer_fee_config_removed_events,
-                        TokenTransferFeeConfigRemoved { dest_chain_selector, token }
+                        &mut borrow_events_mut().token_transfer_fee_config_added_events,
+                        TokenTransferFeeConfigAdded {
+                            dest_chain_selector,
+                            token,
+                            token_transfer_fee_config
+                        }
                     );
-                }
-            }
-        );
+                };
 
-        state.token_transfer_fee_configs.add(
-            dest_chain_selector, token_transfer_fee_configs
+                // Remove token configurations
+                remove_tokens.for_each_ref(
+                    |token| {
+                        let token: address = *token;
+                        if (token_configs.contains(&token)) {
+                            token_configs.remove(&token);
+
+                            event::emit(
+                                TokenTransferFeeConfigRemoved { dest_chain_selector, token }
+                            );
+                            event::emit_event(
+                                &mut borrow_events_mut().token_transfer_fee_config_removed_events,
+                                TokenTransferFeeConfigRemoved { dest_chain_selector, token }
+                            );
+                        }
+                    }
+                );
+            }
         );
     }
 

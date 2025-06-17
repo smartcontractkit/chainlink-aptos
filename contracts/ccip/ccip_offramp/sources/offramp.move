@@ -28,6 +28,7 @@ module ccip_offramp::offramp {
     use ccip::receiver_dispatcher;
     use ccip::receiver_registry;
     use ccip::rmn_remote;
+    use ccip::safe_big_ordered_map;
     use ccip::token_admin_dispatcher;
     use ccip::token_admin_registry;
 
@@ -391,15 +392,17 @@ module ccip_offramp::offramp {
         source_chain_selector: u64, sequence_number: u64
     ): u8 acquires OffRampState {
         let state = borrow_state();
-
         assert!(
             state.execution_states.contains(&source_chain_selector),
             error::invalid_argument(E_UNKNOWN_SOURCE_CHAIN_SELECTOR)
         );
-        let source_chain_execution_states =
-            state.execution_states.borrow(&source_chain_selector);
-        let execution_state = source_chain_execution_states.borrow(&sequence_number);
-        *execution_state
+
+        *safe_big_ordered_map::nested_borrow_with_default(
+            &state.execution_states,
+            &source_chain_selector,
+            &sequence_number,
+            &EXECUTION_STATE_UNTOUCHED
+        )
     }
 
     fun execute_single_report(
@@ -450,18 +453,16 @@ module ccip_offramp::offramp {
             );
         };
 
-        let source_chain_execution_states =
-            state.execution_states.borrow(&source_chain_selector);
-
         let message = &execution_report.message;
         let sequence_number = message.header.sequence_number;
 
         let execution_state =
-            if (source_chain_execution_states.contains(&sequence_number)) {
-                *source_chain_execution_states.borrow(&sequence_number)
-            } else {
-                EXECUTION_STATE_UNTOUCHED
-            };
+            *safe_big_ordered_map::nested_borrow_with_default(
+                &state.execution_states,
+                &source_chain_selector,
+                &sequence_number,
+                &EXECUTION_STATE_UNTOUCHED
+            );
 
         if (execution_state != EXECUTION_STATE_UNTOUCHED) {
             event::emit(SkippedAlreadyExecuted { source_chain_selector, sequence_number });
@@ -488,12 +489,12 @@ module ccip_offramp::offramp {
         execute_single_message(state, message, &execution_report.offchain_token_data);
 
         // Since Aptos only supports success or reverts, when it reaches this it has succeeded.
-        // Use remove and add pattern due to variable size struct
-        // https://github.com/aptos-labs/aptos-core/blob/96fa267/aptos-move/framework/aptos-framework/sources/datastructures/big_ordered_map.move#L450
-        let source_chain_execution_states =
-            state.execution_states.remove(&source_chain_selector);
-        source_chain_execution_states.upsert(sequence_number, EXECUTION_STATE_SUCCESS);
-        state.execution_states.add(source_chain_selector, source_chain_execution_states);
+        safe_big_ordered_map::nested_upsert(
+            &mut state.execution_states,
+            source_chain_selector,
+            sequence_number,
+            EXECUTION_STATE_SUCCESS
+        );
 
         event::emit(
             ExecutionStateChanged {
