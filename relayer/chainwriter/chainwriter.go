@@ -36,6 +36,7 @@ func NewChainWriter(lgr logger.Logger, feeClient aptos.AptosRpcClient, txm *txm.
 
 		// TODO: validate config
 		config: config,
+		stop:   make(chan struct{}),
 	}
 }
 
