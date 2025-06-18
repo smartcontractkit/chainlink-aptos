@@ -190,7 +190,7 @@ func (a *aptosChainWriter) GetEstimateFee(ctx context.Context, contract, method 
 
 func adjustTxMetaForCCIPExecute(meta *commontypes.TxMeta, moduleName, functionName string, paramValues []any) (*commontypes.TxMeta, error) {
 	// Skip non-CCIP offramp:execute tx
-	if moduleName != "offramp" && functionName != "execute" {
+	if moduleName != "offramp" || functionName != "execute" {
 		return meta, nil
 	}
 
