@@ -30,6 +30,12 @@ module data_feeds::router {
         to: address
     }
 
+    #[event]
+    struct FeedRead has drop, store {
+        feed_ids: vector<vector<u8>>,
+        benchmarks: vector<Benchmark>
+    }
+
     const ENOT_OWNER: u64 = 0;
     const ECANNOT_TRANSFER_TO_SELF: u64 = 1;
     const ENOT_PROPOSED_OWNER: u64 = 2;
@@ -67,10 +73,14 @@ module data_feeds::router {
 
     public fun get_benchmarks(
         _authority: &signer, feed_ids: vector<vector<u8>>, _billing_data: vector<u8>
-    ): vector<Benchmark> acquires Router {
-        let _router = borrow_global<Router>(get_state_addr());
+    ): vector<Benchmark> {
+        let benchmarks = registry::get_benchmarks_unchecked(feed_ids);
 
-        registry::get_benchmarks_unchecked(feed_ids)
+        event::emit(
+            FeedRead { feed_ids: feed_ids, benchmarks: benchmarks }
+        );
+
+        benchmarks
     }
 
     // @deprecated This function is no longer supported
