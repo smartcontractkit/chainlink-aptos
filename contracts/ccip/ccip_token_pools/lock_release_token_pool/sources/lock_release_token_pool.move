@@ -665,8 +665,27 @@ module lock_release_token_pool::lock_release_token_pool {
 
     #[view]
     public fun owner(): address acquires LockReleaseTokenPoolState {
-        let pool = borrow_pool();
-        ownable::owner(&pool.ownable_state)
+        ownable::owner(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun has_pending_transfer(): bool acquires LockReleaseTokenPoolState {
+        ownable::has_pending_transfer(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_from(): Option<address> acquires LockReleaseTokenPoolState {
+        ownable::pending_transfer_from(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_to(): Option<address> acquires LockReleaseTokenPoolState {
+        ownable::pending_transfer_to(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_accepted(): Option<bool> acquires LockReleaseTokenPoolState {
+        ownable::pending_transfer_accepted(&borrow_pool().ownable_state)
     }
 
     public entry fun transfer_ownership(

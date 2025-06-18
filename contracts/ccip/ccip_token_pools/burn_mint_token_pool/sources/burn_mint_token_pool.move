@@ -485,8 +485,27 @@ module burn_mint_token_pool::burn_mint_token_pool {
 
     #[view]
     public fun owner(): address acquires BurnMintTokenPoolState {
-        let pool = borrow_pool();
-        ownable::owner(&pool.ownable_state)
+        ownable::owner(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun has_pending_transfer(): bool acquires BurnMintTokenPoolState {
+        ownable::has_pending_transfer(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_from(): Option<address> acquires BurnMintTokenPoolState {
+        ownable::pending_transfer_from(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_to(): Option<address> acquires BurnMintTokenPoolState {
+        ownable::pending_transfer_to(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_accepted(): Option<bool> acquires BurnMintTokenPoolState {
+        ownable::pending_transfer_accepted(&borrow_pool().ownable_state)
     }
 
     public entry fun transfer_ownership(caller: &signer, to: address) acquires BurnMintTokenPoolState {

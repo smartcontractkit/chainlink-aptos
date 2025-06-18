@@ -4,7 +4,7 @@ module managed_token_pool::managed_token_pool {
     use std::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef};
     use std::primary_fungible_store;
     use std::object::{Self, Object};
-    use std::option;
+    use std::option::{Self, Option};
     use std::signer;
     use std::string::{Self, String};
 
@@ -435,8 +435,27 @@ module managed_token_pool::managed_token_pool {
 
     #[view]
     public fun owner(): address acquires ManagedTokenPoolState {
-        let pool = borrow_pool();
-        ownable::owner(&pool.ownable_state)
+        ownable::owner(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun has_pending_transfer(): bool acquires ManagedTokenPoolState {
+        ownable::has_pending_transfer(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_from(): Option<address> acquires ManagedTokenPoolState {
+        ownable::pending_transfer_from(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_to(): Option<address> acquires ManagedTokenPoolState {
+        ownable::pending_transfer_to(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_accepted(): Option<bool> acquires ManagedTokenPoolState {
+        ownable::pending_transfer_accepted(&borrow_pool().ownable_state)
     }
 
     public entry fun transfer_ownership(caller: &signer, to: address) acquires ManagedTokenPoolState {

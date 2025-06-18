@@ -80,6 +80,10 @@ module managed_token::ownable {
         owner_internal(state)
     }
 
+    public fun has_pending_transfer(state: &OwnableState): bool {
+        state.pending_transfer.is_some()
+    }
+
     public fun pending_transfer_from(state: &OwnableState): Option<address> {
         state.pending_transfer.map_ref(|pending_transfer| pending_transfer.from)
     }
