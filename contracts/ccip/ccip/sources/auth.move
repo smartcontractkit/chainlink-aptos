@@ -1,7 +1,7 @@
 module ccip::auth {
     use std::error;
     use std::object;
-    use std::option;
+    use std::option::{Self, Option};
     use std::signer;
     use std::string;
 
@@ -147,6 +147,26 @@ module ccip::auth {
     #[view]
     public fun owner(): address acquires AuthState {
         ownable::owner(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun has_pending_transfer(): bool acquires AuthState {
+        ownable::has_pending_transfer(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_from(): Option<address> acquires AuthState {
+        ownable::pending_transfer_from(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_to(): Option<address> acquires AuthState {
+        ownable::pending_transfer_to(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_accepted(): Option<bool> acquires AuthState {
+        ownable::pending_transfer_accepted(&borrow_state().ownable_state)
     }
 
     public fun assert_only_owner(caller: address) acquires AuthState {

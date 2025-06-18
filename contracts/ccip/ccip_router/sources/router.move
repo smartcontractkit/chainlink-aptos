@@ -320,6 +320,26 @@ module ccip_router::router {
         ownable::owner(&borrow_state().ownable_state)
     }
 
+    #[view]
+    public fun has_pending_transfer(): bool acquires RouterState {
+        ownable::has_pending_transfer(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_from(): Option<address> acquires RouterState {
+        ownable::pending_transfer_from(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_to(): Option<address> acquires RouterState {
+        ownable::pending_transfer_to(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_accepted(): Option<bool> acquires RouterState {
+        ownable::pending_transfer_accepted(&borrow_state().ownable_state)
+    }
+
     public entry fun transfer_ownership(caller: &signer, to: address) acquires RouterState {
         let state = borrow_state_mut();
         ownable::transfer_ownership(caller, &mut state.ownable_state, to)

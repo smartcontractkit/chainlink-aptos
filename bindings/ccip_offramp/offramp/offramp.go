@@ -33,6 +33,10 @@ type OfframpInterface interface {
 	GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error)
 	GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, error)
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
+	HasPendingTransfer(opts *bind.CallOpts) (bool, error)
+	PendingTransferFrom(opts *bind.CallOpts) (*aptos.AccountAddress, error)
+	PendingTransferTo(opts *bind.CallOpts) (*aptos.AccountAddress, error)
+	PendingTransferAccepted(opts *bind.CallOpts) (*bool, error)
 	LatestConfigDetails(opts *bind.CallOpts, ocrPluginType byte) (module_ocr3_base.OCRConfig, error)
 
 	Initialize(opts *bind.TransactOpts, chainSelector uint64, permissionlessExecutionThresholdSeconds uint32, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (*api.PendingTransaction, error)
@@ -61,6 +65,10 @@ type OfframpEncoder interface {
 	GetStaticConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetDynamicConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	HasPendingTransfer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferFrom() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferTo() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferAccepted() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	LatestConfigDetails(ocrPluginType byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Initialize(chainSelector uint64, permissionlessExecutionThresholdSeconds uint32, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Execute(reportContext [][]byte, report []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -452,6 +460,90 @@ func (c OfframpContract) Owner(opts *bind.CallOpts) (aptos.AccountAddress, error
 	return r0, nil
 }
 
+func (c OfframpContract) HasPendingTransfer(opts *bind.CallOpts) (bool, error) {
+	module, function, typeTags, args, err := c.offrampEncoder.HasPendingTransfer()
+	if err != nil {
+		return *new(bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	var (
+		r0 bool
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(bool), err
+	}
+	return r0, nil
+}
+
+func (c OfframpContract) PendingTransferFrom(opts *bind.CallOpts) (*aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.offrampEncoder.PendingTransferFrom()
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	var (
+		r0 bind.StdOption[aptos.AccountAddress]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+	return r0.Value(), nil
+}
+
+func (c OfframpContract) PendingTransferTo(opts *bind.CallOpts) (*aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.offrampEncoder.PendingTransferTo()
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	var (
+		r0 bind.StdOption[aptos.AccountAddress]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+	return r0.Value(), nil
+}
+
+func (c OfframpContract) PendingTransferAccepted(opts *bind.CallOpts) (*bool, error) {
+	module, function, typeTags, args, err := c.offrampEncoder.PendingTransferAccepted()
+	if err != nil {
+		return *new(*bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*bool), err
+	}
+
+	var (
+		r0 bind.StdOption[bool]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*bool), err
+	}
+	return r0.Value(), nil
+}
+
 func (c OfframpContract) LatestConfigDetails(opts *bind.CallOpts, ocrPluginType byte) (module_ocr3_base.OCRConfig, error) {
 	module, function, typeTags, args, err := c.offrampEncoder.LatestConfigDetails(ocrPluginType)
 	if err != nil {
@@ -622,6 +714,22 @@ func (c offrampEncoder) GetDynamicConfig() (bind.ModuleInformation, string, []ap
 
 func (c offrampEncoder) Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("owner", nil, []string{}, []any{})
+}
+
+func (c offrampEncoder) HasPendingTransfer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("has_pending_transfer", nil, []string{}, []any{})
+}
+
+func (c offrampEncoder) PendingTransferFrom() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_from", nil, []string{}, []any{})
+}
+
+func (c offrampEncoder) PendingTransferTo() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_to", nil, []string{}, []any{})
+}
+
+func (c offrampEncoder) PendingTransferAccepted() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_accepted", nil, []string{}, []any{})
 }
 
 func (c offrampEncoder) LatestConfigDetails(ocrPluginType byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {

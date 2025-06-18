@@ -381,6 +381,34 @@ module managed_token::managed_token {
         owner_internal(&TokenState[token_state_address_internal()])
     }
 
+    #[view]
+    public fun has_pending_transfer(): bool acquires TokenState {
+        ownable::has_pending_transfer(
+            &TokenState[token_state_address_internal()].ownable_state
+        )
+    }
+
+    #[view]
+    public fun pending_transfer_from(): Option<address> acquires TokenState {
+        ownable::pending_transfer_from(
+            &TokenState[token_state_address_internal()].ownable_state
+        )
+    }
+
+    #[view]
+    public fun pending_transfer_to(): Option<address> acquires TokenState {
+        ownable::pending_transfer_to(
+            &TokenState[token_state_address_internal()].ownable_state
+        )
+    }
+
+    #[view]
+    public fun pending_transfer_accepted(): Option<bool> acquires TokenState {
+        ownable::pending_transfer_accepted(
+            &TokenState[token_state_address_internal()].ownable_state
+        )
+    }
+
     inline fun owner_internal(state: &TokenState): address {
         ownable::owner(&state.ownable_state)
     }

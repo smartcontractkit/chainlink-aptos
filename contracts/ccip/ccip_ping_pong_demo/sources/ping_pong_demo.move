@@ -248,6 +248,26 @@ module ccip_ping_pong_demo::ping_pong_demo {
         ownable::owner(&state.ownable_state)
     }
 
+    #[view]
+    public fun has_pending_transfer(): bool acquires PingPongDemo {
+        ownable::has_pending_transfer(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_from(): Option<address> acquires PingPongDemo {
+        ownable::pending_transfer_from(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_to(): Option<address> acquires PingPongDemo {
+        ownable::pending_transfer_to(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_accepted(): Option<bool> acquires PingPongDemo {
+        ownable::pending_transfer_accepted(&borrow_state().ownable_state)
+    }
+
     public entry fun transfer_ownership(caller: &signer, to: address) acquires PingPongDemo {
         let state = borrow_state_mut();
         ownable::transfer_ownership(caller, &mut state.ownable_state, to)
