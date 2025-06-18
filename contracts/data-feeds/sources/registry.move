@@ -99,6 +99,11 @@ module data_feeds::registry {
     }
 
     #[event]
+    struct WriteSkippedFeedNotSet has drop, store {
+        feed_id: vector<u8>
+    }
+
+    #[event]
     struct OwnershipTransferRequested has drop, store {
         from: address,
         to: address
@@ -491,6 +496,8 @@ module data_feeds::registry {
         }
     }
 
+    // N.B. This FeedConfig type has a report field. These report fields are now being
+    // set to an empty vector<u8> on the on_report path(s).
     #[view]
     public fun get_feeds(): vector<FeedConfig> acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());
@@ -600,7 +607,11 @@ module data_feeds::registry {
     fun perform_update(
         registry: &mut Registry, feed_id: vector<u8>, report_data: vector<u8>
     ) {
-        if (!simple_map::contains_key(&registry.feeds, &feed_id)) { return };
+        if (!simple_map::contains_key(&registry.feeds, &feed_id)) {
+            event::emit(WriteSkippedFeedNotSet { feed_id });
+
+            return
+        };
 
         let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
 

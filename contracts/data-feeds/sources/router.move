@@ -81,7 +81,7 @@ module data_feeds::router {
         benchmarks
     }
 
-    // @deprecated This function is no longer supported
+    // This function has been disabled
     public fun get_reports(
         _authority: &signer, feed_ids: vector<vector<u8>>, _billing_data: vector<u8>
     ): vector<Report> {
