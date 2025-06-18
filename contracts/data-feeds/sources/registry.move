@@ -600,9 +600,7 @@ module data_feeds::registry {
     fun perform_update(
         registry: &mut Registry, feed_id: vector<u8>, report_data: vector<u8>
     ) {
-        if (!simple_map::contains_key(&registry.feeds, &feed_id)) {
-            return
-        };
+        if (!simple_map::contains_key(&registry.feeds, &feed_id)) { return };
 
         let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
 
@@ -1005,7 +1003,8 @@ module data_feeds::registry {
 
         let report_data_not_set =
             x"0003acdb4fce42f65d6032b18aee53efdf526cc734ad296cb57565979d883bdd0000000000000000000000000000000000000000000000000000000066ed173e0000000000000000000000000000000000000000000000000000000066ed174200000000000000007fffffffffffffffffffffffffffffffffffffffffffffff00000000000000007fffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000066ee68c2000000000000000000000000000000000000000000000d808cc35e6ed670bd00000000000000000000000000000000000000000000000d808590c35425347980000000000000000000000000000000000000000000000d8093f5f989878e7c00";
-        let feed_id_not_set  = x"0003222222222222222200000000000000000000000000000000000000000000";
+        let feed_id_not_set =
+            x"0003222222222222222200000000000000000000000000000000000000000000";
 
         // Only set one of the feed configs
         set_feeds(

@@ -76,9 +76,7 @@ module data_feeds::router {
     ): vector<Benchmark> {
         let benchmarks = registry::get_benchmarks_unchecked(feed_ids);
 
-        event::emit(
-            FeedRead { feed_ids: feed_ids, benchmarks: benchmarks }
-        );
+        event::emit(FeedRead { feed_ids: feed_ids, benchmarks: benchmarks });
 
         benchmarks
     }
