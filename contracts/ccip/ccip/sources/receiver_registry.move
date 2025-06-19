@@ -1,209 +1,154 @@
-module ccip::receiver_registry {
-    use std::account;
-    use std::bcs;
-    use std::dispatchable_fungible_asset;
-    use std::error;
-    use std::event::{Self, EventHandle};
-    use std::function_info::{Self, FunctionInfo};
-    use std::type_info::{Self, TypeInfo};
-    use std::fungible_asset::{Self, Metadata};
-    use std::object::{Self, ExtendRef, Object, TransferRef};
-    use std::option::{Self, Option};
-    use std::signer;
-    use std::string::{Self, String};
+module ccip::receiver_registry;
 
-    use ccip::client;
-    use ccip::state_object;
+use std::ascii;
+use std::type_name::{Self, TypeName};
+use std::string::{Self, String};
 
-    friend ccip::receiver_dispatcher;
+use sui::address;
+use sui::event;
+use sui::vec_map::{Self, VecMap};
 
-    struct ReceiverRegistryState has key, store {
-        extend_ref: ExtendRef,
-        transfer_ref: TransferRef,
-        receiver_registered_events: EventHandle<ReceiverRegistered>
-    }
+use ccip::state_object::{Self, CCIPObjectRef, OwnerCap};
 
-    struct CCIPReceiverRegistration has key {
-        ccip_receive_function: FunctionInfo,
-        proof_typeinfo: TypeInfo,
-        dispatch_metadata: Object<Metadata>,
-        dispatch_extend_ref: ExtendRef,
-        dispatch_transfer_ref: TransferRef,
-        executing_input: Option<client::Any2AptosMessage>
-    }
+public struct ReceiverConfig has store, copy, drop {
+    module_name: String,
+    // technically not needed, bc it is always "ccip_receive"
+    function_name: String,
+    // if the receiver state is an empty address, we assume that the receiver has a function sign like
+    // receiver::module_name::ccip_receive(ref: &CCIPObjectRef, receiver_package_id: address, receiver_params: osh::ReceiverParams): osh::ReceiverParams
+    // if the receiver state is not an empty address, we assume that the receiver has a function signature like
+    // receiver::module_name::ccip_receive(ref: &CCIPObjectRef, receiver_state: &mut ReceiverState, receiver_package_id: address, receiver_params: osh::ReceiverParams): osh::ReceiverParams
+    receiver_state_id: address,
+    proof_typename: TypeName,
+}
 
-    #[event]
-    struct ReceiverRegistered has store, drop {
-        receiver_address: address,
-        receiver_module_name: vector<u8>
-    }
+// TODO: rethink the use of vec_map here, as it is O(N) for lookups. consider a bag or other map-like structure.
+public struct ReceiverRegistry has key, store {
+    id: UID,
+    receiver_configs: VecMap<address, ReceiverConfig>
+}
 
-    const E_ALREADY_REGISTERED: u64 = 1;
-    const E_UNKNOWN_RECEIVER: u64 = 2;
-    const E_UNKNOWN_PROOF_TYPE: u64 = 3;
-    const E_MISSING_INPUT: u64 = 4;
-    const E_NON_EMPTY_INPUT: u64 = 5;
-    const E_PROOF_TYPE_ACCOUNT_MISMATCH: u64 = 6;
-    const E_PROOF_TYPE_MODULE_MISMATCH: u64 = 7;
+public struct ReceiverRegistered has copy, drop {
+    receiver_package_id: address,
+    receiver_state_id: address,
+    receiver_module_name: String,
+    proof_typename: TypeName,
+}
 
-    #[view]
-    public fun type_and_version(): String {
-        string::utf8(b"ReceiverRegistry 1.6.0")
-    }
+public struct ReceiverUnregistered has copy, drop {
+    receiver_package_id: address,
+}
 
-    fun init_module(_publisher: &signer) {
-        let state_object_signer = state_object::object_signer();
-        let constructor_ref =
-            object::create_named_object(&state_object_signer, b"CCIPReceiverRegistry");
-        let extend_ref = object::generate_extend_ref(&constructor_ref);
-        let transfer_ref = object::generate_transfer_ref(&constructor_ref);
+const E_ALREADY_REGISTERED: u64 = 1;
+const E_ALREADY_INITIALIZED: u64 = 2;
+const E_UNKNOWN_RECEIVER: u64 = 3;
+const E_NOT_ALLOWED: u64 = 4;
 
-        let state = ReceiverRegistryState {
-            extend_ref,
-            transfer_ref,
-            receiver_registered_events: account::new_event_handle(&state_object_signer)
-        };
+public fun type_and_version(): String {
+    string::utf8(b"ReceiverRegistry 1.6.0")
+}
 
-        move_to(&state_object_signer, state);
-    }
+public fun initialize(
+    ref: &mut CCIPObjectRef,
+    _: &OwnerCap,
+    ctx: &mut TxContext
+) {
+    assert!(
+        !state_object::contains<ReceiverRegistry>(ref),
+        E_ALREADY_INITIALIZED
+    );
+    let state = ReceiverRegistry {
+        id: object::new(ctx),
+        receiver_configs: vec_map::empty()
+    };
 
-    public fun register_receiver<ProofType: drop>(
-        receiver_account: &signer, receiver_module_name: vector<u8>, _proof: ProofType
-    ) acquires ReceiverRegistryState {
-        let receiver_address = signer::address_of(receiver_account);
-        assert!(
-            !exists<CCIPReceiverRegistration>(receiver_address),
-            error::invalid_argument(E_ALREADY_REGISTERED)
-        );
+    state_object::add(ref, state, ctx);
+}
 
-        let ccip_receive_function =
-            function_info::new_function_info(
-                receiver_account,
-                string::utf8(receiver_module_name),
-                string::utf8(b"ccip_receive")
-            );
-        let proof_typeinfo = type_info::type_of<ProofType>();
-        assert!(
-            proof_typeinfo.account_address() == receiver_address,
-            E_PROOF_TYPE_ACCOUNT_MISMATCH
-        );
-        assert!(
-            proof_typeinfo.module_name() == receiver_module_name,
-            E_PROOF_TYPE_MODULE_MISMATCH
-        );
+public fun register_receiver<ProofType: drop>(
+    ref: &mut CCIPObjectRef,
+    receiver_state_id: address,
+    _proof: ProofType,
+) {
+    let registry = state_object::borrow_mut<ReceiverRegistry>(ref);
+    let proof_tn = type_name::get<ProofType>();
+    let address_str = type_name::get_address(&proof_tn);
+    let receiver_module_name = std::string::from_ascii(type_name::get_module(&proof_tn));
+    let receiver_package_id = address::from_ascii_bytes(&ascii::into_bytes(address_str));
+    assert!(!registry.receiver_configs.contains(&receiver_package_id), E_ALREADY_REGISTERED);
 
-        let state = borrow_state_mut();
-        let dispatch_signer = object::generate_signer_for_extending(&state.extend_ref);
+    let proof_typename = type_name::get<ProofType>();
+    let receiver_config = ReceiverConfig {
+        module_name: receiver_module_name,
+        function_name: string::utf8(b"ccip_receive"),
+        receiver_state_id,
+        proof_typename,
+    };
+    registry.receiver_configs.insert(receiver_package_id, receiver_config);
 
-        let dispatch_object_seed = bcs::to_bytes(&receiver_address);
-        dispatch_object_seed.append(b"CCIPReceiverRegistration");
+    event::emit(ReceiverRegistered {
+        receiver_package_id,
+        receiver_state_id,
+        receiver_module_name,
+        proof_typename,
+    });
+}
 
-        let dispatch_constructor_ref =
-            object::create_named_object(&dispatch_signer, dispatch_object_seed);
-        let dispatch_extend_ref = object::generate_extend_ref(&dispatch_constructor_ref);
-        let dispatch_transfer_ref =
-            object::generate_transfer_ref(&dispatch_constructor_ref);
-        let dispatch_metadata =
-            fungible_asset::add_fungibility(
-                &dispatch_constructor_ref,
-                option::none(),
-                // max name length is 32 chars
-                string::utf8(b"CCIPReceiverRegistration"),
-                // max symbol length is 10 chars
-                string::utf8(b"CCIPRR"),
-                0,
-                string::utf8(b""),
-                string::utf8(b"")
-            );
+public fun unregister_receiver(
+    ref: &mut CCIPObjectRef,
+    receiver_package_id: address,
+    ctx: &TxContext,
+) {
+    let current_owner = state_object::get_current_owner(ref);
+    let registry = state_object::borrow_mut<ReceiverRegistry>(ref);
+    
+    assert!(
+        registry.receiver_configs.contains(&receiver_package_id),
+        E_UNKNOWN_RECEIVER
+    );
 
-        dispatchable_fungible_asset::register_derive_supply_dispatch_function(
-            &dispatch_constructor_ref, option::some(ccip_receive_function)
-        );
+    assert!(ctx.sender() == current_owner, E_NOT_ALLOWED);
 
-        move_to(
-            receiver_account,
-            CCIPReceiverRegistration {
-                ccip_receive_function,
-                proof_typeinfo,
-                dispatch_metadata,
-                dispatch_extend_ref,
-                dispatch_transfer_ref,
-                executing_input: option::none()
-            }
-        );
+    registry.receiver_configs.remove(&receiver_package_id);
 
-        event::emit(ReceiverRegistered { receiver_address, receiver_module_name });
-        event::emit_event(
-            &mut state.receiver_registered_events,
-            ReceiverRegistered { receiver_address, receiver_module_name }
-        );
-    }
+    event::emit(ReceiverUnregistered {
+        receiver_package_id,
+    });
+}
 
-    #[view]
-    public fun is_registered_receiver(receiver_address: address): bool {
-        exists<CCIPReceiverRegistration>(receiver_address)
-    }
+public fun get_receiver_config(
+    ref: &CCIPObjectRef,
+    receiver_package_id: address,
+): ReceiverConfig {
+    let registry = state_object::borrow<ReceiverRegistry>(ref);
 
-    public fun get_receiver_input<ProofType: drop>(
-        receiver_address: address, _proof: ProofType
-    ): client::Any2AptosMessage acquires CCIPReceiverRegistration {
-        let registration = get_registration_mut(receiver_address);
+    assert!(
+        registry.receiver_configs.contains(&receiver_package_id),
+        E_UNKNOWN_RECEIVER
+    );
+    *registry.receiver_configs.get(&receiver_package_id)
+}
 
-        assert!(
-            registration.proof_typeinfo == type_info::type_of<ProofType>(),
-            error::permission_denied(E_UNKNOWN_PROOF_TYPE)
-        );
+public fun get_receiver_config_fields(rc: ReceiverConfig): (String, String, address, TypeName) {
+    (rc.module_name, rc.function_name, rc.receiver_state_id, rc.proof_typename)
+}
 
-        assert!(
-            registration.executing_input.is_some(),
-            error::invalid_state(E_MISSING_INPUT)
-        );
+// This function checks if a receiver is registered in the registry but not if the type proof matches.
+// this is not needed anymore?
+public fun is_registered_receiver(ref: &CCIPObjectRef, receiver_package_id: address): bool {
+    let registry = state_object::borrow<ReceiverRegistry>(ref);
+    registry.receiver_configs.contains(&receiver_package_id)
+}
 
-        registration.executing_input.extract()
-    }
+// this will return empty string if the receiver is not registered. this can be called by the PTB to get the module name of the receiver and confirm if this receiver is registered.
+// this is used by the PTB to get the module name of the receiver and confirm if this receiver is registered.
+public fun get_receiver_module_and_state(ref: &CCIPObjectRef, receiver_package_id: address): (String, address) {
+    let registry = state_object::borrow<ReceiverRegistry>(ref);
 
-    public(friend) fun start_receive(
-        receiver_address: address, message: client::Any2AptosMessage
-    ): Object<Metadata> acquires CCIPReceiverRegistration {
-        let registration = get_registration_mut(receiver_address);
+    if (registry.receiver_configs.contains(&receiver_package_id)) {
+        let receiver_config = registry.receiver_configs.get(&receiver_package_id);
+        return (receiver_config.module_name, receiver_config.receiver_state_id)
+    };
 
-        assert!(
-            registration.executing_input.is_none(),
-            error::invalid_state(E_NON_EMPTY_INPUT)
-        );
-
-        registration.executing_input.fill(message);
-
-        registration.dispatch_metadata
-    }
-
-    public(friend) fun finish_receive(receiver_address: address) acquires CCIPReceiverRegistration {
-        let registration = get_registration_mut(receiver_address);
-
-        assert!(
-            registration.executing_input.is_none(),
-            error::invalid_state(E_NON_EMPTY_INPUT)
-        );
-    }
-
-    inline fun borrow_state(): &ReceiverRegistryState {
-        borrow_global<ReceiverRegistryState>(state_object::object_address())
-    }
-
-    inline fun borrow_state_mut(): &mut ReceiverRegistryState {
-        borrow_global_mut<ReceiverRegistryState>(state_object::object_address())
-    }
-
-    inline fun get_registration_mut(receiver_address: address): &mut CCIPReceiverRegistration {
-        assert!(
-            exists<CCIPReceiverRegistration>(receiver_address),
-            error::invalid_argument(E_UNKNOWN_RECEIVER)
-        );
-        borrow_global_mut<CCIPReceiverRegistration>(receiver_address)
-    }
-
-    #[test_only]
-    public fun init_module_for_testing(publisher: &signer) {
-        init_module(publisher);
-    }
+    (string::utf8(b""), @0x0)
 }
