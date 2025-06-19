@@ -142,6 +142,11 @@ module lock_release_token_pool::lock_release_token_pool {
                     && fungible_asset::withdraw_dispatch_function(store).is_none(),
                 E_DISPATCHABLE_TOKEN_WITHOUT_TRANSFER_REF
             );
+        } else {
+            let metadata = object::address_to_object<Metadata>(@lock_release_local_token);
+            let transfer_ref_metadata =
+                fungible_asset::transfer_ref_metadata(transfer_ref.borrow());
+            assert!(metadata == transfer_ref_metadata, E_LOCAL_TOKEN_MISMATCH);
         };
 
         let pool = LockReleaseTokenPoolState {
