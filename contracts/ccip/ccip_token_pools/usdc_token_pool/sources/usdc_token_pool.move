@@ -535,11 +535,6 @@ module usdc_token_pool::usdc_token_pool {
                 error::invalid_argument(E_ZERO_CHAIN_SELECTOR)
             );
 
-            assert!(
-                allowed_caller.length() != 0,
-                error::invalid_argument(E_EMPTY_ALLOWED_CALLER)
-            );
-
             address::assert_non_zero_address_vector(&allowed_caller);
 
             pool.chain_to_domain.upsert(
