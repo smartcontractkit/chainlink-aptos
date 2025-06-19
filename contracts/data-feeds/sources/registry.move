@@ -27,6 +27,8 @@ module data_feeds::registry {
         callback_registered: bool
     }
 
+    // The report field is now unused, and will be an empty
+    // vector<u8> in all future writes
     struct Feed has key, store, drop, copy {
         description: String,
         config_id: vector<u8>,
@@ -83,6 +85,8 @@ module data_feeds::registry {
         feed_id: vector<u8>
     }
 
+    // The report field is now unused, and will be an empty
+    // vector<u8> in all future writes
     #[event]
     struct FeedUpdated has drop, store {
         feed_id: vector<u8>,
