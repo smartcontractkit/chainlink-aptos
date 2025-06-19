@@ -4,10 +4,10 @@ version = "1.0.0"
 authors = []
 
 [addresses]
-ccip = "_"
+ccip = "0xbf9c97104a501e238a10ef1180386d4c030dbd9834a557cfcb016e85d929fdaf"
 ccip_dummy_receiver = "_"
-mcms = "_"
-mcms_register_entrypoints = "_"
+mcms = "0x5766a70250989316dfa20858bba1c6a930226803a2162247a432a7d8e0e81a45"
+mcms_register_entrypoints = "0x1"
 
 [dev-addresses]
 ccip = "0x85d5520ea6a8b1501502651040c6f61238b281142ccbafdc205d40258f0bec10"
