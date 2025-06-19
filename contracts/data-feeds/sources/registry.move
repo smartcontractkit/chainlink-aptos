@@ -664,7 +664,7 @@ module data_feeds::registry {
                 feed_id,
                 timestamp: observation_timestamp,
                 benchmark: benchmark_price,
-                report: report_data
+                report: vector::empty<u8>()
             }
         );
     }

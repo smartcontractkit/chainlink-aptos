@@ -73,7 +73,9 @@ module data_feeds::router {
 
     public fun get_benchmarks(
         _authority: &signer, feed_ids: vector<vector<u8>>, _billing_data: vector<u8>
-    ): vector<Benchmark> {
+    ): vector<Benchmark> acquires Router {
+        let _router = borrow_global<Router>(get_state_addr());
+
         let benchmarks = registry::get_benchmarks_unchecked(feed_ids);
 
         event::emit(FeedRead { feed_ids: feed_ids, benchmarks: benchmarks });
