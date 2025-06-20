@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/go-viper/mapstructure/v2"
@@ -39,6 +40,8 @@ type aptosChainReader struct {
 	eventSyncCancelFunc context.CancelFunc
 	txSyncCancelFunc    context.CancelFunc
 
+	// Mutex to protect concurrent access to maps
+	mu                    sync.RWMutex
 	moduleAddresses       map[string]aptos.AccountAddress
 	eventAccountAddresses map[string]aptos.AccountAddress
 
@@ -70,6 +73,46 @@ func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config confi
 	}
 
 	return reader
+}
+
+// Helper functions for safe access to maps with proper locking
+
+func (a *aptosChainReader) getModuleAddress(contractName string) (aptos.AccountAddress, bool) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	address, ok := a.moduleAddresses[contractName]
+	return address, ok
+}
+
+func (a *aptosChainReader) setModuleAddresses(addresses map[string]aptos.AccountAddress) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for contractName, address := range addresses {
+		a.moduleAddresses[contractName] = address
+	}
+}
+
+func (a *aptosChainReader) deleteModuleAddress(contractName string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if _, ok := a.moduleAddresses[contractName]; ok {
+		delete(a.moduleAddresses, contractName)
+		return true
+	}
+	return false
+}
+
+func (a *aptosChainReader) getEventAccountAddress(cacheKey string) (aptos.AccountAddress, bool) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	address, ok := a.eventAccountAddresses[cacheKey]
+	return address, ok
+}
+
+func (a *aptosChainReader) setEventAccountAddress(cacheKey string, address aptos.AccountAddress) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.eventAccountAddresses[cacheKey] = address
 }
 
 func (a *aptosChainReader) Name() string {
@@ -128,7 +171,7 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 	_address, contractName, method := readComponents[0], readComponents[1], readComponents[2]
 
 	// Source the read configuration, by contract name
-	address, ok := a.moduleAddresses[contractName]
+	address, ok := a.getModuleAddress(contractName)
 	if !ok {
 		return fmt.Errorf("no bound address for module %s", contractName)
 	}
@@ -339,8 +382,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	}
 
 	contractName := contract.Name
-	address, ok := a.moduleAddresses[contractName]
-
+	address, ok := a.getModuleAddress(contractName)
 	if !ok {
 		return nil, fmt.Errorf("no bound address for module %s", contractName)
 	}
@@ -495,20 +537,15 @@ func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContr
 		newBindings[binding.Name] = *moduleAddress
 	}
 
-	for name, address := range newBindings {
-		a.moduleAddresses[name] = address
-	}
+	a.setModuleAddresses(newBindings)
 
 	return nil
 }
 
 func (a *aptosChainReader) Unbind(ctx context.Context, bindings []types.BoundContract) error {
-
 	for _, binding := range bindings {
 		key := binding.Name
-		if _, ok := a.moduleAddresses[key]; ok {
-			delete(a.moduleAddresses, key)
-		} else {
+		if !a.deleteModuleAddress(key) {
 			return fmt.Errorf("no such binding: %s", key)
 		}
 	}
@@ -550,9 +587,11 @@ func (a *aptosChainReader) computeEventAccountAddress(boundAddress aptos.Account
 			return eventAccountAddress, fmt.Errorf("invalid event account address definition: %s", eventConfig.EventAccountAddress)
 		}
 		cacheKey := addressFunctionAddress.String() + "::" + addressFunctionModuleName + "::" + addressFunctionFunctionName
-		if cached, ok := a.eventAccountAddresses[cacheKey]; ok {
+
+		if cached, ok := a.getEventAccountAddress(cacheKey); ok {
 			return cached, nil
 		}
+
 		viewPayload := &aptos.ViewPayload{
 			Module: aptos.ModuleId{
 				Address: addressFunctionAddress,
@@ -570,7 +609,7 @@ func (a *aptosChainReader) computeEventAccountAddress(boundAddress aptos.Account
 		if err != nil {
 			return eventAccountAddress, fmt.Errorf("failed to decode event account address function output: %+w", err)
 		}
-		a.eventAccountAddresses[cacheKey] = eventAccountAddress
+		a.setEventAccountAddress(cacheKey, eventAccountAddress)
 		return eventAccountAddress, nil
 	}
 }
@@ -581,7 +620,7 @@ func (a *aptosChainReader) getEventConfig(moduleKey, eventKey string) (eventAcco
 		return aptos.AccountAddress{}, "", nil, fmt.Errorf("no module config found for key: %s", moduleKey)
 	}
 
-	boundAddress, ok := a.moduleAddresses[moduleKey]
+	boundAddress, ok := a.getModuleAddress(moduleKey)
 	if !ok {
 		return aptos.AccountAddress{}, "", nil, fmt.Errorf("no bound address for module: %s", moduleKey)
 	}
