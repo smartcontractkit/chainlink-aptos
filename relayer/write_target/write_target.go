@@ -194,6 +194,11 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	// Helper to build monitoring (Beholder) messages
 	builder := NewMessageBuilder(c.chainInfo, capInfo)
 
+	if request.Config == nil {
+		msg := builder.buildWriteError(info, 0, "empty request config", "empty request config")
+		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
+	}
+
 	// Parse the request (WT-specific) config
 	var reqConfig ReqConfig
 	err := request.Config.UnwrapTo(&reqConfig)
@@ -211,6 +216,11 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 
 	// Source the receiver address from the config
 	info.receiver = reqConfig.Address
+
+	if request.Inputs == nil {
+		msg := builder.buildWriteError(info, 0, "empty request inputs", "empty request inputs")
+		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
+	}
 
 	// Source the signed report from the request
 	signedReport, ok := request.Inputs.Underlying[KeySignedReport]
