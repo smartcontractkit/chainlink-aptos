@@ -36,13 +36,12 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 	module_lock_release_token_pool.FunctionInfo,
 )
 
-func Compile(address, ccipAddress, mcmsAddress, ccipTokenPoolAddress, localTokenAddress, tokenPoolAdministrator aptos.AccountAddress, registerMCMSEntrypoints bool) (compile.CompiledPackage, error) {
+func Compile(address, ccipAddress, mcmsAddress, ccipTokenPoolAddress, localTokenAddress aptos.AccountAddress, registerMCMSEntrypoints bool) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"lock_release_token_pool":   address,
 		"ccip":                      ccipAddress,
 		"ccip_token_pool":           ccipTokenPoolAddress,
 		"lock_release_local_token":  localTokenAddress,
-		"token_pool_administrator":  tokenPoolAdministrator,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
@@ -74,7 +73,6 @@ func DeployToObject(
 		"ccip":                      ccipAddress,
 		"ccip_token_pool":           ccipTokenPoolAddress,
 		"lock_release_local_token":  localTokenAddress,
-		"token_pool_administrator":  auth.AccountAddress(),
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}

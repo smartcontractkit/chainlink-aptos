@@ -33,6 +33,10 @@ type OnrampInterface interface {
 	GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error)
 	GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, error)
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
+	HasPendingTransfer(opts *bind.CallOpts) (bool, error)
+	PendingTransferFrom(opts *bind.CallOpts) (*aptos.AccountAddress, error)
+	PendingTransferTo(opts *bind.CallOpts) (*aptos.AccountAddress, error)
+	PendingTransferAccepted(opts *bind.CallOpts) (*bool, error)
 
 	Initialize(opts *bind.TransactOpts, chainSelector uint64, feeAggregator aptos.AccountAddress, allowlistAdmin aptos.AccountAddress, destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainAllowlistEnabled []bool) (*api.PendingTransaction, error)
 	SetDynamicConfig(opts *bind.TransactOpts, feeAggregator aptos.AccountAddress, allowlistAdmin aptos.AccountAddress) (*api.PendingTransaction, error)
@@ -59,6 +63,10 @@ type OnrampEncoder interface {
 	GetStaticConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetDynamicConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	HasPendingTransfer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferFrom() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferTo() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferAccepted() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Initialize(chainSelector uint64, feeAggregator aptos.AccountAddress, allowlistAdmin aptos.AccountAddress, destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	SetDynamicConfig(feeAggregator aptos.AccountAddress, allowlistAdmin aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplyDestChainConfigUpdates(destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -425,6 +433,90 @@ func (c OnrampContract) Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	return r0, nil
 }
 
+func (c OnrampContract) HasPendingTransfer(opts *bind.CallOpts) (bool, error) {
+	module, function, typeTags, args, err := c.onrampEncoder.HasPendingTransfer()
+	if err != nil {
+		return *new(bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	var (
+		r0 bool
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(bool), err
+	}
+	return r0, nil
+}
+
+func (c OnrampContract) PendingTransferFrom(opts *bind.CallOpts) (*aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.onrampEncoder.PendingTransferFrom()
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	var (
+		r0 bind.StdOption[aptos.AccountAddress]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+	return r0.Value(), nil
+}
+
+func (c OnrampContract) PendingTransferTo(opts *bind.CallOpts) (*aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.onrampEncoder.PendingTransferTo()
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	var (
+		r0 bind.StdOption[aptos.AccountAddress]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+	return r0.Value(), nil
+}
+
+func (c OnrampContract) PendingTransferAccepted(opts *bind.CallOpts) (*bool, error) {
+	module, function, typeTags, args, err := c.onrampEncoder.PendingTransferAccepted()
+	if err != nil {
+		return *new(*bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*bool), err
+	}
+
+	var (
+		r0 bind.StdOption[bool]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*bool), err
+	}
+	return r0.Value(), nil
+}
+
 // Entry Functions
 
 func (c OnrampContract) Initialize(opts *bind.TransactOpts, chainSelector uint64, feeAggregator aptos.AccountAddress, allowlistAdmin aptos.AccountAddress, destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainAllowlistEnabled []bool) (*api.PendingTransaction, error) {
@@ -588,6 +680,22 @@ func (c onrampEncoder) GetDynamicConfig() (bind.ModuleInformation, string, []apt
 
 func (c onrampEncoder) Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("owner", nil, []string{}, []any{})
+}
+
+func (c onrampEncoder) HasPendingTransfer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("has_pending_transfer", nil, []string{}, []any{})
+}
+
+func (c onrampEncoder) PendingTransferFrom() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_from", nil, []string{}, []any{})
+}
+
+func (c onrampEncoder) PendingTransferTo() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_to", nil, []string{}, []any{})
+}
+
+func (c onrampEncoder) PendingTransferAccepted() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_accepted", nil, []string{}, []any{})
 }
 
 func (c onrampEncoder) Initialize(chainSelector uint64, feeAggregator aptos.AccountAddress, allowlistAdmin aptos.AccountAddress, destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {

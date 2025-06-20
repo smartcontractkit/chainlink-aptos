@@ -10,6 +10,7 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk/api"
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
+	module_rate_limiter "github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/token_pool/rate_limiter"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 )
 
@@ -36,14 +37,22 @@ type LockReleaseTokenPoolInterface interface {
 	GetSupportedChains(opts *bind.CallOpts) ([]uint64, error)
 	GetAllowlistEnabled(opts *bind.CallOpts) (bool, error)
 	GetAllowlist(opts *bind.CallOpts) ([]aptos.AccountAddress, error)
+	GetCurrentInboundRateLimiterState(opts *bind.CallOpts, remoteChainSelector uint64) (module_rate_limiter.TokenBucket, error)
+	GetCurrentOutboundRateLimiterState(opts *bind.CallOpts, remoteChainSelector uint64) (module_rate_limiter.TokenBucket, error)
 	GetRebalancer(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	GetStoreAddress(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
+	HasPendingTransfer(opts *bind.CallOpts) (bool, error)
+	PendingTransferFrom(opts *bind.CallOpts) (*aptos.AccountAddress, error)
+	PendingTransferTo(opts *bind.CallOpts) (*aptos.AccountAddress, error)
+	PendingTransferAccepted(opts *bind.CallOpts) (*bool, error)
 
 	AddRemotePool(opts *bind.TransactOpts, remoteChainSelector uint64, remotePoolAddress []byte) (*api.PendingTransaction, error)
 	RemoveRemotePool(opts *bind.TransactOpts, remoteChainSelector uint64, remotePoolAddress []byte) (*api.PendingTransaction, error)
 	ApplyChainUpdates(opts *bind.TransactOpts, remoteChainSelectorsToRemove []uint64, remoteChainSelectorsToAdd []uint64, remotePoolAddressesToAdd [][][]byte, remoteTokenAddressesToAdd [][]byte) (*api.PendingTransaction, error)
 	ApplyAllowlistUpdates(opts *bind.TransactOpts, removes []aptos.AccountAddress, adds []aptos.AccountAddress) (*api.PendingTransaction, error)
+	SetChainRateLimiterConfigs(opts *bind.TransactOpts, remoteChainSelectors []uint64, outboundIsEnableds []bool, outboundCapacities []uint64, outboundRates []uint64, inboundIsEnableds []bool, inboundCapacities []uint64, inboundRates []uint64) (*api.PendingTransaction, error)
+	SetChainRateLimiterConfig(opts *bind.TransactOpts, remoteChainSelector uint64, outboundIsEnabled bool, outboundCapacity uint64, outboundRate uint64, inboundIsEnabled bool, inboundCapacity uint64, inboundRate uint64) (*api.PendingTransaction, error)
 	ProvideLiquidity(opts *bind.TransactOpts, amount uint64) (*api.PendingTransaction, error)
 	WithdrawLiquidity(opts *bind.TransactOpts, amount uint64) (*api.PendingTransaction, error)
 	SetRebalancer(opts *bind.TransactOpts, rebalancer aptos.AccountAddress) (*api.PendingTransaction, error)
@@ -70,21 +79,27 @@ type LockReleaseTokenPoolEncoder interface {
 	GetSupportedChains() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetAllowlistEnabled() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetAllowlist() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetCurrentInboundRateLimiterState(remoteChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetCurrentOutboundRateLimiterState(remoteChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetRebalancer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStoreAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	HasPendingTransfer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferFrom() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferTo() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferAccepted() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AddRemotePool(remoteChainSelector uint64, remotePoolAddress []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	RemoveRemotePool(remoteChainSelector uint64, remotePoolAddress []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplyChainUpdates(remoteChainSelectorsToRemove []uint64, remoteChainSelectorsToAdd []uint64, remotePoolAddressesToAdd [][][]byte, remoteTokenAddressesToAdd [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplyAllowlistUpdates(removes []aptos.AccountAddress, adds []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	SetChainRateLimiterConfigs(remoteChainSelectors []uint64, outboundIsEnableds []bool, outboundCapacities []uint64, outboundRates []uint64, inboundIsEnableds []bool, inboundCapacities []uint64, inboundRates []uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	SetChainRateLimiterConfig(remoteChainSelector uint64, outboundIsEnabled bool, outboundCapacity uint64, outboundRate uint64, inboundIsEnabled bool, inboundCapacity uint64, inboundRate uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ProvideLiquidity(amount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	WithdrawLiquidity(amount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	SetRebalancer(rebalancer aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TransferOwnership(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	SetChainRateLimiterConfigs(remoteChainSelectors []uint64, outboundIsEnableds []bool, outboundCapacities []uint64, outboundRates []uint64, inboundIsEnableds []bool, inboundCapacities []uint64, inboundRates []uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	SetChainRateLimiterConfig(remoteChainSelector uint64, outboundIsEnabled bool, outboundCapacity uint64, outboundRate uint64, inboundIsEnabled bool, inboundCapacity uint64, inboundRate uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	StoreAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AssertCanInitialize(callerAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -423,6 +438,48 @@ func (c LockReleaseTokenPoolContract) GetAllowlist(opts *bind.CallOpts) ([]aptos
 	return r0, nil
 }
 
+func (c LockReleaseTokenPoolContract) GetCurrentInboundRateLimiterState(opts *bind.CallOpts, remoteChainSelector uint64) (module_rate_limiter.TokenBucket, error) {
+	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.GetCurrentInboundRateLimiterState(remoteChainSelector)
+	if err != nil {
+		return *new(module_rate_limiter.TokenBucket), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(module_rate_limiter.TokenBucket), err
+	}
+
+	var (
+		r0 module_rate_limiter.TokenBucket
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(module_rate_limiter.TokenBucket), err
+	}
+	return r0, nil
+}
+
+func (c LockReleaseTokenPoolContract) GetCurrentOutboundRateLimiterState(opts *bind.CallOpts, remoteChainSelector uint64) (module_rate_limiter.TokenBucket, error) {
+	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.GetCurrentOutboundRateLimiterState(remoteChainSelector)
+	if err != nil {
+		return *new(module_rate_limiter.TokenBucket), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(module_rate_limiter.TokenBucket), err
+	}
+
+	var (
+		r0 module_rate_limiter.TokenBucket
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(module_rate_limiter.TokenBucket), err
+	}
+	return r0, nil
+}
+
 func (c LockReleaseTokenPoolContract) GetRebalancer(opts *bind.CallOpts) (aptos.AccountAddress, error) {
 	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.GetRebalancer()
 	if err != nil {
@@ -486,6 +543,90 @@ func (c LockReleaseTokenPoolContract) Owner(opts *bind.CallOpts) (aptos.AccountA
 	return r0, nil
 }
 
+func (c LockReleaseTokenPoolContract) HasPendingTransfer(opts *bind.CallOpts) (bool, error) {
+	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.HasPendingTransfer()
+	if err != nil {
+		return *new(bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	var (
+		r0 bool
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(bool), err
+	}
+	return r0, nil
+}
+
+func (c LockReleaseTokenPoolContract) PendingTransferFrom(opts *bind.CallOpts) (*aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.PendingTransferFrom()
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	var (
+		r0 bind.StdOption[aptos.AccountAddress]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+	return r0.Value(), nil
+}
+
+func (c LockReleaseTokenPoolContract) PendingTransferTo(opts *bind.CallOpts) (*aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.PendingTransferTo()
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	var (
+		r0 bind.StdOption[aptos.AccountAddress]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+	return r0.Value(), nil
+}
+
+func (c LockReleaseTokenPoolContract) PendingTransferAccepted(opts *bind.CallOpts) (*bool, error) {
+	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.PendingTransferAccepted()
+	if err != nil {
+		return *new(*bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*bool), err
+	}
+
+	var (
+		r0 bind.StdOption[bool]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*bool), err
+	}
+	return r0.Value(), nil
+}
+
 // Entry Functions
 
 func (c LockReleaseTokenPoolContract) AddRemotePool(opts *bind.TransactOpts, remoteChainSelector uint64, remotePoolAddress []byte) (*api.PendingTransaction, error) {
@@ -517,6 +658,24 @@ func (c LockReleaseTokenPoolContract) ApplyChainUpdates(opts *bind.TransactOpts,
 
 func (c LockReleaseTokenPoolContract) ApplyAllowlistUpdates(opts *bind.TransactOpts, removes []aptos.AccountAddress, adds []aptos.AccountAddress) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.ApplyAllowlistUpdates(removes, adds)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c LockReleaseTokenPoolContract) SetChainRateLimiterConfigs(opts *bind.TransactOpts, remoteChainSelectors []uint64, outboundIsEnableds []bool, outboundCapacities []uint64, outboundRates []uint64, inboundIsEnableds []bool, inboundCapacities []uint64, inboundRates []uint64) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.SetChainRateLimiterConfigs(remoteChainSelectors, outboundIsEnableds, outboundCapacities, outboundRates, inboundIsEnableds, inboundCapacities, inboundRates)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c LockReleaseTokenPoolContract) SetChainRateLimiterConfig(opts *bind.TransactOpts, remoteChainSelector uint64, outboundIsEnabled bool, outboundCapacity uint64, outboundRate uint64, inboundIsEnabled bool, inboundCapacity uint64, inboundRate uint64) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.lockReleaseTokenPoolEncoder.SetChainRateLimiterConfig(remoteChainSelector, outboundIsEnabled, outboundCapacity, outboundRate, inboundIsEnabled, inboundCapacity, inboundRate)
 	if err != nil {
 		return nil, err
 	}
@@ -657,6 +816,22 @@ func (c lockReleaseTokenPoolEncoder) GetAllowlist() (bind.ModuleInformation, str
 	return c.BoundContract.Encode("get_allowlist", nil, []string{}, []any{})
 }
 
+func (c lockReleaseTokenPoolEncoder) GetCurrentInboundRateLimiterState(remoteChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_current_inbound_rate_limiter_state", nil, []string{
+		"u64",
+	}, []any{
+		remoteChainSelector,
+	})
+}
+
+func (c lockReleaseTokenPoolEncoder) GetCurrentOutboundRateLimiterState(remoteChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_current_outbound_rate_limiter_state", nil, []string{
+		"u64",
+	}, []any{
+		remoteChainSelector,
+	})
+}
+
 func (c lockReleaseTokenPoolEncoder) GetRebalancer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("get_rebalancer", nil, []string{}, []any{})
 }
@@ -667,6 +842,22 @@ func (c lockReleaseTokenPoolEncoder) GetStoreAddress() (bind.ModuleInformation, 
 
 func (c lockReleaseTokenPoolEncoder) Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("owner", nil, []string{}, []any{})
+}
+
+func (c lockReleaseTokenPoolEncoder) HasPendingTransfer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("has_pending_transfer", nil, []string{}, []any{})
+}
+
+func (c lockReleaseTokenPoolEncoder) PendingTransferFrom() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_from", nil, []string{}, []any{})
+}
+
+func (c lockReleaseTokenPoolEncoder) PendingTransferTo() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_to", nil, []string{}, []any{})
+}
+
+func (c lockReleaseTokenPoolEncoder) PendingTransferAccepted() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_accepted", nil, []string{}, []any{})
 }
 
 func (c lockReleaseTokenPoolEncoder) AddRemotePool(remoteChainSelector uint64, remotePoolAddress []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
@@ -713,6 +904,46 @@ func (c lockReleaseTokenPoolEncoder) ApplyAllowlistUpdates(removes []aptos.Accou
 	})
 }
 
+func (c lockReleaseTokenPoolEncoder) SetChainRateLimiterConfigs(remoteChainSelectors []uint64, outboundIsEnableds []bool, outboundCapacities []uint64, outboundRates []uint64, inboundIsEnableds []bool, inboundCapacities []uint64, inboundRates []uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("set_chain_rate_limiter_configs", nil, []string{
+		"vector<u64>",
+		"vector<bool>",
+		"vector<u64>",
+		"vector<u64>",
+		"vector<bool>",
+		"vector<u64>",
+		"vector<u64>",
+	}, []any{
+		remoteChainSelectors,
+		outboundIsEnableds,
+		outboundCapacities,
+		outboundRates,
+		inboundIsEnableds,
+		inboundCapacities,
+		inboundRates,
+	})
+}
+
+func (c lockReleaseTokenPoolEncoder) SetChainRateLimiterConfig(remoteChainSelector uint64, outboundIsEnabled bool, outboundCapacity uint64, outboundRate uint64, inboundIsEnabled bool, inboundCapacity uint64, inboundRate uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("set_chain_rate_limiter_config", nil, []string{
+		"u64",
+		"bool",
+		"u64",
+		"u64",
+		"bool",
+		"u64",
+		"u64",
+	}, []any{
+		remoteChainSelector,
+		outboundIsEnabled,
+		outboundCapacity,
+		outboundRate,
+		inboundIsEnabled,
+		inboundCapacity,
+		inboundRate,
+	})
+}
+
 func (c lockReleaseTokenPoolEncoder) ProvideLiquidity(amount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("provide_liquidity", nil, []string{
 		"u64",
@@ -754,46 +985,6 @@ func (c lockReleaseTokenPoolEncoder) ExecuteOwnershipTransfer(to aptos.AccountAd
 		"address",
 	}, []any{
 		to,
-	})
-}
-
-func (c lockReleaseTokenPoolEncoder) SetChainRateLimiterConfigs(remoteChainSelectors []uint64, outboundIsEnableds []bool, outboundCapacities []uint64, outboundRates []uint64, inboundIsEnableds []bool, inboundCapacities []uint64, inboundRates []uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("set_chain_rate_limiter_configs", nil, []string{
-		"vector<u64>",
-		"vector<bool>",
-		"vector<u64>",
-		"vector<u64>",
-		"vector<bool>",
-		"vector<u64>",
-		"vector<u64>",
-	}, []any{
-		remoteChainSelectors,
-		outboundIsEnableds,
-		outboundCapacities,
-		outboundRates,
-		inboundIsEnableds,
-		inboundCapacities,
-		inboundRates,
-	})
-}
-
-func (c lockReleaseTokenPoolEncoder) SetChainRateLimiterConfig(remoteChainSelector uint64, outboundIsEnabled bool, outboundCapacity uint64, outboundRate uint64, inboundIsEnabled bool, inboundCapacity uint64, inboundRate uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("set_chain_rate_limiter_config", nil, []string{
-		"u64",
-		"bool",
-		"u64",
-		"u64",
-		"bool",
-		"u64",
-		"u64",
-	}, []any{
-		remoteChainSelector,
-		outboundIsEnabled,
-		outboundCapacity,
-		outboundRate,
-		inboundIsEnabled,
-		inboundCapacity,
-		inboundRate,
 	})
 }
 

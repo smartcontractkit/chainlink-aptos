@@ -10,6 +10,7 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk/api"
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
+	module_rate_limiter "github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/token_pool/rate_limiter"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 )
 
@@ -33,13 +34,21 @@ type BurnMintTokenPoolInterface interface {
 	GetSupportedChains(opts *bind.CallOpts) ([]uint64, error)
 	GetAllowlistEnabled(opts *bind.CallOpts) (bool, error)
 	GetAllowlist(opts *bind.CallOpts) ([]aptos.AccountAddress, error)
+	GetCurrentInboundRateLimiterState(opts *bind.CallOpts, remoteChainSelector uint64) (module_rate_limiter.TokenBucket, error)
+	GetCurrentOutboundRateLimiterState(opts *bind.CallOpts, remoteChainSelector uint64) (module_rate_limiter.TokenBucket, error)
 	GetStoreAddress(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
+	HasPendingTransfer(opts *bind.CallOpts) (bool, error)
+	PendingTransferFrom(opts *bind.CallOpts) (*aptos.AccountAddress, error)
+	PendingTransferTo(opts *bind.CallOpts) (*aptos.AccountAddress, error)
+	PendingTransferAccepted(opts *bind.CallOpts) (*bool, error)
 
 	AddRemotePool(opts *bind.TransactOpts, remoteChainSelector uint64, remotePoolAddress []byte) (*api.PendingTransaction, error)
 	RemoveRemotePool(opts *bind.TransactOpts, remoteChainSelector uint64, remotePoolAddress []byte) (*api.PendingTransaction, error)
 	ApplyChainUpdates(opts *bind.TransactOpts, remoteChainSelectorsToRemove []uint64, remoteChainSelectorsToAdd []uint64, remotePoolAddressesToAdd [][][]byte, remoteTokenAddressesToAdd [][]byte) (*api.PendingTransaction, error)
 	ApplyAllowlistUpdates(opts *bind.TransactOpts, removes []aptos.AccountAddress, adds []aptos.AccountAddress) (*api.PendingTransaction, error)
+	SetChainRateLimiterConfigs(opts *bind.TransactOpts, remoteChainSelectors []uint64, outboundIsEnableds []bool, outboundCapacities []uint64, outboundRates []uint64, inboundIsEnableds []bool, inboundCapacities []uint64, inboundRates []uint64) (*api.PendingTransaction, error)
+	SetChainRateLimiterConfig(opts *bind.TransactOpts, remoteChainSelector uint64, outboundIsEnabled bool, outboundCapacity uint64, outboundRate uint64, inboundIsEnabled bool, inboundCapacity uint64, inboundRate uint64) (*api.PendingTransaction, error)
 	TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
 	AcceptOwnership(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 	ExecuteOwnershipTransfer(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
@@ -60,17 +69,23 @@ type BurnMintTokenPoolEncoder interface {
 	GetSupportedChains() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetAllowlistEnabled() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetAllowlist() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetCurrentInboundRateLimiterState(remoteChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetCurrentOutboundRateLimiterState(remoteChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStoreAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	HasPendingTransfer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferFrom() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferTo() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferAccepted() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AddRemotePool(remoteChainSelector uint64, remotePoolAddress []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	RemoveRemotePool(remoteChainSelector uint64, remotePoolAddress []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplyChainUpdates(remoteChainSelectorsToRemove []uint64, remoteChainSelectorsToAdd []uint64, remotePoolAddressesToAdd [][][]byte, remoteTokenAddressesToAdd [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplyAllowlistUpdates(removes []aptos.AccountAddress, adds []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	SetChainRateLimiterConfigs(remoteChainSelectors []uint64, outboundIsEnableds []bool, outboundCapacities []uint64, outboundRates []uint64, inboundIsEnableds []bool, inboundCapacities []uint64, inboundRates []uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	SetChainRateLimiterConfig(remoteChainSelector uint64, outboundIsEnabled bool, outboundCapacity uint64, outboundRate uint64, inboundIsEnabled bool, inboundCapacity uint64, inboundRate uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TransferOwnership(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	SetChainRateLimiterConfigs(remoteChainSelectors []uint64, outboundIsEnableds []bool, outboundCapacities []uint64, outboundRates []uint64, inboundIsEnableds []bool, inboundCapacities []uint64, inboundRates []uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	SetChainRateLimiterConfig(remoteChainSelector uint64, outboundIsEnabled bool, outboundCapacity uint64, outboundRate uint64, inboundIsEnabled bool, inboundCapacity uint64, inboundRate uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	StoreAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AssertCanInitialize(callerAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -345,6 +360,48 @@ func (c BurnMintTokenPoolContract) GetAllowlist(opts *bind.CallOpts) ([]aptos.Ac
 	return r0, nil
 }
 
+func (c BurnMintTokenPoolContract) GetCurrentInboundRateLimiterState(opts *bind.CallOpts, remoteChainSelector uint64) (module_rate_limiter.TokenBucket, error) {
+	module, function, typeTags, args, err := c.burnMintTokenPoolEncoder.GetCurrentInboundRateLimiterState(remoteChainSelector)
+	if err != nil {
+		return *new(module_rate_limiter.TokenBucket), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(module_rate_limiter.TokenBucket), err
+	}
+
+	var (
+		r0 module_rate_limiter.TokenBucket
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(module_rate_limiter.TokenBucket), err
+	}
+	return r0, nil
+}
+
+func (c BurnMintTokenPoolContract) GetCurrentOutboundRateLimiterState(opts *bind.CallOpts, remoteChainSelector uint64) (module_rate_limiter.TokenBucket, error) {
+	module, function, typeTags, args, err := c.burnMintTokenPoolEncoder.GetCurrentOutboundRateLimiterState(remoteChainSelector)
+	if err != nil {
+		return *new(module_rate_limiter.TokenBucket), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(module_rate_limiter.TokenBucket), err
+	}
+
+	var (
+		r0 module_rate_limiter.TokenBucket
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(module_rate_limiter.TokenBucket), err
+	}
+	return r0, nil
+}
+
 func (c BurnMintTokenPoolContract) GetStoreAddress(opts *bind.CallOpts) (aptos.AccountAddress, error) {
 	module, function, typeTags, args, err := c.burnMintTokenPoolEncoder.GetStoreAddress()
 	if err != nil {
@@ -387,6 +444,90 @@ func (c BurnMintTokenPoolContract) Owner(opts *bind.CallOpts) (aptos.AccountAddr
 	return r0, nil
 }
 
+func (c BurnMintTokenPoolContract) HasPendingTransfer(opts *bind.CallOpts) (bool, error) {
+	module, function, typeTags, args, err := c.burnMintTokenPoolEncoder.HasPendingTransfer()
+	if err != nil {
+		return *new(bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	var (
+		r0 bool
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(bool), err
+	}
+	return r0, nil
+}
+
+func (c BurnMintTokenPoolContract) PendingTransferFrom(opts *bind.CallOpts) (*aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.burnMintTokenPoolEncoder.PendingTransferFrom()
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	var (
+		r0 bind.StdOption[aptos.AccountAddress]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+	return r0.Value(), nil
+}
+
+func (c BurnMintTokenPoolContract) PendingTransferTo(opts *bind.CallOpts) (*aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.burnMintTokenPoolEncoder.PendingTransferTo()
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	var (
+		r0 bind.StdOption[aptos.AccountAddress]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+	return r0.Value(), nil
+}
+
+func (c BurnMintTokenPoolContract) PendingTransferAccepted(opts *bind.CallOpts) (*bool, error) {
+	module, function, typeTags, args, err := c.burnMintTokenPoolEncoder.PendingTransferAccepted()
+	if err != nil {
+		return *new(*bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*bool), err
+	}
+
+	var (
+		r0 bind.StdOption[bool]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*bool), err
+	}
+	return r0.Value(), nil
+}
+
 // Entry Functions
 
 func (c BurnMintTokenPoolContract) AddRemotePool(opts *bind.TransactOpts, remoteChainSelector uint64, remotePoolAddress []byte) (*api.PendingTransaction, error) {
@@ -418,6 +559,24 @@ func (c BurnMintTokenPoolContract) ApplyChainUpdates(opts *bind.TransactOpts, re
 
 func (c BurnMintTokenPoolContract) ApplyAllowlistUpdates(opts *bind.TransactOpts, removes []aptos.AccountAddress, adds []aptos.AccountAddress) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.burnMintTokenPoolEncoder.ApplyAllowlistUpdates(removes, adds)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c BurnMintTokenPoolContract) SetChainRateLimiterConfigs(opts *bind.TransactOpts, remoteChainSelectors []uint64, outboundIsEnableds []bool, outboundCapacities []uint64, outboundRates []uint64, inboundIsEnableds []bool, inboundCapacities []uint64, inboundRates []uint64) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.burnMintTokenPoolEncoder.SetChainRateLimiterConfigs(remoteChainSelectors, outboundIsEnableds, outboundCapacities, outboundRates, inboundIsEnableds, inboundCapacities, inboundRates)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c BurnMintTokenPoolContract) SetChainRateLimiterConfig(opts *bind.TransactOpts, remoteChainSelector uint64, outboundIsEnabled bool, outboundCapacity uint64, outboundRate uint64, inboundIsEnabled bool, inboundCapacity uint64, inboundRate uint64) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.burnMintTokenPoolEncoder.SetChainRateLimiterConfig(remoteChainSelector, outboundIsEnabled, outboundCapacity, outboundRate, inboundIsEnabled, inboundCapacity, inboundRate)
 	if err != nil {
 		return nil, err
 	}
@@ -519,12 +678,44 @@ func (c burnMintTokenPoolEncoder) GetAllowlist() (bind.ModuleInformation, string
 	return c.BoundContract.Encode("get_allowlist", nil, []string{}, []any{})
 }
 
+func (c burnMintTokenPoolEncoder) GetCurrentInboundRateLimiterState(remoteChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_current_inbound_rate_limiter_state", nil, []string{
+		"u64",
+	}, []any{
+		remoteChainSelector,
+	})
+}
+
+func (c burnMintTokenPoolEncoder) GetCurrentOutboundRateLimiterState(remoteChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_current_outbound_rate_limiter_state", nil, []string{
+		"u64",
+	}, []any{
+		remoteChainSelector,
+	})
+}
+
 func (c burnMintTokenPoolEncoder) GetStoreAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("get_store_address", nil, []string{}, []any{})
 }
 
 func (c burnMintTokenPoolEncoder) Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("owner", nil, []string{}, []any{})
+}
+
+func (c burnMintTokenPoolEncoder) HasPendingTransfer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("has_pending_transfer", nil, []string{}, []any{})
+}
+
+func (c burnMintTokenPoolEncoder) PendingTransferFrom() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_from", nil, []string{}, []any{})
+}
+
+func (c burnMintTokenPoolEncoder) PendingTransferTo() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_to", nil, []string{}, []any{})
+}
+
+func (c burnMintTokenPoolEncoder) PendingTransferAccepted() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_accepted", nil, []string{}, []any{})
 }
 
 func (c burnMintTokenPoolEncoder) AddRemotePool(remoteChainSelector uint64, remotePoolAddress []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
@@ -571,26 +762,6 @@ func (c burnMintTokenPoolEncoder) ApplyAllowlistUpdates(removes []aptos.AccountA
 	})
 }
 
-func (c burnMintTokenPoolEncoder) TransferOwnership(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("transfer_ownership", nil, []string{
-		"address",
-	}, []any{
-		to,
-	})
-}
-
-func (c burnMintTokenPoolEncoder) AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("accept_ownership", nil, []string{}, []any{})
-}
-
-func (c burnMintTokenPoolEncoder) ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("execute_ownership_transfer", nil, []string{
-		"address",
-	}, []any{
-		to,
-	})
-}
-
 func (c burnMintTokenPoolEncoder) SetChainRateLimiterConfigs(remoteChainSelectors []uint64, outboundIsEnableds []bool, outboundCapacities []uint64, outboundRates []uint64, inboundIsEnableds []bool, inboundCapacities []uint64, inboundRates []uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("set_chain_rate_limiter_configs", nil, []string{
 		"vector<u64>",
@@ -628,6 +799,26 @@ func (c burnMintTokenPoolEncoder) SetChainRateLimiterConfig(remoteChainSelector 
 		inboundIsEnabled,
 		inboundCapacity,
 		inboundRate,
+	})
+}
+
+func (c burnMintTokenPoolEncoder) TransferOwnership(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("transfer_ownership", nil, []string{
+		"address",
+	}, []any{
+		to,
+	})
+}
+
+func (c burnMintTokenPoolEncoder) AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("accept_ownership", nil, []string{}, []any{})
+}
+
+func (c burnMintTokenPoolEncoder) ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("execute_ownership_transfer", nil, []string{
+		"address",
+	}, []any{
+		to,
 	})
 }
 

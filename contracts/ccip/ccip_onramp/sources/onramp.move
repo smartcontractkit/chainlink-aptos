@@ -6,7 +6,7 @@ module ccip_onramp::onramp {
     use std::dispatchable_fungible_asset;
     use std::fungible_asset::{Self, Metadata, FungibleStore};
     use std::object::{Self, Object};
-    use std::option;
+    use std::option::{Self, Option};
     use std::primary_fungible_store;
     use std::signer;
     use std::string::{Self, String};
@@ -955,6 +955,26 @@ module ccip_onramp::onramp {
     #[view]
     public fun owner(): address acquires OnRampState {
         ownable::owner(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun has_pending_transfer(): bool acquires OnRampState {
+        ownable::has_pending_transfer(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_from(): Option<address> acquires OnRampState {
+        ownable::pending_transfer_from(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_to(): Option<address> acquires OnRampState {
+        ownable::pending_transfer_to(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_accepted(): Option<bool> acquires OnRampState {
+        ownable::pending_transfer_accepted(&borrow_state().ownable_state)
     }
 
     public entry fun transfer_ownership(caller: &signer, to: address) acquires OnRampState {
