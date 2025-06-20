@@ -198,7 +198,10 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 	argMap := make(map[string]interface{})
 
 	if a.config.IsLoopPlugin {
-		paramBytes := params.(*[]byte)
+		paramBytes, ok := params.(*[]byte)
+		if !ok {
+			return fmt.Errorf("expected params to be of type *[]byte, got %T", params)
+		}
 
 		// use json.Number to decode uint64 correctly. when we serialize into bcs, serializeArg will convert it into the appropriate number type.
 		decoder := json.NewDecoder(bytes.NewReader(*paramBytes))

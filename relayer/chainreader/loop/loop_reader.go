@@ -161,7 +161,10 @@ func (a *loopChainReader) QueryKey(ctx context.Context, contract types.BoundCont
 	}
 
 	for i, sequence := range sequences {
-		jsonBytes := sequence.Data.(*[]byte)
+		jsonBytes, ok := sequence.Data.(*[]byte)
+		if !ok {
+			return nil, fmt.Errorf("expected sequence.Data to be of type *[]byte, got %T", sequence.Data)
+		}
 		jsonData := map[string]any{}
 		err := json.Unmarshal(*jsonBytes, &jsonData)
 		if err != nil {
