@@ -479,7 +479,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 
 		submitResponse, err := client.SubmitTransaction(signedTx)
 		if err == nil {
-			if submitResponse.Hash == "" {
+			if submitResponse == nil || submitResponse.Hash == "" {
 				ctxLogger.Errorw("did not receive hash after successful tx submission")
 				a.updateTransactionStatus(tx, commontypes.Failed)
 				return
@@ -766,8 +766,11 @@ func (a *AptosTxm) simulateTransaction(client aptos.AptosRpcClient, rawTx aptos.
 			return nil, errors.New("no simulated tx returned")
 		}
 		simulateResponse := txs[0]
+		if simulateResponse == nil {
+			return nil, errors.New("empty simulated response")
+		}
 
-		if !*(simulateResponse.TxnSuccess()) {
+		if !simulateResponse.Success {
 			if simulateResponse.VmStatus == "SEQUENCE_NUMBER_TOO_OLD" || simulateResponse.VmStatus == "SEQUENCE_NUMBER_TOO_NEW" {
 				// race condition with tx confirmation incrementing the sequence number, retry
 				lastError = fmt.Errorf("simulate bad status: %v", simulateResponse.VmStatus)
