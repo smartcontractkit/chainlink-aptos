@@ -210,6 +210,14 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 	case a.broadcastChan <- transactionID:
 		ctxLogger.Debugw("Tx enqueued", "fromAddr", fromAddress)
 	default:
+		// if the channel is full, we drop the transaction.
+		// we do this instead of setting the tx in `a.transactions` post-broadcast to avoid a race
+		// with the broadcastLoop, which expects to find the tx in `a.transactions` upon reception of
+		// the id.
+		a.transactionsLock.Lock()
+		delete(a.transactions, transactionID)
+		a.transactionsLock.Unlock()
+
 		return fmt.Errorf("failed to enqueue tx: %+v", tx)
 	}
 
