@@ -254,7 +254,7 @@ func (a *AptosTxm) broadcastLoop() {
 				}
 			}
 
-			a.transactionsLock.Lock()
+			a.transactionsLock.RLock()
 			broadcastTxs := []*AptosTx{}
 			for _, transactionId := range broadcastIds {
 				tx, ok := a.transactions[transactionId]
@@ -264,7 +264,7 @@ func (a *AptosTxm) broadcastLoop() {
 				}
 				broadcastTxs = append(broadcastTxs, tx)
 			}
-			a.transactionsLock.Unlock()
+			a.transactionsLock.RUnlock()
 
 			sort.Slice(broadcastTxs, func(i, j int) bool {
 				return broadcastTxs[i].Timestamp < broadcastTxs[j].Timestamp
@@ -404,6 +404,24 @@ func (a *AptosTxm) createSignedTx(client aptos.AptosRpcClient, rawTx *aptos.RawT
 	return signedTx, nil
 }
 
+func (a *AptosTxm) updateTransactionStatus(tx *AptosTx, status commontypes.TransactionStatus) {
+	a.transactionsLock.Lock()
+	defer a.transactionsLock.Unlock()
+	tx.Status = status
+}
+
+func (a *AptosTxm) incrementTransactionAttempt(tx *AptosTx) {
+	a.transactionsLock.Lock()
+	defer a.transactionsLock.Unlock()
+	tx.Attempt++
+}
+
+func (a *AptosTxm) getTransactionAttempt(tx *AptosTx) uint64 {
+	a.transactionsLock.RLock()
+	defer a.transactionsLock.RUnlock()
+	return tx.Attempt
+}
+
 func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	client := a.client
 	ctxLogger := GetContexedTxLogger(a.baseLogger, tx.ID, tx.Metadata)
@@ -413,19 +431,20 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		sequenceNumber, err := a.getSequenceNumber(client, tx.FromAddress)
 		if err != nil {
 			ctxLogger.Errorw("failed to get sequence number", "fromAddress", tx.FromAddress.String(), "error", err)
-			tx.Status = commontypes.Failed
+			a.updateTransactionStatus(tx, commontypes.Failed)
 			return
 		}
 		newTxStore, err := a.accountStore.CreateTxStore(tx.FromAddress.String(), sequenceNumber)
 		if err != nil {
 			ctxLogger.Errorw("failed to create tx store", "fromAddress", tx.FromAddress.String(), "error", err)
-			tx.Status = commontypes.Failed
+			a.updateTransactionStatus(tx, commontypes.Failed)
 			return
 		}
 		txStore = newTxStore
 	}
 
-	if tx.Attempt > 0 {
+	currentAttempt := a.getTransactionAttempt(tx)
+	if currentAttempt > 0 {
 		// If we're retrying a failed transaction that we caught in the confirm loop, resync the nonce again
 		// first.
 		_ = a.resyncNonce(client, tx)
@@ -439,14 +458,14 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		rawTx, err := a.createRawTx(client, tx, nonce)
 		if err != nil {
 			ctxLogger.Errorw("failed to create raw tx", "error", err)
-			tx.Status = commontypes.Failed
+			a.updateTransactionStatus(tx, commontypes.Failed)
 			return
 		}
 
 		signedTx, err := a.createSignedTx(client, rawTx, tx.PublicKey, tx.FromAddress)
 		if err != nil {
 			ctxLogger.Errorw("failed to create signed tx", "error", err)
-			tx.Status = commontypes.Failed
+			a.updateTransactionStatus(tx, commontypes.Failed)
 			return
 		}
 
@@ -454,22 +473,23 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		if err == nil {
 			if submitResponse.Hash == "" {
 				ctxLogger.Errorw("did not receive hash after successful tx submission")
-				tx.Status = commontypes.Failed
+				a.updateTransactionStatus(tx, commontypes.Failed)
 				return
 			}
 
 			// tx included in the Mempool
-			ctxLogger.Debugw("submit tx successful", "attempt", tx.Attempt, "submitResponse", submitResponse)
+			currentAttempt := a.getTransactionAttempt(tx)
+			ctxLogger.Debugw("submit tx successful", "attempt", currentAttempt, "submitResponse", submitResponse)
 
 			err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, rawTx.ExpirationTimestampSeconds, tx)
 			if err != nil {
 				// TODO: figure out what to do here, this should never occur.
 				ctxLogger.Errorw("failed to add unconfirmed tx", "txHash", submitResponse.Hash, "error", err)
-				tx.Status = commontypes.Failed
+				a.updateTransactionStatus(tx, commontypes.Failed)
 				return
 			}
 
-			tx.Status = commontypes.Unconfirmed
+			a.updateTransactionStatus(tx, commontypes.Unconfirmed)
 			return
 		} else {
 			// In case of http errors (>400) wait gracefully and retry
@@ -479,7 +499,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			if !errors.As(err, &httpError) {
 				// Do not retry on unknown errors
 				ctxLogger.Errorw("failed to submit signed tx, discarding..", "error", err)
-				tx.Status = commontypes.Failed
+				a.updateTransactionStatus(tx, commontypes.Failed)
 				return
 			}
 
@@ -495,7 +515,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 	}
 
 	ctxLogger.Errorw("reached max retries for submitting the tx")
-	tx.Status = commontypes.Failed
+	a.updateTransactionStatus(tx, commontypes.Failed)
 }
 
 func (a *AptosTxm) confirmLoop() {
@@ -559,9 +579,9 @@ func (a *AptosTxm) checkUnconfirmed() {
 							if userTx.VmStatus == "Out of gas" {
 								// https://github.com/aptos-labs/aptos-core/blob/77ff4bf413f54c41206bd5573e1891fa3a0dccf6/api/types/src/convert.rs#L1062
 								// Example transaction: https://api.testnet.aptoslabs.com/v1/transactions/by_hash/0x7a106db811c8d5dfd71ac98f374ca36e4f630ce5412b99c8f0e871e7feda37ea
-								unconfirmedTx.Tx.Attempt++
+								a.incrementTransactionAttempt(unconfirmedTx.Tx)
 								if !a.maybeRetry(unconfirmedTx, RetryReasonOutOfGas) {
-									unconfirmedTx.Tx.Status = commontypes.Failed
+									a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Failed)
 								}
 								continue
 							}
@@ -573,7 +593,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 					ctxLogger.Errorw("unexpected confirmed tx type", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
 				}
 
-				unconfirmedTx.Tx.Status = commontypes.Finalized
+				a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Finalized)
 			} else {
 				ctxLogger.Debugw("tx is still unconfirmed", "hash", hash, "chainTx", chainTx)
 				// Check using the ledger timestamp whether the transaction has expired.
@@ -593,13 +613,13 @@ func (a *AptosTxm) checkUnconfirmed() {
 				err = txStore.Confirm(unconfirmedTx.Nonce, hash, true)
 				if err != nil {
 					ctxLogger.Errorw("couldn't confirm expired tx", "error", err)
-					unconfirmedTx.Tx.Status = commontypes.Failed
+					a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Failed)
 					continue
 				}
 
-				unconfirmedTx.Tx.Attempt++
+				a.incrementTransactionAttempt(unconfirmedTx.Tx)
 				if !a.maybeRetry(unconfirmedTx, RetryReasonExpired) {
-					unconfirmedTx.Tx.Status = commontypes.Failed
+					a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Failed)
 				}
 			}
 		}
@@ -626,16 +646,17 @@ func (r RetryReason) String() string {
 
 func (a *AptosTxm) maybeRetry(unconfirmedTx *UnconfirmedTx, retryReason RetryReason) bool {
 	ctxLogger := GetContexedTxLogger(a.baseLogger, unconfirmedTx.Tx.ID, unconfirmedTx.Tx.Metadata)
-	if unconfirmedTx.Tx.Attempt >= a.config.MaxTxRetryAttempts {
+	currentAttempt := a.getTransactionAttempt(unconfirmedTx.Tx)
+	if currentAttempt >= a.config.MaxTxRetryAttempts {
 		ctxLogger.Errorw("tx reached max num of retries and will be discarded", "hash", unconfirmedTx.Hash, "retryReason", retryReason)
 		return false
 	}
 
-	ctxLogger.Debugw("retrying tx", "attempt", unconfirmedTx.Tx.Attempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
+	ctxLogger.Debugw("retrying tx", "attempt", currentAttempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
 	select {
 	case a.broadcastChan <- unconfirmedTx.Tx.ID:
 	default:
-		ctxLogger.Errorw("failed to enqueue tx for rebroadcast", "attempt", unconfirmedTx.Tx.Attempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
+		ctxLogger.Errorw("failed to enqueue tx for rebroadcast", "attempt", currentAttempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
 	}
 
 	return true
