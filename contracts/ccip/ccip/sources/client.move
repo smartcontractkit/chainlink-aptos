@@ -6,6 +6,7 @@ module ccip::client {
     const SVM_EXTRA_ARGS_V1_TAG: vector<u8> = x"1f3b3aba";
 
     const E_INVALID_SVM_TOKEN_RECEIVER_LENGTH: u64 = 1;
+    const E_INVALID_SVM_ACCOUNT_LENGTH: u64 = 2;
 
     #[view]
     public fun generic_extra_args_v2_tag(): vector<u8> {
@@ -41,14 +42,12 @@ module ccip::client {
         extra_args.append(bcs::to_bytes(&compute_units));
         extra_args.append(bcs::to_bytes(&account_is_writable_bitmap));
         extra_args.append(bcs::to_bytes(&allow_out_of_order_execution));
-        if (token_receiver.length() < 32) {
-            token_receiver.reverse();
-            while (token_receiver.length() < 32) {
-                token_receiver.push_back(0);
-            };
-            token_receiver.reverse();
-        };
+
         assert!(token_receiver.length() == 32, E_INVALID_SVM_TOKEN_RECEIVER_LENGTH);
+        accounts.for_each_ref(|account| {
+            assert!(account.length() == 32, E_INVALID_SVM_ACCOUNT_LENGTH);
+        });
+      
         extra_args.append(bcs::to_bytes(&token_receiver));
         extra_args.append(bcs::to_bytes(&accounts));
         extra_args

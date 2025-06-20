@@ -47,7 +47,10 @@ module ccip::client_test {
         let allow_ooo = true;
         let token_receiver =
             x"1234567890123456789012345678901234567890123456789012345678901234";
-        let accounts = vector[vector[1, 2, 3], vector[4, 5, 6, 7, 8]];
+        let accounts = vector[
+            x"0000000000000000000000000000000000000000000000000000000000000001", // 32 bytes
+            x"0000000000000000000000000000000000000000000000000000000000000002"  // 32 bytes
+        ];
 
         let encoded =
             client::encode_svm_extra_args_v1(
@@ -67,6 +70,12 @@ module ccip::client_test {
     }
 
     #[test]
+    #[
+        expected_failure(
+            abort_code = client::E_INVALID_SVM_TOKEN_RECEIVER_LENGTH,
+            location = ccip::client
+        )
+    ]
     fun test_svm_token_receiver_padding() {
         // Test with short token receiver - should be padded to 32 bytes
         let short_receiver = vector[1, 2, 3];
@@ -74,9 +83,6 @@ module ccip::client_test {
             client::encode_svm_extra_args_v1(
                 100u32, 0u64, false, short_receiver, vector[]
             );
-
-        // Should not fail and should include the padded receiver
-        assert!(encoded.length() >= 4 + 4 + 8 + 1 + 32);
     }
 
     #[test]
@@ -140,8 +146,8 @@ module ccip::client_test {
         // Should encode successfully
         assert!(encoded.length() >= 4 + 4 + 8 + 1 + 32);
 
-        // Test with single account
-        let single_account = vector[vector[0xaa, 0xbb, 0xcc]];
+        // Test with single account - update to use 32-byte account
+        let single_account = vector[x"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]; // 32 bytes
         let encoded_with_account =
             client::encode_svm_extra_args_v1(
                 compute_units,
@@ -168,5 +174,96 @@ module ccip::client_test {
             x"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"; // 50 bytes
         // E_INVALID_SVM_TOKEN_RECEIVER_LENGTH
         client::encode_svm_extra_args_v1(100, 0, false, long_receiver, vector[]);
+    }
+
+    #[test]
+    fun test_svm_args_with_valid_32_byte_accounts() {
+        // Test that accounts with exactly 32 bytes are accepted
+        let compute_units = 100000u32;
+        let bitmap = 0u64;
+        let allow_ooo = true;
+        let token_receiver =
+            x"1234567890123456789012345678901234567890123456789012345678901234";
+        
+        // Create accounts with exactly 32 bytes each
+        let account1 = x"0000000000000000000000000000000000000000000000000000000000000001";
+        let account2 = x"0000000000000000000000000000000000000000000000000000000000000002";
+        let account3 = x"0000000000000000000000000000000000000000000000000000000000000003";
+        let valid_accounts = vector[account1, account2, account3];
+
+        // This should succeed
+        let encoded =
+            client::encode_svm_extra_args_v1(
+                compute_units,
+                bitmap,
+                allow_ooo,
+                token_receiver,
+                valid_accounts
+            );
+
+        // Verify encoding was successful
+        assert!(encoded.length() > 0);
+        let tag = encoded.slice(0, 4);
+        assert!(tag == client::svm_extra_args_v1_tag());
+    }
+
+    #[test]
+    #[
+        expected_failure(
+            abort_code = client::E_INVALID_SVM_ACCOUNT_LENGTH,
+            location = ccip::client
+        )
+    ]
+    fun test_svm_args_rejects_invalid_account_length() {
+        // Test that accounts with non-32-byte length are rejected
+        let compute_units = 100000u32;
+        let bitmap = 0u64;
+        let allow_ooo = true;
+        let token_receiver =
+            x"1234567890123456789012345678901234567890123456789012345678901234";
+        
+        // Create accounts with invalid lengths
+        let short_account = x"123456"; // 3 bytes - too short
+        let long_account = x"000000000000000000000000000000000000000000000000000000000000000000000000"; // 34 bytes - too long
+        let invalid_accounts = vector[short_account, long_account];
+
+        // This should fail with E_INVALID_SVM_ACCOUNT_LENGTH
+        client::encode_svm_extra_args_v1(
+            compute_units,
+            bitmap,
+            allow_ooo,
+            token_receiver,
+            invalid_accounts
+        );
+    }
+
+    #[test]
+    #[
+        expected_failure(
+            abort_code = client::E_INVALID_SVM_ACCOUNT_LENGTH,
+            location = ccip::client
+        )
+    ]
+    fun test_svm_args_rejects_single_invalid_account_among_valid() {
+        // Test that even one invalid account among valid ones causes failure
+        let compute_units = 100000u32;
+        let bitmap = 0u64;
+        let allow_ooo = true;
+        let token_receiver =
+            x"1234567890123456789012345678901234567890123456789012345678901234";
+        
+        // Mix of valid and invalid accounts
+        let valid_account = x"0000000000000000000000000000000000000000000000000000000000000001"; // 32 bytes - valid
+        let invalid_account = x"123456789"; // 5 bytes - invalid
+        let mixed_accounts = vector[valid_account, invalid_account];
+
+        // This should fail with E_INVALID_SVM_ACCOUNT_LENGTH
+        client::encode_svm_extra_args_v1(
+            compute_units,
+            bitmap,
+            allow_ooo,
+            token_receiver,
+            mixed_accounts
+        );
     }
 }
