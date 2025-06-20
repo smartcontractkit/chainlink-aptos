@@ -335,6 +335,9 @@ func (c *chain) listNodeStatuses(start, end int) ([]types.NodeStatus, int, error
 }
 
 func nodeStatus(n *config.Node, id string) (types.NodeStatus, error) {
+	if n == nil {
+		return types.NodeStatus{}, errors.New("nil node passed for node status")
+	}
 	var s types.NodeStatus
 	s.ChainID = id
 	s.Name = *n.Name
