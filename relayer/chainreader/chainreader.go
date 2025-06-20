@@ -343,10 +343,15 @@ func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request typ
 			result types.BatchReadResult
 		}, len(batch))
 
-		for i, read := range batch {
-			go func(index int, read types.BatchRead) {
-				readResult := types.BatchReadResult{ReadName: read.ReadName}
+		var wg sync.WaitGroup
+		wg.Add(len(batch))
 
+		for i, read := range batch {
+			// Pass contract as an argument to avoid closing over the loop variable.
+			go func(index int, read types.BatchRead, contract types.BoundContract) {
+				defer wg.Done() // Ensure WaitGroup is decremented even if GetLatestValue panics.
+
+				readResult := types.BatchReadResult{ReadName: read.ReadName}
 				err := a.GetLatestValue(ctx, contract.ReadIdentifier(read.ReadName), primitives.Finalized, read.Params, read.ReturnVal)
 				readResult.SetResult(read.ReturnVal, err)
 
@@ -356,18 +361,31 @@ func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request typ
 					result types.BatchReadResult
 				}{index, readResult}:
 				case <-ctx.Done():
+					// If context is cancelled, the goroutine will exit.
+					// wg.Done() will be called by the defer.
 					return
 				}
-			}(i, read)
+			}(i, read, contract)
 		}
 
-		for range batch {
-			select {
-			case res := <-resultChan:
-				batchResults[res.index] = res.result
-			case <-ctx.Done():
-				return nil, ctx.Err()
+		// Start a new goroutine to wait for all workers to finish and then close the channel.
+		go func() {
+			wg.Wait()
+			close(resultChan)
+		}()
+
+		resultsReceived := 0
+		for res := range resultChan {
+			batchResults[res.index] = res.result
+			resultsReceived++
+		}
+
+		if resultsReceived != len(batch) {
+			// Check if the lack of results was due to a context cancellation or time out.
+			if err := ctx.Err(); err != nil {
+				return nil, err
 			}
+			return nil, fmt.Errorf("batch processing failed: expected %d results, but received %d. This may be due to a panic in a worker goroutine", len(batch), resultsReceived)
 		}
 
 		result[contract] = batchResults
