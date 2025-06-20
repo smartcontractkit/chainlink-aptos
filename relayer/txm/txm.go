@@ -91,6 +91,7 @@ func (a *AptosTxm) Close() error {
 	return a.starter.StopOnce(a.Name(), func() error {
 		close(a.stop)
 		a.done.Wait()
+		close(a.broadcastChan)
 		return nil
 	})
 }
