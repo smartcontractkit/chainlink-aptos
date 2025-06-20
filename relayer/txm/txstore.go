@@ -67,6 +67,8 @@ func (s *TxStore) ResyncNonce(onchainNonce uint64) {
 }
 
 func (s *TxStore) GetLastResyncedNonce() uint64 {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	return s.lastOnchainNonce
 }
 
