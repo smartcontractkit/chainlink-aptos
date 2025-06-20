@@ -2,6 +2,7 @@ package write_target
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"google.golang.org/protobuf/proto"
@@ -49,7 +50,7 @@ func NewAptosWriteTargetMonitor(ctx context.Context, lggr logger.Logger) (*monit
 	emitter := monitor.NewProtoEmitter(lggr, &client, schemaBasePath)
 
 	// Proxy ProtoEmitter with additional processing
-	protoEmitterProxy := protoEmitter{
+	protoEmitterProxy := aptosProtoEmitter{
 		lggr:    lggr,
 		emitter: emitter,
 		processors: []monitor.ProtoProcessor{
@@ -62,14 +63,17 @@ func NewAptosWriteTargetMonitor(ctx context.Context, lggr logger.Logger) (*monit
 }
 
 // ProtoEmitter proxy specific to the Aptos WT
-type protoEmitter struct {
+type aptosProtoEmitter struct {
 	lggr       logger.Logger
 	emitter    monitor.ProtoEmitter
 	processors []monitor.ProtoProcessor
 }
 
 // Emit emits a proto.Message and runs additional processing
-func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any) error {
+func (e *aptosProtoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any) error {
+	if m == nil {
+		return errors.New("nil message passed for emit")
+	}
 	err := e.emitter.Emit(ctx, m, attrKVs...)
 	if err != nil {
 		return fmt.Errorf("failed to emit: %w", err)
@@ -80,7 +84,10 @@ func (e *protoEmitter) Emit(ctx context.Context, m proto.Message, attrKVs ...any
 }
 
 // EmitWithLog emits a proto.Message and runs additional processing
-func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs ...any) error {
+func (e *aptosProtoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs ...any) error {
+	if m == nil {
+		return errors.New("nil message passed for emit with log")
+	}
 	err := e.emitter.EmitWithLog(ctx, m, attrKVs...)
 	if err != nil {
 		return fmt.Errorf("failed to emit with log: %w", err)
@@ -91,7 +98,7 @@ func (e *protoEmitter) EmitWithLog(ctx context.Context, m proto.Message, attrKVs
 }
 
 // Process aggregates further processing for emitted messages
-func (e *protoEmitter) Process(ctx context.Context, m proto.Message, attrKVs ...any) error {
+func (e *aptosProtoEmitter) Process(ctx context.Context, m proto.Message, attrKVs ...any) error {
 	// Further processing for emitted messages
 	for _, p := range e.processors {
 		err := p.Process(ctx, m, attrKVs...)
