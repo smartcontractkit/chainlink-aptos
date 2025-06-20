@@ -332,9 +332,9 @@ module ccip_offramp::ocr3_base {
     inline fun hash_report(
         report: vector<u8>, config_digest: vector<u8>, sequence_bytes: vector<u8>
     ): vector<u8> {
-        let combined = copy report;
-        combined.append(config_digest);
+        let combined = config_digest;
         combined.append(sequence_bytes);
+        combined.append(report);
         aptos_hash::blake2b_256(combined)
     }
 
