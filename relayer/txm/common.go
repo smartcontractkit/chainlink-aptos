@@ -202,23 +202,43 @@ func SerializeScheduleBatchParams(ops []TimelockOperation, predecessor []byte, s
 	})
 }
 
-func SerializeStageCodeChunkParams(metadata []byte, indices []uint16, chunks [][]byte, seed []byte) ([]byte, error) {
+// SerializeStageCodeChunkParams serializes parameters for stage_code_chunk (3 parameters)
+func SerializeStageCodeChunkParams(metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte) ([]byte, error) {
 	return bcs.SerializeSingle(func(ser *bcs.Serializer) {
-		ser.WriteBytes(metadata)
+		ser.WriteBytes(metadataChunk)
 
 		// Serialize indices
-		ser.Uleb128(uint32(len(indices)))
-		for _, idx := range indices {
+		ser.Uleb128(uint32(len(codeIndices)))
+		for _, idx := range codeIndices {
 			ser.U16(idx)
 		}
 
 		// Serialize chunks
-		ser.Uleb128(uint32(len(chunks)))
-		for _, chunk := range chunks {
+		ser.Uleb128(uint32(len(codeChunks)))
+		for _, chunk := range codeChunks {
+			ser.WriteBytes(chunk)
+		}
+	})
+}
+
+// SerializeStageCodeChunkAndPublishParams serializes parameters for stage_code_chunk_and_publish_to_object (4 parameters)
+func SerializeStageCodeChunkAndPublishParams(metadataChunk []byte, codeIndices []uint16, codeChunks [][]byte, newOwnerSeed []byte) ([]byte, error) {
+	return bcs.SerializeSingle(func(ser *bcs.Serializer) {
+		ser.WriteBytes(metadataChunk)
+
+		// Serialize indices
+		ser.Uleb128(uint32(len(codeIndices)))
+		for _, idx := range codeIndices {
+			ser.U16(idx)
+		}
+
+		// Serialize chunks
+		ser.Uleb128(uint32(len(codeChunks)))
+		for _, chunk := range codeChunks {
 			ser.WriteBytes(chunk)
 		}
 
-		ser.WriteBytes(seed)
+		ser.WriteBytes(newOwnerSeed)
 	})
 }
 

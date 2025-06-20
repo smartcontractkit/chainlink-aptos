@@ -84,7 +84,7 @@ module ccip::fee_quoter {
 
     // Link has 8 decimals on Aptos and 18 decimals on it's native chain, Ethereum. We want to emit
     // the fee in juels (1e18) denomination for consistency across chains. This means we multiply
-    // the fee by 1e8 on Aptos before we emit it in the event.
+    // the fee by 1e10 on Aptos before we emit it in the event.
     const LOCAL_8_TO_18_DECIMALS_LINK_MULTIPLIER: u256 = 10_000_000_000;
 
     struct FeeQuoterState has key, store {

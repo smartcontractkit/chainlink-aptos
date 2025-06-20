@@ -15,7 +15,6 @@ module ccip_token_pool::token_pool {
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool_rate_limiter;
 
-    const STORE_OBJECT_SEED: vector<u8> = b"CCIPTokenPool";
     const MAX_U256: u256 =
         115792089237316195423570985008687907853269984665640564039457584007913129639935;
     const MAX_U64: u256 = 18446744073709551615;
@@ -40,9 +39,6 @@ module ccip_token_pool::token_pool {
         remote_token_address: vector<u8>,
         remote_pools: vector<vector<u8>>
     }
-
-    // the callback proof type used as authentication to retrieve and set input and output arguments.
-    struct CallbackProof has drop {}
 
     #[event]
     struct LockedOrBurned has store, drop {
@@ -151,14 +147,6 @@ module ccip_token_pool::token_pool {
             liquidity_removed_events: account::new_event_handle(event_account),
             rebalancer_set_events: account::new_event_handle(event_account)
         }
-    }
-
-    inline fun store_address(): address {
-        account::create_resource_address(&@ccip_token_pool, STORE_OBJECT_SEED)
-    }
-
-    inline fun borrow_pool(): &TokenPoolState {
-        borrow_global<TokenPoolState>(store_address())
     }
 
     #[view]

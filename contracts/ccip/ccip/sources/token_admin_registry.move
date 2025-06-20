@@ -203,7 +203,7 @@ module ccip::token_admin_registry {
     }
 
     #[view]
-    // returns the token pool address for the given local token, or @0x0 if the token is not registered.
+    /// returns the token pool address for the given local token, or @0x0 if the token is not registered.
     public fun get_pool(local_token: address): address acquires TokenAdminRegistryState {
         let state = borrow_state();
         if (state.token_configs.contains(&local_token)) {
@@ -216,7 +216,15 @@ module ccip::token_admin_registry {
     }
 
     #[view]
-    // returns (token_pool_address, administrator, pending_administrator)
+    /// Returns the local token address for the token pool.
+    public fun get_pool_local_token(
+        token_pool_address: address
+    ): address acquires TokenPoolRegistration {
+        get_registration(token_pool_address).local_token
+    }
+
+    #[view]
+    /// returns (token_pool_address, administrator, pending_administrator)
     public fun get_token_config(
         local_token: address
     ): (address, address, address) acquires TokenAdminRegistryState {

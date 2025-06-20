@@ -1350,6 +1350,8 @@ module mcms::mcms {
                     &mut stream,
                     |stream| { bcs_stream::deserialize_vector_u8(stream) }
                 );
+            bcs_stream::assert_is_consumed(&stream);
+
             mcms_deployer::stage_code_chunk(
                 self_signer,
                 metadata_chunk,
@@ -1369,6 +1371,8 @@ module mcms::mcms {
                     |stream| { bcs_stream::deserialize_vector_u8(stream) }
                 );
             let new_owner_seed = bcs_stream::deserialize_vector_u8(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+
             mcms_deployer::stage_code_chunk_and_publish_to_object(
                 self_signer,
                 metadata_chunk,
@@ -1389,6 +1393,8 @@ module mcms::mcms {
                     |stream| { bcs_stream::deserialize_vector_u8(stream) }
                 );
             let code_object_address = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+
             mcms_deployer::stage_code_chunk_and_upgrade_object_code(
                 self_signer,
                 metadata_chunk,

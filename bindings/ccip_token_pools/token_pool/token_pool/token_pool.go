@@ -37,11 +37,10 @@ type TokenPoolEncoder interface {
 	CalculateLocalAmount(remoteAmount *big.Int, remoteDecimals byte, localDecimals byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CalculateLocalAmountInternal(remoteAmount *big.Int, remoteDecimals byte, localDecimals byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Initialize(localToken aptos.AccountAddress, allowlist []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	StoreAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	DestroyTokenPool(state TokenPoolState) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip_token_pool","module":"token_pool","name":"destroy_token_pool","parameters":[{"name":"state","type":"TokenPoolState"}]},{"package":"ccip_token_pool","module":"token_pool","name":"initialize","parameters":[{"name":"local_token","type":"address"},{"name":"allowlist","type":"vector\u003caddress\u003e"}]},{"package":"ccip_token_pool","module":"token_pool","name":"store_address","parameters":null}]`
+const FunctionInfo = `[{"package":"ccip_token_pool","module":"token_pool","name":"destroy_token_pool","parameters":[{"name":"state","type":"TokenPoolState"}]},{"package":"ccip_token_pool","module":"token_pool","name":"initialize","parameters":[{"name":"local_token","type":"address"},{"name":"allowlist","type":"vector\u003caddress\u003e"}]}]`
 
 func NewTokenPool(address aptos.AccountAddress, client aptos.AptosRpcClient) TokenPoolInterface {
 	contract := bind.NewBoundContract(address, "ccip_token_pool", "token_pool", client)
@@ -60,9 +59,6 @@ type TokenPoolState struct {
 type RemoteChainConfig struct {
 	RemoteTokenAddress []byte   `move:"vector<u8>"`
 	RemotePools        [][]byte `move:"vector<vector<u8>>"`
-}
-
-type CallbackProof struct {
 }
 
 type LockedOrBurned struct {
@@ -272,10 +268,6 @@ func (c tokenPoolEncoder) Initialize(localToken aptos.AccountAddress, allowlist 
 		localToken,
 		allowlist,
 	})
-}
-
-func (c tokenPoolEncoder) StoreAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("store_address", nil, []string{}, []any{})
 }
 
 func (c tokenPoolEncoder) DestroyTokenPool(state TokenPoolState) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
