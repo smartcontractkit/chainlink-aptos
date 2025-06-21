@@ -15,6 +15,8 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 )
 
+const maxResponseSize = 4 * 1024 * 1024 // 4MB
+
 func NewLoopChainReader(logger logger.Logger, cr types.ContractReader) types.ContractReader {
 	return &loopChainReader{logger: logger, cr: cr, moduleAddresses: map[string]string{}}
 }
@@ -165,6 +167,11 @@ func (a *loopChainReader) QueryKey(ctx context.Context, contract types.BoundCont
 		if !ok {
 			return nil, fmt.Errorf("expected sequence.Data to be of type *[]byte, got %T", sequence.Data)
 		}
+
+		if len(*jsonBytes) > maxResponseSize {
+			return nil, fmt.Errorf("sequence data response size (%d bytes) exceeds maximum allowed size (%d bytes)", len(*jsonBytes), maxResponseSize)
+		}
+
 		jsonData := map[string]any{}
 		err := json.Unmarshal(*jsonBytes, &jsonData)
 		if err != nil {
@@ -221,6 +228,10 @@ func (a *loopChainReader) getBindings() []types.BoundContract {
 }
 
 func (a *loopChainReader) decodeGLVReturnValue(label string, jsonBytes []byte, returnVal any) error {
+	if len(jsonBytes) > maxResponseSize {
+		return fmt.Errorf("getLatestValue response size (%d bytes) exceeds maximum allowed size (%d bytes)", len(jsonBytes), maxResponseSize)
+	}
+
 	var result any
 	err := json.Unmarshal(jsonBytes, &result)
 	if err != nil {
