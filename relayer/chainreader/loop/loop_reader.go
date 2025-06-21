@@ -18,6 +18,15 @@ import (
 
 const maxResponseSize = 4 * 1024 * 1024 // 4MB
 
+// NewLoopChainReader creates a ContractReader that wraps an existing ContractReader
+// to work across LOOP boundaries.
+//
+// The wrapper provides:
+// - Contract name to module address mapping
+// - JSON serialization/deserialization for LOOP communication
+// - Automatic contract re-binding for LOOP plugin restarts
+//
+// Both `logger` and `cr` parameters must be non-nil.
 func NewLoopChainReader(logger logger.Logger, cr types.ContractReader) types.ContractReader {
 	return &loopChainReader{logger: logger, cr: cr, moduleAddresses: map[string]string{}}
 }
