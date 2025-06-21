@@ -3,6 +3,7 @@ package loop
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -189,6 +190,10 @@ func (a *loopChainReader) QueryKey(ctx context.Context, contract types.BoundCont
 		err := json.Unmarshal(*jsonBytes, &jsonData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal LOOP sourced JSON event data (`%s`): %w", string(*jsonBytes), err)
+		}
+
+		if sequenceDataType == nil {
+			return nil, errors.New("sequence data type is nil")
 		}
 
 		eventData := reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()

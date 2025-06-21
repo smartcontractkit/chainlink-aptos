@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -398,6 +399,10 @@ func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request typ
 }
 
 func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]types.Sequence, error) {
+	if sequenceDataType == nil {
+		return nil, errors.New("sequence data type is nil")
+	}
+
 	if a.dbStore == nil {
 		return nil, fmt.Errorf("QueryKey only operates in persistent mode")
 	}
@@ -515,6 +520,10 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 }
 
 func (a *aptosChainReader) QueryKeyWithMetadata(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]config.SequenceWithMetadata, error) {
+	if sequenceDataType == nil {
+		return nil, errors.New("sequence data type is nil")
+	}
+
 	seqs, err := a.QueryKey(ctx, contract, filter, limitAndSort, sequenceDataType)
 	if err != nil {
 		return nil, err
