@@ -315,7 +315,7 @@ func (c *chain) Replay(ctx context.Context, fromBlock string, args map[string]an
 
 // TODO BCF-2602 statuses are static for non-evm chain and should be dynamic
 func (c *chain) listNodeStatuses(start, end int) ([]types.NodeStatus, int, error) {
-	stats := make([]types.NodeStatus, 0)
+	stats := make([]types.NodeStatus, 0, end-start)
 	total := len(c.cfg.Nodes)
 	if start >= total {
 		return stats, total, chains.ErrOutOfRange

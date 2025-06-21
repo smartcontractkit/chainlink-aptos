@@ -233,7 +233,7 @@ func (a *loopChainReader) Unbind(ctx context.Context, bindings []types.BoundCont
 }
 
 func (a *loopChainReader) getBindings() []types.BoundContract {
-	bindings := []types.BoundContract{}
+	bindings := make([]types.BoundContract, 0, len(a.moduleAddresses))
 
 	for name, address := range a.moduleAddresses {
 		bindings = append(bindings, types.BoundContract{
