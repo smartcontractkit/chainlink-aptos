@@ -439,7 +439,7 @@ func decodeReport(report []byte, metadata capabilities.RequestMetadata) (*platfo
 	if reportDecoded.ExecutionID != metadata.WorkflowExecutionID {
 		return nil, errors.New("decoded report execution ID does not match the request")
 	} else if reportDecoded.WorkflowID != metadata.WorkflowID {
-		return nil, errors.New("decoded report execution ID does not match the request")
+		return nil, errors.New("decoded report workflow ID does not match the request")
 	}
 
 	return reportDecoded, nil
