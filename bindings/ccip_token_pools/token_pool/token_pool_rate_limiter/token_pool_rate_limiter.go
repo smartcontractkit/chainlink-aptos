@@ -45,21 +45,24 @@ func NewTokenPoolRateLimiter(address aptos.AccountAddress, client aptos.AptosRpc
 // Structs
 
 type RateLimitState struct {
+	Pool aptos.AccountAddress `move:"address"`
 }
 
 type TokensConsumed struct {
-	RemoteChainSelector uint64 `move:"u64"`
-	Tokens              uint64 `move:"u64"`
+	Pool                aptos.AccountAddress `move:"address"`
+	RemoteChainSelector uint64               `move:"u64"`
+	Tokens              uint64               `move:"u64"`
 }
 
 type ConfigChanged struct {
-	RemoteChainSelector uint64 `move:"u64"`
-	OutboundIsEnabled   bool   `move:"bool"`
-	OutboundCapacity    uint64 `move:"u64"`
-	OutboundRate        uint64 `move:"u64"`
-	InboundIsEnabled    bool   `move:"bool"`
-	InboundCapacity     uint64 `move:"u64"`
-	InboundRate         uint64 `move:"u64"`
+	Pool                aptos.AccountAddress `move:"address"`
+	RemoteChainSelector uint64               `move:"u64"`
+	OutboundIsEnabled   bool                 `move:"bool"`
+	OutboundCapacity    uint64               `move:"u64"`
+	OutboundRate        uint64               `move:"u64"`
+	InboundIsEnabled    bool                 `move:"bool"`
+	InboundCapacity     uint64               `move:"u64"`
+	InboundRate         uint64               `move:"u64"`
 }
 
 type TokenPoolRateLimiterContract struct {

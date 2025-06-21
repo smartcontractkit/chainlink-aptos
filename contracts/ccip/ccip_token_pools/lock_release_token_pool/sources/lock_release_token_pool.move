@@ -100,7 +100,10 @@ module lock_release_token_pool::lock_release_token_pool {
                 store_signer_cap,
                 ownable_state: ownable::new(&store_signer, @lock_release_token_pool),
                 token_pool_state: token_pool::initialize(
-                    &store_signer, @lock_release_local_token, vector[]
+                    &store_signer,
+                    publisher,
+                    @lock_release_local_token,
+                    vector[]
                 )
             }
         );

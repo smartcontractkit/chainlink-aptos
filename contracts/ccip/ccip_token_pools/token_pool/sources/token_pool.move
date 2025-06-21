@@ -5,6 +5,7 @@ module ccip_token_pool::token_pool {
     use std::fungible_asset::{Self, FungibleAsset, Metadata};
     use std::object::{Self, Object};
     use std::smart_table::{Self, SmartTable};
+    use std::signer;
 
     use ccip::address;
     use ccip::eth_abi;
@@ -20,6 +21,7 @@ module ccip_token_pool::token_pool {
     const MAX_U64: u256 = 18446744073709551615;
 
     struct TokenPoolState has key, store {
+        pool: address,
         allowlist_state: allowlist::AllowlistState,
         fa_metadata: Object<Metadata>,
         remote_chain_configs: SmartTable<u64, RemoteChainConfig>,
@@ -42,6 +44,7 @@ module ccip_token_pool::token_pool {
 
     #[event]
     struct LockedOrBurned has store, drop {
+        pool: address,
         remote_chain_selector: u64,
         local_token: address,
         amount: u64
@@ -49,6 +52,7 @@ module ccip_token_pool::token_pool {
 
     #[event]
     struct ReleasedOrMinted has store, drop {
+        pool: address,
         remote_chain_selector: u64,
         local_token: address,
         recipient: address,
@@ -57,39 +61,46 @@ module ccip_token_pool::token_pool {
 
     #[event]
     struct AllowlistRemove has store, drop {
+        pool: address,
         sender: address
     }
 
     #[event]
     struct AllowlistAdd has store, drop {
+        pool: address,
         sender: address
     }
 
     #[event]
     struct RemotePoolAdded has store, drop {
+        pool: address,
         remote_chain_selector: u64,
         remote_pool_address: vector<u8>
     }
 
     #[event]
     struct RemotePoolRemoved has store, drop {
+        pool: address,
         remote_chain_selector: u64,
         remote_pool_address: vector<u8>
     }
 
     #[event]
     struct ChainAdded has store, drop {
+        pool: address,
         remote_chain_selector: u64,
         remote_token_address: vector<u8>
     }
 
     #[event]
     struct ChainRemoved has store, drop {
+        pool: address,
         remote_chain_selector: u64
     }
 
     #[event]
     struct LiquidityAdded has store, drop {
+        pool: address,
         local_token: address,
         provider: address,
         amount: u64
@@ -97,6 +108,7 @@ module ccip_token_pool::token_pool {
 
     #[event]
     struct LiquidityRemoved has store, drop {
+        pool: address,
         local_token: address,
         provider: address,
         amount: u64
@@ -104,6 +116,7 @@ module ccip_token_pool::token_pool {
 
     #[event]
     struct RebalancerSet has store, drop {
+        pool: address,
         old_rebalancer: address,
         new_rebalancer: address
     }
@@ -128,15 +141,19 @@ module ccip_token_pool::token_pool {
     /// This function should be called from the init_module function to ensure the events
     /// are created on the correct object.
     public fun initialize(
-        event_account: &signer, local_token: address, allowlist: vector<address>
+        event_account: &signer,
+        pool: &signer,
+        local_token: address,
+        allowlist: vector<address>
     ): TokenPoolState {
         let fa_metadata = object::address_to_object<Metadata>(local_token);
 
         TokenPoolState {
+            pool: signer::address_of(pool),
             allowlist_state: allowlist::new(event_account, allowlist),
             fa_metadata,
             remote_chain_configs: smart_table::new(),
-            rate_limiter_config: token_pool_rate_limiter::new(event_account),
+            rate_limiter_config: token_pool_rate_limiter::new(event_account, pool),
             locked_events: account::new_event_handle(event_account),
             released_events: account::new_event_handle(event_account),
             remote_pool_added_events: account::new_event_handle(event_account),
@@ -187,19 +204,22 @@ module ccip_token_pool::token_pool {
         remote_pool_addresses_to_add: vector<vector<vector<u8>>>,
         remote_token_addresses_to_add: vector<vector<u8>>
     ) {
-        remote_chain_selectors_to_remove.for_each_ref(|remote_chain_selector| {
-            let remote_chain_selector: u64 = *remote_chain_selector;
-            assert!(
-                state.remote_chain_configs.contains(remote_chain_selector),
-                error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
-            );
-            state.remote_chain_configs.remove(remote_chain_selector);
+        remote_chain_selectors_to_remove.for_each_ref(
+            |remote_chain_selector| {
+                let remote_chain_selector: u64 = *remote_chain_selector;
+                assert!(
+                    state.remote_chain_configs.contains(remote_chain_selector),
+                    error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
+                );
+                state.remote_chain_configs.remove(remote_chain_selector);
 
-            event::emit(ChainRemoved { remote_chain_selector });
-            event::emit_event(
-                &mut state.chain_removed_events, ChainRemoved { remote_chain_selector }
-            );
-        });
+                event::emit(ChainRemoved { pool: state.pool, remote_chain_selector });
+                event::emit_event(
+                    &mut state.chain_removed_events,
+                    ChainRemoved { pool: state.pool, remote_chain_selector }
+                );
+            }
+        );
 
         let add_len = remote_chain_selectors_to_add.length();
         assert!(
@@ -238,21 +258,31 @@ module ccip_token_pool::token_pool {
                     remote_chain_config.remote_pools.push_back(remote_pool_address);
 
                     event::emit(
-                        RemotePoolAdded { remote_chain_selector, remote_pool_address }
+                        RemotePoolAdded {
+                            pool: state.pool,
+                            remote_chain_selector,
+                            remote_pool_address
+                        }
                     );
                     event::emit_event(
                         &mut state.remote_pool_added_events,
-                        RemotePoolAdded { remote_chain_selector, remote_pool_address }
+                        RemotePoolAdded {
+                            pool: state.pool,
+                            remote_chain_selector,
+                            remote_pool_address
+                        }
                     );
                 }
             );
 
             state.remote_chain_configs.add(remote_chain_selector, remote_chain_config);
 
-            event::emit(ChainAdded { remote_chain_selector, remote_token_address });
+            event::emit(
+                ChainAdded { pool: state.pool, remote_chain_selector, remote_token_address }
+            );
             event::emit_event(
                 &mut state.chain_added_events,
-                ChainAdded { remote_chain_selector, remote_token_address }
+                ChainAdded { pool: state.pool, remote_chain_selector, remote_token_address }
             );
         };
     }
@@ -312,10 +342,12 @@ module ccip_token_pool::token_pool {
 
         remote_chain_config.remote_pools.push_back(remote_pool_address);
 
-        event::emit(RemotePoolAdded { remote_chain_selector, remote_pool_address });
+        event::emit(
+            RemotePoolAdded { pool: state.pool, remote_chain_selector, remote_pool_address }
+        );
         event::emit_event(
             &mut state.remote_pool_added_events,
-            RemotePoolAdded { remote_chain_selector, remote_pool_address }
+            RemotePoolAdded { pool: state.pool, remote_chain_selector, remote_pool_address }
         );
     }
 
@@ -337,10 +369,20 @@ module ccip_token_pool::token_pool {
         // remove instead of swap_remove for readability, so the newest added pool is always at the end.
         remote_chain_config.remote_pools.remove(i);
 
-        event::emit(RemotePoolRemoved { remote_chain_selector, remote_pool_address });
+        event::emit(
+            RemotePoolRemoved {
+                pool: state.pool,
+                remote_chain_selector,
+                remote_pool_address
+            }
+        );
         event::emit_event(
             &mut state.remote_pool_removed_events,
-            RemotePoolRemoved { remote_chain_selector, remote_pool_address }
+            RemotePoolRemoved {
+                pool: state.pool,
+                remote_chain_selector,
+                remote_pool_address
+            }
         );
     }
 
@@ -443,11 +485,23 @@ module ccip_token_pool::token_pool {
         let local_token = object::object_address(&state.fa_metadata);
 
         event::emit(
-            ReleasedOrMinted { remote_chain_selector, local_token, recipient, amount }
+            ReleasedOrMinted {
+                pool: state.pool,
+                remote_chain_selector,
+                local_token,
+                recipient,
+                amount
+            }
         );
         event::emit_event(
             &mut state.released_events,
-            ReleasedOrMinted { remote_chain_selector, local_token, recipient, amount }
+            ReleasedOrMinted {
+                pool: state.pool,
+                remote_chain_selector,
+                local_token,
+                recipient,
+                amount
+            }
         );
     }
 
@@ -456,10 +510,12 @@ module ccip_token_pool::token_pool {
     ) {
         let local_token = object::object_address(&state.fa_metadata);
 
-        event::emit(LockedOrBurned { remote_chain_selector, local_token, amount });
+        event::emit(
+            LockedOrBurned { pool: state.pool, remote_chain_selector, local_token, amount }
+        );
         event::emit_event(
             &mut state.locked_events,
-            LockedOrBurned { remote_chain_selector, local_token, amount }
+            LockedOrBurned { pool: state.pool, remote_chain_selector, local_token, amount }
         );
     }
 
@@ -468,10 +524,12 @@ module ccip_token_pool::token_pool {
     ) {
         let local_token = object::object_address(&state.fa_metadata);
 
-        event::emit(LiquidityAdded { local_token, provider, amount });
+        event::emit(
+            LiquidityAdded { pool: state.pool, local_token, provider, amount }
+        );
         event::emit_event(
             &mut state.liquidity_added_events,
-            LiquidityAdded { local_token, provider, amount }
+            LiquidityAdded { pool: state.pool, local_token, provider, amount }
         );
     }
 
@@ -480,20 +538,22 @@ module ccip_token_pool::token_pool {
     ) {
         let local_token = object::object_address(&state.fa_metadata);
 
-        event::emit(LiquidityRemoved { local_token, provider, amount });
+        event::emit(
+            LiquidityRemoved { pool: state.pool, local_token, provider, amount }
+        );
         event::emit_event(
             &mut state.liquidity_removed_events,
-            LiquidityRemoved { local_token, provider, amount }
+            LiquidityRemoved { pool: state.pool, local_token, provider, amount }
         );
     }
 
     public fun emit_rebalancer_set(
         state: &mut TokenPoolState, old_rebalancer: address, new_rebalancer: address
     ) {
-        event::emit(RebalancerSet { old_rebalancer, new_rebalancer });
+        event::emit(RebalancerSet { pool: state.pool, old_rebalancer, new_rebalancer });
         event::emit_event(
             &mut state.rebalancer_set_events,
-            RebalancerSet { old_rebalancer, new_rebalancer }
+            RebalancerSet { pool: state.pool, old_rebalancer, new_rebalancer }
         );
     }
 
@@ -663,6 +723,7 @@ module ccip_token_pool::token_pool {
 
     public fun destroy_token_pool(state: TokenPoolState) {
         let TokenPoolState {
+            pool: _,
             allowlist_state,
             fa_metadata: _fa_metadata,
             remote_chain_configs,

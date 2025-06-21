@@ -98,7 +98,10 @@ module burn_mint_token_pool::burn_mint_token_pool {
                 store_signer_cap,
                 ownable_state: ownable::new(&store_signer, @burn_mint_token_pool),
                 token_pool_state: token_pool::initialize(
-                    &store_signer, @burn_mint_local_token, vector[]
+                    &store_signer,
+                    publisher,
+                    @burn_mint_local_token,
+                    vector[]
                 )
             }
         );

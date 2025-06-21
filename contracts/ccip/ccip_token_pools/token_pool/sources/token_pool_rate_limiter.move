@@ -5,10 +5,12 @@ module ccip_token_pool::token_pool_rate_limiter {
     use std::error;
     use std::event;
     use std::event::EventHandle;
+    use std::signer;
 
     use ccip_token_pool::rate_limiter;
 
     struct RateLimitState has store {
+        pool: address,
         outbound_rate_limiter_config: SmartTable<u64, rate_limiter::TokenBucket>,
         inbound_rate_limiter_config: SmartTable<u64, rate_limiter::TokenBucket>,
         tokens_consumed_events: EventHandle<TokensConsumed>,
@@ -17,12 +19,14 @@ module ccip_token_pool::token_pool_rate_limiter {
 
     #[event]
     struct TokensConsumed has store, drop {
+        pool: address,
         remote_chain_selector: u64,
         tokens: u64
     }
 
     #[event]
     struct ConfigChanged has store, drop {
+        pool: address,
         remote_chain_selector: u64,
         outbound_is_enabled: bool,
         outbound_capacity: u64,
@@ -34,8 +38,9 @@ module ccip_token_pool::token_pool_rate_limiter {
 
     const E_BUCKET_NOT_FOUND: u64 = 1;
 
-    public fun new(event_account: &signer): RateLimitState {
+    public fun new(event_account: &signer, pool: &signer): RateLimitState {
         RateLimitState {
+            pool: signer::address_of(pool),
             outbound_rate_limiter_config: smart_table::new(),
             inbound_rate_limiter_config: smart_table::new(),
             tokens_consumed_events: account::new_event_handle(event_account),
@@ -47,6 +52,7 @@ module ccip_token_pool::token_pool_rate_limiter {
         state: &mut RateLimitState, dest_chain_selector: u64, requested_tokens: u64
     ) {
         consume_from_bucket(
+            state.pool,
             &mut state.tokens_consumed_events,
             &mut state.inbound_rate_limiter_config,
             dest_chain_selector,
@@ -58,6 +64,7 @@ module ccip_token_pool::token_pool_rate_limiter {
         state: &mut RateLimitState, dest_chain_selector: u64, requested_tokens: u64
     ) {
         consume_from_bucket(
+            state.pool,
             &mut state.tokens_consumed_events,
             &mut state.outbound_rate_limiter_config,
             dest_chain_selector,
@@ -66,6 +73,7 @@ module ccip_token_pool::token_pool_rate_limiter {
     }
 
     inline fun consume_from_bucket(
+        pool: address,
         tokens_consumed_events: &mut EventHandle<TokensConsumed>,
         rate_limiter: &mut SmartTable<u64, rate_limiter::TokenBucket>,
         dest_chain_selector: u64,
@@ -81,6 +89,7 @@ module ccip_token_pool::token_pool_rate_limiter {
 
         event::emit(
             TokensConsumed {
+                pool,
                 remote_chain_selector: dest_chain_selector,
                 tokens: requested_tokens
             }
@@ -88,6 +97,7 @@ module ccip_token_pool::token_pool_rate_limiter {
         event::emit_event(
             tokens_consumed_events,
             TokensConsumed {
+                pool,
                 remote_chain_selector: dest_chain_selector,
                 tokens: requested_tokens
             }
@@ -128,6 +138,7 @@ module ccip_token_pool::token_pool_rate_limiter {
 
         event::emit(
             ConfigChanged {
+                pool: state.pool,
                 remote_chain_selector,
                 outbound_is_enabled,
                 outbound_capacity,
@@ -140,6 +151,7 @@ module ccip_token_pool::token_pool_rate_limiter {
         event::emit_event(
             &mut state.config_changed_events,
             ConfigChanged {
+                pool: state.pool,
                 remote_chain_selector,
                 outbound_is_enabled,
                 outbound_capacity,
@@ -169,6 +181,7 @@ module ccip_token_pool::token_pool_rate_limiter {
 
     public fun destroy_rate_limiter(state: RateLimitState) {
         let RateLimitState {
+            pool: _,
             outbound_rate_limiter_config,
             inbound_rate_limiter_config,
             tokens_consumed_events,

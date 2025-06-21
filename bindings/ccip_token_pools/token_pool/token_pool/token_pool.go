@@ -53,7 +53,8 @@ func NewTokenPool(address aptos.AccountAddress, client aptos.AptosRpcClient) Tok
 // Structs
 
 type TokenPoolState struct {
-	FaMetadata bind.StdObject `move:"aptos_framework::object::Object"`
+	Pool       aptos.AccountAddress `move:"address"`
+	FaMetadata bind.StdObject       `move:"aptos_framework::object::Object"`
 }
 
 type RemoteChainConfig struct {
@@ -62,12 +63,14 @@ type RemoteChainConfig struct {
 }
 
 type LockedOrBurned struct {
+	Pool                aptos.AccountAddress `move:"address"`
 	RemoteChainSelector uint64               `move:"u64"`
 	LocalToken          aptos.AccountAddress `move:"address"`
 	Amount              uint64               `move:"u64"`
 }
 
 type ReleasedOrMinted struct {
+	Pool                aptos.AccountAddress `move:"address"`
 	RemoteChainSelector uint64               `move:"u64"`
 	LocalToken          aptos.AccountAddress `move:"address"`
 	Recipient           aptos.AccountAddress `move:"address"`
@@ -75,45 +78,54 @@ type ReleasedOrMinted struct {
 }
 
 type AllowlistRemove struct {
+	Pool   aptos.AccountAddress `move:"address"`
 	Sender aptos.AccountAddress `move:"address"`
 }
 
 type AllowlistAdd struct {
+	Pool   aptos.AccountAddress `move:"address"`
 	Sender aptos.AccountAddress `move:"address"`
 }
 
 type RemotePoolAdded struct {
-	RemoteChainSelector uint64 `move:"u64"`
-	RemotePoolAddress   []byte `move:"vector<u8>"`
+	Pool                aptos.AccountAddress `move:"address"`
+	RemoteChainSelector uint64               `move:"u64"`
+	RemotePoolAddress   []byte               `move:"vector<u8>"`
 }
 
 type RemotePoolRemoved struct {
-	RemoteChainSelector uint64 `move:"u64"`
-	RemotePoolAddress   []byte `move:"vector<u8>"`
+	Pool                aptos.AccountAddress `move:"address"`
+	RemoteChainSelector uint64               `move:"u64"`
+	RemotePoolAddress   []byte               `move:"vector<u8>"`
 }
 
 type ChainAdded struct {
-	RemoteChainSelector uint64 `move:"u64"`
-	RemoteTokenAddress  []byte `move:"vector<u8>"`
+	Pool                aptos.AccountAddress `move:"address"`
+	RemoteChainSelector uint64               `move:"u64"`
+	RemoteTokenAddress  []byte               `move:"vector<u8>"`
 }
 
 type ChainRemoved struct {
-	RemoteChainSelector uint64 `move:"u64"`
+	Pool                aptos.AccountAddress `move:"address"`
+	RemoteChainSelector uint64               `move:"u64"`
 }
 
 type LiquidityAdded struct {
+	Pool       aptos.AccountAddress `move:"address"`
 	LocalToken aptos.AccountAddress `move:"address"`
 	Provider   aptos.AccountAddress `move:"address"`
 	Amount     uint64               `move:"u64"`
 }
 
 type LiquidityRemoved struct {
+	Pool       aptos.AccountAddress `move:"address"`
 	LocalToken aptos.AccountAddress `move:"address"`
 	Provider   aptos.AccountAddress `move:"address"`
 	Amount     uint64               `move:"u64"`
 }
 
 type RebalancerSet struct {
+	Pool          aptos.AccountAddress `move:"address"`
 	OldRebalancer aptos.AccountAddress `move:"address"`
 	NewRebalancer aptos.AccountAddress `move:"address"`
 }

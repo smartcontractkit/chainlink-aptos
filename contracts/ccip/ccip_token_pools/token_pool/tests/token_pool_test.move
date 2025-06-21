@@ -148,7 +148,7 @@ module ccip_token_pool::token_pool_test {
 
         let token_address = object::address_from_constructor_ref(constructor_ref);
 
-        let state = token_pool::initialize(owner, token_address, vector[]);
+        let state = token_pool::initialize(owner, owner, token_address, vector[]);
 
         // Set state in the pool
         set_up_default_remote_chain(&mut state);

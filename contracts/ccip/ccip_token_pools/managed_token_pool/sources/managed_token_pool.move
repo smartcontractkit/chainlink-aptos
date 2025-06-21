@@ -88,7 +88,10 @@ module managed_token_pool::managed_token_pool {
             store_signer_address: signer::address_of(&store_signer),
             store_signer_cap,
             token_pool_state: token_pool::initialize(
-                &store_signer, managed_token_address, vector[]
+                &store_signer,
+                publisher,
+                managed_token_address,
+                vector[]
             )
         };
 
