@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -107,17 +106,6 @@ func (c *TOMLConfig) IsEnabled() bool {
 	return c.Enabled == nil || *c.Enabled
 }
 
-func (c *TOMLConfig) SetFrom(f *TOMLConfig) {
-	c.Enabled = f.Enabled
-
-	c.ChainID = f.ChainID
-	c.NetworkName = f.NetworkName
-	c.NetworkNameFull = f.NetworkNameFull
-
-	setFromChain(&c.Chain, &f.Chain)
-	c.Nodes.SetFrom(&f.Nodes)
-}
-
 func (c *TOMLConfig) SetDefaults() {
 	if c.TransactionManager == nil {
 		c.TransactionManager = &DefaultConfigSet.TransactionManager
@@ -144,19 +132,6 @@ func (c *TOMLConfig) SetDefaults() {
 	if c.NetworkNameFull == "" {
 		c.NetworkNameFull = fmt.Sprintf("%s-%s", ChainFamilyName, c.NetworkName)
 	}
-}
-
-func setFromChain(c, f *Chain) {
-	if f.TransactionManager != nil {
-		c.TransactionManager = f.TransactionManager
-	}
-	if f.BalanceMonitor != nil {
-		c.BalanceMonitor = f.BalanceMonitor
-	}
-	if f.WriteTargetCap != nil {
-		c.WriteTargetCap = f.WriteTargetCap
-	}
-	c.Workflow = f.Workflow
 }
 
 func (c *TOMLConfig) ValidateConfig() (err error) {
@@ -193,26 +168,3 @@ func (c *TOMLConfig) TOMLString() (string, error) {
 }
 
 type Nodes []*Node
-
-func (ns *Nodes) SetFrom(fs *Nodes) {
-	for _, f := range *fs {
-		if f.Name == nil {
-			*ns = append(*ns, f)
-		} else if i := slices.IndexFunc(*ns, func(n *Node) bool {
-			return n.Name != nil && *n.Name == *f.Name
-		}); i == -1 {
-			*ns = append(*ns, f)
-		} else {
-			setFromNode((*ns)[i], f)
-		}
-	}
-}
-
-func setFromNode(n, f *Node) {
-	if f.Name != nil {
-		n.Name = f.Name
-	}
-	if f.URL != nil {
-		n.URL = f.URL
-	}
-}
