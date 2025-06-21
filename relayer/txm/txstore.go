@@ -183,8 +183,8 @@ func (c *AccountStore) CreateTxStore(accountAddress string, initialNonce uint64)
 
 // GetTxStore returns the TxStore for the provided account.
 func (c *AccountStore) GetTxStore(accountAddress string) *TxStore {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	c.lock.RLock()
+	defer c.lock.RUnlock()
 	store, ok := c.store[accountAddress]
 	if !ok {
 		return nil
