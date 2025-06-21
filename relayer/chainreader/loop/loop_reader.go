@@ -227,7 +227,10 @@ func (a *loopChainReader) Unbind(ctx context.Context, bindings []types.BoundCont
 	}
 
 	// we ignore unbind errors, because if the LOOP plugin restarted, the binding would not exist.
-	_ = a.cr.Unbind(ctx, bindings)
+	err := a.cr.Unbind(ctx, bindings)
+	if err != nil {
+		a.logger.Warnw("failed to unbind bindings", "err", err)
+	}
 
 	return nil
 }
