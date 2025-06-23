@@ -67,6 +67,8 @@ func (s *TxStore) ResyncNonce(onchainNonce uint64) {
 }
 
 func (s *TxStore) GetLastResyncedNonce() uint64 {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	return s.lastOnchainNonce
 }
 
@@ -181,8 +183,8 @@ func (c *AccountStore) CreateTxStore(accountAddress string, initialNonce uint64)
 
 // GetTxStore returns the TxStore for the provided account.
 func (c *AccountStore) GetTxStore(accountAddress string) *TxStore {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	c.lock.RLock()
+	defer c.lock.RUnlock()
 	store, ok := c.store[accountAddress]
 	if !ok {
 		return nil

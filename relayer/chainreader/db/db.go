@@ -203,9 +203,19 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 		baseSQL += " ORDER BY tx_version " + direction
 	}
 
-	if limitAndSort.Limit.Count > 0 {
-		baseSQL += fmt.Sprintf(" LIMIT %d", limitAndSort.Limit.Count)
+	var maxLimit uint64 = 1000
+	limitCount := limitAndSort.Limit.Count
+	if limitCount > maxLimit {
+		s.lggr.Warnw("Requested limit exceeds maximum allowed, capping limit",
+			"requestedLimit", limitCount,
+			"maxLimit", maxLimit)
+		limitCount = maxLimit
+	} else if limitCount <= 0 {
+		// Default limit if none provided
+		limitCount = maxLimit
 	}
+
+	baseSQL += fmt.Sprintf(" LIMIT %d", limitCount)
 
 	s.lggr.Debugw("Executing SQL query",
 		"sql", baseSQL,
@@ -281,7 +291,10 @@ func (s *DBStore) buildSQLCondition(expr query.Expression, args *[]any, argCount
 		case *primitives.Comparator:
 			conditions := []string{}
 			for _, valueCmp := range v.ValueComparators {
-				jsonPath := utils.BuildJsonPathExpr("data", v.Name)
+				jsonPath, err := utils.BuildJsonPathExpr("data", v.Name)
+				if err != nil {
+					return "", fmt.Errorf("invalid field name %s: %w", v.Name, err)
+				}
 
 				var condition string
 				if utils.IsNumeric(valueCmp.Value) {
