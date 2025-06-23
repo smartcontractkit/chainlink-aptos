@@ -586,7 +586,13 @@ module ccip::fee_quoter_chain_family {
                 vector[], // token store addresses
                 token_addr, // fee token
                 @0x0, // fee token store
-                client::encode_svm_extra_args_v1(500000, 0, true, vector[], vector[])
+                client::encode_svm_extra_args_v1(
+                    500000,
+                    0,
+                    true,
+                    x"0000000000000000000000000000000000000000000000000000000000000001",
+                    x"0000000000000000000000000000000000000000000000000000000000000002"
+                )
             );
     }
 }
