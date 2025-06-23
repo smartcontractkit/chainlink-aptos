@@ -49,7 +49,7 @@ module ccip::client_test {
             x"1234567890123456789012345678901234567890123456789012345678901234";
         let accounts = vector[
             x"0000000000000000000000000000000000000000000000000000000000000001", // 32 bytes
-            x"0000000000000000000000000000000000000000000000000000000000000002"  // 32 bytes
+            x"0000000000000000000000000000000000000000000000000000000000000002" // 32 bytes
         ];
 
         let encoded =
@@ -146,7 +146,9 @@ module ccip::client_test {
         assert!(encoded.length() >= 4 + 4 + 8 + 1 + 32);
 
         // Test with single account
-        let single_account = vector[x"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]; // 32 bytes
+        let single_account = vector[
+            x"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]; // 32 bytes
         let encoded_with_account =
             client::encode_svm_extra_args_v1(
                 compute_units,

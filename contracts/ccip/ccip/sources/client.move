@@ -47,7 +47,7 @@ module ccip::client {
         accounts.for_each_ref(|account| {
             assert!(account.length() == 32, E_INVALID_SVM_ACCOUNT_LENGTH);
         });
-      
+
         extra_args.append(bcs::to_bytes(&token_receiver));
         extra_args.append(bcs::to_bytes(&accounts));
         extra_args
