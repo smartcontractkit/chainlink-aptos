@@ -9,8 +9,8 @@ module lock_release_token_pool::lock_release_token_pool {
     use std::signer;
     use std::string::{Self, String};
 
-    use ccip::ownable;
     use ccip::token_admin_registry;
+    use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
 

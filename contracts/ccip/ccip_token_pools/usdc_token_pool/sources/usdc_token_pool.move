@@ -13,8 +13,8 @@ module usdc_token_pool::usdc_token_pool {
 
     use ccip::address;
     use ccip::eth_abi;
-    use ccip::ownable;
     use ccip::token_admin_registry;
+    use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
 

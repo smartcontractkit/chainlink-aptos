@@ -13,7 +13,7 @@ func TestCompile(t *testing.T) {
 		aptos.AccountTwo,
 		aptos.AccountThree,
 		aptos.AccountFour,
-		aptos.AccountFour,
+		aptos.AccountTen,
 		aptos.AccountFour,
 		false,
 	)
