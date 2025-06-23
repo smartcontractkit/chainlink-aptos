@@ -281,7 +281,10 @@ func (s *DBStore) buildSQLCondition(expr query.Expression, args *[]any, argCount
 		case *primitives.Comparator:
 			conditions := []string{}
 			for _, valueCmp := range v.ValueComparators {
-				jsonPath := utils.BuildJsonPathExpr("data", v.Name)
+				jsonPath, err := utils.BuildJsonPathExpr("data", v.Name)
+				if err != nil {
+					return "", fmt.Errorf("invalid field name %s: %w", v.Name, err)
+				}
 
 				var condition string
 				if utils.IsNumeric(valueCmp.Value) {
