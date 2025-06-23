@@ -8,10 +8,12 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 )
 
+const MAX_EXPRESSION_DEPTH = 32
+
 func SerializeExpressions(exprs []query.Expression) ([]query.Expression, error) {
 	serializedExprs := make([]query.Expression, 0, len(exprs))
 	for _, expr := range exprs {
-		serializedExpr, err := serializeExpressionValues(expr)
+		serializedExpr, err := serializeExpressionValues(expr, 0)
 		if err != nil {
 			return nil, fmt.Errorf("failed to serialize expression: %w", err)
 		}
@@ -23,7 +25,7 @@ func SerializeExpressions(exprs []query.Expression) ([]query.Expression, error) 
 func DeserializeExpressions(exprs []query.Expression) ([]query.Expression, error) {
 	deserializedExprs := make([]query.Expression, 0, len(exprs))
 	for _, expr := range exprs {
-		deserializedExpr, err := deserializeExpressionValues(expr)
+		deserializedExpr, err := deserializeExpressionValues(expr, 0)
 		if err != nil {
 			return nil, fmt.Errorf("failed to deserialize expression: %w", err)
 		}
@@ -36,7 +38,11 @@ func DeserializeExpressions(exprs []query.Expression) ([]query.Expression, error
 // https://github.com/smartcontractkit/chainlink-common/blob/fe3ec4466fb5adfffd8fc77eef1cef67c4a918cc/pkg/loop/internal/relayer/pluginprovider/contractreader/contract_reader.go#L1033
 // in ccipChainReader.ExecutedMessages, it's a primitive
 
-func serializeExpressionValues(expr query.Expression) (query.Expression, error) {
+func serializeExpressionValues(expr query.Expression, depth int) (query.Expression, error) {
+	if depth > MAX_EXPRESSION_DEPTH {
+		return expr, fmt.Errorf("expression depth exceeds maximum allowed depth of %d", MAX_EXPRESSION_DEPTH)
+	}
+
 	resultExpr := expr
 	var err error
 
@@ -70,7 +76,7 @@ func serializeExpressionValues(expr query.Expression) (query.Expression, error) 
 
 		for _, subExpr := range originalBoolExpr.Expressions {
 			var processedSubExpr query.Expression
-			processedSubExpr, err = serializeExpressionValues(subExpr)
+			processedSubExpr, err = serializeExpressionValues(subExpr, depth+1)
 			if err != nil {
 				return expr, fmt.Errorf("failed processing sub-expression within %s: %w", originalBoolExpr.BoolOperator, err)
 			}
@@ -85,7 +91,11 @@ func serializeExpressionValues(expr query.Expression) (query.Expression, error) 
 	return resultExpr, nil
 }
 
-func deserializeExpressionValues(expr query.Expression) (query.Expression, error) {
+func deserializeExpressionValues(expr query.Expression, depth int) (query.Expression, error) {
+	if depth > MAX_EXPRESSION_DEPTH {
+		return expr, fmt.Errorf("expression depth exceeds maximum allowed depth of %d", MAX_EXPRESSION_DEPTH)
+	}
+
 	resultExpr := expr
 	var err error
 
@@ -132,7 +142,7 @@ func deserializeExpressionValues(expr query.Expression) (query.Expression, error
 
 		for _, subExpr := range originalBoolExpr.Expressions {
 			var processedSubExpr query.Expression
-			processedSubExpr, err = deserializeExpressionValues(subExpr)
+			processedSubExpr, err = deserializeExpressionValues(subExpr, depth+1)
 			if err != nil {
 				return expr, fmt.Errorf("failed processing sub-expression within %s: %w", originalBoolExpr.BoolOperator, err)
 			}

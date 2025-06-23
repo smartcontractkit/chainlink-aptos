@@ -83,6 +83,10 @@ func convertFunctionParams(argMap map[string]interface{}, params []crconfig.Apto
 }
 
 func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, method string, args any, transactionID string, toAddress string, meta *commontypes.TxMeta, value *big.Int) error {
+	if value != nil && value.Sign() != 0 {
+		return fmt.Errorf("value is not supported")
+	}
+
 	moduleConfig, ok := a.config.Modules[contractName]
 	if !ok {
 		return fmt.Errorf("no such contract: %s", contractName)

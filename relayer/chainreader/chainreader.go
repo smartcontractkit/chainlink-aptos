@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/go-viper/mapstructure/v2"
@@ -39,6 +41,8 @@ type aptosChainReader struct {
 	eventSyncCancelFunc context.CancelFunc
 	txSyncCancelFunc    context.CancelFunc
 
+	// Mutex to protect concurrent access to maps
+	mu                    sync.RWMutex
 	moduleAddresses       map[string]aptos.AccountAddress
 	eventAccountAddresses map[string]aptos.AccountAddress
 
@@ -70,6 +74,46 @@ func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config confi
 	}
 
 	return reader
+}
+
+// Helper functions for safe access to maps with proper locking
+
+func (a *aptosChainReader) getModuleAddress(contractName string) (aptos.AccountAddress, bool) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	address, ok := a.moduleAddresses[contractName]
+	return address, ok
+}
+
+func (a *aptosChainReader) setModuleAddresses(addresses map[string]aptos.AccountAddress) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for contractName, address := range addresses {
+		a.moduleAddresses[contractName] = address
+	}
+}
+
+func (a *aptosChainReader) deleteModuleAddress(contractName string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if _, ok := a.moduleAddresses[contractName]; ok {
+		delete(a.moduleAddresses, contractName)
+		return true
+	}
+	return false
+}
+
+func (a *aptosChainReader) getEventAccountAddress(cacheKey string) (aptos.AccountAddress, bool) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	address, ok := a.eventAccountAddresses[cacheKey]
+	return address, ok
+}
+
+func (a *aptosChainReader) setEventAccountAddress(cacheKey string, address aptos.AccountAddress) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.eventAccountAddresses[cacheKey] = address
 }
 
 func (a *aptosChainReader) Name() string {
@@ -128,7 +172,7 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 	_address, contractName, method := readComponents[0], readComponents[1], readComponents[2]
 
 	// Source the read configuration, by contract name
-	address, ok := a.moduleAddresses[contractName]
+	address, ok := a.getModuleAddress(contractName)
 	if !ok {
 		return fmt.Errorf("no bound address for module %s", contractName)
 	}
@@ -155,7 +199,10 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 	argMap := make(map[string]interface{})
 
 	if a.config.IsLoopPlugin {
-		paramBytes := params.(*[]byte)
+		paramBytes, ok := params.(*[]byte)
+		if !ok {
+			return fmt.Errorf("expected params to be of type *[]byte, got %T", params)
+		}
 
 		// use json.Number to decode uint64 correctly. when we serialize into bcs, serializeArg will convert it into the appropriate number type.
 		decoder := json.NewDecoder(bytes.NewReader(*paramBytes))
@@ -300,10 +347,15 @@ func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request typ
 			result types.BatchReadResult
 		}, len(batch))
 
-		for i, read := range batch {
-			go func(index int, read types.BatchRead) {
-				readResult := types.BatchReadResult{ReadName: read.ReadName}
+		var wg sync.WaitGroup
+		wg.Add(len(batch))
 
+		for i, read := range batch {
+			// Pass contract as an argument to avoid closing over the loop variable.
+			go func(index int, read types.BatchRead, contract types.BoundContract) {
+				defer wg.Done() // Ensure WaitGroup is decremented even if GetLatestValue panics.
+
+				readResult := types.BatchReadResult{ReadName: read.ReadName}
 				err := a.GetLatestValue(ctx, contract.ReadIdentifier(read.ReadName), primitives.Finalized, read.Params, read.ReturnVal)
 				readResult.SetResult(read.ReturnVal, err)
 
@@ -313,18 +365,31 @@ func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request typ
 					result types.BatchReadResult
 				}{index, readResult}:
 				case <-ctx.Done():
+					// If context is cancelled, the goroutine will exit.
+					// wg.Done() will be called by the defer.
 					return
 				}
-			}(i, read)
+			}(i, read, contract)
 		}
 
-		for range batch {
-			select {
-			case res := <-resultChan:
-				batchResults[res.index] = res.result
-			case <-ctx.Done():
-				return nil, ctx.Err()
+		// Start a new goroutine to wait for all workers to finish and then close the channel.
+		go func() {
+			wg.Wait()
+			close(resultChan)
+		}()
+
+		resultsReceived := 0
+		for res := range resultChan {
+			batchResults[res.index] = res.result
+			resultsReceived++
+		}
+
+		if resultsReceived != len(batch) {
+			// Check if the lack of results was due to a context cancellation or time out.
+			if err := ctx.Err(); err != nil {
+				return nil, err
 			}
+			return nil, fmt.Errorf("batch processing failed: expected %d results, but received %d. This may be due to a panic in a worker goroutine", len(batch), resultsReceived)
 		}
 
 		result[contract] = batchResults
@@ -334,13 +399,16 @@ func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request typ
 }
 
 func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]types.Sequence, error) {
+	if sequenceDataType == nil {
+		return nil, errors.New("sequence data type is nil")
+	}
+
 	if a.dbStore == nil {
 		return nil, fmt.Errorf("QueryKey only operates in persistent mode")
 	}
 
 	contractName := contract.Name
-	address, ok := a.moduleAddresses[contractName]
-
+	address, ok := a.getModuleAddress(contractName)
 	if !ok {
 		return nil, fmt.Errorf("no bound address for module %s", contractName)
 	}
@@ -452,6 +520,10 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 }
 
 func (a *aptosChainReader) QueryKeyWithMetadata(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]config.SequenceWithMetadata, error) {
+	if sequenceDataType == nil {
+		return nil, errors.New("sequence data type is nil")
+	}
+
 	seqs, err := a.QueryKey(ctx, contract, filter, limitAndSort, sequenceDataType)
 	if err != nil {
 		return nil, err
@@ -495,20 +567,15 @@ func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContr
 		newBindings[binding.Name] = *moduleAddress
 	}
 
-	for name, address := range newBindings {
-		a.moduleAddresses[name] = address
-	}
+	a.setModuleAddresses(newBindings)
 
 	return nil
 }
 
 func (a *aptosChainReader) Unbind(ctx context.Context, bindings []types.BoundContract) error {
-
 	for _, binding := range bindings {
 		key := binding.Name
-		if _, ok := a.moduleAddresses[key]; ok {
-			delete(a.moduleAddresses, key)
-		} else {
+		if !a.deleteModuleAddress(key) {
 			return fmt.Errorf("no such binding: %s", key)
 		}
 	}
@@ -550,9 +617,11 @@ func (a *aptosChainReader) computeEventAccountAddress(boundAddress aptos.Account
 			return eventAccountAddress, fmt.Errorf("invalid event account address definition: %s", eventConfig.EventAccountAddress)
 		}
 		cacheKey := addressFunctionAddress.String() + "::" + addressFunctionModuleName + "::" + addressFunctionFunctionName
-		if cached, ok := a.eventAccountAddresses[cacheKey]; ok {
+
+		if cached, ok := a.getEventAccountAddress(cacheKey); ok {
 			return cached, nil
 		}
+
 		viewPayload := &aptos.ViewPayload{
 			Module: aptos.ModuleId{
 				Address: addressFunctionAddress,
@@ -570,7 +639,7 @@ func (a *aptosChainReader) computeEventAccountAddress(boundAddress aptos.Account
 		if err != nil {
 			return eventAccountAddress, fmt.Errorf("failed to decode event account address function output: %+w", err)
 		}
-		a.eventAccountAddresses[cacheKey] = eventAccountAddress
+		a.setEventAccountAddress(cacheKey, eventAccountAddress)
 		return eventAccountAddress, nil
 	}
 }
@@ -581,7 +650,7 @@ func (a *aptosChainReader) getEventConfig(moduleKey, eventKey string) (eventAcco
 		return aptos.AccountAddress{}, "", nil, fmt.Errorf("no module config found for key: %s", moduleKey)
 	}
 
-	boundAddress, ok := a.moduleAddresses[moduleKey]
+	boundAddress, ok := a.getModuleAddress(moduleKey)
 	if !ok {
 		return aptos.AccountAddress{}, "", nil, fmt.Errorf("no bound address for module: %s", moduleKey)
 	}
