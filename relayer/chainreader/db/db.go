@@ -203,9 +203,19 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 		baseSQL += " ORDER BY tx_version " + direction
 	}
 
-	if limitAndSort.Limit.Count > 0 {
-		baseSQL += fmt.Sprintf(" LIMIT %d", limitAndSort.Limit.Count)
+	var maxLimit uint64 = 1000
+	limitCount := limitAndSort.Limit.Count
+	if limitCount > maxLimit {
+		s.lggr.Warnw("Requested limit exceeds maximum allowed, capping limit",
+			"requestedLimit", limitCount,
+			"maxLimit", maxLimit)
+		limitCount = maxLimit
+	} else if limitCount <= 0 {
+		// Default limit if none provided
+		limitCount = maxLimit
 	}
+
+	baseSQL += fmt.Sprintf(" LIMIT %d", limitCount)
 
 	s.lggr.Debugw("Executing SQL query",
 		"sql", baseSQL,
