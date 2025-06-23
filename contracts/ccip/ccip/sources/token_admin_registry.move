@@ -426,12 +426,6 @@ module ccip::token_admin_registry {
             } = move_from<TokenPoolRegistration>(previous_pool_address);
         };
 
-        event::emit(
-            TokenUnregistered {
-                local_token,
-                previous_pool_address: token_config.token_pool_address
-            }
-        );
         event::emit_event(
             &mut state.token_unregistered_events,
             TokenUnregistered {
@@ -472,13 +466,6 @@ module ccip::token_admin_registry {
         config.token_pool_address = token_pool_address;
 
         if (previous_pool_address != token_pool_address) {
-            event::emit(
-                PoolSet {
-                    local_token,
-                    previous_pool_address,
-                    new_pool_address: token_pool_address
-                }
-            );
             event::emit_event(
                 &mut state.pool_set_events,
                 PoolSet {
@@ -528,13 +515,6 @@ module ccip::token_admin_registry {
             );
         };
 
-        event::emit(
-            AdministratorTransferRequested {
-                local_token,
-                current_admin: @0x0,
-                new_admin: administrator
-            }
-        );
         event::emit_event(
             &mut state.administrator_transfer_requested_events,
             AdministratorTransferRequested {
@@ -565,13 +545,6 @@ module ccip::token_admin_registry {
         // can be @0x0 to cancel a pending transfer.
         token_config.pending_administrator = new_admin;
 
-        event::emit(
-            AdministratorTransferRequested {
-                local_token,
-                current_admin: token_config.administrator,
-                new_admin
-            }
-        );
         event::emit_event(
             &mut state.administrator_transfer_requested_events,
             AdministratorTransferRequested {
@@ -602,9 +575,6 @@ module ccip::token_admin_registry {
         token_config.administrator = token_config.pending_administrator;
         token_config.pending_administrator = @0x0;
 
-        event::emit(
-            AdministratorTransferred { local_token, new_admin: token_config.administrator }
-        );
         event::emit_event(
             &mut state.administrator_transferred_events,
             AdministratorTransferred { local_token, new_admin: token_config.administrator }
@@ -1084,6 +1054,13 @@ module ccip::token_admin_registry {
     #[test_only]
     public fun init_module_for_testing(publisher: &signer) {
         init_module(publisher);
+    }
+
+    #[test_only]
+    public fun get_token_unregistered_events(): vector<TokenUnregistered> acquires TokenAdminRegistryState {
+        event::emitted_events_by_handle<TokenUnregistered>(
+            &borrow_state().token_unregistered_events
+        )
     }
 
     #[test_only]

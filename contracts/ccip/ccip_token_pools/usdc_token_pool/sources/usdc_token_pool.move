@@ -542,14 +542,6 @@ module usdc_token_pool::usdc_token_pool {
                 Domain { allowed_caller, domain_identifier, enabled }
             );
 
-            event::emit(
-                DomainsSet {
-                    allowed_caller,
-                    domain_identifier,
-                    remote_chain_selector,
-                    enabled
-                }
-            );
             event::emit_event(
                 &mut pool.domain_set_events,
                 DomainsSet {

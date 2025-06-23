@@ -189,9 +189,6 @@ module ccip_offramp::ocr3_base {
         config_info.big_f = big_f;
         config_info.config_digest = config_digest;
 
-        event::emit(
-            ConfigSet { ocr_plugin_type, config_digest, signers, transmitters, big_f }
-        );
         event::emit_event(
             &mut ocr3_state.config_set_events,
             ConfigSet { ocr_plugin_type, config_digest, signers, transmitters, big_f }
@@ -295,7 +292,6 @@ module ccip_offramp::ocr3_base {
         };
 
         let sequence_number: u64 = deserialize_sequence_bytes(sequence_bytes);
-        event::emit(Transmitted { ocr_plugin_type, config_digest, sequence_number });
         event::emit_event(
             &mut ocr3_state.transmitted_events,
             Transmitted { ocr_plugin_type, config_digest, sequence_number }

@@ -322,7 +322,6 @@ module ccip_offramp::offramp {
 
         let static_config = create_static_config(chain_selector);
 
-        event::emit(StaticConfigSet { static_config });
         event::emit_event(
             &mut state.static_config_set_events, StaticConfigSet { static_config }
         );
@@ -410,7 +409,6 @@ module ccip_offramp::offramp {
         if (rmn_remote::is_cursed_u128(source_chain_selector as u128)) {
             assert!(!manual_execution, error::permission_denied(E_CURSED_BY_RMN));
 
-            event::emit(SkippedReportExecution { source_chain_selector });
             event::emit_event(
                 &mut state.skipped_report_execution_events,
                 SkippedReportExecution { source_chain_selector }
@@ -461,7 +459,6 @@ module ccip_offramp::offramp {
             );
 
         if (*execution_state_ref != EXECUTION_STATE_UNTOUCHED) {
-            event::emit(SkippedAlreadyExecuted { source_chain_selector, sequence_number });
             event::emit_event(
                 &mut state.skipped_already_executed_events,
                 SkippedAlreadyExecuted { source_chain_selector, sequence_number }
@@ -487,15 +484,6 @@ module ccip_offramp::offramp {
         // Since Aptos only supports success of reverts, when it reaches this it has succeeded.
         *execution_state_ref = EXECUTION_STATE_SUCCESS;
 
-        event::emit(
-            ExecutionStateChanged {
-                source_chain_selector,
-                sequence_number,
-                message_id: message.header.message_id,
-                message_hash: hashed_leaf,
-                state: EXECUTION_STATE_SUCCESS
-            }
-        );
         event::emit_event(
             &mut state.execution_state_changed_events,
             ExecutionStateChanged {
@@ -598,13 +586,6 @@ module ccip_offramp::offramp {
         // Commit the roots that do not require RMN blessing validation.
         commit_merkle_roots(state, commit_report.unblessed_merkle_roots, false);
 
-        event::emit(
-            CommitReportAccepted {
-                blessed_merkle_roots: commit_report.blessed_merkle_roots,
-                unblessed_merkle_roots: commit_report.unblessed_merkle_roots,
-                price_updates: commit_report.price_updates
-            }
-        );
         event::emit_event(
             &mut state.commit_report_accepted_events,
             CommitReportAccepted {
@@ -956,7 +937,6 @@ module ccip_offramp::offramp {
             permissionless_execution_threshold_seconds;
         let dynamic_config =
             create_dynamic_config(permissionless_execution_threshold_seconds);
-        event::emit(DynamicConfigSet { dynamic_config });
         event::emit_event(
             &mut state.dynamic_config_set_events,
             DynamicConfigSet { dynamic_config }
@@ -1027,9 +1007,6 @@ module ccip_offramp::offramp {
             config.on_ramp = on_ramp;
             config.is_rmn_verification_disabled = is_rmn_verification_disabled;
 
-            event::emit(
-                SourceChainConfigSet { source_chain_selector, source_chain_config: *config }
-            );
             event::emit_event(
                 &mut state.source_chain_config_set_events,
                 SourceChainConfigSet { source_chain_selector, source_chain_config: *config }
@@ -1690,8 +1667,9 @@ module ccip_offramp::offramp {
     }
 
     #[test_only]
-    public fun commit_report_unblessed_merkle_roots(report: &CommitReport):
-        &vector<MerkleRoot> {
+    public fun commit_report_unblessed_merkle_roots(
+        report: &CommitReport
+    ): &vector<MerkleRoot> {
         &report.unblessed_merkle_roots
     }
 
@@ -1719,7 +1697,9 @@ module ccip_offramp::offramp {
     }
 
     #[test_only]
-    public fun token_price_update_usd_per_token(update: &TokenPriceUpdate): u256 {
+    public fun token_price_update_usd_per_token(
+        update: &TokenPriceUpdate
+    ): u256 {
         update.usd_per_token
     }
 

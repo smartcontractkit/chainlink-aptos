@@ -395,7 +395,6 @@ module ccip::fee_quoter {
             let (found, index) = state.fee_tokens.index_of(&fee_token);
             if (found) {
                 state.fee_tokens.remove(index);
-                event::emit(FeeTokenRemoved { fee_token });
                 event::emit_event(
                     &mut state.fee_token_removed_events, FeeTokenRemoved { fee_token }
                 );
@@ -408,7 +407,6 @@ module ccip::fee_quoter {
             let (found, _) = state.fee_tokens.index_of(&fee_token);
             if (!found) {
                 state.fee_tokens.push_back(fee_token);
-                event::emit(FeeTokenAdded { fee_token });
                 event::emit_event(
                     &mut state.fee_token_added_events, FeeTokenAdded { fee_token }
                 );
@@ -527,13 +525,6 @@ module ccip::fee_quoter {
 
             token_transfer_fee_configs.upsert(token, token_transfer_fee_config);
 
-            event::emit(
-                TokenTransferFeeConfigAdded {
-                    dest_chain_selector,
-                    token,
-                    token_transfer_fee_config
-                }
-            );
             event::emit_event(
                 &mut state.token_transfer_fee_config_added_events,
                 TokenTransferFeeConfigAdded {
@@ -544,22 +535,16 @@ module ccip::fee_quoter {
             );
         };
 
-        remove_tokens.for_each_ref(
-            |token| {
-                let token: address = *token;
-                if (token_transfer_fee_configs.contains(token)) {
-                    token_transfer_fee_configs.remove(token);
-
-                    event::emit(
-                        TokenTransferFeeConfigRemoved { dest_chain_selector, token }
-                    );
-                    event::emit_event(
-                        &mut state.token_transfer_fee_config_removed_events,
-                        TokenTransferFeeConfigRemoved { dest_chain_selector, token }
-                    );
-                }
+        remove_tokens.for_each_ref(|token| {
+            let token: address = *token;
+            if (token_transfer_fee_configs.contains(token)) {
+                token_transfer_fee_configs.remove(token);
+                event::emit_event(
+                    &mut state.token_transfer_fee_config_removed_events,
+                    TokenTransferFeeConfigRemoved { dest_chain_selector, token }
+                );
             }
-        );
+        });
     }
 
     public fun update_prices(
@@ -591,13 +576,6 @@ module ccip::fee_quoter {
                     timestamp
                 };
                 state.usd_per_token.upsert(*token, timestamped_price);
-                event::emit(
-                    UsdPerTokenUpdated {
-                        token: *token,
-                        usd_per_token: *usd_per_token,
-                        timestamp
-                    }
-                );
                 event::emit_event(
                     &mut state.usd_per_token_updated_events,
                     UsdPerTokenUpdated {
@@ -618,13 +596,6 @@ module ccip::fee_quoter {
                     *dest_chain_selector, timestamped_price
                 );
 
-                event::emit(
-                    UsdPerUnitGasUpdated {
-                        dest_chain_selector: *dest_chain_selector,
-                        usd_per_unit_gas: *usd_per_unit_gas,
-                        timestamp
-                    }
-                );
                 event::emit_event(
                     &mut state.usd_per_unit_gas_updated_events,
                     UsdPerUnitGasUpdated {
@@ -792,12 +763,6 @@ module ccip::fee_quoter {
                 let premium_multiplier_wei_per_eth: u64 = *premium_multiplier_wei_per_eth;
                 state.premium_multiplier_wei_per_eth.upsert(
                     token, premium_multiplier_wei_per_eth
-                );
-                event::emit(
-                    PremiumMultiplierWeiPerEthUpdated {
-                        token,
-                        premium_multiplier_wei_per_eth
-                    }
                 );
                 event::emit_event(
                     &mut state.premium_multiplier_wei_per_eth_updated_events,
@@ -1383,14 +1348,12 @@ module ccip::fee_quoter {
             let dest_chain_config_ref =
                 state.dest_chain_configs.borrow_mut(dest_chain_selector);
             *dest_chain_config_ref = dest_chain_config;
-            event::emit(DestChainConfigUpdated { dest_chain_selector, dest_chain_config });
             event::emit_event(
                 &mut state.dest_chain_config_updated_events,
                 DestChainConfigUpdated { dest_chain_selector, dest_chain_config }
             );
         } else {
             state.dest_chain_configs.add(dest_chain_selector, dest_chain_config);
-            event::emit(DestChainAdded { dest_chain_selector, dest_chain_config });
             event::emit_event(
                 &mut state.dest_chain_added_events,
                 DestChainAdded { dest_chain_selector, dest_chain_config }

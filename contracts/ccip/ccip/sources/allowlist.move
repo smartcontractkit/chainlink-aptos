@@ -73,12 +73,6 @@ module ccip::allowlist {
                 let (found, i) = state.allowlist.index_of(&removed_address);
                 if (found) {
                     state.allowlist.swap_remove(i);
-                    event::emit(
-                        AllowlistRemove {
-                            allowlist_name: state.allowlist_name,
-                            removed_address
-                        }
-                    );
                     event::emit_event(
                         &mut state.allowlist_remove_events,
                         AllowlistRemove {
@@ -96,28 +90,17 @@ module ccip::allowlist {
                 error::invalid_state(E_ALLOWLIST_NOT_ENABLED)
             );
 
-            adds.for_each_ref(
-                |added_address| {
-                    let added_address: address = *added_address;
-                    if (added_address != @0x0
-                        && !state.allowlist.contains(&added_address)) {
-                        state.allowlist.push_back(added_address);
-                        event::emit(
-                            AllowlistAdd {
-                                allowlist_name: state.allowlist_name,
-                                added_address
-                            }
-                        );
-                        event::emit_event(
-                            &mut state.allowlist_add_events,
-                            AllowlistAdd {
-                                allowlist_name: state.allowlist_name,
-                                added_address
-                            }
-                        );
-                    }
+            adds.for_each_ref(|added_address| {
+                let added_address: address = *added_address;
+                if (added_address != @0x0
+                    && !state.allowlist.contains(&added_address)) {
+                    state.allowlist.push_back(added_address);
+                    event::emit_event(
+                        &mut state.allowlist_add_events,
+                        AllowlistAdd { allowlist_name: state.allowlist_name, added_address }
+                    );
                 }
-            );
+            });
         }
     }
 
@@ -146,6 +129,19 @@ module ccip::allowlist {
             allowlist_name: string::utf8(b"default")
         }
     }
+
+    #[test_only]
+    public fun get_allowlist_add_events(state: &mut AllowlistState):
+        &mut EventHandle<AllowlistAdd> {
+        &mut state.allowlist_add_events
+    }
+
+    #[test_only]
+    public fun get_allowlist_remove_events(
+        state: &mut AllowlistState
+    ): &mut EventHandle<AllowlistRemove> {
+        &mut state.allowlist_remove_events
+    }
 }
 
 #[test_only]
@@ -155,7 +151,7 @@ module ccip::allowlist_test {
     use std::signer;
     use std::vector;
 
-    use ccip::allowlist;
+    use ccip::allowlist::{Self, AllowlistAdd, AllowlistRemove};
 
     #[test(owner = @0x0)]
     fun init_empty_is_empty_and_disabled(owner: &signer) {
@@ -216,13 +212,13 @@ module ccip::allowlist_test {
 
         allowlist::apply_allowlist_updates(&mut state, vector::empty(), adds);
 
-        assert_add_events_emitted(adds);
+        assert_add_events_emitted(adds, &mut state);
 
         let removes = vector[@0x1];
 
         allowlist::apply_allowlist_updates(&mut state, removes, vector::empty());
 
-        assert_remove_events_emitted(removes);
+        assert_remove_events_emitted(removes, &mut state);
 
         assert!(allowlist::get_allowlist(&state).length() == 1);
         assert!(allowlist::is_allowed(&state, @0x2));
@@ -249,23 +245,24 @@ module ccip::allowlist_test {
         // Since removes happen before adds, the account should still be allowed
         assert!(allowlist::is_allowed(&state, account_to_allow));
 
-        assert_remove_events_emitted(adds_and_removes);
+        assert_remove_events_emitted(adds_and_removes, &mut state);
         // Events don't get purged after calling event::emitted_events so we'll have
         // both the first and the second add event in the emitted events
         adds_and_removes.push_back(account_to_allow);
-        assert_add_events_emitted(adds_and_removes);
+        assert_add_events_emitted(adds_and_removes, &mut state);
 
         allowlist::destroy_allowlist(state);
     }
 
     inline fun assert_add_events_emitted(
-        added_addresses: vector<address>
+        added_addresses: vector<address>, state: &mut allowlist::AllowlistState
     ) {
         let expected =
-            added_addresses.map::<address, allowlist::AllowlistAdd> (|add| allowlist::new_add_event(
-                add
-            ));
-        let got = event::emitted_events<allowlist::AllowlistAdd>();
+            added_addresses.map::<address, AllowlistAdd> (|add| allowlist::new_add_event(add));
+        let got =
+            event::emitted_events_by_handle<AllowlistAdd>(
+                allowlist::get_allowlist_add_events(state)
+            );
         let number_of_adds = expected.length();
 
         // Assert that exactly one event was emitted for each add
@@ -278,13 +275,16 @@ module ccip::allowlist_test {
     }
 
     inline fun assert_remove_events_emitted(
-        added_addresses: vector<address>
+        added_addresses: vector<address>, state: &mut allowlist::AllowlistState
     ) {
         let expected =
-            added_addresses.map::<address, allowlist::AllowlistRemove> (|add| allowlist::new_remove_event(
+            added_addresses.map::<address, AllowlistRemove> (|add| allowlist::new_remove_event(
                 add
             ));
-        let got = event::emitted_events<allowlist::AllowlistRemove>();
+        let got =
+            event::emitted_events_by_handle<AllowlistRemove>(
+                allowlist::get_allowlist_remove_events(state)
+            );
         let number_of_adds = expected.length();
 
         // Assert that exactly one event was emitted for each add
