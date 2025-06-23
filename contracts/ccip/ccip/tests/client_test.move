@@ -47,7 +47,10 @@ module ccip::client_test {
         let allow_ooo = true;
         let token_receiver =
             x"1234567890123456789012345678901234567890123456789012345678901234";
-        let accounts = vector[vector[1, 2, 3], vector[4, 5, 6, 7, 8]];
+        let accounts = vector[
+            x"0000000000000000000000000000000000000000000000000000000000000001", // 32 bytes
+            x"0000000000000000000000000000000000000000000000000000000000000002" // 32 bytes
+        ];
 
         let encoded =
             client::encode_svm_extra_args_v1(
@@ -67,16 +70,18 @@ module ccip::client_test {
     }
 
     #[test]
-    fun test_svm_token_receiver_padding() {
-        // Test with short token receiver - should be padded to 32 bytes
+    #[
+        expected_failure(
+            abort_code = client::E_INVALID_SVM_TOKEN_RECEIVER_LENGTH,
+            location = ccip::client
+        )
+    ]
+    fun test_svm_token_shorter_receiver() {
         let short_receiver = vector[1, 2, 3];
         let encoded =
             client::encode_svm_extra_args_v1(
                 100u32, 0u64, false, short_receiver, vector[]
             );
-
-        // Should not fail and should include the padded receiver
-        assert!(encoded.length() >= 4 + 4 + 8 + 1 + 32);
     }
 
     #[test]
@@ -141,7 +146,9 @@ module ccip::client_test {
         assert!(encoded.length() >= 4 + 4 + 8 + 1 + 32);
 
         // Test with single account
-        let single_account = vector[vector[0xaa, 0xbb, 0xcc]];
+        let single_account = vector[
+            x"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]; // 32 bytes
         let encoded_with_account =
             client::encode_svm_extra_args_v1(
                 compute_units,
