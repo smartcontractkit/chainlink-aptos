@@ -792,7 +792,6 @@ module ccip_onramp::onramp {
         state: &mut OnRampState, fee_aggregator: address, allowlist_admin: address
     ) {
         address::assert_non_zero_address(fee_aggregator);
-        address::assert_non_zero_address(allowlist_admin);
 
         state.fee_aggregator = fee_aggregator;
         state.allowlist_admin = allowlist_admin;
