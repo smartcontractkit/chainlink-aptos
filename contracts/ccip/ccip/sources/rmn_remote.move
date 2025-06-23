@@ -337,8 +337,6 @@ module ccip::rmn_remote {
         let new_config_count = state.config_count + 1;
         state.config_count = new_config_count;
 
-        event::emit(ConfigSet { version: new_config_count, config: new_config });
-
         event::emit_event(
             &mut state.config_set_events,
             ConfigSet { version: new_config_count, config: new_config }
@@ -386,7 +384,6 @@ module ccip::rmn_remote {
                 state.cursed_subjects.add(subject, true);
             }
         );
-        event::emit(Cursed { subjects });
         event::emit_event(&mut state.cursed_events, Cursed { subjects });
     }
 
@@ -409,7 +406,6 @@ module ccip::rmn_remote {
             );
             state.cursed_subjects.remove(subject);
         });
-        event::emit(Uncursed { subjects });
         event::emit_event(&mut state.uncursed_events, Uncursed { subjects });
     }
 

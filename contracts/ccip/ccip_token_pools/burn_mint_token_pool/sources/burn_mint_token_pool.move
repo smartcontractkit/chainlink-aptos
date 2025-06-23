@@ -694,4 +694,22 @@ module burn_mint_token_pool::burn_mint_token_pool {
     public entry fun test_init_module(owner: &signer) {
         init_module(owner);
     }
+
+    #[test_only]
+    public fun get_locked_or_burned_events(
+        state: address
+    ): vector<token_pool::LockedOrBurned> acquires BurnMintTokenPoolState {
+        token_pool::get_locked_or_burned_events(
+            &borrow_global<BurnMintTokenPoolState>(state).token_pool_state
+        )
+    }
+
+    #[test_only]
+    public fun get_released_or_minted_events(
+        state: address
+    ): vector<token_pool::ReleasedOrMinted> acquires BurnMintTokenPoolState {
+        token_pool::get_released_or_minted_events(
+            &borrow_global<BurnMintTokenPoolState>(state).token_pool_state
+        )
+    }
 }

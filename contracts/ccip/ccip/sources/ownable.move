@@ -210,4 +210,25 @@ module ccip::ownable {
         event::destroy_handle(ownership_transfer_accepted_events);
         event::destroy_handle(ownership_transferred_events);
     }
+
+    #[test_only]
+    public fun get_ownership_transfer_requested_events(
+        state: &OwnableState
+    ): &EventHandle<OwnershipTransferRequested> {
+        &state.ownership_transfer_requested_events
+    }
+
+    #[test_only]
+    public fun get_ownership_transfer_accepted_events(
+        state: &OwnableState
+    ): &EventHandle<OwnershipTransferAccepted> {
+        &state.ownership_transfer_accepted_events
+    }
+
+    #[test_only]
+    public fun get_ownership_transferred_events(
+        state: &OwnableState
+    ): &EventHandle<OwnershipTransferred> {
+        &state.ownership_transferred_events
+    }
 }

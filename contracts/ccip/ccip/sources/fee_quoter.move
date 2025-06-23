@@ -539,6 +539,7 @@ module ccip::fee_quoter {
             let token: address = *token;
             if (token_transfer_fee_configs.contains(token)) {
                 token_transfer_fee_configs.remove(token);
+
                 event::emit_event(
                     &mut state.token_transfer_fee_config_removed_events,
                     TokenTransferFeeConfigRemoved { dest_chain_selector, token }

@@ -873,4 +873,22 @@ module lock_release_token_pool::lock_release_token_pool {
     public fun test_init_module(publisher: &signer) {
         init_module(publisher);
     }
+
+    #[test_only]
+    public fun get_locked_or_burned_events(
+        state: address
+    ): vector<token_pool::LockedOrBurned> acquires LockReleaseTokenPoolState {
+        token_pool::get_locked_or_burned_events(
+            &borrow_global<LockReleaseTokenPoolState>(state).token_pool_state
+        )
+    }
+
+    #[test_only]
+    public fun get_released_or_minted_events(
+        state: address
+    ): vector<token_pool::ReleasedOrMinted> acquires LockReleaseTokenPoolState {
+        token_pool::get_released_or_minted_events(
+            &borrow_global<LockReleaseTokenPoolState>(state).token_pool_state
+        )
+    }
 }

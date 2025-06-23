@@ -10,7 +10,6 @@ module ccip_onramp::onramp_test {
     use std::fungible_asset::{Self, Metadata, MintRef, BurnRef, TransferRef};
     use std::primary_fungible_store;
     use std::timestamp;
-    use std::event;
 
     use ccip::token_admin_registry;
     use ccip::rmn_remote;
@@ -21,7 +20,6 @@ module ccip_onramp::onramp_test {
     use ccip::state_object::{Self};
     use ccip::fee_quoter::{Self};
 
-    use ccip_token_pool::token_pool;
     use burn_mint_token_pool::burn_mint_token_pool;
     use lock_release_token_pool::lock_release_token_pool;
 
@@ -759,7 +757,9 @@ module ccip_onramp::onramp_test {
         assert!(onramp_state_balance == fee_token_amount);
 
         assert!(
-            event::emitted_events<token_pool::LockedOrBurned>().length() == 1
+            burn_mint_token_pool::get_locked_or_burned_events(
+                burn_mint_token_pool::get_store_address()
+            ).length() == 1
         );
     }
 
@@ -882,7 +882,9 @@ module ccip_onramp::onramp_test {
         assert!(token_pool_balance == sent_amount);
 
         assert!(
-            event::emitted_events<token_pool::LockedOrBurned>().length() == 1
+            lock_release_token_pool::get_locked_or_burned_events(
+                lock_release_token_pool::get_store_address()
+            ).length() == 1
         );
     }
 
