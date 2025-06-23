@@ -106,8 +106,8 @@ func ApplyEventFilterRenames(exprs []query.Expression, renames map[string]string
 	return newExprs
 }
 
-// Regex for validating the JSON path - only allows dot-separated alphabetic sequences
-var validJsonPathPattern = regexp.MustCompile(`^[a-zA-Z]+(\.[a-zA-Z]+)*$`)
+// Regex for validating the JSON path - allows dot-separated sequences of alphabetic characters and underscores
+var validJsonPathPattern = regexp.MustCompile(`^[a-zA-Z_]+(\.[a-zA-Z_]+)*$`)
 
 // buildJsonPathExpr constructs a PostgreSQL JSON path expression for accessing nested fields
 // Example: "Header.SourceChainSelector" becomes data->'Header'->>'SourceChainSelector'
