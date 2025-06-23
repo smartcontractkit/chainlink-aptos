@@ -33,7 +33,10 @@ module ccip::fee_quoter_bcs {
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
             22, 23, 24, 25, 26, 27, 28, 29, 30, 31
         ];
-        let accounts = vector[vector[1, 2, 3, 4, 5], vector[5, 4, 3, 2, 1]];
+        let accounts = vector[
+            x"0000000000000000000000000000000000000000000000000000000000000001",
+            x"0000000000000000000000000000000000000000000000000000000000000002"
+        ];
 
         let encoded_svm =
             client::encode_svm_extra_args_v1(
@@ -133,7 +136,10 @@ module ccip::fee_quoter_bcs {
         // Test SVM encoding size
         let token_receiver =
             x"0000000000000000000000000000000000000000000000000000000000000000";
-        let accounts = vector[vector[1, 2, 3], vector[4, 5, 6]];
+        let accounts = vector[
+            x"0000000000000000000000000000000000000000000000000000000000000001",
+            x"0000000000000000000000000000000000000000000000000000000000000002"
+        ];
         let svm_encoded =
             client::encode_svm_extra_args_v1(
                 100u32, 200u64, false, token_receiver, accounts
@@ -145,11 +151,10 @@ module ccip::fee_quoter_bcs {
         // 8 bytes (u64 bitmap = 200)
         // 1 byte (bool allow_ooo = false)
         // 33 bytes (BCS-encoded token_receiver: 1 byte length + 32 bytes data)
-        // 9 bytes (BCS-encoded accounts: 1 byte outer length + 4 bytes first inner + 4 bytes second inner)
-        //   where accounts = vector[vector[1,2,3], vector[4,5,6]]
-        //   = 02 030102030 0304050 6 (in hex)
-        // Total: 4 + 4 + 8 + 1 + 33 + 9 = 59 bytes
-        assert!(svm_encoded.length() == 59); // Exact expected size
+        // 65 bytes (BCS-encoded accounts: 1 byte outer length + 32 bytes first inner + 32 bytes second inner)
+        //   where accounts = vector[32 bytes, 32 bytes]
+        // Total: 4 + 4 + 8 + 1 + 33 + 65 = 117 bytes
+        assert!(svm_encoded.length() == 117); // Exact expected size
     }
 
     #[test]
@@ -275,7 +280,11 @@ module ccip::fee_quoter_bcs {
         let allow_ooo2 = false;
         let token_receiver2 =
             x"0202020202020202020202020202020202020202020202020202020202020202";
-        let accounts2 = vector[vector[1, 2, 3], vector[4, 5, 6], vector[7, 8, 9]];
+        let accounts2 = vector[
+            x"0000000000000000000000000000000000000000000000000000000000000001",
+            x"0000000000000000000000000000000000000000000000000000000000000002",
+            x"0000000000000000000000000000000000000000000000000000000000000003"
+        ];
 
         let encoded2 =
             client::encode_svm_extra_args_v1(
