@@ -3,6 +3,7 @@ package platform_secondary
 import (
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/api"
+
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/compile"
 	module_forwarder "github.com/smartcontractkit/chainlink-aptos/bindings/platform_secondary/forwarder"
