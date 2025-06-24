@@ -91,7 +91,7 @@ module ccip::ownable_test {
 
         assert!(
             event::emitted_events_by_handle<OwnershipTransferAccepted>(
-                ownable::get_ownership_transfer_accepted_events(&mut ownable_state)
+                ownable::get_ownership_transfer_accepted_events(&ownable_state)
             ).length() == 1
         );
 
@@ -120,7 +120,7 @@ module ccip::ownable_test {
 
         assert!(
             event::emitted_events_by_handle<OwnershipTransferred>(
-                ownable::get_ownership_transferred_events(&mut ownable_state)
+                ownable::get_ownership_transferred_events(&ownable_state)
             ).length() == 1
         );
 

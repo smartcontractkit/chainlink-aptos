@@ -236,16 +236,6 @@ module managed_token::managed_token {
 
         let token = object::object_from_constructor_ref(constructor_ref);
 
-        event::emit(
-            Initialize {
-                publisher: publisher_addr,
-                token,
-                max_supply,
-                decimals,
-                icon,
-                project
-            }
-        );
         event::emit_event(
             &mut initialize_events,
             Initialize {
@@ -321,7 +311,6 @@ module managed_token::managed_token {
             &borrow_token_metadata_refs(state).mint_ref, to, amount
         );
 
-        event::emit(Mint { minter: minter_addr, to, amount });
         event::emit_event(
             &mut state.mint_events,
             Mint { minter: minter_addr, to, amount }
@@ -341,7 +330,6 @@ module managed_token::managed_token {
             &borrow_token_metadata_refs(state).burn_ref, from, amount
         );
 
-        event::emit(Burn { burner: burner_addr, from, amount });
         event::emit_event(
             &mut state.burn_events,
             Burn { burner: burner_addr, from, amount }
