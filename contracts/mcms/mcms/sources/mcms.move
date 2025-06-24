@@ -1227,7 +1227,15 @@ module mcms::mcms {
         function_names: vector<String>,
         datas: vector<vector<u8>>
     ) acquires Multisig, MultisigState, Timelock {
-        for (i in 0..targets.length()) {
+        let len = targets.length();
+        assert!(
+            len == module_names.length()
+                && len == function_names.length()
+                && len == datas.length(),
+            E_INVALID_PARAMETERS
+        );
+
+        for (i in 0..len) {
             let target = targets[i];
             let module_name = module_names[i];
             let function_name = function_names[i];

@@ -9,8 +9,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
     use std::string::{Self, String};
     use aptos_framework::fungible_asset::{BurnRef, MintRef};
 
-    use ccip::ownable;
     use ccip::token_admin_registry;
+    use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
 
@@ -294,7 +294,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
             );
 
         // Construct lock_or_burn output before we lose access to fa
-        let dest_pool_data = token_pool::encode_local_decimals(&fa);
+        let dest_pool_data = token_pool::encode_local_decimals(&pool.token_pool_state);
 
         // Burn the funds
         assert!(pool.burn_ref.is_some(), E_BURN_REF_NOT_SET);

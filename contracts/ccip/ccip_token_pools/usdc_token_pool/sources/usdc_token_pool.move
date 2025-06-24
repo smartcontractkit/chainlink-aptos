@@ -13,8 +13,8 @@ module usdc_token_pool::usdc_token_pool {
 
     use ccip::address;
     use ccip::eth_abi;
-    use ccip::ownable;
     use ccip::token_admin_registry;
+    use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
 
@@ -467,8 +467,6 @@ module usdc_token_pool::usdc_token_pool {
         expected_nonce: u64,
         expected_local_domain: u32
     ) {
-        message::validate_message(usdc_message);
-
         let version = message::get_message_version(usdc_message);
         assert!(
             version == SUPPORTED_USDC_VERSION,

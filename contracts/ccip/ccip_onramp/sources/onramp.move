@@ -419,7 +419,8 @@ module ccip_onramp::onramp {
 
         let tokens_len = token_addresses.length();
         assert!(
-            tokens_len == token_store_addresses.length(),
+            tokens_len == token_amounts.length()
+                && tokens_len == token_store_addresses.length(),
             error::invalid_argument(E_TOKEN_AMOUNT_MISMATCH)
         );
 

@@ -308,6 +308,10 @@ module ccip::token_admin_registry {
             !exists<TokenPoolRegistration>(token_pool_address),
             error::invalid_argument(E_ALREADY_REGISTERED)
         );
+        assert!(
+            object::object_exists<Metadata>(local_token),
+            error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
+        );
 
         let state = borrow_state_mut();
 

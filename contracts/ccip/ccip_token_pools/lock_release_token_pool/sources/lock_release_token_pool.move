@@ -9,8 +9,8 @@ module lock_release_token_pool::lock_release_token_pool {
     use std::signer;
     use std::string::{Self, String};
 
-    use ccip::ownable;
     use ccip::token_admin_registry;
+    use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
 
@@ -345,7 +345,7 @@ module lock_release_token_pool::lock_release_token_pool {
             );
 
         // Construct lock_or_burn output before we lose access to fa
-        let dest_pool_data = token_pool::encode_local_decimals(&fa);
+        let dest_pool_data = token_pool::encode_local_decimals(&pool.token_pool_state);
         let metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
         let store =
             primary_fungible_store::primary_store(pool.store_signer_address, metadata);

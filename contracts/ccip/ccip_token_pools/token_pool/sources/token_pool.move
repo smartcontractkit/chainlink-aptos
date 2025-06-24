@@ -366,14 +366,12 @@ module ccip_token_pool::token_pool {
             error::invalid_state(E_CURSED_CHAIN)
         );
 
+        let sender = token_admin_registry::get_lock_or_burn_sender(input);
         // Allowlist check
-        if (allowlist::get_allowlist_enabled(&state.allowlist_state)) {
-            let sender = token_admin_registry::get_lock_or_burn_sender(input);
-            assert!(
-                allowlist::is_allowed(&state.allowlist_state, sender),
-                error::permission_denied(E_NOT_ALLOWED_CALLER)
-            );
-        };
+        assert!(
+            allowlist::is_allowed(&state.allowlist_state, sender),
+            error::permission_denied(E_NOT_ALLOWED_CALLER)
+        );
 
         if (!is_supported_chain(state, remote_chain_selector)) {
             abort error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
@@ -487,9 +485,8 @@ module ccip_token_pool::token_pool {
     // |                          Decimals                            |
     // ================================================================
 
-    public fun encode_local_decimals(fa: &FungibleAsset): vector<u8> {
-        let fa_metadata = fungible_asset::metadata_from_asset(fa);
-        let fa_decimals = fungible_asset::decimals(fa_metadata);
+    public fun encode_local_decimals(state: &TokenPoolState): vector<u8> {
+        let fa_decimals = fungible_asset::decimals(state.fa_metadata);
         let ret = vector[];
         eth_abi::encode_u8(&mut ret, fa_decimals);
         ret
@@ -644,9 +641,10 @@ module ccip_token_pool::token_pool {
     }
 
     // ================================================================
-    // |                          Destroy                             |
+    // |                          Test functions                       |
     // ================================================================
 
+    #[test_only]
     public fun destroy_token_pool(state: TokenPoolState) {
         let TokenPoolState {
             allowlist_state,
