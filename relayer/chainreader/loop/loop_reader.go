@@ -103,17 +103,9 @@ func (a *loopChainReader) BatchGetLatestValues(ctx context.Context, request type
 	for contract, requestBatch := range request {
 		convertedBatch := []types.BatchRead{}
 		for _, read := range requestBatch {
-			readComponents := strings.Split(read.ReadName, "-")
-			if len(readComponents) != 3 {
-				return nil, fmt.Errorf("invalid read identifier: %s", read.ReadName)
-			}
-			_, contractName, _ := readComponents[0], readComponents[1], readComponents[2]
-			if contractName != contract.Name {
-				return nil, fmt.Errorf("mismatched contract name: read.ReadName '%s' has contract '%s', but expected '%s'", read.ReadName, contractName, contract)
-			}
-			_, ok := a.moduleAddresses[contractName]
+			_, ok := a.moduleAddresses[contract.Name]
 			if !ok {
-				return nil, fmt.Errorf("no such contract: %s", contractName)
+				return nil, fmt.Errorf("no such contract: %s", contract.Name)
 			}
 
 			jsonParamBytes, err := json.Marshal(read.Params)
