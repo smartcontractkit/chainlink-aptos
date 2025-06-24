@@ -10,8 +10,8 @@ module managed_token_pool::managed_token_pool {
 
     use managed_token::managed_token;
 
-    use ccip::ownable;
     use ccip::token_admin_registry;
+    use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
 

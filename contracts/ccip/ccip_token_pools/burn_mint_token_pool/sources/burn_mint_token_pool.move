@@ -9,8 +9,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
     use std::string::{Self, String};
     use aptos_framework::fungible_asset::{BurnRef, MintRef};
 
-    use ccip::ownable;
     use ccip::token_admin_registry;
+    use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
 

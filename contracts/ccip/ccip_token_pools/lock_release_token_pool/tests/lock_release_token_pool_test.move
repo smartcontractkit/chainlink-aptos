@@ -411,7 +411,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
             user = @0x456
         )
     ]
-    #[expected_failure(abort_code = 327683, location = ccip::ownable)]
+    #[expected_failure(abort_code = 327683, location = ccip_token_pool::ownable)]
     fun test_set_rebalancer_to_zero_address_unauthorized(
         owner: &signer,
         ccip: &signer,
@@ -540,7 +540,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
             user = @0x456
         )
     ]
-    #[expected_failure(abort_code = 327683, location = ccip::ownable)]
+    #[expected_failure(abort_code = 327683, location = ccip_token_pool::ownable)]
     fun test_migrate_transfer_ref_unauthorized(
         owner: &signer,
         ccip: &signer,
