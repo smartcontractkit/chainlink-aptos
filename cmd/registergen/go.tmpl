@@ -1,0 +1,31 @@
+// Code generated - DO NOT EDIT.
+// This file is a generated registry and any manual changes will be lost.
+
+package bind
+
+// FunctionRegistry contains all function information organized by package -> module -> function name
+var FunctionRegistry = map[string]map[string]map[string]FunctionInfo{
+{{- range $pkg, $modules := . }}
+    "{{ $pkg }}": {
+    {{- range $module, $functions := $modules }}
+        "{{ $module }}": {
+        {{- range $funcName, $funcInfo := $functions }}
+            "{{ $funcName }}": {
+                Package:    "{{ $funcInfo.Package }}",
+                Module:     "{{ $funcInfo.Module }}",
+                Name:       "{{ $funcInfo.Name }}",
+                Parameters: []FunctionParameter{
+                {{- range $param := $funcInfo.Parameters }}
+                    {
+                        Name: "{{ $param.Name }}",
+                        Type: "{{ $param.Type }}",
+                    },
+                {{- end }}
+                },
+            },
+        {{- end }}
+        },
+    {{- end }}
+    },
+{{- end }}
+}
