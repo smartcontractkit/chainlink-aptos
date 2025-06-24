@@ -246,6 +246,7 @@ module ccip::fee_quoter {
     const E_INVALID_FEE_RANGE: u64 = 34;
     const E_INVALID_DEST_BYTES_OVERHEAD: u64 = 35;
     const E_INVALID_SVM_RECEIVER_LENGTH: u64 = 36;
+    const E_TOKEN_AMOUNT_MISMATCH: u64 = 37;
 
     #[view]
     public fun type_and_version(): String {
@@ -1259,6 +1260,10 @@ module ccip::fee_quoter {
         let chain_family_selector = dest_chain_config.chain_family_selector;
 
         let tokens_len = dest_token_addresses.length();
+        assert!(
+            tokens_len == dest_pool_datas.length(),
+            error::invalid_argument(E_TOKEN_AMOUNT_MISMATCH)
+        );
 
         let dest_exec_data_per_token = vector[];
         for (i in 0..tokens_len) {
