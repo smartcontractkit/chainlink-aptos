@@ -60,7 +60,9 @@ module managed_token::ownable_test {
         assert!(pending_transfer_accepted == option::some(false));
 
         assert!(
-            event::emitted_events<OwnershipTransferRequested>().length() == 1
+            event::emitted_events_by_handle<OwnershipTransferRequested>(
+                ownable::get_ownership_transfer_requested_events(&ownable_state)
+            ).length() == 1
         );
 
         ownable::destroy(ownable_state);
@@ -88,7 +90,9 @@ module managed_token::ownable_test {
         assert!(pending_transfer_accepted == option::some(true));
 
         assert!(
-            event::emitted_events<OwnershipTransferAccepted>().length() == 1
+            event::emitted_events_by_handle<OwnershipTransferAccepted>(
+                ownable::get_ownership_transfer_accepted_events(&ownable_state)
+            ).length() == 1
         );
 
         ownable::destroy(ownable_state);
@@ -115,7 +119,9 @@ module managed_token::ownable_test {
         assert!(pending_transfer_accepted == option::none());
 
         assert!(
-            event::emitted_events<OwnershipTransferred>().length() == 1
+            event::emitted_events_by_handle<OwnershipTransferred>(
+                ownable::get_ownership_transferred_events(&ownable_state)
+            ).length() == 1
         );
 
         ownable::destroy(ownable_state);

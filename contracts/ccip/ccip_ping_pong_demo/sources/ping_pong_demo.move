@@ -155,10 +155,8 @@ module ccip_ping_pong_demo::ping_pong_demo {
         state: &mut PingPongDemo, ping_pong_count: u256
     ) {
         if ((ping_pong_count & 1) == 1) {
-            event::emit(Ping { ping_pong_count });
             event::emit_event(&mut state.ping_events, Ping { ping_pong_count });
         } else {
-            event::emit(Pong { ping_pong_count });
             event::emit_event(&mut state.pong_events, Pong { ping_pong_count });
         };
 

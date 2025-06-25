@@ -541,7 +541,6 @@ module ccip_onramp::onramp {
         let message_id = calculate_message_hash(&message, metadata_hash);
         message.header.message_id = message_id;
 
-        event::emit(CCIPMessageSent { dest_chain_selector, sequence_number, message });
         event::emit_event(
             &mut state.ccip_message_sent_events,
             CCIPMessageSent { dest_chain_selector, sequence_number, message }
@@ -673,12 +672,6 @@ module ccip_onramp::onramp {
                     };
                 });
 
-                event::emit(
-                    AllowlistSendersAdded {
-                        dest_chain_selector,
-                        senders: add_allowed_senders
-                    }
-                );
                 event::emit_event(
                     &mut state.allowlist_senders_added_events,
                     AllowlistSendersAdded {
@@ -697,12 +690,6 @@ module ccip_onramp::onramp {
                     }
                 });
 
-                event::emit(
-                    AllowlistSendersRemoved {
-                        dest_chain_selector,
-                        senders: remove_allowed_senders
-                    }
-                );
                 event::emit_event(
                     &mut state.allowlist_senders_removed_events,
                     AllowlistSendersRemoved {
@@ -771,13 +758,6 @@ module ccip_onramp::onramp {
                 balance
             );
 
-            event::emit(
-                FeeTokenWithdrawn {
-                    fee_aggregator: state.fee_aggregator,
-                    fee_token,
-                    amount: balance
-                }
-            );
             event::emit_event(
                 &mut state.fee_token_withdrawn_events,
                 FeeTokenWithdrawn {
@@ -801,7 +781,6 @@ module ccip_onramp::onramp {
 
         let dynamic_config = DynamicConfig { fee_aggregator, allowlist_admin };
 
-        event::emit(ConfigSet { static_config, dynamic_config });
         event::emit_event(
             &mut state.config_set_events,
             ConfigSet { static_config, dynamic_config }
@@ -916,14 +895,6 @@ module ccip_onramp::onramp {
             dest_chain_config.router = router;
             dest_chain_config.allowlist_enabled = allowlist_enabled;
 
-            event::emit(
-                DestChainConfigSet {
-                    dest_chain_selector,
-                    router,
-                    sequence_number: dest_chain_config.sequence_number,
-                    allowlist_enabled: dest_chain_config.allowlist_enabled
-                }
-            );
             event::emit_event(
                 &mut state.dest_chain_config_set_events,
                 DestChainConfigSet {

@@ -195,7 +195,6 @@ module ccip_token_pool::token_pool {
             );
             state.remote_chain_configs.remove(remote_chain_selector);
 
-            event::emit(ChainRemoved { remote_chain_selector });
             event::emit_event(
                 &mut state.chain_removed_events, ChainRemoved { remote_chain_selector }
             );
@@ -237,9 +236,6 @@ module ccip_token_pool::token_pool {
 
                     remote_chain_config.remote_pools.push_back(remote_pool_address);
 
-                    event::emit(
-                        RemotePoolAdded { remote_chain_selector, remote_pool_address }
-                    );
                     event::emit_event(
                         &mut state.remote_pool_added_events,
                         RemotePoolAdded { remote_chain_selector, remote_pool_address }
@@ -249,7 +245,6 @@ module ccip_token_pool::token_pool {
 
             state.remote_chain_configs.add(remote_chain_selector, remote_chain_config);
 
-            event::emit(ChainAdded { remote_chain_selector, remote_token_address });
             event::emit_event(
                 &mut state.chain_added_events,
                 ChainAdded { remote_chain_selector, remote_token_address }
@@ -312,7 +307,6 @@ module ccip_token_pool::token_pool {
 
         remote_chain_config.remote_pools.push_back(remote_pool_address);
 
-        event::emit(RemotePoolAdded { remote_chain_selector, remote_pool_address });
         event::emit_event(
             &mut state.remote_pool_added_events,
             RemotePoolAdded { remote_chain_selector, remote_pool_address }
@@ -337,7 +331,6 @@ module ccip_token_pool::token_pool {
         // remove instead of swap_remove for readability, so the newest added pool is always at the end.
         remote_chain_config.remote_pools.remove(i);
 
-        event::emit(RemotePoolRemoved { remote_chain_selector, remote_pool_address });
         event::emit_event(
             &mut state.remote_pool_removed_events,
             RemotePoolRemoved { remote_chain_selector, remote_pool_address }
@@ -440,9 +433,6 @@ module ccip_token_pool::token_pool {
     ) {
         let local_token = object::object_address(&state.fa_metadata);
 
-        event::emit(
-            ReleasedOrMinted { remote_chain_selector, local_token, recipient, amount }
-        );
         event::emit_event(
             &mut state.released_events,
             ReleasedOrMinted { remote_chain_selector, local_token, recipient, amount }
@@ -454,7 +444,6 @@ module ccip_token_pool::token_pool {
     ) {
         let local_token = object::object_address(&state.fa_metadata);
 
-        event::emit(LockedOrBurned { remote_chain_selector, local_token, amount });
         event::emit_event(
             &mut state.locked_events,
             LockedOrBurned { remote_chain_selector, local_token, amount }
@@ -466,7 +455,6 @@ module ccip_token_pool::token_pool {
     ) {
         let local_token = object::object_address(&state.fa_metadata);
 
-        event::emit(LiquidityAdded { local_token, provider, amount });
         event::emit_event(
             &mut state.liquidity_added_events,
             LiquidityAdded { local_token, provider, amount }
@@ -478,7 +466,6 @@ module ccip_token_pool::token_pool {
     ) {
         let local_token = object::object_address(&state.fa_metadata);
 
-        event::emit(LiquidityRemoved { local_token, provider, amount });
         event::emit_event(
             &mut state.liquidity_removed_events,
             LiquidityRemoved { local_token, provider, amount }
@@ -488,7 +475,6 @@ module ccip_token_pool::token_pool {
     public fun emit_rebalancer_set(
         state: &mut TokenPoolState, old_rebalancer: address, new_rebalancer: address
     ) {
-        event::emit(RebalancerSet { old_rebalancer, new_rebalancer });
         event::emit_event(
             &mut state.rebalancer_set_events,
             RebalancerSet { old_rebalancer, new_rebalancer }
@@ -689,5 +675,15 @@ module ccip_token_pool::token_pool {
         event::destroy_handle(rebalancer_set_events);
 
         token_pool_rate_limiter::destroy_rate_limiter(rate_limiter_config);
+    }
+
+    #[test_only]
+    public fun get_locked_or_burned_events(state: &TokenPoolState): vector<LockedOrBurned> {
+        event::emitted_events_by_handle<LockedOrBurned>(&state.locked_events)
+    }
+
+    #[test_only]
+    public fun get_released_or_minted_events(state: &TokenPoolState): vector<ReleasedOrMinted> {
+        event::emitted_events_by_handle<ReleasedOrMinted>(&state.released_events)
     }
 }

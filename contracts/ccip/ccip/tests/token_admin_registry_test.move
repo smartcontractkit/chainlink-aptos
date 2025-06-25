@@ -14,8 +14,7 @@ module ccip::token_admin_registry_test {
     };
     use std::account;
     use std::primary_fungible_store;
-    use std::event;
-    use ccip::token_admin_registry::{Self, TokenUnregistered};
+    use ccip::token_admin_registry::{Self};
     use ccip::state_object;
     use ccip::auth;
 
@@ -134,9 +133,7 @@ module ccip::token_admin_registry_test {
         assert!(token_pool_address == @0x0);
         assert!(admin == @0x0);
         assert!(pending_admin == @0x0);
-        assert!(
-            event::emitted_events<TokenUnregistered>().length() == 1
-        );
+        assert!(token_admin_registry::get_token_unregistered_events().length() == 1);
 
         let new_administrator = signer::address_of(owner);
         mock_pool::register_and_set_pool(owner, &mock_obj_signer, token_addr);

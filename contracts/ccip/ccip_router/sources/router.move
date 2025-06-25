@@ -306,7 +306,6 @@ module ccip_router::router {
                     &mut state.on_ramp_set_events,
                     OnRampSet { dest_chain_selector, on_ramp_version }
                 );
-                event::emit(OnRampSet { dest_chain_selector, on_ramp_version });
             }
         );
     }

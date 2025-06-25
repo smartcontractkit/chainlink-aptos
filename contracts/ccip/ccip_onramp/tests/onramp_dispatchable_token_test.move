@@ -17,7 +17,6 @@ module ccip_onramp::onramp_dispatchable_token_test {
     };
     use std::primary_fungible_store;
     use std::timestamp;
-    use std::event;
 
     use ccip::token_admin_registry;
     use ccip::rmn_remote;
@@ -29,7 +28,6 @@ module ccip_onramp::onramp_dispatchable_token_test {
     use ccip::fee_quoter::{Self};
     use ccip_onramp::mock_token;
 
-    use ccip_token_pool::token_pool;
     use burn_mint_token_pool::burn_mint_token_pool;
     use lock_release_token_pool::lock_release_token_pool;
 
@@ -210,14 +208,18 @@ module ccip_onramp::onramp_dispatchable_token_test {
         assert!(token_pool_balance == result.sent_amount);
 
         assert!(
-            event::emitted_events<token_pool::LockedOrBurned>().length() == 1
+            lock_release_token_pool::get_locked_or_burned_events(
+                lock_release_token_pool::get_store_address()
+            ).length() == 1
         );
     }
 
     fun assert_burn_mint_pool_success(result: &CCIPSendResult) {
         assert_ccip_send_success(result);
         assert!(
-            event::emitted_events<token_pool::LockedOrBurned>().length() == 1
+            burn_mint_token_pool::get_locked_or_burned_events(
+                burn_mint_token_pool::get_store_address()
+            ).length() == 1
         );
     }
 
