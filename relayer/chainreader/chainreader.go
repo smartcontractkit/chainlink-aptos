@@ -129,16 +129,24 @@ func (a *aptosChainReader) HealthReport() map[string]error {
 }
 
 func (a *aptosChainReader) Start(ctx context.Context) error {
+	deadline, hasDeadline := ctx.Deadline()
+	a.lggr.Infow("ChainReader Start() called",
+		"ctx_err", ctx.Err(),
+		"has_deadline", hasDeadline,
+		"deadline", deadline,
+		"ctx_type", fmt.Sprintf("%T", ctx),
+	)
+
 	return a.starter.StartOnce(a.Name(), func() error {
 		if a.dbStore != nil {
 
 			var syncEventCtx context.Context
-			syncEventCtx, a.eventSyncCancelFunc = context.WithCancel(ctx)
+			syncEventCtx, a.eventSyncCancelFunc = context.WithCancel(context.Background())
 			go a.startEventPolling(syncEventCtx)
 			a.lggr.Infow("AptosChainReader started event polling", "interval", a.config.EventSyncInterval)
 
 			var syncTxCtx context.Context
-			syncTxCtx, a.txSyncCancelFunc = context.WithCancel(ctx)
+			syncTxCtx, a.txSyncCancelFunc = context.WithCancel(context.Background())
 			go a.startTxPolling(syncTxCtx)
 			a.lggr.Infow("AptosChainReader started transaction polling", "interval", a.config.TxSyncInterval)
 		}

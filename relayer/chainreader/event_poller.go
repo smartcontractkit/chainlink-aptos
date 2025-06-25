@@ -13,6 +13,9 @@ import (
 )
 
 func (a *aptosChainReader) startEventPolling(ctx context.Context) {
+	a.lggr.Infow("Event polling goroutine started")
+	defer a.lggr.Infow("Event polling goroutine exited")
+
 	ticker := time.NewTicker(a.config.EventSyncInterval)
 	defer ticker.Stop()
 
