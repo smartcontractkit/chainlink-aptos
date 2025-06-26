@@ -116,7 +116,6 @@ type GethConfig struct {
 	Name    string
 	WSRPC   string
 	HTTPRPC string
-	ChainId string
 }
 
 type DevnetConfig struct {
@@ -192,11 +191,6 @@ func ValidateGeth() (*GethConfig, error) {
 		errs = append(errs, "GETH_HTTP_PORT is required")
 	}
 
-	chainId, ok := os.LookupEnv("GETH_CHAIN_ID")
-	if !ok {
-		errs = append(errs, "GETH_CHAIN_ID is required")
-	}
-
 	if len(errs) == 0 {
 		return &GethConfig{
 			Image:   gethImage,
@@ -204,7 +198,6 @@ func ValidateGeth() (*GethConfig, error) {
 			Name:    name,
 			WSRPC:   fmt.Sprintf("ws://%s:%s", name, gethWsPort),
 			HTTPRPC: fmt.Sprintf("http://%s:%s", name, gethHttpPort),
-			ChainId: chainId,
 		}, nil
 	}
 
