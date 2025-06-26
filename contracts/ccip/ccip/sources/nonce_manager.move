@@ -6,6 +6,7 @@ module ccip::nonce_manager {
     use ccip::auth;
     use ccip::state_object;
 
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct NonceManagerState has key, store {
         // dest chain selector -> sender -> nonce
         outbound_nonces: SmartTable<u64, SmartTable<address, u64>>

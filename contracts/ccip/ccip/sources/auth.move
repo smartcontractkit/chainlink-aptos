@@ -12,6 +12,7 @@ module ccip::auth {
     use mcms::bcs_stream;
     use mcms::mcms_registry;
 
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct AuthState has key {
         ownable_state: ownable::OwnableState,
         allowed_onramps: allowlist::AllowlistState,

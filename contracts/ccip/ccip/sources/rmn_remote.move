@@ -22,6 +22,7 @@ module ccip::rmn_remote {
 
     const GLOBAL_CURSE_SUBJECT: vector<u8> = x"01000000000000000000000000000001";
 
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct RMNRemoteState has key {
         local_chain_selector: u64,
         config: Config,

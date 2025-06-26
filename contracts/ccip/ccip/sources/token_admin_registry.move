@@ -26,6 +26,7 @@ module ccip::token_admin_registry {
         RELEASE_OR_MINT
     }
 
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct TokenAdminRegistryState has key, store {
         extend_ref: ExtendRef,
         transfer_ref: TransferRef,

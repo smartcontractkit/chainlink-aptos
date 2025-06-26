@@ -87,6 +87,7 @@ module ccip::fee_quoter {
     // the fee by 1e10 on Aptos before we emit it in the event.
     const LOCAL_8_TO_18_DECIMALS_LINK_MULTIPLIER: u256 = 10_000_000_000;
 
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct FeeQuoterState has key, store {
         // max_fee_juels_per_msg is in juels (1e18) denomination for consistency across chains.
         max_fee_juels_per_msg: u256,

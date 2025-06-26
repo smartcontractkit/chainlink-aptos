@@ -10,6 +10,7 @@ module managed_token::faucet {
 
     const E_NOT_PUBLISHER: u64 = 1;
 
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct FaucetState has key, store {
         extend_ref: ExtendRef
     }

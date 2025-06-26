@@ -17,6 +17,7 @@ module ccip::receiver_registry {
 
     friend ccip::receiver_dispatcher;
 
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct ReceiverRegistryState has key, store {
         extend_ref: ExtendRef,
         transfer_ref: TransferRef,

@@ -21,6 +21,7 @@ module ccip::state_object {
     friend ccip::rmn_remote;
     friend ccip::token_admin_registry;
 
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct StateObjectRefs has key {
         extend_ref: ExtendRef,
         transfer_ref: TransferRef
