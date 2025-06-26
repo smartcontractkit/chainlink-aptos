@@ -86,6 +86,7 @@ func (a *aptosChainReader) getModuleAddress(contractName string) (aptos.AccountA
 }
 
 func (a *aptosChainReader) setModuleAddresses(addresses map[string]aptos.AccountAddress) {
+	a.lggr.Infow("setModuleAddresses called", "addresses", addresses)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for contractName, address := range addresses {
