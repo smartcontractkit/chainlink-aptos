@@ -180,9 +180,7 @@ module ccip_onramp::onramp {
 
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints == @0x1) {
-            mcms_registry::register_entrypoint(
-                publisher, string::utf8(b"onramp"), McmsCallback {}
-            );
+            register_mcms_entrypoint(publisher);
         };
     }
 
@@ -1090,6 +1088,12 @@ module ccip_onramp::onramp {
         option::none()
     }
 
+    public(friend) fun register_mcms_entrypoint(publisher: &signer) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(b"onramp"), McmsCallback {}
+        );
+    }
+
     public fun dynamic_config_fee_aggregator(config: &DynamicConfig): address {
         config.fee_aggregator
     }
@@ -1110,9 +1114,7 @@ module ccip_onramp::onramp {
     }
 
     #[test_only]
-    public fun register_mcms_entrypoint(publisher: &signer) {
-        mcms_registry::register_entrypoint(
-            publisher, string::utf8(b"onramp"), McmsCallback {}
-        );
+    public fun test_register_mcms_entrypoint(publisher: &signer) {
+        register_mcms_entrypoint(publisher);
     }
 }

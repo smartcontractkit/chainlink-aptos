@@ -61,9 +61,10 @@ type AuthEncoder interface {
 	AssertIsAllowedOfframp(caller aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AssertOnlyOwner(caller aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	RegisterMCMSEntrypoint() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"auth","name":"accept_ownership","parameters":null},{"package":"ccip","module":"auth","name":"apply_allowed_offramp_updates","parameters":[{"name":"offramps_to_remove","type":"vector\u003caddress\u003e"},{"name":"offramps_to_add","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"auth","name":"apply_allowed_onramp_updates","parameters":[{"name":"onramps_to_remove","type":"vector\u003caddress\u003e"},{"name":"onramps_to_add","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"auth","name":"assert_is_allowed_offramp","parameters":[{"name":"caller","type":"address"}]},{"package":"ccip","module":"auth","name":"assert_is_allowed_onramp","parameters":[{"name":"caller","type":"address"}]},{"package":"ccip","module":"auth","name":"assert_only_owner","parameters":[{"name":"caller","type":"address"}]},{"package":"ccip","module":"auth","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"ccip","module":"auth","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"auth","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
+const FunctionInfo = `[{"package":"ccip","module":"auth","name":"accept_ownership","parameters":null},{"package":"ccip","module":"auth","name":"apply_allowed_offramp_updates","parameters":[{"name":"offramps_to_remove","type":"vector\u003caddress\u003e"},{"name":"offramps_to_add","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"auth","name":"apply_allowed_onramp_updates","parameters":[{"name":"onramps_to_remove","type":"vector\u003caddress\u003e"},{"name":"onramps_to_add","type":"vector\u003caddress\u003e"}]},{"package":"ccip","module":"auth","name":"assert_is_allowed_offramp","parameters":[{"name":"caller","type":"address"}]},{"package":"ccip","module":"auth","name":"assert_is_allowed_onramp","parameters":[{"name":"caller","type":"address"}]},{"package":"ccip","module":"auth","name":"assert_only_owner","parameters":[{"name":"caller","type":"address"}]},{"package":"ccip","module":"auth","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"ccip","module":"auth","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"auth","name":"register_mcms_entrypoint","parameters":null},{"package":"ccip","module":"auth","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
 
 func NewAuth(address aptos.AccountAddress, client aptos.AptosRpcClient) AuthInterface {
 	contract := bind.NewBoundContract(address, "ccip", "auth", client)
@@ -449,4 +450,8 @@ func (c authEncoder) MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleI
 	}, []any{
 		Metadata,
 	})
+}
+
+func (c authEncoder) RegisterMCMSEntrypoint() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("register_mcms_entrypoint", nil, []string{}, []any{})
 }

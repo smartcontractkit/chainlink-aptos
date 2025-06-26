@@ -267,9 +267,7 @@ module ccip_offramp::offramp {
 
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints == @0x1) {
-            mcms_registry::register_entrypoint(
-                publisher, string::utf8(b"offramp"), McmsCallback {}
-            );
+            register_mcms_entrypoint(publisher);
         };
     }
 
@@ -1450,6 +1448,13 @@ module ccip_offramp::offramp {
         option::none()
     }
 
+    /// Callable during upgrades
+    public(friend) fun register_mcms_entrypoint(publisher: &signer) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(b"offramp"), McmsCallback {}
+        );
+    }
+
     // ======================= Getters ==========================
     public fun chain_selector(config: &StaticConfig): u64 {
         config.chain_selector
@@ -1477,9 +1482,7 @@ module ccip_offramp::offramp {
 
     #[test_only]
     public fun test_register_mcms_entrypoint(publisher: &signer) {
-        mcms_registry::register_entrypoint(
-            publisher, string::utf8(b"offramp"), McmsCallback {}
-        );
+        register_mcms_entrypoint(publisher);
     }
 
     #[test_only]
