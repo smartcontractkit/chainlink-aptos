@@ -37,18 +37,10 @@ func (s *DBStore) EnsureSchema(ctx context.Context) error {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 
-	dropSchemaSQL := `
-DROP SCHEMA IF EXISTS aptos CASCADE;
-`
-	_, err := s.ds.ExecContext(ctx, dropSchemaSQL)
-	if err != nil {
-		return fmt.Errorf("failed to drop aptos schema: %w", err)
-	}
-
 	schemaSQL := `
 CREATE SCHEMA IF NOT EXISTS aptos;
 `
-	_, err = s.ds.ExecContext(ctx, schemaSQL)
+	_, err := s.ds.ExecContext(ctx, schemaSQL)
 	if err != nil {
 		return fmt.Errorf("failed to create aptos schema: %w", err)
 	}
@@ -247,9 +239,12 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 		}
 
 		var data map[string]any
-		if err := json.Unmarshal(dataBytes, &data); err != nil {
+		decoder := json.NewDecoder(strings.NewReader(string(dataBytes)))
+		decoder.UseNumber()
+		if err := decoder.Decode(&data); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal event data: %w", err)
 		}
+
 		record.Data = data
 		records = append(records, record)
 	}

@@ -2,6 +2,7 @@ package codec
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -87,7 +88,7 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 
 	switch t.Kind() {
 	case reflect.String:
-		return data, nil
+		return str, nil
 	case reflect.Slice:
 		if t.Elem().Kind() != reflect.Uint8 {
 			return nil, fmt.Errorf("unsupported target slice element type for hex string conversion: %v", t.Elem().Kind())
@@ -184,12 +185,13 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 }
 
 func numericStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
-	if f.Kind() != reflect.String {
-		return data, nil
-	}
-
-	str, ok := data.(string)
-	if !ok {
+	var str string
+	switch v := data.(type) {
+	case string:
+		str = v
+	case json.Number:
+		str = v.String()
+	default:
 		return data, nil
 	}
 
@@ -199,7 +201,7 @@ func numericStringHook(f reflect.Type, t reflect.Type, data interface{}) (interf
 		fieldPtr := newStructVal.Field(0).Addr().Interface()
 
 		// Decode the original numeric string data into the field pointer
-		if err := DecodeAptosJsonValue(data, fieldPtr); err != nil {
+		if err := DecodeAptosJsonValue(str, fieldPtr); err != nil {
 			return nil, fmt.Errorf("failed decoding numeric string for single-field struct %v field %s (%v): %w", t, field.Name, field.Type, err)
 		}
 		return newStructVal.Interface(), nil
