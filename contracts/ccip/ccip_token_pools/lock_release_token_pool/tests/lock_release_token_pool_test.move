@@ -93,7 +93,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
         ccip: &signer, owner: &signer, lock_release_token_pool: &signer
     ) {
         state_object::init_module_for_testing(ccip);
-        auth::test_init_module(owner);
+        auth::test_init_module(ccip);
         token_admin_registry::init_module_for_testing(ccip);
         lock_release_token_pool::test_init_module(lock_release_token_pool);
     }

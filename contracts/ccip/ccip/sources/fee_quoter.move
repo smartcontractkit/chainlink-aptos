@@ -256,9 +256,7 @@ module ccip::fee_quoter {
     fun init_module(publisher: &signer) {
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints == @0x1) {
-            mcms_registry::register_entrypoint(
-                publisher, string::utf8(b"fee_quoter"), McmsCallback {}
-            );
+            register_mcms_entrypoint(publisher);
         };
     }
 
@@ -1702,6 +1700,13 @@ module ccip::fee_quoter {
         };
 
         option::none()
+    }
+
+    /// Callable during upgrades
+    public(friend) fun register_mcms_entrypoint(publisher: &signer) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(b"fee_quoter"), McmsCallback {}
+        );
     }
 
     public fun dest_chain_config_values(

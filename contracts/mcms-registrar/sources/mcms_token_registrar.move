@@ -19,9 +19,7 @@ module managed_token::mcms_token_registrar {
         assert!(object::is_object(@managed_token), E_NOT_PUBLISHER);
 
         if (@mcms_register_entrypoints == @0x1) {
-            mcms_registry::register_entrypoint(
-                publisher, string::utf8(b"managed_token"), McmsCallback {}
-            );
+            register_mcms_entrypoint(publisher);
         };
     }
 
@@ -118,6 +116,13 @@ module managed_token::mcms_token_registrar {
         };
 
         option::none()
+    }
+
+    /// Callable during upgrades
+    public(friend) fun register_mcms_entrypoint(publisher: &signer) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(b"managed_token"), McmsCallback {}
+        );
     }
 
     #[test_only]
