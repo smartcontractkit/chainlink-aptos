@@ -86,7 +86,6 @@ func (a *aptosChainReader) getModuleAddress(contractName string) (aptos.AccountA
 }
 
 func (a *aptosChainReader) setModuleAddresses(addresses map[string]aptos.AccountAddress) {
-	a.lggr.Infow("setModuleAddresses called", "addresses", addresses)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for contractName, address := range addresses {
@@ -663,6 +662,12 @@ func (a *aptosChainReader) getEventConfig(moduleKey, eventKey string) (eventAcco
 	if !ok {
 		return aptos.AccountAddress{}, "", nil, fmt.Errorf("no module config found for key: %s", moduleKey)
 	}
+
+	a.mu.RLock()
+	a.lggr.Debugw("Looking up module address",
+		"requestedModuleKey", moduleKey,
+		"mapContents", fmt.Sprintf("%+v", a.moduleAddresses))
+	a.mu.RUnlock()
 
 	boundAddress, ok := a.getModuleAddress(moduleKey)
 	if !ok {
