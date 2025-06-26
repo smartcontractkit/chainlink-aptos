@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -239,9 +240,12 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 		}
 
 		var data map[string]any
-		if err := json.Unmarshal(dataBytes, &data); err != nil {
+		decoder := json.NewDecoder(bytes.NewReader(dataBytes))
+		decoder.UseNumber()
+		if err := decoder.Decode(&data); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal event data: %w", err)
 		}
+
 		record.Data = data
 		records = append(records, record)
 	}

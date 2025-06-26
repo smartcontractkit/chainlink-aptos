@@ -230,8 +230,8 @@ func (a *aptosChainReader) syncTransmitterTxs(ctx context.Context, transmitter a
 			// Create synthetic ExecutionStateChanged event
 			// The fields map one-to-one the onchain event
 			executionStateChanged := map[string]any{
-				"source_chain_selector": sourceChainSelector,
-				"sequence_number":       execReport.Message.Header.SequenceNumber,
+				"source_chain_selector": fmt.Sprintf("%d", sourceChainSelector),
+				"sequence_number":       fmt.Sprintf("%d", execReport.Message.Header.SequenceNumber),
 				"message_id":            "0x" + hex.EncodeToString(execReport.Message.Header.MessageID),
 				"message_hash":          "0x" + hex.EncodeToString(messageHash[:]),
 				"state":                 uint8(3), // 3 = FAILURE
