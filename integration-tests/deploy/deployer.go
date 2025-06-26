@@ -248,7 +248,7 @@ func (d *Deployer) DeployCore() error {
 		toml.WebServer.HTTPPort = webserverPort
 		toml.Aptos[0].ChainID = d.Devnet.Config.ChainId
 		toml.Aptos[0].Nodes[0].URL = d.Devnet.Config.HTTPRPC
-		toml.EVM[0].ChainID = d.Geth.Config.ChainId
+		toml.EVM[0].ChainID = "1337"
 		toml.EVM[0].Nodes[0].Name = "node-geth-0"
 		toml.EVM[0].Nodes[0].WSURL = d.Geth.Config.WSRPC
 		toml.EVM[0].Nodes[0].HTTPURL = d.Geth.Config.HTTPRPC
