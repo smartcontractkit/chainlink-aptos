@@ -191,7 +191,6 @@ func (d *Deployer) DeployGeth() error {
 			"--rpc.allow-unprotected-txs",
 			"--http.corsdomain=*",
 			"--vmdebug",
-			"--networkid=1337",
 			"--dev.period=1",
 			"--miner.gasprice=10",
 		},
