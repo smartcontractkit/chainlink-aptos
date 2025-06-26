@@ -86,9 +86,11 @@ func (a *aptosChainReader) getModuleAddress(contractName string) (aptos.AccountA
 }
 
 func (a *aptosChainReader) setModuleAddresses(addresses map[string]aptos.AccountAddress) {
+	a.lggr.Infow("setModuleAddresses called", "addresses", addresses)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for contractName, address := range addresses {
+		a.lggr.Infow("Binding contract", "name", contractName, "address", address.String())
 		a.moduleAddresses[contractName] = address
 	}
 }
@@ -97,9 +99,11 @@ func (a *aptosChainReader) deleteModuleAddress(contractName string) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if _, ok := a.moduleAddresses[contractName]; ok {
+		a.lggr.Infow("Unbinding contract", "name", contractName)
 		delete(a.moduleAddresses, contractName)
 		return true
 	}
+	a.lggr.Warnw("Attempted to unbind non-existent contract", "name", contractName)
 	return false
 }
 
@@ -565,6 +569,7 @@ func (a *aptosChainReader) QueryKeyWithMetadata(ctx context.Context, contract ty
 }
 
 func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContract) error {
+	a.lggr.Infow("Bind called", "bindings", bindings)
 	newBindings := map[string]aptos.AccountAddress{}
 	for _, binding := range bindings {
 		moduleAddress := &aptos.AccountAddress{}
@@ -581,6 +586,7 @@ func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContr
 }
 
 func (a *aptosChainReader) Unbind(ctx context.Context, bindings []types.BoundContract) error {
+	a.lggr.Infow("Unbind called", "bindings", bindings)
 	for _, binding := range bindings {
 		key := binding.Name
 		if !a.deleteModuleAddress(key) {
