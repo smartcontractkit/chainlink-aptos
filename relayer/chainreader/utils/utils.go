@@ -100,7 +100,15 @@ func ApplyEventFilterRenames(exprs []query.Expression, renames map[string]string
 				newExprs[i] = expr
 			}
 		} else {
-			newExprs[i] = expr
+			// Apply renames recursively to nested expressions
+			boolExpr := expr.BoolExpression
+			nestedExprs := ApplyEventFilterRenames(boolExpr.Expressions, renames)
+			newExprs[i] = query.Expression{
+				BoolExpression: query.BoolExpression{
+					Expressions:  nestedExprs,
+					BoolOperator: boolExpr.BoolOperator,
+				},
+			}
 		}
 	}
 	return newExprs

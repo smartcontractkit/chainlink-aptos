@@ -89,6 +89,7 @@ func (a *aptosChainReader) setModuleAddresses(addresses map[string]aptos.Account
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for contractName, address := range addresses {
+		a.lggr.Infow("Binding contract", "name", contractName, "address", address.String())
 		a.moduleAddresses[contractName] = address
 	}
 }
@@ -97,9 +98,11 @@ func (a *aptosChainReader) deleteModuleAddress(contractName string) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if _, ok := a.moduleAddresses[contractName]; ok {
+		a.lggr.Infow("Unbinding contract", "name", contractName)
 		delete(a.moduleAddresses, contractName)
 		return true
 	}
+	a.lggr.Warnw("Attempted to unbind non-existent contract", "name", contractName)
 	return false
 }
 
@@ -129,16 +132,24 @@ func (a *aptosChainReader) HealthReport() map[string]error {
 }
 
 func (a *aptosChainReader) Start(ctx context.Context) error {
+	deadline, hasDeadline := ctx.Deadline()
+	a.lggr.Infow("ChainReader Start() called",
+		"ctx_err", ctx.Err(),
+		"has_deadline", hasDeadline,
+		"deadline", deadline,
+		"ctx_type", fmt.Sprintf("%T", ctx),
+	)
+
 	return a.starter.StartOnce(a.Name(), func() error {
 		if a.dbStore != nil {
 
 			var syncEventCtx context.Context
-			syncEventCtx, a.eventSyncCancelFunc = context.WithCancel(ctx)
+			syncEventCtx, a.eventSyncCancelFunc = context.WithCancel(context.Background())
 			go a.startEventPolling(syncEventCtx)
 			a.lggr.Infow("AptosChainReader started event polling", "interval", a.config.EventSyncInterval)
 
 			var syncTxCtx context.Context
-			syncTxCtx, a.txSyncCancelFunc = context.WithCancel(ctx)
+			syncTxCtx, a.txSyncCancelFunc = context.WithCancel(context.Background())
 			go a.startTxPolling(syncTxCtx)
 			a.lggr.Infow("AptosChainReader started transaction polling", "interval", a.config.TxSyncInterval)
 		}
@@ -557,6 +568,7 @@ func (a *aptosChainReader) QueryKeyWithMetadata(ctx context.Context, contract ty
 }
 
 func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContract) error {
+	a.lggr.Infow("Bind called", "bindings", bindings)
 	newBindings := map[string]aptos.AccountAddress{}
 	for _, binding := range bindings {
 		moduleAddress := &aptos.AccountAddress{}
@@ -573,6 +585,7 @@ func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContr
 }
 
 func (a *aptosChainReader) Unbind(ctx context.Context, bindings []types.BoundContract) error {
+	a.lggr.Infow("Unbind called", "bindings", bindings)
 	for _, binding := range bindings {
 		key := binding.Name
 		if !a.deleteModuleAddress(key) {
@@ -649,6 +662,12 @@ func (a *aptosChainReader) getEventConfig(moduleKey, eventKey string) (eventAcco
 	if !ok {
 		return aptos.AccountAddress{}, "", nil, fmt.Errorf("no module config found for key: %s", moduleKey)
 	}
+
+	a.mu.RLock()
+	a.lggr.Debugw("Looking up module address",
+		"requestedModuleKey", moduleKey,
+		"mapContents", fmt.Sprintf("%+v", a.moduleAddresses))
+	a.mu.RUnlock()
 
 	boundAddress, ok := a.getModuleAddress(moduleKey)
 	if !ok {

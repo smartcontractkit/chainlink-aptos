@@ -2,6 +2,7 @@ package chainreader
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -19,6 +20,9 @@ import (
 )
 
 func (a *aptosChainReader) startTxPolling(ctx context.Context) {
+	a.lggr.Infow("Transaction polling goroutine started")
+	defer a.lggr.Infow("Transaction polling goroutine exited")
+
 	ticker := time.NewTicker(a.config.TxSyncInterval)
 	defer ticker.Stop()
 
@@ -228,8 +232,8 @@ func (a *aptosChainReader) syncTransmitterTxs(ctx context.Context, transmitter a
 			executionStateChanged := map[string]any{
 				"source_chain_selector": sourceChainSelector,
 				"sequence_number":       execReport.Message.Header.SequenceNumber,
-				"message_id":            execReport.Message.Header.MessageID,
-				"message_hash":          messageHash[:],
+				"message_id":            "0x" + hex.EncodeToString(execReport.Message.Header.MessageID),
+				"message_hash":          "0x" + hex.EncodeToString(messageHash[:]),
 				"state":                 uint8(3), // 3 = FAILURE
 			}
 

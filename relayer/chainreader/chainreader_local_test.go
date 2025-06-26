@@ -1195,6 +1195,46 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 		require.ElementsMatch(t, expectedValues, values)
 	})
 
+	t.Run("Filter by nested path via EventFilterRenames - nested boolean", func(t *testing.T) {
+		// This filter will test renaming inside nested boolean expressions.
+		// (NestedID >= 2 AND NestedID < 5) OR (NestedID >= 15 AND NestedID < 18)
+		filter := query.KeyFilter{
+			Key: "ComplexStruct",
+			Expressions: []query.Expression{
+				query.Or(
+					query.And(
+						query.Comparator("NestedID",
+							primitives.ValueComparator{Value: uint64(2), Operator: primitives.Gte},
+							primitives.ValueComparator{Value: uint64(5), Operator: primitives.Lt},
+						),
+					),
+					query.And(
+						query.Comparator("NestedID",
+							primitives.ValueComparator{Value: uint64(15), Operator: primitives.Gte},
+							primitives.ValueComparator{Value: uint64(18), Operator: primitives.Lt},
+						),
+					),
+				),
+			},
+		}
+		seqs, err := loopReader.QueryKey(
+			context.Background(),
+			binding,
+			filter,
+			query.LimitAndSort{Limit: query.CountLimit(100)},
+			&ComplexStruct{},
+		)
+		require.NoError(t, err)
+
+		var ids []uint64
+		for _, seq := range seqs {
+			cs, ok := seq.Data.(*ComplexStruct)
+			require.True(t, ok)
+			ids = append(ids, cs.RenamedNested.RenamedId)
+		}
+		require.ElementsMatch(t, []uint64{2, 3, 4, 15, 16, 17}, ids)
+	})
+
 	t.Run("QueryKey - Error Cases", func(t *testing.T) {
 		// Filtering on a non-existent field returns empty results.
 		invalidFilter := query.KeyFilter{
