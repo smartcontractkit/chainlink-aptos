@@ -88,7 +88,7 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 
 	switch t.Kind() {
 	case reflect.String:
-		return str, nil
+		return data, nil
 	case reflect.Slice:
 		if t.Elem().Kind() != reflect.Uint8 {
 			return nil, fmt.Errorf("unsupported target slice element type for hex string conversion: %v", t.Elem().Kind())
@@ -209,7 +209,7 @@ func numericStringHook(f reflect.Type, t reflect.Type, data interface{}) (interf
 
 	switch t.Kind() {
 	case reflect.String:
-		return data, nil
+		return str, nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		val, err := strconv.ParseInt(str, 10, 64)
 		if err != nil {
