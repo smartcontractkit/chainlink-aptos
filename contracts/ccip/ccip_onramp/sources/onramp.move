@@ -1,62 +1,63 @@
 module ccip_onramp::onramp {
-    use std::account::{Self, SignerCapability};
-    use std::aptos_hash;
-    use std::error;
-    use std::event::{Self, EventHandle};
-    use std::dispatchable_fungible_asset;
-    use std::fungible_asset::{Self, Metadata, FungibleStore};
-    use std::object::{Self, Object};
-    use std::option::{Self, Option};
-    use std::primary_fungible_store;
-    use std::signer;
-    use std::string::{Self, String};
-    use std::smart_table::{Self, SmartTable};
+    use std::ascii;
+    use std::type_name;
 
-    use ccip::address;
-    use ccip::auth;
+    use sui::address;
+    use sui::clock::Clock;
+    use sui::balance;
+    use sui::coin::{Self, Coin, CoinMetadata};
+    use sui::event;
+    use sui::hash;
+    use std::string::{Self, String};
+    use sui::table::{Self, Table};
+    use sui::bag::{Self, Bag};
+    use sui::package::UpgradeCap;
+
+    use ccip::dynamic_dispatcher as dd;
     use ccip::eth_abi;
     use ccip::fee_quoter;
     use ccip::merkle_proof;
-    use ccip::nonce_manager;
-    use ccip::ownable;
+    use ccip::nonce_manager::{Self, NonceManagerCap};
     use ccip::rmn_remote;
-    use ccip::token_admin_dispatcher;
-    use ccip::token_admin_registry;
+    use ccip::state_object::CCIPObjectRef;
+    use ccip_onramp::ownable::{Self, OwnerCap, OwnableState};
 
+    use mcms::mcms_registry::{Self, Registry, ExecutingCallbackParams};
+    use mcms::mcms_deployer::{Self, DeployerState};
     use mcms::bcs_stream;
-    use mcms::mcms_registry;
 
-    const STATE_SEED: vector<u8> = b"CHAINLINK_CCIP_ONRAMP";
-
-    struct OnRampDeployment has key, store {
-        state_signer_cap: SignerCapability
-    }
-
-    struct OnRampState has key, store {
-        state_signer_cap: SignerCapability,
-        ownable_state: ownable::OwnableState,
+    public struct OnRampState has key, store {
+        id: UID,
         chain_selector: u64,
         fee_aggregator: address,
         allowlist_admin: address,
 
         // dest chain selector -> config
-        dest_chain_configs: SmartTable<u64, DestChainConfig>,
-        config_set_events: EventHandle<ConfigSet>,
-        dest_chain_config_set_events: EventHandle<DestChainConfigSet>,
-        ccip_message_sent_events: EventHandle<CCIPMessageSent>,
-        allowlist_senders_added_events: EventHandle<AllowlistSendersAdded>,
-        allowlist_senders_removed_events: EventHandle<AllowlistSendersRemoved>,
-        fee_token_withdrawn_events: EventHandle<FeeTokenWithdrawn>
+        dest_chain_configs: Table<u64, DestChainConfig>,
+        // coin metadata address -> Coin
+        fee_tokens: Bag,
+        nonce_manager_cap: Option<NonceManagerCap>,
+        source_transfer_cap: Option<dd::SourceTransferCap>,
+        ownable_state: OwnableState,
     }
 
-    struct DestChainConfig has store, drop {
+    public struct OnRampStatePointer has key, store {
+        id: UID,
+        on_ramp_state_id: address,
+        owner_cap_id: address,
+    }
+
+    public struct DestChainConfig has store, drop {
+        // on EVM, transfers can be stopped by zeroing the router address,
+        // since we don't have a router address here, we add an is_enabled flag.
+        // ref: https://github.com/smartcontractkit/chainlink/blob/62a9b78e1c32174ccec11f1ed487edf3b0b4e8fd/contracts/src/v0.8/ccip/onRamp/OnRamp.sol#L181
+        is_enabled: bool,
         sequence_number: u64,
         allowlist_enabled: bool,
-        router: address,
         allowed_senders: vector<address>
     }
 
-    struct RampMessageHeader has store, drop, copy {
+    public struct RampMessageHeader has store, drop, copy {
         message_id: vector<u8>,
         source_chain_selector: u64,
         dest_chain_selector: u64,
@@ -64,7 +65,7 @@ module ccip_onramp::onramp {
         nonce: u64
     }
 
-    struct Aptos2AnyRampMessage has store, drop, copy {
+    public struct Sui2AnyRampMessage has store, drop, copy {
         header: RampMessageHeader,
         sender: address,
         data: vector<u8>,
@@ -73,450 +74,758 @@ module ccip_onramp::onramp {
         fee_token: address,
         fee_token_amount: u64,
         fee_value_juels: u256,
-        token_amounts: vector<Aptos2AnyTokenTransfer>
+        token_amounts: vector<Sui2AnyTokenTransfer>
     }
 
-    struct Aptos2AnyTokenTransfer has store, drop, copy {
+    public struct Sui2AnyTokenTransfer has store, drop, copy {
         source_pool_address: address,
+        // the token address on the destination chain
         dest_token_address: vector<u8>,
-        extra_data: vector<u8>,
+        extra_data: vector<u8>, // random bytes provided by token pool, e.g. encoded decimals
         amount: u64,
-        dest_exec_data: vector<u8>
+        dest_exec_data: vector<u8> // destination gas amount
     }
 
-    struct StaticConfig has store, drop, copy {
+    public struct StaticConfig has copy, drop {
         chain_selector: u64
     }
 
-    struct DynamicConfig has store, drop, copy {
+    public struct DynamicConfig has copy, drop {
         fee_aggregator: address,
         allowlist_admin: address
     }
 
-    #[event]
-    struct ConfigSet has store, drop {
+    public struct ConfigSet has copy, drop {
         static_config: StaticConfig,
         dynamic_config: DynamicConfig
     }
 
-    #[event]
-    struct DestChainConfigSet has store, drop {
+    public struct DestChainConfigSet has copy, drop {
         dest_chain_selector: u64,
+        is_enabled: bool,
         sequence_number: u64,
-        router: address,
         allowlist_enabled: bool
     }
 
-    #[event]
-    struct CCIPMessageSent has store, drop {
+    public struct CCIPMessageSent has copy, drop {
         dest_chain_selector: u64,
         sequence_number: u64,
-        message: Aptos2AnyRampMessage
+        message: Sui2AnyRampMessage
     }
 
-    #[event]
-    struct AllowlistSendersAdded has store, drop {
+    public struct AllowlistSendersAdded has copy, drop {
         dest_chain_selector: u64,
         senders: vector<address>
     }
 
-    #[event]
-    struct AllowlistSendersRemoved has store, drop {
+    public struct AllowlistSendersRemoved has copy, drop {
         dest_chain_selector: u64,
         senders: vector<address>
     }
 
-    #[event]
-    struct FeeTokenWithdrawn has store, drop {
+    public struct FeeTokenWithdrawn has copy, drop {
         fee_aggregator: address,
         fee_token: address,
         amount: u64
     }
 
-    const E_ALREADY_INITIALIZED: u64 = 1;
-    const E_DEST_CHAIN_ARGUMENT_MISMATCH: u64 = 2;
-    const E_INVALID_DEST_CHAIN_SELECTOR: u64 = 3;
-    const E_UNKNOWN_DEST_CHAIN_SELECTOR: u64 = 4;
-    const E_UNKNOWN_FUNCTION: u64 = 5;
-    const E_SENDER_NOT_ALLOWED: u64 = 6;
-    const E_ONLY_CALLABLE_BY_OWNER_OR_ALLOWLIST_ADMIN: u64 = 7;
-    const E_INVALID_ALLOWLIST_REQUEST: u64 = 8;
-    const E_INVALID_ALLOWLIST_ADDRESS: u64 = 9;
-    const E_UNSUPPORTED_TOKEN: u64 = 10;
-    const E_INVALID_FEE_TOKEN: u64 = 11;
-    const E_CURSED_BY_RMN: u64 = 12;
-    const E_INVALID_TOKEN: u64 = 13;
-    const E_INVALID_TOKEN_STORE: u64 = 14;
-    const E_UNEXPECTED_WITHDRAW_AMOUNT: u64 = 15;
-    const E_UNEXPECTED_FUNGIBLE_ASSET: u64 = 16;
-    const E_FEE_AGGREGATOR_NOT_SET: u64 = 17;
-    const E_MUST_BE_CALLED_BY_ROUTER: u64 = 18;
-    const E_TOKEN_AMOUNT_MISMATCH: u64 = 19;
-    const E_CANNOT_SEND_ZERO_TOKENS: u64 = 20;
-    const E_ZERO_CHAIN_SELECTOR: u64 = 21;
+    const EDestChainArgumentMismatch: u64 = 1;
+    const EInvalidDestChainSelector: u64 = 2;
+    const EUnknownDestChainSelector: u64 = 3;
+    const EDestChainNotEnabled: u64 = 4;
+    const ESenderNotAllowed: u64 = 5;
+    const EOnlyCallableByAllowlistAdmin: u64 = 6;
+    const EInvalidAllowlistRequest: u64 = 7;
+    const EInvalidAllowlistAddress: u64 = 8;
+    const ECursedByRmn: u64 = 9;
+    const EUnexpectedWithdrawAmount: u64 = 10;
+    const EFeeAggregatorNotSet: u64 = 11;
+    const ENonceManagerCapExists: u64 = 12;
+    const ESourceTransferCapExists: u64 = 13;
+    const EUnknownFunction: u64 = 14;
+    const ECannotSendZeroTokens: u64 = 15;
+    const EZeroChainSelector: u64 = 16;
 
-    #[view]
     public fun type_and_version(): String {
         string::utf8(b"OnRamp 1.6.0")
     }
 
-    fun init_module(publisher: &signer) {
-        let (state_signer, state_signer_cap) =
-            account::create_resource_account(publisher, STATE_SEED);
+    public struct ONRAMP has drop {}
 
-        move_to(
-            publisher,
-            OnRampDeployment { state_signer_cap }
-        );
+    fun init(_witness: ONRAMP, ctx: &mut TxContext) {
+        let (ownable_state, owner_cap) = ownable::new(ctx);
 
-        if (@ccip_onramp == @ccip) {
-            // if we're deployed on the same code object, self-register as an allowed onramp.
-            auth::apply_allowed_onramp_updates(
-                publisher,
-                vector[],
-                vector[signer::address_of(&state_signer)]
-            );
+        let state = OnRampState {
+            id: object::new(ctx),
+            chain_selector: 0,
+            fee_aggregator: @0x0,
+            allowlist_admin: @0x0,
+            dest_chain_configs: table::new(ctx),
+            fee_tokens: bag::new(ctx),
+            nonce_manager_cap: option::none(),
+            source_transfer_cap: option::none(),
+            ownable_state
         };
 
-        // Register the entrypoint with mcms
-        if (@mcms_register_entrypoints == @0x1) {
-            register_mcms_entrypoint(publisher);
+        let pointer = OnRampStatePointer {
+            id: object::new(ctx),
+            on_ramp_state_id: object::id_to_address(object::borrow_id(&state)),
+            owner_cap_id: object::id_to_address(object::borrow_id(&owner_cap)),
         };
+
+        let tn = type_name::get_with_original_ids<ONRAMP>();
+        let package_bytes = ascii::into_bytes(tn.get_address());
+        let package_id = address::from_ascii_bytes(&package_bytes);
+
+        transfer::share_object(state);
+        transfer::public_transfer(owner_cap, ctx.sender());
+        transfer::transfer(pointer, package_id);
     }
 
-    #[view]
-    public fun get_state_address(): address {
-        get_state_address_internal()
-    }
-
-    public entry fun initialize(
-        caller: &signer,
+    public fun initialize(
+        state: &mut OnRampState,
+        _: &OwnerCap,
+        nonce_manager_cap: NonceManagerCap,
+        source_transfer_cap: dd::SourceTransferCap,
         chain_selector: u64,
         fee_aggregator: address,
         allowlist_admin: address,
         dest_chain_selectors: vector<u64>,
-        dest_chain_routers: vector<address>,
-        dest_chain_allowlist_enabled: vector<bool>
-    ) acquires OnRampDeployment {
-        assert!(chain_selector != 0, E_ZERO_CHAIN_SELECTOR);
+        dest_chain_enabled: vector<bool>,
+        dest_chain_allowlist_enabled: vector<bool>,
+        _ctx: &mut TxContext
+    ) {
+        assert!(chain_selector != 0, EZeroChainSelector);
+        state.chain_selector = chain_selector;
         assert!(
-            exists<OnRampDeployment>(@ccip_onramp),
-            error::invalid_state(E_ALREADY_INITIALIZED)
+            state.nonce_manager_cap.is_none(),
+            ENonceManagerCapExists
         );
+        state.nonce_manager_cap.fill(nonce_manager_cap);
+        assert!(
+            state.source_transfer_cap.is_none(),
+            ESourceTransferCapExists
+        );
+        state.source_transfer_cap.fill(source_transfer_cap);
 
-        let OnRampDeployment { state_signer_cap } =
-            move_from<OnRampDeployment>(@ccip_onramp);
-
-        let state_signer = &account::create_signer_with_capability(&state_signer_cap);
-
-        let ownable_state = ownable::new(state_signer, @ccip_onramp);
-
-        ownable::assert_only_owner(signer::address_of(caller), &ownable_state);
-
-        let state = OnRampState {
-            state_signer_cap,
-            ownable_state,
-            chain_selector,
-            fee_aggregator: @0x0,
-            allowlist_admin: @0x0,
-            dest_chain_configs: smart_table::new(),
-            config_set_events: account::new_event_handle(state_signer),
-            dest_chain_config_set_events: account::new_event_handle(state_signer),
-            ccip_message_sent_events: account::new_event_handle(state_signer),
-            allowlist_senders_added_events: account::new_event_handle(state_signer),
-            allowlist_senders_removed_events: account::new_event_handle(state_signer),
-            fee_token_withdrawn_events: account::new_event_handle(state_signer)
-        };
-
-        set_dynamic_config_internal(&mut state, fee_aggregator, allowlist_admin);
+        set_dynamic_config_internal(state, fee_aggregator, allowlist_admin);
 
         apply_dest_chain_config_updates_internal(
-            &mut state,
+            state,
             dest_chain_selectors,
-            dest_chain_routers,
+            dest_chain_enabled,
             dest_chain_allowlist_enabled
         );
-
-        move_to(state_signer, state);
     }
 
-    #[view]
-    public fun is_chain_supported(dest_chain_selector: u64): bool acquires OnRampState {
-        let state = borrow_state();
+    public fun is_chain_supported(state: &OnRampState, dest_chain_selector: u64): bool {
         state.dest_chain_configs.contains(dest_chain_selector)
     }
 
-    #[view]
-    public fun get_expected_next_sequence_number(
-        dest_chain_selector: u64
-    ): u64 acquires OnRampState {
-        let state = borrow_state();
+    public fun get_expected_next_sequence_number(state: &OnRampState, dest_chain_selector: u64): u64 {
         assert!(
             state.dest_chain_configs.contains(dest_chain_selector),
-            error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
+            EUnknownDestChainSelector
         );
-        let dest_chain_config = state.dest_chain_configs.borrow(dest_chain_selector);
+        let dest_chain_config = &state.dest_chain_configs[dest_chain_selector];
         dest_chain_config.sequence_number + 1
     }
 
-    #[view]
-    public fun get_fee(
+    // TODO: verify withdraw fee tokens
+    public fun withdraw_fee_tokens<T>(
+        state: &mut OnRampState,
+        _: &OwnerCap,
+        fee_token_metadata: &CoinMetadata<T>
+    ) {
+        assert!(state.fee_aggregator != @0x0, EFeeAggregatorNotSet);
+
+        let fee_token_metadata_addr = object::id_to_address(object::borrow_id(fee_token_metadata));
+
+        let coins: Coin<T> = bag::remove(&mut state.fee_tokens, fee_token_metadata_addr);
+        let balance = balance::value(coin::balance(&coins));
+        transfer::public_transfer(coins, state.fee_aggregator);
+        event::emit(
+            FeeTokenWithdrawn {
+                fee_aggregator: state.fee_aggregator,
+                fee_token: fee_token_metadata_addr,
+                amount: balance
+            }
+        );
+    }
+
+    fun set_dynamic_config_internal(
+        state: &mut OnRampState, fee_aggregator: address, allowlist_admin: address
+    ) {
+        ccip::address::assert_non_zero_address(fee_aggregator);
+        ccip::address::assert_non_zero_address(allowlist_admin);
+
+        state.fee_aggregator = fee_aggregator;
+        state.allowlist_admin = allowlist_admin;
+
+        let static_config = StaticConfig { chain_selector: state.chain_selector };
+        let dynamic_config = DynamicConfig { fee_aggregator, allowlist_admin };
+
+        event::emit(ConfigSet { static_config, dynamic_config });
+    }
+
+    fun apply_dest_chain_config_updates_internal(
+        state: &mut OnRampState,
+        dest_chain_selectors: vector<u64>,
+        dest_chain_enabled: vector<bool>,
+        dest_chain_allowlist_enabled: vector<bool>
+    ) {
+        let dest_chains_len = dest_chain_selectors.length();
+        assert!(
+            dest_chains_len == dest_chain_enabled.length(),
+            EDestChainArgumentMismatch
+        );
+        assert!(
+            dest_chains_len == dest_chain_allowlist_enabled.length(),
+            EDestChainArgumentMismatch
+        );
+
+        let mut i = 0;
+        while (i < dest_chains_len) {
+            let dest_chain_selector = dest_chain_selectors[i];
+            assert!(
+                dest_chain_selector != 0,
+                EInvalidDestChainSelector
+            );
+
+            let is_enabled = dest_chain_enabled[i];
+            let allowlist_enabled = dest_chain_allowlist_enabled[i];
+
+            if (!state.dest_chain_configs.contains(dest_chain_selector)) {
+                state.dest_chain_configs.add(
+                    dest_chain_selector,
+                    DestChainConfig {
+                        is_enabled: false,
+                        sequence_number: 0,
+                        allowlist_enabled: false,
+                        allowed_senders: vector[]
+                    }
+                );
+            };
+
+            let dest_chain_config =
+                table::borrow_mut(
+                    &mut state.dest_chain_configs, dest_chain_selector
+                );
+
+            dest_chain_config.is_enabled = is_enabled;
+            dest_chain_config.allowlist_enabled = allowlist_enabled;
+
+            event::emit(
+                DestChainConfigSet {
+                    dest_chain_selector,
+                    is_enabled,
+                    sequence_number: dest_chain_config.sequence_number,
+                    allowlist_enabled: dest_chain_config.allowlist_enabled
+                }
+            );
+
+            i = i + 1;
+        };
+    }
+
+    public fun get_fee<T>(
+        ref: &CCIPObjectRef,
+        clock: &Clock,
         dest_chain_selector: u64,
         receiver: vector<u8>,
         data: vector<u8>,
-        token_addresses: vector<address>,
+        token_addresses: vector<address>, // the token's coin metadata object ids
         token_amounts: vector<u64>,
-        token_store_addresses: vector<address>,
-        fee_token: address,
-        fee_token_store: address,
+        fee_token: &CoinMetadata<T>,
         extra_args: vector<u8>
     ): u64 {
         get_fee_internal(
+            ref,
+            clock,
             dest_chain_selector,
             receiver,
             data,
             token_addresses,
             token_amounts,
-            token_store_addresses,
-            fee_token,
-            fee_token_store,
-            extra_args
+            object::id_to_address(object::borrow_id(fee_token)),
+            extra_args,
         )
     }
 
-    inline fun get_fee_internal(
+    fun get_fee_internal(
+        ref: &CCIPObjectRef,
+        clock: &Clock,
         dest_chain_selector: u64,
         receiver: vector<u8>,
         data: vector<u8>,
-        token_addresses: vector<address>,
+        token_addresses: vector<address>, // the token's coin metadata object ids
         token_amounts: vector<u64>,
-        token_store_addresses: vector<address>,
         fee_token: address,
-        fee_token_store: address,
         extra_args: vector<u8>
     ): u64 {
         assert!(
-            !rmn_remote::is_cursed_u128(dest_chain_selector as u128),
-            error::permission_denied(E_CURSED_BY_RMN)
+            !rmn_remote::is_cursed_u128(ref, dest_chain_selector as u128),
+            ECursedByRmn
         );
         fee_quoter::get_validated_fee(
+            ref,
+            clock,
             dest_chain_selector,
             receiver,
             data,
             token_addresses,
             token_amounts,
-            token_store_addresses,
             fee_token,
-            fee_token_store,
-            extra_args
+            extra_args,
         )
     }
 
-    inline fun resolve_fungible_asset(token: address): Object<Metadata> {
-        assert!(
-            object::object_exists<Metadata>(token),
-            error::invalid_argument(E_INVALID_TOKEN)
-        );
-        object::address_to_object<Metadata>(token)
+    public fun set_dynamic_config(
+        state: &mut OnRampState,
+        _: &OwnerCap,
+        fee_aggregator: address,
+        allowlist_admin: address
+    ) {
+        set_dynamic_config_internal(state, fee_aggregator, allowlist_admin);
     }
 
-    inline fun resolve_fungible_store(
-        owner: address, token: Object<Metadata>, store_address: address
-    ): Object<FungibleStore> {
-        let resolved_address =
-            if (store_address == @0x0) {
-                primary_fungible_store::primary_store_address(owner, token)
-            } else {
-                store_address
+    public fun apply_dest_chain_config_updates(
+        state: &mut OnRampState,
+        _: &OwnerCap,
+        dest_chain_selectors: vector<u64>,
+        dest_chain_enabled: vector<bool>,
+        dest_chain_allowlist_enabled: vector<bool>
+    ) {
+        apply_dest_chain_config_updates_internal(
+            state,
+            dest_chain_selectors,
+            dest_chain_enabled,
+            dest_chain_allowlist_enabled
+        )
+    }
+
+    public fun get_dest_chain_config(state: &OnRampState, dest_chain_selector: u64): (bool, u64, bool, vector<address>) {
+        assert!(
+            state.dest_chain_configs.contains(dest_chain_selector),
+            EUnknownDestChainSelector
+        );
+
+        let dest_chain_config = &state.dest_chain_configs[dest_chain_selector];
+
+        (
+            dest_chain_config.is_enabled,
+            dest_chain_config.sequence_number,
+            dest_chain_config.allowlist_enabled,
+            dest_chain_config.allowed_senders,
+        )
+    }
+
+    public fun get_allowed_senders_list(state: &OnRampState, dest_chain_selector: u64): (bool, vector<address>) {
+        assert!(
+            state.dest_chain_configs.contains(dest_chain_selector),
+            EUnknownDestChainSelector
+        );
+
+        let dest_chain_config = &state.dest_chain_configs[dest_chain_selector];
+
+        (dest_chain_config.allowlist_enabled, dest_chain_config.allowed_senders)
+    }
+
+    public fun apply_allowlist_updates(
+        state: &mut OnRampState,
+        _: &OwnerCap,
+        dest_chain_selectors: vector<u64>,
+        dest_chain_allowlist_enabled: vector<bool>,
+        dest_chain_add_allowed_senders: vector<vector<address>>,
+        dest_chain_remove_allowed_senders: vector<vector<address>>,
+        _ctx: &mut TxContext,
+    ) {
+        apply_allowlist_updates_internal(
+            state,
+            dest_chain_selectors,
+            dest_chain_allowlist_enabled,
+            dest_chain_add_allowed_senders,
+            dest_chain_remove_allowed_senders
+        );
+    }
+
+    public fun apply_allowlist_updates_by_admin(
+        state: &mut OnRampState,
+        dest_chain_selectors: vector<u64>,
+        dest_chain_allowlist_enabled: vector<bool>,
+        dest_chain_add_allowed_senders: vector<vector<address>>,
+        dest_chain_remove_allowed_senders: vector<vector<address>>,
+        ctx: &mut TxContext,
+    ) {
+        assert!(
+            state.allowlist_admin == ctx.sender(),
+            EOnlyCallableByAllowlistAdmin
+        );
+
+        apply_allowlist_updates_internal(
+            state,
+            dest_chain_selectors,
+            dest_chain_allowlist_enabled,
+            dest_chain_add_allowed_senders,
+            dest_chain_remove_allowed_senders
+        );
+    }
+
+    fun apply_allowlist_updates_internal(
+        state: &mut OnRampState,
+        dest_chain_selectors: vector<u64>,
+        dest_chain_allowlist_enabled: vector<bool>,
+        dest_chain_add_allowed_senders: vector<vector<address>>,
+        dest_chain_remove_allowed_senders: vector<vector<address>>,
+    ) {
+        let dest_chains_len = dest_chain_selectors.length();
+        assert!(
+            dest_chains_len == dest_chain_allowlist_enabled.length(),
+            EDestChainArgumentMismatch
+        );
+        assert!(
+            dest_chains_len == dest_chain_add_allowed_senders.length(),
+            EDestChainArgumentMismatch
+        );
+        assert!(
+            dest_chains_len == dest_chain_remove_allowed_senders.length(),
+            EDestChainArgumentMismatch
+        );
+
+        let mut i = 0;
+        while (i < dest_chains_len) {
+            let dest_chain_selector = dest_chain_selectors[i];
+            assert!(
+                state.dest_chain_configs.contains(dest_chain_selector),
+                EUnknownDestChainSelector
+            );
+
+            let allowlist_enabled = dest_chain_allowlist_enabled[i];
+            let add_allowed_senders = dest_chain_add_allowed_senders[i];
+            let remove_allowed_senders = dest_chain_remove_allowed_senders[i];
+
+            let dest_chain_config =
+                state.dest_chain_configs.borrow_mut(dest_chain_selector);
+            dest_chain_config.allowlist_enabled = allowlist_enabled;
+
+            if (add_allowed_senders.length() > 0) {
+                assert!(allowlist_enabled, EInvalidAllowlistRequest);
+
+                vector::do_ref!(
+                    &add_allowed_senders,
+                    |sender_address| {
+                        let sender_address: address = *sender_address;
+                        assert!(sender_address != @0x0, EInvalidAllowlistAddress);
+
+                        let (found, _) = vector::index_of(
+                            &dest_chain_config.allowed_senders, &sender_address
+                        );
+                        if (!found) {
+                            dest_chain_config.allowed_senders.push_back(sender_address);
+                        };
+                    }
+                );
+
+                event::emit(
+                    AllowlistSendersAdded {
+                        dest_chain_selector,
+                        senders: add_allowed_senders
+                    }
+                );
             };
-        assert!(
-            object::object_exists<FungibleStore>(resolved_address),
-            error::invalid_argument(E_INVALID_TOKEN_STORE)
-        );
-        object::address_to_object<FungibleStore>(resolved_address)
+
+            if (remove_allowed_senders.length() > 0) {
+                vector::do_ref!(
+                    &remove_allowed_senders,
+                    |sender_address| {
+                        let (found, i) = vector::index_of(
+                            &dest_chain_config.allowed_senders, sender_address
+                        );
+                        if (found) {
+                            vector::swap_remove(
+                                &mut dest_chain_config.allowed_senders, i
+                            );
+                        }
+                    }
+                );
+
+                event::emit(
+                    AllowlistSendersRemoved {
+                        dest_chain_selector,
+                        senders: remove_allowed_senders
+                    }
+                );
+            };
+            i = i + 1;
+        };
     }
 
-    public fun ccip_send(
-        router: &signer,
-        caller: &signer,
-        dest_chain_selector: u64,
+    public fun get_outbound_nonce(
+        ref: &CCIPObjectRef, dest_chain_selector: u64, sender: address
+    ): u64 {
+        nonce_manager::get_outbound_nonce(ref, dest_chain_selector, sender)
+    }
+
+    public fun get_static_config(state: &OnRampState): StaticConfig {
+        StaticConfig { chain_selector: state.chain_selector }
+    }
+
+    public fun get_static_config_fields(cfg: StaticConfig): u64 {
+        cfg.chain_selector
+    }
+
+    public fun get_dynamic_config(state: &OnRampState): DynamicConfig {
+        DynamicConfig {
+            fee_aggregator: state.fee_aggregator,
+            allowlist_admin: state.allowlist_admin
+        }
+    }
+
+    public fun get_dynamic_config_fields(cfg: DynamicConfig): (address, address) {
+        (cfg.fee_aggregator, cfg.allowlist_admin)
+    }
+
+    fun calculate_metadata_hash(
+        source_chain_selector: u64, dest_chain_selector: u64, on_ramp_address: address
+    ): vector<u8> {
+        let mut packed = vector[];
+        eth_abi::encode_right_padded_bytes32(
+            &mut packed, hash::keccak256(&b"Sui2AnyMessageHashV1")
+        );
+        eth_abi::encode_u64(&mut packed, source_chain_selector);
+        eth_abi::encode_u64(&mut packed, dest_chain_selector);
+        eth_abi::encode_address(&mut packed, on_ramp_address);
+        hash::keccak256(&packed)
+    }
+
+    fun calculate_message_hash(
+        message: &Sui2AnyRampMessage, metadata_hash: vector<u8>
+    ): vector<u8> {
+        let mut outer_hash = vector[];
+        eth_abi::encode_right_padded_bytes32(&mut outer_hash, merkle_proof::leaf_domain_separator());
+        eth_abi::encode_right_padded_bytes32(&mut outer_hash, metadata_hash);
+
+        let mut inner_hash = vector[];
+        eth_abi::encode_address(&mut inner_hash, message.sender);
+        eth_abi::encode_u64(&mut inner_hash, message.header.sequence_number);
+        eth_abi::encode_u64(&mut inner_hash, message.header.nonce);
+        eth_abi::encode_address(&mut inner_hash, message.fee_token);
+        eth_abi::encode_u64(&mut inner_hash, message.fee_token_amount);
+        eth_abi::encode_right_padded_bytes32(&mut outer_hash, hash::keccak256(&inner_hash));
+
+        eth_abi::encode_right_padded_bytes32(
+            &mut outer_hash, hash::keccak256(&message.receiver)
+        );
+        eth_abi::encode_right_padded_bytes32(&mut outer_hash, hash::keccak256(&message.data));
+
+        let mut token_hash = vector[];
+        eth_abi::encode_u256(&mut token_hash, message.token_amounts.length() as u256);
+        message.token_amounts.do_ref!(
+            |token_transfer| {
+                let token_transfer: &Sui2AnyTokenTransfer = token_transfer;
+                eth_abi::encode_address(
+                    &mut token_hash, token_transfer.source_pool_address
+                );
+                eth_abi::encode_bytes(&mut token_hash, token_transfer.dest_token_address);
+                eth_abi::encode_bytes(&mut token_hash, token_transfer.extra_data);
+                eth_abi::encode_u64(&mut token_hash, token_transfer.amount);
+                eth_abi::encode_bytes(&mut token_hash, token_transfer.dest_exec_data);
+            }
+        );
+        eth_abi::encode_right_padded_bytes32(&mut outer_hash, hash::keccak256(&token_hash));
+
+        eth_abi::encode_right_padded_bytes32(
+            &mut outer_hash, hash::keccak256(&message.extra_args)
+        );
+
+        hash::keccak256(&outer_hash)
+    }
+
+    public fun ccip_send<T>(
+        ref: &mut CCIPObjectRef,
+        state: &mut OnRampState,
+        clock: &Clock,
         receiver: vector<u8>,
         data: vector<u8>,
-        token_addresses: vector<address>,
-        token_amounts: vector<u64>,
-        token_store_addresses: vector<address>,
-        fee_token: address,
-        fee_token_store: address,
-        extra_args: vector<u8>
-    ): vector<u8> acquires OnRampState {
-        // get_fee_internal checks for curse status
+        token_params: dd::TokenParams,
+        fee_token_metadata: &CoinMetadata<T>,
+        fee_token: &mut Coin<T>,
+        extra_args: vector<u8>,
+        ctx: &mut TxContext
+    ): vector<u8> {
+        // get_fee_internal will check curse status
+        let fee_token_metadata_addr = object::id_to_address(object::borrow_id(fee_token_metadata));
+
+        // the hot potato is returned and consumed
+        let (dest_chain_selector, params) = dd::deconstruct_token_params(state.source_transfer_cap.borrow(), token_params);
+
+        let mut token_amounts = vector[];
+        let mut source_tokens = vector[];
+        let mut dest_tokens = vector[];
+        let mut dest_pool_datas = vector[];
+        let mut token_transfers = vector[];
+        let mut i = 0;
+        let tokens_len = params.length();
+
+        while (i < tokens_len) {
+            let (source_pool, amount, source_token_address, dest_token_address, extra_data) = dd::get_source_token_transfer_data(params[i]);
+            assert!(amount > 0, ECannotSendZeroTokens);
+            token_transfers.push_back(
+                Sui2AnyTokenTransfer {
+                    source_pool_address: source_pool,
+                    amount,
+                    dest_token_address,
+                    extra_data: extra_data, // encoded decimals
+                    dest_exec_data: vector[] // destination execution gas amount, populated later by fee quoter
+                }
+            );
+            token_amounts.push_back(amount);
+            source_tokens.push_back(source_token_address);
+            dest_tokens.push_back(dest_token_address);
+            dest_pool_datas.push_back(extra_data);
+
+            i = i + 1;
+        };
+
         let fee_token_amount =
             get_fee_internal(
+                ref,
+                clock,
                 dest_chain_selector,
                 receiver,
                 data,
-                token_addresses,
+                source_tokens,
                 token_amounts,
-                token_store_addresses,
-                fee_token,
-                fee_token_store,
-                extra_args
+                fee_token_metadata_addr,
+                extra_args,
             );
+
+        let fee_token_balance = balance::value(coin::balance(fee_token));
         if (fee_token_amount != 0) {
-            // deposit the fee in the state object's primary fungible store.
-            let fa_metadata = resolve_fungible_asset(fee_token);
-            let resolved_store =
-                resolve_fungible_store(
-                    signer::address_of(caller), fa_metadata, fee_token_store
-                );
-
-            let fa =
-                dispatchable_fungible_asset::withdraw(
-                    caller, resolved_store, fee_token_amount
-                );
-            // validate the withdrawn asset since we're potentially calling dispatchable fungible asset functions.
             assert!(
-                fa_metadata == fungible_asset::metadata_from_asset(&fa),
-                error::invalid_state(E_UNEXPECTED_FUNGIBLE_ASSET)
+                fee_token_amount <= fee_token_balance,
+                EUnexpectedWithdrawAmount
             );
-            assert!(
-                fee_token_amount == fungible_asset::amount(&fa),
-                error::invalid_state(E_UNEXPECTED_WITHDRAW_AMOUNT)
-            );
+            let paid = coin::split(fee_token, fee_token_amount, ctx);
 
-            primary_fungible_store::deposit(get_state_address_internal(), fa);
+            if (state.fee_tokens.contains(fee_token_metadata_addr)) {
+                let coins: &mut Coin<T> = bag::borrow_mut(&mut state.fee_tokens, fee_token_metadata_addr);
+                coins.join(paid);
+            } else {
+                state.fee_tokens.add(fee_token_metadata_addr, paid);
+            };
+            // if overpaying, onramp will only take out the amount it needs, leaving the fee token object with the remaining balance
         };
+        // if fee_token_amount is 0, the fee_token object is returned to the sender unchanged.
 
-        let state = borrow_state_mut();
-        assert!(
-            state.dest_chain_configs.contains(dest_chain_selector),
-            error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
-        );
+        let sender = ctx.sender();
+        verify_sender(state, dest_chain_selector, sender);
 
-        let dest_chain_config = state.dest_chain_configs.borrow_mut(dest_chain_selector);
-
-        if (dest_chain_config.allowlist_enabled) {
-            assert!(
-                dest_chain_config.allowed_senders.contains(&signer::address_of(caller)),
-                error::permission_denied(E_SENDER_NOT_ALLOWED)
-            );
-        };
-
-        assert!(
-            dest_chain_config.router == signer::address_of(router),
-            error::invalid_argument(E_MUST_BE_CALLED_BY_ROUTER)
-        );
-
-        let sender = signer::address_of(caller);
-
-        let dest_token_addresses = vector[];
-        let dest_pool_datas = vector[];
-
-        let state_signer =
-            account::create_signer_with_capability(&state.state_signer_cap);
-
-        let tokens_len = token_addresses.length();
-        assert!(
-            tokens_len == token_amounts.length()
-                && tokens_len == token_store_addresses.length(),
-            error::invalid_argument(E_TOKEN_AMOUNT_MISMATCH)
-        );
-
-        let token_receiver =
-            fee_quoter::get_token_receiver(dest_chain_selector, extra_args, receiver);
-
-        let token_transfers = vector[];
-        for (i in 0..tokens_len) {
-            let token = token_addresses[i];
-            let amount = token_amounts[i];
-            let token_store = token_store_addresses[i];
-
-            assert!(amount > 0, error::invalid_argument(E_CANNOT_SEND_ZERO_TOKENS));
-
-            let fa_metadata = resolve_fungible_asset(token);
-            let resolved_store = resolve_fungible_store(sender, fa_metadata, token_store);
-
-            let fa = dispatchable_fungible_asset::withdraw(
-                caller, resolved_store, amount
-            );
-
-            // validate the withdrawn asset since we're potentially calling dispatchable fungible asset functions.
-            assert!(
-                fa_metadata == fungible_asset::metadata_from_asset(&fa),
-                error::invalid_state(E_UNEXPECTED_FUNGIBLE_ASSET)
-            );
-            assert!(
-                amount == fungible_asset::amount(&fa),
-                error::invalid_state(E_UNEXPECTED_WITHDRAW_AMOUNT)
-            );
-
-            let token_pool_address = token_admin_registry::get_pool(token);
-            assert!(
-                token_pool_address != @0x0,
-                error::invalid_argument(E_UNSUPPORTED_TOKEN)
-            );
-
-            let (dest_token_address, dest_pool_data) =
-                token_admin_dispatcher::dispatch_lock_or_burn(
-                    &state_signer,
-                    token_pool_address,
-                    fa,
-                    sender,
-                    dest_chain_selector,
-                    token_receiver
-                );
-
-            dest_token_addresses.push_back(dest_token_address);
-            dest_pool_datas.push_back(dest_pool_data);
-
-            token_transfers.push_back(
-                Aptos2AnyTokenTransfer {
-                    source_pool_address: token_pool_address,
-                    dest_token_address,
-                    extra_data: dest_pool_data,
-                    amount,
-                    dest_exec_data: vector[]
-                }
-            );
-        };
-
-        dest_chain_config.sequence_number += 1;
-
-        let sequence_number = dest_chain_config.sequence_number;
+        let sequence_number = get_incremented_sequence_number(state, dest_chain_selector);
 
         let (
             fee_value_juels,
             is_out_of_order_execution,
             converted_extra_args,
-            dest_exec_data_per_token
+            mut dest_exec_data_per_token
         ) =
             fee_quoter::process_message_args(
+                ref,
                 dest_chain_selector,
-                fee_token,
+                fee_token_metadata_addr,
                 fee_token_amount,
                 extra_args,
-                token_addresses,
-                dest_token_addresses,
+                source_tokens,
+                dest_tokens,
                 dest_pool_datas
             );
 
-        token_transfers.zip_mut(
+        token_transfers.zip_do_mut!(
             &mut dest_exec_data_per_token,
             |token_amount, dest_exec_data| {
-                let token_amount: &mut Aptos2AnyTokenTransfer = token_amount;
+                let token_amount: &mut Sui2AnyTokenTransfer = token_amount;
                 token_amount.dest_exec_data = *dest_exec_data;
             }
         );
 
-        let nonce =
-            if (is_out_of_order_execution) { 0 }
-            else {
-                nonce_manager::get_incremented_outbound_nonce(
-                    &state_signer, dest_chain_selector, sender
-                )
-            };
+        let message = construct_message(
+            ref,
+            state,
+            dest_chain_selector,
+            is_out_of_order_execution,
+            sender,
+            sequence_number,
+            data,
+            receiver,
+            converted_extra_args,
+            fee_token_metadata_addr,
+            fee_token_amount,
+            fee_value_juels,
+            token_transfers,
+            ctx
+        );
 
-        let message = Aptos2AnyRampMessage {
+        event::emit(CCIPMessageSent { dest_chain_selector, sequence_number, message });
+
+        message.header.message_id
+    }
+
+    fun verify_sender(state: &OnRampState, dest_chain_selector: u64, sender: address) {
+        assert!(
+            state.dest_chain_configs.contains(dest_chain_selector),
+            EUnknownDestChainSelector
+        );
+
+        let dest_chain_config = &state.dest_chain_configs[dest_chain_selector];
+        assert!(dest_chain_config.is_enabled, EDestChainNotEnabled);
+
+        if (dest_chain_config.allowlist_enabled) {
+            assert!(
+                dest_chain_config.allowed_senders.contains(&sender),
+                ESenderNotAllowed
+            );
+        };
+    }
+
+    fun get_incremented_sequence_number(
+        state: &mut OnRampState, dest_chain_selector: u64
+    ): u64 {
+        let dest_chain_config = state.dest_chain_configs.borrow_mut(dest_chain_selector);
+        dest_chain_config.sequence_number = dest_chain_config.sequence_number + 1;
+
+        dest_chain_config.sequence_number
+    }
+
+    fun construct_message(
+        ref: &mut CCIPObjectRef,
+        state: &OnRampState,
+        dest_chain_selector: u64,
+        is_out_of_order_execution: bool,
+        sender: address,
+        sequence_number: u64,
+        data: vector<u8>,
+        receiver: vector<u8>,
+        converted_extra_args: vector<u8>,
+        fee_token_metadata: address,
+        fee_token_amount: u64,
+        fee_value_juels: u256,
+        token_transfers: vector<Sui2AnyTokenTransfer>,
+        ctx: &mut TxContext
+    ): Sui2AnyRampMessage {
+        // calculate nonce
+        let mut nonce = 0;
+        if (!is_out_of_order_execution) {
+            nonce = nonce_manager::get_incremented_outbound_nonce(
+                ref,
+                state.nonce_manager_cap.borrow(),
+                dest_chain_selector,
+                sender,
+                ctx
+            );
+        };
+
+        // create message
+        let mut message = Sui2AnyRampMessage {
             header: RampMessageHeader {
                 // populated on completion
                 message_id: vector[],
@@ -529,592 +838,210 @@ module ccip_onramp::onramp {
             data,
             receiver,
             extra_args: converted_extra_args,
-            fee_token,
+            fee_token: fee_token_metadata,
             fee_token_amount,
             fee_value_juels,
             token_amounts: token_transfers
         };
-        let metadata_hash =
-            calculate_metadata_hash(state.chain_selector, dest_chain_selector);
+
+        // attach message id
+        let metadata_hash = calculate_metadata_hash(state.chain_selector, dest_chain_selector, object::id_to_address(&object::id(state)));
         let message_id = calculate_message_hash(&message, metadata_hash);
         message.header.message_id = message_id;
 
-        event::emit_event(
-            &mut state.ccip_message_sent_events,
-            CCIPMessageSent { dest_chain_selector, sequence_number, message }
-        );
-
-        message_id
+        message
     }
 
-    public entry fun set_dynamic_config(
-        caller: &signer, fee_aggregator: address, allowlist_admin: address
-    ) acquires OnRampState {
-        let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
-        set_dynamic_config_internal(state, fee_aggregator, allowlist_admin)
+    public fun get_ccip_package_id(): address {
+        @ccip
     }
 
-    public entry fun apply_dest_chain_config_updates(
-        caller: &signer,
-        dest_chain_selectors: vector<u64>,
-        dest_chain_routers: vector<address>,
-        dest_chain_allowlist_enabled: vector<bool>
-    ) acquires OnRampState {
-        let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+    // ================================================================
+    // |                      CCIP Ownable Functions                    |
+    // ================================================================
 
-        apply_dest_chain_config_updates_internal(
-            state,
-            dest_chain_selectors,
-            dest_chain_routers,
-            dest_chain_allowlist_enabled
-        )
+    public fun owner(state: &OnRampState): address {
+        ownable::owner(&state.ownable_state)
     }
 
-    #[view]
-    public fun get_dest_chain_config(
-        dest_chain_selector: u64
-    ): (u64, bool, address) acquires OnRampState {
-        let state = borrow_state();
-
-        assert!(
-            state.dest_chain_configs.contains(dest_chain_selector),
-            error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
-        );
-
-        let dest_chain_config = state.dest_chain_configs.borrow(dest_chain_selector);
-
-        (
-            dest_chain_config.sequence_number,
-            dest_chain_config.allowlist_enabled,
-            dest_chain_config.router
-        )
+    public fun has_pending_transfer(state: &OnRampState): bool {
+        ownable::has_pending_transfer(&state.ownable_state)
     }
 
-    #[view]
-    public fun get_allowed_senders_list(
-        dest_chain_selector: u64
-    ): (bool, vector<address>) acquires OnRampState {
-        let state = borrow_state();
-
-        assert!(
-            state.dest_chain_configs.contains(dest_chain_selector),
-            error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
-        );
-
-        let dest_chain_config = state.dest_chain_configs.borrow(dest_chain_selector);
-
-        (dest_chain_config.allowlist_enabled, dest_chain_config.allowed_senders)
+    public fun pending_transfer_from(state: &OnRampState): Option<address> {
+        ownable::pending_transfer_from(&state.ownable_state)
     }
 
-    public entry fun apply_allowlist_updates(
-        caller: &signer,
-        dest_chain_selectors: vector<u64>,
-        dest_chain_allowlist_enabled: vector<bool>,
-        dest_chain_add_allowed_senders: vector<vector<address>>,
-        dest_chain_remove_allowed_senders: vector<vector<address>>
-    ) acquires OnRampState {
-        let state = borrow_state_mut();
-        assert!(
-            signer::address_of(caller) == ownable::owner(&state.ownable_state)
-                || signer::address_of(caller) == state.allowlist_admin,
-            error::permission_denied(E_ONLY_CALLABLE_BY_OWNER_OR_ALLOWLIST_ADMIN)
-        );
-
-        let dest_chains_len = dest_chain_selectors.length();
-        assert!(
-            dest_chains_len == dest_chain_allowlist_enabled.length(),
-            error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
-        );
-        assert!(
-            dest_chains_len == dest_chain_add_allowed_senders.length(),
-            error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
-        );
-        assert!(
-            dest_chains_len == dest_chain_remove_allowed_senders.length(),
-            error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
-        );
-
-        for (i in 0..dest_chains_len) {
-            let dest_chain_selector = dest_chain_selectors[i];
-            assert!(
-                state.dest_chain_configs.contains(dest_chain_selector),
-                error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
-            );
-
-            let allowlist_enabled = dest_chain_allowlist_enabled[i];
-            let add_allowed_senders = dest_chain_add_allowed_senders[i];
-            let remove_allowed_senders = dest_chain_remove_allowed_senders[i];
-
-            let dest_chain_config =
-                state.dest_chain_configs.borrow_mut(dest_chain_selector);
-            dest_chain_config.allowlist_enabled = allowlist_enabled;
-
-            if (add_allowed_senders.length() > 0) {
-                assert!(
-                    allowlist_enabled,
-                    error::invalid_argument(E_INVALID_ALLOWLIST_REQUEST)
-                );
-                add_allowed_senders.for_each_ref(|sender_address| {
-                    let sender_address: address = *sender_address;
-                    assert!(
-                        sender_address != @0x0,
-                        error::invalid_argument(E_INVALID_ALLOWLIST_ADDRESS)
-                    );
-
-                    let (found, _) =
-                        dest_chain_config.allowed_senders.index_of(&sender_address);
-                    if (!found) {
-                        dest_chain_config.allowed_senders.push_back(sender_address);
-                    };
-                });
-
-                event::emit_event(
-                    &mut state.allowlist_senders_added_events,
-                    AllowlistSendersAdded {
-                        dest_chain_selector,
-                        senders: add_allowed_senders
-                    }
-                );
-            };
-
-            if (remove_allowed_senders.length() > 0) {
-                remove_allowed_senders.for_each_ref(|sender_address| {
-                    let (found, i) =
-                        dest_chain_config.allowed_senders.index_of(sender_address);
-                    if (found) {
-                        dest_chain_config.allowed_senders.swap_remove(i);
-                    }
-                });
-
-                event::emit_event(
-                    &mut state.allowlist_senders_removed_events,
-                    AllowlistSendersRemoved {
-                        dest_chain_selector,
-                        senders: remove_allowed_senders
-                    }
-                );
-            };
-        };
+    public fun pending_transfer_to(state: &OnRampState): Option<address> {
+        ownable::pending_transfer_to(&state.ownable_state)
     }
 
-    #[view]
-    public fun get_outbound_nonce(
-        dest_chain_selector: u64, sender: address
-    ): u64 {
-        nonce_manager::get_outbound_nonce(dest_chain_selector, sender)
+    public fun pending_transfer_accepted(state: &OnRampState): Option<bool> {
+        ownable::pending_transfer_accepted(&state.ownable_state)
     }
 
-    #[view]
-    public fun get_static_config(): StaticConfig acquires OnRampState {
-        let state = borrow_state();
-        StaticConfig { chain_selector: state.chain_selector }
-    }
-
-    #[view]
-    public fun get_dynamic_config(): DynamicConfig acquires OnRampState {
-        let state = borrow_state();
-        DynamicConfig {
-            fee_aggregator: state.fee_aggregator,
-            allowlist_admin: state.allowlist_admin
-        }
-    }
-
-    public entry fun withdraw_fee_tokens(fee_tokens: vector<address>) acquires OnRampState {
-        let state = borrow_state_mut();
-
-        assert!(
-            state.fee_aggregator != @0x0,
-            error::invalid_state(E_FEE_AGGREGATOR_NOT_SET)
-        );
-
-        let state_address = get_state_address_internal();
-        let state_signer =
-            &account::create_signer_with_capability(&state.state_signer_cap);
-
-        for (i in 0..fee_tokens.length()) {
-            let fee_token = fee_tokens[i];
-
-            assert!(
-                object::object_exists<Metadata>(fee_token),
-                error::invalid_argument(E_INVALID_FEE_TOKEN)
-            );
-
-            let fee_token_metadata = object::address_to_object<Metadata>(fee_token);
-
-            let balance =
-                primary_fungible_store::balance(state_address, fee_token_metadata);
-            if (balance == 0) {
-                continue;
-            };
-
-            primary_fungible_store::transfer(
-                state_signer,
-                fee_token_metadata,
-                state.fee_aggregator,
-                balance
-            );
-
-            event::emit_event(
-                &mut state.fee_token_withdrawn_events,
-                FeeTokenWithdrawn {
-                    fee_aggregator: state.fee_aggregator,
-                    fee_token,
-                    amount: balance
-                }
-            );
-        };
-    }
-
-    inline fun set_dynamic_config_internal(
-        state: &mut OnRampState, fee_aggregator: address, allowlist_admin: address
-    ) {
-        address::assert_non_zero_address(fee_aggregator);
-
-        state.fee_aggregator = fee_aggregator;
-        state.allowlist_admin = allowlist_admin;
-
-        let static_config = StaticConfig { chain_selector: state.chain_selector };
-
-        let dynamic_config = DynamicConfig { fee_aggregator, allowlist_admin };
-
-        event::emit_event(
-            &mut state.config_set_events,
-            ConfigSet { static_config, dynamic_config }
-        );
-    }
-
-    inline fun calculate_metadata_hash(
-        source_chain_selector: u64, dest_chain_selector: u64
-    ): vector<u8> {
-        let packed = vector[];
-        eth_abi::encode_right_padded_bytes32(
-            &mut packed, aptos_hash::keccak256(b"Aptos2AnyMessageHashV1")
-        );
-        eth_abi::encode_u64(&mut packed, source_chain_selector);
-        eth_abi::encode_u64(&mut packed, dest_chain_selector);
-        eth_abi::encode_address(&mut packed, @ccip_onramp);
-        aptos_hash::keccak256(packed)
-    }
-
-    inline fun calculate_message_hash(
-        message: &Aptos2AnyRampMessage, metadata_hash: vector<u8>
-    ): vector<u8> {
-        let outer_hash = vector[];
-        eth_abi::encode_right_padded_bytes32(
-            &mut outer_hash, merkle_proof::leaf_domain_separator()
-        );
-        eth_abi::encode_right_padded_bytes32(&mut outer_hash, metadata_hash);
-
-        let inner_hash = vector[];
-        eth_abi::encode_address(&mut inner_hash, message.sender);
-        eth_abi::encode_u64(&mut inner_hash, message.header.sequence_number);
-        eth_abi::encode_u64(&mut inner_hash, message.header.nonce);
-        eth_abi::encode_address(&mut inner_hash, message.fee_token);
-        eth_abi::encode_u64(&mut inner_hash, message.fee_token_amount);
-        eth_abi::encode_right_padded_bytes32(
-            &mut outer_hash, aptos_hash::keccak256(inner_hash)
-        );
-
-        eth_abi::encode_right_padded_bytes32(
-            &mut outer_hash, aptos_hash::keccak256(message.receiver)
-        );
-        eth_abi::encode_right_padded_bytes32(
-            &mut outer_hash, aptos_hash::keccak256(message.data)
-        );
-
-        let token_hash = vector[];
-        eth_abi::encode_u256(&mut token_hash, message.token_amounts.length() as u256);
-        message.token_amounts.for_each_ref(
-            |token_transfer| {
-                let token_transfer: &Aptos2AnyTokenTransfer = token_transfer;
-                eth_abi::encode_address(
-                    &mut token_hash, token_transfer.source_pool_address
-                );
-                eth_abi::encode_bytes(&mut token_hash, token_transfer.dest_token_address);
-                eth_abi::encode_bytes(&mut token_hash, token_transfer.extra_data);
-                eth_abi::encode_u64(&mut token_hash, token_transfer.amount);
-                eth_abi::encode_bytes(&mut token_hash, token_transfer.dest_exec_data);
-            }
-        );
-        eth_abi::encode_right_padded_bytes32(
-            &mut outer_hash, aptos_hash::keccak256(token_hash)
-        );
-
-        eth_abi::encode_right_padded_bytes32(
-            &mut outer_hash, aptos_hash::keccak256(message.extra_args)
-        );
-
-        aptos_hash::keccak256(outer_hash)
-    }
-
-    inline fun apply_dest_chain_config_updates_internal(
+    public entry fun transfer_ownership(
         state: &mut OnRampState,
-        dest_chain_selectors: vector<u64>,
-        dest_chain_routers: vector<address>,
-        dest_chain_allowlist_enabled: vector<bool>
+        owner_cap: &OwnerCap,
+        new_owner: address,
+        ctx: &mut TxContext,
     ) {
-        let dest_chains_len = dest_chain_selectors.length();
-        assert!(
-            dest_chains_len == dest_chain_routers.length(),
-            error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
+        ownable::transfer_ownership(owner_cap, &mut state.ownable_state, new_owner, ctx);
+    }
+
+    public entry fun accept_ownership(
+        state: &mut OnRampState,
+        ctx: &mut TxContext,
+    ) {
+        ownable::accept_ownership(&mut state.ownable_state, ctx);
+    }
+
+    public fun accept_ownership_from_object(
+        state: &mut OnRampState,
+        from: &mut UID,
+        ctx: &mut TxContext,
+    ) {
+        ownable::accept_ownership_from_object(&mut state.ownable_state, from, ctx);
+    }
+
+    public fun execute_ownership_transfer(
+        owner_cap: OwnerCap,
+        ownable_state: &mut OwnableState,
+        to: address,
+        ctx: &mut TxContext,
+    ) {
+        ownable::execute_ownership_transfer(owner_cap, ownable_state, to, ctx);
+    }
+
+    public fun mcms_register_entrypoint(
+        registry: &mut Registry,
+        state: &mut OnRampState,
+        owner_cap: OwnerCap,
+        mcms: address,
+        ctx: &mut TxContext,
+    ) {
+        ownable::set_owner(&owner_cap, &mut state.ownable_state, mcms, ctx);
+
+        mcms_registry::register_entrypoint(
+            registry,
+            McmsCallback {},
+            option::some(owner_cap),
+            ctx,
         );
-        assert!(
-            dest_chains_len == dest_chain_allowlist_enabled.length(),
-            error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
+    }
+
+    public fun mcms_register_upgrade_cap(
+        upgrade_cap: UpgradeCap,
+        registry: &mut Registry,
+        state: &mut DeployerState,
+        ctx: &mut TxContext,
+    ) {
+        mcms_deployer::register_upgrade_cap(
+            state,
+            registry,
+            upgrade_cap,
+            ctx,
         );
-
-        for (i in 0..dest_chains_len) {
-            let dest_chain_selector = dest_chain_selectors[i];
-            assert!(
-                dest_chain_selector != 0,
-                error::invalid_argument(E_INVALID_DEST_CHAIN_SELECTOR)
-            );
-
-            let router = dest_chain_routers[i];
-            let allowlist_enabled = dest_chain_allowlist_enabled[i];
-
-            if (!state.dest_chain_configs.contains(dest_chain_selector)) {
-                state.dest_chain_configs.add(
-                    dest_chain_selector,
-                    DestChainConfig {
-                        sequence_number: 0,
-                        router: @0x0,
-                        allowlist_enabled: false,
-                        allowed_senders: vector[]
-                    }
-                );
-            };
-
-            let dest_chain_config =
-                state.dest_chain_configs.borrow_mut(dest_chain_selector);
-
-            dest_chain_config.router = router;
-            dest_chain_config.allowlist_enabled = allowlist_enabled;
-
-            event::emit_event(
-                &mut state.dest_chain_config_set_events,
-                DestChainConfigSet {
-                    dest_chain_selector,
-                    router,
-                    sequence_number: dest_chain_config.sequence_number,
-                    allowlist_enabled: dest_chain_config.allowlist_enabled
-                }
-            );
-        };
-    }
-
-    inline fun get_state_address_internal(): address {
-        account::create_resource_address(&@ccip_onramp, STATE_SEED)
-    }
-
-    inline fun borrow_state(): &OnRampState {
-        borrow_global<OnRampState>(get_state_address_internal())
-    }
-
-    inline fun borrow_state_mut(): &mut OnRampState {
-        borrow_global_mut<OnRampState>(get_state_address_internal())
-    }
-
-    //
-    // ccip::ownable functions
-    //
-
-    #[view]
-    public fun owner(): address acquires OnRampState {
-        ownable::owner(&borrow_state().ownable_state)
-    }
-
-    #[view]
-    public fun has_pending_transfer(): bool acquires OnRampState {
-        ownable::has_pending_transfer(&borrow_state().ownable_state)
-    }
-
-    #[view]
-    public fun pending_transfer_from(): Option<address> acquires OnRampState {
-        ownable::pending_transfer_from(&borrow_state().ownable_state)
-    }
-
-    #[view]
-    public fun pending_transfer_to(): Option<address> acquires OnRampState {
-        ownable::pending_transfer_to(&borrow_state().ownable_state)
-    }
-
-    #[view]
-    public fun pending_transfer_accepted(): Option<bool> acquires OnRampState {
-        ownable::pending_transfer_accepted(&borrow_state().ownable_state)
-    }
-
-    public entry fun transfer_ownership(caller: &signer, to: address) acquires OnRampState {
-        let state = borrow_state_mut();
-        ownable::transfer_ownership(caller, &mut state.ownable_state, to)
-    }
-
-    public entry fun accept_ownership(caller: &signer) acquires OnRampState {
-        let state = borrow_state_mut();
-        ownable::accept_ownership(caller, &mut state.ownable_state)
-    }
-
-    public entry fun execute_ownership_transfer(
-        caller: &signer, to: address
-    ) acquires OnRampState {
-        let state = borrow_state_mut();
-        ownable::execute_ownership_transfer(caller, &mut state.ownable_state, to)
     }
 
     // ================================================================
     // |                      MCMS Entrypoint                         |
     // ================================================================
 
-    struct McmsCallback has drop {}
+    public struct McmsCallback has drop {}
 
-    public fun mcms_entrypoint<T: key>(
-        _metadata: Object<T>
-    ): option::Option<u128> acquires OnRampDeployment, OnRampState {
-        let (caller, function, data) =
-            mcms_registry::get_callback_params(@ccip_onramp, McmsCallback {});
+    public fun mcms_entrypoint(
+        state: &mut OnRampState,
+        registry: &mut Registry,
+        params: ExecutingCallbackParams, // hot potato
+        ctx: &mut TxContext,
+    ) {
+        let (owner_cap, function, data) = mcms_registry::get_callback_params<
+            McmsCallback,
+            OwnerCap,
+        >(
+            registry,
+            McmsCallback {},
+            params,
+        );
 
-        let function_bytes = *function.bytes();
-        let stream = bcs_stream::new(data);
+        let function_bytes = *function.as_bytes();
+        let mut stream = bcs_stream::new(data);
 
-        if (function_bytes == b"initialize") {
-            let chain_selector = bcs_stream::deserialize_u64(&mut stream);
-            let fee_aggregator = bcs_stream::deserialize_address(&mut stream);
-            let allowlist_admin = bcs_stream::deserialize_address(&mut stream);
-            let dest_chain_selectors =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_u64(stream)
-                );
-            let dest_chain_routers =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_address(stream)
-                );
-            let dest_chain_allowlist_enabled =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_bool(stream)
-                );
-            bcs_stream::assert_is_consumed(&stream);
-            initialize(
-                &caller,
-                chain_selector,
-                fee_aggregator,
-                allowlist_admin,
-                dest_chain_selectors,
-                dest_chain_routers,
-                dest_chain_allowlist_enabled
-            );
-        } else if (function_bytes == b"set_dynamic_config") {
+        if (function_bytes == b"set_dynamic_config") {
             let fee_aggregator = bcs_stream::deserialize_address(&mut stream);
             let allowlist_admin = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            set_dynamic_config(&caller, fee_aggregator, allowlist_admin);
+            set_dynamic_config(state, owner_cap, fee_aggregator, allowlist_admin);
         } else if (function_bytes == b"apply_dest_chain_config_updates") {
             let dest_chain_selectors =
-                bcs_stream::deserialize_vector(
+                bcs_stream::deserialize_vector!(
                     &mut stream,
                     |stream| bcs_stream::deserialize_u64(stream)
                 );
-            let dest_chain_routers =
-                bcs_stream::deserialize_vector(
+            let dest_chain_enabled =
+                bcs_stream::deserialize_vector!(
                     &mut stream,
-                    |stream| bcs_stream::deserialize_address(stream)
+                    |stream| bcs_stream::deserialize_bool(stream)
                 );
             let dest_chain_allowlist_enabled =
-                bcs_stream::deserialize_vector(
+                bcs_stream::deserialize_vector!(
                     &mut stream,
                     |stream| bcs_stream::deserialize_bool(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
-            apply_dest_chain_config_updates(
-                &caller,
-                dest_chain_selectors,
-                dest_chain_routers,
-                dest_chain_allowlist_enabled
-            );
+            apply_dest_chain_config_updates(state, owner_cap, dest_chain_selectors, dest_chain_enabled, dest_chain_allowlist_enabled);
         } else if (function_bytes == b"apply_allowlist_updates") {
             let dest_chain_selectors =
-                bcs_stream::deserialize_vector(
+                bcs_stream::deserialize_vector!(
                     &mut stream,
                     |stream| bcs_stream::deserialize_u64(stream)
                 );
             let dest_chain_allowlist_enabled =
-                bcs_stream::deserialize_vector(
+                bcs_stream::deserialize_vector!(
                     &mut stream,
                     |stream| bcs_stream::deserialize_bool(stream)
                 );
             let dest_chain_add_allowed_senders =
-                bcs_stream::deserialize_vector(
+                bcs_stream::deserialize_vector!(
                     &mut stream,
-                    |stream| bcs_stream::deserialize_vector(
+                    |stream| bcs_stream::deserialize_vector!(
                         stream,
                         |stream| bcs_stream::deserialize_address(stream)
                     )
                 );
             let dest_chain_remove_allowed_senders =
-                bcs_stream::deserialize_vector(
+                bcs_stream::deserialize_vector!(
                     &mut stream,
-                    |stream| bcs_stream::deserialize_vector(
+                    |stream| bcs_stream::deserialize_vector!(
                         stream,
                         |stream| bcs_stream::deserialize_address(stream)
                     )
                 );
-            bcs_stream::assert_is_consumed(&stream);
-            apply_allowlist_updates(
-                &caller,
-                dest_chain_selectors,
-                dest_chain_allowlist_enabled,
-                dest_chain_add_allowed_senders,
-                dest_chain_remove_allowed_senders
-            );
+            apply_allowlist_updates(state, owner_cap, dest_chain_selectors, dest_chain_allowlist_enabled, dest_chain_add_allowed_senders, dest_chain_remove_allowed_senders, ctx);
         } else if (function_bytes == b"transfer_ownership") {
             let to = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            transfer_ownership(&caller, to)
-        } else if (function_bytes == b"accept_ownership") {
+            transfer_ownership(state, owner_cap, to, ctx);
+        } else if (function_bytes == b"accept_ownership_as_mcms") {
+            // TODO: This may not be needed as we call `mcms_registry::register_entrypoint` with the `OwnerCap`
+            let mcms = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            accept_ownership(&caller)
+            ownable::accept_ownership_as_mcms(&mut state.ownable_state, mcms, ctx);
         } else if (function_bytes == b"execute_ownership_transfer") {
             let to = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            execute_ownership_transfer(&caller, to)
+            let owner_cap = mcms_registry::release_cap(registry, McmsCallback {});
+            execute_ownership_transfer(owner_cap, &mut state.ownable_state, to , ctx);
         } else {
-            abort error::invalid_argument(E_UNKNOWN_FUNCTION)
+            abort EUnknownFunction
         };
-
-        option::none()
     }
 
-    public(friend) fun register_mcms_entrypoint(publisher: &signer) {
-        mcms_registry::register_entrypoint(
-            publisher, string::utf8(b"onramp"), McmsCallback {}
-        );
-    }
-
-    public fun dynamic_config_fee_aggregator(config: &DynamicConfig): address {
-        config.fee_aggregator
-    }
-
-    public fun dynamic_config_allowlist_admin(config: &DynamicConfig): address {
-        config.allowlist_admin
-    }
-
-    public fun static_config_chain_selector(config: &StaticConfig): u64 {
-        config.chain_selector
-    }
-
-    // ========================== TEST ONLY ==========================
+    // ============================== Test Functions ============================== //
 
     #[test_only]
-    public fun test_init_module(publisher: &signer) {
-        init_module(publisher);
-    }
-
-    #[test_only]
-    public fun test_register_mcms_entrypoint(publisher: &signer) {
-        register_mcms_entrypoint(publisher);
+    public fun test_init(ctx: &mut TxContext) {
+        init(ONRAMP{}, ctx);
     }
 }

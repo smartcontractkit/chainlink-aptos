@@ -1,722 +1,429 @@
-module burn_mint_token_pool::burn_mint_token_pool {
-    use std::account::{Self, SignerCapability};
-    use std::error;
-    use std::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef};
-    use std::primary_fungible_store;
-    use std::object::{Self, Object, ObjectCore};
-    use std::option::{Self, Option};
-    use std::signer;
-    use std::string::{Self, String};
-    use aptos_framework::fungible_asset::{BurnRef, MintRef};
+/// this module will store the treasury cap object within the token pool state
+/// this will disable any burning/minting of the token outside of the token pool
+/// if this is not desired, consider using the lock release token pool or the
+/// combination of the managed token and managed token pool
+module burn_mint_token_pool::burn_mint_token_pool;
 
-    use ccip::token_admin_registry;
-    use ccip_token_pool::ownable;
-    use ccip_token_pool::rate_limiter;
-    use ccip_token_pool::token_pool;
+use std::string::{Self, String};
+use std::type_name::{Self, TypeName};
 
-    use mcms::mcms_registry;
-    use mcms::bcs_stream;
+use sui::clock::Clock;
+use sui::coin::{Self, Coin, CoinMetadata, TreasuryCap};
 
-    const STORE_OBJECT_SEED: vector<u8> = b"CcipBurnMintTokenPool";
+use ccip::dynamic_dispatcher as dd;
+use ccip::eth_abi;
+use ccip::offramp_state_helper as osh;
+use ccip::state_object::CCIPObjectRef;
+use ccip::token_admin_registry;
 
-    struct BurnMintTokenPoolDeployment has key {
-        store_signer_cap: SignerCapability,
-        ownable_state: ownable::OwnableState,
-        token_pool_state: token_pool::TokenPoolState
-    }
+use ccip_token_pool::token_pool::{Self, TokenPoolState};
 
-    struct BurnMintTokenPoolState has key, store {
-        store_signer_cap: SignerCapability,
-        ownable_state: ownable::OwnableState,
-        token_pool_state: token_pool::TokenPoolState,
-        store_signer_address: address,
-        burn_ref: Option<BurnRef>,
-        mint_ref: Option<MintRef>
-    }
+public struct OwnerCap has key, store {
+    id: UID,
+    state_id: ID,
+}
 
-    const E_NOT_PUBLISHER: u64 = 1;
-    const E_ALREADY_INITIALIZED: u64 = 2;
-    const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
-    const E_LOCAL_TOKEN_MISMATCH: u64 = 4;
-    const E_INVALID_ARGUMENTS: u64 = 5;
-    const E_UNKNOWN_FUNCTION: u64 = 6;
-    const E_MINT_REF_NOT_SET: u64 = 7;
-    const E_BURN_REF_NOT_SET: u64 = 8;
+public struct BurnMintTokenPoolState<phantom T> has key {
+    id: UID,
+    token_pool_state: TokenPoolState,
+    treasury_cap: TreasuryCap<T>,
+}
 
-    // ================================================================
-    // |                             Init                             |
-    // ================================================================
+const EInvalidArguments: u64 = 1;
+const EInvalidOwnerCap: u64 = 2;
 
-    #[view]
-    public fun type_and_version(): String {
-        string::utf8(b"BurnMintTokenPool 1.6.0")
-    }
+// ================================================================
+// |                             Init                             |
+// ================================================================
 
-    fun init_module(publisher: &signer) {
-        // register the pool on deployment, because in the case of object code deployment,
-        // this is the only time we have a signer ref to @ccip_burn_mint_pool.
-        assert!(
-            object::object_exists<Metadata>(@burn_mint_local_token),
-            error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
-        );
-        let metadata = object::address_to_object<Metadata>(@burn_mint_local_token);
+public fun type_and_version(): String {
+    string::utf8(b"BurnMintTokenPool 1.6.0")
+}
 
-        // create an Account on the object for event handles.
-        account::create_account_if_does_not_exist(@burn_mint_token_pool);
+public fun initialize<T: drop>(
+    ref: &mut CCIPObjectRef,
+    coin_metadata: &CoinMetadata<T>,
+    treasury_cap: TreasuryCap<T>,
+    token_pool_package_id: address,
+    token_pool_administrator: address,
+    ctx: &mut TxContext,
+) {
+    let (_, _, _, burn_mint_token_pool) =
+        initialize_internal(coin_metadata, treasury_cap, ctx);
 
-        // the name of this module. if incorrect, callbacks will fail to be registered and
-        // register_pool will revert.
-        let token_pool_module_name = b"burn_mint_token_pool";
+    token_admin_registry::register_pool(
+        ref,
+        &burn_mint_token_pool.treasury_cap,
+        coin_metadata,
+        token_pool_package_id,
+        object::uid_to_address(&burn_mint_token_pool.id),
+        string::utf8(b"burn_mint_token_pool"),
+        token_pool_administrator,
+        TypeProof {},
+    );
 
-        // Register the entrypoint with mcms
-        if (@mcms_register_entrypoints == @0x1) {
-            register_mcms_entrypoint(publisher, token_pool_module_name);
-        };
+    transfer::share_object(burn_mint_token_pool);
+}
 
-        token_admin_registry::register_pool(
-            publisher,
-            token_pool_module_name,
-            @burn_mint_local_token,
-            CallbackProof {}
-        );
+public fun initialize_by_ccip_admin<T: drop>(
+    ref: &mut CCIPObjectRef,
+    coin_metadata: &CoinMetadata<T>,
+    treasury_cap: TreasuryCap<T>,
+    token_pool_package_id: address,
+    token_pool_administrator: address,
+    ctx: &mut TxContext,
+) {
+    let (coin_metadata_address, token_type_name, type_proof_type_name, burn_mint_token_pool) =
+        initialize_internal(coin_metadata, treasury_cap, ctx);
 
-        // create a resource account to be the owner of the primary FungibleStore we will use.
-        let (store_signer, store_signer_cap) =
-            account::create_resource_account(publisher, STORE_OBJECT_SEED);
+    token_admin_registry::register_pool_by_admin(
+        ref,
+        coin_metadata_address,
+        token_pool_package_id,
+        object::uid_to_address(&burn_mint_token_pool.id),
+        string::utf8(b"burn_mint_token_pool"),
+        token_type_name.into_string(),
+        token_pool_administrator,
+        type_proof_type_name.into_string(),
+        ctx,
+    );
 
-        // make sure this is a valid fungible asset that is primary fungible store enabled,
-        // ie. created with primary_fungible_store::create_primary_store_enabled_fungible_asset
-        primary_fungible_store::ensure_primary_store_exists(
-            signer::address_of(&store_signer), metadata
-        );
+    transfer::share_object(burn_mint_token_pool);
+}
 
-        move_to(
-            publisher,
-            BurnMintTokenPoolDeployment {
-                store_signer_cap,
-                ownable_state: ownable::new(&store_signer, @burn_mint_token_pool),
-                token_pool_state: token_pool::initialize(
-                    &store_signer, @burn_mint_local_token, vector[]
-                )
-            }
-        );
-    }
+#[allow(lint(self_transfer))]
+fun initialize_internal<T: drop>(
+    coin_metadata: &CoinMetadata<T>,
+    treasury_cap: TreasuryCap<T>,
+    ctx: &mut TxContext,
+): (address, TypeName, TypeName, BurnMintTokenPoolState<T>) {
+    let coin_metadata_address: address = object::id_to_address(&object::id(coin_metadata));
 
-    public fun initialize(
-        caller: &signer, burn_ref: BurnRef, mint_ref: MintRef
-    ) acquires BurnMintTokenPoolDeployment {
-        assert_can_initialize(signer::address_of(caller));
+    let burn_mint_token_pool = BurnMintTokenPoolState<T> {
+        id: object::new(ctx),
+        token_pool_state: token_pool::initialize(coin_metadata_address, coin_metadata.get_decimals(), vector[], ctx),
+        treasury_cap,
+    };
+    let token_type_name = type_name::get<T>();
+    let type_proof_type_name = type_name::get<TypeProof>();
 
-        assert!(
-            exists<BurnMintTokenPoolDeployment>(@burn_mint_token_pool),
-            error::invalid_argument(E_ALREADY_INITIALIZED)
-        );
+    let owner_cap = OwnerCap {
+        id: object::new(ctx),
+        state_id: object::id(&burn_mint_token_pool),
+    };
+    transfer::transfer(owner_cap, ctx.sender());
 
-        let metadata = object::address_to_object<Metadata>(@burn_mint_local_token);
-        let burn_ref_metadata = fungible_asset::burn_ref_metadata(&burn_ref);
-        let mint_ref_metadata = fungible_asset::mint_ref_metadata(&mint_ref);
+    (coin_metadata_address, token_type_name, type_proof_type_name, burn_mint_token_pool)
+}
 
-        assert!(
-            metadata == burn_ref_metadata && metadata == mint_ref_metadata,
-            error::invalid_argument(E_LOCAL_TOKEN_MISMATCH)
-        );
+// ================================================================
+// |                 Exposing token_pool functions                |
+// ================================================================
 
-        let BurnMintTokenPoolDeployment {
-            store_signer_cap,
-            ownable_state,
-            token_pool_state
-        } = move_from<BurnMintTokenPoolDeployment>(@burn_mint_token_pool);
+// this now returns the address of coin metadata
+public fun get_token<T>(state: &BurnMintTokenPoolState<T>): address {
+    token_pool::get_token(&state.token_pool_state)
+}
 
-        let store_signer = account::create_signer_with_capability(&store_signer_cap);
+public fun get_token_decimals<T>(state: &BurnMintTokenPoolState<T>): u8 {
+    state.token_pool_state.get_local_decimals()
+}
 
-        let pool = BurnMintTokenPoolState {
-            ownable_state,
-            store_signer_address: signer::address_of(&store_signer),
-            store_signer_cap,
-            token_pool_state,
-            burn_ref: option::some(burn_ref),
-            mint_ref: option::some(mint_ref)
-        };
+public fun get_remote_pools<T>(
+    state: &BurnMintTokenPoolState<T>,
+    remote_chain_selector: u64
+): vector<vector<u8>> {
+    token_pool::get_remote_pools(&state.token_pool_state, remote_chain_selector)
+}
 
-        move_to(&store_signer, pool);
-    }
+public fun is_remote_pool<T>(
+    state: &BurnMintTokenPoolState<T>,
+    remote_chain_selector: u64,
+    remote_pool_address: vector<u8>
+): bool {
+    token_pool::is_remote_pool(
+        &state.token_pool_state,
+        remote_chain_selector,
+        remote_pool_address
+    )
+}
 
-    // ================================================================
-    // |                 Exposing token_pool functions                |
-    // ================================================================
+public fun get_remote_token<T>(
+    state: &BurnMintTokenPoolState<T>, remote_chain_selector: u64
+): vector<u8> {
+    token_pool::get_remote_token(&state.token_pool_state, remote_chain_selector)
+}
 
-    #[view]
-    public fun get_token(): address acquires BurnMintTokenPoolState {
-        token_pool::get_token(&borrow_pool().token_pool_state)
-    }
+public fun add_remote_pool<T>(
+    state: &mut BurnMintTokenPoolState<T>,
+    owner_cap: &OwnerCap,
+    remote_chain_selector: u64,
+    remote_pool_address: vector<u8>,
+) {
+    assert!(owner_cap.state_id == object::id(state), EInvalidOwnerCap);
+    token_pool::add_remote_pool(
+        &mut state.token_pool_state, remote_chain_selector, remote_pool_address
+    );
+}
 
-    #[view]
-    public fun get_router(): address {
-        token_pool::get_router()
-    }
+public fun remove_remote_pool<T>(
+    state: &mut BurnMintTokenPoolState<T>,
+    owner_cap: &OwnerCap,
+    remote_chain_selector: u64,
+    remote_pool_address: vector<u8>,
+) {
+    assert!(owner_cap.state_id == object::id(state), EInvalidOwnerCap);
+    token_pool::remove_remote_pool(
+        &mut state.token_pool_state, remote_chain_selector, remote_pool_address
+    );
+}
 
-    #[view]
-    public fun get_token_decimals(): u8 acquires BurnMintTokenPoolState {
-        token_pool::get_token_decimals(&borrow_pool().token_pool_state)
-    }
+public fun is_supported_chain<T>(
+    state: &BurnMintTokenPoolState<T>,
+    remote_chain_selector: u64
+): bool {
+    token_pool::is_supported_chain(&state.token_pool_state, remote_chain_selector)
+}
 
-    #[view]
-    public fun get_remote_pools(
-        remote_chain_selector: u64
-    ): vector<vector<u8>> acquires BurnMintTokenPoolState {
-        token_pool::get_remote_pools(
-            &borrow_pool().token_pool_state, remote_chain_selector
-        )
-    }
+public fun get_supported_chains<T>(state: &BurnMintTokenPoolState<T>): vector<u64> {
+    token_pool::get_supported_chains(&state.token_pool_state)
+}
 
-    #[view]
-    public fun is_remote_pool(
-        remote_chain_selector: u64, remote_pool_address: vector<u8>
-    ): bool acquires BurnMintTokenPoolState {
-        token_pool::is_remote_pool(
-            &borrow_pool().token_pool_state,
+public fun apply_chain_updates<T>(
+    state: &mut BurnMintTokenPoolState<T>,
+    owner_cap: &OwnerCap,
+    remote_chain_selectors_to_remove: vector<u64>,
+    remote_chain_selectors_to_add: vector<u64>,
+    remote_pool_addresses_to_add: vector<vector<vector<u8>>>,
+    remote_token_addresses_to_add: vector<vector<u8>>
+) {
+    assert!(owner_cap.state_id == object::id(state), EInvalidOwnerCap);
+    token_pool::apply_chain_updates(
+        &mut state.token_pool_state,
+        remote_chain_selectors_to_remove,
+        remote_chain_selectors_to_add,
+        remote_pool_addresses_to_add,
+        remote_token_addresses_to_add
+    );
+}
+
+public fun get_allowlist_enabled<T>(state: &BurnMintTokenPoolState<T>): bool {
+    token_pool::get_allowlist_enabled(&state.token_pool_state)
+}
+
+public fun get_allowlist<T>(state: &BurnMintTokenPoolState<T>): vector<address> {
+    token_pool::get_allowlist(&state.token_pool_state)
+}
+
+public fun set_allowlist_enabled<T>(
+    state: &mut BurnMintTokenPoolState<T>,
+    owner_cap: &OwnerCap,
+    enabled: bool
+) {
+    assert!(owner_cap.state_id == object::id(state), EInvalidOwnerCap);
+    token_pool::set_allowlist_enabled(&mut state.token_pool_state, enabled);
+}
+
+public fun apply_allowlist_updates<T>(
+    state: &mut BurnMintTokenPoolState<T>,
+    owner_cap: &OwnerCap,
+    removes: vector<address>,
+    adds: vector<address>
+) {
+    assert!(owner_cap.state_id == object::id(state), EInvalidOwnerCap);
+    token_pool::apply_allowlist_updates(&mut state.token_pool_state, removes, adds);
+}
+
+// ================================================================
+// |                         Burn/Mint                            |
+// ================================================================
+
+public struct TypeProof has drop {}
+
+public fun lock_or_burn<T>(
+    ref: &CCIPObjectRef,
+    clock: &Clock,
+    state: &mut BurnMintTokenPoolState<T>,
+    c: Coin<T>,
+    token_params: dd::TokenParams,
+    ctx: &mut TxContext
+): dd::TokenParams {
+    let amount = c.value();
+    let sender = ctx.sender();
+    let remote_chain_selector = dd::get_destination_chain_selector(&token_params);
+
+    // This metod validates various aspects of the lock or burn operation. If any of the
+    // validations fail, the transaction will abort.
+    let dest_token_address =
+        token_pool::validate_lock_or_burn(
+            ref,
+            clock,
+            &mut state.token_pool_state,
+            sender,
             remote_chain_selector,
-            remote_pool_address
-        )
-    }
-
-    #[view]
-    public fun get_remote_token(
-        remote_chain_selector: u64
-    ): vector<u8> acquires BurnMintTokenPoolState {
-        let pool = borrow_pool();
-        token_pool::get_remote_token(&pool.token_pool_state, remote_chain_selector)
-    }
-
-    public entry fun add_remote_pool(
-        caller: &signer, remote_chain_selector: u64, remote_pool_address: vector<u8>
-    ) acquires BurnMintTokenPoolState {
-        let pool = borrow_pool_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
-
-        token_pool::add_remote_pool(
-            &mut pool.token_pool_state, remote_chain_selector, remote_pool_address
-        );
-    }
-
-    public entry fun remove_remote_pool(
-        caller: &signer, remote_chain_selector: u64, remote_pool_address: vector<u8>
-    ) acquires BurnMintTokenPoolState {
-        let pool = borrow_pool_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
-
-        token_pool::remove_remote_pool(
-            &mut pool.token_pool_state, remote_chain_selector, remote_pool_address
-        );
-    }
-
-    #[view]
-    public fun is_supported_chain(remote_chain_selector: u64): bool acquires BurnMintTokenPoolState {
-        let pool = borrow_pool();
-        token_pool::is_supported_chain(&pool.token_pool_state, remote_chain_selector)
-    }
-
-    #[view]
-    public fun get_supported_chains(): vector<u64> acquires BurnMintTokenPoolState {
-        let pool = borrow_pool();
-        token_pool::get_supported_chains(&pool.token_pool_state)
-    }
-
-    public entry fun apply_chain_updates(
-        caller: &signer,
-        remote_chain_selectors_to_remove: vector<u64>,
-        remote_chain_selectors_to_add: vector<u64>,
-        remote_pool_addresses_to_add: vector<vector<vector<u8>>>,
-        remote_token_addresses_to_add: vector<vector<u8>>
-    ) acquires BurnMintTokenPoolState {
-        let pool = borrow_pool_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
-
-        token_pool::apply_chain_updates(
-            &mut pool.token_pool_state,
-            remote_chain_selectors_to_remove,
-            remote_chain_selectors_to_add,
-            remote_pool_addresses_to_add,
-            remote_token_addresses_to_add
-        );
-    }
-
-    #[view]
-    public fun get_allowlist_enabled(): bool acquires BurnMintTokenPoolState {
-        let pool = borrow_pool();
-        token_pool::get_allowlist_enabled(&pool.token_pool_state)
-    }
-
-    #[view]
-    public fun get_allowlist(): vector<address> acquires BurnMintTokenPoolState {
-        let pool = borrow_pool();
-        token_pool::get_allowlist(&pool.token_pool_state)
-    }
-
-    public entry fun apply_allowlist_updates(
-        caller: &signer, removes: vector<address>, adds: vector<address>
-    ) acquires BurnMintTokenPoolState {
-        let pool = borrow_pool_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
-        token_pool::apply_allowlist_updates(&mut pool.token_pool_state, removes, adds);
-    }
-
-    // ================================================================
-    // |                         Burn/Mint                            |
-    // ================================================================
-
-    // the callback proof type used as authentication to retrieve and set input and output arguments.
-    struct CallbackProof has drop {}
-
-    public fun lock_or_burn<T: key>(
-        _store: Object<T>, fa: FungibleAsset, _transfer_ref: &TransferRef
-    ) acquires BurnMintTokenPoolState {
-        // retrieve the input for this lock or burn operation. if this function is invoked
-        // outside of ccip::token_admin_registry, the transaction will abort.
-        let input =
-            token_admin_registry::get_lock_or_burn_input_v1(
-                @burn_mint_token_pool, CallbackProof {}
-            );
-
-        let pool = borrow_pool_mut();
-        let fa_amount = fungible_asset::amount(&fa);
-
-        // This method validates various aspects of the lock or burn operation. If any of the
-        // validations fail, the transaction will abort.
-        let dest_token_address =
-            token_pool::validate_lock_or_burn(
-                &mut pool.token_pool_state,
-                &fa,
-                &input,
-                fa_amount
-            );
-
-        // Construct lock_or_burn output before we lose access to fa
-        let dest_pool_data = token_pool::encode_local_decimals(&pool.token_pool_state);
-
-        // Burn the funds
-        assert!(pool.burn_ref.is_some(), E_BURN_REF_NOT_SET);
-        fungible_asset::burn(pool.burn_ref.borrow(), fa);
-
-        // set the output for this lock or burn operation.
-        token_admin_registry::set_lock_or_burn_output_v1(
-            @burn_mint_token_pool,
-            CallbackProof {},
-            dest_token_address,
-            dest_pool_data
+            amount,
         );
 
-        let remote_chain_selector =
-            token_admin_registry::get_lock_or_burn_remote_chain_selector(&input);
+    coin::burn(&mut state.treasury_cap, c);
 
-        token_pool::emit_locked_or_burned(
-            &mut pool.token_pool_state, fa_amount, remote_chain_selector
-        );
-    }
+    let mut extra_data = vector[];
+    eth_abi::encode_u8(&mut extra_data, state.token_pool_state.get_local_decimals());
 
-    public fun release_or_mint<T: key>(
-        _store: Object<T>, _amount: u64, _transfer_ref: &TransferRef
-    ): FungibleAsset acquires BurnMintTokenPoolState {
-        // retrieve the input for this release or mint operation. if this function is invoked
-        // outside of ccip::token_admin_registry, the transaction will abort.
-        let input =
-            token_admin_registry::get_release_or_mint_input_v1(
-                @burn_mint_token_pool, CallbackProof {}
-            );
-        let pool = borrow_pool_mut();
-        let local_amount =
-            token_pool::calculate_release_or_mint_amount(&pool.token_pool_state, &input);
+    token_pool::emit_locked_or_burned(&mut state.token_pool_state, amount, remote_chain_selector);
 
-        token_pool::validate_release_or_mint(
-            &mut pool.token_pool_state, &input, local_amount
-        );
+    dd::add_source_token_transfer(
+        ref,
+        token_params,
+        amount,
+        state.token_pool_state.get_token(),
+        dest_token_address,
+        extra_data,
+        TypeProof {},
+    )
+}
 
-        // Mint the amount for release.
-        assert!(pool.mint_ref.is_some(), E_MINT_REF_NOT_SET);
-        let fa = fungible_asset::mint(pool.mint_ref.borrow(), local_amount);
+public fun release_or_mint<T>(
+    ref: &CCIPObjectRef,
+    clock: &Clock,
+    pool: &mut BurnMintTokenPoolState<T>,
+    receiver_params: osh::ReceiverParams,
+    index: u64,
+    ctx: &mut TxContext
+): osh::ReceiverParams {
+    let remote_chain_selector = osh::get_source_chain_selector(&receiver_params);
+    let (receiver, source_amount, dest_token_address, source_pool_address, source_pool_data, _) = osh::get_token_param_data(&receiver_params, index);
+    let local_amount = token_pool::calculate_release_or_mint_amount(
+        &pool.token_pool_state,
+        source_pool_data,
+        source_amount
+    );
+    
+    token_pool::validate_release_or_mint(
+        ref,
+        clock,
+        &mut pool.token_pool_state,
+        remote_chain_selector,
+        dest_token_address,
+        source_pool_address,
+        local_amount
+    );
 
-        // set the output for this release or mint operation.
-        token_admin_registry::set_release_or_mint_output_v1(
-            @burn_mint_token_pool, CallbackProof {}, local_amount
-        );
+    let c = coin::mint(
+        &mut pool.treasury_cap,
+        local_amount,
+        ctx,
+    );
 
-        let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
-        let remote_chain_selector =
-            token_admin_registry::get_release_or_mint_remote_chain_selector(&input);
+    token_pool::emit_released_or_minted(
+        &mut pool.token_pool_state,
+        receiver,
+        local_amount,
+        remote_chain_selector,
+    );
 
-        token_pool::emit_released_or_minted(
-            &mut pool.token_pool_state,
-            recipient,
-            local_amount,
-            remote_chain_selector
-        );
+    osh::complete_token_transfer(
+        ref,
+        receiver_params,
+        index,
+        c,
+        TypeProof {},
+    )
+}
 
-        // return the withdrawn fungible asset.
-        fa
-    }
+// ================================================================
+// |                    Rate limit config                         |
+// ================================================================
 
-    // ================================================================
-    // |                    Rate limit config                         |
-    // ================================================================
+public fun set_chain_rate_limiter_configs<T>(
+    state: &mut BurnMintTokenPoolState<T>,
+    owner_cap: &OwnerCap,
+    clock: &Clock,
+    remote_chain_selectors: vector<u64>,
+    outbound_is_enableds: vector<bool>,
+    outbound_capacities: vector<u64>,
+    outbound_rates: vector<u64>,
+    inbound_is_enableds: vector<bool>,
+    inbound_capacities: vector<u64>,
+    inbound_rates: vector<u64>
+) {
+    assert!(owner_cap.state_id == object::id(state), EInvalidOwnerCap);
+    let number_of_chains = remote_chain_selectors.length();
 
-    public entry fun set_chain_rate_limiter_configs(
-        caller: &signer,
-        remote_chain_selectors: vector<u64>,
-        outbound_is_enableds: vector<bool>,
-        outbound_capacities: vector<u64>,
-        outbound_rates: vector<u64>,
-        inbound_is_enableds: vector<bool>,
-        inbound_capacities: vector<u64>,
-        inbound_rates: vector<u64>
-    ) acquires BurnMintTokenPoolState {
-        let pool = borrow_pool_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+    assert!(
+        number_of_chains == outbound_is_enableds.length()
+            && number_of_chains == outbound_capacities.length()
+            && number_of_chains == outbound_rates.length()
+            && number_of_chains == inbound_is_enableds.length()
+            && number_of_chains == inbound_capacities.length()
+            && number_of_chains == inbound_rates.length(),
+        EInvalidArguments
+    );
 
-        let number_of_chains = remote_chain_selectors.length();
-
-        assert!(
-            number_of_chains == outbound_is_enableds.length()
-                && number_of_chains == outbound_capacities.length()
-                && number_of_chains == outbound_rates.length()
-                && number_of_chains == inbound_is_enableds.length()
-                && number_of_chains == inbound_capacities.length()
-                && number_of_chains == inbound_rates.length(),
-            error::invalid_argument(E_INVALID_ARGUMENTS)
-        );
-
-        for (i in 0..number_of_chains) {
-            token_pool::set_chain_rate_limiter_config(
-                &mut pool.token_pool_state,
-                remote_chain_selectors[i],
-                outbound_is_enableds[i],
-                outbound_capacities[i],
-                outbound_rates[i],
-                inbound_is_enableds[i],
-                inbound_capacities[i],
-                inbound_rates[i]
-            );
-        };
-    }
-
-    public entry fun set_chain_rate_limiter_config(
-        caller: &signer,
-        remote_chain_selector: u64,
-        outbound_is_enabled: bool,
-        outbound_capacity: u64,
-        outbound_rate: u64,
-        inbound_is_enabled: bool,
-        inbound_capacity: u64,
-        inbound_rate: u64
-    ) acquires BurnMintTokenPoolState {
-        let pool = borrow_pool_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
-
+    let mut i = 0;
+    while (i < number_of_chains) {
         token_pool::set_chain_rate_limiter_config(
-            &mut pool.token_pool_state,
-            remote_chain_selector,
-            outbound_is_enabled,
-            outbound_capacity,
-            outbound_rate,
-            inbound_is_enabled,
-            inbound_capacity,
-            inbound_rate
+            clock,
+            &mut state.token_pool_state,
+            remote_chain_selectors[i],
+            outbound_is_enableds[i],
+            outbound_capacities[i],
+            outbound_rates[i],
+            inbound_is_enableds[i],
+            inbound_capacities[i],
+            inbound_rates[i]
         );
-    }
+        i = i + 1;
+    };
+}
 
-    #[view]
-    public fun get_current_inbound_rate_limiter_state(
-        remote_chain_selector: u64
-    ): rate_limiter::TokenBucket acquires BurnMintTokenPoolState {
-        token_pool::get_current_inbound_rate_limiter_state(
-            &borrow_pool().token_pool_state, remote_chain_selector
-        )
-    }
+public fun set_chain_rate_limiter_config<T>(
+    state: &mut BurnMintTokenPoolState<T>,
+    owner_cap: &OwnerCap,
+    clock: &Clock,
+    remote_chain_selector: u64,
+    outbound_is_enabled: bool,
+    outbound_capacity: u64,
+    outbound_rate: u64,
+    inbound_is_enabled: bool,
+    inbound_capacity: u64,
+    inbound_rate: u64
+) {
+    assert!(owner_cap.state_id == object::id(state), EInvalidOwnerCap);
+    token_pool::set_chain_rate_limiter_config(
+        clock,
+        &mut state.token_pool_state,
+        remote_chain_selector,
+        outbound_is_enabled,
+        outbound_capacity,
+        outbound_rate,
+        inbound_is_enabled,
+        inbound_capacity,
+        inbound_rate
+    );
+}
 
-    #[view]
-    public fun get_current_outbound_rate_limiter_state(
-        remote_chain_selector: u64
-    ): rate_limiter::TokenBucket acquires BurnMintTokenPoolState {
-        token_pool::get_current_outbound_rate_limiter_state(
-            &borrow_pool().token_pool_state, remote_chain_selector
-        )
-    }
+// destroy the burn mint token pool state and the owner cap, return the treasury cap to the owner
+// this should only be called after unregistering the pool from the token admin registry
+public fun destroy_token_pool<T>(
+    state: BurnMintTokenPoolState<T>,
+    owner_cap: OwnerCap,
+    _ctx: &mut TxContext,
+): TreasuryCap<T> {
+    assert!(owner_cap.state_id == object::id(&state), EInvalidOwnerCap);
 
-    // ================================================================
-    // |                      Storage helpers                         |
-    // ================================================================
+    let BurnMintTokenPoolState<T> {
+        id: state_id,
+        token_pool_state,
+        treasury_cap,
+    } = state;
+    token_pool::destroy_token_pool(token_pool_state);
+    object::delete(state_id);
 
-    #[view]
-    public fun get_store_address(): address {
-        store_address()
-    }
+    let OwnerCap {
+        id: owner_cap_id,
+        state_id: _,
+    } = owner_cap;
+    object::delete(owner_cap_id);
 
-    inline fun store_address(): address {
-        account::create_resource_address(&@burn_mint_token_pool, STORE_OBJECT_SEED)
-    }
-
-    fun assert_can_initialize(caller_address: address) {
-        if (caller_address == @burn_mint_token_pool) { return };
-
-        if (object::is_object(@burn_mint_token_pool)) {
-            let burn_mint_token_pool_object =
-                object::address_to_object<ObjectCore>(@burn_mint_token_pool);
-            if (caller_address == object::owner(burn_mint_token_pool_object)
-                || caller_address == object::root_owner(burn_mint_token_pool_object)) {
-                return
-            };
-        };
-
-        abort error::permission_denied(E_NOT_PUBLISHER)
-    }
-
-    inline fun borrow_pool(): &BurnMintTokenPoolState {
-        borrow_global<BurnMintTokenPoolState>(store_address())
-    }
-
-    inline fun borrow_pool_mut(): &mut BurnMintTokenPoolState {
-        borrow_global_mut<BurnMintTokenPoolState>(store_address())
-    }
-
-    // ================================================================
-    // |                       Expose ownable                         |
-    // ================================================================
-
-    #[view]
-    public fun owner(): address acquires BurnMintTokenPoolState {
-        ownable::owner(&borrow_pool().ownable_state)
-    }
-
-    #[view]
-    public fun has_pending_transfer(): bool acquires BurnMintTokenPoolState {
-        ownable::has_pending_transfer(&borrow_pool().ownable_state)
-    }
-
-    #[view]
-    public fun pending_transfer_from(): Option<address> acquires BurnMintTokenPoolState {
-        ownable::pending_transfer_from(&borrow_pool().ownable_state)
-    }
-
-    #[view]
-    public fun pending_transfer_to(): Option<address> acquires BurnMintTokenPoolState {
-        ownable::pending_transfer_to(&borrow_pool().ownable_state)
-    }
-
-    #[view]
-    public fun pending_transfer_accepted(): Option<bool> acquires BurnMintTokenPoolState {
-        ownable::pending_transfer_accepted(&borrow_pool().ownable_state)
-    }
-
-    public entry fun transfer_ownership(caller: &signer, to: address) acquires BurnMintTokenPoolState {
-        let pool = borrow_pool_mut();
-        ownable::transfer_ownership(caller, &mut pool.ownable_state, to)
-    }
-
-    public entry fun accept_ownership(caller: &signer) acquires BurnMintTokenPoolState {
-        let pool = borrow_pool_mut();
-        ownable::accept_ownership(caller, &mut pool.ownable_state)
-    }
-
-    public entry fun execute_ownership_transfer(
-        caller: &signer, to: address
-    ) acquires BurnMintTokenPoolState {
-        let pool = borrow_pool_mut();
-        ownable::execute_ownership_transfer(caller, &mut pool.ownable_state, to)
-    }
-
-    // ================================================================
-    // |                    Ref Migration                              |
-    // ================================================================
-
-    public fun migrate_mint_ref(caller: &signer): MintRef acquires BurnMintTokenPoolState {
-        let pool = borrow_pool_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
-        assert!(pool.mint_ref.is_some(), E_MINT_REF_NOT_SET);
-
-        pool.mint_ref.extract()
-    }
-
-    public fun migrate_burn_ref(caller: &signer): BurnRef acquires BurnMintTokenPoolState {
-        let pool = borrow_pool_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
-        assert!(pool.burn_ref.is_some(), E_BURN_REF_NOT_SET);
-
-        pool.burn_ref.extract()
-    }
-
-    // ================================================================
-    // |                      MCMS entrypoint                         |
-    // ================================================================
-
-    struct McmsCallback has drop {}
-
-    public fun mcms_entrypoint<T: key>(
-        _metadata: object::Object<T>
-    ): option::Option<u128> acquires BurnMintTokenPoolState {
-        let (caller, function, data) =
-            mcms_registry::get_callback_params(@burn_mint_token_pool, McmsCallback {});
-
-        let function_bytes = *function.bytes();
-        let stream = bcs_stream::new(data);
-
-        if (function_bytes == b"add_remote_pool") {
-            let remote_chain_selector = bcs_stream::deserialize_u64(&mut stream);
-            let remote_pool_address = bcs_stream::deserialize_vector_u8(&mut stream);
-            bcs_stream::assert_is_consumed(&stream);
-            add_remote_pool(&caller, remote_chain_selector, remote_pool_address);
-        } else if (function_bytes == b"remove_remote_pool") {
-            let remote_chain_selector = bcs_stream::deserialize_u64(&mut stream);
-            let remote_pool_address = bcs_stream::deserialize_vector_u8(&mut stream);
-            bcs_stream::assert_is_consumed(&stream);
-            remove_remote_pool(&caller, remote_chain_selector, remote_pool_address);
-        } else if (function_bytes == b"apply_chain_updates") {
-            let remote_chain_selectors_to_remove =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
-                );
-            let remote_chain_selectors_to_add =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
-                );
-            let remote_pool_addresses_to_add =
-                bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_vector(
-                        stream, |stream| bcs_stream::deserialize_vector_u8(stream)
-                    )
-                );
-            let remote_token_addresses_to_add =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
-                );
-            bcs_stream::assert_is_consumed(&stream);
-            apply_chain_updates(
-                &caller,
-                remote_chain_selectors_to_remove,
-                remote_chain_selectors_to_add,
-                remote_pool_addresses_to_add,
-                remote_token_addresses_to_add
-            );
-        } else if (function_bytes == b"apply_allowlist_updates") {
-            let removes =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
-                );
-            let adds =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
-                );
-            bcs_stream::assert_is_consumed(&stream);
-            apply_allowlist_updates(&caller, removes, adds);
-        } else if (function_bytes == b"set_chain_rate_limiter_configs") {
-            let remote_chain_selectors =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
-                );
-            let outbound_is_enableds =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_bool(stream)
-                );
-            let outbound_capacities =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
-                );
-            let outbound_rates =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
-                );
-            let inbound_is_enableds =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_bool(stream)
-                );
-            let inbound_capacities =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
-                );
-            let inbound_rates =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
-                );
-            bcs_stream::assert_is_consumed(&stream);
-            set_chain_rate_limiter_configs(
-                &caller,
-                remote_chain_selectors,
-                outbound_is_enableds,
-                outbound_capacities,
-                outbound_rates,
-                inbound_is_enableds,
-                inbound_capacities,
-                inbound_rates
-            );
-        } else if (function_bytes == b"set_chain_rate_limiter_config") {
-            let remote_chain_selector = bcs_stream::deserialize_u64(&mut stream);
-            let outbound_is_enabled = bcs_stream::deserialize_bool(&mut stream);
-            let outbound_capacity = bcs_stream::deserialize_u64(&mut stream);
-            let outbound_rate = bcs_stream::deserialize_u64(&mut stream);
-            let inbound_is_enabled = bcs_stream::deserialize_bool(&mut stream);
-            let inbound_capacity = bcs_stream::deserialize_u64(&mut stream);
-            let inbound_rate = bcs_stream::deserialize_u64(&mut stream);
-            bcs_stream::assert_is_consumed(&stream);
-            set_chain_rate_limiter_config(
-                &caller,
-                remote_chain_selector,
-                outbound_is_enabled,
-                outbound_capacity,
-                outbound_rate,
-                inbound_is_enabled,
-                inbound_capacity,
-                inbound_rate
-            );
-        } else if (function_bytes == b"transfer_ownership") {
-            let to = bcs_stream::deserialize_address(&mut stream);
-            bcs_stream::assert_is_consumed(&stream);
-            transfer_ownership(&caller, to);
-        } else if (function_bytes == b"accept_ownership") {
-            bcs_stream::assert_is_consumed(&stream);
-            accept_ownership(&caller);
-        } else if (function_bytes == b"execute_ownership_transfer") {
-            let to = bcs_stream::deserialize_address(&mut stream);
-            bcs_stream::assert_is_consumed(&stream);
-            execute_ownership_transfer(&caller, to)
-        } else {
-            abort error::invalid_argument(E_UNKNOWN_FUNCTION)
-        };
-
-        option::none()
-    }
-
-    /// Callable during upgrades
-    public(friend) fun register_mcms_entrypoint(
-        publisher: &signer, module_name: vector<u8>
-    ) {
-        mcms_registry::register_entrypoint(
-            publisher, string::utf8(module_name), McmsCallback {}
-        );
-    }
-
-    // ================================================================
-    // |                      Test functions                          |
-    // ================================================================
-
-    #[test_only]
-    public entry fun test_init_module(owner: &signer) {
-        init_module(owner);
-    }
-
-    #[test_only]
-    public fun get_locked_or_burned_events(
-        state: address
-    ): vector<token_pool::LockedOrBurned> acquires BurnMintTokenPoolState {
-        token_pool::get_locked_or_burned_events(
-            &borrow_global<BurnMintTokenPoolState>(state).token_pool_state
-        )
-    }
-
-    #[test_only]
-    public fun get_released_or_minted_events(
-        state: address
-    ): vector<token_pool::ReleasedOrMinted> acquires BurnMintTokenPoolState {
-        token_pool::get_released_or_minted_events(
-            &borrow_global<BurnMintTokenPoolState>(state).token_pool_state
-        )
-    }
+    treasury_cap
 }
