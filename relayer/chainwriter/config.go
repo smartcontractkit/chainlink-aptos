@@ -1,37 +1,34 @@
 package chainwriter
 
 import (
-	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
+	"github.com/smartcontractkit/chainlink-common/pkg/types/aptos"
 )
 
-type FeeStrategy int
+// Deprecated
+//
+//go:fix inline
+type FeeStrategy = aptos.FeeStrategy
 
+// Deprecated
+//
+//go:fix inline
 const (
-	DeprioritizedFeeStrategy FeeStrategy = -1
-	DefaultFeeStrategy       FeeStrategy = 0
-	PrioritizedFeeStrategy   FeeStrategy = 1
+	DeprioritizedFeeStrategy = aptos.DeprioritizedFeeStrategy
+	DefaultFeeStrategy       = aptos.DefaultFeeStrategy
+	PrioritizedFeeStrategy   = aptos.PrioritizedFeeStrategy
 )
 
-type ChainWriterConfig struct {
-	Modules     map[string]*ChainWriterModule
-	FeeStrategy FeeStrategy
-}
+// Deprecated
+//
+//go:fix inline
+type ChainWriterConfig = aptos.ContractWriterConfig
 
-type ChainWriterModule struct {
-	// The module name (optional). When not provided, the key in the map under which this module
-	// is stored is used.
-	Name      string
-	Functions map[string]*ChainWriterFunction
-}
+// Deprecated
+//
+//go:fix inline
+type ChainWriterModule = aptos.ContractWriterModule
 
-type ChainWriterFunction struct {
-	// The function name (optional). When not provided, the key in the map under which this function
-	// is stored is used.
-	Name string
-	// The public key of the sending account.
-	PublicKey string
-	// The account address (optional). When not provided, the address is calculated
-	// from the public key.
-	FromAddress string
-	Params      []crconfig.AptosFunctionParam
-}
+// Deprecated
+//
+//go:fix inline
+type ChainWriterFunction = aptos.ContractWriterFunction
