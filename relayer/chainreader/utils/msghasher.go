@@ -231,6 +231,9 @@ func computeMetadataHash(
 }
 
 func encodeUint256(n *big.Int) []byte {
+	if n == nil {
+		n = big.NewInt(0)
+	}
 	return common.LeftPadBytes(n.Bytes(), 32)
 }
 
