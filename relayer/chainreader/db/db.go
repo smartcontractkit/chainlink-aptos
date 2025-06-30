@@ -38,10 +38,17 @@ func (s *DBStore) EnsureSchema(ctx context.Context) error {
 		return nil
 	}
 
+	dropSchemaSQL := `DROP SCHEMA IF EXISTS aptos CASCADE;`
+	s.lggr.Infow("Dropping aptos schema for clean deployment")
+	_, err := s.ds.ExecContext(ctx, dropSchemaSQL)
+	if err != nil {
+		return fmt.Errorf("failed to drop aptos schema: %w", err)
+	}
+
 	schemaSQL := `
 CREATE SCHEMA IF NOT EXISTS aptos;
 `
-	_, err := s.ds.ExecContext(ctx, schemaSQL)
+	_, err = s.ds.ExecContext(ctx, schemaSQL)
 	if err != nil {
 		return fmt.Errorf("failed to create aptos schema: %w", err)
 	}
