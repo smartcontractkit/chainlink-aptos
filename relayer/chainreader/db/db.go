@@ -31,12 +31,12 @@ func NewDBStore(ds sqlutil.DataSource, logger logger.Logger) *DBStore {
 }
 
 func (s *DBStore) EnsureSchema(ctx context.Context) error {
+	s.rwMutex.Lock()
+	defer s.rwMutex.Unlock()
+
 	if s.schemaEnsured {
 		return nil
 	}
-
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
 
 	schemaSQL := `
 CREATE SCHEMA IF NOT EXISTS aptos;
@@ -104,7 +104,7 @@ func (s *DBStore) InsertEvents(ctx context.Context, records []EventRecord) error
 INSERT INTO aptos.events (
     event_account_address,
     event_handle,
-		event_field_name,
+    event_field_name,
     event_offset,
     tx_version,
     block_height,
@@ -112,7 +112,7 @@ INSERT INTO aptos.events (
     block_timestamp,
     data
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-ON CONFLICT (event_account_address, event_handle, event_field_name, tx_version)
+ON CONFLICT (event_account_address, event_handle, event_field_name, event_offset, tx_version)
 DO NOTHING;
 `
 
