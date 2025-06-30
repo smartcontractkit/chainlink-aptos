@@ -122,18 +122,27 @@ eventLoop:
 			}
 
 			if len(batchRecords) > 0 {
-				if err := a.dbStore.InsertEvents(ctx, batchRecords); err != nil {
-					return fmt.Errorf("syncEvent: failed to insert batch of events: %w", err)
+				err := a.dbStore.InsertEvents(ctx, batchRecords)
+				if err != nil {
+					a.lggr.Errorw("syncEvent: batch insert failed, falling back to per-event insert", "error", err)
+					for _, record := range batchRecords {
+						if err := a.dbStore.InsertEvents(ctx, []db.EventRecord{record}); err != nil {
+							a.lggr.Errorw("syncEvent: failed to insert single event, skipping", "event", record, "error", err)
+							continue
+						}
+						totalProcessed++
+						// Advance latestOffset for each successfully inserted event
+						latestOffset = *record.EventOffset + 1
+					}
+				} else {
+					totalProcessed += len(batchRecords)
+					latestOffset = newEvents[len(newEvents)-1].SequenceNumber + 1
 				}
-
-				totalProcessed += len(batchRecords)
 				a.lggr.Debugw("syncEvent: saved batch of events",
 					"batch_count", len(batchRecords),
 					"total_processed", totalProcessed,
 					"handle", eventHandle)
 			}
-
-			latestOffset = newEvents[len(newEvents)-1].SequenceNumber + 1
 
 			// If we received fewer events than the batch size, we're caught up
 			if uint64(len(newEvents)) < batchSize {
