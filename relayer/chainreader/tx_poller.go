@@ -254,12 +254,13 @@ func (a *aptosChainReader) syncTransmitterTxs(ctx context.Context, transmitter a
 				EventAccountAddress: eventAccountAddress.String(),
 				EventHandle:         eventHandle,
 				EventFieldName:      eventConfig.EventHandleFieldName,
-				EventOffset:         nil, // Synthetic events don't have offsets
-				TxVersion:           userTxn.Version,
-				BlockHeight:         head.Height,
-				BlockHash:           head.Hash,
-				BlockTimestamp:      head.Timestamp,
-				Data:                executionStateChanged,
+				// Synthetic events have an offset of zero, since there won't be a duplicate event of the same type inside the same tx
+				EventOffset:    0,
+				TxVersion:      userTxn.Version,
+				BlockHeight:    head.Height,
+				BlockHash:      head.Hash,
+				BlockTimestamp: head.Timestamp,
+				Data:           executionStateChanged,
 			}
 
 			records = append(records, record)
