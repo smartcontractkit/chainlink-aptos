@@ -52,13 +52,13 @@ CREATE TABLE IF NOT EXISTS aptos.events (
     event_account_address TEXT NOT NULL,
     event_handle TEXT NOT NULL,
 		event_field_name TEXT NOT NULL,
-    event_offset BIGINT,
+    event_offset BIGINT NOT NULL,
     tx_version BIGINT NOT NULL,
     block_height TEXT NOT NULL,
     block_hash BYTEA NOT NULL,
     block_timestamp BIGINT NOT NULL,
     data JSONB NOT NULL,
-		UNIQUE (event_account_address, event_handle, event_field_name, tx_version)
+		UNIQUE (event_account_address, event_handle, event_field_name, event_offset, tx_version)
 );
 `
 	_, err = s.ds.ExecContext(ctx, createTableSQL)
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS aptos.events (
 
 	indexSQL := `
 CREATE INDEX IF NOT EXISTS idx_events_account_handle_offset
-ON aptos.events(event_account_address, event_handle, event_field_name, event_offset);
+ON aptos.events(event_account_address, event_handle, event_field_name, tx_version, event_offset);
 `
 	_, err = s.ds.ExecContext(ctx, indexSQL)
 	if err != nil {
@@ -84,7 +84,7 @@ type EventRecord struct {
 	EventAccountAddress string
 	EventHandle         string
 	EventFieldName      string
-	EventOffset         *uint64
+	EventOffset         uint64
 	TxVersion           uint64
 	BlockHeight         string
 	BlockHash           []byte
@@ -201,7 +201,7 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 		if sortDir, ok := limitAndSort.SortBy[0].(query.SortBySequence); ok && sortDir.GetDirection() == query.Desc {
 			direction = "DESC"
 		}
-		baseSQL += " ORDER BY tx_version " + direction
+		baseSQL += " ORDER BY (tx_version, event_offset) " + direction
 	}
 
 	var maxLimit uint64 = 2000
