@@ -258,7 +258,7 @@ func (s *DBStore) GetLatestOffset(ctx context.Context, eventAccountAddress, even
 	defer s.rwMutex.RUnlock()
 
 	querySQL := `
-SELECT COALESCE(MAX(event_offset), 0) FROM aptos.events
+SELECT COALESCE(MAX(event_offset) + 1, 0) FROM aptos.events
 WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 `
 
