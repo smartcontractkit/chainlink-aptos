@@ -1190,7 +1190,7 @@ module ccip::fee_quoter {
             (extra_args_v2, allow_out_of_order_execution)
         } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
             let (
-                _compute_units,
+                compute_units,
                 _account_is_writable_bitmap,
                 allow_out_of_order_execution,
                 token_receiver,
@@ -1207,6 +1207,16 @@ module ccip::fee_quoter {
                     error::invalid_argument(E_INVALID_TOKEN_RECEIVER)
                 );
             };
+
+            assert!(
+                !dest_chain_config.enforce_out_of_order || allow_out_of_order_execution,
+                error::invalid_argument(E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE)
+            );
+            assert!(
+                compute_units <= dest_chain_config.max_per_msg_gas_limit,
+                error::invalid_argument(E_MESSAGE_COMPUTE_UNIT_LIMIT_TOO_HIGH)
+            );
+
             (extra_args, allow_out_of_order_execution)
         } else {
             abort error::invalid_argument(E_UNKNOWN_CHAIN_FAMILY_SELECTOR)
