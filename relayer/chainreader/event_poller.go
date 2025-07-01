@@ -132,7 +132,7 @@ eventLoop:
 						}
 						totalProcessed++
 						// Advance latestOffset for each successfully inserted event
-						latestOffset = *record.EventOffset + 1
+						latestOffset = record.EventOffset + 1
 					}
 				} else {
 					totalProcessed += len(batchRecords)
