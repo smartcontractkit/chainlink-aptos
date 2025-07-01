@@ -67,6 +67,10 @@ func (h *MessageHasherV1) Hash(ctx context.Context, report *ExecutionReport, onR
 		return [32]byte{}, fmt.Errorf("compute metadata hash: %w", err)
 	}
 
+	if len(report.Message.Header.MessageID) != 32 {
+		return [32]byte{}, fmt.Errorf("invalid MessageID length: %d", len(report.Message.Header.MessageID))
+	}
+
 	var messageID [32]byte
 	copy(messageID[:], report.Message.Header.MessageID)
 
@@ -231,6 +235,9 @@ func computeMetadataHash(
 }
 
 func encodeUint256(n *big.Int) []byte {
+	if n == nil {
+		n = big.NewInt(0)
+	}
 	return common.LeftPadBytes(n.Bytes(), 32)
 }
 

@@ -52,6 +52,7 @@ type aptosChainReader struct {
 }
 
 var _ types.ContractTypeProvider = &aptosChainReader{}
+var _ types.ContractReader = &aptosChainReader{}
 
 type ExtendedContractReader interface {
 	types.ContractReader
