@@ -20,6 +20,10 @@ import (
 )
 
 func (a *aptosChainReader) startTxPolling(ctx context.Context) {
+	if err := a.waitForInitialEvent(ctx); err != nil {
+		return // Context was cancelled
+	}
+
 	a.lggr.Infow("Transaction polling goroutine started")
 	defer a.lggr.Infow("Transaction polling goroutine exited")
 
@@ -50,6 +54,49 @@ func (a *aptosChainReader) startTxPolling(ctx context.Context) {
 		case <-ctx.Done():
 			a.lggr.Infow("Transaction polling stopped")
 			return
+		}
+	}
+}
+
+func (a *aptosChainReader) waitForInitialEvent(ctx context.Context) error {
+	const (
+		moduleKey = "OffRamp"
+		eventKey  = "ExecutionStateChanged"
+	)
+
+	a.lggr.Infow("Waiting for initial ExecutionStateChanged event before starting transaction polling...")
+
+	ticker := time.NewTicker(a.config.TxSyncInterval)
+	defer ticker.Stop()
+
+	for {
+		eventAccountAddress, eventHandle, eventConfig, err := a.getEventConfig(moduleKey, eventKey)
+		if err != nil {
+			a.lggr.Warnw("Failed to get ExecutionStateChanged event config, retrying...", "error", err)
+		} else {
+			events, err := a.dbStore.QueryEvents(
+				ctx,
+				eventAccountAddress.String(),
+				eventHandle,
+				eventConfig.EventHandleFieldName,
+				nil,
+				query.LimitAndSort{Limit: query.CountLimit(1)},
+			)
+			if err != nil {
+				a.lggr.Warnw("Failed to query for ExecutionStateChanged events, retrying...", "error", err)
+			} else if len(events) > 0 {
+				a.lggr.Infow("Found initial ExecutionStateChanged event, starting tx poller.")
+				return nil // Found events, proceed.
+			}
+		}
+
+		select {
+		case <-ticker.C:
+			a.lggr.Infow("No ExecutionStateChanged events found yet, waiting...")
+			continue
+		case <-ctx.Done():
+			a.lggr.Infow("Transaction polling stopped during initial wait.")
+			return ctx.Err()
 		}
 	}
 }
@@ -254,12 +301,13 @@ func (a *aptosChainReader) syncTransmitterTxs(ctx context.Context, transmitter a
 				EventAccountAddress: eventAccountAddress.String(),
 				EventHandle:         eventHandle,
 				EventFieldName:      eventConfig.EventHandleFieldName,
-				EventOffset:         nil, // Synthetic events don't have offsets
-				TxVersion:           userTxn.Version,
-				BlockHeight:         head.Height,
-				BlockHash:           head.Hash,
-				BlockTimestamp:      head.Timestamp,
-				Data:                executionStateChanged,
+				// Synthetic events have an offset of zero, since there won't be a duplicate event of the same type inside the same tx
+				EventOffset:    0,
+				TxVersion:      userTxn.Version,
+				BlockHeight:    head.Height,
+				BlockHash:      head.Hash,
+				BlockTimestamp: head.Timestamp,
+				Data:           executionStateChanged,
 			}
 
 			records = append(records, record)

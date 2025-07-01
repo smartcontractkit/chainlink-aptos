@@ -111,7 +111,7 @@ eventLoop:
 					EventAccountAddress: eventAccountAddress.String(),
 					EventHandle:         eventHandle,
 					EventFieldName:      eventFieldName,
-					EventOffset:         &event.SequenceNumber,
+					EventOffset:         event.SequenceNumber,
 					TxVersion:           event.Version,
 					BlockHeight:         head.Height,
 					BlockHash:           head.Hash,
