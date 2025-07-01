@@ -222,6 +222,12 @@ module ccip::token_admin_registry {
     }
 
     #[view]
+    /// Checks if resource `TokenPoolRegistration` exists at `token_pool_address`
+    public fun has_token_pool_registration(token_pool_address: address): bool {
+        exists<TokenPoolRegistration>(token_pool_address)
+    }
+
+    #[view]
     /// returns (token_pool_address, administrator, pending_administrator)
     public fun get_token_config(
         local_token: address
@@ -286,6 +292,27 @@ module ccip::token_admin_registry {
         // Check if there are more tokens after the last key
         let has_more = token_configs.next_key(&current_key).is_some();
         (result, current_key, has_more)
+    }
+
+    inline fun destroy_pool_registration_if_exists(pool_address: address) {
+        if (exists<TokenPoolRegistration>(pool_address)) {
+            let TokenPoolRegistration {
+                lock_or_burn_function: _,
+                release_or_mint_function: _,
+                proof_typeinfo: _,
+                dispatch_metadata: _,
+                dispatch_deposit_fungible_store: _,
+                dispatch_extend_ref: _,
+                dispatch_transfer_ref: _,
+                dispatch_fa_transfer_ref: _,
+                execution_state: _,
+                executing_lock_or_burn_input_v1: _,
+                executing_release_or_mint_input_v1: _,
+                executing_lock_or_burn_output_v1: _,
+                executing_release_or_mint_output_v1: _,
+                local_token: _
+            } = move_from<TokenPoolRegistration>(pool_address);
+        };
     }
 
     // ================================================================
@@ -408,25 +435,7 @@ module ccip::token_admin_registry {
             error::permission_denied(E_NOT_ADMINISTRATOR)
         );
 
-        let previous_pool_address = token_config.token_pool_address;
-        if (exists<TokenPoolRegistration>(previous_pool_address)) {
-            let TokenPoolRegistration {
-                lock_or_burn_function: _,
-                release_or_mint_function: _,
-                proof_typeinfo: _,
-                dispatch_metadata: _,
-                dispatch_deposit_fungible_store: _,
-                dispatch_extend_ref: _,
-                dispatch_transfer_ref: _,
-                dispatch_fa_transfer_ref: _,
-                execution_state: _,
-                executing_lock_or_burn_input_v1: _,
-                executing_release_or_mint_input_v1: _,
-                executing_lock_or_burn_output_v1: _,
-                executing_release_or_mint_output_v1: _,
-                local_token: _
-            } = move_from<TokenPoolRegistration>(previous_pool_address);
-        };
+        destroy_pool_registration_if_exists(token_config.token_pool_address);
 
         event::emit_event(
             &mut state.token_unregistered_events,
@@ -468,6 +477,8 @@ module ccip::token_admin_registry {
         config.token_pool_address = token_pool_address;
 
         if (previous_pool_address != token_pool_address) {
+            destroy_pool_registration_if_exists(previous_pool_address);
+
             event::emit_event(
                 &mut state.pool_set_events,
                 PoolSet {
@@ -1070,6 +1081,11 @@ module ccip::token_admin_registry {
         event::emitted_events_by_handle<TokenUnregistered>(
             &borrow_state().token_unregistered_events
         )
+    }
+
+    #[test_only]
+    public fun get_pool_set_events(): vector<PoolSet> acquires TokenAdminRegistryState {
+        event::emitted_events_by_handle<PoolSet>(&borrow_state().pool_set_events)
     }
 
     #[test_only]

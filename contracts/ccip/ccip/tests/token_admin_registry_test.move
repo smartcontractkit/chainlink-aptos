@@ -778,6 +778,55 @@ module ccip::token_admin_registry_test {
         assert!(retrieved_pool == signer::address_of(&ccip_obj_signer));
     }
 
+    #[test(ccip = @ccip, owner = @mcms)]
+    fun test_set_pool_cleans_up_previous_registration(
+        ccip: &signer, owner: &signer
+    ) {
+        let (ccip_obj_signer, mock_obj_signer, token_obj) = setup(ccip, owner);
+        let token_addr = object::object_address(&token_obj);
+        let ccip_pool_addr = signer::address_of(&ccip_obj_signer);
+        let mock_pool_addr = signer::address_of(&mock_obj_signer);
+
+        // Register first pool (ccip_obj_signer)
+        token_admin_registry::register_pool<TestProof>(
+            &ccip_obj_signer,
+            TOKEN_ADMIN_REGISTRY_TEST_MODULE_NAME,
+            token_addr,
+            TestProof {}
+        );
+
+        set_admin(owner, token_addr);
+
+        token_admin_registry::set_pool(owner, token_addr, ccip_pool_addr);
+        assert!(token_admin_registry::get_pool_set_events().length() == 1);
+
+        // Verify first pool is set and registration exists
+        let pool_addr = token_admin_registry::get_pool(token_addr);
+        assert!(pool_addr == ccip_pool_addr);
+        // This verifies the TokenPoolRegistration resource exists
+        let local_token = token_admin_registry::get_pool_local_token(ccip_pool_addr);
+        assert!(local_token == token_addr);
+
+        // Register second pool (mock_obj_signer) for the SAME token
+        mock_pool::register_pool(&mock_obj_signer, token_addr);
+
+        // Switch to the second pool - this should clean up the first pool's registration
+        token_admin_registry::set_pool(owner, token_addr, mock_pool_addr);
+        assert!(token_admin_registry::get_pool_set_events().length() == 2);
+
+        // Verify the pool was switched
+        let new_pool_addr = token_admin_registry::get_pool(token_addr);
+        assert!(new_pool_addr == mock_pool_addr);
+
+        // Verify the new pool's registration exists
+        let local_token = token_admin_registry::get_pool_local_token(mock_pool_addr);
+        assert!(token_admin_registry::has_token_pool_registration(mock_pool_addr));
+        assert!(local_token == token_addr);
+
+        // Verify the old pool's registration does not exist
+        assert!(!token_admin_registry::has_token_pool_registration(ccip_pool_addr));
+    }
+
     // =========================== Mock Pool Implementation ===========================
 
     public fun lock_or_burn<T: key>(
