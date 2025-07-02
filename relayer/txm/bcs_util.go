@@ -221,7 +221,7 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 			return nil
 		}
 	case aptos.TypeTagU64:
-		if v, ok := argVal.(uint64); ok {
+		if v, ok := argVal.(uint64); ok && v == uint64(uint64(v)) {
 			serializer.U64(v)
 			return nil
 		}
@@ -248,8 +248,10 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 		}
 		if v, ok := argVal.(uint64); ok {
 			b := big.NewInt(0).SetUint64(v)
-			serializer.U128(*b)
-			return nil
+			if v == b.Uint64() {
+				serializer.U128(*b)
+				return nil
+			}
 		}
 		if v, ok := argVal.(int); ok && v >= 0 && v == int(int64(v)) {
 			b := big.NewInt(int64(v))
@@ -274,8 +276,10 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 		}
 		if v, ok := argVal.(uint64); ok {
 			b := big.NewInt(0).SetUint64(v)
-			serializer.U256(*b)
-			return nil
+			if v == b.Uint64() {
+				serializer.U256(*b)
+				return nil
+			}
 		}
 		if v, ok := argVal.(int); ok && v >= 0 && v == int(int64(v)) {
 			b := big.NewInt(int64(v))
@@ -372,11 +376,20 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 			if rv.IsNil() {
 				// If the option is unset/nil pointer is passed, serialize as an empty vector
 				serializer.Uleb128(0)
+				if err := serializer.Error(); err != nil {
+					return err
+				}
 				return nil
 			} else {
 				// If the option is set/a value is passed, serialize as a vector of length 1
 				serializer.Uleb128(1)
+				if err := serializer.Error(); err != nil {
+					return err
+				}
 				if err := serializeArg(rv.Elem().Interface(), tag.TypeParams[0], serializer); err != nil {
+					return err
+				}
+				if err := serializer.Error(); err != nil {
 					return err
 				}
 				return nil
@@ -461,6 +474,9 @@ func deserializeArg(argType aptos.TypeTag, deserializer *bcs.Deserializer) (any,
 				return nil, errors.New("invalid option::Option type parameters")
 			}
 			length := deserializer.Uleb128()
+			if err := deserializer.Error(); err != nil {
+				return nil, err
+			}
 			if length == 0 {
 				// Unset option - return a new nil pointer of the underlying type
 				vp := reflect.NewAt(getType(tag.TypeParams[0]), nil)
@@ -469,6 +485,9 @@ func deserializeArg(argType aptos.TypeTag, deserializer *bcs.Deserializer) (any,
 				// Option is set - deserialize the underlying value and return a new pointer to it
 				elem, err := deserializeArg(tag.TypeParams[0], deserializer)
 				if err != nil {
+					return nil, err
+				}
+				if err := deserializer.Error(); err != nil {
 					return nil, err
 				}
 				val := reflect.ValueOf(elem)
