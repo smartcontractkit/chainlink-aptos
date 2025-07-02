@@ -695,6 +695,11 @@ func (a *AptosTxm) resyncNonce(client aptos.AptosRpcClient, tx *AptosTx) error {
 	}
 
 	txStore := a.accountStore.GetTxStore(address.String())
+	// this should never occur, as resyncNonce is only called after ensuring a TxStore exists in
+	// signAndBroadcast.
+	if txStore == nil {
+		return fmt.Errorf("failed to get tx store for address %s", address.String())
+	}
 	ctxLogger := GetContexedTxLogger(a.baseLogger, tx.ID, tx.Metadata)
 
 	previousNextNonce := txStore.GetNextNonce()
