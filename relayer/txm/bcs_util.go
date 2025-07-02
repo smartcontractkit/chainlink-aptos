@@ -108,9 +108,9 @@ func CreateBcsValue(typeTag aptos.TypeTag, typeValue any) ([]byte, error) {
 		return nil, err
 	}
 
-	// this should never occur, as we should check for serialization errors after every invocation.
+	// this should never occur, as we should check for serialize errors after every invocation.
 	if err := serializer.Error(); err != nil {
-		return nil, fmt.Errorf("unexpected unchecked serialization error: %w", err)
+		return nil, fmt.Errorf("unexpected unchecked serialize error: %w", err)
 	}
 
 	return serializer.ToBytes(), nil
@@ -462,7 +462,7 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 			}
 
 			if err := serializer.Error(); err != nil {
-				return err
+				return fmt.Errorf("unexpected unchecked serialize error while processing vector: %w", err)
 			}
 		}
 		return nil
@@ -504,7 +504,7 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 					return err
 				}
 				if err := serializer.Error(); err != nil {
-					return err
+					return fmt.Errorf("unexpected unchecked serialize error while processing option: %w", err)
 				}
 				return nil
 			}
@@ -527,9 +527,9 @@ func GetBcsValues(data []byte, typeTags ...aptos.TypeTag) ([]any, error) {
 			return nil, err
 		}
 
-		// this should never occur, as we should check for serialization errors after every invocation.
+		// this should never occur, as we should check for serialize errors after every invocation.
 		if err := deserializer.Error(); err != nil {
-			return nil, fmt.Errorf("unexpected unchecked deserialization error: %w", err)
+			return nil, fmt.Errorf("unexpected unchecked deserialize error: %w", err)
 		}
 	}
 	return returns, nil
@@ -600,8 +600,9 @@ func deserializeArg(argType aptos.TypeTag, deserializer *bcs.Deserializer) (any,
 				return nil, err
 			}
 
+			// this should never occur, as we should check for deserialize errors after every invocation.
 			if err := deserializer.Error(); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("unexpected unchecked deserialize error while processing vector: %w", err)
 			}
 			returns = reflect.Append(returns, reflect.ValueOf(elem))
 		}
@@ -636,7 +637,7 @@ func deserializeArg(argType aptos.TypeTag, deserializer *bcs.Deserializer) (any,
 					return nil, err
 				}
 				if err := deserializer.Error(); err != nil {
-					return nil, err
+					return nil, fmt.Errorf("unexpected unchecked deserialize error while processing option: %w", err)
 				}
 				val := reflect.ValueOf(elem)
 				vp := reflect.New(val.Type())
