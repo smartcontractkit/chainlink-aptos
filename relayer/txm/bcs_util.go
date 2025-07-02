@@ -279,7 +279,7 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 			return nil
 		}
 	case aptos.TypeTagU64:
-		if v, ok := argVal.(uint64); ok && v == uint64(uint64(v)) {
+		if v, ok := argVal.(uint64); ok {
 			serializer.U64(v)
 			if err := serializer.Error(); err != nil {
 				return err
