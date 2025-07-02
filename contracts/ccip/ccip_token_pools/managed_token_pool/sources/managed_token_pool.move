@@ -466,6 +466,13 @@ module managed_token_pool::managed_token_pool {
         ownable::accept_ownership(caller, &mut pool.ownable_state)
     }
 
+    public entry fun execute_ownership_transfer(
+        caller: &signer, to: address
+    ) acquires ManagedTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::execute_ownership_transfer(caller, &mut pool.ownable_state, to)
+    }
+
     // ================================================================
     // |                      MCMS entrypoint                         |
     // ================================================================
