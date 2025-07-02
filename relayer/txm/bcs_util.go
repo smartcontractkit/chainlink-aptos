@@ -108,8 +108,9 @@ func CreateBcsValue(typeTag aptos.TypeTag, typeValue any) ([]byte, error) {
 		return nil, err
 	}
 
+	// this should never occur, as we should check for serialization errors after every invocation.
 	if err := serializer.Error(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unexpected unchecked serialization error: %w", err)
 	}
 
 	return serializer.ToBytes(), nil
@@ -526,8 +527,9 @@ func GetBcsValues(data []byte, typeTags ...aptos.TypeTag) ([]any, error) {
 			return nil, err
 		}
 
+		// this should never occur, as we should check for serialization errors after every invocation.
 		if err := deserializer.Error(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unexpected unchecked deserialization error: %w", err)
 		}
 	}
 	return returns, nil
