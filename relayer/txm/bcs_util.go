@@ -248,10 +248,8 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 		}
 		if v, ok := argVal.(uint64); ok {
 			b := big.NewInt(0).SetUint64(v)
-			if v == b.Uint64() {
-				serializer.U128(*b)
-				return nil
-			}
+			serializer.U128(*b)
+			return nil
 		}
 		if v, ok := argVal.(int); ok && v >= 0 && v == int(int64(v)) {
 			b := big.NewInt(int64(v))
@@ -276,10 +274,8 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 		}
 		if v, ok := argVal.(uint64); ok {
 			b := big.NewInt(0).SetUint64(v)
-			if v == b.Uint64() {
-				serializer.U256(*b)
-				return nil
-			}
+			serializer.U256(*b)
+			return nil
 		}
 		if v, ok := argVal.(int); ok && v >= 0 && v == int(int64(v)) {
 			b := big.NewInt(int64(v))
@@ -423,24 +419,53 @@ func GetBcsValues(data []byte, typeTags ...aptos.TypeTag) ([]any, error) {
 func deserializeArg(argType aptos.TypeTag, deserializer *bcs.Deserializer) (any, error) {
 	switch argType.Value.GetType() {
 	case aptos.TypeTagBool:
-		return deserializer.Bool(), nil
+		result := deserializer.Bool()
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
+		return result, nil
 	case aptos.TypeTagU8:
-		return deserializer.U8(), nil
+		result := deserializer.U8()
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
+		return result, nil
 	case aptos.TypeTagU16:
-		return deserializer.U16(), nil
+		result := deserializer.U16()
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
+		return result, nil
 	case aptos.TypeTagU32:
-		return deserializer.U32(), nil
+		result := deserializer.U32()
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
+		return result, nil
 	case aptos.TypeTagU64:
-		return deserializer.U64(), nil
+		result := deserializer.U64()
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
+		return result, nil
 	case aptos.TypeTagU128:
 		b := deserializer.U128()
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
 		return &b, nil
 	case aptos.TypeTagU256:
 		b := deserializer.U256()
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
 		return &b, nil
 	case aptos.TypeTagAddress:
 		address := aptos.AccountAddress{}
 		deserializer.Struct(&address)
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
 		return address, nil
 	case aptos.TypeTagVector:
 		length := deserializer.Uleb128()
@@ -468,7 +493,11 @@ func deserializeArg(argType aptos.TypeTag, deserializer *bcs.Deserializer) (any,
 		tagName := fmt.Sprintf("%s::%s::%s", tag.Address.String(), tag.Module, tag.Name)
 		switch tagName {
 		case "0x1::string::String":
-			return deserializer.ReadString(), nil
+			result := deserializer.ReadString()
+			if err := deserializer.Error(); err != nil {
+				return nil, err
+			}
+			return result, nil
 		case "0x1::option::Option":
 			if len(tag.TypeParams) != 1 {
 				return nil, errors.New("invalid option::Option type parameters")
