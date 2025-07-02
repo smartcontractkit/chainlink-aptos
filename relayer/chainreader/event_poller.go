@@ -171,7 +171,7 @@ func (a *aptosChainReader) SyncAllEvents(ctx context.Context) error {
 			continue
 		}
 
-		boundAddress, ok := a.moduleAddresses[moduleKey]
+		boundAddress, ok := a.getModuleAddress(moduleKey)
 		if !ok {
 			a.lggr.Warnw("SyncAllEvents: no bound address for module", "module", moduleKey)
 			continue
