@@ -2,6 +2,7 @@ package txm
 
 import (
 	"crypto/ed25519"
+	"math/big"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 
@@ -22,4 +23,5 @@ type AptosTx struct {
 	Attempt         uint64
 	Status          commontypes.TransactionStatus
 	Simulate        bool
+	Fee             *big.Int // Transaction fee in octas (1e-8 APT)
 }

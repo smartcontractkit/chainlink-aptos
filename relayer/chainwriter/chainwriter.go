@@ -8,6 +8,7 @@ import (
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/shopspring/decimal"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
@@ -158,6 +159,14 @@ func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, 
 
 func (a *aptosChainWriter) GetTransactionStatus(ctx context.Context, transactionID string) (commontypes.TransactionStatus, error) {
 	return a.txm.GetStatus(transactionID)
+}
+
+func (a *aptosChainWriter) GetTransactionFee(ctx context.Context, transactionID string) (decimal.Decimal, error) {
+	fee, err := a.txm.GetTransactionFee(ctx, transactionID)
+	if err != nil {
+		return decimal.Decimal{}, err
+	}
+	return decimal.New(fee.Int64(), -8), nil // Convert from octas (1e-8 APT) to APT
 }
 
 func (a *aptosChainWriter) GetFeeComponents(ctx context.Context) (*commontypes.ChainFeeComponents, error) {
