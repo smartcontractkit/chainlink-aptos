@@ -1393,6 +1393,17 @@ module ccip::fee_quoter {
         borrow_global_mut<FeeQuoterState>(state_object::object_address())
     }
 
+    inline fun get_validated_token_price(
+        state: &FeeQuoterState, token: address
+    ): TimestampedPrice {
+        let token_price = get_token_price_internal(state, token);
+        assert!(
+            token_price.value > 0 && token_price.timestamp > 0,
+            error::invalid_state(E_TOKEN_NOT_SUPPORTED)
+        );
+        token_price
+    }
+
     // Token prices can be stale. On EVM we have additional fallbacks to a price feed, if configured. Since these
     // fallbacks don't exist on Aptos, we simply return the price as is.
     inline fun get_token_price_internal(
@@ -1438,9 +1449,8 @@ module ccip::fee_quoter {
         from_token_amount: u64,
         to_token: address
     ): u64 {
-        let from_token_price = get_token_price_internal(state, from_token);
-        let to_token_price = get_token_price_internal(state, to_token);
-
+        let from_token_price = get_validated_token_price(state, from_token);
+        let to_token_price = get_validated_token_price(state, to_token);
         let to_token_amount =
             ((from_token_amount as u256) * from_token_price.value) / to_token_price.value;
         assert!(
