@@ -17,3 +17,11 @@ wrappers: ## Generate wrappers for Move contracts.
 .PHONY: move-test
 move-test: ## Run the Move tests.
 	contracts/scripts/test.sh
+
+.PHONY: gomods
+gomods: ## Install gomods
+	go install github.com/jmank88/gomods@v0.1.5
+
+.PHONY: gomodtidy
+gomodtidy: gomods
+	gomods tidy

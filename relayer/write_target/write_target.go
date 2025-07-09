@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,6 +20,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/consensus/ocr3/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
+	"github.com/smartcontractkit/chainlink-common/pkg/metering"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
@@ -434,12 +436,24 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 		return success(), nil
 	}
 
+	// Get the gas unit for the chain
+	chainID, err := strconv.ParseUint(c.chainInfo.ChainID, 10, 64)
+	if err != nil {
+		c.lggr.Errorw("failed to parse chain ID", "error", err)
+		return success(), nil
+	}
+	gasUnit, err := metering.GasUnitForChain(chainID)
+	if err != nil {
+		c.lggr.Errorw("failed to get gas unit", "error", err)
+		return success(), nil
+	}
+
 	return capabilities.CapabilityResponse{
 		Metadata: capabilities.ResponseMetadata{
 			Metering: []capabilities.MeteringNodeDetail{
 				{
 					// Peer2PeerID from remote peers is ignored by engine
-					SpendUnit:  "GAS." + c.chainInfo.ChainID,
+					SpendUnit:  gasUnit,
 					SpendValue: fee.String(),
 				},
 			},
