@@ -162,7 +162,9 @@ func newMockedWriteTarget(t *testing.T, lggr logger.Logger) mockedWriteTarget {
 			ConfirmerPollPeriod: *config.MustNewDuration(100 * time.Millisecond),
 			ConfirmerTimeout:    *config.MustNewDuration(300 * time.Millisecond),
 		},
-		ChainInfo:        ChainInfo{},
+		ChainInfo: ChainInfo{
+			ChainID: "1", // Use a valid chain ID for testing
+		},
 		Logger:           lggr,
 		Beholder:         bh,
 		ChainService:     cs,
@@ -305,7 +307,7 @@ func TestWriteTarget_Execute(t *testing.T) {
 			expected := capabilities.CapabilityResponse{
 				Metadata: capabilities.ResponseMetadata{
 					Metering: []capabilities.MeteringNodeDetail{{
-						SpendUnit:  "GAS.",
+						SpendUnit:  "GAS.5009297550715157269", // Dynamic gas unit for chain ID 1
 						SpendValue: "100",
 					}},
 				},
