@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/aptos-labs/aptos-go-sdk"
+	"github.com/shopspring/decimal"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
 
@@ -13,12 +14,27 @@ import (
 	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainwriter"
 	aptosconfig "github.com/smartcontractkit/chainlink-aptos/relayer/config"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 )
+
+// contractWriterWrapper wraps the common ContractWriter interface and adds GetTransactionFee method
+type contractWriterWrapper struct {
+	commontypes.ContractWriter
+	txm *txm.AptosTxm
+}
+
+func (w *contractWriterWrapper) GetTransactionFee(ctx context.Context, transactionID string) (decimal.Decimal, error) {
+	fee, err := w.txm.GetTransactionFee(ctx, transactionID)
+	if err != nil {
+		return decimal.Decimal{}, err
+	}
+	return decimal.NewFromBigInt(fee, -8), nil // Convert from octas (1e-8 APT) to APT
+}
 
 const version = "1.0.0"
 
@@ -136,7 +152,13 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 		FeeStrategy: chainwriter.DefaultFeeStrategy,
 	}
 
-	cw := chainwriter.NewChainWriter(lggr, client, chain.TxManager(), cwConfig)
+	baseCw := chainwriter.NewChainWriter(lggr, client, chain.TxManager(), cwConfig)
+
+	// Create a wrapper that implements both the common ContractWriter interface and adds GetTransactionFee
+	cw := &contractWriterWrapper{
+		ContractWriter: baseCw,
+		txm:            chain.TxManager(),
+	}
 
 	validate := func(config write_target.ReqConfig) error {
 		address := aptos.AccountAddress{}
