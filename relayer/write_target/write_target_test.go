@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/consensus/ocr3/types"
@@ -296,10 +297,20 @@ func TestWriteTarget_Execute(t *testing.T) {
 			mockedWT.cw.EXPECT().SubmitTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 			// signal that transaction is in terminal state and it's time to poll for transmission status
 			mockedWT.cw.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(tc.TransactionStatus, nil)
+			// Get transaction fee (always called for terminal statuses)
+			mockedWT.cw.EXPECT().GetTransactionFee(mock.Anything, mock.Anything).Return(decimal.NewFromInt(100), nil).Once()
 			request := createValidRequest(t)
 			result, err := mockedWT.wt.Execute(t.Context(), request)
 			require.NoError(t, err)
-			require.Equal(t, success(), result)
+			expected := capabilities.CapabilityResponse{
+				Metadata: capabilities.ResponseMetadata{
+					Metering: []capabilities.MeteringNodeDetail{{
+						SpendUnit:  "GAS.",
+						SpendValue: "100",
+					}},
+				},
+			}
+			require.Equal(t, expected, result)
 			tests.RequireLogMessage(t, observed, tc.ExpectedLogMsg)
 		}
 	})
