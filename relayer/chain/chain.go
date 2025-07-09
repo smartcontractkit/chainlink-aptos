@@ -313,6 +313,15 @@ func (c *chain) Replay(ctx context.Context, fromBlock string, args map[string]an
 	return errors.ErrUnsupported
 }
 
+func (c *chain) GetChainInfo(ctx context.Context) (types.ChainInfo, error) {
+	return types.ChainInfo{
+		FamilyName:      config.ChainFamilyName,
+		ChainID:         c.id,
+		NetworkName:     c.cfg.NetworkName,
+		NetworkNameFull: c.cfg.NetworkNameFull,
+	}, nil
+}
+
 // TODO BCF-2602 statuses are static for non-evm chain and should be dynamic
 func (c *chain) listNodeStatuses(start, end int) ([]types.NodeStatus, int, error) {
 	stats := make([]types.NodeStatus, 0, end-start)
