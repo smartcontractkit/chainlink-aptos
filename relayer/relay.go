@@ -186,3 +186,11 @@ func (r *relayer) ListNodeStatuses(ctx context.Context, pageSize int32, pageToke
 func (r *relayer) Transact(ctx context.Context, from, to string, amount *big.Int, balanceCheck bool) error {
 	return r.chain.Transact(ctx, from, to, amount, balanceCheck)
 }
+
+func (r *relayer) GetChainInfo(ctx context.Context) (types.ChainInfo, error) {
+	return r.chain.GetChainInfo(ctx)
+}
+
+func (r *relayer) TON() (types.TONService, error) {
+	return nil, errors.New("TON is not supported for aptos")
+}
