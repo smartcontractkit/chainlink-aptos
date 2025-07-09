@@ -295,6 +295,7 @@ func (d *Deployer) DeployCore() error {
 				"CL_CONFIG":            tomlString,
 				"CL_DATABASE_URL":      fmt.Sprintf("%s?sslmode=disable", dbUrl),
 				"CL_PASSWORD_KEYSTORE": "notastrongpassword",
+				"CL_MERCURY_CACHE_LATEST_REPORT_DEADLINE": "1h",    // Add default value for Mercury cache
 			},
 			Entrypoint: []string{"bash", "-c", fmt.Sprintf("echo -e \"%s\\n%s\" > /tmp/api_credentials && chainlink node start --api /tmp/api_credentials", coreConfig.Email, coreConfig.Password)},
 		}

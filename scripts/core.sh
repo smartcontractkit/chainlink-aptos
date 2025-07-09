@@ -77,6 +77,7 @@ for ((i = 1; i <= NODE_COUNT; i++)); do
 		-e "CL_CONFIG=${CL_CONFIG}" \
 		-e "CL_DATABASE_URL=postgresql://postgres:postgres@chainlink.postgres:5432/${database_name}?sslmode=disable" \
 		-e "CL_PASSWORD_KEYSTORE=asdfasdfasdfasdf" \
+		-e "CL_MERCURY_CACHE_LATEST_REPORT_DEADLINE=1h" \
 		--entrypoint bash \
 		${image_name} \
 		-c "echo -e '${api_email}\n${api_password}' > /tmp/api_credentials && chainlink node start --api /tmp/api_credentials"

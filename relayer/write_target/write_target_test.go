@@ -24,6 +24,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/report/platform"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target/mocks"
+	"github.com/smartcontractkit/chainlink-common/pkg/metering"
 )
 
 func TestNewWriteTargetID(t *testing.T) {
@@ -304,10 +305,14 @@ func TestWriteTarget_Execute(t *testing.T) {
 			request := createValidRequest(t)
 			result, err := mockedWT.wt.Execute(t.Context(), request)
 			require.NoError(t, err)
+			// Get the expected gas unit dynamically to match the actual code behavior
+			expectedGasUnit, err := metering.GasUnitForChain(1)
+			require.NoError(t, err)
+
 			expected := capabilities.CapabilityResponse{
 				Metadata: capabilities.ResponseMetadata{
 					Metering: []capabilities.MeteringNodeDetail{{
-						SpendUnit:  "GAS.5009297550715157269", // Dynamic gas unit for chain ID 1
+						SpendUnit:  expectedGasUnit, // Dynamic gas unit for chain ID 1 from metering.GasUnitForChain
 						SpendValue: "100",
 					}},
 				},
