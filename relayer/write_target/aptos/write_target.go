@@ -33,7 +33,7 @@ func (w *contractWriterWrapper) GetTransactionFee(ctx context.Context, transacti
 	if err != nil {
 		return decimal.Decimal{}, err
 	}
-	return decimal.New(fee.Int64(), -8), nil // Convert from octas (1e-8 APT) to APT
+	return decimal.NewFromBigInt(fee, -8), nil // Convert from octas (1e-8 APT) to APT
 }
 
 const version = "1.0.0"

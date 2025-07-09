@@ -166,7 +166,7 @@ func (a *aptosChainWriter) GetTransactionFee(ctx context.Context, transactionID 
 	if err != nil {
 		return decimal.Decimal{}, err
 	}
-	return decimal.New(fee.Int64(), -8), nil // Convert from octas (1e-8 APT) to APT
+	return decimal.NewFromBigInt(fee, -8), nil // Convert from octas (1e-8 APT) to APT
 }
 
 func (a *aptosChainWriter) GetFeeComponents(ctx context.Context) (*commontypes.ChainFeeComponents, error) {
