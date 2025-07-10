@@ -162,13 +162,21 @@ func computeMessageDataHash(
 	}
 
 	var tokenHashData []byte
-	tokenHashData = append(tokenHashData, encodeUint256(big.NewInt(int64(len(tokens))))...)
+	tokenCountBytes, err := encodeUint256(big.NewInt(int64(len(tokens))))
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("failed to encode token count: %w", err)
+	}
+	tokenHashData = append(tokenHashData, tokenCountBytes...)
 	for _, token := range tokens {
 		tokenHashData = append(tokenHashData, encodeBytes(token.SourcePoolAddress)...)
 		tokenHashData = append(tokenHashData, token.DestTokenAddress[:]...)
 		tokenHashData = append(tokenHashData, encodeUint32(token.DestGasAmount)...)
 		tokenHashData = append(tokenHashData, encodeBytes(token.ExtraData)...)
-		tokenHashData = append(tokenHashData, encodeUint256(token.Amount)...)
+		tokenAmountBytes, err := encodeUint256(token.Amount)
+		if err != nil {
+			return [32]byte{}, fmt.Errorf("failed to encode token amount: %w", err)
+		}
+		tokenHashData = append(tokenHashData, tokenAmountBytes...)
 	}
 	tokenAmountsHash := crypto.Keccak256Hash(tokenHashData)
 
@@ -234,11 +242,11 @@ func computeMetadataHash(
 	return metadataHash, nil
 }
 
-func encodeUint256(n *big.Int) []byte {
+func encodeUint256(n *big.Int) ([]byte, error) {
 	if n == nil {
-		n = big.NewInt(0)
+		return nil, fmt.Errorf("encodeUint256: nil big.Int value")
 	}
-	return common.LeftPadBytes(n.Bytes(), 32)
+	return common.LeftPadBytes(n.Bytes(), 32), nil
 }
 
 func encodeUint32(n uint32) []byte {

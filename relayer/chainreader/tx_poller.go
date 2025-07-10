@@ -315,31 +315,13 @@ func (a *aptosChainReader) syncTransmitterTxs(ctx context.Context, transmitter a
 		}
 
 		if len(records) > 0 {
-			// Try batch insert first
 			if err := a.dbStore.InsertEvents(ctx, records); err != nil {
-				a.lggr.Errorw("Batch insert failed, falling back to per-event insert", "error", err)
-				// Fallback: insert each record individually, skip bad ones
-				totalProcessed := 0
-				for _, record := range records {
-					if err := a.dbStore.InsertEvents(ctx, []db.EventRecord{record}); err != nil {
-						a.lggr.Errorw("Failed to insert single synthetic event, skipping",
-							"error", err,
-							"transmitter", transmitter.String(),
-							"txVersion", record.TxVersion)
-						continue
-					} else {
-						totalProcessed++
-					}
-				}
-				a.lggr.Debugw("Inserted synthetic ExecutionStateChanged events",
-					"count", totalProcessed, "transmitter", transmitter.String())
-				sequenceNumber += uint64(len(txns))
-				a.transmitters[transmitter] = sequenceNumber
-				return totalProcessed, nil
-			} else {
-				a.lggr.Debugw("Inserted synthetic ExecutionStateChanged events",
-					"count", len(records), "transmitter", transmitter.String())
+				a.lggr.Errorw("Failed to insert synthetic ExecutionStateChanged events", "error", err)
+				return totalProcessed, fmt.Errorf("failed to insert events: %w", err)
 			}
+
+			a.lggr.Debugw("Inserted synthetic ExecutionStateChanged events",
+				"count", len(records), "transmitter", transmitter.String())
 		}
 
 		sequenceNumber += uint64(len(txns))
