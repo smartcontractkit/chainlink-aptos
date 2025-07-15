@@ -87,7 +87,7 @@ There are **4 types** of token pools available on Aptos:
 
 ### 4. Managed Token Pool (`managed_token_pool`)
 
-- **Requires token owner to register pool with CCIP Token Admin Registry** after deployment
+- **Automatically registers with CCIP Token Admin Registry** during deployment
 - Designed specifically for tokens deployed with the managed token package
 - Uses allowlist-based permission system for secure mint/burn operations
 - **Does not support dynamic dispatch** - calls `fungible_asset` module functions directly
@@ -98,7 +98,7 @@ There are **4 types** of token pools available on Aptos:
 - Pool's address must be added to managed token's allowlists before operation
 - Pool calls `managed_token::mint()` and `managed_token::burn()` functions directly
 - Managed token validates permissions via allowlist checks
-- Token owner must call `managed_token_pool::initialize() OR token_admin_registry::set_pool()` to enable CCIP functionality
+- Pool automatically registers with Token Admin Registry during deployment
 
 **Mechanism**:
 
@@ -174,38 +174,9 @@ aptos move deploy-object \
 managed_token=<MANAGED_TOKEN_ADDRESS>,\
 ccip=<CCIP_ADDRESS>,\
 ccip_token_pool=<CCIP_TOKEN_POOL_ADDRESS>,\
-token_pool_administrator=<TOKEN_POOL_ADMINISTRATOR_ADDRESS>,\
 mcms=<MCMS_ADDRESS>,\
 mcms_register_entrypoints=<MCMS_REGISTER_ENTRYPOINTS_ADDRESS>
 ```
-
-### ⚠️ **CRITICAL: Token Pool Administrator Configuration**
-
-**Before deploying**, carefully verify the `token_pool_administrator` address configuration:
-
-- **Risk**: If set to an address you don't control, the token pool becomes **permanently locked** with no recovery mechanism
-- **Recommendation**: Use your deployer address, a multisig you control, or another address where you definitely hold the private key
-- **Common Mistakes to Avoid**:
-  - Using `@0x0` (zero address)
-  - Typos in the address configuration
-  - Using test addresses in production deployments
-  - Copy-pasting addresses from different environments
-
-**Example Safe Configuration:**
-
-```toml
-# In your Move.toml or deployment command
-token_pool_administrator = "0x123...abc"  # ✅ Your controlled address
-```
-
-**What the Administrator Controls:**
-
-- Pool initialization and configuration
-- Cross-chain settings and rate limits
-- Pool upgrades and parameter changes
-- Administrative role transfers
-
-**There is no recovery mechanism if the administrator address is set incorrectly.** Double-check this address before deployment.
 
 ### Initialize Pool
 
@@ -213,10 +184,10 @@ token_pool_administrator = "0x123...abc"  # ✅ Your controlled address
 
 ```move
 // For tokens WITHOUT dynamic dispatch
-lock_release_token_pool::initialize(admin_signer, option::none());
+lock_release_token_pool::initialize(admin_signer, option::none(), rebalancer_address);
 
-// For tokens WITH dynamic dispatch
-lock_release_token_pool::initialize(admin_signer, option::some(transfer_ref));
+// For tokens WITH dynamic dispatch (must provide transfer_ref)
+lock_release_token_pool::initialize(admin_signer, option::some(transfer_ref), rebalancer_address);
 ```
 
 **Burn/Mint Pool**:
@@ -234,21 +205,29 @@ usdc_token_pool::initialize(admin_signer);
 **Managed Token Pool**:
 
 ```move
-// 1. Deploy managed token pool (automatically registers with CCIP)
+// 1. Pool registers automatically during deployment
 
-// 2. Register pool with CCIP Token Admin Registry
-// Must be called by token owner to enable CCIP
-managed_token_pool::initialize(token_owner, administrator_address);
-
-// Or call `token_admin_registry` directly.
-token_admin_registry::set_pool(
+// 2. Token owner proposes administrator
+token_admin_registry::propose_administrator(
     token_owner,
-    managed_token::token_metadata(), // `managed_token` you deployed
-    @managed_token_pool, // `managed_token_pool` you deployed
+    managed_token::token_metadata(),
     administrator_address
 );
 
-// 3. Add pool to token allowlists
+// 3. Administrator accepts role
+token_admin_registry::accept_admin_role(
+    administrator_signer,
+    managed_token::token_metadata()
+);
+
+// 4. Administrator activates the pool
+token_admin_registry::set_pool(
+    administrator_signer,
+    managed_token::token_metadata(),
+    @managed_token_pool
+);
+
+// 5. Add pool to token allowlists
 let pool_store_address = managed_token_pool::get_store_address();
 
 managed_token::apply_allowed_minter_updates(
@@ -306,11 +285,21 @@ pool::apply_allowlist_updates(
 
 ## Token Admin Registry Integration
 
-### Automatic Registration Process
+### Updated Registration Process
 
-The Token Admin Registry manages which pools are authorized for specific tokens. It maintains a **1:1 mapping** of tokens to pools.
+The Token Admin Registry manages which pools are authorized for specific tokens. The current flow supports **multiple pools per token** but only **one active pool** at a time.
 
-**During pool deployment**, each pool automatically registers itself with the Token Admin Registry via the `init_module` function:
+**⚠️ Critical Requirement**: `propose_administrator` is the **only function** that adds tokens to `token_configs`. This means:
+
+- It **must be called** before `accept_admin_role` or `set_pool` can work
+- Without this step, the token will not exist in the registry's configuration
+- All subsequent admin operations will fail if this step is skipped
+
+### Step-by-Step Registration Flow
+
+#### Step 1: Register Pool
+
+During pool deployment, each pool automatically registers itself with the Token Admin Registry via the `init_module` function:
 
 ```move
 // Automatic registration during pool deployment (in init_module)
@@ -318,42 +307,169 @@ token_admin_registry::register_pool(
     publisher,
     pool_module_name,  // e.g., b"lock_release_token_pool"
     token_address,
-    administrator_address,
     CallbackProof {}
 );
 ```
 
-This ensures that:
+**This step:**
 
-- The token is immediately associated with the new pool
-- The specified administrator has control over the pool
-- The pool can be called by CCIP for cross-chain operations
+- Registers the pool for the token (multiple pools can be registered)
+- **Does NOT activate the pool** for use
+- **Does NOT add the token to token_configs**
+
+#### Step 2: Propose Administrator
+
+**⚠️ Authorization Required**: Only the **token owner** or **CCIP owner** can propose an administrator for the token:
+
+```move
+// Must be called by token owner or CCIP owner
+token_admin_registry::propose_administrator(
+    token_owner,
+    token_address,
+    proposed_admin_address
+);
+```
+
+**This step:**
+
+- **Verifies caller owns the token** or is CCIP owner (security checkpoint)
+- Adds the token to `token_configs` (REQUIRED for later operations)
+- Sets a pending administrator
+- Can only be called if no administrator is already set
+
+#### Step 3: Accept Admin Role
+
+The proposed administrator must accept the role:
+
+```move
+// Must be called by the proposed administrator
+token_admin_registry::accept_admin_role(
+    proposed_admin_signer,
+    token_address
+);
+```
+
+**This step:**
+
+- Sets the administrator as active
+- Clears the pending administrator
+- Enables the administrator to manage pools for this token
+
+#### Step 4: Activate Pool
+
+The administrator can now activate a specific registered pool:
+
+```move
+// Must be called by the token's administrator
+token_admin_registry::set_pool(
+    admin_signer,
+    token_address,
+    pool_address_to_activate
+);
+```
+
+**This step:**
+
+- Activates the specified pool for the token
+- Replaces any previously active pool
+- **Does NOT clean up** the previous pool's resources (old pool remains registered but inactive)
+
+### Complete Flow Example
+
+```move
+// 1. Pool registers automatically during deployment (in init_module)
+// token_admin_registry::register_pool(...) // Called automatically
+
+// 2. Token owner proposes admin
+token_admin_registry::propose_administrator(
+    token_owner,
+    managed_token::token_metadata(),
+    pool_administrator_address
+);
+
+// 3. Proposed admin accepts role
+token_admin_registry::accept_admin_role(
+    pool_administrator,
+    managed_token::token_metadata()
+);
+
+// 4. Admin activates the pool
+token_admin_registry::set_pool(
+    pool_administrator,
+    managed_token::token_metadata(),
+    @managed_token_pool  // Pool address to activate
+);
+```
+
+### Multiple Pools Support
+
+The new system allows multiple pools to be registered for the same token:
+
+- **Registration**: Multiple pools can register for the same token (no uniqueness check)
+- **Activation**: Only one pool can be active at a time via `set_pool`
+- **Switching**: Administrators can switch between registered pools using `set_pool`
+- **No Automatic Cleanup**: Previous pools remain registered but inactive when a new pool is activated
+
+**Important Implications:**
+
+- Inactive registered pools continue to exist and can be queried via `get_pool_local_token`
+- Resources from inactive pools are not automatically cleaned up
+- Multiple pool objects may exist for the same token simultaneously
+- Only the active pool (returned by `get_pool`) should be trusted for operations
 
 ### Pool Management Functions
 
-**Check Current Pool**:
+**Check Active Pool**:
 
 ```move
-let pool_address = token_admin_registry::get_pool(token_address);
+let active_pool_address = token_admin_registry::get_pool(token_address);
 ```
 
-**Check Pool Administrator**:
+**Check Pool's Token** (works for ANY registered pool, not just active):
 
 ```move
-let admin_address = token_admin_registry::get_administrator(token_address);
+let local_token = token_admin_registry::get_pool_local_token(pool_address);
 ```
 
-**Transfer Pool Admin**:
+**Check Token Configuration**:
 
 ```move
-token_admin_registry::transfer_admin_role(admin_signer, token_address, new_admin);
+let (pool_address, admin, pending_admin) = token_admin_registry::get_token_config(token_address);
 ```
 
-**Accept Admin Role**:
+**Transfer Admin Role**:
 
 ```move
+// Current admin proposes new admin
+token_admin_registry::transfer_admin_role(current_admin, token_address, new_admin);
+
+// New admin accepts
 token_admin_registry::accept_admin_role(new_admin_signer, token_address);
 ```
+
+### Security Considerations
+
+⚠️ **Critical Security Issue**: `get_pool_local_token` returns information for ANY registered pool, **even if it's not currently active**. This could allow adversaries to mislead users into believing a pool is active when it's only registered but not in use.
+
+**Attack Scenario:**
+
+1. Adversary deploys a malicious pool and registers it for a legitimate token
+2. Adversary calls `get_pool_local_token(malicious_pool)` and gets the legitimate token address
+3. Users might assume the malicious pool is the active pool for that token
+4. Users interact with the malicious pool instead of the legitimate active pool
+
+**Example of safe verification**:
+
+```move
+// DON'T just trust get_pool_local_token
+let local_token = token_admin_registry::get_pool_local_token(some_pool);
+
+// DO verify the pool is actually active for the token
+let active_pool = token_admin_registry::get_pool(local_token);
+assert!(active_pool == some_pool, E_POOL_NOT_ACTIVE);
+```
+
+**Best Practice**: Always verify pool activation status before trusting any pool operations.
 
 ### Pool Unregistration
 
@@ -366,11 +482,20 @@ token_admin_registry::unregister_pool(
 );
 ```
 
-**⚠️ Warning**: Unregistering a pool will:
+**⚠️ Critical Warning**: `unregister_pool` is **highly destructive** and will:
 
-- Remove the token-to-pool mapping
-- Disable cross-chain transfers for that token unless registered with another pool
-- Require re-registration to restore functionality
+- Remove the pool registration completely
+- **Remove the token from `token_configs` entirely** (destroys all token admin configuration)
+- Remove the administrator assignment for the token
+- Emit a `TokenUnregistered` event
+- **Disable ALL pool operations** for that token until completely re-registered
+
+**Recovery Process**: To restore functionality after unregistration, you must restart the **entire 4-step flow**:
+
+1. Deploy new pool (auto-registers)
+2. `propose_administrator` (re-adds token to `token_configs`)
+3. `accept_admin_role`
+4. `set_pool`
 
 ### Pool Upgrades
 
@@ -423,7 +548,6 @@ To switch pools for a token, you must deploy a new pool contract and use the unr
        new_pool_signer,
        pool_module_name,  // e.g., b"lock_release_token_pool"
        token_address,
-       administrator_address,
        CallbackProof {}
    );
    ```
