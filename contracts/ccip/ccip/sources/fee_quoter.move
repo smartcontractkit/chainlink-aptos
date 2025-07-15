@@ -84,7 +84,7 @@ module ccip::fee_quoter {
 
     // Link has 8 decimals on Aptos and 18 decimals on it's native chain, Ethereum. We want to emit
     // the fee in juels (1e18) denomination for consistency across chains. This means we multiply
-    // the fee by 1e8 on Aptos before we emit it in the event.
+    // the fee by 1e10 on Aptos before we emit it in the event.
     const LOCAL_8_TO_18_DECIMALS_LINK_MULTIPLIER: u256 = 10_000_000_000;
 
     struct FeeQuoterState has key, store {
@@ -246,6 +246,7 @@ module ccip::fee_quoter {
     const E_INVALID_FEE_RANGE: u64 = 34;
     const E_INVALID_DEST_BYTES_OVERHEAD: u64 = 35;
     const E_INVALID_SVM_RECEIVER_LENGTH: u64 = 36;
+    const E_TOKEN_AMOUNT_MISMATCH: u64 = 37;
 
     #[view]
     public fun type_and_version(): String {
@@ -255,9 +256,7 @@ module ccip::fee_quoter {
     fun init_module(publisher: &signer) {
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints == @0x1) {
-            mcms_registry::register_entrypoint(
-                publisher, string::utf8(b"fee_quoter"), McmsCallback {}
-            );
+            register_mcms_entrypoint(publisher);
         };
     }
 
@@ -395,7 +394,6 @@ module ccip::fee_quoter {
             let (found, index) = state.fee_tokens.index_of(&fee_token);
             if (found) {
                 state.fee_tokens.remove(index);
-                event::emit(FeeTokenRemoved { fee_token });
                 event::emit_event(
                     &mut state.fee_token_removed_events, FeeTokenRemoved { fee_token }
                 );
@@ -408,7 +406,6 @@ module ccip::fee_quoter {
             let (found, _) = state.fee_tokens.index_of(&fee_token);
             if (!found) {
                 state.fee_tokens.push_back(fee_token);
-                event::emit(FeeTokenAdded { fee_token });
                 event::emit_event(
                     &mut state.fee_token_added_events, FeeTokenAdded { fee_token }
                 );
@@ -527,13 +524,6 @@ module ccip::fee_quoter {
 
             token_transfer_fee_configs.upsert(token, token_transfer_fee_config);
 
-            event::emit(
-                TokenTransferFeeConfigAdded {
-                    dest_chain_selector,
-                    token,
-                    token_transfer_fee_config
-                }
-            );
             event::emit_event(
                 &mut state.token_transfer_fee_config_added_events,
                 TokenTransferFeeConfigAdded {
@@ -544,22 +534,17 @@ module ccip::fee_quoter {
             );
         };
 
-        remove_tokens.for_each_ref(
-            |token| {
-                let token: address = *token;
-                if (token_transfer_fee_configs.contains(token)) {
-                    token_transfer_fee_configs.remove(token);
+        remove_tokens.for_each_ref(|token| {
+            let token: address = *token;
+            if (token_transfer_fee_configs.contains(token)) {
+                token_transfer_fee_configs.remove(token);
 
-                    event::emit(
-                        TokenTransferFeeConfigRemoved { dest_chain_selector, token }
-                    );
-                    event::emit_event(
-                        &mut state.token_transfer_fee_config_removed_events,
-                        TokenTransferFeeConfigRemoved { dest_chain_selector, token }
-                    );
-                }
+                event::emit_event(
+                    &mut state.token_transfer_fee_config_removed_events,
+                    TokenTransferFeeConfigRemoved { dest_chain_selector, token }
+                );
             }
-        );
+        });
     }
 
     public fun update_prices(
@@ -591,13 +576,6 @@ module ccip::fee_quoter {
                     timestamp
                 };
                 state.usd_per_token.upsert(*token, timestamped_price);
-                event::emit(
-                    UsdPerTokenUpdated {
-                        token: *token,
-                        usd_per_token: *usd_per_token,
-                        timestamp
-                    }
-                );
                 event::emit_event(
                     &mut state.usd_per_token_updated_events,
                     UsdPerTokenUpdated {
@@ -618,13 +596,6 @@ module ccip::fee_quoter {
                     *dest_chain_selector, timestamped_price
                 );
 
-                event::emit(
-                    UsdPerUnitGasUpdated {
-                        dest_chain_selector: *dest_chain_selector,
-                        usd_per_unit_gas: *usd_per_unit_gas,
-                        timestamp
-                    }
-                );
                 event::emit_event(
                     &mut state.usd_per_unit_gas_updated_events,
                     UsdPerUnitGasUpdated {
@@ -792,12 +763,6 @@ module ccip::fee_quoter {
                 let premium_multiplier_wei_per_eth: u64 = *premium_multiplier_wei_per_eth;
                 state.premium_multiplier_wei_per_eth.upsert(
                     token, premium_multiplier_wei_per_eth
-                );
-                event::emit(
-                    PremiumMultiplierWeiPerEthUpdated {
-                        token,
-                        premium_multiplier_wei_per_eth
-                    }
                 );
                 event::emit_event(
                     &mut state.premium_multiplier_wei_per_eth_updated_events,
@@ -1225,7 +1190,7 @@ module ccip::fee_quoter {
             (extra_args_v2, allow_out_of_order_execution)
         } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
             let (
-                _compute_units,
+                compute_units,
                 _account_is_writable_bitmap,
                 allow_out_of_order_execution,
                 token_receiver,
@@ -1242,6 +1207,16 @@ module ccip::fee_quoter {
                     error::invalid_argument(E_INVALID_TOKEN_RECEIVER)
                 );
             };
+
+            assert!(
+                !dest_chain_config.enforce_out_of_order || allow_out_of_order_execution,
+                error::invalid_argument(E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE)
+            );
+            assert!(
+                compute_units <= dest_chain_config.max_per_msg_gas_limit,
+                error::invalid_argument(E_MESSAGE_COMPUTE_UNIT_LIMIT_TOO_HIGH)
+            );
+
             (extra_args, allow_out_of_order_execution)
         } else {
             abort error::invalid_argument(E_UNKNOWN_CHAIN_FAMILY_SELECTOR)
@@ -1259,6 +1234,10 @@ module ccip::fee_quoter {
         let chain_family_selector = dest_chain_config.chain_family_selector;
 
         let tokens_len = dest_token_addresses.length();
+        assert!(
+            tokens_len == dest_pool_datas.length(),
+            error::invalid_argument(E_TOKEN_AMOUNT_MISMATCH)
+        );
 
         let dest_exec_data_per_token = vector[];
         for (i in 0..tokens_len) {
@@ -1383,14 +1362,12 @@ module ccip::fee_quoter {
             let dest_chain_config_ref =
                 state.dest_chain_configs.borrow_mut(dest_chain_selector);
             *dest_chain_config_ref = dest_chain_config;
-            event::emit(DestChainConfigUpdated { dest_chain_selector, dest_chain_config });
             event::emit_event(
                 &mut state.dest_chain_config_updated_events,
                 DestChainConfigUpdated { dest_chain_selector, dest_chain_config }
             );
         } else {
             state.dest_chain_configs.add(dest_chain_selector, dest_chain_config);
-            event::emit(DestChainAdded { dest_chain_selector, dest_chain_config });
             event::emit_event(
                 &mut state.dest_chain_added_events,
                 DestChainAdded { dest_chain_selector, dest_chain_config }
@@ -1414,6 +1391,17 @@ module ccip::fee_quoter {
 
     inline fun borrow_state_mut(): &mut FeeQuoterState {
         borrow_global_mut<FeeQuoterState>(state_object::object_address())
+    }
+
+    inline fun get_validated_token_price(
+        state: &FeeQuoterState, token: address
+    ): TimestampedPrice {
+        let token_price = get_token_price_internal(state, token);
+        assert!(
+            token_price.value > 0 && token_price.timestamp > 0,
+            error::invalid_state(E_TOKEN_NOT_SUPPORTED)
+        );
+        token_price
     }
 
     // Token prices can be stale. On EVM we have additional fallbacks to a price feed, if configured. Since these
@@ -1461,9 +1449,8 @@ module ccip::fee_quoter {
         from_token_amount: u64,
         to_token: address
     ): u64 {
-        let from_token_price = get_token_price_internal(state, from_token);
-        let to_token_price = get_token_price_internal(state, to_token);
-
+        let from_token_price = get_validated_token_price(state, from_token);
+        let to_token_price = get_validated_token_price(state, to_token);
         let to_token_amount =
             ((from_token_amount as u256) * from_token_price.value) / to_token_price.value;
         assert!(
@@ -1733,6 +1720,13 @@ module ccip::fee_quoter {
         };
 
         option::none()
+    }
+
+    /// Callable during upgrades
+    public(friend) fun register_mcms_entrypoint(publisher: &signer) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(b"fee_quoter"), McmsCallback {}
+        );
     }
 
     public fun dest_chain_config_values(

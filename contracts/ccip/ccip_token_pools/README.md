@@ -132,7 +132,6 @@ aptos move deploy-object \
   --named-addresses lock_release_local_token=<YOUR_TOKEN_ADDRESS>,\
 ccip=<CCIP_ADDRESS>,\
 ccip_token_pool=<CCIP_TOKEN_POOL_ADDRESS>,\
-token_pool_administrator=<TOKEN_POOL_ADMINISTRATOR_ADDRESS>,\
 mcms=<MCMS_ADDRESS>,\
 mcms_register_entrypoints=<MCMS_REGISTER_ENTRYPOINTS_ADDRESS>
 ```
@@ -146,7 +145,6 @@ aptos move deploy-object \
   --named-addresses burn_mint_local_token=<YOUR_TOKEN_ADDRESS>,\
 ccip=<CCIP_ADDRESS>,\
 ccip_token_pool=<CCIP_TOKEN_POOL_ADDRESS>,\
-token_pool_administrator=<TOKEN_POOL_ADMINISTRATOR_ADDRESS>,\
 mcms=<MCMS_ADDRESS>,\
 mcms_register_entrypoints=<MCMS_REGISTER_ENTRYPOINTS_ADDRESS>
 ```
@@ -160,7 +158,6 @@ aptos move deploy-object \
   --named-addresses local_token=<YOUR_TOKEN_ADDRESS>,\
 ccip=<CCIP_ADDRESS>,\
 ccip_token_pool=<CCIP_TOKEN_POOL_ADDRESS>,\
-token_pool_administrator=<TOKEN_POOL_ADMINISTRATOR_ADDRESS>,\
 mcms=<MCMS_ADDRESS>,\
 message_transmitter=<MESSAGE_TRANSMITTER_ADDRESS>,\
 token_messenger_minter=<TOKEN_MESSENGER_MINTER_ADDRESS>,\
@@ -390,7 +387,6 @@ aptos move upgrade-object \
   --named-addresses lock_release_local_token=<YOUR_TOKEN_ADDRESS>,\
 ccip=<CCIP_ADDRESS>,\
 ccip_token_pool=<CCIP_TOKEN_POOL_ADDRESS>,\
-token_pool_administrator=<TOKEN_POOL_ADMINISTRATOR_ADDRESS>,\
 mcms=<MCMS_ADDRESS>,\
 mcms_register_entrypoints=<MCMS_REGISTER_ENTRYPOINTS_ADDRESS>
 ```
@@ -399,32 +395,40 @@ Where `TOKEN_POOL_ADDRESS` is the address of the existing pool object.
 
 #### Option 2: Deploy New Pool and Switch Registration
 
-To switch pools for a token, you can deploy a new pool contract and update the Token Admin Registry to point to the new pool.
-This is useful for major upgrades or changes in pool logic.
+To switch pools for a token, you must deploy a new pool contract and use the unregister/register pattern to update the Token Admin Registry.
 
 1. **Deploy New Pool**: Deploy the new pool contract using the deployment commands above
 
-2. **Switch Pool Registration**:
-
-   ```move
-   token_admin_registry::set_pool(
-       admin_signer,
-       token_address,
-       new_pool_address
-   );
-   ```
-
-3. **Migrate Funds/Refs**
+2. **Migrate Funds/Refs** (BEFORE unregistering):
 
    - For Lock/Release pools:
      - Move locked funds from old to new pool
      - Migrate TransferRef if provided
-   - For Burn/Mint pools
+   - For Burn/Mint pools:
      - Migrate BurnRef and MintRef
 
-4. **Update Configurations**: Set up rate limits and chain configs on new pool
+3. **Unregister Old Pool**:
 
-5. **Cleanup**: Optionally unregister or disable the old pool
+   ```move
+   token_admin_registry::unregister_pool(
+       admin_signer,
+       token_address
+   );
+   ```
+
+4. **Register New Pool**:
+
+   ```move
+   token_admin_registry::register_pool(
+       new_pool_signer,
+       pool_module_name,  // e.g., b"lock_release_token_pool"
+       token_address,
+       administrator_address,
+       CallbackProof {}
+   );
+   ```
+
+5. **Update Configurations**: Set up rate limits and chain configs on new pool
 
 #### Upgrade Considerations
 

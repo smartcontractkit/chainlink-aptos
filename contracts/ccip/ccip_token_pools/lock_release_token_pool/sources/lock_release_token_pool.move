@@ -9,8 +9,9 @@ module lock_release_token_pool::lock_release_token_pool {
     use std::signer;
     use std::string::{Self, String};
 
-    use ccip::ownable;
     use ccip::token_admin_registry;
+    use ccip_token_pool::ownable;
+    use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
 
     use mcms::mcms_registry;
@@ -71,16 +72,13 @@ module lock_release_token_pool::lock_release_token_pool {
 
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints == @0x1) {
-            mcms_registry::register_entrypoint(
-                publisher, string::utf8(token_pool_module_name), McmsCallback {}
-            );
+            register_mcms_entrypoint(publisher, token_pool_module_name);
         };
 
         token_admin_registry::register_pool(
             publisher,
             token_pool_module_name,
             @lock_release_local_token,
-            @token_pool_administrator,
             CallbackProof {}
         );
 
@@ -142,6 +140,11 @@ module lock_release_token_pool::lock_release_token_pool {
                     && fungible_asset::withdraw_dispatch_function(store).is_none(),
                 E_DISPATCHABLE_TOKEN_WITHOUT_TRANSFER_REF
             );
+        } else {
+            let metadata = object::address_to_object<Metadata>(@lock_release_local_token);
+            let transfer_ref_metadata =
+                fungible_asset::transfer_ref_metadata(transfer_ref.borrow());
+            assert!(metadata == transfer_ref_metadata, E_LOCAL_TOKEN_MISMATCH);
         };
 
         let pool = LockReleaseTokenPoolState {
@@ -340,7 +343,7 @@ module lock_release_token_pool::lock_release_token_pool {
             );
 
         // Construct lock_or_burn output before we lose access to fa
-        let dest_pool_data = token_pool::encode_local_decimals(&fa);
+        let dest_pool_data = token_pool::encode_local_decimals(&pool.token_pool_state);
         let metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
         let store =
             primary_fungible_store::primary_store(pool.store_signer_address, metadata);
@@ -424,7 +427,7 @@ module lock_release_token_pool::lock_release_token_pool {
     // |                    Rate limit config                         |
     // ================================================================
 
-    public fun set_chain_rate_limiter_configs(
+    public entry fun set_chain_rate_limiter_configs(
         caller: &signer,
         remote_chain_selectors: vector<u64>,
         outbound_is_enableds: vector<bool>,
@@ -463,7 +466,7 @@ module lock_release_token_pool::lock_release_token_pool {
         };
     }
 
-    public fun set_chain_rate_limiter_config(
+    public entry fun set_chain_rate_limiter_config(
         caller: &signer,
         remote_chain_selector: u64,
         outbound_is_enabled: bool,
@@ -486,6 +489,24 @@ module lock_release_token_pool::lock_release_token_pool {
             inbound_capacity,
             inbound_rate
         );
+    }
+
+    #[view]
+    public fun get_current_inbound_rate_limiter_state(
+        remote_chain_selector: u64
+    ): rate_limiter::TokenBucket acquires LockReleaseTokenPoolState {
+        token_pool::get_current_inbound_rate_limiter_state(
+            &borrow_pool().token_pool_state, remote_chain_selector
+        )
+    }
+
+    #[view]
+    public fun get_current_outbound_rate_limiter_state(
+        remote_chain_selector: u64
+    ): rate_limiter::TokenBucket acquires LockReleaseTokenPoolState {
+        token_pool::get_current_outbound_rate_limiter_state(
+            &borrow_pool().token_pool_state, remote_chain_selector
+        )
     }
 
     // ================================================================
@@ -647,8 +668,27 @@ module lock_release_token_pool::lock_release_token_pool {
 
     #[view]
     public fun owner(): address acquires LockReleaseTokenPoolState {
-        let pool = borrow_pool();
-        ownable::owner(&pool.ownable_state)
+        ownable::owner(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun has_pending_transfer(): bool acquires LockReleaseTokenPoolState {
+        ownable::has_pending_transfer(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_from(): Option<address> acquires LockReleaseTokenPoolState {
+        ownable::pending_transfer_from(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_to(): Option<address> acquires LockReleaseTokenPoolState {
+        ownable::pending_transfer_to(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_accepted(): Option<bool> acquires LockReleaseTokenPoolState {
+        ownable::pending_transfer_accepted(&borrow_pool().ownable_state)
     }
 
     public entry fun transfer_ownership(
@@ -823,6 +863,15 @@ module lock_release_token_pool::lock_release_token_pool {
         option::none()
     }
 
+    /// Callable during upgrades
+    public(friend) fun register_mcms_entrypoint(
+        publisher: &signer, module_name: vector<u8>
+    ) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(module_name), McmsCallback {}
+        );
+    }
+
     // ================================================================
     // |                      Test functions                          |
     // ================================================================
@@ -830,5 +879,23 @@ module lock_release_token_pool::lock_release_token_pool {
     #[test_only]
     public fun test_init_module(publisher: &signer) {
         init_module(publisher);
+    }
+
+    #[test_only]
+    public fun get_locked_or_burned_events(
+        state: address
+    ): vector<token_pool::LockedOrBurned> acquires LockReleaseTokenPoolState {
+        token_pool::get_locked_or_burned_events(
+            &borrow_global<LockReleaseTokenPoolState>(state).token_pool_state
+        )
+    }
+
+    #[test_only]
+    public fun get_released_or_minted_events(
+        state: address
+    ): vector<token_pool::ReleasedOrMinted> acquires LockReleaseTokenPoolState {
+        token_pool::get_released_or_minted_events(
+            &borrow_global<LockReleaseTokenPoolState>(state).token_pool_state
+        )
     }
 }

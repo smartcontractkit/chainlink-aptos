@@ -5,7 +5,7 @@ go 1.24.1
 require (
 	github.com/aptos-labs/aptos-go-sdk v1.7.1-0.20250602153733-bb1facae1d43
 	github.com/aptos-labs/tree-sitter-move-on-aptos v0.0.0-20250321090037-c820eb4716e1
-	github.com/ethereum/go-ethereum v1.15.7
+	github.com/ethereum/go-ethereum v1.15.3
 	github.com/go-viper/mapstructure/v2 v2.2.1
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-plugin v1.6.3
@@ -32,14 +32,21 @@ require (
 	github.com/apache/arrow-go/v18 v18.0.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/bits-and-blooms/bitset v1.17.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudevents/sdk-go/binding/format/protobuf/v2 v2.15.2 // indirect
 	github.com/cloudevents/sdk-go/v2 v2.16.0 // indirect
 	github.com/coder/websocket v1.8.12 // indirect
+	github.com/consensys/bavard v0.1.22 // indirect
+	github.com/consensys/gnark-crypto v0.14.0 // indirect
+	github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a // indirect
+	github.com/crate-crypto/go-kzg-4844 v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
+	github.com/ethereum/c-kzg-4844 v1.0.3 // indirect
+	github.com/ethereum/go-verkle v0.2.2 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
@@ -84,6 +91,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible // indirect
 	github.com/mitchellh/mapstructure v1.5.1-0.20220423185008-bf980b35cac4 // indirect
+	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect
@@ -104,6 +112,7 @@ require (
 	github.com/smartcontractkit/libocr v0.0.0-20250220133800-f3b940c4f298 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
+	github.com/supranational/blst v0.3.14 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
@@ -135,4 +144,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250324211829-b45e905df463 // indirect
 	google.golang.org/grpc v1.71.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	rsc.io/tmplfunc v0.0.3 // indirect
 )

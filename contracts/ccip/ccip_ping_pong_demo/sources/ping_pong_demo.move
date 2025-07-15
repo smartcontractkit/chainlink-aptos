@@ -155,10 +155,8 @@ module ccip_ping_pong_demo::ping_pong_demo {
         state: &mut PingPongDemo, ping_pong_count: u256
     ) {
         if ((ping_pong_count & 1) == 1) {
-            event::emit(Ping { ping_pong_count });
             event::emit_event(&mut state.ping_events, Ping { ping_pong_count });
         } else {
-            event::emit(Pong { ping_pong_count });
             event::emit_event(&mut state.pong_events, Pong { ping_pong_count });
         };
 
@@ -246,6 +244,26 @@ module ccip_ping_pong_demo::ping_pong_demo {
     public fun owner(): address acquires PingPongDemo {
         let state = borrow_state();
         ownable::owner(&state.ownable_state)
+    }
+
+    #[view]
+    public fun has_pending_transfer(): bool acquires PingPongDemo {
+        ownable::has_pending_transfer(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_from(): Option<address> acquires PingPongDemo {
+        ownable::pending_transfer_from(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_to(): Option<address> acquires PingPongDemo {
+        ownable::pending_transfer_to(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_accepted(): Option<bool> acquires PingPongDemo {
+        ownable::pending_transfer_accepted(&borrow_state().ownable_state)
     }
 
     public entry fun transfer_ownership(caller: &signer, to: address) acquires PingPongDemo {

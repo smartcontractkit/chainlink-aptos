@@ -79,12 +79,6 @@ module ccip_token_pool::token_pool_rate_limiter {
         let bucket = rate_limiter.borrow_mut(dest_chain_selector);
         rate_limiter::consume(bucket, requested_tokens);
 
-        event::emit(
-            TokensConsumed {
-                remote_chain_selector: dest_chain_selector,
-                tokens: requested_tokens
-            }
-        );
         event::emit_event(
             tokens_consumed_events,
             TokensConsumed {
@@ -126,17 +120,6 @@ module ccip_token_pool::token_pool_rate_limiter {
             inbound_rate
         );
 
-        event::emit(
-            ConfigChanged {
-                remote_chain_selector,
-                outbound_is_enabled,
-                outbound_capacity,
-                outbound_rate,
-                inbound_is_enabled,
-                inbound_capacity,
-                inbound_rate
-            }
-        );
         event::emit_event(
             &mut state.config_changed_events,
             ConfigChanged {
@@ -149,6 +132,22 @@ module ccip_token_pool::token_pool_rate_limiter {
                 inbound_rate
             }
         );
+    }
+
+    public fun get_current_inbound_rate_limiter_state(
+        state: &RateLimitState, remote_chain_selector: u64
+    ): rate_limiter::TokenBucket {
+        rate_limiter::get_current_token_bucket_state(
+            state.inbound_rate_limiter_config.borrow(remote_chain_selector)
+        )
+    }
+
+    public fun get_current_outbound_rate_limiter_state(
+        state: &RateLimitState, remote_chain_selector: u64
+    ): rate_limiter::TokenBucket {
+        rate_limiter::get_current_token_bucket_state(
+            state.outbound_rate_limiter_config.borrow(remote_chain_selector)
+        )
     }
 
     public fun destroy_rate_limiter(state: RateLimitState) {

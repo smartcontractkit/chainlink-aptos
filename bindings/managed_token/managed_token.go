@@ -49,6 +49,7 @@ func (l ManagedTokenContact) Ownable() module_ownable.OwnableInterface {
 var FunctionInfo = bind.MustParseFunctionInfo(
 	module_allowlist.FunctionInfo,
 	module_ownable.FunctionInfo,
+	module_managed_token.FunctionInfo,
 )
 
 func Compile(address aptos.AccountAddress) (compile.CompiledPackage, error) {

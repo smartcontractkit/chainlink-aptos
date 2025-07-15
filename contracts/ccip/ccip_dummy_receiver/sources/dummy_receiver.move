@@ -52,7 +52,6 @@ module ccip_dummy_receiver::dummy_receiver {
 
         let state = borrow_state_mut();
 
-        event::emit(ReceivedMessage { data });
         event::emit_event(&mut state.received_message_events, ReceivedMessage { data });
 
         option::none()
@@ -75,5 +74,11 @@ module ccip_dummy_receiver::dummy_receiver {
     #[test_only]
     public fun new_dummy_receiver_proof(): DummyReceiverProof {
         DummyReceiverProof {}
+    }
+
+    #[test_only]
+    public fun get_received_message_events(): vector<ReceivedMessage> acquires CCIPReceiverState {
+        let state = borrow_global<CCIPReceiverState>(@ccip_dummy_receiver);
+        event::emitted_events_by_handle<ReceivedMessage>(&state.received_message_events)
     }
 }

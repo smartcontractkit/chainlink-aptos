@@ -13,6 +13,9 @@ import (
 )
 
 func (a *aptosChainReader) startEventPolling(ctx context.Context) {
+	a.lggr.Infow("Event polling goroutine started")
+	defer a.lggr.Infow("Event polling goroutine exited")
+
 	ticker := time.NewTicker(a.config.EventSyncInterval)
 	defer ticker.Stop()
 
@@ -108,7 +111,7 @@ eventLoop:
 					EventAccountAddress: eventAccountAddress.String(),
 					EventHandle:         eventHandle,
 					EventFieldName:      eventFieldName,
-					EventOffset:         &event.SequenceNumber,
+					EventOffset:         event.SequenceNumber,
 					TxVersion:           event.Version,
 					BlockHeight:         head.Height,
 					BlockHash:           head.Hash,
@@ -159,7 +162,7 @@ func (a *aptosChainReader) SyncAllEvents(ctx context.Context) error {
 			continue
 		}
 
-		boundAddress, ok := a.moduleAddresses[moduleKey]
+		boundAddress, ok := a.getModuleAddress(moduleKey)
 		if !ok {
 			a.lggr.Warnw("SyncAllEvents: no bound address for module", "module", moduleKey)
 			continue

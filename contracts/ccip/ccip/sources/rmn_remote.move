@@ -103,9 +103,7 @@ module ccip::rmn_remote {
     fun init_module(publisher: &signer) {
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints == @0x1) {
-            mcms_registry::register_entrypoint(
-                publisher, string::utf8(b"rmn_remote"), McmsCallback {}
-            );
+            register_mcms_entrypoint(publisher);
         };
     }
 
@@ -337,8 +335,6 @@ module ccip::rmn_remote {
         let new_config_count = state.config_count + 1;
         state.config_count = new_config_count;
 
-        event::emit(ConfigSet { version: new_config_count, config: new_config });
-
         event::emit_event(
             &mut state.config_set_events,
             ConfigSet { version: new_config_count, config: new_config }
@@ -386,7 +382,6 @@ module ccip::rmn_remote {
                 state.cursed_subjects.add(subject, true);
             }
         );
-        event::emit(Cursed { subjects });
         event::emit_event(&mut state.cursed_events, Cursed { subjects });
     }
 
@@ -409,7 +404,6 @@ module ccip::rmn_remote {
             );
             state.cursed_subjects.remove(subject);
         });
-        event::emit(Uncursed { subjects });
         event::emit_event(&mut state.uncursed_events, Uncursed { subjects });
     }
 
@@ -513,5 +507,12 @@ module ccip::rmn_remote {
         };
 
         option::none()
+    }
+
+    /// Callable during upgrades
+    public(friend) fun register_mcms_entrypoint(publisher: &signer) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(b"rmn_remote"), McmsCallback {}
+        );
     }
 }

@@ -15,7 +15,6 @@ func TestCompile(t *testing.T) {
 		aptos.AccountFour,
 		aptos.AccountFour,
 		aptos.AccountFour,
-		aptos.AccountFour,
 		false,
 	)
 	require.NoError(t, err)

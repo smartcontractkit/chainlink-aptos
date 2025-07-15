@@ -6,7 +6,7 @@ module ccip_onramp::onramp {
     use std::dispatchable_fungible_asset;
     use std::fungible_asset::{Self, Metadata, FungibleStore};
     use std::object::{Self, Object};
-    use std::option;
+    use std::option::{Self, Option};
     use std::primary_fungible_store;
     use std::signer;
     use std::string::{Self, String};
@@ -154,6 +154,7 @@ module ccip_onramp::onramp {
     const E_TOKEN_AMOUNT_MISMATCH: u64 = 19;
     const E_CANNOT_SEND_ZERO_TOKENS: u64 = 20;
     const E_ZERO_CHAIN_SELECTOR: u64 = 21;
+    const E_CALCULATE_MESSAGE_HASH_INVALID_ARGUMENTS: u64 = 22;
 
     #[view]
     public fun type_and_version(): String {
@@ -180,9 +181,7 @@ module ccip_onramp::onramp {
 
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints == @0x1) {
-            mcms_registry::register_entrypoint(
-                publisher, string::utf8(b"onramp"), McmsCallback {}
-            );
+            register_mcms_entrypoint(publisher);
         };
     }
 
@@ -419,7 +418,8 @@ module ccip_onramp::onramp {
 
         let tokens_len = token_addresses.length();
         assert!(
-            tokens_len == token_store_addresses.length(),
+            tokens_len == token_amounts.length()
+                && tokens_len == token_store_addresses.length(),
             error::invalid_argument(E_TOKEN_AMOUNT_MISMATCH)
         );
 
@@ -536,11 +536,10 @@ module ccip_onramp::onramp {
             token_amounts: token_transfers
         };
         let metadata_hash =
-            calculate_metadata_hash(state.chain_selector, dest_chain_selector);
-        let message_id = calculate_message_hash(&message, metadata_hash);
+            calculate_metadata_hash_inlined(state.chain_selector, dest_chain_selector);
+        let message_id = calculate_message_hash_inlined(&message, metadata_hash);
         message.header.message_id = message_id;
 
-        event::emit(CCIPMessageSent { dest_chain_selector, sequence_number, message });
         event::emit_event(
             &mut state.ccip_message_sent_events,
             CCIPMessageSent { dest_chain_selector, sequence_number, message }
@@ -672,12 +671,6 @@ module ccip_onramp::onramp {
                     };
                 });
 
-                event::emit(
-                    AllowlistSendersAdded {
-                        dest_chain_selector,
-                        senders: add_allowed_senders
-                    }
-                );
                 event::emit_event(
                     &mut state.allowlist_senders_added_events,
                     AllowlistSendersAdded {
@@ -696,12 +689,6 @@ module ccip_onramp::onramp {
                     }
                 });
 
-                event::emit(
-                    AllowlistSendersRemoved {
-                        dest_chain_selector,
-                        senders: remove_allowed_senders
-                    }
-                );
                 event::emit_event(
                     &mut state.allowlist_senders_removed_events,
                     AllowlistSendersRemoved {
@@ -770,13 +757,6 @@ module ccip_onramp::onramp {
                 balance
             );
 
-            event::emit(
-                FeeTokenWithdrawn {
-                    fee_aggregator: state.fee_aggregator,
-                    fee_token,
-                    amount: balance
-                }
-            );
             event::emit_event(
                 &mut state.fee_token_withdrawn_events,
                 FeeTokenWithdrawn {
@@ -792,7 +772,6 @@ module ccip_onramp::onramp {
         state: &mut OnRampState, fee_aggregator: address, allowlist_admin: address
     ) {
         address::assert_non_zero_address(fee_aggregator);
-        address::assert_non_zero_address(allowlist_admin);
 
         state.fee_aggregator = fee_aggregator;
         state.allowlist_admin = allowlist_admin;
@@ -801,14 +780,13 @@ module ccip_onramp::onramp {
 
         let dynamic_config = DynamicConfig { fee_aggregator, allowlist_admin };
 
-        event::emit(ConfigSet { static_config, dynamic_config });
         event::emit_event(
             &mut state.config_set_events,
             ConfigSet { static_config, dynamic_config }
         );
     }
 
-    inline fun calculate_metadata_hash(
+    inline fun calculate_metadata_hash_inlined(
         source_chain_selector: u64, dest_chain_selector: u64
     ): vector<u8> {
         let packed = vector[];
@@ -821,7 +799,79 @@ module ccip_onramp::onramp {
         aptos_hash::keccak256(packed)
     }
 
-    inline fun calculate_message_hash(
+    #[view]
+    public fun calculate_metadata_hash(
+        source_chain_selector: u64, dest_chain_selector: u64
+    ): vector<u8> {
+        calculate_metadata_hash_inlined(source_chain_selector, dest_chain_selector)
+    }
+
+    #[view]
+    public fun calculate_message_hash(
+        message_id: vector<u8>,
+        source_chain_selector: u64,
+        dest_chain_selector: u64,
+        sequence_number: u64,
+        nonce: u64,
+        sender: address,
+        receiver: vector<u8>,
+        data: vector<u8>,
+        fee_token: address,
+        fee_token_amount: u64,
+        source_pool_addresses: vector<address>,
+        dest_token_addresses: vector<vector<u8>>,
+        extra_datas: vector<vector<u8>>,
+        amounts: vector<u64>,
+        dest_exec_datas: vector<vector<u8>>,
+        extra_args: vector<u8>
+    ): vector<u8> {
+        let source_pool_addresses_len = source_pool_addresses.length();
+        assert!(
+            source_pool_addresses_len == dest_token_addresses.length()
+                && source_pool_addresses_len == extra_datas.length()
+                && source_pool_addresses_len == amounts.length()
+                && source_pool_addresses_len == dest_exec_datas.length(),
+            error::invalid_argument(E_CALCULATE_MESSAGE_HASH_INVALID_ARGUMENTS)
+        );
+
+        let metadata_hash =
+            calculate_metadata_hash_inlined(source_chain_selector, dest_chain_selector);
+
+        let token_amounts = vector[];
+        for (i in 0..source_pool_addresses_len) {
+            token_amounts.push_back(
+                Aptos2AnyTokenTransfer {
+                    source_pool_address: source_pool_addresses[i],
+                    dest_token_address: dest_token_addresses[i],
+                    extra_data: extra_datas[i],
+                    amount: amounts[i],
+                    dest_exec_data: dest_exec_datas[i]
+                }
+            );
+        };
+
+        let message = Aptos2AnyRampMessage {
+            header: RampMessageHeader {
+                message_id,
+                source_chain_selector,
+                dest_chain_selector,
+                sequence_number,
+                nonce
+            },
+            sender,
+            data,
+            receiver,
+            extra_args,
+            fee_token,
+            fee_token_amount,
+            fee_value_juels: 0, // Not used in hashing
+            token_amounts
+        };
+
+        calculate_message_hash_inlined(&message, metadata_hash)
+    }
+
+    inline fun calculate_message_hash_inlined(
         message: &Aptos2AnyRampMessage, metadata_hash: vector<u8>
     ): vector<u8> {
         let outer_hash = vector[];
@@ -916,14 +966,6 @@ module ccip_onramp::onramp {
             dest_chain_config.router = router;
             dest_chain_config.allowlist_enabled = allowlist_enabled;
 
-            event::emit(
-                DestChainConfigSet {
-                    dest_chain_selector,
-                    router,
-                    sequence_number: dest_chain_config.sequence_number,
-                    allowlist_enabled: dest_chain_config.allowlist_enabled
-                }
-            );
             event::emit_event(
                 &mut state.dest_chain_config_set_events,
                 DestChainConfigSet {
@@ -955,6 +997,26 @@ module ccip_onramp::onramp {
     #[view]
     public fun owner(): address acquires OnRampState {
         ownable::owner(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun has_pending_transfer(): bool acquires OnRampState {
+        ownable::has_pending_transfer(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_from(): Option<address> acquires OnRampState {
+        ownable::pending_transfer_from(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_to(): Option<address> acquires OnRampState {
+        ownable::pending_transfer_to(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_accepted(): Option<bool> acquires OnRampState {
+        ownable::pending_transfer_accepted(&borrow_state().ownable_state)
     }
 
     public entry fun transfer_ownership(caller: &signer, to: address) acquires OnRampState {
@@ -1099,6 +1161,12 @@ module ccip_onramp::onramp {
         option::none()
     }
 
+    public(friend) fun register_mcms_entrypoint(publisher: &signer) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(b"onramp"), McmsCallback {}
+        );
+    }
+
     public fun dynamic_config_fee_aggregator(config: &DynamicConfig): address {
         config.fee_aggregator
     }
@@ -1119,9 +1187,7 @@ module ccip_onramp::onramp {
     }
 
     #[test_only]
-    public fun register_mcms_entrypoint(publisher: &signer) {
-        mcms_registry::register_entrypoint(
-            publisher, string::utf8(b"onramp"), McmsCallback {}
-        );
+    public fun test_register_mcms_entrypoint(publisher: &signer) {
+        register_mcms_entrypoint(publisher);
     }
 }

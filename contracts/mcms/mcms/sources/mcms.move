@@ -1227,7 +1227,15 @@ module mcms::mcms {
         function_names: vector<String>,
         datas: vector<vector<u8>>
     ) acquires Multisig, MultisigState, Timelock {
-        for (i in 0..targets.length()) {
+        let len = targets.length();
+        assert!(
+            len == module_names.length()
+                && len == function_names.length()
+                && len == datas.length(),
+            E_INVALID_PARAMETERS
+        );
+
+        for (i in 0..len) {
             let target = targets[i];
             let module_name = module_names[i];
             let function_name = function_names[i];
@@ -1350,6 +1358,8 @@ module mcms::mcms {
                     &mut stream,
                     |stream| { bcs_stream::deserialize_vector_u8(stream) }
                 );
+            bcs_stream::assert_is_consumed(&stream);
+
             mcms_deployer::stage_code_chunk(
                 self_signer,
                 metadata_chunk,
@@ -1369,6 +1379,8 @@ module mcms::mcms {
                     |stream| { bcs_stream::deserialize_vector_u8(stream) }
                 );
             let new_owner_seed = bcs_stream::deserialize_vector_u8(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+
             mcms_deployer::stage_code_chunk_and_publish_to_object(
                 self_signer,
                 metadata_chunk,
@@ -1389,6 +1401,8 @@ module mcms::mcms {
                     |stream| { bcs_stream::deserialize_vector_u8(stream) }
                 );
             let code_object_address = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+
             mcms_deployer::stage_code_chunk_and_upgrade_object_code(
                 self_signer,
                 metadata_chunk,

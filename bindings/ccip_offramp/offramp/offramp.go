@@ -32,7 +32,13 @@ type OfframpInterface interface {
 	GetAllSourceChainConfigs(opts *bind.CallOpts) ([]uint64, []SourceChainConfig, error)
 	GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error)
 	GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, error)
+	CalculateMetadataHash(opts *bind.CallOpts, sourceChainSelector uint64, destChainSelector uint64, onRamp []byte) ([]byte, error)
+	CalculateMessageHash(opts *bind.CallOpts, messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender []byte, receiver aptos.AccountAddress, data []byte, gasLimit *big.Int, sourcePoolAddresses [][]byte, destTokenAddresses []aptos.AccountAddress, destGasAmounts []uint32, extraDatas [][]byte, amounts []*big.Int) ([]byte, error)
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
+	HasPendingTransfer(opts *bind.CallOpts) (bool, error)
+	PendingTransferFrom(opts *bind.CallOpts) (*aptos.AccountAddress, error)
+	PendingTransferTo(opts *bind.CallOpts) (*aptos.AccountAddress, error)
+	PendingTransferAccepted(opts *bind.CallOpts) (*bool, error)
 	LatestConfigDetails(opts *bind.CallOpts, ocrPluginType byte) (module_ocr3_base.OCRConfig, error)
 
 	Initialize(opts *bind.TransactOpts, chainSelector uint64, permissionlessExecutionThresholdSeconds uint32, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (*api.PendingTransaction, error)
@@ -60,7 +66,13 @@ type OfframpEncoder interface {
 	GetAllSourceChainConfigs() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStaticConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetDynamicConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	CalculateMetadataHash(sourceChainSelector uint64, destChainSelector uint64, onRamp []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	CalculateMessageHash(messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender []byte, receiver aptos.AccountAddress, data []byte, gasLimit *big.Int, sourcePoolAddresses [][]byte, destTokenAddresses []aptos.AccountAddress, destGasAmounts []uint32, extraDatas [][]byte, amounts []*big.Int) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	HasPendingTransfer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferFrom() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferTo() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferAccepted() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	LatestConfigDetails(ocrPluginType byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Initialize(chainSelector uint64, permissionlessExecutionThresholdSeconds uint32, sourceChainsSelector []uint64, sourceChainsIsEnabled []bool, sourceChainsIsRMNVerificationDisabled []bool, sourceChainsOnRamp [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Execute(reportContext [][]byte, report []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -73,15 +85,16 @@ type OfframpEncoder interface {
 	ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	SetOcr3Config(configDigest []byte, ocrPluginType byte, bigF byte, isSignatureVerificationEnabled bool, signers [][]byte, transmitters []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStateAddressInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	CalculateMetadataHash(sourceChainSelector uint64, destChainSelector uint64, onRamp []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	CalculateMetadataHashInlined(sourceChainSelector uint64, destChainSelector uint64, onRamp []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	DeserializeCommitReport(reportBytes []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	DeserializeExecutionReport(reportBytes []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CreateStaticConfig(chainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CreateDynamicConfig(permissionlessExecutionThresholdSeconds uint32) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	RegisterMCMSEntrypoint() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip_offramp","module":"offramp","name":"accept_ownership","parameters":null},{"package":"ccip_offramp","module":"offramp","name":"apply_source_chain_config_updates","parameters":[{"name":"source_chains_selector","type":"vector\u003cu64\u003e"},{"name":"source_chains_is_enabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_is_rmn_verification_disabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_on_ramp","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"calculate_metadata_hash","parameters":[{"name":"source_chain_selector","type":"u64"},{"name":"dest_chain_selector","type":"u64"},{"name":"on_ramp","type":"vector\u003cu8\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"commit","parameters":[{"name":"report_context","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"report","type":"vector\u003cu8\u003e"},{"name":"signatures","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"create_dynamic_config","parameters":[{"name":"permissionless_execution_threshold_seconds","type":"u32"}]},{"package":"ccip_offramp","module":"offramp","name":"create_static_config","parameters":[{"name":"chain_selector","type":"u64"}]},{"package":"ccip_offramp","module":"offramp","name":"deserialize_commit_report","parameters":[{"name":"report_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"deserialize_execution_report","parameters":[{"name":"report_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"execute","parameters":[{"name":"report_context","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"report","type":"vector\u003cu8\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"ccip_offramp","module":"offramp","name":"get_state_address_internal","parameters":null},{"package":"ccip_offramp","module":"offramp","name":"initialize","parameters":[{"name":"chain_selector","type":"u64"},{"name":"permissionless_execution_threshold_seconds","type":"u32"},{"name":"source_chains_selector","type":"vector\u003cu64\u003e"},{"name":"source_chains_is_enabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_is_rmn_verification_disabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_on_ramp","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"manually_execute","parameters":[{"name":"report_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip_offramp","module":"offramp","name":"set_dynamic_config","parameters":[{"name":"permissionless_execution_threshold_seconds","type":"u32"}]},{"package":"ccip_offramp","module":"offramp","name":"set_ocr3_config","parameters":[{"name":"config_digest","type":"vector\u003cu8\u003e"},{"name":"ocr_plugin_type","type":"u8"},{"name":"big_f","type":"u8"},{"name":"is_signature_verification_enabled","type":"bool"},{"name":"signers","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"transmitters","type":"vector\u003caddress\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
+const FunctionInfo = `[{"package":"ccip_offramp","module":"offramp","name":"accept_ownership","parameters":null},{"package":"ccip_offramp","module":"offramp","name":"apply_source_chain_config_updates","parameters":[{"name":"source_chains_selector","type":"vector\u003cu64\u003e"},{"name":"source_chains_is_enabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_is_rmn_verification_disabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_on_ramp","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"calculate_metadata_hash_inlined","parameters":[{"name":"source_chain_selector","type":"u64"},{"name":"dest_chain_selector","type":"u64"},{"name":"on_ramp","type":"vector\u003cu8\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"commit","parameters":[{"name":"report_context","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"report","type":"vector\u003cu8\u003e"},{"name":"signatures","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"create_dynamic_config","parameters":[{"name":"permissionless_execution_threshold_seconds","type":"u32"}]},{"package":"ccip_offramp","module":"offramp","name":"create_static_config","parameters":[{"name":"chain_selector","type":"u64"}]},{"package":"ccip_offramp","module":"offramp","name":"deserialize_commit_report","parameters":[{"name":"report_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"deserialize_execution_report","parameters":[{"name":"report_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"execute","parameters":[{"name":"report_context","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"report","type":"vector\u003cu8\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"ccip_offramp","module":"offramp","name":"get_state_address_internal","parameters":null},{"package":"ccip_offramp","module":"offramp","name":"initialize","parameters":[{"name":"chain_selector","type":"u64"},{"name":"permissionless_execution_threshold_seconds","type":"u32"},{"name":"source_chains_selector","type":"vector\u003cu64\u003e"},{"name":"source_chains_is_enabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_is_rmn_verification_disabled","type":"vector\u003cbool\u003e"},{"name":"source_chains_on_ramp","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"manually_execute","parameters":[{"name":"report_bytes","type":"vector\u003cu8\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip_offramp","module":"offramp","name":"register_mcms_entrypoint","parameters":null},{"package":"ccip_offramp","module":"offramp","name":"set_dynamic_config","parameters":[{"name":"permissionless_execution_threshold_seconds","type":"u32"}]},{"package":"ccip_offramp","module":"offramp","name":"set_ocr3_config","parameters":[{"name":"config_digest","type":"vector\u003cu8\u003e"},{"name":"ocr_plugin_type","type":"u8"},{"name":"big_f","type":"u8"},{"name":"is_signature_verification_enabled","type":"bool"},{"name":"signers","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"transmitters","type":"vector\u003caddress\u003e"}]},{"package":"ccip_offramp","module":"offramp","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
 
 func NewOfframp(address aptos.AccountAddress, client aptos.AptosRpcClient) OfframpInterface {
 	contract := bind.NewBoundContract(address, "ccip_offramp", "offramp", client)
@@ -431,6 +444,48 @@ func (c OfframpContract) GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, e
 	return r0, nil
 }
 
+func (c OfframpContract) CalculateMetadataHash(opts *bind.CallOpts, sourceChainSelector uint64, destChainSelector uint64, onRamp []byte) ([]byte, error) {
+	module, function, typeTags, args, err := c.offrampEncoder.CalculateMetadataHash(sourceChainSelector, destChainSelector, onRamp)
+	if err != nil {
+		return *new([]byte), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new([]byte), err
+	}
+
+	var (
+		r0 []byte
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new([]byte), err
+	}
+	return r0, nil
+}
+
+func (c OfframpContract) CalculateMessageHash(opts *bind.CallOpts, messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender []byte, receiver aptos.AccountAddress, data []byte, gasLimit *big.Int, sourcePoolAddresses [][]byte, destTokenAddresses []aptos.AccountAddress, destGasAmounts []uint32, extraDatas [][]byte, amounts []*big.Int) ([]byte, error) {
+	module, function, typeTags, args, err := c.offrampEncoder.CalculateMessageHash(messageId, sourceChainSelector, destChainSelector, sequenceNumber, nonce, sender, receiver, data, gasLimit, sourcePoolAddresses, destTokenAddresses, destGasAmounts, extraDatas, amounts)
+	if err != nil {
+		return *new([]byte), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new([]byte), err
+	}
+
+	var (
+		r0 []byte
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new([]byte), err
+	}
+	return r0, nil
+}
+
 func (c OfframpContract) Owner(opts *bind.CallOpts) (aptos.AccountAddress, error) {
 	module, function, typeTags, args, err := c.offrampEncoder.Owner()
 	if err != nil {
@@ -450,6 +505,90 @@ func (c OfframpContract) Owner(opts *bind.CallOpts) (aptos.AccountAddress, error
 		return *new(aptos.AccountAddress), err
 	}
 	return r0, nil
+}
+
+func (c OfframpContract) HasPendingTransfer(opts *bind.CallOpts) (bool, error) {
+	module, function, typeTags, args, err := c.offrampEncoder.HasPendingTransfer()
+	if err != nil {
+		return *new(bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	var (
+		r0 bool
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(bool), err
+	}
+	return r0, nil
+}
+
+func (c OfframpContract) PendingTransferFrom(opts *bind.CallOpts) (*aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.offrampEncoder.PendingTransferFrom()
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	var (
+		r0 bind.StdOption[aptos.AccountAddress]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+	return r0.Value(), nil
+}
+
+func (c OfframpContract) PendingTransferTo(opts *bind.CallOpts) (*aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.offrampEncoder.PendingTransferTo()
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	var (
+		r0 bind.StdOption[aptos.AccountAddress]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+	return r0.Value(), nil
+}
+
+func (c OfframpContract) PendingTransferAccepted(opts *bind.CallOpts) (*bool, error) {
+	module, function, typeTags, args, err := c.offrampEncoder.PendingTransferAccepted()
+	if err != nil {
+		return *new(*bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*bool), err
+	}
+
+	var (
+		r0 bind.StdOption[bool]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*bool), err
+	}
+	return r0.Value(), nil
 }
 
 func (c OfframpContract) LatestConfigDetails(opts *bind.CallOpts, ocrPluginType byte) (module_ocr3_base.OCRConfig, error) {
@@ -620,8 +759,70 @@ func (c offrampEncoder) GetDynamicConfig() (bind.ModuleInformation, string, []ap
 	return c.BoundContract.Encode("get_dynamic_config", nil, []string{}, []any{})
 }
 
+func (c offrampEncoder) CalculateMetadataHash(sourceChainSelector uint64, destChainSelector uint64, onRamp []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("calculate_metadata_hash", nil, []string{
+		"u64",
+		"u64",
+		"vector<u8>",
+	}, []any{
+		sourceChainSelector,
+		destChainSelector,
+		onRamp,
+	})
+}
+
+func (c offrampEncoder) CalculateMessageHash(messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender []byte, receiver aptos.AccountAddress, data []byte, gasLimit *big.Int, sourcePoolAddresses [][]byte, destTokenAddresses []aptos.AccountAddress, destGasAmounts []uint32, extraDatas [][]byte, amounts []*big.Int) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("calculate_message_hash", nil, []string{
+		"vector<u8>",
+		"u64",
+		"u64",
+		"u64",
+		"u64",
+		"vector<u8>",
+		"address",
+		"vector<u8>",
+		"u256",
+		"vector<vector<u8>>",
+		"vector<address>",
+		"vector<u32>",
+		"vector<vector<u8>>",
+		"vector<u256>",
+	}, []any{
+		messageId,
+		sourceChainSelector,
+		destChainSelector,
+		sequenceNumber,
+		nonce,
+		sender,
+		receiver,
+		data,
+		gasLimit,
+		sourcePoolAddresses,
+		destTokenAddresses,
+		destGasAmounts,
+		extraDatas,
+		amounts,
+	})
+}
+
 func (c offrampEncoder) Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("owner", nil, []string{}, []any{})
+}
+
+func (c offrampEncoder) HasPendingTransfer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("has_pending_transfer", nil, []string{}, []any{})
+}
+
+func (c offrampEncoder) PendingTransferFrom() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_from", nil, []string{}, []any{})
+}
+
+func (c offrampEncoder) PendingTransferTo() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_to", nil, []string{}, []any{})
+}
+
+func (c offrampEncoder) PendingTransferAccepted() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_accepted", nil, []string{}, []any{})
 }
 
 func (c offrampEncoder) LatestConfigDetails(ocrPluginType byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
@@ -744,8 +945,8 @@ func (c offrampEncoder) GetStateAddressInternal() (bind.ModuleInformation, strin
 	return c.BoundContract.Encode("get_state_address_internal", nil, []string{}, []any{})
 }
 
-func (c offrampEncoder) CalculateMetadataHash(sourceChainSelector uint64, destChainSelector uint64, onRamp []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("calculate_metadata_hash", nil, []string{
+func (c offrampEncoder) CalculateMetadataHashInlined(sourceChainSelector uint64, destChainSelector uint64, onRamp []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("calculate_metadata_hash_inlined", nil, []string{
 		"u64",
 		"u64",
 		"vector<u8>",
@@ -794,4 +995,8 @@ func (c offrampEncoder) MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.Modu
 	}, []any{
 		Metadata,
 	})
+}
+
+func (c offrampEncoder) RegisterMCMSEntrypoint() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("register_mcms_entrypoint", nil, []string{}, []any{})
 }

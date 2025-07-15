@@ -239,4 +239,34 @@ func TestDecodeAptosJsonArray(t *testing.T) {
 		err := DecodeAptosJsonArray([]any{"hello", "world"}, &result)
 		assert.Error(t, err)
 	})
+	t.Run("Hex String to [32]uint8 Array", func(t *testing.T) {
+		var result [32]uint8
+		// 32-byte hex string (64 hex characters)
+		hexStr := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+		err := DecodeAptosJsonValue(hexStr, &result)
+		assert.NoError(t, err)
+		expected := [32]uint8{
+			0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
+			0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
+			0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
+			0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
+		}
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("Hex String to [4]uint8 Array - Wrong Length", func(t *testing.T) {
+		var result [4]uint8
+		// Only 2 bytes, but array expects 4
+		err := DecodeAptosJsonValue("0x1234", &result)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "incorrect length")
+	})
+
+	t.Run("Empty Hex String to [0]uint8 Array", func(t *testing.T) {
+		var result [0]uint8
+		err := DecodeAptosJsonValue("0x", &result)
+		assert.NoError(t, err)
+		expected := [0]uint8{}
+		assert.Equal(t, expected, result)
+	})
 }

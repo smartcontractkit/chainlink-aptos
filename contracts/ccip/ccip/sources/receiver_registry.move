@@ -132,7 +132,6 @@ module ccip::receiver_registry {
             }
         );
 
-        event::emit(ReceiverRegistered { receiver_address, receiver_module_name });
         event::emit_event(
             &mut state.receiver_registered_events,
             ReceiverRegistered { receiver_address, receiver_module_name }

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
@@ -99,15 +100,30 @@ func ApplyEventFilterRenames(exprs []query.Expression, renames map[string]string
 				newExprs[i] = expr
 			}
 		} else {
-			newExprs[i] = expr
+			// Apply renames recursively to nested expressions
+			boolExpr := expr.BoolExpression
+			nestedExprs := ApplyEventFilterRenames(boolExpr.Expressions, renames)
+			newExprs[i] = query.Expression{
+				BoolExpression: query.BoolExpression{
+					Expressions:  nestedExprs,
+					BoolOperator: boolExpr.BoolOperator,
+				},
+			}
 		}
 	}
 	return newExprs
 }
 
+// Regex for validating the JSON path - allows dot-separated sequences of alphabetic characters and underscores
+var validJsonPathPattern = regexp.MustCompile(`^[a-zA-Z_]+(\.[a-zA-Z_]+)*$`)
+
 // buildJsonPathExpr constructs a PostgreSQL JSON path expression for accessing nested fields
 // Example: "Header.SourceChainSelector" becomes data->'Header'->>'SourceChainSelector'
-func BuildJsonPathExpr(baseField string, path string) string {
+func BuildJsonPathExpr(baseField string, path string) (string, error) {
+	if !validJsonPathPattern.MatchString(path) {
+		return "", fmt.Errorf("invalid json path: %s (must contain only letters separated by dots)", path)
+	}
+
 	parts := strings.Split(path, ".")
 	expr := baseField
 
@@ -119,7 +135,7 @@ func BuildJsonPathExpr(baseField string, path string) string {
 		}
 	}
 
-	return expr
+	return expr, nil
 }
 
 func IsNumeric(value any) bool {

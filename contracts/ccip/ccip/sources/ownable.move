@@ -80,6 +80,10 @@ module ccip::ownable {
         owner_internal(state)
     }
 
+    public fun has_pending_transfer(state: &OwnableState): bool {
+        state.pending_transfer.is_some()
+    }
+
     public fun pending_transfer_from(state: &OwnableState): Option<address> {
         state.pending_transfer.map_ref(|pending_transfer| pending_transfer.from)
     }
@@ -107,7 +111,6 @@ module ccip::ownable {
             PendingTransfer { from: caller_address, to, accepted: false }
         );
 
-        event::emit(OwnershipTransferRequested { from: caller_address, to });
         event::emit_event(
             &mut state.ownership_transfer_requested_events,
             OwnershipTransferRequested { from: caller_address, to }
@@ -143,9 +146,6 @@ module ccip::ownable {
 
         pending_transfer.accepted = true;
 
-        event::emit(
-            OwnershipTransferAccepted { from: pending_transfer.from, to: caller_address }
-        );
         event::emit_event(
             &mut state.ownership_transfer_accepted_events,
             OwnershipTransferAccepted { from: pending_transfer.from, to: caller_address }
@@ -178,7 +178,6 @@ module ccip::ownable {
         object::transfer(caller, state.target_object, pending_transfer.to);
         state.pending_transfer = option::none();
 
-        event::emit(OwnershipTransferred { from: caller_address, to });
         event::emit_event(
             &mut state.ownership_transferred_events,
             OwnershipTransferred { from: caller_address, to }
@@ -210,5 +209,26 @@ module ccip::ownable {
         event::destroy_handle(ownership_transfer_requested_events);
         event::destroy_handle(ownership_transfer_accepted_events);
         event::destroy_handle(ownership_transferred_events);
+    }
+
+    #[test_only]
+    public fun get_ownership_transfer_requested_events(
+        state: &OwnableState
+    ): &EventHandle<OwnershipTransferRequested> {
+        &state.ownership_transfer_requested_events
+    }
+
+    #[test_only]
+    public fun get_ownership_transfer_accepted_events(
+        state: &OwnableState
+    ): &EventHandle<OwnershipTransferAccepted> {
+        &state.ownership_transfer_accepted_events
+    }
+
+    #[test_only]
+    public fun get_ownership_transferred_events(
+        state: &OwnableState
+    ): &EventHandle<OwnershipTransferred> {
+        &state.ownership_transferred_events
     }
 }

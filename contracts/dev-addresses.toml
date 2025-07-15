@@ -7,7 +7,6 @@ ccip_token_pool = "0x2000"
 burn_mint_token_pool = "0x2001"
 lock_release_token_pool = "0x2002"
 usdc_token_pool = "0x2003"
-token_pool_administrator = "0x2900"
 
 ## Applications: 3xxx
 ccip_ping_pong_demo = "0x3010"

@@ -83,6 +83,7 @@ module ccip_offramp::ocr3_base {
     const E_NON_UNIQUE_SIGNATURES: u64 = 18;
     const E_INVALID_SIGNATURE: u64 = 19;
     const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 20;
+    const E_INVALID_SIGNATURE_LENGTH: u64 = 21;
 
     public fun new(event_account: &signer): OCR3BaseState {
         OCR3BaseState {
@@ -116,6 +117,11 @@ module ccip_offramp::ocr3_base {
         let caller_address = signer::address_of(caller);
         auth::assert_only_owner(caller_address);
         assert!(big_f != 0, error::invalid_argument(E_BIG_F_MUST_BE_POSITIVE));
+
+        assert!(
+            config_digest.length() == 32,
+            error::invalid_argument(E_INVALID_CONFIG_DIGEST_LENGTH)
+        );
 
         let ocr_config =
             ocr3_state.ocr3_configs.borrow_mut_with_default(
@@ -189,9 +195,6 @@ module ccip_offramp::ocr3_base {
         config_info.big_f = big_f;
         config_info.config_digest = config_digest;
 
-        event::emit(
-            ConfigSet { ocr_plugin_type, config_digest, signers, transmitters, big_f }
-        );
         event::emit_event(
             &mut ocr3_state.config_set_events,
             ConfigSet { ocr_plugin_type, config_digest, signers, transmitters, big_f }
@@ -295,7 +298,6 @@ module ccip_offramp::ocr3_base {
         };
 
         let sequence_number: u64 = deserialize_sequence_bytes(sequence_bytes);
-        event::emit(Transmitted { ocr_plugin_type, config_digest, sequence_number });
         event::emit_event(
             &mut ocr3_state.transmitted_events,
             Transmitted { ocr_plugin_type, config_digest, sequence_number }
@@ -346,6 +348,12 @@ module ccip_offramp::ocr3_base {
         let seen = bit_vector::new(signers.length());
         signatures.for_each_ref(
             |signature_bytes| {
+                let signature_bytes: &vector<u8> = signature_bytes;
+                assert!(
+                    signature_bytes.length() == 96,
+                    error::invalid_argument(E_INVALID_SIGNATURE_LENGTH)
+                );
+
                 let public_key =
                     ed25519::new_unvalidated_public_key_from_bytes(
                         signature_bytes.slice(0, 32)

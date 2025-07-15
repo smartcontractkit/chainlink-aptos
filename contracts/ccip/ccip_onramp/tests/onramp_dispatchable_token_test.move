@@ -17,7 +17,6 @@ module ccip_onramp::onramp_dispatchable_token_test {
     };
     use std::primary_fungible_store;
     use std::timestamp;
-    use std::event;
 
     use ccip::token_admin_registry;
     use ccip::rmn_remote;
@@ -29,7 +28,6 @@ module ccip_onramp::onramp_dispatchable_token_test {
     use ccip::fee_quoter::{Self};
     use ccip_onramp::mock_token;
 
-    use ccip_token_pool::token_pool;
     use burn_mint_token_pool::burn_mint_token_pool;
     use lock_release_token_pool::lock_release_token_pool;
 
@@ -210,14 +208,18 @@ module ccip_onramp::onramp_dispatchable_token_test {
         assert!(token_pool_balance == result.sent_amount);
 
         assert!(
-            event::emitted_events<token_pool::LockedOrBurned>().length() == 1
+            lock_release_token_pool::get_locked_or_burned_events(
+                lock_release_token_pool::get_store_address()
+            ).length() == 1
         );
     }
 
     fun assert_burn_mint_pool_success(result: &CCIPSendResult) {
         assert_ccip_send_success(result);
         assert!(
-            event::emitted_events<token_pool::LockedOrBurned>().length() == 1
+            burn_mint_token_pool::get_locked_or_burned_events(
+                burn_mint_token_pool::get_store_address()
+            ).length() == 1
         );
     }
 
@@ -490,7 +492,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
         };
 
         state_object::init_module_for_testing(ccip);
-        auth::test_init_module(owner);
+        auth::test_init_module(ccip);
         rmn_remote::initialize(owner, SOURCE_CHAIN_SELECTOR);
 
         token_admin_registry::init_module_for_testing(ccip);
@@ -647,7 +649,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
 
         if (pool_type == BURN_MINT_TOKEN_POOL) {
             burn_mint_token_pool::test_init_module(burn_mint_token_pool);
-            burn_mint_token_pool::initialize(burn_mint_token_pool, burn_ref, mint_ref);
+            burn_mint_token_pool::initialize(owner, burn_ref, mint_ref);
             burn_mint_token_pool::apply_chain_updates(
                 owner,
                 vector[],
@@ -665,10 +667,20 @@ module ccip_onramp::onramp_dispatchable_token_test {
                 INBOUND_CAPACITY, // inbound_capacity
                 INBOUND_RATE // inbound_rate
             );
+            // Set admin for token
+            token_admin_registry::propose_administrator(
+                owner, token_addr, signer::address_of(owner)
+            );
+            token_admin_registry::accept_admin_role(owner, token_addr);
+            token_admin_registry::set_pool(
+                owner,
+                token_addr,
+                signer::address_of(burn_mint_token_pool)
+            );
         } else {
             lock_release_token_pool::test_init_module(lock_release_token_pool);
             lock_release_token_pool::initialize(
-                lock_release_token_pool,
+                owner,
                 transfer_ref,
                 signer::address_of(owner)
             );
@@ -688,6 +700,16 @@ module ccip_onramp::onramp_dispatchable_token_test {
                 true,
                 INBOUND_CAPACITY, // inbound_capacity
                 INBOUND_RATE // inbound_rate
+            );
+            // Set admin for token
+            token_admin_registry::propose_administrator(
+                owner, token_addr, signer::address_of(owner)
+            );
+            token_admin_registry::accept_admin_role(owner, token_addr);
+            token_admin_registry::set_pool(
+                owner,
+                token_addr,
+                signer::address_of(lock_release_token_pool)
             );
         };
 

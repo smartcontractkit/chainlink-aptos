@@ -3,6 +3,7 @@ package loop
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -15,6 +16,17 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 )
 
+const maxResponseSize = 4 * 1024 * 1024 // 4MB
+
+// NewLoopChainReader creates a ContractReader that wraps an existing ContractReader
+// to work across LOOP boundaries.
+//
+// The wrapper provides:
+// - Contract name to module address mapping
+// - JSON serialization/deserialization for LOOP communication
+// - Automatic contract re-binding for LOOP plugin restarts
+//
+// Both `logger` and `cr` parameters must be non-nil.
 func NewLoopChainReader(logger logger.Logger, cr types.ContractReader) types.ContractReader {
 	return &loopChainReader{logger: logger, cr: cr, moduleAddresses: map[string]string{}}
 }
@@ -91,6 +103,11 @@ func (a *loopChainReader) BatchGetLatestValues(ctx context.Context, request type
 	for contract, requestBatch := range request {
 		convertedBatch := []types.BatchRead{}
 		for _, read := range requestBatch {
+			_, ok := a.moduleAddresses[contract.Name]
+			if !ok {
+				return nil, fmt.Errorf("no such contract: %s", contract.Name)
+			}
+
 			jsonParamBytes, err := json.Marshal(read.Params)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal params: %+w", err)
@@ -161,11 +178,23 @@ func (a *loopChainReader) QueryKey(ctx context.Context, contract types.BoundCont
 	}
 
 	for i, sequence := range sequences {
-		jsonBytes := sequence.Data.(*[]byte)
+		jsonBytes, ok := sequence.Data.(*[]byte)
+		if !ok {
+			return nil, fmt.Errorf("expected sequence.Data to be of type *[]byte, got %T", sequence.Data)
+		}
+
+		if len(*jsonBytes) > maxResponseSize {
+			return nil, fmt.Errorf("sequence data response size (%d bytes) exceeds maximum allowed size (%d bytes)", len(*jsonBytes), maxResponseSize)
+		}
+
 		jsonData := map[string]any{}
 		err := json.Unmarshal(*jsonBytes, &jsonData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal LOOP sourced JSON event data (`%s`): %w", string(*jsonBytes), err)
+		}
+
+		if sequenceDataType == nil {
+			return nil, errors.New("sequence data type is nil")
 		}
 
 		eventData := reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
@@ -199,13 +228,16 @@ func (a *loopChainReader) Unbind(ctx context.Context, bindings []types.BoundCont
 	}
 
 	// we ignore unbind errors, because if the LOOP plugin restarted, the binding would not exist.
-	_ = a.cr.Unbind(ctx, bindings)
+	err := a.cr.Unbind(ctx, bindings)
+	if err != nil {
+		a.logger.Warnw("failed to unbind bindings", "err", err)
+	}
 
 	return nil
 }
 
 func (a *loopChainReader) getBindings() []types.BoundContract {
-	bindings := []types.BoundContract{}
+	bindings := make([]types.BoundContract, 0, len(a.moduleAddresses))
 
 	for name, address := range a.moduleAddresses {
 		bindings = append(bindings, types.BoundContract{
@@ -218,6 +250,10 @@ func (a *loopChainReader) getBindings() []types.BoundContract {
 }
 
 func (a *loopChainReader) decodeGLVReturnValue(label string, jsonBytes []byte, returnVal any) error {
+	if len(jsonBytes) > maxResponseSize {
+		return fmt.Errorf("getLatestValue response size (%d bytes) exceeds maximum allowed size (%d bytes)", len(jsonBytes), maxResponseSize)
+	}
+
 	var result any
 	err := json.Unmarshal(jsonBytes, &result)
 	if err != nil {

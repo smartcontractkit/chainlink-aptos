@@ -49,7 +49,7 @@ func (c TokenPoolContract) TokenPoolRateLimiter() module_token_pool_rate_limiter
 var FunctionInfo = bind.MustParseFunctionInfo(
 	module_rate_limiter.FunctionInfo,
 	module_token_pool.FunctionInfo,
-	module_rate_limiter.FunctionInfo,
+	module_token_pool_rate_limiter.FunctionInfo,
 )
 
 func Compile(address, ccipAddress, mcmsAddress aptos.AccountAddress) (compile.CompiledPackage, error) {

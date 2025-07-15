@@ -241,6 +241,7 @@ module ccip_offramp::offramp {
     const E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN: u64 = 23;
     const E_RMN_BLESSING_MISMATCH: u64 = 24;
     const E_INVALID_ON_RAMP_UPDATE: u64 = 25;
+    const E_CALCULATE_MESSAGE_HASH_INVALID_ARGUMENTS: u64 = 26;
 
     #[view]
     public fun type_and_version(): String {
@@ -267,9 +268,7 @@ module ccip_offramp::offramp {
 
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints == @0x1) {
-            mcms_registry::register_entrypoint(
-                publisher, string::utf8(b"offramp"), McmsCallback {}
-            );
+            register_mcms_entrypoint(publisher);
         };
     }
 
@@ -322,7 +321,6 @@ module ccip_offramp::offramp {
 
         let static_config = create_static_config(chain_selector);
 
-        event::emit(StaticConfigSet { static_config });
         event::emit_event(
             &mut state.static_config_set_events, StaticConfigSet { static_config }
         );
@@ -410,7 +408,6 @@ module ccip_offramp::offramp {
         if (rmn_remote::is_cursed_u128(source_chain_selector as u128)) {
             assert!(!manual_execution, error::permission_denied(E_CURSED_BY_RMN));
 
-            event::emit(SkippedReportExecution { source_chain_selector });
             event::emit_event(
                 &mut state.skipped_report_execution_events,
                 SkippedReportExecution { source_chain_selector }
@@ -427,15 +424,14 @@ module ccip_offramp::offramp {
         let source_chain_config =
             state.source_chain_configs.borrow(source_chain_selector);
         let metadata_hash =
-            calculate_metadata_hash(
+            calculate_metadata_hash_inlined(
                 source_chain_selector,
                 state.chain_selector,
                 source_chain_config.on_ramp
             );
 
-        let hashed_leaf = calculate_message_hash(
-            &execution_report.message, metadata_hash
-        );
+        let hashed_leaf =
+            calculate_message_hash_inlined(&execution_report.message, metadata_hash);
 
         let root = merkle_proof::merkle_root(hashed_leaf, execution_report.proofs);
 
@@ -461,7 +457,6 @@ module ccip_offramp::offramp {
             );
 
         if (*execution_state_ref != EXECUTION_STATE_UNTOUCHED) {
-            event::emit(SkippedAlreadyExecuted { source_chain_selector, sequence_number });
             event::emit_event(
                 &mut state.skipped_already_executed_events,
                 SkippedAlreadyExecuted { source_chain_selector, sequence_number }
@@ -487,15 +482,6 @@ module ccip_offramp::offramp {
         // Since Aptos only supports success of reverts, when it reaches this it has succeeded.
         *execution_state_ref = EXECUTION_STATE_SUCCESS;
 
-        event::emit(
-            ExecutionStateChanged {
-                source_chain_selector,
-                sequence_number,
-                message_id: message.header.message_id,
-                message_hash: hashed_leaf,
-                state: EXECUTION_STATE_SUCCESS
-            }
-        );
         event::emit_event(
             &mut state.execution_state_changed_events,
             ExecutionStateChanged {
@@ -598,13 +584,6 @@ module ccip_offramp::offramp {
         // Commit the roots that do not require RMN blessing validation.
         commit_merkle_roots(state, commit_report.unblessed_merkle_roots, false);
 
-        event::emit(
-            CommitReportAccepted {
-                blessed_merkle_roots: commit_report.blessed_merkle_roots,
-                unblessed_merkle_roots: commit_report.unblessed_merkle_roots,
-                price_updates: commit_report.price_updates
-            }
-        );
         event::emit_event(
             &mut state.commit_report_accepted_events,
             CommitReportAccepted {
@@ -956,7 +935,6 @@ module ccip_offramp::offramp {
             permissionless_execution_threshold_seconds;
         let dynamic_config =
             create_dynamic_config(permissionless_execution_threshold_seconds);
-        event::emit(DynamicConfigSet { dynamic_config });
         event::emit_event(
             &mut state.dynamic_config_set_events,
             DynamicConfigSet { dynamic_config }
@@ -1027,9 +1005,6 @@ module ccip_offramp::offramp {
             config.on_ramp = on_ramp;
             config.is_rmn_verification_disabled = is_rmn_verification_disabled;
 
-            event::emit(
-                SourceChainConfigSet { source_chain_selector, source_chain_config: *config }
-            );
             event::emit_event(
                 &mut state.source_chain_config_set_events,
                 SourceChainConfigSet { source_chain_selector, source_chain_config: *config }
@@ -1041,7 +1016,7 @@ module ccip_offramp::offramp {
     // |                        Metadata hash                         |
     // ================================================================
 
-    inline fun calculate_metadata_hash(
+    inline fun calculate_metadata_hash_inlined(
         source_chain_selector: u64, dest_chain_selector: u64, on_ramp: vector<u8>
     ): vector<u8> {
         let packed = vector[];
@@ -1054,7 +1029,78 @@ module ccip_offramp::offramp {
         aptos_hash::keccak256(packed)
     }
 
-    inline fun calculate_message_hash(
+    #[view]
+    public fun calculate_metadata_hash(
+        source_chain_selector: u64, dest_chain_selector: u64, on_ramp: vector<u8>
+    ): vector<u8> {
+        calculate_metadata_hash_inlined(
+            source_chain_selector, dest_chain_selector, on_ramp
+        )
+    }
+
+    #[view]
+    public fun calculate_message_hash(
+        message_id: vector<u8>,
+        source_chain_selector: u64,
+        dest_chain_selector: u64,
+        sequence_number: u64,
+        nonce: u64,
+        sender: vector<u8>,
+        receiver: address,
+        data: vector<u8>,
+        gas_limit: u256,
+        source_pool_addresses: vector<vector<u8>>,
+        dest_token_addresses: vector<address>,
+        dest_gas_amounts: vector<u32>,
+        extra_datas: vector<vector<u8>>,
+        amounts: vector<u256>
+    ): vector<u8> {
+        let source_pool_addresses_len = source_pool_addresses.length();
+        assert!(
+            source_pool_addresses_len == dest_token_addresses.length()
+                && source_pool_addresses_len == dest_gas_amounts.length()
+                && source_pool_addresses_len == extra_datas.length()
+                && source_pool_addresses_len == amounts.length(),
+            error::invalid_argument(E_CALCULATE_MESSAGE_HASH_INVALID_ARGUMENTS)
+        );
+
+        let metadata_hash =
+            calculate_metadata_hash_inlined(
+                source_chain_selector, dest_chain_selector, sender
+            );
+
+        let token_amounts = vector[];
+        for (i in 0..source_pool_addresses_len) {
+            token_amounts.push_back(
+                Any2AptosTokenTransfer {
+                    source_pool_address: source_pool_addresses[i],
+                    dest_token_address: dest_token_addresses[i],
+                    dest_gas_amount: dest_gas_amounts[i],
+                    extra_data: extra_datas[i],
+                    amount: amounts[i]
+                }
+            );
+        };
+
+        let message = Any2AptosRampMessage {
+            header: RampMessageHeader {
+                message_id,
+                source_chain_selector,
+                dest_chain_selector,
+                sequence_number,
+                nonce
+            },
+            sender,
+            data,
+            receiver,
+            gas_limit,
+            token_amounts
+        };
+
+        calculate_message_hash_inlined(&message, metadata_hash)
+    }
+
+    inline fun calculate_message_hash_inlined(
         message: &Any2AptosRampMessage, metadata_hash: vector<u8>
     ): vector<u8> {
         let outer_hash = vector[];
@@ -1258,6 +1304,26 @@ module ccip_offramp::offramp {
         ownable::owner(&borrow_state().ownable_state)
     }
 
+    #[view]
+    public fun has_pending_transfer(): bool acquires OffRampState {
+        ownable::has_pending_transfer(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_from(): Option<address> acquires OffRampState {
+        ownable::pending_transfer_from(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_to(): Option<address> acquires OffRampState {
+        ownable::pending_transfer_to(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_accepted(): Option<bool> acquires OffRampState {
+        ownable::pending_transfer_accepted(&borrow_state().ownable_state)
+    }
+
     public entry fun transfer_ownership(caller: &signer, to: address) acquires OffRampState {
         let state = borrow_state_mut();
         ownable::transfer_ownership(caller, &mut state.ownable_state, to)
@@ -1453,56 +1519,14 @@ module ccip_offramp::offramp {
         option::none()
     }
 
+    /// Callable during upgrades
+    public(friend) fun register_mcms_entrypoint(publisher: &signer) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(b"offramp"), McmsCallback {}
+        );
+    }
+
     // ======================= Getters ==========================
-
-    public fun message(report: &ExecutionReport): &Any2AptosRampMessage {
-        &report.message
-    }
-
-    public fun sender(message: &Any2AptosRampMessage): vector<u8> {
-        message.sender
-    }
-
-    public fun data(message: &Any2AptosRampMessage): vector<u8> {
-        message.data
-    }
-
-    public fun receiver(message: &Any2AptosRampMessage): address {
-        message.receiver
-    }
-
-    public fun gas_limit(message: &Any2AptosRampMessage): u256 {
-        message.gas_limit
-    }
-
-    public fun header(message: &Any2AptosRampMessage): &RampMessageHeader {
-        &message.header
-    }
-
-    public fun header_source_chain_selector(header: &RampMessageHeader): u64 {
-        header.source_chain_selector
-    }
-
-    public fun header_dest_chain_selector(header: &RampMessageHeader): u64 {
-        header.dest_chain_selector
-    }
-
-    public fun header_message_id(header: &RampMessageHeader): vector<u8> {
-        header.message_id
-    }
-
-    public fun sequence_number(header: &RampMessageHeader): u64 {
-        header.sequence_number
-    }
-
-    public fun nonce(header: &RampMessageHeader): u64 {
-        header.nonce
-    }
-
-    public fun token_amounts(message: &Any2AptosRampMessage): &vector<Any2AptosTokenTransfer> {
-        &message.token_amounts
-    }
-
     public fun chain_selector(config: &StaticConfig): u64 {
         config.chain_selector
     }
@@ -1522,7 +1546,6 @@ module ccip_offramp::offramp {
     }
 
     // ========================== Test Functions ========================== //
-
     #[test_only]
     public fun test_init_module(publisher: &signer) {
         init_module(publisher);
@@ -1530,9 +1553,7 @@ module ccip_offramp::offramp {
 
     #[test_only]
     public fun test_register_mcms_entrypoint(publisher: &signer) {
-        mcms_registry::register_entrypoint(
-            publisher, string::utf8(b"offramp"), McmsCallback {}
-        );
+        register_mcms_entrypoint(publisher);
     }
 
     #[test_only]
@@ -1561,6 +1582,11 @@ module ccip_offramp::offramp {
     }
 
     #[test_only]
+    public fun test_deserialize_commit_report(report_bytes: vector<u8>): CommitReport {
+        deserialize_commit_report(report_bytes)
+    }
+
+    #[test_only]
     public fun test_deserialize_execution_report(
         report_bytes: vector<u8>
     ): ExecutionReport {
@@ -1571,14 +1597,16 @@ module ccip_offramp::offramp {
     public fun test_calculate_metadata_hash(
         source_chain_selector: u64, dest_chain_selector: u64, onramp: vector<u8>
     ): vector<u8> {
-        calculate_metadata_hash(source_chain_selector, dest_chain_selector, onramp)
+        calculate_metadata_hash_inlined(
+            source_chain_selector, dest_chain_selector, onramp
+        )
     }
 
     #[test_only]
     public fun test_calculate_message_hash(
         message: &Any2AptosRampMessage, metadata_hash: vector<u8>
     ): vector<u8> {
-        calculate_message_hash(message, metadata_hash)
+        calculate_message_hash_inlined(message, metadata_hash)
     }
 
     #[test_only]
@@ -1642,5 +1670,137 @@ module ccip_offramp::offramp {
             max_seq_nr,
             merkle_root
         }
+    }
+
+    #[test_only]
+    public fun message(report: &ExecutionReport): &Any2AptosRampMessage {
+        &report.message
+    }
+
+    #[test_only]
+    public fun sender(message: &Any2AptosRampMessage): vector<u8> {
+        message.sender
+    }
+
+    #[test_only]
+    public fun data(message: &Any2AptosRampMessage): vector<u8> {
+        message.data
+    }
+
+    #[test_only]
+    public fun receiver(message: &Any2AptosRampMessage): address {
+        message.receiver
+    }
+
+    #[test_only]
+    public fun gas_limit(message: &Any2AptosRampMessage): u256 {
+        message.gas_limit
+    }
+
+    #[test_only]
+    public fun header(message: &Any2AptosRampMessage): &RampMessageHeader {
+        &message.header
+    }
+
+    #[test_only]
+    public fun header_source_chain_selector(header: &RampMessageHeader): u64 {
+        header.source_chain_selector
+    }
+
+    #[test_only]
+    public fun header_dest_chain_selector(header: &RampMessageHeader): u64 {
+        header.dest_chain_selector
+    }
+
+    #[test_only]
+    public fun header_message_id(header: &RampMessageHeader): vector<u8> {
+        header.message_id
+    }
+
+    #[test_only]
+    public fun sequence_number(header: &RampMessageHeader): u64 {
+        header.sequence_number
+    }
+
+    #[test_only]
+    public fun nonce(header: &RampMessageHeader): u64 {
+        header.nonce
+    }
+
+    #[test_only]
+    public fun token_amounts(message: &Any2AptosRampMessage): &vector<Any2AptosTokenTransfer> {
+        &message.token_amounts
+    }
+
+    #[test_only]
+    public fun commit_report_price_updates(report: &CommitReport): &PriceUpdates {
+        &report.price_updates
+    }
+
+    #[test_only]
+    public fun commit_report_blessed_merkle_roots(report: &CommitReport): &vector<MerkleRoot> {
+        &report.blessed_merkle_roots
+    }
+
+    #[test_only]
+    public fun commit_report_unblessed_merkle_roots(
+        report: &CommitReport
+    ): &vector<MerkleRoot> {
+        &report.unblessed_merkle_roots
+    }
+
+    #[test_only]
+    public fun commit_report_rmn_signatures(report: &CommitReport): &vector<vector<u8>> {
+        &report.rmn_signatures
+    }
+
+    #[test_only]
+    public fun price_updates_token_price_updates(
+        updates: &PriceUpdates
+    ): &vector<TokenPriceUpdate> {
+        &updates.token_price_updates
+    }
+
+    #[test_only]
+    public fun price_updates_gas_price_updates(updates: &PriceUpdates):
+        &vector<GasPriceUpdate> {
+        &updates.gas_price_updates
+    }
+
+    #[test_only]
+    public fun token_price_update_source_token(update: &TokenPriceUpdate): address {
+        update.source_token
+    }
+
+    #[test_only]
+    public fun token_price_update_usd_per_token(
+        update: &TokenPriceUpdate
+    ): u256 {
+        update.usd_per_token
+    }
+
+    #[test_only]
+    public fun merkle_root_source_chain_selector(root: &MerkleRoot): u64 {
+        root.source_chain_selector
+    }
+
+    #[test_only]
+    public fun merkle_root_on_ramp_address(root: &MerkleRoot): vector<u8> {
+        root.on_ramp_address
+    }
+
+    #[test_only]
+    public fun merkle_root_min_seq_nr(root: &MerkleRoot): u64 {
+        root.min_seq_nr
+    }
+
+    #[test_only]
+    public fun merkle_root_max_seq_nr(root: &MerkleRoot): u64 {
+        root.max_seq_nr
+    }
+
+    #[test_only]
+    public fun merkle_root_merkle_root(root: &MerkleRoot): vector<u8> {
+        root.merkle_root
     }
 }
