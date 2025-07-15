@@ -397,7 +397,7 @@ func (a *aptosChainReader) getSourceChainConfig(ctx context.Context, sourceChain
 
 	filter := []query.Expression{
 		query.Comparator(selector,
-			primitives.ValueComparator{Value: sourceChainSelector, Operator: primitives.Eq},
+			primitives.ValueComparator{Value: fmt.Sprintf("%d", sourceChainSelector), Operator: primitives.Eq},
 		),
 	}
 
