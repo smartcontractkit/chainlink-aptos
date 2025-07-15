@@ -43,7 +43,7 @@ module ccip::fee_quoter {
     const MOVE_PRECOMPILE_SPACE: u256 = 0x0b;
 
     const GAS_PRICE_BITS: u8 = 112;
-    const GAS_PRICE_MASK_112_BITS: u256 = (MAX_U256 >> (255 - GAS_PRICE_BITS + 1)); // 2^112 - 1
+    const GAS_PRICE_MASK_112_BITS: u256 = 0xffffffffffffffffffffffffffff; // 28 f's
 
     const MESSAGE_FIXED_BYTES: u64 = 32 * 15;
     const MESSAGE_FIXED_BYTES_PER_TOKEN: u64 = 32 * (4 + (3 + 2));
