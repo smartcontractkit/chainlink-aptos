@@ -271,8 +271,6 @@ module ccip_offramp::ocr3_base {
             error::invalid_argument(E_INVALID_SEQUENCE_LENGTH)
         );
 
-        // TODO: EVM checks transaction data length here
-
         assert!(
             config_digest == config_info.config_digest,
             error::invalid_argument(E_CONFIG_DIGEST_MISMATCH)
