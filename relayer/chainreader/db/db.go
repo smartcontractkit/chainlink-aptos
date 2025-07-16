@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -30,12 +31,12 @@ func NewDBStore(ds sqlutil.DataSource, logger logger.Logger) *DBStore {
 }
 
 func (s *DBStore) EnsureSchema(ctx context.Context) error {
+	s.rwMutex.Lock()
+	defer s.rwMutex.Unlock()
+
 	if s.schemaEnsured {
 		return nil
 	}
-
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
 
 	schemaSQL := `
 CREATE SCHEMA IF NOT EXISTS aptos;
@@ -51,13 +52,13 @@ CREATE TABLE IF NOT EXISTS aptos.events (
     event_account_address TEXT NOT NULL,
     event_handle TEXT NOT NULL,
 		event_field_name TEXT NOT NULL,
-    event_offset BIGINT,
+    event_offset BIGINT NOT NULL,
     tx_version BIGINT NOT NULL,
     block_height TEXT NOT NULL,
     block_hash BYTEA NOT NULL,
     block_timestamp BIGINT NOT NULL,
     data JSONB NOT NULL,
-		UNIQUE (event_account_address, event_handle, event_field_name, tx_version)
+		UNIQUE (event_account_address, event_handle, event_field_name, event_offset, tx_version)
 );
 `
 	_, err = s.ds.ExecContext(ctx, createTableSQL)
@@ -67,7 +68,7 @@ CREATE TABLE IF NOT EXISTS aptos.events (
 
 	indexSQL := `
 CREATE INDEX IF NOT EXISTS idx_events_account_handle_offset
-ON aptos.events(event_account_address, event_handle, event_field_name, event_offset);
+ON aptos.events(event_account_address, event_handle, event_field_name, tx_version, event_offset);
 `
 	_, err = s.ds.ExecContext(ctx, indexSQL)
 	if err != nil {
@@ -83,7 +84,7 @@ type EventRecord struct {
 	EventAccountAddress string
 	EventHandle         string
 	EventFieldName      string
-	EventOffset         *uint64
+	EventOffset         uint64
 	TxVersion           uint64
 	BlockHeight         string
 	BlockHash           []byte
@@ -103,7 +104,7 @@ func (s *DBStore) InsertEvents(ctx context.Context, records []EventRecord) error
 INSERT INTO aptos.events (
     event_account_address,
     event_handle,
-		event_field_name,
+    event_field_name,
     event_offset,
     tx_version,
     block_height,
@@ -111,7 +112,7 @@ INSERT INTO aptos.events (
     block_timestamp,
     data
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-ON CONFLICT (event_account_address, event_handle, event_field_name, tx_version)
+ON CONFLICT (event_account_address, event_handle, event_field_name, event_offset, tx_version)
 DO NOTHING;
 `
 
@@ -200,7 +201,7 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 		if sortDir, ok := limitAndSort.SortBy[0].(query.SortBySequence); ok && sortDir.GetDirection() == query.Desc {
 			direction = "DESC"
 		}
-		baseSQL += " ORDER BY tx_version " + direction
+		baseSQL += " ORDER BY (tx_version, event_offset) " + direction
 	}
 
 	var maxLimit uint64 = 2000
@@ -239,9 +240,12 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 		}
 
 		var data map[string]any
-		if err := json.Unmarshal(dataBytes, &data); err != nil {
+		decoder := json.NewDecoder(bytes.NewReader(dataBytes))
+		decoder.UseNumber()
+		if err := decoder.Decode(&data); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal event data: %w", err)
 		}
+
 		record.Data = data
 		records = append(records, record)
 	}
@@ -254,7 +258,7 @@ func (s *DBStore) GetLatestOffset(ctx context.Context, eventAccountAddress, even
 	defer s.rwMutex.RUnlock()
 
 	querySQL := `
-SELECT COALESCE(MAX(event_offset), 0) FROM aptos.events
+SELECT COALESCE(MAX(event_offset) + 1, 0) FROM aptos.events
 WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 `
 

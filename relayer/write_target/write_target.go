@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
@@ -55,8 +56,8 @@ type contractReader interface {
 }
 
 type contractWriter interface {
-	SubmitTransaction(ctx context.Context, contractName, method string, args any, transactionID string, toAddress string, meta *commontypes.TxMeta, value *big.Int) error
-	GetTransactionStatus(ctx context.Context, transactionID string) (commontypes.TransactionStatus, error)
+	commontypes.ContractWriter
+	GetTransactionFee(ctx context.Context, transactionID string) (decimal.Decimal, error)
 }
 
 type writeTarget struct {
@@ -425,7 +426,25 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	if err != nil {
 		return capabilities.CapabilityResponse{}, err
 	}
-	return success(), nil
+
+	// Get the transaction fee
+	fee, err := c.cw.GetTransactionFee(ctx, txID.String())
+	if err != nil {
+		c.lggr.Errorw("failed to get transaction fee", "error", err)
+		return success(), nil
+	}
+
+	return capabilities.CapabilityResponse{
+		Metadata: capabilities.ResponseMetadata{
+			Metering: []capabilities.MeteringNodeDetail{
+				{
+					// Peer2PeerID from remote peers is ignored by engine
+					SpendUnit:  "GAS." + c.chainInfo.ChainID,
+					SpendValue: fee.String(),
+				},
+			},
+		},
+	}, nil
 }
 
 func decodeReport(report []byte, metadata capabilities.RequestMetadata) (*platform.Report, error) {

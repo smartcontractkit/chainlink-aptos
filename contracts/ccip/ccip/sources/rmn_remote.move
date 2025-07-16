@@ -103,9 +103,7 @@ module ccip::rmn_remote {
     fun init_module(publisher: &signer) {
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints == @0x1) {
-            mcms_registry::register_entrypoint(
-                publisher, string::utf8(b"rmn_remote"), McmsCallback {}
-            );
+            register_mcms_entrypoint(publisher);
         };
     }
 
@@ -509,5 +507,12 @@ module ccip::rmn_remote {
         };
 
         option::none()
+    }
+
+    /// Callable during upgrades
+    public(friend) fun register_mcms_entrypoint(publisher: &signer) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(b"rmn_remote"), McmsCallback {}
+        );
     }
 }

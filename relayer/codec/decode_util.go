@@ -2,6 +2,7 @@ package codec
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -184,12 +185,13 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 }
 
 func numericStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
-	if f.Kind() != reflect.String {
-		return data, nil
-	}
-
-	str, ok := data.(string)
-	if !ok {
+	var str string
+	switch v := data.(type) {
+	case string:
+		str = v
+	case json.Number:
+		str = v.String()
+	default:
 		return data, nil
 	}
 
@@ -199,7 +201,7 @@ func numericStringHook(f reflect.Type, t reflect.Type, data interface{}) (interf
 		fieldPtr := newStructVal.Field(0).Addr().Interface()
 
 		// Decode the original numeric string data into the field pointer
-		if err := DecodeAptosJsonValue(data, fieldPtr); err != nil {
+		if err := DecodeAptosJsonValue(str, fieldPtr); err != nil {
 			return nil, fmt.Errorf("failed decoding numeric string for single-field struct %v field %s (%v): %w", t, field.Name, field.Type, err)
 		}
 		return newStructVal.Interface(), nil
@@ -207,7 +209,7 @@ func numericStringHook(f reflect.Type, t reflect.Type, data interface{}) (interf
 
 	switch t.Kind() {
 	case reflect.String:
-		return data, nil
+		return str, nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		val, err := strconv.ParseInt(str, 10, 64)
 		if err != nil {

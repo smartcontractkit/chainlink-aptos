@@ -62,9 +62,10 @@ type RMNRemoteEncoder interface {
 	Uncurse(subject []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	UncurseMultiple(subjects [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	RegisterMCMSEntrypoint() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"rmn_remote","name":"curse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"curse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"initialize","parameters":[{"name":"local_chain_selector","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"rmn_remote","name":"set_config","parameters":[{"name":"rmn_home_contract_config_digest","type":"vector\u003cu8\u003e"},{"name":"signer_onchain_public_keys","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"node_indexes","type":"vector\u003cu64\u003e"},{"name":"f_sign","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]}]`
+const FunctionInfo = `[{"package":"ccip","module":"rmn_remote","name":"curse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"curse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"initialize","parameters":[{"name":"local_chain_selector","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"rmn_remote","name":"register_mcms_entrypoint","parameters":null},{"package":"ccip","module":"rmn_remote","name":"set_config","parameters":[{"name":"rmn_home_contract_config_digest","type":"vector\u003cu8\u003e"},{"name":"signer_onchain_public_keys","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"node_indexes","type":"vector\u003cu64\u003e"},{"name":"f_sign","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]}]`
 
 func NewRMNRemote(address aptos.AccountAddress, client aptos.AptosRpcClient) RMNRemoteInterface {
 	contract := bind.NewBoundContract(address, "ccip", "rmn_remote", client)
@@ -535,4 +536,8 @@ func (c rmnRemoteEncoder) MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.Mo
 	}, []any{
 		Metadata,
 	})
+}
+
+func (c rmnRemoteEncoder) RegisterMCMSEntrypoint() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("register_mcms_entrypoint", nil, []string{}, []any{})
 }

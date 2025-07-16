@@ -123,7 +123,7 @@ module ccip_onramp::onramp_test {
         };
 
         state_object::init_module_for_testing(ccip);
-        auth::test_init_module(owner);
+        auth::test_init_module(ccip);
         rmn_remote::initialize(owner, SOURCE_CHAIN_SELECTOR);
 
         token_admin_registry::init_module_for_testing(ccip);
@@ -1406,7 +1406,7 @@ module ccip_onramp::onramp_test {
                 false
             );
         setup_mcms(mcms);
-        onramp::register_mcms_entrypoint(ccip_onramp);
+        onramp::test_register_mcms_entrypoint(ccip_onramp);
         transfer_onramp_ownership(owner, ccip_onramp);
 
         let new_fee_aggregator = @0x789;
@@ -1470,7 +1470,7 @@ module ccip_onramp::onramp_test {
                 false
             );
         setup_mcms(mcms);
-        onramp::register_mcms_entrypoint(ccip_onramp);
+        onramp::test_register_mcms_entrypoint(ccip_onramp);
         transfer_onramp_ownership(owner, ccip_onramp);
 
         let new_dest_chain_selector = DEST_CHAIN_SELECTOR + 999;
@@ -1542,7 +1542,7 @@ module ccip_onramp::onramp_test {
                 false
             );
         setup_mcms(mcms);
-        onramp::register_mcms_entrypoint(ccip_onramp);
+        onramp::test_register_mcms_entrypoint(ccip_onramp);
 
         let new_dest_chain_selector = DEST_CHAIN_SELECTOR + 888;
         let new_router = @0x888;
@@ -1622,7 +1622,7 @@ module ccip_onramp::onramp_test {
                 false
             );
         setup_mcms(mcms);
-        onramp::register_mcms_entrypoint(ccip_onramp);
+        onramp::test_register_mcms_entrypoint(ccip_onramp);
         transfer_onramp_ownership(owner, ccip_onramp);
 
         mcms_registry::test_start_dispatch(

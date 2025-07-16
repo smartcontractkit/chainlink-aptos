@@ -110,9 +110,7 @@ module usdc_token_pool::usdc_token_pool {
 
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints == @0x1) {
-            mcms_registry::register_entrypoint(
-                publisher, string::utf8(token_pool_module_name), McmsCallback {}
-            );
+            register_mcms_entrypoint(publisher, token_pool_module_name);
         };
 
         token_admin_registry::register_pool(
@@ -899,12 +897,12 @@ module usdc_token_pool::usdc_token_pool {
         option::none()
     }
 
-    // ================================================================
-    // |                      Test only functions                     |
-    // ================================================================
-
-    #[test_only]
-    public fun test_init_module(publisher: &signer) {
-        init_module(publisher);
+    /// Callable during upgrades
+    public(friend) fun register_mcms_entrypoint(
+        publisher: &signer, module_name: vector<u8>
+    ) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(module_name), McmsCallback {}
+        );
     }
 }

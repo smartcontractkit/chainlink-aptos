@@ -1,4 +1,4 @@
-package platform_secondary
+package bindings
 
 import (
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"

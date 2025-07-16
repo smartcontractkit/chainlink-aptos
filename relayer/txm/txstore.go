@@ -143,13 +143,25 @@ func (s *TxStore) GetUnconfirmed() []*UnconfirmedTx {
 	defer s.lock.RUnlock()
 
 	unconfirmed := maps.Values(s.unconfirmedNonces)
-	sort.Slice(unconfirmed, func(i, j int) bool {
-		a := unconfirmed[i]
-		b := unconfirmed[j]
-		return a.Nonce < b.Nonce
+	result := make([]*UnconfirmedTx, len(unconfirmed))
+
+	for i, tx := range unconfirmed {
+		// create a shallow copy with the same fields
+		// note: still sharing the same tx pointer, 
+		// accessing underlying AptosTx must be synchronized
+		result[i] = &UnconfirmedTx{
+			Nonce:                   tx.Nonce,
+			Hash:                    tx.Hash,
+			ExpirationTimestampSecs: tx.ExpirationTimestampSecs,
+			Tx:                      tx.Tx,
+		}
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Nonce < result[j].Nonce
 	})
 
-	return unconfirmed
+	return result
 }
 
 func (s *TxStore) InflightCount() int {

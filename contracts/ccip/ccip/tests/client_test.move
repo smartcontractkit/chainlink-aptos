@@ -78,7 +78,7 @@ module ccip::client_test {
     ]
     fun test_svm_token_shorter_receiver() {
         let short_receiver = vector[1, 2, 3];
-        let encoded =
+        let _encoded =
             client::encode_svm_extra_args_v1(
                 100u32, 0u64, false, short_receiver, vector[]
             );
