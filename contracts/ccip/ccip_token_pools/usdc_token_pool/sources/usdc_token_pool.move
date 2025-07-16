@@ -905,4 +905,11 @@ module usdc_token_pool::usdc_token_pool {
             publisher, string::utf8(module_name), McmsCallback {}
         );
     }
+
+    // ============== Test functions ==============
+
+    #[test_only]
+    public fun test_init_module(publisher: &signer) {
+        init_module(publisher);
+    }
 }
