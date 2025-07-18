@@ -33,7 +33,7 @@ type OfframpInterface interface {
 	GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error)
 	GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, error)
 	CalculateMetadataHash(opts *bind.CallOpts, sourceChainSelector uint64, destChainSelector uint64, onRamp []byte) ([]byte, error)
-	CalculateMessageHash(opts *bind.CallOpts, messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender []byte, receiver aptos.AccountAddress, data []byte, gasLimit *big.Int, sourcePoolAddresses [][]byte, destTokenAddresses []aptos.AccountAddress, destGasAmounts []uint32, extraDatas [][]byte, amounts []*big.Int) ([]byte, error)
+	CalculateMessageHash(opts *bind.CallOpts, messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender []byte, receiver aptos.AccountAddress, onRamp []byte, data []byte, gasLimit *big.Int, sourcePoolAddresses [][]byte, destTokenAddresses []aptos.AccountAddress, destGasAmounts []uint32, extraDatas [][]byte, amounts []*big.Int) ([]byte, error)
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	HasPendingTransfer(opts *bind.CallOpts) (bool, error)
 	PendingTransferFrom(opts *bind.CallOpts) (*aptos.AccountAddress, error)
@@ -67,7 +67,7 @@ type OfframpEncoder interface {
 	GetStaticConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetDynamicConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CalculateMetadataHash(sourceChainSelector uint64, destChainSelector uint64, onRamp []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	CalculateMessageHash(messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender []byte, receiver aptos.AccountAddress, data []byte, gasLimit *big.Int, sourcePoolAddresses [][]byte, destTokenAddresses []aptos.AccountAddress, destGasAmounts []uint32, extraDatas [][]byte, amounts []*big.Int) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	CalculateMessageHash(messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender []byte, receiver aptos.AccountAddress, onRamp []byte, data []byte, gasLimit *big.Int, sourcePoolAddresses [][]byte, destTokenAddresses []aptos.AccountAddress, destGasAmounts []uint32, extraDatas [][]byte, amounts []*big.Int) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	HasPendingTransfer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	PendingTransferFrom() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -465,8 +465,8 @@ func (c OfframpContract) CalculateMetadataHash(opts *bind.CallOpts, sourceChainS
 	return r0, nil
 }
 
-func (c OfframpContract) CalculateMessageHash(opts *bind.CallOpts, messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender []byte, receiver aptos.AccountAddress, data []byte, gasLimit *big.Int, sourcePoolAddresses [][]byte, destTokenAddresses []aptos.AccountAddress, destGasAmounts []uint32, extraDatas [][]byte, amounts []*big.Int) ([]byte, error) {
-	module, function, typeTags, args, err := c.offrampEncoder.CalculateMessageHash(messageId, sourceChainSelector, destChainSelector, sequenceNumber, nonce, sender, receiver, data, gasLimit, sourcePoolAddresses, destTokenAddresses, destGasAmounts, extraDatas, amounts)
+func (c OfframpContract) CalculateMessageHash(opts *bind.CallOpts, messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender []byte, receiver aptos.AccountAddress, onRamp []byte, data []byte, gasLimit *big.Int, sourcePoolAddresses [][]byte, destTokenAddresses []aptos.AccountAddress, destGasAmounts []uint32, extraDatas [][]byte, amounts []*big.Int) ([]byte, error) {
+	module, function, typeTags, args, err := c.offrampEncoder.CalculateMessageHash(messageId, sourceChainSelector, destChainSelector, sequenceNumber, nonce, sender, receiver, onRamp, data, gasLimit, sourcePoolAddresses, destTokenAddresses, destGasAmounts, extraDatas, amounts)
 	if err != nil {
 		return *new([]byte), err
 	}
@@ -771,7 +771,7 @@ func (c offrampEncoder) CalculateMetadataHash(sourceChainSelector uint64, destCh
 	})
 }
 
-func (c offrampEncoder) CalculateMessageHash(messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender []byte, receiver aptos.AccountAddress, data []byte, gasLimit *big.Int, sourcePoolAddresses [][]byte, destTokenAddresses []aptos.AccountAddress, destGasAmounts []uint32, extraDatas [][]byte, amounts []*big.Int) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c offrampEncoder) CalculateMessageHash(messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender []byte, receiver aptos.AccountAddress, onRamp []byte, data []byte, gasLimit *big.Int, sourcePoolAddresses [][]byte, destTokenAddresses []aptos.AccountAddress, destGasAmounts []uint32, extraDatas [][]byte, amounts []*big.Int) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("calculate_message_hash", nil, []string{
 		"vector<u8>",
 		"u64",
@@ -780,6 +780,7 @@ func (c offrampEncoder) CalculateMessageHash(messageId []byte, sourceChainSelect
 		"u64",
 		"vector<u8>",
 		"address",
+		"vector<u8>",
 		"vector<u8>",
 		"u256",
 		"vector<vector<u8>>",
@@ -795,6 +796,7 @@ func (c offrampEncoder) CalculateMessageHash(messageId []byte, sourceChainSelect
 		nonce,
 		sender,
 		receiver,
+		onRamp,
 		data,
 		gasLimit,
 		sourcePoolAddresses,
