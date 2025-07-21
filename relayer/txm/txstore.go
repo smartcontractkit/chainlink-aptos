@@ -147,7 +147,7 @@ func (s *TxStore) GetUnconfirmed() []*UnconfirmedTx {
 
 	for i, tx := range unconfirmed {
 		// create a shallow copy with the same fields
-		// note: still sharing the same tx pointer, 
+		// note: still sharing the same tx pointer,
 		// accessing underlying AptosTx must be synchronized
 		result[i] = &UnconfirmedTx{
 			Nonce:                   tx.Nonce,
