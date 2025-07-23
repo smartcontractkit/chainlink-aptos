@@ -1,0 +1,315 @@
+package logpoller
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/aptos-labs/aptos-go-sdk"
+
+	"github.com/smartcontractkit/chainlink-common/pkg/types"
+
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/db"
+	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
+)
+
+func (l *AptosLogPoller) startEventPolling(ctx context.Context) {
+	l.lggr.Infow("Event polling goroutine started")
+	defer l.lggr.Infow("Event polling goroutine exited")
+
+	ticker := time.NewTicker(l.config.EventPollingInterval.Duration())
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			syncCtx, cancel := context.WithTimeout(ctx, l.config.EventPollingInterval.Duration())
+			start := time.Now()
+
+			err := l.SyncAllEvents(syncCtx)
+			elapsed := time.Since(start)
+
+			if err != nil {
+				l.lggr.Warnw("EventSync completed with errors",
+					"error", err,
+					"duration", elapsed)
+			} else {
+				l.lggr.Debugw("Event sync completed successfully",
+					"duration", elapsed)
+			}
+
+			cancel()
+		case <-ctx.Done():
+			l.lggr.Infow("Event polling stopped")
+			return
+		}
+	}
+}
+
+func (l *AptosLogPoller) SyncAllEvents(ctx context.Context) error {
+	if l.dbStore == nil {
+		return fmt.Errorf("SyncAllEvents only operates in persistent mode")
+	}
+
+	if err := l.dbStore.EnsureSchema(ctx); err != nil {
+		return fmt.Errorf("SyncAllEvents: failed to ensure schema: %w", err)
+	}
+
+	// Avoid locking durring the potentially long operation
+	l.mu.RLock()
+	modulesCopy := make(map[string]*moduleInfo)
+	for k, v := range l.modules {
+		modulesCopy[k] = v
+	}
+	l.mu.RUnlock()
+
+	successCount := 0
+	errorCount := 0
+	var lastErr error
+
+	for moduleKey, moduleInfo := range modulesCopy {
+		if moduleInfo.eventConfigs == nil {
+			continue
+		}
+
+		for eventKey, eventConfig := range moduleInfo.eventConfigs {
+			select {
+			case <-ctx.Done():
+				if successCount > 0 {
+					l.lggr.Infow("SyncAllEvents: interrupted, some events synced", "successCount", successCount, "errorCount", errorCount)
+				}
+				return ctx.Err()
+			default:
+				err := l.syncEvent(ctx, moduleInfo.address, eventConfig, moduleInfo.name)
+				if err != nil {
+					errorCount++
+					lastErr = fmt.Errorf("SyncAllEvents: module %s event %s: %w", moduleKey, eventKey, err)
+					l.lggr.Errorw("SyncAllEvents: error syncing event", "module", moduleKey, "event", eventKey, "error", err)
+				} else {
+					successCount++
+				}
+			}
+		}
+	}
+
+	if errorCount > 0 {
+		l.lggr.Errorw("SyncAllEvents: completed with errors", "successCount", successCount, "errorCount", errorCount, "lastError", lastErr)
+		return lastErr
+	}
+
+	l.lggr.Infow("SyncAllEvents: successfully synced all events", "count", successCount)
+	return nil
+}
+
+func (l *AptosLogPoller) SyncEvent(ctx context.Context, moduleKey, eventKey string) error {
+	l.mu.RLock()
+	info, exists := l.modules[moduleKey]
+	if !exists {
+		l.mu.RUnlock()
+		return fmt.Errorf("module %s not registered", moduleKey)
+	}
+
+	eventConfig, exists := info.eventConfigs[eventKey]
+	if !exists {
+		l.mu.RUnlock()
+		return fmt.Errorf("event %s not configured for module %s", eventKey, moduleKey)
+	}
+
+	address := info.address
+	name := info.name
+	l.mu.RUnlock()
+
+	return l.syncEvent(ctx, address, eventConfig, name)
+}
+
+func (l *AptosLogPoller) syncEvent(ctx context.Context, boundAddress aptos.AccountAddress, eventConfig *config.ChainReaderEvent, eventModuleName string) error {
+	if err := l.dbStore.EnsureSchema(ctx); err != nil {
+		return fmt.Errorf("syncEvent: failed to ensure schema: %w", err)
+	}
+
+	eventAccountAddress, err := l.computeEventAccountAddress(boundAddress, eventConfig)
+	if err != nil {
+		return fmt.Errorf("syncEvent: %w", err)
+	}
+
+	eventHandle := boundAddress.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
+	eventFieldName := eventConfig.EventHandleFieldName
+
+	latestOffset, err := l.dbStore.GetLatestOffset(ctx, eventAccountAddress.String(), eventHandle, eventFieldName)
+	if err != nil {
+		return fmt.Errorf("syncEvent: failed to get latest offset: %w", err)
+	}
+
+	resource, err := l.client.AccountResource(eventAccountAddress, eventHandle)
+	if err != nil {
+		return fmt.Errorf("syncEvent: failed to fetch the resource: %w", err)
+	}
+
+	creationNumber, err := crutils.ExtractEventCreationNum(resource, eventFieldName)
+	if err != nil {
+		return fmt.Errorf("syncEvent: failed to extract creation_num for %s: %w", eventFieldName, err)
+	}
+
+	batchSize := l.config.EventBatchSize
+	var totalProcessed int = 0
+
+eventLoop:
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			events, err := l.client.EventsByCreationNumber(eventAccountAddress, creationNumber, &latestOffset, &batchSize)
+			if err != nil {
+				l.lggr.Errorw("syncEvent: failed to fetch new events", "error", err)
+				return fmt.Errorf("syncEvent: failed to fetch events: %w", err)
+			}
+
+			if len(events) == 0 {
+				break eventLoop
+			}
+
+			var batchRecords []db.EventRecord
+			for _, event := range events {
+				head, err := l.getBlockHead(event.Version)
+				if err != nil {
+					l.lggr.Errorw("syncEvent: failed to fetch block metadata", "version", event.Version, "error", err)
+					continue
+				}
+
+				if err := crutils.RenameMapFields(event.Data, eventConfig.EventFieldRenames); err != nil {
+					l.lggr.Errorw("syncEvent: failed to rename event fields", "error", err)
+					continue
+				}
+
+				record := db.EventRecord{
+					EventAccountAddress: eventAccountAddress.String(),
+					EventHandle:         eventHandle,
+					EventFieldName:      eventFieldName,
+					EventOffset:         event.SequenceNumber,
+					TxVersion:           event.Version,
+					BlockHeight:         head.Height,
+					BlockHash:           head.Hash,
+					BlockTimestamp:      head.Timestamp,
+					Data:                event.Data,
+				}
+				batchRecords = append(batchRecords, record)
+			}
+
+			if len(batchRecords) > 0 {
+				if err := l.dbStore.InsertEvents(ctx, batchRecords); err != nil {
+					return fmt.Errorf("syncEvent: failed to insert batch of events: %w", err)
+				}
+
+				totalProcessed += len(batchRecords)
+				l.lggr.Debugw("syncEvent: saved batch of events",
+					"batch_count", len(batchRecords),
+					"total_processed", totalProcessed,
+					"handle", eventHandle)
+			}
+
+			latestOffset = events[len(events)-1].SequenceNumber + 1
+
+			// If we received fewer events than the batch size, we're caught up
+			if uint64(len(events)) < batchSize {
+				break eventLoop
+			}
+		}
+	}
+
+	if totalProcessed > 0 {
+		l.lggr.Infow("Events synced",
+			"count", totalProcessed,
+			"handle", eventHandle,
+			"account", eventAccountAddress.String())
+	}
+
+	return nil
+}
+
+func (l *AptosLogPoller) computeEventAccountAddress(boundAddress aptos.AccountAddress, eventConfig *config.ChainReaderEvent) (aptos.AccountAddress, error) {
+	var eventAccountAddress aptos.AccountAddress
+	if len(eventConfig.EventAccountAddress) == 0 {
+		return boundAddress, nil
+	}
+
+	components := strings.Split(eventConfig.EventAccountAddress, "::")
+	if len(components) == 1 {
+		err := eventAccountAddress.ParseStringRelaxed(components[0])
+		if err != nil {
+			return eventAccountAddress, fmt.Errorf("failed to parse event account address: %+w", err)
+		}
+		return eventAccountAddress, nil
+	} else {
+		var addressFunctionAddress aptos.AccountAddress
+		var addressFunctionModuleName, addressFunctionFunctionName string
+		if len(components) == 3 {
+			err := addressFunctionAddress.ParseStringRelaxed(components[0])
+			if err != nil {
+				return eventAccountAddress, fmt.Errorf("failed to parse event account address function address: %+w", err)
+			}
+			addressFunctionModuleName = components[1]
+			addressFunctionFunctionName = components[2]
+		} else if len(components) == 2 {
+			addressFunctionAddress = boundAddress
+			addressFunctionModuleName = components[0]
+			addressFunctionFunctionName = components[1]
+		} else {
+			return eventAccountAddress, fmt.Errorf("invalid event account address definition: %s", eventConfig.EventAccountAddress)
+		}
+
+		cacheKey := addressFunctionAddress.String() + "::" + addressFunctionModuleName + "::" + addressFunctionFunctionName
+
+		if cached, ok := l.getEventAccountAddress(cacheKey); ok {
+			return cached, nil
+		}
+
+		viewPayload := &aptos.ViewPayload{
+			Module: aptos.ModuleId{
+				Address: addressFunctionAddress,
+				Name:    addressFunctionModuleName,
+			},
+			Function: addressFunctionFunctionName,
+			ArgTypes: []aptos.TypeTag{},
+			Args:     [][]byte{},
+		}
+
+		data, err := l.client.View(viewPayload)
+		if err != nil {
+			return eventAccountAddress, fmt.Errorf("failed to call view function: %+w", err)
+		}
+
+		err = codec.DecodeAptosJsonValue(data[0], &eventAccountAddress)
+		if err != nil {
+			return eventAccountAddress, fmt.Errorf("failed to decode event account address function output: %+w", err)
+		}
+
+		l.setEventAccountAddress(cacheKey, eventAccountAddress)
+
+		return eventAccountAddress, nil
+	}
+}
+
+func (l *AptosLogPoller) getBlockHead(version uint64) (types.Head, error) {
+	block, err := l.client.BlockByVersion(version, false)
+	if err != nil {
+		return types.Head{}, fmt.Errorf("failed to get block by version: %w", err)
+	}
+
+	hexBytes, err := utils.DecodeHexRelaxed(block.BlockHash)
+	if err != nil {
+		return types.Head{}, fmt.Errorf("failed to decode block hash: %w", err)
+	}
+
+	head := types.Head{
+		Height:    fmt.Sprintf("%d", block.BlockHeight),
+		Hash:      hexBytes,
+		Timestamp: block.BlockTimestamp / 1000000, // microseconds to seconds conversion
+	}
+
+	return head, nil
+}
