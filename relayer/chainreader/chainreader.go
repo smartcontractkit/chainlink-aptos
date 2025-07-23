@@ -26,8 +26,8 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/loop"
 	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
 type aptosChainReader struct {
@@ -48,6 +48,8 @@ type aptosChainReader struct {
 
 	transmitters map[aptos.AccountAddress]uint64
 
+	logPoller *logpoller.AptosLogPoller
+
 	client aptos.AptosRpcClient
 }
 
@@ -58,12 +60,13 @@ type ExtendedContractReader interface {
 	QueryKeyWithMetadata(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]config.SequenceWithMetadata, error)
 }
 
-func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config config.ChainReaderConfig, ds sqlutil.DataSource) types.ContractReader {
+func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config config.ChainReaderConfig, ds sqlutil.DataSource, poller *logpoller.AptosLogPoller) types.ContractReader {
 	lggr := logger.Named(lgr, "AptosChainReader")
 	reader := &aptosChainReader{
 		lggr:                  lggr,
 		client:                client,
 		config:                config,
+		logPoller:             poller,
 		moduleAddresses:       map[string]aptos.AccountAddress{},
 		eventAccountAddresses: map[string]aptos.AccountAddress{},
 		transmitters:          map[aptos.AccountAddress]uint64{},
@@ -141,33 +144,12 @@ func (a *aptosChainReader) Start(ctx context.Context) error {
 	)
 
 	return a.starter.StartOnce(a.Name(), func() error {
-		if a.dbStore != nil {
-
-			var syncEventCtx context.Context
-			syncEventCtx, a.eventSyncCancelFunc = context.WithCancel(context.Background())
-			go a.startEventPolling(syncEventCtx)
-			a.lggr.Infow("AptosChainReader started event polling", "interval", a.config.EventSyncInterval)
-
-			var syncTxCtx context.Context
-			syncTxCtx, a.txSyncCancelFunc = context.WithCancel(context.Background())
-			go a.startTxPolling(syncTxCtx)
-			a.lggr.Infow("AptosChainReader started transaction polling", "interval", a.config.TxSyncInterval)
-		}
-
 		return nil
 	})
 }
 
 func (a *aptosChainReader) Close() error {
 	return a.starter.StopOnce(a.Name(), func() error {
-		if a.eventSyncCancelFunc != nil {
-			a.eventSyncCancelFunc()
-		}
-
-		if a.txSyncCancelFunc != nil {
-			a.txSyncCancelFunc()
-		}
-
 		return nil
 	})
 }
@@ -477,8 +459,10 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	eventHandle := address.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
 
 	// Always sync event to get the latest data
-	if err := a.syncEvent(ctx, address, eventConfig, eventModuleName); err != nil {
-		return nil, fmt.Errorf("syncEvent error: %w", err)
+	if a.logPoller != nil {
+		if err := a.logPoller.SyncEvent(ctx, contractName, filter.Key); err != nil {
+			return nil, fmt.Errorf("LogPoller syncEvent error: %w", err)
+		}
 	}
 
 	if eventConfig.EventFilterRenames != nil {
@@ -577,6 +561,19 @@ func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContr
 			return fmt.Errorf("failed to convert module address %s: %+w", binding.Address, err)
 		}
 		newBindings[binding.Name] = *moduleAddress
+
+		if a.logPoller != nil {
+			moduleConfig, ok := a.config.Modules[binding.Name]
+			if ok && moduleConfig.Events != nil {
+				a.lggr.Infow("Registering module with LogPoller",
+					"module", binding.Name,
+					"address", binding.Address)
+
+				if err := a.logPoller.RegisterModule(ctx, binding.Name, *moduleAddress, moduleConfig.Name, moduleConfig.Events); err != nil {
+					return fmt.Errorf("failed to register module with LogPoller: %w", err)
+				}
+			}
+		}
 	}
 
 	a.setModuleAddresses(newBindings)
@@ -588,6 +585,16 @@ func (a *aptosChainReader) Unbind(ctx context.Context, bindings []types.BoundCon
 	a.lggr.Infow("Unbind called", "bindings", bindings)
 	for _, binding := range bindings {
 		key := binding.Name
+
+		if a.logPoller != nil {
+			a.lggr.Infow("Unregistering module from LogPoller", "module", key)
+
+			if err := a.logPoller.UnregisterModule(ctx, key); err != nil {
+				a.lggr.Errorw("Failed to unregister module from LogPoller",
+					"module", key, "error", err)
+			}
+		}
+
 		if !a.deleteModuleAddress(key) {
 			return fmt.Errorf("no such binding: %s", key)
 		}
@@ -655,63 +662,4 @@ func (a *aptosChainReader) computeEventAccountAddress(boundAddress aptos.Account
 		a.setEventAccountAddress(cacheKey, eventAccountAddress)
 		return eventAccountAddress, nil
 	}
-}
-
-func (a *aptosChainReader) getEventConfig(moduleKey, eventKey string) (eventAccountAddress aptos.AccountAddress, eventHandle string, eventConfig *config.ChainReaderEvent, err error) {
-	moduleConfig, ok := a.config.Modules[moduleKey]
-	if !ok {
-		return aptos.AccountAddress{}, "", nil, fmt.Errorf("no module config found for key: %s", moduleKey)
-	}
-
-	a.mu.RLock()
-	a.lggr.Debugw("Looking up module address",
-		"requestedModuleKey", moduleKey,
-		"mapContents", fmt.Sprintf("%+v", a.moduleAddresses))
-	a.mu.RUnlock()
-
-	boundAddress, ok := a.getModuleAddress(moduleKey)
-	if !ok {
-		return aptos.AccountAddress{}, "", nil, fmt.Errorf("no bound address for module: %s", moduleKey)
-	}
-
-	eventConfig, ok = moduleConfig.Events[eventKey]
-	if !ok {
-		return aptos.AccountAddress{}, "", nil, fmt.Errorf("no event config found for module %s, event %s", moduleKey, eventKey)
-	}
-
-	var eventModuleName string
-	if moduleConfig.Name != "" {
-		eventModuleName = moduleConfig.Name
-	} else {
-		eventModuleName = moduleKey
-	}
-
-	eventAccountAddress, err = a.computeEventAccountAddress(boundAddress, eventConfig)
-	if err != nil {
-		return aptos.AccountAddress{}, "", nil, fmt.Errorf("failed to compute event account address: %w", err)
-	}
-
-	eventHandle = boundAddress.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
-
-	return eventAccountAddress, eventHandle, eventConfig, nil
-}
-
-func (a *aptosChainReader) getBlockHead(version uint64) (types.Head, error) {
-	block, err := a.client.BlockByVersion(version, false)
-	if err != nil {
-		return types.Head{}, fmt.Errorf("failed to get block by version: %w", err)
-	}
-
-	hexBytes, err := utils.DecodeHexRelaxed(block.BlockHash)
-	if err != nil {
-		return types.Head{}, fmt.Errorf("failed to decode block hash: %w", err)
-	}
-
-	head := types.Head{
-		Height:    fmt.Sprintf("%d", block.BlockHeight),
-		Hash:      hexBytes,
-		Timestamp: block.BlockTimestamp / 1000000, // microseconds to seconds conversion
-	}
-
-	return head, nil
 }

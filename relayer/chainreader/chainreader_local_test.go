@@ -26,6 +26,7 @@ import (
 
 	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/loop"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
@@ -254,7 +255,10 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		Address: accountAddress.String(),
 	}
 
-	chainReader := NewChainReader(logger, rateLimitedClient, config, nil)
+	logPoller, err := logpoller.NewLogPoller(logger, getClient, nil, nil)
+	require.NoError(t, err)
+
+	chainReader := NewChainReader(logger, rateLimitedClient, config, nil, logPoller)
 	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{binding})
 	require.NoError(t, err)
 
@@ -535,7 +539,10 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 	}
 
 	// Create ChainReader with persistence enabled.
-	chainReader := NewChainReader(logger, rateLimitedClient, config, db)
+	logPoller, err := logpoller.NewLogPoller(logger, getClient, db, nil)
+	require.NoError(t, err)
+
+	chainReader := NewChainReader(logger, rateLimitedClient, config, db, logPoller)
 	binding := commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()}
 	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{binding})
 	require.NoError(t, err)
@@ -829,9 +836,12 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 			TxSyncInterval:    3 * time.Second,
 			TxSyncTimeout:     1 * time.Second,
 		}
-		chainReaderRenamed := NewChainReader(logger, rateLimitedClient, configRenamed, db)
+		logPoller, err := logpoller.NewLogPoller(logger, getClient, db, nil)
+		require.NoError(t, err)
+
+		chainReaderRenamed := NewChainReader(logger, rateLimitedClient, configRenamed, db, logPoller)
 		bindingRenamed := commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()}
-		err := chainReaderRenamed.Bind(context.Background(), []commontypes.BoundContract{bindingRenamed})
+		err = chainReaderRenamed.Bind(context.Background(), []commontypes.BoundContract{bindingRenamed})
 		require.NoError(t, err)
 
 		txId := uuid.New().String()
@@ -987,7 +997,10 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 	db := sqltest.NewDB(t, dsn)
 
 	// Create ChainReader with persistence enabled.
-	chainReader := NewChainReader(lg, rlClient, config, db)
+	logPoller, err := logpoller.NewLogPoller(lg, getClient, db, nil)
+	require.NoError(t, err)
+
+	chainReader := NewChainReader(lg, rlClient, config, db, logPoller)
 	binding := commontypes.BoundContract{Name: "testContract", Address: acctAddr.String()}
 	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{binding})
 	require.NoError(t, err)
