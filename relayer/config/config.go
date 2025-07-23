@@ -11,6 +11,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/config"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target"
@@ -21,6 +22,7 @@ const ChainFamilyName = "aptos"
 
 var DefaultConfigSet = ConfigSet{
 	TransactionManager: txm.DefaultConfigSet,
+	LogPoller:          logpoller.DefaultConfigSet,
 	BalanceMonitor: monitor.GenericBalanceConfig{
 		BalancePollPeriod: *config.MustNewDuration(10 * time.Second),
 	},
@@ -29,6 +31,7 @@ var DefaultConfigSet = ConfigSet{
 
 type ConfigSet struct { //nolint:revive
 	TransactionManager txm.Config
+	LogPoller          logpoller.Config
 	BalanceMonitor     monitor.GenericBalanceConfig
 	WriteTargetCap     write_target.Config
 }
@@ -41,6 +44,7 @@ type WorkflowConfig struct {
 
 type Chain struct {
 	TransactionManager *txm.Config
+	LogPoller          *logpoller.Config
 	BalanceMonitor     *monitor.GenericBalanceConfig
 	WriteTargetCap     *write_target.Config
 	Workflow           *WorkflowConfig
@@ -109,6 +113,9 @@ func (c *TOMLConfig) IsEnabled() bool {
 func (c *TOMLConfig) SetDefaults() {
 	if c.TransactionManager == nil {
 		c.TransactionManager = &DefaultConfigSet.TransactionManager
+	}
+	if c.LogPoller == nil {
+		c.LogPoller = &DefaultConfigSet.LogPoller
 	}
 	if c.BalanceMonitor == nil {
 		c.BalanceMonitor = &DefaultConfigSet.BalanceMonitor
