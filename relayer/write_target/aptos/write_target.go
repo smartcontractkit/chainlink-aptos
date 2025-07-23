@@ -112,7 +112,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 				},
 			},
 		},
-	}, chain.DataSource())
+	}, chain.DataSource(), chain.LogPoller())
 
 	err = cr.Bind(ctx, []commontypes.BoundContract{{
 		Address: config.Workflow.ForwarderAddress,
