@@ -250,6 +250,10 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 		records = append(records, record)
 	}
 
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during row iteration: %w", err)
+	}
+
 	return records, nil
 }
 
