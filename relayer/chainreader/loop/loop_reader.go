@@ -159,7 +159,7 @@ func (a *loopChainReader) BatchGetLatestValues(ctx context.Context, request type
 func (a *loopChainReader) QueryKey(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]types.Sequence, error) {
 	err := a.cr.Bind(ctx, a.getBindings())
 	if err != nil {
-		return nil, fmt.Errorf("failed to re-bind before BatchGetLatestValues: %w", err)
+		return nil, fmt.Errorf("failed to re-bind before QueryKey: %w", err)
 	}
 
 	convertedExpressions, err := SerializeExpressions(filter.Expressions)

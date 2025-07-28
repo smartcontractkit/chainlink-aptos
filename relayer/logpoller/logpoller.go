@@ -167,25 +167,24 @@ func (l *AptosLogPoller) setEventAccountAddress(cacheKey string, address aptos.A
 }
 
 func (l *AptosLogPoller) getEventConfig(moduleKey, eventKey string) (aptos.AccountAddress, string, *config.ChainReaderEvent, error) {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-
-	for key, moduleInfo := range l.modules {
-		if key == moduleKey {
-			eventConfig, exists := moduleInfo.eventConfigs[eventKey]
-			if !exists {
-				return aptos.AccountAddress{}, "", nil, fmt.Errorf("event %s not configured for module %s", eventKey, moduleKey)
-			}
-
-			eventAccountAddress, err := l.computeEventAccountAddress(moduleInfo.address, eventConfig)
-			if err != nil {
-				return aptos.AccountAddress{}, "", nil, fmt.Errorf("failed to compute event account address: %w", err)
-			}
-
-			eventHandle := moduleInfo.address.String() + "::" + moduleInfo.name + "::" + eventConfig.EventHandleStructName
-			return eventAccountAddress, eventHandle, eventConfig, nil
-		}
-	}
-
-	return aptos.AccountAddress{}, "", nil, fmt.Errorf("module %s not registered", moduleKey)
+    l.mu.RLock()
+    defer l.mu.RUnlock()
+    
+    moduleInfo, exists := l.modules[moduleKey]
+    if !exists {
+        return aptos.AccountAddress{}, "", nil, fmt.Errorf("module %s not registered", moduleKey)
+    }
+    
+    eventConfig, exists := moduleInfo.eventConfigs[eventKey]
+    if !exists {
+        return aptos.AccountAddress{}, "", nil, fmt.Errorf("event %s not configured for module %s", eventKey, moduleKey)
+    }
+    
+    eventAccountAddress, err := l.computeEventAccountAddress(moduleInfo.address, eventConfig)
+    if err != nil {
+        return aptos.AccountAddress{}, "", nil, fmt.Errorf("failed to compute event account address: %w", err)
+    }
+    
+    eventHandle := moduleInfo.address.String() + "::" + moduleInfo.name + "::" + eventConfig.EventHandleStructName
+    return eventAccountAddress, eventHandle, eventConfig, nil
 }
