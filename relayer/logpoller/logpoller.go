@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	// "time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 
@@ -115,13 +114,10 @@ func (l *AptosLogPoller) Start(ctx context.Context) error {
 			var syncEventCtx context.Context
 			syncEventCtx, l.eventCtxCancel = context.WithCancel(context.Background())
 			go l.startEventPolling(syncEventCtx)
-			// l.lggr.Infow("LogPoller started event polling", "interval", l.config.EventSyncInterval)
 
-			// var syncTxCtx context.Context
-			// syncTxCtx, l.txCtxCancel = context.WithCancel(context.Background())
-			// go l.startTxPolling(syncTxCtx)
-			// l.lggr.Infow("LogPoller started transaction polling", "interval", l.config.TxSyncInterval)
-			l.txCtxCancel = nil
+			var syncTxCtx context.Context
+			syncTxCtx, l.txCtxCancel = context.WithCancel(context.Background())
+			go l.startTxPolling(syncTxCtx)
 		}
 
 		return nil

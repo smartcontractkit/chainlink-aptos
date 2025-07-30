@@ -7,7 +7,7 @@ import (
 	"math/big"
 	"math/rand"
 	"strconv"
-	// "time"
+	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/pelletier/go-toml/v2"
@@ -23,7 +23,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
-	// "github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
@@ -220,12 +220,12 @@ func (c *chain) GetClient() (aptos.AptosRpcClient, error) {
 
 	c.lggr.Debugw("Created client", "name", node.Name, "url", node.URL)
 
-	// rateLimitedClient := ratelimit.NewRateLimitedClient(client,
-	// 	100,            // max requests in-flight
-	// 	30*time.Second, // timeout
-	// )
+	rateLimitedClient := ratelimit.NewRateLimitedClient(client,
+		100,            // max requests in-flight
+		30*time.Second, // timeout
+	)
 
-	return client, nil
+	return rateLimitedClient, nil
 }
 
 func (c *chain) Start(ctx context.Context) error {
