@@ -97,9 +97,6 @@ func (s *DBStore) InsertEvents(ctx context.Context, records []EventRecord) error
 		return nil
 	}
 
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
-
 	insertSQL := `
 INSERT INTO aptos.events (
     event_account_address,
@@ -130,6 +127,7 @@ DO NOTHING;
 			continue
 		}
 
+		s.rwMutex.Lock()
 		_, err = s.ds.ExecContext(ctx, insertSQL,
 			record.EventAccountAddress,
 			record.EventHandle,
@@ -141,6 +139,7 @@ DO NOTHING;
 			record.BlockTimestamp,
 			data,
 		)
+		s.rwMutex.Unlock()
 
 		if err != nil {
 			errMsg := fmt.Errorf("failed to insert event (handle: %s, field_name: %s, offset: %v): %w",

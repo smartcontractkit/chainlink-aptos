@@ -27,7 +27,7 @@ func (l *AptosLogPoller) startEventPolling(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			syncCtx, cancel := context.WithTimeout(ctx, l.config.EventPollingInterval.Duration())
+			syncCtx, cancel := context.WithTimeout(ctx, l.config.PollTimeout.Duration())
 			start := time.Now()
 
 			err := l.SyncAllEvents(syncCtx)
