@@ -76,14 +76,14 @@ ON aptos.events(event_account_address, event_handle, event_field_name, tx_versio
 	}
 
 	transmitterSeqSQL := `
-    CREATE TABLE IF NOT EXISTS aptos.transmitter_sequence_nums (
-        id BIGSERIAL PRIMARY KEY,
-        transmitter_address TEXT NOT NULL,
-        sequence_number BIGINT NOT NULL,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        UNIQUE (transmitter_address)
-    );
-    `
+CREATE TABLE IF NOT EXISTS aptos.transmitter_sequence_nums (
+		id BIGSERIAL PRIMARY KEY,
+		transmitter_address TEXT NOT NULL,
+		sequence_number BIGINT NOT NULL,
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		UNIQUE (transmitter_address)
+);
+`
 	_, err = s.ds.ExecContext(ctx, transmitterSeqSQL)
 	if err != nil {
 		return fmt.Errorf("failed to create aptos.transmitter_sequences table: %w", err)

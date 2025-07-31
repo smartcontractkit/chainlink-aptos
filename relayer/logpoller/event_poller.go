@@ -7,9 +7,11 @@ import (
 	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
+	"github.com/aptos-labs/aptos-go-sdk/api"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/cache"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/db"
 	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
@@ -144,9 +146,21 @@ func (l *AptosLogPoller) syncEvent(ctx context.Context, boundAddress aptos.Accou
 		return fmt.Errorf("syncEvent: failed to get latest offset: %w", err)
 	}
 
-	resource, err := l.client.AccountResource(eventAccountAddress, eventHandle)
-	if err != nil {
-		return fmt.Errorf("syncEvent: failed to fetch the resource: %w", err)
+	cacheKey := cache.AccountResourceCacheKey{
+		Address:      eventAccountAddress,
+		ResourceType: eventHandle,
+	}
+	resource, found := l.resourceCache.Get(cacheKey)
+
+	if !found {
+		resource, err = l.client.AccountResource(eventAccountAddress, eventHandle)
+		if err != nil {
+			return fmt.Errorf("syncEvent: failed to fetch the resource: %w", err)
+		}
+
+		// store permanently since event creation ids don't change
+		l.resourceCache.SetPermanent(cacheKey, resource)
+		l.lggr.Debugw("Resource cached", "key", cacheKey.String())
 	}
 
 	creationNumber, err := crutils.ExtractEventCreationNum(resource, eventFieldName)
@@ -295,9 +309,20 @@ func (l *AptosLogPoller) computeEventAccountAddress(boundAddress aptos.AccountAd
 }
 
 func (l *AptosLogPoller) getBlockHead(version uint64) (types.Head, error) {
-	block, err := l.client.BlockByVersion(version, false)
-	if err != nil {
-		return types.Head{}, fmt.Errorf("failed to get block by version: %w", err)
+	var block *api.Block
+	var err error
+
+	if cachedBlock, found := l.blockCache.Get(version); found {
+		l.lggr.Debugw("Using cached block", "version", version)
+		block = cachedBlock
+	} else {
+		block, err = l.client.BlockByVersion(version, false)
+		if err != nil {
+			return types.Head{}, fmt.Errorf("failed to get block by version: %w", err)
+		}
+
+		l.blockCache.Set(version, block)
+		l.lggr.Debugw("Block cached", "version", version)
 	}
 
 	hexBytes, err := utils.DecodeHexRelaxed(block.BlockHash)
