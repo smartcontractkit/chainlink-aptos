@@ -177,9 +177,6 @@ DO NOTHING;
 }
 
 func (s *DBStore) QueryEvents(ctx context.Context, eventAccountAddress, eventHandle, eventFieldName string, expressions []query.Expression, limitAndSort query.LimitAndSort) ([]EventRecord, error) {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
-
 	baseSQL := `
 SELECT id, event_account_address, event_handle, event_field_name, event_offset, tx_version, block_height, block_hash, block_timestamp, data
 FROM aptos.events
@@ -237,7 +234,10 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 		"params", args,
 		"limitCount", limitAndSort.Limit.Count)
 
+	s.rwMutex.RLock()
 	rows, err := s.ds.QueryContext(ctx, baseSQL, args...)
+	s.rwMutex.RUnlock()
+
 	if err != nil {
 		return nil, fmt.Errorf("query events failed: %w", err)
 	}
@@ -271,16 +271,17 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 }
 
 func (s *DBStore) GetLatestOffset(ctx context.Context, eventAccountAddress, eventHandle, eventFieldName string) (uint64, error) {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
-
 	querySQL := `
 SELECT COALESCE(MAX(event_offset) + 1, 0) FROM aptos.events
 WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 `
 
+	s.rwMutex.RLock()
+	row := s.ds.QueryRowxContext(ctx, querySQL, eventAccountAddress, eventHandle, eventFieldName)
+	s.rwMutex.RUnlock()
+
 	var offset uint64
-	err := s.ds.QueryRowxContext(ctx, querySQL, eventAccountAddress, eventHandle, eventFieldName).Scan(&offset)
+	err := row.Scan(&offset)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get latest offset: %w", err)
 	}
@@ -289,16 +290,17 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 }
 
 func (s *DBStore) GetTxVersionByID(ctx context.Context, id uint64) (uint64, error) {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
-
 	querySQL := `
 SELECT tx_version FROM aptos.events
 WHERE id = $1
 `
 
+	s.rwMutex.RLock()
+	row := s.ds.QueryRowxContext(ctx, querySQL, id)
+	s.rwMutex.RUnlock()
+
 	var txVersion uint64
-	err := s.ds.QueryRowxContext(ctx, querySQL, id).Scan(&txVersion)
+	err := row.Scan(&txVersion)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch tx_version for id %d: %w", id, err)
 	}
@@ -307,17 +309,18 @@ WHERE id = $1
 }
 
 func (s *DBStore) GetTransmitterSequenceNum(ctx context.Context, transmitterAddress string) (uint64, error) {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
-
 	querySQL := `
 SELECT COALESCE(
   (SELECT ts.sequence_number FROM aptos.transmitter_sequence_nums ts WHERE ts.transmitter_address = $1), 0
 )
  `
 
+	s.rwMutex.RLock()
+	row := s.ds.QueryRowxContext(ctx, querySQL, transmitterAddress)
+	s.rwMutex.RUnlock()
+
 	var sequenceNumber uint64
-	err := s.ds.QueryRowxContext(ctx, querySQL, transmitterAddress).Scan(&sequenceNumber)
+	err := row.Scan(&sequenceNumber)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get transmitter sequence: %w", err)
 	}
@@ -326,9 +329,6 @@ SELECT COALESCE(
 }
 
 func (s *DBStore) UpdateTransmitterSequence(ctx context.Context, transmitterAddress string, sequenceNumber uint64) error {
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
-
 	upsertSQL := `
 INSERT INTO aptos.transmitter_sequence_nums (transmitter_address, sequence_number, updated_at)
 VALUES ($1, $2, NOW())
@@ -337,7 +337,10 @@ SET sequence_number = EXCLUDED.sequence_number, updated_at = NOW()
 WHERE aptos.transmitter_sequence_nums.sequence_number < EXCLUDED.sequence_number
 `
 
+	s.rwMutex.Lock()
 	_, err := s.ds.ExecContext(ctx, upsertSQL, transmitterAddress, sequenceNumber)
+	s.rwMutex.Unlock()
+
 	if err != nil {
 		return fmt.Errorf("failed to update transmitter sequence: %w", err)
 	}
