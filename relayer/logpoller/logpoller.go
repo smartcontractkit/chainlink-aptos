@@ -32,7 +32,6 @@ type AptosLogPoller struct {
 	mu                    sync.RWMutex
 	modules               map[string]*moduleInfo
 	eventAccountAddresses map[string]aptos.AccountAddress
-	transmitters          map[aptos.AccountAddress]uint64
 
 	starter        commonutils.StartStopOnce
 	eventCtxCancel context.CancelFunc
@@ -58,7 +57,6 @@ func NewLogPoller(lggr logger.Logger, getClient func() (aptos.AptosRpcClient, er
 		client:                client,
 		modules:               make(map[string]*moduleInfo),
 		eventAccountAddresses: make(map[string]aptos.AccountAddress),
-		transmitters:          make(map[aptos.AccountAddress]uint64),
 	}, nil
 }
 

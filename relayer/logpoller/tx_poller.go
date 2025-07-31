@@ -73,14 +73,6 @@ func (l *AptosLogPoller) SyncAllTransmitterTxs(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			l.mu.Lock()
-			_, exists := l.transmitters[transmitter]
-			if !exists {
-				l.lggr.Debugw("Initializing sequence number for transmitter", "transmitter", transmitter.String())
-				l.transmitters[transmitter] = 0
-			}
-			l.mu.Unlock()
-
 			processed, err := l.syncTransmitterTxs(ctx, transmitter, batchSize)
 			if err != nil {
 				l.lggr.Errorw("Failed to sync transmitter transactions",
@@ -104,12 +96,16 @@ func (l *AptosLogPoller) syncTransmitterTxs(ctx context.Context, transmitter apt
 		eventKey  = "ExecutionStateChanged"
 	)
 
-	l.mu.RLock()
-	sequenceNumber := l.transmitters[transmitter]
-	l.mu.RUnlock()
+	sequenceNumber, err := l.dbStore.GetTransmitterSequenceNum(ctx, transmitter.String())
+	if err != nil {
+		return 0, fmt.Errorf("failed to get transmitter sequence: %w", err)
+	}
+
+	l.lggr.Debugw("Starting transaction sync for transmitter",
+		"transmitter", transmitter.String(),
+		"fromSequence", sequenceNumber)
 
 	totalProcessed := 0
-
 	eventAccountAddress, eventHandle, eventConfig, err := l.getEventConfig(moduleKey, eventKey)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get ExecutionStateChanged event config: %w", err)
@@ -292,9 +288,21 @@ func (l *AptosLogPoller) syncTransmitterTxs(ctx context.Context, transmitter apt
 		}
 
 		// Update sequence number for this transmitter
-		l.mu.Lock()
-		l.transmitters[transmitter] = sequenceNumber + uint64(len(txns))
-		l.mu.Unlock()
+		if len(txns) > 0 {
+			newSequenceNumber := sequenceNumber + uint64(len(txns))
+			if err := l.dbStore.UpdateTransmitterSequence(ctx, transmitter.String(), newSequenceNumber); err != nil {
+				l.lggr.Errorw("Failed to update transmitter sequence in database",
+					"transmitter", transmitter.String(),
+					"oldSequence", sequenceNumber,
+					"newSequence", newSequenceNumber,
+					"error", err)
+			} else {
+				l.lggr.Debugw("Updated transmitter sequence in database",
+					"transmitter", transmitter.String(),
+					"oldSequence", sequenceNumber,
+					"newSequence", newSequenceNumber)
+			}
+		}
 
 		return totalProcessed, nil
 	}

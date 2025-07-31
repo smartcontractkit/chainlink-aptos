@@ -75,6 +75,20 @@ ON aptos.events(event_account_address, event_handle, event_field_name, tx_versio
 		return fmt.Errorf("failed to create index on aptos.events: %w", err)
 	}
 
+	transmitterSeqSQL := `
+    CREATE TABLE IF NOT EXISTS aptos.transmitter_sequence_nums (
+        id BIGSERIAL PRIMARY KEY,
+        transmitter_address TEXT NOT NULL,
+        sequence_number BIGINT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (transmitter_address)
+    );
+    `
+	_, err = s.ds.ExecContext(ctx, transmitterSeqSQL)
+	if err != nil {
+		return fmt.Errorf("failed to create aptos.transmitter_sequences table: %w", err)
+	}
+
 	s.schemaEnsured = true
 	return nil
 }
@@ -290,6 +304,45 @@ WHERE id = $1
 	}
 
 	return txVersion, nil
+}
+
+func (s *DBStore) GetTransmitterSequenceNum(ctx context.Context, transmitterAddress string) (uint64, error) {
+	s.rwMutex.RLock()
+	defer s.rwMutex.RUnlock()
+
+	querySQL := `
+SELECT COALESCE(
+  (SELECT ts.sequence_number FROM aptos.transmitter_sequence_nums ts WHERE ts.transmitter_address = $1), 0
+)
+ `
+
+	var sequenceNumber uint64
+	err := s.ds.QueryRowxContext(ctx, querySQL, transmitterAddress).Scan(&sequenceNumber)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get transmitter sequence: %w", err)
+	}
+
+	return sequenceNumber, nil
+}
+
+func (s *DBStore) UpdateTransmitterSequence(ctx context.Context, transmitterAddress string, sequenceNumber uint64) error {
+	s.rwMutex.Lock()
+	defer s.rwMutex.Unlock()
+
+	upsertSQL := `
+INSERT INTO aptos.transmitter_sequence_nums (transmitter_address, sequence_number, updated_at)
+VALUES ($1, $2, NOW())
+ON CONFLICT (transmitter_address) DO UPDATE
+SET sequence_number = EXCLUDED.sequence_number, updated_at = NOW()
+WHERE aptos.transmitter_sequence_nums.sequence_number < EXCLUDED.sequence_number
+`
+
+	_, err := s.ds.ExecContext(ctx, upsertSQL, transmitterAddress, sequenceNumber)
+	if err != nil {
+		return fmt.Errorf("failed to update transmitter sequence: %w", err)
+	}
+
+	return nil
 }
 
 func (s *DBStore) buildSQLCondition(expr query.Expression, args *[]any, argCount *int) (string, error) {
