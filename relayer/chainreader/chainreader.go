@@ -46,8 +46,6 @@ type aptosChainReader struct {
 	moduleAddresses       map[string]aptos.AccountAddress
 	eventAccountAddresses map[string]aptos.AccountAddress
 
-	transmitters map[aptos.AccountAddress]uint64
-
 	logPoller *logpoller.AptosLogPoller
 
 	client aptos.AptosRpcClient
@@ -69,7 +67,6 @@ func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config confi
 		logPoller:             poller,
 		moduleAddresses:       map[string]aptos.AccountAddress{},
 		eventAccountAddresses: map[string]aptos.AccountAddress{},
-		transmitters:          map[aptos.AccountAddress]uint64{},
 	}
 
 	if ds != nil {
@@ -78,8 +75,6 @@ func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config confi
 
 	return reader
 }
-
-// Helper functions for safe access to maps with proper locking
 
 func (a *aptosChainReader) getModuleAddress(contractName string) (aptos.AccountAddress, bool) {
 	a.mu.RLock()
