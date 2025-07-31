@@ -5,13 +5,16 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
+	"github.com/aptos-labs/aptos-go-sdk/api"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil"
 	commonutils "github.com/smartcontractkit/chainlink-common/pkg/utils"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/cache"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/db"
 )
@@ -29,13 +32,19 @@ type AptosLogPoller struct {
 	config  *Config
 	client  aptos.AptosRpcClient
 
-	mu                    sync.RWMutex
-	modules               map[string]*moduleInfo
-	eventAccountAddresses map[string]aptos.AccountAddress
+	mu      sync.RWMutex
+	modules map[string]*moduleInfo
 
-	starter        commonutils.StartStopOnce
-	eventCtxCancel context.CancelFunc
-	txCtxCancel    context.CancelFunc
+	// cache
+	resourceCache            *cache.Cache[cache.AccountResourceCacheKey, map[string]any]
+	blockCache               *cache.Cache[uint64, *api.Block]
+	eventAccountAddressCache *cache.Cache[string, aptos.AccountAddress]
+	cacheCleanupInterval     time.Duration
+
+	starter             commonutils.StartStopOnce
+	eventCtxCancel      context.CancelFunc
+	txCtxCancel         context.CancelFunc
+	cachePurgeCtxCancel context.CancelFunc
 }
 
 func NewLogPoller(lggr logger.Logger, getClient func() (aptos.AptosRpcClient, error), ds sqlutil.DataSource, cfg *Config) (*AptosLogPoller, error) {
@@ -51,13 +60,84 @@ func NewLogPoller(lggr logger.Logger, getClient func() (aptos.AptosRpcClient, er
 	dbStore := db.NewDBStore(ds, lggr)
 
 	return &AptosLogPoller{
-		lggr:                  logger.Named(lggr, "AptosLogPoller"),
-		dbStore:               dbStore,
-		config:                cfg,
-		client:                client,
-		modules:               make(map[string]*moduleInfo),
-		eventAccountAddresses: make(map[string]aptos.AccountAddress),
+		lggr:    logger.Named(lggr, "AptosLogPoller"),
+		dbStore: dbStore,
+		config:  cfg,
+		client:  client,
+
+		modules: make(map[string]*moduleInfo),
+
+		resourceCache:            cache.NewCache[cache.AccountResourceCacheKey, map[string]any](15*time.Minute, lggr),
+		blockCache:               cache.NewCache[uint64, *api.Block](15*time.Minute, lggr),
+		eventAccountAddressCache: cache.NewCache[string, aptos.AccountAddress](15*time.Minute, lggr),
+		cacheCleanupInterval:     30 * time.Minute,
 	}, nil
+}
+
+func (l *AptosLogPoller) Start(ctx context.Context) error {
+	return l.starter.StartOnce(l.Name(), func() error {
+		if l.dbStore != nil {
+			var syncEventCtx context.Context
+			syncEventCtx, l.eventCtxCancel = context.WithCancel(context.Background())
+			go l.startEventPolling(syncEventCtx)
+
+			var syncTxCtx context.Context
+			syncTxCtx, l.txCtxCancel = context.WithCancel(context.Background())
+			go l.startTxPolling(syncTxCtx)
+
+			var cachePurgeCtx context.Context
+			cachePurgeCtx, l.cachePurgeCtxCancel = context.WithCancel(context.Background())
+			go l.startCachePurging(cachePurgeCtx)
+		}
+
+		return nil
+	})
+}
+
+func (l *AptosLogPoller) Close() error {
+	return l.starter.StopOnce(l.Name(), func() error {
+		if l.eventCtxCancel != nil {
+			l.eventCtxCancel()
+		}
+
+		if l.txCtxCancel != nil {
+			l.txCtxCancel()
+		}
+
+		if l.cachePurgeCtxCancel != nil {
+			l.cachePurgeCtxCancel()
+		}
+
+		return nil
+	})
+}
+
+func (l *AptosLogPoller) startCachePurging(ctx context.Context) {
+	l.lggr.Infow("Cache purging goroutine started")
+	defer l.lggr.Infow("Cache purging goroutine exited")
+
+	ticker := time.NewTicker(l.cacheCleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			resourcesPurged := l.resourceCache.Purge()
+			blocksPurged := l.blockCache.Purge()
+			eventAddressesesPurged := l.eventAccountAddressCache.Purge()
+
+			if resourcesPurged > 0 || blocksPurged > 0 || eventAddressesesPurged > 0 {
+				l.lggr.Debugw("Purged expired cache entries",
+					"resources", resourcesPurged,
+					"blocks", blocksPurged,
+					"eventAddresses", eventAddressesesPurged)
+			}
+
+		case <-ctx.Done():
+			l.lggr.Infow("Cache purging stopped")
+			return
+		}
+	}
 }
 
 func (l *AptosLogPoller) RegisterModule(ctx context.Context, moduleKey string, address aptos.AccountAddress, name string, eventConfigs map[string]*config.ChainReaderEvent) error {
@@ -106,36 +186,6 @@ func (l *AptosLogPoller) UnregisterModule(ctx context.Context, moduleKey string)
 	return nil
 }
 
-func (l *AptosLogPoller) Start(ctx context.Context) error {
-	return l.starter.StartOnce(l.Name(), func() error {
-		if l.dbStore != nil {
-			var syncEventCtx context.Context
-			syncEventCtx, l.eventCtxCancel = context.WithCancel(context.Background())
-			go l.startEventPolling(syncEventCtx)
-
-			var syncTxCtx context.Context
-			syncTxCtx, l.txCtxCancel = context.WithCancel(context.Background())
-			go l.startTxPolling(syncTxCtx)
-		}
-
-		return nil
-	})
-}
-
-func (l *AptosLogPoller) Close() error {
-	return l.starter.StopOnce(l.Name(), func() error {
-		if l.eventCtxCancel != nil {
-			l.eventCtxCancel()
-		}
-
-		if l.txCtxCancel != nil {
-			l.txCtxCancel()
-		}
-
-		return nil
-	})
-}
-
 func (l *AptosLogPoller) Name() string {
 	return l.lggr.Name()
 }
@@ -149,16 +199,12 @@ func (l *AptosLogPoller) HealthReport() map[string]error {
 }
 
 func (l *AptosLogPoller) getEventAccountAddress(cacheKey string) (aptos.AccountAddress, bool) {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	address, ok := l.eventAccountAddresses[cacheKey]
-	return address, ok
+	return l.eventAccountAddressCache.Get(cacheKey)
 }
 
 func (l *AptosLogPoller) setEventAccountAddress(cacheKey string, address aptos.AccountAddress) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.eventAccountAddresses[cacheKey] = address
+	l.eventAccountAddressCache.SetPermanent(cacheKey, address)
+	l.lggr.Debugw("Cached event account address", "key", cacheKey, "address", address.String())
 }
 
 func (l *AptosLogPoller) getEventConfig(moduleKey, eventKey string) (aptos.AccountAddress, string, *config.ChainReaderEvent, error) {
