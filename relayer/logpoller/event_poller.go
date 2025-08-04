@@ -53,6 +53,8 @@ func (l *AptosLogPoller) startEventPolling(ctx context.Context) {
 }
 
 func (l *AptosLogPoller) SyncAllEvents(ctx context.Context) error {
+	start := time.Now()
+
 	if l.dbStore == nil {
 		return fmt.Errorf("SyncAllEvents only operates in persistent mode")
 	}
@@ -81,9 +83,17 @@ func (l *AptosLogPoller) SyncAllEvents(ctx context.Context) error {
 		for eventKey, eventConfig := range moduleInfo.eventConfigs {
 			select {
 			case <-ctx.Done():
+				elapsed := time.Since(start)
 				if successCount > 0 {
-					l.lggr.Infow("SyncAllEvents: interrupted, some events synced", "successCount", successCount, "errorCount", errorCount)
+					l.lggr.Infow("SyncAllEvents: interrupted, some events synced",
+						"successCount", successCount,
+						"errorCount", errorCount,
+						"duration", elapsed)
+				} else {
+					l.lggr.Infow("SyncAllEvents: interrupted before processing any events",
+						"duration", elapsed)
 				}
+
 				return ctx.Err()
 			default:
 				err := l.syncEvent(ctx, moduleInfo.address, eventConfig, moduleInfo.name)
@@ -98,12 +108,19 @@ func (l *AptosLogPoller) SyncAllEvents(ctx context.Context) error {
 		}
 	}
 
+	elapsed := time.Since(start)
 	if errorCount > 0 {
-		l.lggr.Errorw("SyncAllEvents: completed with errors", "successCount", successCount, "errorCount", errorCount, "lastError", lastErr)
+		l.lggr.Errorw("SyncAllEvents: completed with errors",
+			"successCount", successCount,
+			"errorCount", errorCount,
+			"lastError", lastErr,
+			"duration", elapsed)
 		return lastErr
 	}
 
-	l.lggr.Infow("SyncAllEvents: successfully synced all events", "count", successCount)
+	l.lggr.Infow("SyncAllEvents: successfully synced all events",
+		"count", successCount,
+		"duration", elapsed)
 	return nil
 }
 
@@ -227,7 +244,8 @@ eventLoop:
 				l.lggr.Debugw("syncEvent: saved batch of events",
 					"batch_count", len(batchRecords),
 					"total_processed", totalProcessed,
-					"handle", eventHandle)
+					"handle", eventHandle,
+					"field", eventFieldName)
 			}
 
 			latestOffset = events[len(events)-1].SequenceNumber + 1
@@ -244,11 +262,13 @@ eventLoop:
 		l.lggr.Infow("syncEvent: events synced",
 			"count", totalProcessed,
 			"handle", eventHandle,
+			"field", eventFieldName,
 			"account", eventAccountAddress.String(),
 			"duration", elapsed)
 	} else {
 		l.lggr.Debugw("syncEvent: no new events to sync",
 			"handle", eventHandle,
+			"field", eventFieldName,
 			"account", eventAccountAddress.String(),
 			"duration", elapsed)
 	}
