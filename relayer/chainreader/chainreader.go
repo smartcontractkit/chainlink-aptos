@@ -456,13 +456,6 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 
 	eventHandle := address.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
 
-	// Always sync event to get the latest data
-	if a.logPoller != nil {
-		if err := a.logPoller.SyncEvent(ctx, contractName, filter.Key); err != nil {
-			return nil, fmt.Errorf("LogPoller syncEvent error: %w", err)
-		}
-	}
-
 	if eventConfig.EventFilterRenames != nil {
 		expressions = crutils.ApplyEventFilterRenames(expressions, eventConfig.EventFilterRenames)
 	}
