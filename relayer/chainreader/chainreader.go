@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/go-viper/mapstructure/v2"
@@ -387,6 +388,8 @@ func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request typ
 }
 
 func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]types.Sequence, error) {
+	start := time.Now()
+
 	if sequenceDataType == nil {
 		return nil, errors.New("sequence data type is nil")
 	}
@@ -501,10 +504,12 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		sequences = append(sequences, sequence)
 	}
 
-	a.lggr.Debugw("QueryKey returning results",
+	elapsed := time.Since(start)
+	a.lggr.Infow("QueryKey returning results",
 		"contract", address.String(),
 		"key", filter.Key,
-		"resultCount", len(sequences))
+		"resultCount", len(sequences),
+		"duration", elapsed)
 
 	return sequences, nil
 }
