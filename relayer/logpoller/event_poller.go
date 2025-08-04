@@ -108,8 +108,6 @@ func (l *AptosLogPoller) SyncAllEvents(ctx context.Context) error {
 }
 
 func (l *AptosLogPoller) SyncEvent(ctx context.Context, moduleKey, eventKey string) error {
-	start := time.Now()
-
 	l.mu.RLock()
 	info, exists := l.modules[moduleKey]
 	if !exists {
@@ -129,24 +127,12 @@ func (l *AptosLogPoller) SyncEvent(ctx context.Context, moduleKey, eventKey stri
 
 	err := l.syncEvent(ctx, address, eventConfig, name)
 
-	elapsed := time.Since(start)
-	if err != nil {
-		l.lggr.Warnw("SyncEvent completed with error",
-			"module", moduleKey,
-			"event", eventKey,
-			"duration", elapsed,
-			"error", err)
-	} else {
-		l.lggr.Infow("SyncEvent completed successfully",
-			"module", moduleKey,
-			"event", eventKey,
-			"duration", elapsed)
-	}
-
 	return err
 }
 
 func (l *AptosLogPoller) syncEvent(ctx context.Context, boundAddress aptos.AccountAddress, eventConfig *config.ChainReaderEvent, eventModuleName string) error {
+	start := time.Now()
+
 	if err := l.dbStore.EnsureSchema(ctx); err != nil {
 		return fmt.Errorf("syncEvent: failed to ensure schema: %w", err)
 	}
@@ -253,11 +239,18 @@ eventLoop:
 		}
 	}
 
+	elapsed := time.Since(start)
 	if totalProcessed > 0 {
-		l.lggr.Infow("Events synced",
+		l.lggr.Infow("syncEvent: events synced",
 			"count", totalProcessed,
 			"handle", eventHandle,
-			"account", eventAccountAddress.String())
+			"account", eventAccountAddress.String(),
+			"duration", elapsed)
+	} else {
+		l.lggr.Debugw("syncEvent: no new events to sync",
+			"handle", eventHandle,
+			"account", eventAccountAddress.String(),
+			"duration", elapsed)
 	}
 
 	return nil
