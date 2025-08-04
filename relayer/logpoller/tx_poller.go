@@ -56,6 +56,8 @@ func (l *AptosLogPoller) startTxPolling(ctx context.Context) {
 
 // SyncAllTransmitterTxs syncs transactions for all registered transmitters
 func (l *AptosLogPoller) SyncAllTransmitterTxs(ctx context.Context) error {
+	start := time.Now()
+
 	transmitters, err := l.getTransmitters(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get transmitters: %w", err)
@@ -83,14 +85,25 @@ func (l *AptosLogPoller) SyncAllTransmitterTxs(ctx context.Context) error {
 		}
 	}
 
+	elapsed := time.Since(start)
 	if totalProcessed > 0 {
-		l.lggr.Debugw("Transaction sync completed", "totalProcessed", totalProcessed)
+		l.lggr.Infow("Transaction sync completed for all transmitters",
+			"totalProcessed", totalProcessed,
+			"transmitterCount", len(transmitters),
+			"duration", elapsed)
+	} else {
+		l.lggr.Debugw("Transaction sync completed for all transmitters",
+			"totalProcessed", 0,
+			"transmitterCount", len(transmitters),
+			"duration", elapsed)
 	}
 
 	return nil
 }
 
 func (l *AptosLogPoller) syncTransmitterTxs(ctx context.Context, transmitter aptos.AccountAddress, batchSize uint64) (int, error) {
+	start := time.Now()
+
 	const (
 		moduleKey = "OffRamp"
 		eventKey  = "ExecutionStateChanged"
@@ -303,6 +316,12 @@ func (l *AptosLogPoller) syncTransmitterTxs(ctx context.Context, transmitter apt
 					"newSequence", newSequenceNumber)
 			}
 		}
+
+		elapsed := time.Since(start)
+		l.lggr.Debugw("Finished transaction sync for transmitter",
+			"transmitter", transmitter.String(),
+			"processed", totalProcessed,
+			"duration", elapsed)
 
 		return totalProcessed, nil
 	}
