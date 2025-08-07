@@ -52,7 +52,9 @@ module ccip_onramp::onramp {
     struct DestChainConfig has store, drop {
         sequence_number: u64,
         allowlist_enabled: bool,
+        /// The address of the `router` module, used for offchain discovery.
         router: address,
+        /// The address of the expected signer when the `router` calls `onramp`
         router_state_address: address,
         allowed_senders: vector<address>
     }
@@ -104,7 +106,9 @@ module ccip_onramp::onramp {
     struct DestChainConfigSet has store, drop {
         dest_chain_selector: u64,
         sequence_number: u64,
+        /// The address of the `router` module, used for offchain discovery.
         router: address,
+        /// The address of the expected signer when the `router` calls `onramp`
         router_state_address: address,
         allowlist_enabled: bool
     }
