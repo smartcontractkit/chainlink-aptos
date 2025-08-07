@@ -52,7 +52,10 @@ module ccip_onramp::onramp {
     struct DestChainConfig has store, drop {
         sequence_number: u64,
         allowlist_enabled: bool,
+        /// The address of the `router` module, used for offchain discovery.
         router: address,
+        /// The address of the expected signer when the `router` calls `onramp`
+        router_state_address: address,
         allowed_senders: vector<address>
     }
 
@@ -103,7 +106,10 @@ module ccip_onramp::onramp {
     struct DestChainConfigSet has store, drop {
         dest_chain_selector: u64,
         sequence_number: u64,
+        /// The address of the `router` module, used for offchain discovery.
         router: address,
+        /// The address of the expected signer when the `router` calls `onramp`
+        router_state_address: address,
         allowlist_enabled: bool
     }
 
@@ -197,6 +203,7 @@ module ccip_onramp::onramp {
         allowlist_admin: address,
         dest_chain_selectors: vector<u64>,
         dest_chain_routers: vector<address>,
+        dest_chain_router_state_addresses: vector<address>,
         dest_chain_allowlist_enabled: vector<bool>
     ) acquires OnRampDeployment {
         assert!(chain_selector != 0, E_ZERO_CHAIN_SELECTOR);
@@ -235,6 +242,7 @@ module ccip_onramp::onramp {
             &mut state,
             dest_chain_selectors,
             dest_chain_routers,
+            dest_chain_router_state_addresses,
             dest_chain_allowlist_enabled
         );
 
@@ -404,7 +412,7 @@ module ccip_onramp::onramp {
         };
 
         assert!(
-            dest_chain_config.router == signer::address_of(router),
+            dest_chain_config.router_state_address == signer::address_of(router),
             error::invalid_argument(E_MUST_BE_CALLED_BY_ROUTER)
         );
 
@@ -560,6 +568,7 @@ module ccip_onramp::onramp {
         caller: &signer,
         dest_chain_selectors: vector<u64>,
         dest_chain_routers: vector<address>,
+        dest_chain_router_state_addresses: vector<address>,
         dest_chain_allowlist_enabled: vector<bool>
     ) acquires OnRampState {
         let state = borrow_state_mut();
@@ -569,6 +578,7 @@ module ccip_onramp::onramp {
             state,
             dest_chain_selectors,
             dest_chain_routers,
+            dest_chain_router_state_addresses,
             dest_chain_allowlist_enabled
         )
     }
@@ -576,7 +586,7 @@ module ccip_onramp::onramp {
     #[view]
     public fun get_dest_chain_config(
         dest_chain_selector: u64
-    ): (u64, bool, address) acquires OnRampState {
+    ): (u64, bool, address, address) acquires OnRampState {
         let state = borrow_state();
 
         assert!(
@@ -589,7 +599,8 @@ module ccip_onramp::onramp {
         (
             dest_chain_config.sequence_number,
             dest_chain_config.allowlist_enabled,
-            dest_chain_config.router
+            dest_chain_config.router,
+            dest_chain_config.router_state_address
         )
     }
 
@@ -926,11 +937,16 @@ module ccip_onramp::onramp {
         state: &mut OnRampState,
         dest_chain_selectors: vector<u64>,
         dest_chain_routers: vector<address>,
+        dest_chain_router_state_addresses: vector<address>,
         dest_chain_allowlist_enabled: vector<bool>
     ) {
         let dest_chains_len = dest_chain_selectors.length();
         assert!(
             dest_chains_len == dest_chain_routers.length(),
+            error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
+        );
+        assert!(
+            dest_chains_len == dest_chain_router_state_addresses.length(),
             error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
         );
         assert!(
@@ -946,6 +962,7 @@ module ccip_onramp::onramp {
             );
 
             let router = dest_chain_routers[i];
+            let router_state_address = dest_chain_router_state_addresses[i];
             let allowlist_enabled = dest_chain_allowlist_enabled[i];
 
             if (!state.dest_chain_configs.contains(dest_chain_selector)) {
@@ -954,6 +971,7 @@ module ccip_onramp::onramp {
                     DestChainConfig {
                         sequence_number: 0,
                         router: @0x0,
+                        router_state_address: @0x0,
                         allowlist_enabled: false,
                         allowed_senders: vector[]
                     }
@@ -964,6 +982,7 @@ module ccip_onramp::onramp {
                 state.dest_chain_configs.borrow_mut(dest_chain_selector);
 
             dest_chain_config.router = router;
+            dest_chain_config.router_state_address = router_state_address;
             dest_chain_config.allowlist_enabled = allowlist_enabled;
 
             event::emit_event(
@@ -971,6 +990,7 @@ module ccip_onramp::onramp {
                 DestChainConfigSet {
                     dest_chain_selector,
                     router,
+                    router_state_address,
                     sequence_number: dest_chain_config.sequence_number,
                     allowlist_enabled: dest_chain_config.allowlist_enabled
                 }
@@ -1065,6 +1085,11 @@ module ccip_onramp::onramp {
                     &mut stream,
                     |stream| bcs_stream::deserialize_address(stream)
                 );
+            let dest_chain_router_state_addresses =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_address(stream)
+                );
             let dest_chain_allowlist_enabled =
                 bcs_stream::deserialize_vector(
                     &mut stream,
@@ -1078,6 +1103,7 @@ module ccip_onramp::onramp {
                 allowlist_admin,
                 dest_chain_selectors,
                 dest_chain_routers,
+                dest_chain_router_state_addresses,
                 dest_chain_allowlist_enabled
             );
         } else if (function_bytes == b"set_dynamic_config") {
@@ -1096,6 +1122,11 @@ module ccip_onramp::onramp {
                     &mut stream,
                     |stream| bcs_stream::deserialize_address(stream)
                 );
+            let dest_chain_router_state_addresses =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_address(stream)
+                );
             let dest_chain_allowlist_enabled =
                 bcs_stream::deserialize_vector(
                     &mut stream,
@@ -1106,6 +1137,7 @@ module ccip_onramp::onramp {
                 &caller,
                 dest_chain_selectors,
                 dest_chain_routers,
+                dest_chain_router_state_addresses,
                 dest_chain_allowlist_enabled
             );
         } else if (function_bytes == b"apply_allowlist_updates") {
