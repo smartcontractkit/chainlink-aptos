@@ -23,6 +23,10 @@ func (l *AptosLogPoller) startTxPolling(ctx context.Context) {
 	l.lggr.Infow("Transaction polling goroutine started")
 	defer l.lggr.Infow("Transaction polling goroutine exited")
 
+	if err := l.waitForInitialEvent(ctx); err != nil {
+		return // Context was cancelled
+	}
+
 	ticker := time.NewTicker(l.config.TxPollingInterval.Duration())
 	defer ticker.Stop()
 
@@ -50,6 +54,49 @@ func (l *AptosLogPoller) startTxPolling(ctx context.Context) {
 		case <-ctx.Done():
 			l.lggr.Infow("Transaction polling stopped")
 			return
+		}
+	}
+}
+
+func (l *AptosLogPoller) waitForInitialEvent(ctx context.Context) error {
+	const (
+		moduleKey = "OffRamp"
+		eventKey  = "ExecutionStateChanged"
+	)
+
+	l.lggr.Infow("Waiting for initial ExecutionStateChanged event before starting transaction polling...")
+
+	ticker := time.NewTicker(l.config.TxPollingInterval.Duration())
+	defer ticker.Stop()
+
+	for {
+		eventAccountAddress, eventHandle, eventConfig, err := l.getEventConfig(moduleKey, eventKey)
+		if err != nil {
+			l.lggr.Warnw("Failed to get ExecutionStateChanged event config, retrying...", "error", err)
+		} else {
+			events, err := l.dbStore.QueryEvents(
+				ctx,
+				eventAccountAddress.String(),
+				eventHandle,
+				eventConfig.EventHandleFieldName,
+				nil,
+				query.LimitAndSort{Limit: query.CountLimit(1)},
+			)
+			if err != nil {
+				l.lggr.Warnw("Failed to query for ExecutionStateChanged events, retrying...", "error", err)
+			} else if len(events) > 0 {
+				l.lggr.Infow("Found initial ExecutionStateChanged event, starting tx poller.")
+				return nil // Found events, proceed.
+			}
+		}
+
+		select {
+		case <-ticker.C:
+			l.lggr.Infow("No ExecutionStateChanged events found yet, waiting...")
+			continue
+		case <-ctx.Done():
+			l.lggr.Infow("Transaction polling stopped during initial wait.")
+			return ctx.Err()
 		}
 	}
 }
