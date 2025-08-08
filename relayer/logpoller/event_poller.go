@@ -60,10 +60,6 @@ func (l *AptosLogPoller) SyncAllEvents(ctx context.Context) error {
 		return fmt.Errorf("SyncAllEvents only operates in persistent mode")
 	}
 
-	if err := l.dbStore.EnsureSchema(ctx); err != nil {
-		return fmt.Errorf("SyncAllEvents: failed to ensure schema: %w", err)
-	}
-
 	// Avoid locking durring the potentially long operation
 	l.mu.RLock()
 	modulesCopy := make(map[string]*moduleInfo)
@@ -150,10 +146,6 @@ func (l *AptosLogPoller) SyncEvent(ctx context.Context, moduleKey, eventKey stri
 
 func (l *AptosLogPoller) syncEvent(ctx context.Context, boundAddress aptos.AccountAddress, eventConfig *config.ChainReaderEvent, eventModuleName string) error {
 	start := time.Now()
-
-	if err := l.dbStore.EnsureSchema(ctx); err != nil {
-		return fmt.Errorf("syncEvent: failed to ensure schema: %w", err)
-	}
 
 	eventAccountAddress, err := l.computeEventAccountAddress(boundAddress, eventConfig)
 	if err != nil {

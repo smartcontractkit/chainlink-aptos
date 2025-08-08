@@ -41,9 +41,9 @@ type AptosLogPoller struct {
 	eventAccountAddressCache *cache.Cache
 	cacheCleanupInterval     time.Duration
 
-	starter             commonutils.StartStopOnce
-	eventCtxCancel      context.CancelFunc
-	txCtxCancel         context.CancelFunc
+	starter        commonutils.StartStopOnce
+	eventCtxCancel context.CancelFunc
+	txCtxCancel    context.CancelFunc
 }
 
 func NewLogPoller(lggr logger.Logger, getClient func() (aptos.AptosRpcClient, error), ds sqlutil.DataSource, cfg *Config) (*AptosLogPoller, error) {
