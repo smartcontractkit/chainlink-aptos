@@ -6,12 +6,13 @@ import (
 	"strings"
 	"time"
 
+	cache "github.com/patrickmn/go-cache"
+
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/api"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 
-	"github.com/smartcontractkit/chainlink-aptos/relayer/cache"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/db"
 	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
@@ -167,11 +168,9 @@ func (l *AptosLogPoller) syncEvent(ctx context.Context, boundAddress aptos.Accou
 		return fmt.Errorf("syncEvent: failed to get latest offset: %w", err)
 	}
 
-	cacheKey := cache.AccountResourceCacheKey{
-		Address:      eventAccountAddress,
-		ResourceType: eventHandle,
-	}
-	resource, found := l.resourceCache.Get(cacheKey)
+	cacheKey := eventAccountAddress.String() + "::" + eventHandle
+	resourceAny, found := l.resourceCache.Get(cacheKey)
+	var resource map[string]any
 
 	if !found {
 		resource, err = l.client.AccountResource(eventAccountAddress, eventHandle)
@@ -180,8 +179,19 @@ func (l *AptosLogPoller) syncEvent(ctx context.Context, boundAddress aptos.Accou
 		}
 
 		// store permanently since event creation ids don't change
-		l.resourceCache.SetPermanent(cacheKey, resource)
-		l.lggr.Debugw("Resource cached", "key", cacheKey.String())
+		l.resourceCache.Set(cacheKey, resource, cache.NoExpiration)
+		l.lggr.Debugw("Resource cached", "key", cacheKey)
+	} else {
+		var ok bool
+		resource, ok = resourceAny.(map[string]any)
+		if !ok {
+			l.lggr.Errorw("Failed to cast cached resource to map[string]any", "key", cacheKey)
+			resource, err = l.client.AccountResource(eventAccountAddress, eventHandle)
+			if err != nil {
+				return fmt.Errorf("syncEvent: failed to fetch the resource after cache cast failure: %w", err)
+			}
+			l.resourceCache.Set(cacheKey, resource, cache.NoExpiration)
+		}
 	}
 
 	creationNumber, err := crutils.ExtractEventCreationNum(resource, eventFieldName)
@@ -343,16 +353,27 @@ func (l *AptosLogPoller) getBlockHead(version uint64) (types.Head, error) {
 	var block *api.Block
 	var err error
 
-	if cachedBlock, found := l.blockCache.Get(version); found {
-		l.lggr.Debugw("Using cached block", "version", version)
-		block = cachedBlock
+	cacheKey := fmt.Sprintf("block-%d", version)
+	if cachedBlockAny, found := l.blockCache.Get(cacheKey); found {
+		var ok bool
+		block, ok = cachedBlockAny.(*api.Block)
+		if !ok {
+			l.lggr.Errorw("Failed to cast cached block to *api.Block", "key", cacheKey)
+			block, err = l.client.BlockByVersion(version, false)
+			if err != nil {
+				return types.Head{}, fmt.Errorf("failed to get block by version after cache cast failure: %w", err)
+			}
+			l.blockCache.Set(cacheKey, block, cache.DefaultExpiration)
+		} else {
+			l.lggr.Debugw("Using cached block", "version", version)
+		}
 	} else {
 		block, err = l.client.BlockByVersion(version, false)
 		if err != nil {
 			return types.Head{}, fmt.Errorf("failed to get block by version: %w", err)
 		}
 
-		l.blockCache.Set(version, block)
+		l.blockCache.Set(cacheKey, block, cache.DefaultExpiration)
 		l.lggr.Debugw("Block cached", "version", version)
 	}
 

@@ -7,14 +7,14 @@ import (
 	"sync"
 	"time"
 
+	cache "github.com/patrickmn/go-cache"
+
 	"github.com/aptos-labs/aptos-go-sdk"
-	"github.com/aptos-labs/aptos-go-sdk/api"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil"
 	commonutils "github.com/smartcontractkit/chainlink-common/pkg/utils"
 
-	"github.com/smartcontractkit/chainlink-aptos/relayer/cache"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/db"
 )
@@ -36,15 +36,14 @@ type AptosLogPoller struct {
 	modules map[string]*moduleInfo
 
 	// cache
-	resourceCache            *cache.Cache[cache.AccountResourceCacheKey, map[string]any]
-	blockCache               *cache.Cache[uint64, *api.Block]
-	eventAccountAddressCache *cache.Cache[string, aptos.AccountAddress]
+	resourceCache            *cache.Cache
+	blockCache               *cache.Cache
+	eventAccountAddressCache *cache.Cache
 	cacheCleanupInterval     time.Duration
 
 	starter             commonutils.StartStopOnce
 	eventCtxCancel      context.CancelFunc
 	txCtxCancel         context.CancelFunc
-	cachePurgeCtxCancel context.CancelFunc
 }
 
 func NewLogPoller(lggr logger.Logger, getClient func() (aptos.AptosRpcClient, error), ds sqlutil.DataSource, cfg *Config) (*AptosLogPoller, error) {
@@ -59,6 +58,9 @@ func NewLogPoller(lggr logger.Logger, getClient func() (aptos.AptosRpcClient, er
 
 	dbStore := db.NewDBStore(ds, lggr)
 
+	defaultTTL := 15 * time.Minute
+	cleanupInterval := 30 * time.Minute
+
 	return &AptosLogPoller{
 		lggr:    logger.Named(lggr, "AptosLogPoller"),
 		dbStore: dbStore,
@@ -67,10 +69,10 @@ func NewLogPoller(lggr logger.Logger, getClient func() (aptos.AptosRpcClient, er
 
 		modules: make(map[string]*moduleInfo),
 
-		resourceCache:            cache.NewCache[cache.AccountResourceCacheKey, map[string]any](15*time.Minute, lggr),
-		blockCache:               cache.NewCache[uint64, *api.Block](15*time.Minute, lggr),
-		eventAccountAddressCache: cache.NewCache[string, aptos.AccountAddress](15*time.Minute, lggr),
-		cacheCleanupInterval:     30 * time.Minute,
+		resourceCache:            cache.New(defaultTTL, cleanupInterval),
+		blockCache:               cache.New(defaultTTL, cleanupInterval),
+		eventAccountAddressCache: cache.New(defaultTTL, cleanupInterval),
+		cacheCleanupInterval:     cleanupInterval,
 	}, nil
 }
 
@@ -84,10 +86,6 @@ func (l *AptosLogPoller) Start(ctx context.Context) error {
 			var syncTxCtx context.Context
 			syncTxCtx, l.txCtxCancel = context.WithCancel(context.Background())
 			go l.startTxPolling(syncTxCtx)
-
-			var cachePurgeCtx context.Context
-			cachePurgeCtx, l.cachePurgeCtxCancel = context.WithCancel(context.Background())
-			go l.startCachePurging(cachePurgeCtx)
 		}
 
 		return nil
@@ -104,40 +102,8 @@ func (l *AptosLogPoller) Close() error {
 			l.txCtxCancel()
 		}
 
-		if l.cachePurgeCtxCancel != nil {
-			l.cachePurgeCtxCancel()
-		}
-
 		return nil
 	})
-}
-
-func (l *AptosLogPoller) startCachePurging(ctx context.Context) {
-	l.lggr.Infow("Cache purging goroutine started")
-	defer l.lggr.Infow("Cache purging goroutine exited")
-
-	ticker := time.NewTicker(l.cacheCleanupInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			resourcesPurged := l.resourceCache.Purge()
-			blocksPurged := l.blockCache.Purge()
-			eventAddressesesPurged := l.eventAccountAddressCache.Purge()
-
-			if resourcesPurged > 0 || blocksPurged > 0 || eventAddressesesPurged > 0 {
-				l.lggr.Debugw("Purged expired cache entries",
-					"resources", resourcesPurged,
-					"blocks", blocksPurged,
-					"eventAddresses", eventAddressesesPurged)
-			}
-
-		case <-ctx.Done():
-			l.lggr.Infow("Cache purging stopped")
-			return
-		}
-	}
 }
 
 func (l *AptosLogPoller) RegisterModule(ctx context.Context, moduleKey string, address aptos.AccountAddress, name string, eventConfigs map[string]*config.ChainReaderEvent) error {
@@ -199,11 +165,14 @@ func (l *AptosLogPoller) HealthReport() map[string]error {
 }
 
 func (l *AptosLogPoller) getEventAccountAddress(cacheKey string) (aptos.AccountAddress, bool) {
-	return l.eventAccountAddressCache.Get(cacheKey)
+	if value, found := l.eventAccountAddressCache.Get(cacheKey); found {
+		return value.(aptos.AccountAddress), true
+	}
+	return aptos.AccountAddress{}, false
 }
 
 func (l *AptosLogPoller) setEventAccountAddress(cacheKey string, address aptos.AccountAddress) {
-	l.eventAccountAddressCache.SetPermanent(cacheKey, address)
+	l.eventAccountAddressCache.Set(cacheKey, address, cache.NoExpiration)
 	l.lggr.Debugw("Cached event account address", "key", cacheKey, "address", address.String())
 }
 
