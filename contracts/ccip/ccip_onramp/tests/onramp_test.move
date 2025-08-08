@@ -40,7 +40,6 @@ module ccip_onramp::onramp_test {
 
     const OWNER: address = @0x100;
     const ROUTER: address = @0x200;
-    const ROUTER_STATE_ADDRESS: address = @0x202;
     const FEE_AGGREGATOR: address = @0x300;
     const ALLOWLIST_ADMIN: address = @0x400;
     const SENDER: address = @0x500;
@@ -341,7 +340,6 @@ module ccip_onramp::onramp_test {
             ALLOWLIST_ADMIN,
             vector[DEST_CHAIN_SELECTOR], // dest_chain_selectors
             vector[ROUTER], // dest_chain_routers
-            vector[ROUTER_STATE_ADDRESS], // dest_chain_router_state_addresses
             vector[false] // dest_chain_allowlist_enabled
         );
 
@@ -392,12 +390,11 @@ module ccip_onramp::onramp_test {
             onramp::dynamic_config_allowlist_admin(&dynamic_config) == ALLOWLIST_ADMIN
         );
 
-        let (sequence_number, allowlist_enabled, router_addr, router_state_addr) =
+        let (sequence_number, allowlist_enabled, router_addr) =
             onramp::get_dest_chain_config(DEST_CHAIN_SELECTOR);
         assert!(sequence_number == 0);
         assert!(allowlist_enabled == false);
         assert!(router_addr == ROUTER);
-        assert!(router_state_addr == ROUTER_STATE_ADDRESS);
 
         assert!(onramp::owner() == signer::address_of(owner));
     }
@@ -520,57 +517,49 @@ module ccip_onramp::onramp_test {
 
         let dest_chain_selectors = vector[DEST_CHAIN_SELECTOR];
         let dest_chain_routers = vector[ROUTER];
-        let dest_chain_router_state_addresses = vector[ROUTER_STATE_ADDRESS];
         let dest_chain_allowlist_enabled = vector[true];
 
         // Verify existing destination chain config is unchanged
-        let (sequence_number, allowlist_enabled, router_addr, router_state_addr) =
+        let (sequence_number, allowlist_enabled, router_addr) =
             onramp::get_dest_chain_config(DEST_CHAIN_SELECTOR);
         assert!(sequence_number == 0);
         assert!(allowlist_enabled == false);
         assert!(router_addr == ROUTER);
-        assert!(router_state_addr == ROUTER_STATE_ADDRESS);
 
         onramp::apply_dest_chain_config_updates(
             owner,
             dest_chain_selectors,
             dest_chain_routers,
-            dest_chain_router_state_addresses,
             dest_chain_allowlist_enabled
         );
 
         // Verify new destination chain config
-        let (sequence_number, allowlist_enabled, router_addr, router_state_addr) =
+        let (sequence_number, allowlist_enabled, router_addr) =
             onramp::get_dest_chain_config(DEST_CHAIN_SELECTOR);
         assert!(sequence_number == 0);
         assert!(allowlist_enabled == true);
         assert!(router_addr == ROUTER);
-        assert!(router_state_addr == ROUTER_STATE_ADDRESS);
 
         // Update existing destination chain
         let new_dest_chain_selector = DEST_CHAIN_SELECTOR + 1;
         let new_router = @0x300;
-        let new_router_state_address = @0x303;
         let dest_chain_selectors = vector[new_dest_chain_selector];
         let dest_chain_routers = vector[new_router];
-        let dest_chain_router_state_addresses = vector[new_router_state_address];
         let dest_chain_allowlist_enabled = vector[true];
 
         onramp::apply_dest_chain_config_updates(
             owner,
             dest_chain_selectors,
             dest_chain_routers,
-            dest_chain_router_state_addresses,
             dest_chain_allowlist_enabled
         );
 
         // Verify updated config
-        let (sequence_number, allowlist_enabled, router_addr, router_state_addr) =
+        let (sequence_number, allowlist_enabled, router_addr) =
             onramp::get_dest_chain_config(new_dest_chain_selector);
         assert!(sequence_number == 0);
         assert!(allowlist_enabled == true);
         assert!(router_addr == new_router);
-        assert!(router_state_addr == new_router_state_address);
     }
 
     #[
@@ -606,14 +595,12 @@ module ccip_onramp::onramp_test {
         // First enable allowlist for destination chain
         let dest_chain_selectors = vector[DEST_CHAIN_SELECTOR];
         let dest_chain_routers = vector[ROUTER];
-        let dest_chain_router_state_addresses = vector[ROUTER_STATE_ADDRESS];
         let dest_chain_allowlist_enabled = vector[true];
 
         onramp::apply_dest_chain_config_updates(
             owner,
             dest_chain_selectors,
             dest_chain_routers,
-            dest_chain_router_state_addresses,
             dest_chain_allowlist_enabled
         );
 
@@ -664,7 +651,7 @@ module ccip_onramp::onramp_test {
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
             sender = @0x500,
-            router_state_address = @0x202, // ROUTER_STATE_ADDRESS
+            router = @0x200,
             burn_mint_token_pool = @burn_mint_token_pool,
             lock_release_token_pool = @lock_release_token_pool
         )
@@ -675,7 +662,7 @@ module ccip_onramp::onramp_test {
         ccip_onramp: &signer,
         owner: &signer,
         sender: &signer,
-        router_state_address: &signer,
+        router: &signer,
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer
     ) acquires TestToken {
@@ -741,7 +728,7 @@ module ccip_onramp::onramp_test {
 
         let message_id =
             onramp::ccip_send(
-                router_state_address,
+                router,
                 sender,
                 DEST_CHAIN_SELECTOR,
                 receiver,
@@ -757,8 +744,7 @@ module ccip_onramp::onramp_test {
         assert!(message_id.length() > 0);
 
         // Verify sequence number was incremented
-        let (sequence_number, _, _, _) =
-            onramp::get_dest_chain_config(DEST_CHAIN_SELECTOR);
+        let (sequence_number, _, _) = onramp::get_dest_chain_config(DEST_CHAIN_SELECTOR);
         assert!(sequence_number == 1);
 
         // Verify tokens were transferred
@@ -784,7 +770,7 @@ module ccip_onramp::onramp_test {
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
             sender = @0x500,
-            router_state_address = @0x202, // ROUTER_STATE_ADDRESS
+            router = @0x200,
             burn_mint_token_pool = @burn_mint_token_pool,
             lock_release_token_pool = @lock_release_token_pool
         )
@@ -795,7 +781,7 @@ module ccip_onramp::onramp_test {
         ccip_onramp: &signer,
         owner: &signer,
         sender: &signer,
-        router_state_address: &signer,
+        router: &signer,
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer
     ) acquires TestToken {
@@ -861,7 +847,7 @@ module ccip_onramp::onramp_test {
 
         let message_id =
             onramp::ccip_send(
-                router_state_address,
+                router,
                 sender,
                 DEST_CHAIN_SELECTOR,
                 receiver,
@@ -877,8 +863,7 @@ module ccip_onramp::onramp_test {
         assert!(message_id.length() > 0);
 
         // Verify sequence number was incremented
-        let (sequence_number, _, _, _) =
-            onramp::get_dest_chain_config(DEST_CHAIN_SELECTOR);
+        let (sequence_number, _, _) = onramp::get_dest_chain_config(DEST_CHAIN_SELECTOR);
         assert!(sequence_number == 1);
 
         // Verify tokens were transferred
@@ -1051,14 +1036,12 @@ module ccip_onramp::onramp_test {
         let new_router = @0x300;
         let dest_chain_selectors = vector[new_chain_selector];
         let dest_chain_routers = vector[new_router];
-        let dest_chain_router_state_addresses = vector[ROUTER_STATE_ADDRESS];
         let dest_chain_allowlist_enabled = vector[false];
 
         onramp::apply_dest_chain_config_updates(
             owner,
             dest_chain_selectors,
             dest_chain_routers,
-            dest_chain_router_state_addresses,
             dest_chain_allowlist_enabled
         );
 
@@ -1247,14 +1230,12 @@ module ccip_onramp::onramp_test {
 
         let dest_chain_selectors = vector[DEST_CHAIN_SELECTOR];
         let dest_chain_routers = vector[ROUTER];
-        let dest_chain_router_state_addresses = vector[ROUTER_STATE_ADDRESS];
         let dest_chain_allowlist_enabled = vector[false]; // Disabled!
 
         onramp::apply_dest_chain_config_updates(
             owner,
             dest_chain_selectors,
             dest_chain_routers,
-            dest_chain_router_state_addresses,
             dest_chain_allowlist_enabled
         );
 
@@ -1305,7 +1286,6 @@ module ccip_onramp::onramp_test {
             owner,
             vector[DEST_CHAIN_SELECTOR], // dest_chain_selectors
             vector[ROUTER], // dest_chain_routers
-            vector[ROUTER_STATE_ADDRESS], // dest_chain_router_state_addresses
             vector[true] // dest_chain_allowlist_enabled
         );
 
@@ -1370,7 +1350,7 @@ module ccip_onramp::onramp_test {
             onramp::dynamic_config_allowlist_admin(&dynamic_config) == ALLOWLIST_ADMIN
         );
 
-        let (sequence_number, allowlist_enabled, dest_router, _) =
+        let (sequence_number, allowlist_enabled, dest_router) =
             onramp::get_dest_chain_config(DEST_CHAIN_SELECTOR);
         assert!(sequence_number == 0);
         assert!(allowlist_enabled == false);
@@ -1497,7 +1477,6 @@ module ccip_onramp::onramp_test {
         let new_router = @0x999;
         let dest_chain_selectors = vector[new_dest_chain_selector];
         let dest_chain_routers = vector[new_router];
-        let dest_chain_router_state_addresses = vector[new_router];
         let dest_chain_allowlist_enabled = vector[true];
 
         let data = vector[];
@@ -1506,9 +1485,6 @@ module ccip_onramp::onramp_test {
 
         let routers_data = bcs::to_bytes(&dest_chain_routers);
         vector::append(&mut data, routers_data);
-
-        let router_state_data = bcs::to_bytes(&dest_chain_router_state_addresses);
-        vector::append(&mut data, router_state_data);
 
         let allowlist_data = bcs::to_bytes(&dest_chain_allowlist_enabled);
         vector::append(&mut data, allowlist_data);
@@ -1527,7 +1503,7 @@ module ccip_onramp::onramp_test {
 
         assert!(onramp::is_chain_supported(new_dest_chain_selector));
 
-        let (_, allowlist_enabled, router, _) =
+        let (_, allowlist_enabled, router) =
             onramp::get_dest_chain_config(new_dest_chain_selector);
         assert!(allowlist_enabled == true);
         assert!(router == new_router);
@@ -1570,12 +1546,10 @@ module ccip_onramp::onramp_test {
 
         let new_dest_chain_selector = DEST_CHAIN_SELECTOR + 888;
         let new_router = @0x888;
-        let new_router_state_address = @0x808;
         onramp::apply_dest_chain_config_updates(
             owner,
             vector[new_dest_chain_selector],
             vector[new_router],
-            vector[new_router_state_address],
             vector[true]
         );
 

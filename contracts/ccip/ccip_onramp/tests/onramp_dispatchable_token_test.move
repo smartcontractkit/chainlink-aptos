@@ -45,7 +45,6 @@ module ccip_onramp::onramp_dispatchable_token_test {
 
     const OWNER: address = @0x100;
     const ROUTER: address = @0x200;
-    const ROUTER_STATE_ADDRESS: address = @0x202;
     const FEE_AGGREGATOR: address = @0x300;
     const ALLOWLIST_ADMIN: address = @0x400;
     const SENDER: address = @0x500;
@@ -86,7 +85,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
         ccip_onramp: &signer,
         owner: &signer,
         sender: &signer,
-        router_state_address: &signer,
+        router: &signer,
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer,
         pool_type: u8,
@@ -157,7 +156,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
 
         let message_id =
             onramp::ccip_send(
-                router_state_address,
+                router,
                 sender,
                 DEST_CHAIN_SELECTOR,
                 receiver,
@@ -183,8 +182,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
         assert!(result.message_id.length() > 0);
 
         // Verify sequence number was incremented
-        let (sequence_number, _, _, _) =
-            onramp::get_dest_chain_config(DEST_CHAIN_SELECTOR);
+        let (sequence_number, _, _) = onramp::get_dest_chain_config(DEST_CHAIN_SELECTOR);
         assert!(sequence_number == 1);
 
         // Verify tokens were transferred
@@ -242,7 +240,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
             sender = @0x500,
-            router_state_address = @0x202, // ROUTER_STATE_ADDRESS
+            router = @0x200,
             burn_mint_token_pool = @burn_mint_token_pool,
             lock_release_token_pool = @lock_release_token_pool
         )
@@ -253,7 +251,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
         ccip_onramp: &signer,
         owner: &signer,
         sender: &signer,
-        router_state_address: &signer,
+        router: &signer,
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer
     ) acquires TestToken {
@@ -264,7 +262,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
                 ccip_onramp,
                 owner,
                 sender,
-                router_state_address,
+                router,
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 LOCK_RELEASE_TOKEN_POOL,
@@ -283,7 +281,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
             sender = @0x500,
-            router_state_address = @0x202, // ROUTER_STATE_ADDRESS
+            router = @0x200,
             burn_mint_token_pool = @burn_mint_token_pool,
             lock_release_token_pool = @lock_release_token_pool
         )
@@ -294,7 +292,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
         ccip_onramp: &signer,
         owner: &signer,
         sender: &signer,
-        router_state_address: &signer,
+        router: &signer,
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer
     ) acquires TestToken {
@@ -305,7 +303,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
                 ccip_onramp,
                 owner,
                 sender,
-                router_state_address,
+                router,
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 BURN_MINT_TOKEN_POOL,
@@ -365,7 +363,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
             sender = @0x500,
-            router_state_address = @0x202, // ROUTER_STATE_ADDRESS
+            router = @0x200,
             burn_mint_token_pool = @burn_mint_token_pool,
             lock_release_token_pool = @lock_release_token_pool
         )
@@ -376,7 +374,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
         ccip_onramp: &signer,
         owner: &signer,
         sender: &signer,
-        router_state_address: &signer,
+        router: &signer,
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer
     ) acquires TestToken {
@@ -387,7 +385,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
                 ccip_onramp,
                 owner,
                 sender,
-                router_state_address,
+                router,
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 LOCK_RELEASE_TOKEN_POOL,
@@ -406,7 +404,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
             sender = @0x500,
-            router_state_address = @0x202, // ROUTER_STATE_ADDRESS
+            router = @0x200,
             burn_mint_token_pool = @burn_mint_token_pool,
             lock_release_token_pool = @lock_release_token_pool
         )
@@ -417,7 +415,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
         ccip_onramp: &signer,
         owner: &signer,
         sender: &signer,
-        router_state_address: &signer,
+        router: &signer,
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer
     ) acquires TestToken {
@@ -428,7 +426,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
                 ccip_onramp,
                 owner,
                 sender,
-                router_state_address,
+                router,
                 burn_mint_token_pool,
                 lock_release_token_pool,
                 LOCK_RELEASE_TOKEN_POOL,
@@ -522,7 +520,6 @@ module ccip_onramp::onramp_dispatchable_token_test {
             ALLOWLIST_ADMIN,
             vector[DEST_CHAIN_SELECTOR], // dest_chain_selectors
             vector[ROUTER], // dest_chain_routers
-            vector[ROUTER_STATE_ADDRESS], // dest_chain_router_state_addresses
             vector[false] // dest_chain_allowlist_enabled
         );
         assert!(onramp::owner() == owner_addr);
