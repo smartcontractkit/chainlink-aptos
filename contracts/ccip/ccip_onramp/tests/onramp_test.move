@@ -71,7 +71,7 @@ module ccip_onramp::onramp_test {
         timestamp::update_global_time_for_test_secs(timestamp_seconds);
     }
 
-    fun setup(
+    public fun setup(
         aptos_framework: &signer,
         ccip: &signer,
         ccip_onramp: &signer,

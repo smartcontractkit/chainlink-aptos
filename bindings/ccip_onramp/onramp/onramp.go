@@ -27,11 +27,13 @@ type OnrampInterface interface {
 	IsChainSupported(opts *bind.CallOpts, destChainSelector uint64) (bool, error)
 	GetExpectedNextSequenceNumber(opts *bind.CallOpts, destChainSelector uint64) (uint64, error)
 	GetFee(opts *bind.CallOpts, destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (uint64, error)
+	GetDestChainConfigV2(opts *bind.CallOpts, destChainSelector uint64) (uint64, bool, aptos.AccountAddress, aptos.AccountAddress, error)
 	GetDestChainConfig(opts *bind.CallOpts, destChainSelector uint64) (uint64, bool, aptos.AccountAddress, error)
 	GetAllowedSendersList(opts *bind.CallOpts, destChainSelector uint64) (bool, []aptos.AccountAddress, error)
 	GetOutboundNonce(opts *bind.CallOpts, destChainSelector uint64, sender aptos.AccountAddress) (uint64, error)
 	GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error)
 	GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, error)
+	DestChainConfigsV2Exists(opts *bind.CallOpts) (bool, error)
 	CalculateMetadataHash(opts *bind.CallOpts, sourceChainSelector uint64, destChainSelector uint64) ([]byte, error)
 	CalculateMessageHash(opts *bind.CallOpts, messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender aptos.AccountAddress, receiver []byte, data []byte, feeToken aptos.AccountAddress, feeTokenAmount uint64, sourcePoolAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, extraDatas [][]byte, amounts []uint64, destExecDatas [][]byte, extraArgs []byte) ([]byte, error)
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
@@ -41,13 +43,16 @@ type OnrampInterface interface {
 	PendingTransferAccepted(opts *bind.CallOpts) (*bool, error)
 
 	Initialize(opts *bind.TransactOpts, chainSelector uint64, feeAggregator aptos.AccountAddress, allowlistAdmin aptos.AccountAddress, destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainAllowlistEnabled []bool) (*api.PendingTransaction, error)
+	InitializeDestChainConfigsV2(opts *bind.TransactOpts, destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (*api.PendingTransaction, error)
 	SetDynamicConfig(opts *bind.TransactOpts, feeAggregator aptos.AccountAddress, allowlistAdmin aptos.AccountAddress) (*api.PendingTransaction, error)
+	ApplyDestChainConfigUpdatesV2(opts *bind.TransactOpts, destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (*api.PendingTransaction, error)
 	ApplyDestChainConfigUpdates(opts *bind.TransactOpts, destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainAllowlistEnabled []bool) (*api.PendingTransaction, error)
 	ApplyAllowlistUpdates(opts *bind.TransactOpts, destChainSelectors []uint64, destChainAllowlistEnabled []bool, destChainAddAllowedSenders [][]aptos.AccountAddress, destChainRemoveAllowedSenders [][]aptos.AccountAddress) (*api.PendingTransaction, error)
 	WithdrawFeeTokens(opts *bind.TransactOpts, feeTokens []aptos.AccountAddress) (*api.PendingTransaction, error)
 	TransferOwnership(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
 	AcceptOwnership(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 	ExecuteOwnershipTransfer(opts *bind.TransactOpts, to aptos.AccountAddress) (*api.PendingTransaction, error)
+	MigrateDestChainConfigsToV2(opts *bind.TransactOpts, destChainSelectors []uint64) (*api.PendingTransaction, error)
 
 	// Encoder returns the encoder implementation of this module.
 	Encoder() OnrampEncoder
@@ -59,11 +64,13 @@ type OnrampEncoder interface {
 	IsChainSupported(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetExpectedNextSequenceNumber(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetFee(destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetDestChainConfigV2(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetDestChainConfig(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetAllowedSendersList(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetOutboundNonce(destChainSelector uint64, sender aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStaticConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetDynamicConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	DestChainConfigsV2Exists() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CalculateMetadataHash(sourceChainSelector uint64, destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CalculateMessageHash(messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender aptos.AccountAddress, receiver []byte, data []byte, feeToken aptos.AccountAddress, feeTokenAmount uint64, sourcePoolAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, extraDatas [][]byte, amounts []uint64, destExecDatas [][]byte, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -72,24 +79,28 @@ type OnrampEncoder interface {
 	PendingTransferTo() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	PendingTransferAccepted() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Initialize(chainSelector uint64, feeAggregator aptos.AccountAddress, allowlistAdmin aptos.AccountAddress, destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	InitializeDestChainConfigsV2(destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	SetDynamicConfig(feeAggregator aptos.AccountAddress, allowlistAdmin aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ApplyDestChainConfigUpdatesV2(destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplyDestChainConfigUpdates(destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplyAllowlistUpdates(destChainSelectors []uint64, destChainAllowlistEnabled []bool, destChainAddAllowedSenders [][]aptos.AccountAddress, destChainRemoveAllowedSenders [][]aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	WithdrawFeeTokens(feeTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TransferOwnership(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	MigrateDestChainConfigsToV2(destChainSelectors []uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetFeeInternal(destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ResolveFungibleAsset(token aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ResolveFungibleStore(owner aptos.AccountAddress, token aptos.AccountAddress, storeAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CCIPSend(destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CalculateMetadataHashInlined(sourceChainSelector uint64, destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ApplyDestChainConfigUpdatesInternalV2(destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStateAddressInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	RegisterMCMSEntrypoint() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip_onramp","module":"onramp","name":"accept_ownership","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"apply_allowlist_updates","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"},{"name":"dest_chain_add_allowed_senders","type":"vector\u003cvector\u003caddress\u003e\u003e"},{"name":"dest_chain_remove_allowed_senders","type":"vector\u003cvector\u003caddress\u003e\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"apply_dest_chain_config_updates","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"calculate_metadata_hash_inlined","parameters":[{"name":"source_chain_selector","type":"u64"},{"name":"dest_chain_selector","type":"u64"}]},{"package":"ccip_onramp","module":"onramp","name":"ccip_send","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"get_fee_internal","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"get_state_address_internal","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"initialize","parameters":[{"name":"chain_selector","type":"u64"},{"name":"fee_aggregator","type":"address"},{"name":"allowlist_admin","type":"address"},{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"register_mcms_entrypoint","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"resolve_fungible_asset","parameters":[{"name":"token","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"resolve_fungible_store","parameters":[{"name":"owner","type":"address"},{"name":"token","type":"address"},{"name":"store_address","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"set_dynamic_config","parameters":[{"name":"fee_aggregator","type":"address"},{"name":"allowlist_admin","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"withdraw_fee_tokens","parameters":[{"name":"fee_tokens","type":"vector\u003caddress\u003e"}]}]`
+const FunctionInfo = `[{"package":"ccip_onramp","module":"onramp","name":"accept_ownership","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"apply_allowlist_updates","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"},{"name":"dest_chain_add_allowed_senders","type":"vector\u003cvector\u003caddress\u003e\u003e"},{"name":"dest_chain_remove_allowed_senders","type":"vector\u003cvector\u003caddress\u003e\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"apply_dest_chain_config_updates","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"apply_dest_chain_config_updates_internal_v2","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_router_state_addresses","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"apply_dest_chain_config_updates_v2","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_router_state_addresses","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"calculate_metadata_hash_inlined","parameters":[{"name":"source_chain_selector","type":"u64"},{"name":"dest_chain_selector","type":"u64"}]},{"package":"ccip_onramp","module":"onramp","name":"ccip_send","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"get_fee_internal","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"get_state_address_internal","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"initialize","parameters":[{"name":"chain_selector","type":"u64"},{"name":"fee_aggregator","type":"address"},{"name":"allowlist_admin","type":"address"},{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"initialize_dest_chain_configs_v2","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_router_state_addresses","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"migrate_dest_chain_configs_to_v2","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"register_mcms_entrypoint","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"resolve_fungible_asset","parameters":[{"name":"token","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"resolve_fungible_store","parameters":[{"name":"owner","type":"address"},{"name":"token","type":"address"},{"name":"store_address","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"set_dynamic_config","parameters":[{"name":"fee_aggregator","type":"address"},{"name":"allowlist_admin","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"withdraw_fee_tokens","parameters":[{"name":"fee_tokens","type":"vector\u003caddress\u003e"}]}]`
 
 func NewOnramp(address aptos.AccountAddress, client aptos.AptosRpcClient) OnrampInterface {
 	contract := bind.NewBoundContract(address, "ccip_onramp", "onramp", client)
@@ -110,11 +121,22 @@ type OnRampState struct {
 	AllowlistAdmin aptos.AccountAddress `move:"address"`
 }
 
+type DestChainConfigsV2 struct {
+}
+
 type DestChainConfig struct {
 	SequenceNumber   uint64                 `move:"u64"`
 	AllowlistEnabled bool                   `move:"bool"`
 	Router           aptos.AccountAddress   `move:"address"`
 	AllowedSenders   []aptos.AccountAddress `move:"vector<address>"`
+}
+
+type DestChainConfigV2 struct {
+	SequenceNumber     uint64                 `move:"u64"`
+	AllowlistEnabled   bool                   `move:"bool"`
+	Router             aptos.AccountAddress   `move:"address"`
+	RouterStateAddress aptos.AccountAddress   `move:"address"`
+	AllowedSenders     []aptos.AccountAddress `move:"vector<address>"`
 }
 
 type RampMessageHeader struct {
@@ -164,6 +186,14 @@ type DestChainConfigSet struct {
 	SequenceNumber    uint64               `move:"u64"`
 	Router            aptos.AccountAddress `move:"address"`
 	AllowlistEnabled  bool                 `move:"bool"`
+}
+
+type DestChainConfigSetV2 struct {
+	DestChainSelector  uint64               `move:"u64"`
+	SequenceNumber     uint64               `move:"u64"`
+	Router             aptos.AccountAddress `move:"address"`
+	RouterStateAddress aptos.AccountAddress `move:"address"`
+	AllowlistEnabled   bool                 `move:"bool"`
 }
 
 type CCIPMessageSent struct {
@@ -309,6 +339,30 @@ func (c OnrampContract) GetFee(opts *bind.CallOpts, destChainSelector uint64, re
 	return r0, nil
 }
 
+func (c OnrampContract) GetDestChainConfigV2(opts *bind.CallOpts, destChainSelector uint64) (uint64, bool, aptos.AccountAddress, aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.onrampEncoder.GetDestChainConfigV2(destChainSelector)
+	if err != nil {
+		return *new(uint64), *new(bool), *new(aptos.AccountAddress), *new(aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(uint64), *new(bool), *new(aptos.AccountAddress), *new(aptos.AccountAddress), err
+	}
+
+	var (
+		r0 uint64
+		r1 bool
+		r2 aptos.AccountAddress
+		r3 aptos.AccountAddress
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0, &r1, &r2, &r3); err != nil {
+		return *new(uint64), *new(bool), *new(aptos.AccountAddress), *new(aptos.AccountAddress), err
+	}
+	return r0, r1, r2, r3, nil
+}
+
 func (c OnrampContract) GetDestChainConfig(opts *bind.CallOpts, destChainSelector uint64) (uint64, bool, aptos.AccountAddress, error) {
 	module, function, typeTags, args, err := c.onrampEncoder.GetDestChainConfig(destChainSelector)
 	if err != nil {
@@ -413,6 +467,27 @@ func (c OnrampContract) GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, er
 
 	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
 		return *new(DynamicConfig), err
+	}
+	return r0, nil
+}
+
+func (c OnrampContract) DestChainConfigsV2Exists(opts *bind.CallOpts) (bool, error) {
+	module, function, typeTags, args, err := c.onrampEncoder.DestChainConfigsV2Exists()
+	if err != nil {
+		return *new(bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	var (
+		r0 bool
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(bool), err
 	}
 	return r0, nil
 }
@@ -575,8 +650,26 @@ func (c OnrampContract) Initialize(opts *bind.TransactOpts, chainSelector uint64
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
+func (c OnrampContract) InitializeDestChainConfigsV2(opts *bind.TransactOpts, destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.onrampEncoder.InitializeDestChainConfigsV2(destChainSelectors, destChainRouters, destChainRouterStateAddresses, destChainAllowlistEnabled)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
 func (c OnrampContract) SetDynamicConfig(opts *bind.TransactOpts, feeAggregator aptos.AccountAddress, allowlistAdmin aptos.AccountAddress) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.onrampEncoder.SetDynamicConfig(feeAggregator, allowlistAdmin)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c OnrampContract) ApplyDestChainConfigUpdatesV2(opts *bind.TransactOpts, destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.onrampEncoder.ApplyDestChainConfigUpdatesV2(destChainSelectors, destChainRouters, destChainRouterStateAddresses, destChainAllowlistEnabled)
 	if err != nil {
 		return nil, err
 	}
@@ -638,6 +731,15 @@ func (c OnrampContract) ExecuteOwnershipTransfer(opts *bind.TransactOpts, to apt
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
+func (c OnrampContract) MigrateDestChainConfigsToV2(opts *bind.TransactOpts, destChainSelectors []uint64) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.onrampEncoder.MigrateDestChainConfigsToV2(destChainSelectors)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
 // Encoder
 type onrampEncoder struct {
 	*bind.BoundContract
@@ -691,6 +793,14 @@ func (c onrampEncoder) GetFee(destChainSelector uint64, receiver []byte, data []
 	})
 }
 
+func (c onrampEncoder) GetDestChainConfigV2(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_dest_chain_config_v2", nil, []string{
+		"u64",
+	}, []any{
+		destChainSelector,
+	})
+}
+
 func (c onrampEncoder) GetDestChainConfig(destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("get_dest_chain_config", nil, []string{
 		"u64",
@@ -723,6 +833,10 @@ func (c onrampEncoder) GetStaticConfig() (bind.ModuleInformation, string, []apto
 
 func (c onrampEncoder) GetDynamicConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("get_dynamic_config", nil, []string{}, []any{})
+}
+
+func (c onrampEncoder) DestChainConfigsV2Exists() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("dest_chain_configs_v2_exists", nil, []string{}, []any{})
 }
 
 func (c onrampEncoder) CalculateMetadataHash(sourceChainSelector uint64, destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
@@ -811,6 +925,20 @@ func (c onrampEncoder) Initialize(chainSelector uint64, feeAggregator aptos.Acco
 	})
 }
 
+func (c onrampEncoder) InitializeDestChainConfigsV2(destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("initialize_dest_chain_configs_v2", nil, []string{
+		"vector<u64>",
+		"vector<address>",
+		"vector<address>",
+		"vector<bool>",
+	}, []any{
+		destChainSelectors,
+		destChainRouters,
+		destChainRouterStateAddresses,
+		destChainAllowlistEnabled,
+	})
+}
+
 func (c onrampEncoder) SetDynamicConfig(feeAggregator aptos.AccountAddress, allowlistAdmin aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("set_dynamic_config", nil, []string{
 		"address",
@@ -818,6 +946,20 @@ func (c onrampEncoder) SetDynamicConfig(feeAggregator aptos.AccountAddress, allo
 	}, []any{
 		feeAggregator,
 		allowlistAdmin,
+	})
+}
+
+func (c onrampEncoder) ApplyDestChainConfigUpdatesV2(destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("apply_dest_chain_config_updates_v2", nil, []string{
+		"vector<u64>",
+		"vector<address>",
+		"vector<address>",
+		"vector<bool>",
+	}, []any{
+		destChainSelectors,
+		destChainRouters,
+		destChainRouterStateAddresses,
+		destChainAllowlistEnabled,
 	})
 }
 
@@ -872,6 +1014,14 @@ func (c onrampEncoder) ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.M
 		"address",
 	}, []any{
 		to,
+	})
+}
+
+func (c onrampEncoder) MigrateDestChainConfigsToV2(destChainSelectors []uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("migrate_dest_chain_configs_to_v2", nil, []string{
+		"vector<u64>",
+	}, []any{
+		destChainSelectors,
 	})
 }
 
@@ -950,6 +1100,20 @@ func (c onrampEncoder) CalculateMetadataHashInlined(sourceChainSelector uint64, 
 	}, []any{
 		sourceChainSelector,
 		destChainSelector,
+	})
+}
+
+func (c onrampEncoder) ApplyDestChainConfigUpdatesInternalV2(destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("apply_dest_chain_config_updates_internal_v2", nil, []string{
+		"vector<u64>",
+		"vector<address>",
+		"vector<address>",
+		"vector<bool>",
+	}, []any{
+		destChainSelectors,
+		destChainRouters,
+		destChainRouterStateAddresses,
+		destChainAllowlistEnabled,
 	})
 }
 
