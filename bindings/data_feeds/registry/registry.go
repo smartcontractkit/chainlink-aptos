@@ -156,6 +156,10 @@ type StaleReport struct {
 	ReportTimestamp *big.Int `move:"u256"`
 }
 
+type WriteSkippedFeedNotSet struct {
+	FeedId []byte `move:"vector<u8>"`
+}
+
 type OwnershipTransferRequested struct {
 	From aptos.AccountAddress `move:"address"`
 	To   aptos.AccountAddress `move:"address"`
