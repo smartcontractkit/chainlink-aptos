@@ -43,7 +43,7 @@ type OnrampInterface interface {
 	PendingTransferAccepted(opts *bind.CallOpts) (*bool, error)
 
 	Initialize(opts *bind.TransactOpts, chainSelector uint64, feeAggregator aptos.AccountAddress, allowlistAdmin aptos.AccountAddress, destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainAllowlistEnabled []bool) (*api.PendingTransaction, error)
-	InitializeDestChainConfigsV2(opts *bind.TransactOpts, destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (*api.PendingTransaction, error)
+	InitializeDestChainConfigsV2(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 	SetDynamicConfig(opts *bind.TransactOpts, feeAggregator aptos.AccountAddress, allowlistAdmin aptos.AccountAddress) (*api.PendingTransaction, error)
 	ApplyDestChainConfigUpdatesV2(opts *bind.TransactOpts, destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (*api.PendingTransaction, error)
 	ApplyDestChainConfigUpdates(opts *bind.TransactOpts, destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainAllowlistEnabled []bool) (*api.PendingTransaction, error)
@@ -79,7 +79,7 @@ type OnrampEncoder interface {
 	PendingTransferTo() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	PendingTransferAccepted() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Initialize(chainSelector uint64, feeAggregator aptos.AccountAddress, allowlistAdmin aptos.AccountAddress, destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	InitializeDestChainConfigsV2(destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	InitializeDestChainConfigsV2() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	SetDynamicConfig(feeAggregator aptos.AccountAddress, allowlistAdmin aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplyDestChainConfigUpdatesV2(destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplyDestChainConfigUpdates(destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -94,13 +94,12 @@ type OnrampEncoder interface {
 	ResolveFungibleStore(owner aptos.AccountAddress, token aptos.AccountAddress, storeAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CCIPSend(destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CalculateMetadataHashInlined(sourceChainSelector uint64, destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	ApplyDestChainConfigUpdatesInternalV2(destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStateAddressInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	RegisterMCMSEntrypoint() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip_onramp","module":"onramp","name":"accept_ownership","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"apply_allowlist_updates","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"},{"name":"dest_chain_add_allowed_senders","type":"vector\u003cvector\u003caddress\u003e\u003e"},{"name":"dest_chain_remove_allowed_senders","type":"vector\u003cvector\u003caddress\u003e\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"apply_dest_chain_config_updates","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"apply_dest_chain_config_updates_internal_v2","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_router_state_addresses","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"apply_dest_chain_config_updates_v2","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_router_state_addresses","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"calculate_metadata_hash_inlined","parameters":[{"name":"source_chain_selector","type":"u64"},{"name":"dest_chain_selector","type":"u64"}]},{"package":"ccip_onramp","module":"onramp","name":"ccip_send","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"get_fee_internal","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"get_state_address_internal","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"initialize","parameters":[{"name":"chain_selector","type":"u64"},{"name":"fee_aggregator","type":"address"},{"name":"allowlist_admin","type":"address"},{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"initialize_dest_chain_configs_v2","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_router_state_addresses","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"migrate_dest_chain_configs_to_v2","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"register_mcms_entrypoint","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"resolve_fungible_asset","parameters":[{"name":"token","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"resolve_fungible_store","parameters":[{"name":"owner","type":"address"},{"name":"token","type":"address"},{"name":"store_address","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"set_dynamic_config","parameters":[{"name":"fee_aggregator","type":"address"},{"name":"allowlist_admin","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"withdraw_fee_tokens","parameters":[{"name":"fee_tokens","type":"vector\u003caddress\u003e"}]}]`
+const FunctionInfo = `[{"package":"ccip_onramp","module":"onramp","name":"accept_ownership","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"apply_allowlist_updates","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"},{"name":"dest_chain_add_allowed_senders","type":"vector\u003cvector\u003caddress\u003e\u003e"},{"name":"dest_chain_remove_allowed_senders","type":"vector\u003cvector\u003caddress\u003e\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"apply_dest_chain_config_updates","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"apply_dest_chain_config_updates_v2","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_router_state_addresses","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"calculate_metadata_hash_inlined","parameters":[{"name":"source_chain_selector","type":"u64"},{"name":"dest_chain_selector","type":"u64"}]},{"package":"ccip_onramp","module":"onramp","name":"ccip_send","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"get_fee_internal","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"get_state_address_internal","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"initialize","parameters":[{"name":"chain_selector","type":"u64"},{"name":"fee_aggregator","type":"address"},{"name":"allowlist_admin","type":"address"},{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"initialize_dest_chain_configs_v2","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"migrate_dest_chain_configs_to_v2","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"register_mcms_entrypoint","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"resolve_fungible_asset","parameters":[{"name":"token","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"resolve_fungible_store","parameters":[{"name":"owner","type":"address"},{"name":"token","type":"address"},{"name":"store_address","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"set_dynamic_config","parameters":[{"name":"fee_aggregator","type":"address"},{"name":"allowlist_admin","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"withdraw_fee_tokens","parameters":[{"name":"fee_tokens","type":"vector\u003caddress\u003e"}]}]`
 
 func NewOnramp(address aptos.AccountAddress, client aptos.AptosRpcClient) OnrampInterface {
 	contract := bind.NewBoundContract(address, "ccip_onramp", "onramp", client)
@@ -650,8 +649,8 @@ func (c OnrampContract) Initialize(opts *bind.TransactOpts, chainSelector uint64
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (c OnrampContract) InitializeDestChainConfigsV2(opts *bind.TransactOpts, destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.onrampEncoder.InitializeDestChainConfigsV2(destChainSelectors, destChainRouters, destChainRouterStateAddresses, destChainAllowlistEnabled)
+func (c OnrampContract) InitializeDestChainConfigsV2(opts *bind.TransactOpts) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.onrampEncoder.InitializeDestChainConfigsV2()
 	if err != nil {
 		return nil, err
 	}
@@ -925,18 +924,8 @@ func (c onrampEncoder) Initialize(chainSelector uint64, feeAggregator aptos.Acco
 	})
 }
 
-func (c onrampEncoder) InitializeDestChainConfigsV2(destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("initialize_dest_chain_configs_v2", nil, []string{
-		"vector<u64>",
-		"vector<address>",
-		"vector<address>",
-		"vector<bool>",
-	}, []any{
-		destChainSelectors,
-		destChainRouters,
-		destChainRouterStateAddresses,
-		destChainAllowlistEnabled,
-	})
+func (c onrampEncoder) InitializeDestChainConfigsV2() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("initialize_dest_chain_configs_v2", nil, []string{}, []any{})
 }
 
 func (c onrampEncoder) SetDynamicConfig(feeAggregator aptos.AccountAddress, allowlistAdmin aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
@@ -1100,20 +1089,6 @@ func (c onrampEncoder) CalculateMetadataHashInlined(sourceChainSelector uint64, 
 	}, []any{
 		sourceChainSelector,
 		destChainSelector,
-	})
-}
-
-func (c onrampEncoder) ApplyDestChainConfigUpdatesInternalV2(destChainSelectors []uint64, destChainRouters []aptos.AccountAddress, destChainRouterStateAddresses []aptos.AccountAddress, destChainAllowlistEnabled []bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("apply_dest_chain_config_updates_internal_v2", nil, []string{
-		"vector<u64>",
-		"vector<address>",
-		"vector<address>",
-		"vector<bool>",
-	}, []any{
-		destChainSelectors,
-		destChainRouters,
-		destChainRouterStateAddresses,
-		destChainAllowlistEnabled,
 	})
 }
 

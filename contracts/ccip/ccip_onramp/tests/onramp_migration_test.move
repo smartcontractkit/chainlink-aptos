@@ -253,29 +253,32 @@ module ccip_onramp::onramp_migration_test {
                 lock_release_token_pool
             );
 
-        // Test direct V2 initialization (without migration)
-        onramp::initialize_dest_chain_configs_v2(
+        let router_address = @0xabc;
+        let router_state_address = onramp::get_state_address();
+        onramp::apply_dest_chain_config_updates(
             owner,
-            vector[12345, 67890],
-            vector[@0x999, @0x888],
-            vector[@0x777, @0x666],
-            vector[false, true]
+            vector[DEST_CHAIN_SELECTOR, CHAIN_SELECTOR_2],
+            vector[router_address, router_address],
+            vector[true, true]
         );
+
+        // Initialize will migrate all V1 configs to V2
+        onramp::initialize_dest_chain_configs_v2(owner);
 
         // Verify V2 configs work
         let (seq1, enabled1, router1, router_state1) =
-            onramp::get_dest_chain_config_v2(12345);
+            onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
         assert!(seq1 == 0);
-        assert!(enabled1 == false);
-        assert!(router1 == @0x999);
-        assert!(router_state1 == @0x777);
+        assert!(enabled1 == true);
+        assert!(router1 == router_address);
+        assert!(router_state1 == router_state_address);
 
         let (seq2, enabled2, router2, router_state2) =
-            onramp::get_dest_chain_config_v2(67890);
+            onramp::get_dest_chain_config_v2(CHAIN_SELECTOR_2);
         assert!(seq2 == 0);
         assert!(enabled2 == true);
-        assert!(router2 == @0x888);
-        assert!(router_state2 == @0x666);
+        assert!(router2 == router_address);
+        assert!(router_state2 == router_state_address);
     }
 
     #[
@@ -376,22 +379,10 @@ module ccip_onramp::onramp_migration_test {
             );
 
         // First initialization should succeed
-        onramp::initialize_dest_chain_configs_v2(
-            owner,
-            vector[12345],
-            vector[@0x999],
-            vector[@0x777],
-            vector[false]
-        );
+        onramp::initialize_dest_chain_configs_v2(owner);
 
         // Second initialization should fail
-        onramp::initialize_dest_chain_configs_v2(
-            owner,
-            vector[67890],
-            vector[@0x888],
-            vector[@0x666],
-            vector[true]
-        );
+        onramp::initialize_dest_chain_configs_v2(owner);
     }
 
     #[
@@ -513,5 +504,274 @@ module ccip_onramp::onramp_migration_test {
         let (migrated_seq, _, _, _) =
             onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
         assert!(migrated_seq == original_seq);
+    }
+
+    #[
+        test(
+            aptos_framework = @aptos_framework,
+            ccip = @ccip,
+            ccip_onramp = @ccip_onramp,
+            owner = @0x100,
+            burn_mint_token_pool = @burn_mint_token_pool,
+            lock_release_token_pool = @lock_release_token_pool
+        )
+    ]
+    fun test_initialize_dest_chain_configs_v2_auto_migration(
+        aptos_framework: &signer,
+        ccip: &signer,
+        ccip_onramp: &signer,
+        owner: &signer,
+        burn_mint_token_pool: &signer,
+        lock_release_token_pool: &signer
+    ) {
+        let state_address =
+            init_onramp_for_test(
+                aptos_framework,
+                ccip,
+                ccip_onramp,
+                owner,
+                burn_mint_token_pool,
+                lock_release_token_pool
+            );
+
+        let router_address = @0xabc;
+
+        onramp::apply_dest_chain_config_updates(
+            owner,
+            vector[DEST_CHAIN_SELECTOR, CHAIN_SELECTOR_2, CHAIN_SELECTOR_3],
+            vector[router_address, @0xdef, @0x789],
+            vector[true, false, true]
+        );
+
+        assert!(onramp::is_chain_supported(DEST_CHAIN_SELECTOR));
+        assert!(onramp::is_chain_supported(CHAIN_SELECTOR_2));
+        assert!(onramp::is_chain_supported(CHAIN_SELECTOR_3));
+        assert!(!onramp::dest_chain_configs_v2_exists());
+
+        // Auto-migrate ALL V1 configs
+        onramp::initialize_dest_chain_configs_v2(owner);
+
+        // Verify V2 exists and all configs were migrated
+        assert!(onramp::dest_chain_configs_v2_exists());
+
+        // All chains should still be supported (migrated to V2)
+        assert!(onramp::is_chain_supported(DEST_CHAIN_SELECTOR));
+        assert!(onramp::is_chain_supported(CHAIN_SELECTOR_2));
+        assert!(onramp::is_chain_supported(CHAIN_SELECTOR_3));
+
+        // Verify all V2 configs have correct data
+        let (seq1, enabled1, router1, router_state1) =
+            onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
+        assert!(seq1 == 0);
+        assert!(enabled1 == true);
+        assert!(router1 == router_address);
+        assert!(router_state1 == state_address);
+
+        let (seq2, enabled2, router2, router_state2) =
+            onramp::get_dest_chain_config_v2(CHAIN_SELECTOR_2);
+        assert!(seq2 == 0);
+        assert!(enabled2 == false); // Different from chain 1
+        assert!(router2 == @0xdef); // Different router
+        assert!(router_state2 == state_address);
+
+        let (seq3, enabled3, router3, router_state3) =
+            onramp::get_dest_chain_config_v2(CHAIN_SELECTOR_3);
+        assert!(seq3 == 0);
+        assert!(enabled3 == true);
+        assert!(router3 == @0x789); // Different router
+        assert!(router_state3 == state_address);
+    }
+
+    #[
+        test(
+            aptos_framework = @aptos_framework,
+            ccip = @ccip,
+            ccip_onramp = @ccip_onramp,
+            owner = @0x100,
+            burn_mint_token_pool = @burn_mint_token_pool,
+            lock_release_token_pool = @lock_release_token_pool
+        )
+    ]
+    #[expected_failure(abort_code = 196631, location = ccip_onramp::onramp)]
+    fun test_v1_function_reverts_after_v2_migration(
+        aptos_framework: &signer,
+        ccip: &signer,
+        ccip_onramp: &signer,
+        owner: &signer,
+        burn_mint_token_pool: &signer,
+        lock_release_token_pool: &signer
+    ) {
+        let _state_address =
+            init_onramp_for_test(
+                aptos_framework,
+                ccip,
+                ccip_onramp,
+                owner,
+                burn_mint_token_pool,
+                lock_release_token_pool
+            );
+
+        onramp::apply_dest_chain_config_updates(
+            owner,
+            vector[DEST_CHAIN_SELECTOR],
+            vector[@0xabc],
+            vector[true]
+        );
+
+        // Migrate to V2
+        onramp::initialize_dest_chain_configs_v2(owner);
+        assert!(onramp::dest_chain_configs_v2_exists());
+
+        // Now trying to use V1 function should fail with E_DEST_CHAIN_CONFIGS_V2_ALREADY_INITIALIZED
+        onramp::apply_dest_chain_config_updates(
+            owner,
+            vector[CHAIN_SELECTOR_2],
+            vector[@0xdef],
+            vector[false]
+        );
+    }
+
+    #[
+        test(
+            aptos_framework = @aptos_framework,
+            ccip = @ccip,
+            ccip_onramp = @ccip_onramp,
+            owner = @0x100,
+            burn_mint_token_pool = @burn_mint_token_pool,
+            lock_release_token_pool = @lock_release_token_pool
+        )
+    ]
+    fun test_backward_compatible_get_dest_chain_config(
+        aptos_framework: &signer,
+        ccip: &signer,
+        ccip_onramp: &signer,
+        owner: &signer,
+        burn_mint_token_pool: &signer,
+        lock_release_token_pool: &signer
+    ) {
+        let _state_address =
+            init_onramp_for_test(
+                aptos_framework,
+                ccip,
+                ccip_onramp,
+                owner,
+                burn_mint_token_pool,
+                lock_release_token_pool
+            );
+
+        let router_address = @0xabc;
+
+        // Set up V1 configuration
+        onramp::apply_dest_chain_config_updates(
+            owner,
+            vector[DEST_CHAIN_SELECTOR, CHAIN_SELECTOR_2],
+            vector[router_address, @0xdef],
+            vector[true, false]
+        );
+
+        // Test V1 function before migration
+        let (seq1_v1, enabled1_v1, router1_v1) =
+            onramp::get_dest_chain_config(DEST_CHAIN_SELECTOR);
+        let (seq2_v1, enabled2_v1, router2_v1) =
+            onramp::get_dest_chain_config(CHAIN_SELECTOR_2);
+
+        // Migrate to V2
+        onramp::initialize_dest_chain_configs_v2(owner);
+        assert!(onramp::dest_chain_configs_v2_exists());
+
+        // Test that V1 function now reads from V2 storage but returns V1-compatible data
+        let (seq1_after, enabled1_after, router1_after) =
+            onramp::get_dest_chain_config(DEST_CHAIN_SELECTOR);
+        let (seq2_after, enabled2_after, router2_after) =
+            onramp::get_dest_chain_config(CHAIN_SELECTOR_2);
+
+        // Should return the same data as before migration (backward compatibility)
+        assert!(seq1_after == seq1_v1);
+        assert!(enabled1_after == enabled1_v1);
+        assert!(router1_after == router1_v1);
+
+        assert!(seq2_after == seq2_v1);
+        assert!(enabled2_after == enabled2_v1);
+        assert!(router2_after == router2_v1);
+
+        // Verify V2 function returns additional field
+        let (seq1_v2, enabled1_v2, router1_v2, router_state1_v2) =
+            onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
+
+        // V2 should have same V1-compatible fields plus router_state_address
+        assert!(seq1_v2 == seq1_after);
+        assert!(enabled1_v2 == enabled1_after);
+        assert!(router1_v2 == router1_after);
+        assert!(router_state1_v2 == onramp::get_state_address()); // Additional V2 field
+    }
+
+    #[
+        test(
+            aptos_framework = @aptos_framework,
+            ccip = @ccip,
+            ccip_onramp = @ccip_onramp,
+            owner = @0x100,
+            burn_mint_token_pool = @burn_mint_token_pool,
+            lock_release_token_pool = @lock_release_token_pool
+        )
+    ]
+    fun test_existing_v1_auto_migration(
+        aptos_framework: &signer,
+        ccip: &signer,
+        ccip_onramp: &signer,
+        owner: &signer,
+        burn_mint_token_pool: &signer,
+        lock_release_token_pool: &signer
+    ) {
+        let _state_address =
+            init_onramp_for_test(
+                aptos_framework,
+                ccip,
+                ccip_onramp,
+                owner,
+                burn_mint_token_pool,
+                lock_release_token_pool
+            );
+
+        // The setup function automatically adds DEST_CHAIN_SELECTOR to V1
+        // So this tests auto-migration with pre-existing V1 data
+        assert!(!onramp::dest_chain_configs_v2_exists());
+
+        // Verify the chain exists in V1 (from setup)
+        assert!(onramp::is_chain_supported(DEST_CHAIN_SELECTOR));
+
+        // Initialize V2 - should auto-migrate the existing V1 configuration
+        onramp::initialize_dest_chain_configs_v2(owner);
+        assert!(onramp::dest_chain_configs_v2_exists());
+
+        // The existing chain should still be supported (now in V2)
+        assert!(onramp::is_chain_supported(DEST_CHAIN_SELECTOR));
+
+        // Verify the V2 config has the migrated data
+        let (seq, enabled, _router, router_state) =
+            onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
+        assert!(seq == 0);
+        assert!(enabled == false); // From the setup default
+        assert!(router_state == onramp::get_state_address());
+
+        // Should be able to add new V2 configurations for other chains
+        onramp::apply_dest_chain_config_updates_v2(
+            owner,
+            vector[CHAIN_SELECTOR_2],
+            vector[@0xabc],
+            vector[onramp::get_state_address()],
+            vector[true]
+        );
+
+        // Now both chains should be supported
+        assert!(onramp::is_chain_supported(DEST_CHAIN_SELECTOR));
+        assert!(onramp::is_chain_supported(CHAIN_SELECTOR_2));
+
+        let (seq2, enabled2, router2, router_state2) =
+            onramp::get_dest_chain_config_v2(CHAIN_SELECTOR_2);
+        assert!(seq2 == 0);
+        assert!(enabled2 == true);
+        assert!(router2 == @0xabc);
+        assert!(router_state2 == onramp::get_state_address());
     }
 }
