@@ -273,9 +273,7 @@ module ccip_onramp::onramp {
         move_to(state_signer, state);
     }
 
-    public entry fun initialize_dest_chain_configs_v2(
-        caller: &signer
-    ) acquires OnRampState, DestChainConfigsV2 {
+    public entry fun initialize_dest_chain_configs_v2(caller: &signer) acquires OnRampState {
         let state = borrow_state_mut();
         ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
@@ -286,24 +284,19 @@ module ccip_onramp::onramp {
 
         let state_signer =
             &account::create_signer_with_capability(&state.state_signer_cap);
-        move_to(
-            state_signer,
-            DestChainConfigsV2 {
-                dest_chain_configs: smart_table::new(),
-                dest_chain_config_v2_set_events: account::new_event_handle(state_signer)
-            }
-        );
 
-        let dest_chain_selectors = vector[];
-        state.dest_chain_configs.for_each_ref(|key, _value| dest_chain_selectors.push_back(*key));
+        let dest_chain_configs_v2 = DestChainConfigsV2 {
+            dest_chain_configs: smart_table::new(),
+            dest_chain_config_v2_set_events: account::new_event_handle(state_signer)
+        };
 
-        let dest_chain_configs_v2 = borrow_dest_chain_configs_v2_mut();
         migrate_dest_chain_configs_v2_internal(
             state,
-            dest_chain_configs_v2,
-            dest_chain_selectors,
+            &mut dest_chain_configs_v2,
             get_state_address_internal()
         );
+
+        move_to(state_signer, dest_chain_configs_v2);
     }
 
     #[view]
@@ -690,10 +683,11 @@ module ccip_onramp::onramp {
         dest_chain_router_state_addresses: vector<address>,
         dest_chain_allowlist_enabled: vector<bool>
     ) acquires OnRampState, DestChainConfigsV2 {
-        let state = borrow_state();
+        let state = borrow_state_mut();
         ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
         apply_dest_chain_config_updates_v2_internal(
+            state,
             borrow_dest_chain_configs_v2_mut(),
             dest_chain_selectors,
             dest_chain_routers,
@@ -1192,6 +1186,7 @@ module ccip_onramp::onramp {
     }
 
     inline fun apply_dest_chain_config_updates_v2_internal(
+        state: &mut OnRampState,
         dest_chain_configs_v2: &mut DestChainConfigsV2,
         dest_chain_selectors: vector<u64>,
         dest_chain_routers: vector<address>,
@@ -1238,6 +1233,16 @@ module ccip_onramp::onramp {
             dest_chain_config.router = dest_chain_routers[i];
             dest_chain_config.router_state_address = dest_chain_router_state_addresses[i];
             dest_chain_config.allowlist_enabled = dest_chain_allowlist_enabled[i];
+
+            event::emit_event(
+                &mut state.dest_chain_config_set_events,
+                DestChainConfigSet {
+                    dest_chain_selector,
+                    sequence_number: dest_chain_config.sequence_number,
+                    allowlist_enabled: dest_chain_config.allowlist_enabled,
+                    router: dest_chain_config.router
+                }
+            );
 
             event::emit_event(
                 &mut dest_chain_configs_v2.dest_chain_config_v2_set_events,
@@ -1321,7 +1326,11 @@ module ccip_onramp::onramp {
     }
 
     inline fun borrow_dest_chain_configs_v2(): &DestChainConfigsV2 {
-        freeze(borrow_dest_chain_configs_v2_mut())
+        assert!(
+            exists<DestChainConfigsV2>(get_state_address_internal()),
+            error::invalid_state(E_DEST_CHAIN_CONFIGS_V2_NOT_INITIALIZED)
+        );
+        borrow_global<DestChainConfigsV2>(get_state_address_internal())
     }
 
     inline fun borrow_dest_chain_configs_v2_mut(): &mut DestChainConfigsV2 {
@@ -1553,7 +1562,7 @@ module ccip_onramp::onramp {
     // ========================= MIGRATION ==========================
 
     public entry fun migrate_dest_chain_configs_to_v2(
-        caller: &signer, dest_chain_selectors: vector<u64>
+        caller: &signer
     ) acquires OnRampState, DestChainConfigsV2 {
         let state = borrow_state_mut();
         ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
@@ -1571,7 +1580,6 @@ module ccip_onramp::onramp {
             migrate_dest_chain_configs_v2_internal(
                 state,
                 &mut mut_dest_chain_configs_v2,
-                dest_chain_selectors,
                 router_state_address
             );
 
@@ -1581,7 +1589,6 @@ module ccip_onramp::onramp {
             migrate_dest_chain_configs_v2_internal(
                 state,
                 dest_chain_configs_v2,
-                dest_chain_selectors,
                 router_state_address
             );
         }
@@ -1590,14 +1597,17 @@ module ccip_onramp::onramp {
     inline fun migrate_dest_chain_configs_v2_internal(
         state: &mut OnRampState,
         dest_chain_configs_v2: &mut DestChainConfigsV2,
-        dest_chain_selectors: vector<u64>,
         router_state_address: address
     ) {
+        let dest_chain_selectors = vector[];
+        state.dest_chain_configs.for_each_ref(|key, _value| {
+            dest_chain_selectors.push_back(*key)
+        });
+
         dest_chain_selectors.for_each_ref(
             |dest_chain_selector| {
                 let dest_chain_selector = *dest_chain_selector;
 
-                // Aborts if the dest_chain_selector does not exist in V1
                 let DestChainConfig {
                     sequence_number,
                     allowlist_enabled,
@@ -1614,20 +1624,32 @@ module ccip_onramp::onramp {
                         allowed_senders
                     };
 
-                dest_chain_configs_v2.dest_chain_configs.add(
-                    dest_chain_selector, dest_chain_config_v2
-                );
+                // Only add if it doesn't exist in V2
+                if (!dest_chain_configs_v2.dest_chain_configs.contains(dest_chain_selector)) {
+                    dest_chain_configs_v2.dest_chain_configs.add(
+                        dest_chain_selector, dest_chain_config_v2
+                    );
 
-                event::emit_event(
-                    &mut dest_chain_configs_v2.dest_chain_config_v2_set_events,
-                    DestChainConfigSetV2 {
-                        dest_chain_selector,
-                        sequence_number,
-                        router,
-                        router_state_address,
-                        allowlist_enabled
-                    }
-                );
+                    event::emit_event(
+                        &mut state.dest_chain_config_set_events,
+                        DestChainConfigSet {
+                            dest_chain_selector,
+                            sequence_number,
+                            allowlist_enabled,
+                            router
+                        }
+                    );
+                    event::emit_event(
+                        &mut dest_chain_configs_v2.dest_chain_config_v2_set_events,
+                        DestChainConfigSetV2 {
+                            dest_chain_selector,
+                            sequence_number,
+                            router,
+                            router_state_address,
+                            allowlist_enabled
+                        }
+                    );
+                }
             }
         );
     }
@@ -1642,5 +1664,19 @@ module ccip_onramp::onramp {
     #[test_only]
     public fun test_register_mcms_entrypoint(publisher: &signer) {
         register_mcms_entrypoint(publisher);
+    }
+
+    #[test_only]
+    public fun get_dest_chain_config_set_events(): vector<DestChainConfigSet> acquires OnRampState {
+        event::emitted_events_by_handle<DestChainConfigSet>(
+            &borrow_state().dest_chain_config_set_events
+        )
+    }
+
+    #[test_only]
+    public fun get_dest_chain_config_v2_set_events(): vector<DestChainConfigSetV2> acquires DestChainConfigsV2 {
+        event::emitted_events_by_handle<DestChainConfigSetV2>(
+            &borrow_dest_chain_configs_v2().dest_chain_config_v2_set_events
+        )
     }
 }

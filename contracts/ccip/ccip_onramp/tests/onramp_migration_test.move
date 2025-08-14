@@ -85,16 +85,12 @@ module ccip_onramp::onramp_migration_test {
         let next_seq = onramp::get_expected_next_sequence_number(DEST_CHAIN_SELECTOR);
         assert!(next_seq == 1);
 
-        // Migrate first two chains
-        onramp::migrate_dest_chain_configs_to_v2(
-            owner,
-            vector[DEST_CHAIN_SELECTOR, CHAIN_SELECTOR_2]
-        );
+        onramp::migrate_dest_chain_configs_to_v2(owner);
 
-        // Test that functions still work after partial migration
+        // Assert everything got migrated
         assert!(onramp::is_chain_supported(DEST_CHAIN_SELECTOR));
         assert!(onramp::is_chain_supported(CHAIN_SELECTOR_2));
-        assert!(!onramp::is_chain_supported(CHAIN_SELECTOR_3)); // Still in V1
+        assert!(onramp::is_chain_supported(CHAIN_SELECTOR_3));
 
         // Test V2 function for migrated chains
         let (seq1_v2, enabled1_v2, router1_v2, router_state1_v2) =
@@ -147,10 +143,7 @@ module ccip_onramp::onramp_migration_test {
             onramp::get_dest_chain_config(DEST_CHAIN_SELECTOR);
 
         // Migrate specific chains
-        onramp::migrate_dest_chain_configs_to_v2(
-            owner,
-            vector[DEST_CHAIN_SELECTOR, CHAIN_SELECTOR_2]
-        );
+        onramp::migrate_dest_chain_configs_to_v2(owner);
 
         // Verify data is now in V2 storage
         let (seq1_v2, enabled1_v2, router1_v2, router_state1_v2) =
@@ -159,10 +152,6 @@ module ccip_onramp::onramp_migration_test {
         assert!(enabled1_v2 == enabled1);
         assert!(router1_v2 == router1);
         assert!(router_state1_v2 == state_address);
-
-        // Chain 3 was NOT migrated, so it won't exist in V2 storage
-        // The system now uses V2 resource, so chain 3 should not be supported
-        assert!(!onramp::is_chain_supported(CHAIN_SELECTOR_3));
     }
 
     #[
@@ -192,6 +181,8 @@ module ccip_onramp::onramp_migration_test {
                 burn_mint_token_pool,
                 lock_release_token_pool
             );
+        // Setup emits 1 DestChainConfigSet event
+        assert!(onramp::get_dest_chain_config_set_events().length() == 1);
 
         let router_address = @0xabc;
         onramp::apply_dest_chain_config_updates(
@@ -201,28 +192,30 @@ module ccip_onramp::onramp_migration_test {
             vector[true, true, true]
         );
 
+        // Verify 3 more events were emitted (1 + 4)
+        assert!(onramp::get_dest_chain_config_set_events().length() == 4);
+
         // First migration batch - migrate only DEST_CHAIN_SELECTOR
-        onramp::migrate_dest_chain_configs_to_v2(owner, vector[DEST_CHAIN_SELECTOR]);
+        onramp::migrate_dest_chain_configs_to_v2(owner);
 
-        // After creating V2 storage, system switches to V2 for all operations
-        // Only migrated chains will be supported
+        // Verify 3 more events were emitted (1 + 4)
+        assert!(onramp::get_dest_chain_config_set_events().length() == 7);
+
+        // Verify 3 events emitted for DestChainConfigSetV2 after migration
+        assert!(onramp::get_dest_chain_config_v2_set_events().length() == 3);
+
         assert!(onramp::is_chain_supported(DEST_CHAIN_SELECTOR));
+        assert!(onramp::is_chain_supported(CHAIN_SELECTOR_2));
+        assert!(onramp::is_chain_supported(CHAIN_SELECTOR_3));
+
         let (_, _, _, _) = onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
 
-        // Chain 2 and 3 were NOT migrated, so they won't exist in V2 storage
-        assert!(!onramp::is_chain_supported(CHAIN_SELECTOR_2));
-        assert!(!onramp::is_chain_supported(CHAIN_SELECTOR_3));
+        // Call migrate again, but no new chains were migrated
+        onramp::migrate_dest_chain_configs_to_v2(owner);
 
-        // Second migration batch
-        onramp::migrate_dest_chain_configs_to_v2(
-            owner,
-            vector[CHAIN_SELECTOR_2, CHAIN_SELECTOR_3]
-        );
-
-        // Verify all chains are now in V2
-        let (_, _, _, _) = onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
-        let (_, _, _, _) = onramp::get_dest_chain_config_v2(CHAIN_SELECTOR_2);
-        let (_, _, _, _) = onramp::get_dest_chain_config_v2(CHAIN_SELECTOR_3);
+        // Verify no new events were emitted as we did not migrate any more chains
+        assert!(onramp::get_dest_chain_config_set_events().length() == 7);
+        assert!(onramp::get_dest_chain_config_v2_set_events().length() == 3);
     }
 
     #[
@@ -323,7 +316,7 @@ module ccip_onramp::onramp_migration_test {
         assert!(senders1.is_empty()); // Initially empty
 
         // Migrate
-        onramp::migrate_dest_chain_configs_to_v2(owner, vector[DEST_CHAIN_SELECTOR]);
+        onramp::migrate_dest_chain_configs_to_v2(owner);
         assert!(onramp::dest_chain_configs_v2_exists());
 
         // Test allowlist functions after migration
@@ -395,44 +388,6 @@ module ccip_onramp::onramp_migration_test {
             lock_release_token_pool = @lock_release_token_pool
         )
     ]
-    #[expected_failure(abort_code = 65537, location = std::smart_table)]
-    // Should fail because chain doesn't exist in V1
-    fun test_migration_nonexistent_chain_fails(
-        aptos_framework: &signer,
-        ccip: &signer,
-        ccip_onramp: &signer,
-        owner: &signer,
-        burn_mint_token_pool: &signer,
-        lock_release_token_pool: &signer
-    ) {
-        let _state_address =
-            init_onramp_for_test(
-                aptos_framework,
-                ccip,
-                ccip_onramp,
-                owner,
-                burn_mint_token_pool,
-                lock_release_token_pool
-            );
-
-        // Try to migrate a chain that doesn't exist
-        // Aborts from `smart_table` module when calling `remove`
-        onramp::migrate_dest_chain_configs_to_v2(
-            owner,
-            vector[999999] // Non-existent chain
-        );
-    }
-
-    #[
-        test(
-            aptos_framework = @aptos_framework,
-            ccip = @ccip,
-            ccip_onramp = @ccip_onramp,
-            owner = @0x100,
-            burn_mint_token_pool = @burn_mint_token_pool,
-            lock_release_token_pool = @lock_release_token_pool
-        )
-    ]
     #[expected_failure(abort_code = 327683, location = ccip::ownable)]
     // Should fail due to ownership check
     fun test_migration_requires_ownership(
@@ -453,9 +408,7 @@ module ccip_onramp::onramp_migration_test {
                 lock_release_token_pool
             );
         // Non-owner should not be able to migrate
-        onramp::migrate_dest_chain_configs_to_v2(
-            aptos_framework, vector[DEST_CHAIN_SELECTOR]
-        );
+        onramp::migrate_dest_chain_configs_to_v2(aptos_framework);
     }
 
     #[
@@ -497,7 +450,7 @@ module ccip_onramp::onramp_migration_test {
         let (original_seq, _, _) = onramp::get_dest_chain_config(DEST_CHAIN_SELECTOR);
 
         // Migrate
-        onramp::migrate_dest_chain_configs_to_v2(owner, vector[DEST_CHAIN_SELECTOR]);
+        onramp::migrate_dest_chain_configs_to_v2(owner);
         assert!(onramp::dest_chain_configs_v2_exists());
 
         // Verify sequence number is preserved
