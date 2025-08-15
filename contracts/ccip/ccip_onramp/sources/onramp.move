@@ -273,32 +273,6 @@ module ccip_onramp::onramp {
         move_to(state_signer, state);
     }
 
-    public entry fun initialize_dest_chain_configs_v2(caller: &signer) acquires OnRampState {
-        let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
-
-        assert!(
-            !exists<DestChainConfigsV2>(get_state_address_internal()),
-            error::invalid_state(E_DEST_CHAIN_CONFIGS_V2_ALREADY_INITIALIZED)
-        );
-
-        let state_signer =
-            &account::create_signer_with_capability(&state.state_signer_cap);
-
-        let dest_chain_configs_v2 = DestChainConfigsV2 {
-            dest_chain_configs: smart_table::new(),
-            dest_chain_config_v2_set_events: account::new_event_handle(state_signer)
-        };
-
-        migrate_dest_chain_configs_v2_internal(
-            state,
-            &mut dest_chain_configs_v2,
-            get_state_address_internal()
-        );
-
-        move_to(state_signer, dest_chain_configs_v2);
-    }
-
     #[view]
     public fun is_chain_supported(
         dest_chain_selector: u64
@@ -1534,6 +1508,9 @@ module ccip_onramp::onramp {
             let to = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
             execute_ownership_transfer(&caller, to)
+        } else if (function_bytes == b"migrate_dest_chain_configs_to_v2") {
+            bcs_stream::assert_is_consumed(&stream);
+            migrate_dest_chain_configs_to_v2(&caller)
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };
@@ -1561,37 +1538,31 @@ module ccip_onramp::onramp {
 
     // ========================= MIGRATION ==========================
 
-    public entry fun migrate_dest_chain_configs_to_v2(
-        caller: &signer
-    ) acquires OnRampState, DestChainConfigsV2 {
+    public entry fun migrate_dest_chain_configs_to_v2(caller: &signer) acquires OnRampState {
         let state = borrow_state_mut();
         ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
         let router_state_address = get_state_address_internal();
-        if (!exists<DestChainConfigsV2>(router_state_address)) {
-            let state_signer =
-                &account::create_signer_with_capability(&state.state_signer_cap);
+        assert!(
+            !exists<DestChainConfigsV2>(router_state_address),
+            error::invalid_state(E_DEST_CHAIN_CONFIGS_V2_ALREADY_INITIALIZED)
+        );
 
-            let mut_dest_chain_configs_v2 = DestChainConfigsV2 {
-                dest_chain_configs: smart_table::new(),
-                dest_chain_config_v2_set_events: account::new_event_handle(state_signer)
-            };
+        let state_signer =
+            &account::create_signer_with_capability(&state.state_signer_cap);
 
-            migrate_dest_chain_configs_v2_internal(
-                state,
-                &mut mut_dest_chain_configs_v2,
-                router_state_address
-            );
+        let mut_dest_chain_configs_v2 = DestChainConfigsV2 {
+            dest_chain_configs: smart_table::new(),
+            dest_chain_config_v2_set_events: account::new_event_handle(state_signer)
+        };
 
-            move_to(state_signer, mut_dest_chain_configs_v2);
-        } else {
-            let dest_chain_configs_v2 = borrow_dest_chain_configs_v2_mut();
-            migrate_dest_chain_configs_v2_internal(
-                state,
-                dest_chain_configs_v2,
-                router_state_address
-            );
-        }
+        migrate_dest_chain_configs_v2_internal(
+            state,
+            &mut mut_dest_chain_configs_v2,
+            router_state_address
+        );
+
+        move_to(state_signer, mut_dest_chain_configs_v2);
     }
 
     inline fun migrate_dest_chain_configs_v2_internal(

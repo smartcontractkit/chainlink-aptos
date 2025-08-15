@@ -164,7 +164,8 @@ module ccip_onramp::onramp_migration_test {
             lock_release_token_pool = @lock_release_token_pool
         )
     ]
-    fun test_incremental_migration(
+    #[expected_failure(abort_code = 196631, location = ccip_onramp::onramp)]
+    fun test_double_migration_fails(
         aptos_framework: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
@@ -210,12 +211,8 @@ module ccip_onramp::onramp_migration_test {
 
         let (_, _, _, _) = onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
 
-        // Call migrate again, but no new chains were migrated
+        // This should fail with E_DEST_CHAIN_CONFIGS_V2_ALREADY_INITIALIZED
         onramp::migrate_dest_chain_configs_to_v2(owner);
-
-        // Verify no new events were emitted as we did not migrate any more chains
-        assert!(onramp::get_dest_chain_config_set_events().length() == 7);
-        assert!(onramp::get_dest_chain_config_v2_set_events().length() == 3);
     }
 
     #[
@@ -256,7 +253,7 @@ module ccip_onramp::onramp_migration_test {
         );
 
         // Initialize will migrate all V1 configs to V2
-        onramp::initialize_dest_chain_configs_v2(owner);
+        onramp::migrate_dest_chain_configs_to_v2(owner);
 
         // Verify V2 configs work
         let (seq1, enabled1, router1, router_state1) =
@@ -352,42 +349,6 @@ module ccip_onramp::onramp_migration_test {
             lock_release_token_pool = @lock_release_token_pool
         )
     ]
-    #[expected_failure(abort_code = 196631, location = ccip_onramp::onramp)]
-    fun test_double_v2_initialization_fails(
-        aptos_framework: &signer,
-        ccip: &signer,
-        ccip_onramp: &signer,
-        owner: &signer,
-        burn_mint_token_pool: &signer,
-        lock_release_token_pool: &signer
-    ) {
-        let _state_address =
-            init_onramp_for_test(
-                aptos_framework,
-                ccip,
-                ccip_onramp,
-                owner,
-                burn_mint_token_pool,
-                lock_release_token_pool
-            );
-
-        // First initialization should succeed
-        onramp::initialize_dest_chain_configs_v2(owner);
-
-        // Second initialization should fail
-        onramp::initialize_dest_chain_configs_v2(owner);
-    }
-
-    #[
-        test(
-            aptos_framework = @aptos_framework,
-            ccip = @ccip,
-            ccip_onramp = @ccip_onramp,
-            owner = @0x100,
-            burn_mint_token_pool = @burn_mint_token_pool,
-            lock_release_token_pool = @lock_release_token_pool
-        )
-    ]
     #[expected_failure(abort_code = 327683, location = ccip::ownable)]
     // Should fail due to ownership check
     fun test_migration_requires_ownership(
@@ -469,7 +430,7 @@ module ccip_onramp::onramp_migration_test {
             lock_release_token_pool = @lock_release_token_pool
         )
     ]
-    fun test_initialize_dest_chain_configs_v2_auto_migration(
+    fun test_migrate_dest_chain_configs_to_v2_auto_migration(
         aptos_framework: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
@@ -502,7 +463,7 @@ module ccip_onramp::onramp_migration_test {
         assert!(!onramp::dest_chain_configs_v2_exists());
 
         // Auto-migrate ALL V1 configs
-        onramp::initialize_dest_chain_configs_v2(owner);
+        onramp::migrate_dest_chain_configs_to_v2(owner);
 
         // Verify V2 exists and all configs were migrated
         assert!(onramp::dest_chain_configs_v2_exists());
@@ -572,7 +533,7 @@ module ccip_onramp::onramp_migration_test {
         );
 
         // Migrate to V2
-        onramp::initialize_dest_chain_configs_v2(owner);
+        onramp::migrate_dest_chain_configs_to_v2(owner);
         assert!(onramp::dest_chain_configs_v2_exists());
 
         // Now trying to use V1 function should fail with E_DEST_CHAIN_CONFIGS_V2_ALREADY_INITIALIZED
@@ -629,7 +590,7 @@ module ccip_onramp::onramp_migration_test {
             onramp::get_dest_chain_config(CHAIN_SELECTOR_2);
 
         // Migrate to V2
-        onramp::initialize_dest_chain_configs_v2(owner);
+        onramp::migrate_dest_chain_configs_to_v2(owner);
         assert!(onramp::dest_chain_configs_v2_exists());
 
         // Test that V1 function now reads from V2 storage but returns V1-compatible data
@@ -694,7 +655,7 @@ module ccip_onramp::onramp_migration_test {
         assert!(onramp::is_chain_supported(DEST_CHAIN_SELECTOR));
 
         // Initialize V2 - should auto-migrate the existing V1 configuration
-        onramp::initialize_dest_chain_configs_v2(owner);
+        onramp::migrate_dest_chain_configs_to_v2(owner);
         assert!(onramp::dest_chain_configs_v2_exists());
 
         // The existing chain should still be supported (now in V2)
