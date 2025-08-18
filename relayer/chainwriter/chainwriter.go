@@ -21,7 +21,7 @@ import (
 
 // On Aptos, we're unable to specify the gas limit for the receiver, so we need to add on a baseline execute overhead so the transaction will always at least be attempted on-chain.
 // TODO: This should be configurable and passed in as a CW config param.
-const AptosCCIPExecuteGasLimitOverhead = 200
+const AptosCCIPExecuteGasLimitOverhead = 34
 
 type aptosChainWriter struct {
 	logger    logger.Logger
