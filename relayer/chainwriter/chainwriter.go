@@ -202,6 +202,9 @@ func (a *aptosChainWriter) GetEstimateFee(ctx context.Context, contract, method 
 }
 
 func adjustTxMetaForCCIPExecute(meta *commontypes.TxMeta, moduleName, functionName string, paramValues []any) (*commontypes.TxMeta, error) {
+	// On Aptos, we're unable to specify the gas limit for the receiver, so we need to add on a baseline execute overhead so the transaction will always at least be attempted on-chain.
+	const AptosCCIPExecuteGasLimitOverhead = 200
+
 	// Skip non-CCIP offramp:execute tx
 	if moduleName != "offramp" || functionName != "execute" {
 		return meta, nil
@@ -234,7 +237,7 @@ func adjustTxMetaForCCIPExecute(meta *commontypes.TxMeta, moduleName, functionNa
 		return meta, fmt.Errorf("execution report gas limit is nil")
 	}
 
-	totalGasLimit := new(big.Int).Set(report.Message.GasLimit)
+	totalGasLimit := new(big.Int).Add(report.Message.GasLimit, big.NewInt(AptosCCIPExecuteGasLimitOverhead))
 
 	for _, tokenAmount := range report.Message.TokenAmounts {
 		destGasAmount := new(big.Int).SetUint64(uint64(tokenAmount.DestGasAmount))
