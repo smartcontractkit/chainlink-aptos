@@ -19,6 +19,10 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
 
+// On Aptos, we're unable to specify the gas limit for the receiver, so we need to add on a baseline execute overhead so the transaction will always at least be attempted on-chain.
+// TODO: This should be configurable and passed in as a CW config param.
+const AptosCCIPExecuteGasLimitOverhead = 200
+
 type aptosChainWriter struct {
 	logger    logger.Logger
 	txm       *txm.AptosTxm
@@ -202,9 +206,6 @@ func (a *aptosChainWriter) GetEstimateFee(ctx context.Context, contract, method 
 }
 
 func adjustTxMetaForCCIPExecute(meta *commontypes.TxMeta, moduleName, functionName string, paramValues []any) (*commontypes.TxMeta, error) {
-	// On Aptos, we're unable to specify the gas limit for the receiver, so we need to add on a baseline execute overhead so the transaction will always at least be attempted on-chain.
-	const AptosCCIPExecuteGasLimitOverhead = 200
-
 	// Skip non-CCIP offramp:execute tx
 	if moduleName != "offramp" || functionName != "execute" {
 		return meta, nil
