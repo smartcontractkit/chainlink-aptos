@@ -339,7 +339,7 @@ module regulated_token::regulated_token {
     }
 
     public entry fun burn(
-        burner: &signer, from: address, amount: u64
+        caller: &signer, from: address, amount: u64
     ) acquires TokenMetadataRefs, TokenState {
         assert_not_paused();
         assert!(amount != 0, E_INVALID_AMOUNT);
@@ -348,21 +348,21 @@ module regulated_token::regulated_token {
         let from_store = primary_fungible_store::primary_store(from, token_metadata);
         assert_not_frozen(from_store, token_metadata);
 
-        let burner_addr = signer::address_of(burner);
+        let caller_addr = signer::address_of(caller);
         let (is_bridge_burner, is_token_pool_burner, _is_native_burner) =
-            assert_burner_and_get_type(burner_addr, token_metadata);
+            assert_burner_and_get_type(caller_addr, token_metadata);
 
         primary_fungible_store::burn(
             &borrow_token_metadata_refs().burn_ref, from, amount
         );
 
-        if (is_bridge_burner) {
-            event::emit(BridgeBurn { burner: burner_addr, from, amount });
-        } else if (is_token_pool_burner) {
-            event::emit(TokenPoolBurn { burner: burner_addr, from, amount });
-        } else {
-            event::emit(NativeBurn { burner: burner_addr, from, amount });
-        };
+        emit_burn_event(
+            is_bridge_burner,
+            is_token_pool_burner,
+            caller_addr,
+            from,
+            amount
+        );
     }
 
     public entry fun batch_burn_frozen_funds(
@@ -391,23 +391,13 @@ module regulated_token::regulated_token {
                     &borrow_token_metadata_refs().burn_ref, account, balance
                 );
 
-                if (is_bridge_burner) {
-                    event::emit(
-                        BridgeBurn { burner: caller_addr, from: account, amount: balance }
-                    );
-                } else if (is_token_pool_burner) {
-                    event::emit(
-                        TokenPoolBurn {
-                            burner: caller_addr,
-                            from: account,
-                            amount: balance
-                        }
-                    );
-                } else {
-                    event::emit(
-                        NativeBurn { burner: caller_addr, from: account, amount: balance }
-                    );
-                }
+                emit_burn_event(
+                    is_bridge_burner,
+                    is_token_pool_burner,
+                    caller_addr,
+                    account,
+                    balance
+                );
             }
         };
     }
@@ -418,7 +408,7 @@ module regulated_token::regulated_token {
         caller: &signer, role_number: u8, account: address
     ) {
         let role = get_role(role_number);
-        
+
         access_control::grant_role(
             caller,
             token_metadata_internal(),
@@ -696,6 +686,22 @@ module regulated_token::regulated_token {
 
     inline fun borrow_token_metadata_refs(): &TokenMetadataRefs {
         &TokenMetadataRefs[token_address_internal()]
+    }
+
+    inline fun emit_burn_event(
+        is_bridge_burner: bool,
+        is_token_pool_burner: bool,
+        burner: address,
+        from: address,
+        amount: u64
+    ) {
+        if (is_bridge_burner) {
+            event::emit(BridgeBurn { burner, from, amount });
+        } else if (is_token_pool_burner) {
+            event::emit(TokenPoolBurn { burner, from, amount });
+        } else {
+            event::emit(NativeBurn { burner, from, amount });
+        }
     }
 
     public fun pauser_role(): Role {

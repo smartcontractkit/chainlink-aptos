@@ -8,8 +8,7 @@ regulated_token = "_"
 admin = "_"
 
 [dev-addresses]
-# Calculated with object::create_named_object()
-regulated_token = "0x121dfbc38157d675d96eef0bcc54e70e9801714138ce54028b5655459c6376ee"
+regulated_token = "0x123"
 admin = "0x456"
 
 [dependencies]
