@@ -128,6 +128,22 @@ The TXM maintains an `AccountStore` that manages:
 
 **Account Resolution**: Resolve public key to account address, check for authentication key rotation, load current sequence number, and prepare for signing operations.
 
+## In-Memory Storage & Transaction Management
+
+### Storage Architecture
+
+The ChainWriter operates entirely in-memory without persistent storage. All transaction state is maintained in concurrent-safe maps during the transaction lifecycle.
+
+### Transaction Lifecycle Management
+
+**In-Memory Transaction Store**: Pending transactions are stored in memory and tracked from submission through final confirmation.
+
+**Automatic Pruning**: The system implements automatic cleanup of completed transactions:
+- **Trigger Conditions**: Pruning occurs periodically based on configurable intervals
+- **Retention Policy**: Transactions are eligible for removal after reaching final states (Finalized, Failed, Fatal) and exceeding the configured expiration time
+
+**Restart Behavior**: When the service restarts, all in-memory transaction state is lost. Active transactions must be resubmitted by callers if needed.
+
 
 ## Error Handling & Resilience
 
