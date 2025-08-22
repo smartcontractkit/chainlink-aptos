@@ -226,6 +226,58 @@ module regulated_token::regulated_token {
     }
 
     #[view]
+    public fun get_admin(): address {
+        access_control::admin<Metadata, Role>(token_metadata_internal())
+    }
+
+    #[view]
+    public fun get_minters(): vector<address> {
+        access_control::get_role_members(token_metadata_internal(), minter_role())
+    }
+
+    #[view]
+    public fun get_bridge_minters_or_burners(): vector<address> {
+        access_control::get_role_members(
+            token_metadata_internal(), bridge_minter_or_burner_role()
+        )
+    }
+
+    #[view]
+    public fun get_burners(): vector<address> {
+        access_control::get_role_members(token_metadata_internal(), burner_role())
+    }
+
+    #[view]
+    public fun get_freezers(): vector<address> {
+        access_control::get_role_members(token_metadata_internal(), freezer_role())
+    }
+
+    #[view]
+    public fun get_unfreezers(): vector<address> {
+        access_control::get_role_members(token_metadata_internal(), unfreezer_role())
+    }
+
+    #[view]
+    public fun get_pausers(): vector<address> {
+        access_control::get_role_members(token_metadata_internal(), pauser_role())
+    }
+
+    #[view]
+    public fun get_unpausers(): vector<address> {
+        access_control::get_role_members(token_metadata_internal(), unpauser_role())
+    }
+
+    #[view]
+    public fun get_recovery_managers(): vector<address> {
+        access_control::get_role_members(token_metadata_internal(), recovery_role())
+    }
+
+    #[view]
+    public fun get_pending_admin(): address {
+        access_control::pending_admin<Metadata, Role>(token_metadata_internal())
+    }
+
+    #[view]
     public fun is_frozen(account: address): bool acquires TokenState {
         TokenState[token_address_internal()].frozen_accounts.contains(&account)
     }

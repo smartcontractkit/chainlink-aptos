@@ -549,6 +549,69 @@ module regulated_token::regulated_token_comprehensive_test {
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
+    fun test_view_role_functions(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup_token_and_roles(admin, regulated_token);
+
+        // Test all the new view functions to verify they work
+        let admin_addr = regulated_token::get_admin();
+        assert!(admin_addr == ADMIN);
+
+        let pending_admin = regulated_token::get_pending_admin();
+        assert!(pending_admin == @0x0); // Initially no pending admin
+
+        // Test role member getters - setup_token_and_roles creates these roles
+        let minters = regulated_token::get_minters();
+        assert!(minters.length() == 1); // MINTER1 from setup
+        assert!(minters.contains(&MINTER1));
+
+        let bridge_minters_or_burners = regulated_token::get_bridge_minters_or_burners();
+        assert!(bridge_minters_or_burners.length() == 2); // BRIDGE_MINTER and BRIDGE_BURNER from setup
+        assert!(bridge_minters_or_burners.contains(&BRIDGE_MINTER));
+        assert!(bridge_minters_or_burners.contains(&BRIDGE_BURNER));
+
+        let burners = regulated_token::get_burners();
+        assert!(burners.length() == 1); // BURNER1 from setup
+        assert!(burners.contains(&BURNER1));
+
+        let freezers = regulated_token::get_freezers();
+        assert!(freezers.length() == 2); // FREEZER1 and FREEZER2 from setup
+        assert!(freezers.contains(&FREEZER1));
+        assert!(freezers.contains(&FREEZER2));
+
+        let unfreezers = regulated_token::get_unfreezers();
+        assert!(unfreezers.length() == 1); // UNFREEZER1 from setup
+        assert!(unfreezers.contains(&UNFREEZER1));
+
+        let pausers = regulated_token::get_pausers();
+        assert!(pausers.length() == 2); // PAUSER1 and PAUSER2 from setup
+        assert!(pausers.contains(&PAUSER1));
+        assert!(pausers.contains(&PAUSER2));
+
+        let unpausers = regulated_token::get_unpausers();
+        assert!(unpausers.length() == 1); // UNPAUSER1 from setup
+        assert!(unpausers.contains(&UNPAUSER1));
+
+        let recovery_managers = regulated_token::get_recovery_managers();
+        assert!(recovery_managers.length() == 1); // RECOVERY1 from setup
+        assert!(recovery_managers.contains(&RECOVERY1));
+
+        // Test that these functions return the same data as the generic role functions
+        assert!(regulated_token::get_role_members(MINTER_ROLE) == minters);
+        assert!(
+            regulated_token::get_role_members(BRIDGE_MINTER_OR_BURNER_ROLE)
+                == bridge_minters_or_burners
+        );
+        assert!(regulated_token::get_role_members(BURNER_ROLE) == burners);
+        assert!(regulated_token::get_role_members(FREEZER_ROLE) == freezers);
+        assert!(regulated_token::get_role_members(UNFREEZER_ROLE) == unfreezers);
+        assert!(regulated_token::get_role_members(PAUSER_ROLE) == pausers);
+        assert!(regulated_token::get_role_members(UNPAUSER_ROLE) == unpausers);
+        assert!(regulated_token::get_role_members(RECOVERY_ROLE) == recovery_managers);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
     fun test_get_role_function_coverage(
         admin: &signer, regulated_token: &signer
     ) {
