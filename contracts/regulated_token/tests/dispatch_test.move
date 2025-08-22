@@ -14,7 +14,12 @@ module regulated_token::dispatch_test {
     const USER1: address = @0x200;
     const USER2: address = @0x300;
 
-    fun setup(regulated_token: &signer) {
+    fun setup(owner: &signer, regulated_token: &signer) {
+        let constructor_ref = object::create_named_object(owner, b"regulated_token");
+        account::create_account_if_does_not_exist(
+            object::address_from_constructor_ref(&constructor_ref)
+        );
+
         regulated_token::init_module_for_testing(regulated_token);
     }
 
@@ -67,7 +72,7 @@ module regulated_token::dispatch_test {
     fun test_transfer_triggers_dispatch_hooks(
         admin: &signer, regulated_token: &signer
     ) {
-        setup(regulated_token);
+        setup(admin, regulated_token);
         setup_roles(admin);
         setup_accounts_with_tokens(admin, 1000);
 
@@ -89,7 +94,7 @@ module regulated_token::dispatch_test {
     fun test_deposit_withdraw_trigger_hooks(
         admin: &signer, regulated_token: &signer
     ) {
-        setup(regulated_token);
+        setup(admin, regulated_token);
         setup_roles(admin);
         setup_accounts_with_tokens(admin, 1000);
 
@@ -119,7 +124,7 @@ module regulated_token::dispatch_test {
     fun test_transfer_blocked_when_paused(
         admin: &signer, regulated_token: &signer
     ) {
-        setup(regulated_token);
+        setup(admin, regulated_token);
         setup_roles(admin);
         setup_accounts_with_tokens(admin, 1000);
 
@@ -144,7 +149,7 @@ module regulated_token::dispatch_test {
     fun test_withdraw_blocked_when_paused(
         admin: &signer, regulated_token: &signer
     ) {
-        setup(regulated_token);
+        setup(admin, regulated_token);
         setup_roles(admin);
         setup_accounts_with_tokens(admin, 1000);
 
@@ -171,7 +176,7 @@ module regulated_token::dispatch_test {
     fun test_deposit_blocked_when_paused(
         admin: &signer, regulated_token: &signer
     ) {
-        setup(regulated_token);
+        setup(admin, regulated_token);
         setup_roles(admin);
         setup_accounts_with_tokens(admin, 1000);
 
@@ -197,7 +202,7 @@ module regulated_token::dispatch_test {
     fun test_transfer_from_frozen_account_blocked(
         admin: &signer, regulated_token: &signer
     ) {
-        setup(regulated_token);
+        setup(admin, regulated_token);
         setup_roles(admin);
         setup_accounts_with_tokens(admin, 1000);
 
@@ -217,7 +222,7 @@ module regulated_token::dispatch_test {
     fun test_transfer_to_frozen_account_blocked(
         admin: &signer, regulated_token: &signer
     ) {
-        setup(regulated_token);
+        setup(admin, regulated_token);
         setup_roles(admin);
         setup_accounts_with_tokens(admin, 1000);
 
@@ -237,7 +242,7 @@ module regulated_token::dispatch_test {
     fun test_withdraw_from_frozen_account_blocked(
         admin: &signer, regulated_token: &signer
     ) {
-        setup(regulated_token);
+        setup(admin, regulated_token);
         setup_roles(admin);
         setup_accounts_with_tokens(admin, 1000);
 
@@ -259,7 +264,7 @@ module regulated_token::dispatch_test {
     fun test_deposit_to_frozen_account_blocked(
         admin: &signer, regulated_token: &signer
     ) {
-        setup(regulated_token);
+        setup(admin, regulated_token);
         setup_roles(admin);
         setup_accounts_with_tokens(admin, 1000);
 
@@ -284,7 +289,7 @@ module regulated_token::dispatch_test {
     fun test_unfreeze_allows_transfers(
         admin: &signer, regulated_token: &signer
     ) {
-        setup(regulated_token);
+        setup(admin, regulated_token);
         setup_roles(admin);
         setup_accounts_with_tokens(admin, 1000);
 
@@ -310,7 +315,7 @@ module regulated_token::dispatch_test {
     fun test_unpause_allows_transfers(
         admin: &signer, regulated_token: &signer
     ) {
-        setup(regulated_token);
+        setup(admin, regulated_token);
         setup_roles(admin);
         setup_accounts_with_tokens(admin, 1000);
 
@@ -346,7 +351,7 @@ module regulated_token::dispatch_test {
     fun test_paused_overrides_unfrozen(
         admin: &signer, regulated_token: &signer
     ) {
-        setup(regulated_token);
+        setup(admin, regulated_token);
         setup_roles(admin);
         setup_accounts_with_tokens(admin, 1000);
 
@@ -366,7 +371,7 @@ module regulated_token::dispatch_test {
     fun test_frozen_blocks_even_when_unpaused(
         admin: &signer, regulated_token: &signer
     ) {
-        setup(regulated_token);
+        setup(admin, regulated_token);
         setup_roles(admin);
         setup_accounts_with_tokens(admin, 1000);
 
@@ -386,7 +391,7 @@ module regulated_token::dispatch_test {
     fun test_dispatch_with_wrong_transfer_ref(
         admin: &signer, regulated_token: &signer
     ) {
-        setup(regulated_token);
+        setup(admin, regulated_token);
         setup_roles(admin);
 
         // Create a second fungible asset to get a different TransferRef
@@ -417,7 +422,7 @@ module regulated_token::dispatch_test {
     fun test_dispatch_with_invalid_store(
         admin: &signer, regulated_token: &signer
     ) {
-        setup(regulated_token);
+        setup(admin, regulated_token);
         setup_roles(admin);
         setup_accounts_with_tokens(admin, 1000);
 

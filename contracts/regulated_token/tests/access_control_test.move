@@ -400,6 +400,30 @@ module regulated_token::access_control_test {
         access_control::get_role_member(access_obj, TestRole::USER_ROLE, 0);
     }
 
+    #[test(creator = @0x999)]
+    #[expected_failure]
+    // Vector index out of bounds gives different error code
+    fun test_get_role_member_beyond_valid_index(creator: &signer) {
+        account::create_account_for_test(signer::address_of(creator));
+        account::create_account_for_test(ADMIN);
+        account::create_account_for_test(USER1);
+
+        let access_obj = setup_token_metadata(creator);
+        let admin = account::create_signer_for_test(ADMIN);
+
+        // Grant role to one user
+        access_control::grant_role(&admin, access_obj, TestRole::USER_ROLE, USER1);
+
+        // Verify we can access index 0
+        let member_0 = access_control::get_role_member(
+            access_obj, TestRole::USER_ROLE, 0
+        );
+        assert!(member_0 == USER1);
+
+        // Should abort when trying to access index 1 (only have 1 member)
+        access_control::get_role_member(access_obj, TestRole::USER_ROLE, 1);
+    }
+
     // ================================================================
     // |                    Edge Case Tests                          |
     // ================================================================
@@ -627,5 +651,498 @@ module regulated_token::access_control_test {
         assert!(access_control::admin<Metadata, TestRole>(access_obj) == ADMIN);
         // Pending should be USER1
         assert!(access_control::pending_admin<Metadata, TestRole>(access_obj) == USER1);
+    }
+
+    #[test(creator = @0x999)]
+    #[
+        expected_failure(
+            abort_code = access_control::E_NOT_ADMIN,
+            location = regulated_token::access_control
+        )
+    ]
+    fun test_wrong_user_accept_admin_fails(creator: &signer) {
+        account::create_account_for_test(signer::address_of(creator));
+        account::create_account_for_test(ADMIN);
+        account::create_account_for_test(USER1);
+        account::create_account_for_test(USER2);
+
+        let access_obj = setup_token_metadata(creator);
+        let admin = account::create_signer_for_test(ADMIN);
+        let user2 = account::create_signer_for_test(USER2);
+
+        // Transfer admin to USER1
+        access_control::transfer_admin<Metadata, TestRole>(&admin, access_obj, USER1);
+
+        // USER2 tries to accept (wrong user) - should fail
+        access_control::accept_admin<Metadata, TestRole>(&user2, access_obj);
+    }
+
+    #[test(creator = @0x999)]
+    fun test_multiple_admin_transfer_attempts(creator: &signer) {
+        account::create_account_for_test(signer::address_of(creator));
+        account::create_account_for_test(ADMIN);
+        account::create_account_for_test(USER1);
+        account::create_account_for_test(USER2);
+        account::create_account_for_test(MANAGER);
+
+        let access_obj = setup_token_metadata(creator);
+        let admin = account::create_signer_for_test(ADMIN);
+
+        // Multiple consecutive transfer attempts should overwrite pending
+        access_control::transfer_admin<Metadata, TestRole>(&admin, access_obj, USER1);
+        assert!(access_control::pending_admin<Metadata, TestRole>(access_obj) == USER1);
+
+        access_control::transfer_admin<Metadata, TestRole>(&admin, access_obj, USER2);
+        assert!(access_control::pending_admin<Metadata, TestRole>(access_obj) == USER2);
+
+        access_control::transfer_admin<Metadata, TestRole>(&admin, access_obj, MANAGER);
+        assert!(access_control::pending_admin<Metadata, TestRole>(access_obj)
+            == MANAGER);
+
+        // Only the final pending admin should be able to accept
+        let manager = account::create_signer_for_test(MANAGER);
+        access_control::accept_admin<Metadata, TestRole>(&manager, access_obj);
+        assert!(access_control::admin<Metadata, TestRole>(access_obj) == MANAGER);
+    }
+
+    #[test(creator = @0x999)]
+    fun test_admin_transfer_to_existing_role_holder(creator: &signer) {
+        account::create_account_for_test(signer::address_of(creator));
+        account::create_account_for_test(ADMIN);
+        account::create_account_for_test(USER1);
+
+        let access_obj = setup_token_metadata(creator);
+        let admin = account::create_signer_for_test(ADMIN);
+
+        // Grant USER1 a role first
+        access_control::grant_role(&admin, access_obj, TestRole::USER_ROLE, USER1);
+        assert!(access_control::has_role(access_obj, USER1, TestRole::USER_ROLE));
+
+        // Transfer admin to USER1 who already has a role
+        access_control::transfer_admin<Metadata, TestRole>(&admin, access_obj, USER1);
+
+        let user1 = account::create_signer_for_test(USER1);
+        access_control::accept_admin<Metadata, TestRole>(&user1, access_obj);
+
+        // USER1 should now be admin and still have their original role
+        assert!(access_control::admin<Metadata, TestRole>(access_obj) == USER1);
+        assert!(access_control::has_role(access_obj, USER1, TestRole::USER_ROLE));
+    }
+
+    #[test(creator = @0x999)]
+    fun test_new_admin_revoke_previous_admin_roles(creator: &signer) {
+        account::create_account_for_test(signer::address_of(creator));
+        account::create_account_for_test(ADMIN);
+        account::create_account_for_test(USER1);
+
+        let access_obj = setup_token_metadata(creator);
+        let admin = account::create_signer_for_test(ADMIN);
+
+        // Grant ADMIN some roles first
+        access_control::grant_role(
+            &admin,
+            access_obj,
+            TestRole::MANAGER_ROLE,
+            ADMIN
+        );
+        assert!(access_control::has_role(access_obj, ADMIN, TestRole::MANAGER_ROLE));
+
+        // Transfer admin to USER1
+        access_control::transfer_admin<Metadata, TestRole>(&admin, access_obj, USER1);
+        let user1 = account::create_signer_for_test(USER1);
+        access_control::accept_admin<Metadata, TestRole>(&user1, access_obj);
+
+        // New admin can revoke roles from previous admin
+        access_control::revoke_role(
+            &user1,
+            access_obj,
+            TestRole::MANAGER_ROLE,
+            ADMIN
+        );
+        assert!(!access_control::has_role(access_obj, ADMIN, TestRole::MANAGER_ROLE));
+
+        // Previous admin should no longer be able to perform admin functions
+        assert!(access_control::admin<Metadata, TestRole>(access_obj) == USER1);
+    }
+
+    // ================================================================
+    // |                    Performance/Scale Tests                  |
+    // ================================================================
+
+    #[test(creator = @0x999)]
+    fun test_large_role_membership_operations(creator: &signer) {
+        account::create_account_for_test(signer::address_of(creator));
+        account::create_account_for_test(ADMIN);
+
+        let access_obj = setup_token_metadata(creator);
+        let admin = account::create_signer_for_test(ADMIN);
+
+        // Test with 10 users (reasonable scale test)
+        let users = vector[
+            @0x1001,
+            @0x1002,
+            @0x1003,
+            @0x1004,
+            @0x1005,
+            @0x1006,
+            @0x1007,
+            @0x1008,
+            @0x1009,
+            @0x100a
+        ];
+        let num_users = users.length();
+
+        let i = 0;
+        while (i < num_users) {
+            let user_addr = users[i];
+            account::create_account_for_test(user_addr);
+            access_control::grant_role(
+                &admin,
+                access_obj,
+                TestRole::USER_ROLE,
+                user_addr
+            );
+            i = i + 1;
+        };
+
+        // Verify all users have the role
+        let count = access_control::get_role_member_count(
+            access_obj, TestRole::USER_ROLE
+        );
+        assert!(count == num_users, 1);
+
+        // Test get_role_members returns all members
+        let members = access_control::get_role_members(access_obj, TestRole::USER_ROLE);
+        assert!(members.length() == num_users, 2);
+
+        // Test random access by index
+        let member_5 = access_control::get_role_member(
+            access_obj, TestRole::USER_ROLE, 5
+        );
+        assert!(
+            access_control::has_role(access_obj, member_5, TestRole::USER_ROLE),
+            3
+        );
+
+        // Test revocation in the middle
+        let middle_index = num_users / 2;
+        let middle_member =
+            access_control::get_role_member(
+                access_obj, TestRole::USER_ROLE, middle_index
+            );
+        access_control::revoke_role(
+            &admin,
+            access_obj,
+            TestRole::USER_ROLE,
+            middle_member
+        );
+
+        // Count should be reduced by 1
+        let new_count =
+            access_control::get_role_member_count(access_obj, TestRole::USER_ROLE);
+        assert!(new_count == num_users - 1, 4);
+    }
+
+    #[test(creator = @0x999)]
+    fun test_multiple_roles_same_users_scale(creator: &signer) {
+        account::create_account_for_test(signer::address_of(creator));
+        account::create_account_for_test(ADMIN);
+
+        let access_obj = setup_token_metadata(creator);
+        let admin = account::create_signer_for_test(ADMIN);
+
+        // Test with 5 users each having 3 different roles
+        let users = vector[@0x2001, @0x2002, @0x2003, @0x2004, @0x2005];
+        let num_users = users.length();
+
+        let i = 0;
+        while (i < num_users) {
+            let user_addr = users[i];
+            account::create_account_for_test(user_addr);
+
+            // Give each user multiple roles
+            access_control::grant_role(
+                &admin,
+                access_obj,
+                TestRole::USER_ROLE,
+                user_addr
+            );
+            access_control::grant_role(
+                &admin,
+                access_obj,
+                TestRole::MANAGER_ROLE,
+                user_addr
+            );
+            access_control::grant_role(
+                &admin,
+                access_obj,
+                TestRole::VIEWER_ROLE,
+                user_addr
+            );
+
+            i = i + 1;
+        };
+
+        // Verify counts for all roles
+        assert!(
+            access_control::get_role_member_count(access_obj, TestRole::USER_ROLE)
+                == num_users,
+            1
+        );
+        assert!(
+            access_control::get_role_member_count(access_obj, TestRole::MANAGER_ROLE)
+                == num_users,
+            2
+        );
+        assert!(
+            access_control::get_role_member_count(access_obj, TestRole::VIEWER_ROLE)
+                == num_users,
+            3
+        );
+
+        // Test bulk role verification for a specific user
+        let test_user = @0x2003; // 3rd user
+        assert!(
+            access_control::has_role(access_obj, test_user, TestRole::USER_ROLE),
+            4
+        );
+        assert!(
+            access_control::has_role(access_obj, test_user, TestRole::MANAGER_ROLE),
+            5
+        );
+        assert!(
+            access_control::has_role(access_obj, test_user, TestRole::VIEWER_ROLE),
+            6
+        );
+
+        // Test selective revocation - remove USER_ROLE from half the users
+        let j = 0;
+        while (j < num_users / 2) {
+            let user_addr = users[j];
+            access_control::revoke_role(
+                &admin,
+                access_obj,
+                TestRole::USER_ROLE,
+                user_addr
+            );
+            j = j + 1;
+        };
+
+        // USER_ROLE count should be reduced (we removed 2 users from 5, leaving 3)
+        assert!(
+            access_control::get_role_member_count(access_obj, TestRole::USER_ROLE)
+                == num_users - num_users / 2,
+            7
+        );
+        assert!(
+            access_control::get_role_member_count(access_obj, TestRole::MANAGER_ROLE)
+                == num_users,
+            8
+        );
+        assert!(
+            access_control::get_role_member_count(access_obj, TestRole::VIEWER_ROLE)
+                == num_users,
+            9
+        );
+    }
+
+    // ================================================================
+    // |                    State Consistency Integration Test       |
+    // ================================================================
+
+    #[test(creator = @0x999)]
+    fun test_comprehensive_state_consistency_integration(
+        creator: &signer
+    ) {
+        account::create_account_for_test(signer::address_of(creator));
+        account::create_account_for_test(ADMIN);
+        account::create_account_for_test(USER1);
+        account::create_account_for_test(USER2);
+        account::create_account_for_test(MANAGER);
+
+        let access_obj = setup_token_metadata(creator);
+        let admin = account::create_signer_for_test(ADMIN);
+        let user1 = account::create_signer_for_test(USER1);
+        let user2 = account::create_signer_for_test(USER2);
+
+        // === Phase 1: Initial state verification ===
+        assert!(access_control::admin<Metadata, TestRole>(access_obj) == ADMIN, 1);
+        assert!(access_control::pending_admin<Metadata, TestRole>(access_obj) == @0x0, 2);
+        assert!(
+            access_control::get_role_member_count(access_obj, TestRole::USER_ROLE) == 0,
+            3
+        );
+
+        // === Phase 2: Complex role operations ===
+        // Grant multiple roles to users
+        access_control::grant_role(&admin, access_obj, TestRole::USER_ROLE, USER1);
+        access_control::grant_role(
+            &admin,
+            access_obj,
+            TestRole::MANAGER_ROLE,
+            USER1
+        );
+        access_control::grant_role(&admin, access_obj, TestRole::USER_ROLE, USER2);
+        access_control::grant_role(
+            &admin,
+            access_obj,
+            TestRole::VIEWER_ROLE,
+            USER2
+        );
+
+        // Verify state consistency after grants
+        assert!(
+            access_control::has_role(access_obj, USER1, TestRole::USER_ROLE),
+            4
+        );
+        assert!(
+            access_control::has_role(access_obj, USER1, TestRole::MANAGER_ROLE),
+            5
+        );
+        assert!(
+            access_control::has_role(access_obj, USER2, TestRole::USER_ROLE),
+            6
+        );
+        assert!(
+            access_control::has_role(access_obj, USER2, TestRole::VIEWER_ROLE),
+            7
+        );
+        assert!(
+            access_control::get_role_member_count(access_obj, TestRole::USER_ROLE) == 2,
+            8
+        );
+        assert!(
+            access_control::get_role_member_count(access_obj, TestRole::MANAGER_ROLE)
+                == 1,
+            9
+        );
+        assert!(
+            access_control::get_role_member_count(access_obj, TestRole::VIEWER_ROLE)
+                == 1,
+            10
+        );
+
+        // === Phase 3: Role revocation and renunciation ===
+        // Admin revokes USER1's USER_ROLE
+        access_control::revoke_role(&admin, access_obj, TestRole::USER_ROLE, USER1);
+
+        // USER2 renounces their VIEWER_ROLE
+        access_control::renounce_role(&user2, access_obj, TestRole::VIEWER_ROLE);
+
+        // Verify state after revocations
+        assert!(
+            !access_control::has_role(access_obj, USER1, TestRole::USER_ROLE),
+            11
+        );
+        assert!(
+            access_control::has_role(access_obj, USER1, TestRole::MANAGER_ROLE),
+            12
+        ); // Still has MANAGER_ROLE
+        assert!(
+            access_control::has_role(access_obj, USER2, TestRole::USER_ROLE),
+            13
+        );
+        assert!(
+            !access_control::has_role(access_obj, USER2, TestRole::VIEWER_ROLE),
+            14
+        );
+        assert!(
+            access_control::get_role_member_count(access_obj, TestRole::USER_ROLE) == 1,
+            15
+        ); // Only USER2
+        assert!(
+            access_control::get_role_member_count(access_obj, TestRole::VIEWER_ROLE)
+                == 0,
+            16
+        );
+
+        // === Phase 4: Admin transfer operations ===
+        // Transfer admin to USER1
+        access_control::transfer_admin<Metadata, TestRole>(&admin, access_obj, USER1);
+
+        // Verify pending state
+        assert!(access_control::admin<Metadata, TestRole>(access_obj) == ADMIN, 17); // Still old admin
+        assert!(
+            access_control::pending_admin<Metadata, TestRole>(access_obj) == USER1, 18
+        );
+
+        // Original admin should still be able to operate
+        access_control::grant_role(
+            &admin,
+            access_obj,
+            TestRole::VIEWER_ROLE,
+            MANAGER
+        );
+        assert!(
+            access_control::has_role(access_obj, MANAGER, TestRole::VIEWER_ROLE),
+            19
+        );
+
+        // USER1 accepts admin role
+        access_control::accept_admin<Metadata, TestRole>(&user1, access_obj);
+
+        // Verify final admin state
+        assert!(access_control::admin<Metadata, TestRole>(access_obj) == USER1, 20);
+        assert!(access_control::pending_admin<Metadata, TestRole>(access_obj) == @0x0, 21);
+
+        // === Phase 5: New admin operations ===
+        // New admin (USER1) can now perform admin operations
+        access_control::revoke_role(
+            &user1,
+            access_obj,
+            TestRole::VIEWER_ROLE,
+            MANAGER
+        );
+        assert!(
+            !access_control::has_role(access_obj, MANAGER, TestRole::VIEWER_ROLE),
+            22
+        );
+
+        // Grant new roles as new admin
+        access_control::grant_role(
+            &user1,
+            access_obj,
+            TestRole::ADMIN_ROLE,
+            USER2
+        );
+        assert!(
+            access_control::has_role(access_obj, USER2, TestRole::ADMIN_ROLE),
+            23
+        );
+
+        // === Phase 6: Final state consistency verification ===
+        // Verify all role counts are consistent
+        let user_role_count =
+            access_control::get_role_member_count(access_obj, TestRole::USER_ROLE);
+        let manager_role_count =
+            access_control::get_role_member_count(access_obj, TestRole::MANAGER_ROLE);
+        let viewer_role_count =
+            access_control::get_role_member_count(access_obj, TestRole::VIEWER_ROLE);
+        let admin_role_count =
+            access_control::get_role_member_count(access_obj, TestRole::ADMIN_ROLE);
+
+        assert!(user_role_count == 1, 24); // Only USER2
+        assert!(manager_role_count == 1, 25); // Only USER1
+        assert!(viewer_role_count == 0, 26); // None
+        assert!(admin_role_count == 1, 27); // Only USER2
+
+        // Verify role members are correctly stored
+        let user_role_members =
+            access_control::get_role_members(access_obj, TestRole::USER_ROLE);
+        let manager_role_members =
+            access_control::get_role_members(access_obj, TestRole::MANAGER_ROLE);
+
+        assert!(
+            user_role_members.length() == 1 && user_role_members[0] == USER2,
+            28
+        );
+        assert!(
+            manager_role_members.length() == 1 && manager_role_members[0] == USER1,
+            29
+        );
+
+        // Verify admin state is consistent
+        assert!(access_control::admin<Metadata, TestRole>(access_obj) == USER1, 30);
+        assert!(access_control::pending_admin<Metadata, TestRole>(access_obj) == @0x0, 31);
     }
 }

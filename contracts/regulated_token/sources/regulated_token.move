@@ -18,6 +18,7 @@ module regulated_token::regulated_token {
     use std::big_ordered_map::{Self, BigOrderedMap};
 
     use regulated_token::access_control::{Self};
+    use regulated_token::ownable::{Self, OwnableState};
 
     const PAUSER_ROLE: u8 = 0;
     const UNPAUSER_ROLE: u8 = 1;
@@ -26,7 +27,7 @@ module regulated_token::regulated_token {
     const MINTER_ROLE: u8 = 4;
     const BURNER_ROLE: u8 = 5;
     const BRIDGE_MINTER_OR_BURNER_ROLE: u8 = 6;
-    const TOKEN_POOL_ROLE: u8 = 7;
+    const RECOVERY_ROLE: u8 = 7;
 
     enum Role has copy, drop, store {
         PAUSER_ROLE(u8),
@@ -36,7 +37,7 @@ module regulated_token::regulated_token {
         MINTER_ROLE(u8),
         BURNER_ROLE(u8),
         BRIDGE_MINTER_OR_BURNER_ROLE(u8),
-        TOKEN_POOL_ROLE(u8)
+        RECOVERY_ROLE(u8)
     }
 
     const REGULATED_TOKEN_NAME: vector<u8> = b"Regulated Token";
@@ -50,7 +51,8 @@ module regulated_token::regulated_token {
         extend_ref: ExtendRef,
         transfer_ref: ObjectTransferRef,
         paused: bool,
-        frozen_accounts: BigOrderedMap<address, bool>
+        frozen_accounts: BigOrderedMap<address, bool>,
+        ownable_state: OwnableState
     }
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
@@ -113,9 +115,10 @@ module regulated_token::regulated_token {
     }
 
     #[event]
-    struct MinterAdded has drop, store {
+    struct MinterAdded<R> has drop, store {
         admin: address,
         minter: address,
+        role: R,
         operation_type: u8
     }
 
@@ -142,6 +145,14 @@ module regulated_token::regulated_token {
     }
 
     #[event]
+    struct TokensRecovered has drop, store {
+        caller: address,
+        token_metadata: Object<Metadata>,
+        to: address,
+        balance: u64
+    }
+
+    #[event]
     struct TransferAdmin has drop, store {
         admin: address,
         pending_admin: address
@@ -153,24 +164,17 @@ module regulated_token::regulated_token {
         new_admin: address
     }
 
-    const E_NOT_PUBLISHER: u64 = 1;
-    const E_NOT_ALLOWED_BURNER: u64 = 2;
-    const E_TOKEN_NOT_INITIALIZED: u64 = 3;
-    const E_TOKEN_ALREADY_INITIALIZED: u64 = 4;
-    const E_NOT_ALLOWED_MINTER: u64 = 5;
-    const E_NOT_ALLOWED_TOKEN_POOL_MINTER: u64 = 6;
-    const E_INVALID_AMOUNT: u64 = 7;
-    const E_NOT_ALLOWED_BRIDGE_BURNER: u64 = 8;
-    const E_NOT_AUTHORIZED_UNPAUSER: u64 = 9;
-    const E_INVALID_ASSET: u64 = 10;
-    const E_ACCOUNT_NOT_FROZEN: u64 = 11;
-    const E_INVALID_OPERATION_TYPE: u64 = 12;
-    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 13;
-    const E_NOT_ADMIN: u64 = 14;
-    const E_PAUSED: u64 = 15;
-    const E_ACCOUNT_FROZEN: u64 = 16;
-    const E_INVALID_ROLE_NUMBER: u64 = 17;
-    const E_INVALID_STORE: u64 = 18;
+    const E_TOKEN_NOT_INITIALIZED: u64 = 1;
+    const E_ONLY_BURNER_OR_BRIDGE: u64 = 2;
+    const E_ONLY_MINTER_OR_BRIDGE: u64 = 3;
+    const E_INVALID_AMOUNT: u64 = 4;
+    const E_INVALID_ASSET: u64 = 5;
+    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 6;
+    const E_CANNOT_TRANSFER_TO_REGULATED_TOKEN: u64 = 7;
+    const E_PAUSED: u64 = 8;
+    const E_ACCOUNT_FROZEN: u64 = 9;
+    const E_INVALID_ROLE_NUMBER: u64 = 10;
+    const E_INVALID_STORE: u64 = 11;
 
     #[view]
     public fun token_address(): address {
@@ -201,6 +205,78 @@ module regulated_token::regulated_token {
 
     inline fun is_paused_internal(): bool {
         TokenState[token_address_internal()].paused
+    }
+
+    #[view]
+    public fun get_role_members(role_number: u8): vector<address> {
+        let role = get_role(role_number);
+        access_control::get_role_members(token_metadata_internal(), role)
+    }
+
+    #[view]
+    public fun get_role_member_count(role_number: u8): u64 {
+        let role = get_role(role_number);
+        access_control::get_role_member_count(token_metadata_internal(), role)
+    }
+
+    #[view]
+    public fun get_role_member(role_number: u8, index: u64): address {
+        let role = get_role(role_number);
+        access_control::get_role_member(token_metadata_internal(), role, index)
+    }
+
+    #[view]
+    public fun is_frozen(account: address): bool acquires TokenState {
+        TokenState[token_address_internal()].frozen_accounts.contains(&account)
+    }
+
+    #[view]
+    /// Get frozen accounts paginated using a start key and limit.
+    /// Caller should call this on a certain block to ensure you the same state for every call.
+    ///
+    /// This function retrieves a batch of frozen account addresses from the registry, starting from
+    /// the account address that comes after the provided start_key.
+    ///
+    /// @param start_key - Address to start pagination from (returns accounts AFTER this address)
+    /// @param max_count - Maximum number of accounts to return
+    ///
+    /// @return:
+    ///   - vector<address>: List of frozen account addresses (up to max_count)
+    ///   - address: Next key to use for pagination (pass this as start_key in next call)
+    ///   - bool: Whether there are more accounts after this batch
+    public fun get_all_frozen_accounts(
+        start_key: address, max_count: u64
+    ): (vector<address>, address, bool) acquires TokenState {
+        let frozen_accounts = &TokenState[token_address_internal()].frozen_accounts;
+        let result = vector[];
+
+        let current_key_opt = frozen_accounts.next_key(&start_key);
+        if (max_count == 0 || current_key_opt.is_none()) {
+            return (result, start_key, current_key_opt.is_some())
+        };
+
+        let current_key = *current_key_opt.borrow();
+
+        result.push_back(current_key);
+
+        if (max_count == 1) {
+            let has_more = frozen_accounts.next_key(&current_key).is_some();
+            return (result, current_key, has_more);
+        };
+
+        for (_i in 1..max_count) {
+            let next_key_opt = frozen_accounts.next_key(&current_key);
+            if (next_key_opt.is_none()) {
+                return (result, current_key, false)
+            };
+
+            current_key = *next_key_opt.borrow();
+            result.push_back(current_key);
+        };
+
+        // Check if there are more accounts after the last key
+        let has_more = frozen_accounts.next_key(&current_key).is_some();
+        (result, current_key, has_more)
     }
 
     #[view]
@@ -292,7 +368,8 @@ module regulated_token::regulated_token {
                 extend_ref: object::generate_extend_ref(constructor_ref),
                 transfer_ref: object::generate_transfer_ref(constructor_ref),
                 paused: false,
-                frozen_accounts: big_ordered_map::new_with_config(0, 0, false)
+                frozen_accounts: big_ordered_map::new_with_config(0, 0, false),
+                ownable_state: ownable::new(publisher, @regulated_token)
             }
         );
 
@@ -301,40 +378,33 @@ module regulated_token::regulated_token {
     }
 
     public entry fun mint(
-        minter: &signer, to: address, amount: u64
+        caller: &signer, to: address, amount: u64
     ) acquires TokenMetadataRefs, TokenState {
         assert_not_paused();
+        assert!(amount != 0, E_INVALID_AMOUNT);
 
         let token_metadata = token_metadata_internal();
         let to_store =
             primary_fungible_store::ensure_primary_store_exists(to, token_metadata);
 
         assert_not_frozen(to_store, token_metadata);
-        assert!(amount != 0, E_INVALID_AMOUNT);
 
-        let minter_addr = signer::address_of(minter);
+        let minter = signer::address_of(caller);
         let is_bridge_minter =
             access_control::has_role(
-                token_metadata, minter_addr, bridge_minter_or_burner_role()
+                token_metadata, minter, bridge_minter_or_burner_role()
             );
-        let is_token_pool_minter =
-            access_control::has_role(token_metadata, minter_addr, token_pool_role());
         let is_native_minter =
-            access_control::has_role(token_metadata, minter_addr, minter_role());
+            access_control::has_role(token_metadata, minter, minter_role());
 
-        assert!(
-            is_bridge_minter || is_native_minter || is_token_pool_minter,
-            E_NOT_ALLOWED_MINTER
-        );
+        assert!(is_bridge_minter || is_native_minter, E_ONLY_MINTER_OR_BRIDGE);
 
         primary_fungible_store::mint(&borrow_token_metadata_refs().mint_ref, to, amount);
 
-        if (is_token_pool_minter) {
-            event::emit(TokenPoolMint { minter: minter_addr, to, amount });
-        } else if (is_bridge_minter) {
-            event::emit(BridgeMint { minter: minter_addr, to, amount });
+        if (is_bridge_minter) {
+            event::emit(BridgeMint { minter, to, amount });
         } else {
-            event::emit(NativeMint { minter: minter_addr, to, amount });
+            event::emit(NativeMint { minter, to, amount });
         };
     }
 
@@ -348,21 +418,18 @@ module regulated_token::regulated_token {
         let from_store = primary_fungible_store::primary_store(from, token_metadata);
         assert_not_frozen(from_store, token_metadata);
 
-        let caller_addr = signer::address_of(caller);
-        let (is_bridge_burner, is_token_pool_burner, _is_native_burner) =
-            assert_burner_and_get_type(caller_addr, token_metadata);
+        let burner = signer::address_of(caller);
+        let (is_bridge_burner, _) = assert_burner_and_get_type(burner, token_metadata);
 
         primary_fungible_store::burn(
             &borrow_token_metadata_refs().burn_ref, from, amount
         );
 
-        emit_burn_event(
-            is_bridge_burner,
-            is_token_pool_burner,
-            caller_addr,
-            from,
-            amount
-        );
+        if (is_bridge_burner) {
+            event::emit(BridgeBurn { burner, from, amount });
+        } else {
+            event::emit(NativeBurn { burner, from, amount });
+        }
     }
 
     public entry fun batch_burn_frozen_funds(
@@ -374,30 +441,27 @@ module regulated_token::regulated_token {
     }
 
     public entry fun burn_frozen_funds(
-        caller: &signer, account: address
+        caller: &signer, from: address
     ) acquires TokenMetadataRefs, TokenState {
         assert_not_paused();
 
-        let caller_addr = signer::address_of(caller);
+        let burner = signer::address_of(caller);
         let token_metadata = token_metadata_internal();
 
-        let (is_bridge_burner, is_token_pool_burner, _is_native_burner) =
-            assert_burner_and_get_type(caller_addr, token_metadata);
+        let (is_bridge_burner, _) = assert_burner_and_get_type(burner, token_metadata);
 
-        if (primary_fungible_store::is_frozen(account, token_metadata)) {
-            let balance = primary_fungible_store::balance(account, token_metadata);
+        if (primary_fungible_store::is_frozen(from, token_metadata)) {
+            let balance = primary_fungible_store::balance(from, token_metadata);
             if (balance > 0) {
                 primary_fungible_store::burn(
-                    &borrow_token_metadata_refs().burn_ref, account, balance
+                    &borrow_token_metadata_refs().burn_ref, from, balance
                 );
 
-                emit_burn_event(
-                    is_bridge_burner,
-                    is_token_pool_burner,
-                    caller_addr,
-                    account,
-                    balance
-                );
+                if (is_bridge_burner) {
+                    event::emit(BridgeBurn { burner, from, amount: balance });
+                } else {
+                    event::emit(NativeBurn { burner, from, amount: balance });
+                }
             }
         };
     }
@@ -416,13 +480,12 @@ module regulated_token::regulated_token {
             account
         );
 
-        if (role == minter_role()
-            || role == bridge_minter_or_burner_role()
-            || role == token_pool_role()) {
+        if (role == minter_role() || role == bridge_minter_or_burner_role()) {
             event::emit(
                 MinterAdded {
                     admin: signer::address_of(caller),
                     minter: account,
+                    role,
                     operation_type: role_number
                 }
             );
@@ -463,7 +526,6 @@ module regulated_token::regulated_token {
     public entry fun unfreeze_account(
         caller: &signer, account: address
     ) acquires TokenMetadataRefs, TokenState {
-        let caller_addr = signer::address_of(caller);
         assert_unfreezer(caller, token_metadata_internal());
 
         primary_fungible_store::set_frozen_flag(
@@ -472,7 +534,7 @@ module regulated_token::regulated_token {
 
         TokenState[token_address_internal()].frozen_accounts.remove(&account);
 
-        event::emit(AccountUnfrozen { freezer: caller_addr, account });
+        event::emit(AccountUnfrozen { freezer: signer::address_of(caller), account });
     }
 
     /// Batch revoke and grant pauser roles
@@ -572,6 +634,45 @@ module regulated_token::regulated_token {
         }
     }
 
+    /// In case regulated tokens get stuck in the contract or token state, this function can be used to recover them
+    /// This function can only be called by the recovery role
+    public entry fun recover_tokens(caller: &signer, to: address) acquires TokenMetadataRefs {
+        let token_state_address = token_address_internal();
+        assert!(to != @0x0, E_ZERO_ADDRESS_NOT_ALLOWED);
+        assert!(
+            to != @regulated_token && to != token_state_address,
+            E_CANNOT_TRANSFER_TO_REGULATED_TOKEN
+        );
+
+        let token_metadata = object::address_to_object(token_state_address);
+        assert_recovery_role(caller, token_metadata);
+
+        let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
+
+        // Recover regulated tokens sent to contract
+        let balance = primary_fungible_store::balance(@regulated_token, token_metadata);
+        primary_fungible_store::transfer_with_ref(
+            transfer_ref, @regulated_token, to, balance
+        );
+
+        // Recover regulated tokens sent to token state address
+        let balance = primary_fungible_store::balance(
+            token_state_address, token_metadata
+        );
+        primary_fungible_store::transfer_with_ref(
+            transfer_ref, token_state_address, to, balance
+        );
+
+        event::emit(
+            TokensRecovered {
+                caller: signer::address_of(caller),
+                token_metadata,
+                to,
+                balance
+            }
+        );
+    }
+
     fun assert_not_paused() acquires TokenState {
         assert!(!is_paused_internal(), E_PAUSED);
     }
@@ -616,26 +717,27 @@ module regulated_token::regulated_token {
         );
     }
 
-    /// Returns (is_bridge_burner, is_token_pool_burner, is_native_burner)
-    /// and asserts the caller has at least one burner role
+    inline fun assert_recovery_role(
+        caller: &signer, token_metadata: Object<Metadata>
+    ) {
+        access_control::assert_role(
+            token_metadata, signer::address_of(caller), recovery_role()
+        );
+    }
+
     inline fun assert_burner_and_get_type(
-        caller_addr: address, token_metadata: Object<Metadata>
-    ): (bool, bool, bool) {
+        burner: address, token_metadata: Object<Metadata>
+    ): (bool, bool) {
         let is_bridge_burner =
             access_control::has_role(
-                token_metadata, caller_addr, bridge_minter_or_burner_role()
+                token_metadata, burner, bridge_minter_or_burner_role()
             );
         let is_native_burner =
-            access_control::has_role(token_metadata, caller_addr, burner_role());
-        let is_token_pool_burner =
-            access_control::has_role(token_metadata, caller_addr, token_pool_role());
+            access_control::has_role(token_metadata, burner, burner_role());
 
-        assert!(
-            is_bridge_burner || is_native_burner || is_token_pool_burner,
-            E_NOT_ALLOWED_BURNER
-        );
+        assert!(is_bridge_burner || is_native_burner, E_ONLY_BURNER_OR_BRIDGE);
 
-        (is_bridge_burner, is_token_pool_burner, is_native_burner)
+        (is_bridge_burner, is_native_burner)
     }
 
     fun assert_not_frozen<T: key>(
@@ -677,8 +779,8 @@ module regulated_token::regulated_token {
             burner_role()
         } else if (role_number == BRIDGE_MINTER_OR_BURNER_ROLE) {
             bridge_minter_or_burner_role()
-        } else if (role_number == TOKEN_POOL_ROLE) {
-            token_pool_role()
+        } else if (role_number == RECOVERY_ROLE) {
+            recovery_role()
         } else {
             abort E_INVALID_ROLE_NUMBER
         }
@@ -686,22 +788,6 @@ module regulated_token::regulated_token {
 
     inline fun borrow_token_metadata_refs(): &TokenMetadataRefs {
         &TokenMetadataRefs[token_address_internal()]
-    }
-
-    inline fun emit_burn_event(
-        is_bridge_burner: bool,
-        is_token_pool_burner: bool,
-        burner: address,
-        from: address,
-        amount: u64
-    ) {
-        if (is_bridge_burner) {
-            event::emit(BridgeBurn { burner, from, amount });
-        } else if (is_token_pool_burner) {
-            event::emit(TokenPoolBurn { burner, from, amount });
-        } else {
-            event::emit(NativeBurn { burner, from, amount });
-        }
     }
 
     public fun pauser_role(): Role {
@@ -732,8 +818,56 @@ module regulated_token::regulated_token {
         Role::BRIDGE_MINTER_OR_BURNER_ROLE(BRIDGE_MINTER_OR_BURNER_ROLE)
     }
 
-    public fun token_pool_role(): Role {
-        Role::TOKEN_POOL_ROLE(TOKEN_POOL_ROLE)
+    public fun recovery_role(): Role {
+        Role::RECOVERY_ROLE(RECOVERY_ROLE)
+    }
+
+    // ====================== Ownable Functions ======================
+
+    #[view]
+    public fun owner(): address acquires TokenState {
+        ownable::owner(&TokenState[token_address_internal()].ownable_state)
+    }
+
+    #[view]
+    public fun has_pending_transfer(): bool acquires TokenState {
+        ownable::has_pending_transfer(&TokenState[token_address_internal()].ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_from(): Option<address> acquires TokenState {
+        ownable::pending_transfer_from(
+            &TokenState[token_address_internal()].ownable_state
+        )
+    }
+
+    #[view]
+    public fun pending_transfer_to(): Option<address> acquires TokenState {
+        ownable::pending_transfer_to(&TokenState[token_address_internal()].ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_accepted(): Option<bool> acquires TokenState {
+        ownable::pending_transfer_accepted(
+            &TokenState[token_address_internal()].ownable_state
+        )
+    }
+
+    public entry fun transfer_ownership(caller: &signer, to: address) acquires TokenState {
+        let state = &mut TokenState[token_address_internal()];
+        ownable::transfer_ownership(caller, &mut state.ownable_state, to)
+    }
+
+    public entry fun accept_ownership(caller: &signer) acquires TokenState {
+        let state = &mut TokenState[token_address_internal()];
+        ownable::accept_ownership(caller, &mut state.ownable_state)
+    }
+
+    public entry fun execute_ownership_transfer(
+        caller: &signer, to: address
+    ) acquires TokenState {
+        let state = &mut TokenState[token_address_internal()];
+        ownable::execute_ownership_transfer(caller, &mut state.ownable_state, to)
     }
 
     #[test_only]
