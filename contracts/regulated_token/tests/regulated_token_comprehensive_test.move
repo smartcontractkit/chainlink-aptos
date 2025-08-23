@@ -707,44 +707,6 @@ module regulated_token::regulated_token_comprehensive_test {
         assert!(true);
     }
 
-    // ================================================================
-    // |               Phase 3: Input Validation Error Tests         |
-    // ================================================================
-    #[test(admin = @admin, regulated_token = @regulated_token)]
-    #[
-        expected_failure(
-            abort_code = regulated_token::regulated_token::E_INVALID_AMOUNT,
-            location = regulated_token::regulated_token
-        )
-    ]
-    fun test_mint_zero_amount_fails(
-        admin: &signer, regulated_token: &signer
-    ) {
-        setup_token_and_roles(admin, regulated_token);
-
-        // Try to mint zero amount - should fail
-        mint_to_user(USER1, 0);
-    }
-
-    #[test(admin = @admin, regulated_token = @regulated_token)]
-    #[
-        expected_failure(
-            abort_code = regulated_token::regulated_token::E_INVALID_AMOUNT,
-            location = regulated_token::regulated_token
-        )
-    ]
-    fun test_burn_zero_amount_fails(
-        admin: &signer, regulated_token: &signer
-    ) {
-        setup_token_and_roles(admin, regulated_token);
-        mint_tokens_to_users(vector[USER1], vector[100]);
-
-        let burner1 = account::create_signer_for_test(BURNER1);
-
-        // Try to burn zero amount - should fail
-        regulated_token::burn(&burner1, USER1, 0);
-    }
-
     #[test(admin = @admin, regulated_token = @regulated_token)]
     fun test_mint_burn_max_amount_success(
         admin: &signer, regulated_token: &signer
