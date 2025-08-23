@@ -1,0 +1,621 @@
+module regulated_token_pool::regulated_token_pool {
+    use std::account::{Self, SignerCapability};
+    use std::error;
+    use std::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef};
+    use std::primary_fungible_store;
+    use std::object::{Self, Object};
+    use std::option::{Self, Option};
+    use std::signer;
+    use std::string::{Self, String};
+
+    use regulated_token::regulated_token::{Self};
+
+    use ccip::token_admin_registry;
+    use ccip_token_pool::ownable;
+    use ccip_token_pool::rate_limiter;
+    use ccip_token_pool::token_pool;
+
+    use mcms::mcms_registry;
+    use mcms::bcs_stream;
+
+    const STORE_OBJECT_SEED: vector<u8> = b"CcipRegulatedTokenPool";
+
+    struct RegulatedTokenPoolState has key, store {
+        store_signer_cap: SignerCapability,
+        ownable_state: ownable::OwnableState,
+        token_pool_state: token_pool::TokenPoolState,
+        store_signer_address: address
+    }
+
+    const E_NOT_PUBLISHER: u64 = 1;
+    const E_ALREADY_INITIALIZED: u64 = 2;
+    const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
+    const E_LOCAL_TOKEN_MISMATCH: u64 = 4;
+    const E_INVALID_ARGUMENTS: u64 = 5;
+    const E_UNKNOWN_FUNCTION: u64 = 6;
+
+    // ================================================================
+    // |                             Init                             |
+    // ================================================================
+
+    #[view]
+    public fun type_and_version(): String {
+        string::utf8(b"RegulatedTokenPool 1.6.0")
+    }
+
+    fun init_module(publisher: &signer) {
+        // register the pool on deployment, because in the case of object code deployment,
+        // this is the only time we have a signer ref to @regulated_token_pool.
+
+        // create an Account on the object for event handles.
+        account::create_account_if_does_not_exist(@regulated_token_pool);
+
+        // the name of this module. if incorrect, callbacks will fail to be registered and
+        // register_pool will revert.
+        let token_pool_module_name = b"regulated_token_pool";
+
+        // Register the entrypoint with mcms
+        if (@mcms_register_entrypoints == @0x1) {
+            register_mcms_entrypoint(publisher, token_pool_module_name);
+        };
+
+        let regulated_token_address = regulated_token::token_address();
+        token_admin_registry::register_pool(
+            publisher,
+            token_pool_module_name,
+            regulated_token_address,
+            CallbackProof {}
+        );
+
+        // create a resource account to be the owner of the primary FungibleStore we will use.
+        let (store_signer, store_signer_cap) =
+            account::create_resource_account(publisher, STORE_OBJECT_SEED);
+
+        let metadata = object::address_to_object<Metadata>(regulated_token_address);
+
+        // make sure this is a valid fungible asset that is primary fungible store enabled,
+        // ie. created with primary_fungible_store::create_primary_store_enabled_fungible_asset
+        primary_fungible_store::ensure_primary_store_exists(
+            signer::address_of(&store_signer), metadata
+        );
+
+        let store_signer = account::create_signer_with_capability(&store_signer_cap);
+
+        let pool = RegulatedTokenPoolState {
+            ownable_state: ownable::new(&store_signer, @regulated_token_pool),
+            store_signer_address: signer::address_of(&store_signer),
+            store_signer_cap,
+            token_pool_state: token_pool::initialize(
+                &store_signer, regulated_token_address, vector[]
+            )
+        };
+
+        move_to(&store_signer, pool);
+    }
+
+    // ================================================================
+    // |                 Exposing token_pool functions                |
+    // ================================================================
+
+    #[view]
+    public fun get_token(): address acquires RegulatedTokenPoolState {
+        token_pool::get_token(&borrow_pool().token_pool_state)
+    }
+
+    #[view]
+    public fun get_router(): address {
+        token_pool::get_router()
+    }
+
+    #[view]
+    public fun get_token_decimals(): u8 acquires RegulatedTokenPoolState {
+        token_pool::get_token_decimals(&borrow_pool().token_pool_state)
+    }
+
+    #[view]
+    public fun get_remote_pools(
+        remote_chain_selector: u64
+    ): vector<vector<u8>> acquires RegulatedTokenPoolState {
+        token_pool::get_remote_pools(
+            &borrow_pool().token_pool_state, remote_chain_selector
+        )
+    }
+
+    #[view]
+    public fun is_remote_pool(
+        remote_chain_selector: u64, remote_pool_address: vector<u8>
+    ): bool acquires RegulatedTokenPoolState {
+        token_pool::is_remote_pool(
+            &borrow_pool().token_pool_state,
+            remote_chain_selector,
+            remote_pool_address
+        )
+    }
+
+    #[view]
+    public fun get_remote_token(
+        remote_chain_selector: u64
+    ): vector<u8> acquires RegulatedTokenPoolState {
+        let pool = borrow_pool();
+        token_pool::get_remote_token(&pool.token_pool_state, remote_chain_selector)
+    }
+
+    public entry fun add_remote_pool(
+        caller: &signer, remote_chain_selector: u64, remote_pool_address: vector<u8>
+    ) acquires RegulatedTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+
+        token_pool::add_remote_pool(
+            &mut pool.token_pool_state, remote_chain_selector, remote_pool_address
+        );
+    }
+
+    public entry fun remove_remote_pool(
+        caller: &signer, remote_chain_selector: u64, remote_pool_address: vector<u8>
+    ) acquires RegulatedTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+
+        token_pool::remove_remote_pool(
+            &mut pool.token_pool_state, remote_chain_selector, remote_pool_address
+        );
+    }
+
+    #[view]
+    public fun is_supported_chain(remote_chain_selector: u64): bool acquires RegulatedTokenPoolState {
+        let pool = borrow_pool();
+        token_pool::is_supported_chain(&pool.token_pool_state, remote_chain_selector)
+    }
+
+    #[view]
+    public fun get_supported_chains(): vector<u64> acquires RegulatedTokenPoolState {
+        let pool = borrow_pool();
+        token_pool::get_supported_chains(&pool.token_pool_state)
+    }
+
+    public entry fun apply_chain_updates(
+        caller: &signer,
+        remote_chain_selectors_to_remove: vector<u64>,
+        remote_chain_selectors_to_add: vector<u64>,
+        remote_pool_addresses_to_add: vector<vector<vector<u8>>>,
+        remote_token_addresses_to_add: vector<vector<u8>>
+    ) acquires RegulatedTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+
+        token_pool::apply_chain_updates(
+            &mut pool.token_pool_state,
+            remote_chain_selectors_to_remove,
+            remote_chain_selectors_to_add,
+            remote_pool_addresses_to_add,
+            remote_token_addresses_to_add
+        );
+    }
+
+    #[view]
+    public fun get_allowlist_enabled(): bool acquires RegulatedTokenPoolState {
+        let pool = borrow_pool();
+        token_pool::get_allowlist_enabled(&pool.token_pool_state)
+    }
+
+    #[view]
+    public fun get_allowlist(): vector<address> acquires RegulatedTokenPoolState {
+        let pool = borrow_pool();
+        token_pool::get_allowlist(&pool.token_pool_state)
+    }
+
+    public entry fun apply_allowlist_updates(
+        caller: &signer, removes: vector<address>, adds: vector<address>
+    ) acquires RegulatedTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+        token_pool::apply_allowlist_updates(&mut pool.token_pool_state, removes, adds);
+    }
+
+    // ================================================================
+    // |                         Burn/Mint                            |
+    // ================================================================
+
+    // the callback proof type used as authentication to retrieve and set input and output arguments.
+    struct CallbackProof has drop {}
+
+    public fun lock_or_burn<T: key>(
+        _store: Object<T>, fa: FungibleAsset, _transfer_ref: &TransferRef
+    ) acquires RegulatedTokenPoolState {
+        // retrieve the input for this lock or burn operation. if this function is invoked
+        // outside of ccip::token_admin_registry, the transaction will abort.
+        let input =
+            token_admin_registry::get_lock_or_burn_input_v1(
+                @regulated_token_pool, CallbackProof {}
+            );
+
+        let pool = borrow_pool_mut();
+        let fa_amount = fungible_asset::amount(&fa);
+
+        // This method validates various aspects of the lock or burn operation. If any of the
+        // validations fail, the transaction will abort.
+        let dest_token_address =
+            token_pool::validate_lock_or_burn(
+                &mut pool.token_pool_state,
+                &fa,
+                &input,
+                fa_amount
+            );
+
+        // Construct lock_or_burn output before we lose access to fa
+        let dest_pool_data = token_pool::encode_local_decimals(&pool.token_pool_state);
+
+        // Burn the funds using regulated token's bridge burn function
+        // The pool store signer must have BRIDGE_MINTER_OR_BURNER role
+        let pool_signer = &account::create_signer_with_capability(&pool.store_signer_cap);
+        let sender = token_admin_registry::get_lock_or_burn_sender(&input);
+        regulated_token::bridge_burn(pool_signer, sender, fa);
+
+        // set the output for this lock or burn operation.
+        token_admin_registry::set_lock_or_burn_output_v1(
+            @regulated_token_pool,
+            CallbackProof {},
+            dest_token_address,
+            dest_pool_data
+        );
+
+        let remote_chain_selector =
+            token_admin_registry::get_lock_or_burn_remote_chain_selector(&input);
+
+        token_pool::emit_locked_or_burned(
+            &mut pool.token_pool_state, fa_amount, remote_chain_selector
+        );
+    }
+
+    public fun release_or_mint<T: key>(
+        _store: Object<T>, _amount: u64, _transfer_ref: &TransferRef
+    ): FungibleAsset acquires RegulatedTokenPoolState {
+        // retrieve the input for this release or mint operation. if this function is invoked
+        // outside of ccip::token_admin_registry, the transaction will abort.
+        let input =
+            token_admin_registry::get_release_or_mint_input_v1(
+                @regulated_token_pool, CallbackProof {}
+            );
+        let pool = borrow_pool_mut();
+        let local_amount =
+            token_pool::calculate_release_or_mint_amount(&pool.token_pool_state, &input);
+
+        token_pool::validate_release_or_mint(
+            &mut pool.token_pool_state, &input, local_amount
+        );
+
+        // Mint the amount for release using regulated token's bridge mint function
+        // The pool store signer must have BRIDGE_MINTER_OR_BURNER role
+        let pool_signer = &account::create_signer_with_capability(&pool.store_signer_cap);
+        let receiver = token_admin_registry::get_release_or_mint_receiver(&input);
+        let fa = regulated_token::bridge_mint(pool_signer, receiver, local_amount);
+
+        // set the output for this release or mint operation.
+        token_admin_registry::set_release_or_mint_output_v1(
+            @regulated_token_pool, CallbackProof {}, local_amount
+        );
+
+        let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
+        let remote_chain_selector =
+            token_admin_registry::get_release_or_mint_remote_chain_selector(&input);
+
+        token_pool::emit_released_or_minted(
+            &mut pool.token_pool_state,
+            recipient,
+            local_amount,
+            remote_chain_selector
+        );
+
+        // return the withdrawn fungible asset.
+        fa
+    }
+
+    // ================================================================
+    // |                    Rate limit config                         |
+    // ================================================================
+
+    public entry fun set_chain_rate_limiter_configs(
+        caller: &signer,
+        remote_chain_selectors: vector<u64>,
+        outbound_is_enableds: vector<bool>,
+        outbound_capacities: vector<u64>,
+        outbound_rates: vector<u64>,
+        inbound_is_enableds: vector<bool>,
+        inbound_capacities: vector<u64>,
+        inbound_rates: vector<u64>
+    ) acquires RegulatedTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+
+        let number_of_chains = remote_chain_selectors.length();
+
+        assert!(
+            number_of_chains == outbound_is_enableds.length()
+                && number_of_chains == outbound_capacities.length()
+                && number_of_chains == outbound_rates.length()
+                && number_of_chains == inbound_is_enableds.length()
+                && number_of_chains == inbound_capacities.length()
+                && number_of_chains == inbound_rates.length(),
+            error::invalid_argument(E_INVALID_ARGUMENTS)
+        );
+
+        for (i in 0..number_of_chains) {
+            token_pool::set_chain_rate_limiter_config(
+                &mut pool.token_pool_state,
+                remote_chain_selectors[i],
+                outbound_is_enableds[i],
+                outbound_capacities[i],
+                outbound_rates[i],
+                inbound_is_enableds[i],
+                inbound_capacities[i],
+                inbound_rates[i]
+            );
+        };
+    }
+
+    public entry fun set_chain_rate_limiter_config(
+        caller: &signer,
+        remote_chain_selector: u64,
+        outbound_is_enabled: bool,
+        outbound_capacity: u64,
+        outbound_rate: u64,
+        inbound_is_enabled: bool,
+        inbound_capacity: u64,
+        inbound_rate: u64
+    ) acquires RegulatedTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+
+        token_pool::set_chain_rate_limiter_config(
+            &mut pool.token_pool_state,
+            remote_chain_selector,
+            outbound_is_enabled,
+            outbound_capacity,
+            outbound_rate,
+            inbound_is_enabled,
+            inbound_capacity,
+            inbound_rate
+        );
+    }
+
+    #[view]
+    public fun get_current_inbound_rate_limiter_state(
+        remote_chain_selector: u64
+    ): rate_limiter::TokenBucket acquires RegulatedTokenPoolState {
+        token_pool::get_current_inbound_rate_limiter_state(
+            &borrow_pool().token_pool_state, remote_chain_selector
+        )
+    }
+
+    #[view]
+    public fun get_current_outbound_rate_limiter_state(
+        remote_chain_selector: u64
+    ): rate_limiter::TokenBucket acquires RegulatedTokenPoolState {
+        token_pool::get_current_outbound_rate_limiter_state(
+            &borrow_pool().token_pool_state, remote_chain_selector
+        )
+    }
+
+    // ================================================================
+    // |                      Storage helpers                         |
+    // ================================================================
+
+    #[view]
+    public fun get_store_address(): address {
+        store_address()
+    }
+
+    inline fun store_address(): address {
+        account::create_resource_address(&@regulated_token_pool, STORE_OBJECT_SEED)
+    }
+
+    inline fun borrow_pool(): &RegulatedTokenPoolState {
+        borrow_global<RegulatedTokenPoolState>(store_address())
+    }
+
+    inline fun borrow_pool_mut(): &mut RegulatedTokenPoolState {
+        borrow_global_mut<RegulatedTokenPoolState>(store_address())
+    }
+
+    // ================================================================
+    // |                       Expose ownable                         |
+    // ================================================================
+
+    #[view]
+    public fun owner(): address acquires RegulatedTokenPoolState {
+        ownable::owner(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun has_pending_transfer(): bool acquires RegulatedTokenPoolState {
+        ownable::has_pending_transfer(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_from(): Option<address> acquires RegulatedTokenPoolState {
+        ownable::pending_transfer_from(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_to(): Option<address> acquires RegulatedTokenPoolState {
+        ownable::pending_transfer_to(&borrow_pool().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_accepted(): Option<bool> acquires RegulatedTokenPoolState {
+        ownable::pending_transfer_accepted(&borrow_pool().ownable_state)
+    }
+
+    public entry fun transfer_ownership(caller: &signer, to: address) acquires RegulatedTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::transfer_ownership(caller, &mut pool.ownable_state, to)
+    }
+
+    public entry fun accept_ownership(caller: &signer) acquires RegulatedTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::accept_ownership(caller, &mut pool.ownable_state)
+    }
+
+    public entry fun execute_ownership_transfer(
+        caller: &signer, to: address
+    ) acquires RegulatedTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::execute_ownership_transfer(caller, &mut pool.ownable_state, to)
+    }
+
+    // ================================================================
+    // |                      MCMS entrypoint                         |
+    // ================================================================
+
+    struct McmsCallback has drop {}
+
+    public fun mcms_entrypoint<T: key>(
+        _metadata: object::Object<T>
+    ): option::Option<u128> acquires RegulatedTokenPoolState {
+        let (caller, function, data) =
+            mcms_registry::get_callback_params(@regulated_token_pool, McmsCallback {});
+
+        let function_bytes = *function.bytes();
+        let stream = bcs_stream::new(data);
+
+        if (function_bytes == b"add_remote_pool") {
+            let remote_chain_selector = bcs_stream::deserialize_u64(&mut stream);
+            let remote_pool_address = bcs_stream::deserialize_vector_u8(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            add_remote_pool(&caller, remote_chain_selector, remote_pool_address);
+        } else if (function_bytes == b"remove_remote_pool") {
+            let remote_chain_selector = bcs_stream::deserialize_u64(&mut stream);
+            let remote_pool_address = bcs_stream::deserialize_vector_u8(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            remove_remote_pool(&caller, remote_chain_selector, remote_pool_address);
+        } else if (function_bytes == b"apply_chain_updates") {
+            let remote_chain_selectors_to_remove =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let remote_chain_selectors_to_add =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let remote_pool_addresses_to_add =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_vector(
+                        stream, |stream| bcs_stream::deserialize_vector_u8(stream)
+                    )
+                );
+            let remote_token_addresses_to_add =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            apply_chain_updates(
+                &caller,
+                remote_chain_selectors_to_remove,
+                remote_chain_selectors_to_add,
+                remote_pool_addresses_to_add,
+                remote_token_addresses_to_add
+            );
+        } else if (function_bytes == b"apply_allowlist_updates") {
+            let removes =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
+                );
+            let adds =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            apply_allowlist_updates(&caller, removes, adds);
+        } else if (function_bytes == b"set_chain_rate_limiter_configs") {
+            let remote_chain_selectors =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let outbound_is_enableds =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_bool(stream)
+                );
+            let outbound_capacities =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let outbound_rates =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let inbound_is_enableds =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_bool(stream)
+                );
+            let inbound_capacities =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let inbound_rates =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            set_chain_rate_limiter_configs(
+                &caller,
+                remote_chain_selectors,
+                outbound_is_enableds,
+                outbound_capacities,
+                outbound_rates,
+                inbound_is_enableds,
+                inbound_capacities,
+                inbound_rates
+            );
+        } else if (function_bytes == b"set_chain_rate_limiter_config") {
+            let remote_chain_selector = bcs_stream::deserialize_u64(&mut stream);
+            let outbound_is_enabled = bcs_stream::deserialize_bool(&mut stream);
+            let outbound_capacity = bcs_stream::deserialize_u64(&mut stream);
+            let outbound_rate = bcs_stream::deserialize_u64(&mut stream);
+            let inbound_is_enabled = bcs_stream::deserialize_bool(&mut stream);
+            let inbound_capacity = bcs_stream::deserialize_u64(&mut stream);
+            let inbound_rate = bcs_stream::deserialize_u64(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            set_chain_rate_limiter_config(
+                &caller,
+                remote_chain_selector,
+                outbound_is_enabled,
+                outbound_capacity,
+                outbound_rate,
+                inbound_is_enabled,
+                inbound_capacity,
+                inbound_rate
+            );
+        } else if (function_bytes == b"transfer_ownership") {
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            transfer_ownership(&caller, to);
+        } else if (function_bytes == b"accept_ownership") {
+            bcs_stream::assert_is_consumed(&stream);
+            accept_ownership(&caller);
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_FUNCTION)
+        };
+
+        option::none()
+    }
+
+    /// Callable during upgrades
+    public(friend) fun register_mcms_entrypoint(
+        publisher: &signer, module_name: vector<u8>
+    ) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(module_name), McmsCallback {}
+        );
+    }
+
+    // ================================================================
+    // |                      Test functions                          |
+    // ================================================================
+
+    #[test_only]
+    public entry fun test_init_module(owner: &signer) {
+        init_module(owner);
+    }
+}
