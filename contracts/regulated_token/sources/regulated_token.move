@@ -87,13 +87,6 @@ module regulated_token::regulated_token {
     }
 
     #[event]
-    struct TokenPoolMint has drop, store {
-        minter: address,
-        to: address,
-        amount: u64
-    }
-
-    #[event]
     struct NativeBurn has drop, store {
         burner: address,
         from: address,
@@ -102,13 +95,6 @@ module regulated_token::regulated_token {
 
     #[event]
     struct BridgeBurn has drop, store {
-        burner: address,
-        from: address,
-        amount: u64
-    }
-
-    #[event]
-    struct TokenPoolBurn has drop, store {
         burner: address,
         from: address,
         amount: u64
@@ -148,8 +134,9 @@ module regulated_token::regulated_token {
     struct TokensRecovered has drop, store {
         caller: address,
         token_metadata: Object<Metadata>,
+        from: address,
         to: address,
-        balance: u64
+        amount: u64
     }
 
     #[event]
@@ -167,14 +154,13 @@ module regulated_token::regulated_token {
     const E_TOKEN_NOT_INITIALIZED: u64 = 1;
     const E_ONLY_BURNER_OR_BRIDGE: u64 = 2;
     const E_ONLY_MINTER_OR_BRIDGE: u64 = 3;
-    const E_INVALID_AMOUNT: u64 = 4;
-    const E_INVALID_ASSET: u64 = 5;
-    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 6;
-    const E_CANNOT_TRANSFER_TO_REGULATED_TOKEN: u64 = 7;
-    const E_PAUSED: u64 = 8;
-    const E_ACCOUNT_FROZEN: u64 = 9;
-    const E_INVALID_ROLE_NUMBER: u64 = 10;
-    const E_INVALID_STORE: u64 = 11;
+    const E_INVALID_ASSET: u64 = 4;
+    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 5;
+    const E_CANNOT_TRANSFER_TO_REGULATED_TOKEN: u64 = 6;
+    const E_PAUSED: u64 = 7;
+    const E_ACCOUNT_FROZEN: u64 = 8;
+    const E_INVALID_ROLE_NUMBER: u64 = 9;
+    const E_INVALID_STORE: u64 = 10;
 
     #[view]
     public fun token_address(): address {
@@ -433,7 +419,6 @@ module regulated_token::regulated_token {
         caller: &signer, to: address, amount: u64
     ) acquires TokenMetadataRefs, TokenState {
         assert_not_paused();
-        assert!(amount != 0, E_INVALID_AMOUNT);
 
         let token_metadata = token_metadata_internal();
         let to_store =
@@ -464,7 +449,6 @@ module regulated_token::regulated_token {
         caller: &signer, from: address, amount: u64
     ) acquires TokenMetadataRefs, TokenState {
         assert_not_paused();
-        assert!(amount != 0, E_INVALID_AMOUNT);
 
         let token_metadata = token_metadata_internal();
         let from_store = primary_fungible_store::primary_store(from, token_metadata);
@@ -482,6 +466,50 @@ module regulated_token::regulated_token {
         } else {
             event::emit(NativeBurn { burner, from, amount });
         }
+    }
+
+    /// Bridge-specific function to mint tokens directly as `FungibleAsset`.
+    /// Required because this token has dynamic dispatch enabled
+    /// as minting to pool and calling `fungible_asset::withdraw()` reverts.
+    /// Only callable by accounts with BRIDGE_MINTER_OR_BURNER_ROLE.
+    public fun bridge_mint(
+        caller: &signer, to: address, amount: u64
+    ): FungibleAsset acquires TokenMetadataRefs, TokenState {
+        assert_not_paused();
+
+        let token_metadata = token_metadata_internal();
+        assert_bridge_minter_or_burner(caller, token_metadata);
+
+        let to_store =
+            primary_fungible_store::ensure_primary_store_exists(to, token_metadata);
+        assert_not_frozen(to_store, token_metadata);
+
+        let fa = fungible_asset::mint(&borrow_token_metadata_refs().mint_ref, amount);
+
+        event::emit(BridgeMint { minter: signer::address_of(caller), to, amount });
+
+        fa
+    }
+
+    /// Bridge-specific function to burn `FungibleAsset` directly.
+    /// Required because this token has dynamic dispatch enabled
+    /// as depositing to pool and calling `fungible_asset::deposit()` reverts.
+    /// Only callable by accounts with BRIDGE_MINTER_OR_BURNER_ROLE.
+    public fun bridge_burn(
+        caller: &signer, from: address, fa: FungibleAsset
+    ) acquires TokenMetadataRefs, TokenState {
+        assert_not_paused();
+
+        let token_metadata = token_metadata_internal();
+        assert_bridge_minter_or_burner(caller, token_metadata);
+
+        let from_store = primary_fungible_store::primary_store(from, token_metadata);
+        assert_not_frozen(from_store, token_metadata);
+
+        let amount = fungible_asset::amount(&fa);
+        fungible_asset::burn(&borrow_token_metadata_refs().burn_ref, fa);
+
+        event::emit(BridgeBurn { burner: signer::address_of(caller), from, amount });
     }
 
     public entry fun batch_burn_frozen_funds(
@@ -686,6 +714,50 @@ module regulated_token::regulated_token {
         }
     }
 
+    /// Recovers funds from frozen accounts by transferring them to a specified account.
+    /// Only callable by accounts with RECOVERY_ROLE.
+    public entry fun recover_frozen_funds(
+        caller: &signer, from: address, to: address
+    ) acquires TokenMetadataRefs, TokenState {
+        assert_not_paused();
+        assert!(to != @0x0, E_ZERO_ADDRESS_NOT_ALLOWED);
+        assert!(
+            to != @regulated_token && to != token_address_internal(),
+            E_CANNOT_TRANSFER_TO_REGULATED_TOKEN
+        );
+
+        let token_metadata = token_metadata_internal();
+        assert_recovery_role(caller, token_metadata);
+
+        if (primary_fungible_store::is_frozen(from, token_metadata)) {
+            let balance = primary_fungible_store::balance(from, token_metadata);
+            if (balance > 0) {
+                let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
+                primary_fungible_store::transfer_with_ref(transfer_ref, from, to, balance);
+
+                event::emit(
+                    TokensRecovered {
+                        caller: signer::address_of(caller),
+                        token_metadata,
+                        from,
+                        to,
+                        amount: balance
+                    }
+                );
+            }
+        };
+    }
+
+    /// Batch version of recover_frozen_funds for processing multiple frozen accounts.
+    /// Only callable by accounts with RECOVERY_ROLE.
+    public entry fun batch_recover_frozen_funds(
+        caller: &signer, accounts: vector<address>, to: address
+    ) acquires TokenMetadataRefs, TokenState {
+        for (i in 0..accounts.length()) {
+            recover_frozen_funds(caller, accounts[i], to);
+        }
+    }
+
     /// In case regulated tokens get stuck in the contract or token state, this function can be used to recover them
     /// This function can only be called by the recovery role
     public entry fun recover_tokens(caller: &signer, to: address) acquires TokenMetadataRefs {
@@ -707,22 +779,37 @@ module regulated_token::regulated_token {
             transfer_ref, @regulated_token, to, balance
         );
 
+        if (balance > 0) {
+            event::emit(
+                TokensRecovered {
+                    caller: signer::address_of(caller),
+                    token_metadata,
+                    from: @regulated_token,
+                    to,
+                    amount: balance
+                }
+            );
+        };
+
         // Recover regulated tokens sent to token state address
         let balance = primary_fungible_store::balance(
             token_state_address, token_metadata
         );
-        primary_fungible_store::transfer_with_ref(
-            transfer_ref, token_state_address, to, balance
-        );
 
-        event::emit(
-            TokensRecovered {
-                caller: signer::address_of(caller),
-                token_metadata,
-                to,
-                balance
-            }
-        );
+        if (balance > 0) {
+            primary_fungible_store::transfer_with_ref(
+                transfer_ref, token_state_address, to, balance
+            );
+            event::emit(
+                TokensRecovered {
+                    caller: signer::address_of(caller),
+                    token_metadata,
+                    from: token_state_address,
+                    to,
+                    amount: balance
+                }
+            );
+        }
     }
 
     fun assert_not_paused() acquires TokenState {
@@ -774,6 +861,14 @@ module regulated_token::regulated_token {
     ) {
         access_control::assert_role(
             token_metadata, signer::address_of(caller), recovery_role()
+        );
+    }
+
+    fun assert_bridge_minter_or_burner(
+        caller: &signer, token_metadata: Object<Metadata>
+    ) {
+        access_control::assert_role(
+            token_metadata, signer::address_of(caller), bridge_minter_or_burner_role()
         );
     }
 

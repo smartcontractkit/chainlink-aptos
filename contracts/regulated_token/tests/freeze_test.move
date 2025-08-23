@@ -464,4 +464,288 @@ module regulated_token::freeze_test {
         assert!(next_key == @0x0, 2); // Should return start key unchanged
         assert!(has_more, 3); // Should indicate there are accounts available
     }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    fun test_recover_frozen_funds_success(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+
+        let recovery_manager = @0x500;
+        let frozen_user = USER1;
+        let recovery_recipient = @0x600;
+        let initial_amount = 1000u64;
+
+        account::create_account_for_test(frozen_user);
+        account::create_account_for_test(recovery_recipient);
+        account::create_account_for_test(recovery_manager);
+
+        let admin_signer = account::create_signer_for_test(ADMIN);
+        let freezer = account::create_signer_for_test(FREEZER);
+        let recovery_signer = account::create_signer_for_test(recovery_manager);
+
+        // Grant recovery role to recovery_manager
+        regulated_token::grant_role(&admin_signer, 7, recovery_manager); // RECOVERY_ROLE = 7
+
+        let metadata = regulated_token::token_metadata();
+
+        // Mint tokens to frozen user
+        regulated_token::mint(&freezer, frozen_user, initial_amount);
+        assert!(
+            primary_fungible_store::balance(frozen_user, metadata) == initial_amount, 1
+        );
+
+        // Freeze the user's account
+        regulated_token::freeze_accounts(&freezer, vector[frozen_user]);
+        assert!(primary_fungible_store::is_frozen(frozen_user, metadata), 2);
+
+        // Recover frozen funds
+        regulated_token::recover_frozen_funds(
+            &recovery_signer, frozen_user, recovery_recipient
+        );
+
+        // Verify funds were transferred
+        assert!(primary_fungible_store::balance(frozen_user, metadata) == 0, 3);
+        assert!(
+            primary_fungible_store::balance(recovery_recipient, metadata)
+                == initial_amount,
+            4
+        );
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    fun test_batch_recover_frozen_funds_success(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+
+        let recovery_manager = @0x500;
+        let frozen_user1 = USER1;
+        let frozen_user2 = USER2;
+        let recovery_recipient = @0x600;
+        let amount1 = 1000u64;
+        let amount2 = 2000u64;
+
+        account::create_account_for_test(frozen_user1);
+        account::create_account_for_test(frozen_user2);
+        account::create_account_for_test(recovery_recipient);
+        account::create_account_for_test(recovery_manager);
+
+        let admin_signer = account::create_signer_for_test(ADMIN);
+        let freezer = account::create_signer_for_test(FREEZER);
+        let recovery_signer = account::create_signer_for_test(recovery_manager);
+
+        // Grant recovery role to recovery_manager
+        regulated_token::grant_role(&admin_signer, 7, recovery_manager); // RECOVERY_ROLE = 7
+
+        let metadata = regulated_token::token_metadata();
+
+        // Mint tokens to both users
+        regulated_token::mint(&freezer, frozen_user1, amount1);
+        regulated_token::mint(&freezer, frozen_user2, amount2);
+
+        // Freeze both accounts
+        regulated_token::freeze_accounts(&freezer, vector[frozen_user1, frozen_user2]);
+        assert!(primary_fungible_store::is_frozen(frozen_user1, metadata), 1);
+        assert!(primary_fungible_store::is_frozen(frozen_user2, metadata), 2);
+
+        // Batch recover frozen funds
+        regulated_token::batch_recover_frozen_funds(
+            &recovery_signer,
+            vector[frozen_user1, frozen_user2],
+            recovery_recipient
+        );
+
+        // Verify all funds were transferred
+        assert!(primary_fungible_store::balance(frozen_user1, metadata) == 0, 3);
+        assert!(primary_fungible_store::balance(frozen_user2, metadata) == 0, 4);
+        assert!(
+            primary_fungible_store::balance(recovery_recipient, metadata)
+                == amount1 + amount2,
+            5
+        );
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::access_control::E_MISSING_ROLE,
+            location = regulated_token::access_control
+        )
+    ]
+    fun test_recover_frozen_funds_unauthorized(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+
+        let unauthorized_user = @0x500;
+        let frozen_user = USER1;
+        let recovery_recipient = @0x600;
+
+        account::create_account_for_test(frozen_user);
+        account::create_account_for_test(recovery_recipient);
+        account::create_account_for_test(unauthorized_user);
+
+        let freezer = account::create_signer_for_test(FREEZER);
+        let unauthorized_signer = account::create_signer_for_test(unauthorized_user);
+
+        regulated_token::mint(&freezer, frozen_user, 1000);
+        regulated_token::freeze_accounts(&freezer, vector[frozen_user]);
+
+        // Should fail because unauthorized_user doesn't have RECOVERY_ROLE
+        regulated_token::recover_frozen_funds(
+            &unauthorized_signer, frozen_user, recovery_recipient
+        );
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    fun test_recover_frozen_funds_unfrozen_account_no_op(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+
+        let recovery_manager = @0x500;
+        let unfrozen_user = USER1;
+        let recovery_recipient = @0x600;
+        let initial_amount = 1000u64;
+
+        account::create_account_for_test(unfrozen_user);
+        account::create_account_for_test(recovery_recipient);
+        account::create_account_for_test(recovery_manager);
+
+        let admin_signer = account::create_signer_for_test(ADMIN);
+        let freezer = account::create_signer_for_test(FREEZER);
+        let recovery_signer = account::create_signer_for_test(recovery_manager);
+
+        // Grant recovery role to recovery_manager
+        regulated_token::grant_role(&admin_signer, 7, recovery_manager); // RECOVERY_ROLE = 7
+
+        let metadata = regulated_token::token_metadata();
+
+        // Mint tokens to unfrozen user (don't freeze)
+        regulated_token::mint(&freezer, unfrozen_user, initial_amount);
+
+        // Try to recover from unfrozen account - should be no-op
+        regulated_token::recover_frozen_funds(
+            &recovery_signer, unfrozen_user, recovery_recipient
+        );
+
+        // Verify no funds were transferred (account was not frozen)
+        assert!(
+            primary_fungible_store::balance(unfrozen_user, metadata) == initial_amount,
+            1
+        );
+        assert!(primary_fungible_store::balance(recovery_recipient, metadata) == 0, 2);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    fun test_recover_frozen_funds_zero_balance_no_op(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+
+        let recovery_manager = @0x500;
+        let frozen_user = USER1;
+        let recovery_recipient = @0x600;
+
+        account::create_account_for_test(frozen_user);
+        account::create_account_for_test(recovery_recipient);
+        account::create_account_for_test(recovery_manager);
+
+        let admin_signer = account::create_signer_for_test(ADMIN);
+        let freezer = account::create_signer_for_test(FREEZER);
+        let recovery_signer = account::create_signer_for_test(recovery_manager);
+
+        // Grant recovery role to recovery_manager
+        regulated_token::grant_role(&admin_signer, 7, recovery_manager); // RECOVERY_ROLE = 7
+
+        let metadata = regulated_token::token_metadata();
+
+        // Freeze the user's account (but no tokens minted)
+        regulated_token::freeze_accounts(&freezer, vector[frozen_user]);
+        assert!(primary_fungible_store::is_frozen(frozen_user, metadata), 1);
+        assert!(primary_fungible_store::balance(frozen_user, metadata) == 0, 2);
+
+        // Try to recover from frozen account with zero balance - should be no-op
+        regulated_token::recover_frozen_funds(
+            &recovery_signer, frozen_user, recovery_recipient
+        );
+
+        // Verify no funds were transferred (zero balance)
+        assert!(primary_fungible_store::balance(frozen_user, metadata) == 0, 3);
+        assert!(primary_fungible_store::balance(recovery_recipient, metadata) == 0, 4);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::E_ZERO_ADDRESS_NOT_ALLOWED,
+            location = regulated_token::regulated_token
+        )
+    ]
+    fun test_recover_frozen_funds_zero_address(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+
+        let recovery_manager = @0x500;
+        let frozen_user = USER1;
+
+        account::create_account_for_test(frozen_user);
+        account::create_account_for_test(recovery_manager);
+
+        let admin_signer = account::create_signer_for_test(ADMIN);
+        let freezer = account::create_signer_for_test(FREEZER);
+        let recovery_signer = account::create_signer_for_test(recovery_manager);
+
+        // Grant recovery role to recovery_manager
+        regulated_token::grant_role(&admin_signer, 7, recovery_manager); // RECOVERY_ROLE = 7
+
+        // Mint and freeze
+        regulated_token::mint(&freezer, frozen_user, 1000);
+        regulated_token::freeze_accounts(&freezer, vector[frozen_user]);
+
+        // Should fail because recipient is zero address
+        regulated_token::recover_frozen_funds(&recovery_signer, frozen_user, @0x0);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::E_PAUSED,
+            location = regulated_token::regulated_token
+        )
+    ]
+    fun test_recover_frozen_funds_when_paused(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+
+        let recovery_manager = @0x500;
+        let frozen_user = USER1;
+        let recovery_recipient = @0x600;
+
+        account::create_account_for_test(frozen_user);
+        account::create_account_for_test(recovery_recipient);
+        account::create_account_for_test(recovery_manager);
+
+        let admin_signer = account::create_signer_for_test(ADMIN);
+        let freezer = account::create_signer_for_test(FREEZER);
+        let recovery_signer = account::create_signer_for_test(recovery_manager);
+
+        // Grant recovery and pauser roles
+        regulated_token::grant_role(&admin_signer, 7, recovery_manager); // RECOVERY_ROLE = 7
+        regulated_token::grant_role(&admin_signer, 0, ADMIN); // PAUSER_ROLE = 0
+
+        // Mint and freeze
+        regulated_token::mint(&freezer, frozen_user, 1000);
+        regulated_token::freeze_accounts(&freezer, vector[frozen_user]);
+
+        regulated_token::pause(&admin_signer);
+
+        // Should fail because contract is paused
+        regulated_token::recover_frozen_funds(
+            &recovery_signer, frozen_user, recovery_recipient
+        );
+    }
 }

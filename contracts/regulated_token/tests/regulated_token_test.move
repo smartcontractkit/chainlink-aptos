@@ -1,18 +1,27 @@
 #[test_only]
 module regulated_token::regulated_token_test {
-    use std::fungible_asset::{Self};
+    use std::fungible_asset::{Self, FungibleAsset};
     use std::option;
     use std::primary_fungible_store;
     use std::signer;
     use std::string;
     use std::object;
     use std::account;
+    use std::event;
 
     use regulated_token::regulated_token::{Self};
 
-    // Additional constants for recovery tests
     const RECOVERY_USER: address = @0xfeef;
     const RECIPIENT: address = @0xbeef;
+
+    const PAUSER_ROLE: u8 = 0;
+    const UNPAUSER_ROLE: u8 = 1;
+    const FREEZER_ROLE: u8 = 2;
+    const UNFREEZER_ROLE: u8 = 3;
+    const MINTER_ROLE: u8 = 4;
+    const BURNER_ROLE: u8 = 5;
+    const BRIDGE_MINTER_OR_BURNER_ROLE: u8 = 6;
+    const RECOVERY_ROLE: u8 = 7;
 
     fun setup(owner: &signer, regulated_token: &signer) {
         let constructor_ref = object::create_named_object(owner, b"regulated_token");
@@ -29,12 +38,12 @@ module regulated_token::regulated_token_test {
         freezer_addr: address,
         pauser_addr: address
     ) {
-        regulated_token::grant_role(admin, 4, minter_addr); // MINTER_ROLE = 4
-        regulated_token::grant_role(admin, 5, burner_addr); // BURNER_ROLE = 5
-        regulated_token::grant_role(admin, 2, freezer_addr); // FREEZER_ROLE = 2
-        regulated_token::grant_role(admin, 3, freezer_addr); // UNFREEZER_ROLE = 3
-        regulated_token::grant_role(admin, 0, pauser_addr); // PAUSER_ROLE = 0
-        regulated_token::grant_role(admin, 1, pauser_addr); // UNPAUSER_ROLE = 1
+        regulated_token::grant_role(admin, MINTER_ROLE, minter_addr);
+        regulated_token::grant_role(admin, BURNER_ROLE, burner_addr);
+        regulated_token::grant_role(admin, FREEZER_ROLE, freezer_addr);
+        regulated_token::grant_role(admin, UNFREEZER_ROLE, freezer_addr);
+        regulated_token::grant_role(admin, PAUSER_ROLE, pauser_addr);
+        regulated_token::grant_role(admin, UNPAUSER_ROLE, pauser_addr);
     }
 
     fun setup_with_recovery_role(
@@ -53,7 +62,7 @@ module regulated_token::regulated_token_test {
         // Grant recovery role to RECOVERY_USER
         account::create_account_for_test(RECOVERY_USER);
         account::create_account_for_test(RECIPIENT);
-        regulated_token::grant_role(admin, 7, RECOVERY_USER); // RECOVERY_ROLE = 7
+        regulated_token::grant_role(admin, RECOVERY_ROLE, RECOVERY_USER);
 
         // Create primary stores to ensure they exist (for recipient, contract address, and token state address)
         let metadata_obj = regulated_token::token_metadata();
@@ -282,7 +291,7 @@ module regulated_token::regulated_token_test {
         let minter_addr = signer::address_of(minter);
 
         // Grant minter role
-        regulated_token::grant_role(admin, 4, minter_addr); // MINTER_ROLE = 4
+        regulated_token::grant_role(admin, MINTER_ROLE, minter_addr);
 
         // Now minter can mint
         regulated_token::mint(minter, @0x123, 100);
@@ -382,65 +391,7 @@ module regulated_token::regulated_token_test {
     }
 
     // ================================================================
-    // |                      Zero Amount Tests                       |
-    // ================================================================
-
-    #[test(admin = @admin, recipient = @0xcafe, regulated_token = @regulated_token)]
-    #[
-        expected_failure(
-            abort_code = regulated_token::regulated_token::E_INVALID_AMOUNT,
-            location = regulated_token::regulated_token
-        )
-    ]
-    fun test_mint_zero_amount_fails(
-        admin: &signer, recipient: &signer, regulated_token: &signer
-    ) {
-        setup(admin, regulated_token);
-        let admin_addr = signer::address_of(admin);
-        setup_roles(
-            admin,
-            admin_addr,
-            admin_addr,
-            admin_addr,
-            admin_addr
-        );
-
-        let recipient_addr = signer::address_of(recipient);
-        // Try to mint with zero amount (should fail)
-        regulated_token::mint(admin, recipient_addr, 0);
-    }
-
-    #[test(admin = @admin, recipient = @0xcafe, regulated_token = @regulated_token)]
-    #[
-        expected_failure(
-            abort_code = regulated_token::regulated_token::E_INVALID_AMOUNT,
-            location = regulated_token::regulated_token
-        )
-    ]
-    fun test_burn_zero_amount_fails(
-        admin: &signer, recipient: &signer, regulated_token: &signer
-    ) {
-        setup(admin, regulated_token);
-        let admin_addr = signer::address_of(admin);
-        setup_roles(
-            admin,
-            admin_addr,
-            admin_addr,
-            admin_addr,
-            admin_addr
-        );
-
-        let recipient_addr = signer::address_of(recipient);
-
-        // First mint some tokens
-        regulated_token::mint(admin, recipient_addr, 100);
-
-        // Try to burn with zero amount (should fail)
-        regulated_token::burn(admin, recipient_addr, 0);
-    }
-
-    // ================================================================
-    // |                      Burn Frozen Funds Tests                |
+    // |                      Burn Frozen Funds Tests                   |
     // ================================================================
 
     #[test(admin = @admin, user = @0xface, regulated_token = @regulated_token)]
@@ -1228,5 +1179,246 @@ module regulated_token::regulated_token_test {
         assert!(res.length() == 3);
         assert!(next_key == @0x3);
         assert!(!has_more);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    fun test_bridge_mint_success(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let bridge_addr = @0xbeef;
+
+        account::create_account_for_test(bridge_addr);
+
+        // Grant BRIDGE_MINTER_OR_BURNER_ROLE to bridge_addr
+        regulated_token::grant_role(admin, BRIDGE_MINTER_OR_BURNER_ROLE, bridge_addr);
+
+        let bridge_signer = &account::create_signer_for_test(bridge_addr);
+
+        // Call bridge_mint
+        let fa = regulated_token::bridge_mint(bridge_signer, bridge_addr, 1000);
+
+        // Verify the FungibleAsset was created with correct amount
+        assert!(fungible_asset::amount(&fa) == 1000);
+
+        // Clean up by burning the FA
+        regulated_token::bridge_burn(bridge_signer, bridge_addr, fa);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    fun test_bridge_burn_success(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let bridge_addr = @0xbeef;
+
+        account::create_account_for_test(bridge_addr);
+
+        // Grant BRIDGE_MINTER_OR_BURNER_ROLE to bridge_addr
+        regulated_token::grant_role(admin, BRIDGE_MINTER_OR_BURNER_ROLE, bridge_addr);
+
+        let bridge_signer = &account::create_signer_for_test(bridge_addr);
+
+        let fa = regulated_token::bridge_mint(bridge_signer, bridge_addr, 1000);
+        assert!(fungible_asset::amount(&fa) == 1000);
+
+        regulated_token::bridge_burn(bridge_signer, bridge_addr, fa);
+
+        let events = event::emitted_events<regulated_token::BridgeBurn>();
+        assert!(events.length() == 1);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::access_control::E_MISSING_ROLE,
+            location = regulated_token::access_control
+        )
+    ]
+    fun test_bridge_mint_unauthorized(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let unauthorized_addr = @0xbeef;
+
+        account::create_account_for_test(unauthorized_addr);
+        let unauthorized_signer = &account::create_signer_for_test(unauthorized_addr);
+
+        // Should fail because unauthorized_signer doesn't have BRIDGE_MINTER_OR_BURNER_ROLE
+        let fa = regulated_token::bridge_mint(
+            unauthorized_signer, unauthorized_addr, 1000
+        );
+        burn_fa(admin, fa, unauthorized_addr);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::access_control::E_MISSING_ROLE,
+            location = regulated_token::access_control
+        )
+    ]
+    fun test_bridge_burn_unauthorized(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let bridge_addr = @0xcafe;
+        let unauthorized_addr = @0xbeef;
+
+        account::create_account_for_test(bridge_addr);
+        account::create_account_for_test(unauthorized_addr);
+
+        // Grant BRIDGE_MINTER_OR_BURNER_ROLE to bridge_addr only
+        regulated_token::grant_role(admin, BRIDGE_MINTER_OR_BURNER_ROLE, bridge_addr);
+
+        let bridge_signer = &account::create_signer_for_test(bridge_addr);
+        let unauthorized_signer = &account::create_signer_for_test(unauthorized_addr);
+
+        // Create a FungibleAsset with authorized signer
+        let fa = regulated_token::bridge_mint(bridge_signer, bridge_addr, 1000);
+
+        // Should fail because unauthorized_signer doesn't have BRIDGE_MINTER_OR_BURNER_ROLE
+        burn_fa(unauthorized_signer, fa, bridge_addr);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::E_PAUSED,
+            location = regulated_token::regulated_token
+        )
+    ]
+    fun test_bridge_mint_when_paused(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let bridge_addr = @0xbeef;
+
+        account::create_account_for_test(bridge_addr);
+
+        // Grant admin the pauser role
+        let admin_addr = signer::address_of(admin);
+        regulated_token::grant_role(admin, PAUSER_ROLE, admin_addr);
+
+        // Grant BRIDGE_MINTER_OR_BURNER_ROLE to bridge_addr
+        regulated_token::grant_role(admin, BRIDGE_MINTER_OR_BURNER_ROLE, bridge_addr);
+
+        let bridge_signer = &account::create_signer_for_test(bridge_addr);
+
+        regulated_token::pause(admin);
+
+        // Should fail because contract is paused
+        let fa = regulated_token::bridge_mint(bridge_signer, bridge_addr, 1000);
+        burn_fa(admin, fa, bridge_addr);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::E_PAUSED,
+            location = regulated_token::regulated_token
+        )
+    ]
+    fun test_bridge_burn_when_paused(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let bridge_addr = @0xbeef;
+        account::create_account_for_test(bridge_addr);
+
+        // Grant admin the pauser role
+        let admin_addr = signer::address_of(admin);
+        regulated_token::grant_role(admin, PAUSER_ROLE, admin_addr);
+
+        // Grant BRIDGE_MINTER_OR_BURNER_ROLE to bridge_addr
+        regulated_token::grant_role(admin, BRIDGE_MINTER_OR_BURNER_ROLE, bridge_addr);
+
+        let bridge_signer = &account::create_signer_for_test(bridge_addr);
+
+        let fa = regulated_token::bridge_mint(bridge_signer, bridge_addr, 1000);
+
+        regulated_token::pause(admin);
+
+        // Should fail because contract is paused
+        regulated_token::bridge_burn(bridge_signer, bridge_addr, fa);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::E_ACCOUNT_FROZEN,
+            location = regulated_token::regulated_token
+        )
+    ]
+    fun test_bridge_mint_to_frozen_account(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let bridge_addr = @0xbeef;
+        let frozen_addr = @0xcafe;
+
+        account::create_account_for_test(bridge_addr);
+        account::create_account_for_test(frozen_addr);
+
+        // Grant admin the freezer role
+        let admin_addr = signer::address_of(admin);
+        regulated_token::grant_role(admin, FREEZER_ROLE, admin_addr);
+
+        // Grant BRIDGE_MINTER_OR_BURNER_ROLE to bridge_addr
+        regulated_token::grant_role(admin, BRIDGE_MINTER_OR_BURNER_ROLE, bridge_addr);
+
+        let bridge_signer = &account::create_signer_for_test(bridge_addr);
+
+        // Freeze the target account
+        regulated_token::freeze_account(admin, frozen_addr);
+
+        // Should fail because target account is frozen
+        let fa = regulated_token::bridge_mint(bridge_signer, frozen_addr, 1000);
+        burn_fa(admin, fa, bridge_addr);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::E_ACCOUNT_FROZEN,
+            location = regulated_token::regulated_token
+        )
+    ]
+    fun test_bridge_burn_from_frozen_account(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let bridge_addr = @0xbeef;
+        let frozen_addr = @0xcafe;
+
+        account::create_account_for_test(bridge_addr);
+        account::create_account_for_test(frozen_addr);
+
+        // Grant admin the freezer role
+        let admin_addr = signer::address_of(admin);
+        regulated_token::grant_role(admin, FREEZER_ROLE, admin_addr);
+
+        // Grant BRIDGE_MINTER_OR_BURNER_ROLE to bridge_addr
+        regulated_token::grant_role(admin, BRIDGE_MINTER_OR_BURNER_ROLE, bridge_addr);
+
+        let bridge_signer = &account::create_signer_for_test(bridge_addr);
+
+        let fa = regulated_token::bridge_mint(bridge_signer, frozen_addr, 1000);
+
+        regulated_token::freeze_account(admin, frozen_addr);
+
+        // Should fail because source account is frozen
+        regulated_token::bridge_burn(bridge_signer, frozen_addr, fa);
+    }
+
+    fun burn_fa(admin: &signer, fa: FungibleAsset, sender: address) {
+        let metadata = fungible_asset::metadata_from_asset(&fa);
+        // Create a FungibleStore for SENDER so we can burn from it
+        // This will call `regulated_token::bridge_burn` which attempts to check the sender's store
+        // to make sure it's not frozen.
+        let _store = primary_fungible_store::ensure_primary_store_exists(
+            sender, metadata
+        );
+        regulated_token::bridge_burn(admin, sender, fa);
     }
 }
