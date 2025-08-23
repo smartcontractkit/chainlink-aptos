@@ -27,6 +27,8 @@ const (
 	MCMSRegistrar      = Package("mcms-registrar")
 	ManagedTokenFaucet = Package("managed_token_faucet")
 
+	RegulatedToken = Package("regulated_token")
+
 	DataFeeds         = Package("data_feeds")
 	Platform          = Package("platform")
 	PlatformSecondary = Package("platform_secondary")
@@ -57,6 +59,8 @@ var Contracts map[Package]string = map[Package]string{
 	ManagedToken:       filepath.Join("managed_token"),
 	MCMSRegistrar:      filepath.Join("mcms-registrar"),
 	ManagedTokenFaucet: filepath.Join("managed_token_faucet"),
+
+	RegulatedToken: filepath.Join("regulated_token"),
 
 	MCMS:     filepath.Join("mcms", "mcms"),
 	MCMSTest: filepath.Join("mcms", "mcms_test"),

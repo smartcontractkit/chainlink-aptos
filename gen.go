@@ -6,6 +6,8 @@ package aptos
 
 //go:generate go run ./cmd/bindgen --input ./contracts/managed_token_faucet/sources/faucet.move --output ./bindings/managed_token_faucet/faucet
 
+//go:generate go run ./cmd/bindgen --input ./contracts/regulated_token/sources/regulated_token.move --output ./bindings/regulated_token/regulated_token
+
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/auth.move --output ./bindings/ccip/auth
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/fee_quoter.move --output ./bindings/ccip/fee_quoter
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/nonce_manager.move --output ./bindings/ccip/nonce_manager
