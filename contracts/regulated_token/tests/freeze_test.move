@@ -1,8 +1,10 @@
 #[test_only]
 module regulated_token::freeze_test {
     use std::account;
+    use std::option;
     use std::primary_fungible_store;
     use std::object;
+    use std::string;
 
     use regulated_token::regulated_token::{Self};
 
@@ -11,18 +13,29 @@ module regulated_token::freeze_test {
     const USER1: address = @0x200;
     const USER2: address = @0x300;
 
-    fun setup(owner: &signer, regulated_token: &signer) {
-        let constructor_ref = object::create_named_object(owner, b"regulated_token");
+    fun setup(admin: &signer, regulated_token: &signer) {
+        let constructor_ref = object::create_named_object(admin, b"regulated_token");
         account::create_account_if_does_not_exist(
             object::address_from_constructor_ref(&constructor_ref)
         );
         regulated_token::init_module_for_testing(regulated_token);
 
-        let admin = account::create_signer_for_test(ADMIN);
-        regulated_token::grant_role(&admin, 2, FREEZER); // FREEZER_ROLE = 2
-        regulated_token::grant_role(&admin, 3, FREEZER); // UNFREEZER_ROLE = 3
-        regulated_token::grant_role(&admin, 4, FREEZER); // MINTER_ROLE = 4 (for testing mints)
-        regulated_token::grant_role(&admin, 5, FREEZER); // BURNER_ROLE = 5 (for testing burns)
+        regulated_token::initialize(
+            admin,
+            option::none(), // max_supply
+            string::utf8(b"Regulated Token"), // name
+            string::utf8(b"RT"), // symbol
+            6, // decimals
+            string::utf8(
+                b"https://regulatedtoken.com/images/pic.png"
+            ), // icon
+            string::utf8(b"https://regulatedtoken.com") // project
+        );
+
+        regulated_token::grant_role(admin, 2, FREEZER); // FREEZER_ROLE = 2
+        regulated_token::grant_role(admin, 3, FREEZER); // UNFREEZER_ROLE = 3
+        regulated_token::grant_role(admin, 4, FREEZER); // MINTER_ROLE = 4 (for testing mints)
+        regulated_token::grant_role(admin, 5, FREEZER); // BURNER_ROLE = 5 (for testing burns)
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]

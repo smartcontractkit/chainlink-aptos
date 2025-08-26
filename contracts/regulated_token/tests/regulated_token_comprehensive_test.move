@@ -5,6 +5,8 @@ module regulated_token::regulated_token_comprehensive_test {
     use std::object::{Self, Object};
     use std::fungible_asset::{Metadata};
     use std::event;
+    use std::option;
+    use std::string;
 
     use regulated_token::regulated_token::{
         Self,
@@ -42,36 +44,48 @@ module regulated_token::regulated_token_comprehensive_test {
     const BRIDGE_MINTER_OR_BURNER_ROLE: u8 = 6;
     const RECOVERY_ROLE: u8 = 7;
 
-    fun setup_token(owner: &signer, regulated_token: &signer): Object<Metadata> {
-        let constructor_ref = object::create_named_object(owner, b"regulated_token");
+    fun setup_token(admin: &signer, regulated_token: &signer): Object<Metadata> {
+        let constructor_ref = object::create_named_object(admin, b"regulated_token");
         account::create_account_if_does_not_exist(
             object::address_from_constructor_ref(&constructor_ref)
         );
 
         regulated_token::init_module_for_testing(regulated_token);
+
+        // Initialize the token with default parameters - use the admin signer
+        regulated_token::initialize(
+            admin,
+            option::none(), // max_supply
+            string::utf8(b"Regulated Token"), // name
+            string::utf8(b"RT"), // symbol
+            6, // decimals
+            string::utf8(
+                b"https://regulatedtoken.com/images/pic.png"
+            ), // icon
+            string::utf8(b"https://regulatedtoken.com") // project
+        );
+
         regulated_token::token_metadata()
     }
 
-    fun setup_token_and_roles(owner: &signer, regulated_token: &signer): Object<Metadata> {
-        let token_metadata = setup_token(owner, regulated_token);
+    fun setup_token_and_roles(admin: &signer, regulated_token: &signer): Object<Metadata> {
+        let token_metadata = setup_token(admin, regulated_token);
 
-        let admin = account::create_signer_for_test(ADMIN);
+        regulated_token::grant_role(admin, MINTER_ROLE, MINTER1); // Native minter
+        regulated_token::grant_role(admin, BRIDGE_MINTER_OR_BURNER_ROLE, BRIDGE_MINTER); // Bridge minter
+        regulated_token::grant_role(admin, RECOVERY_ROLE, RECOVERY1); // Recover funds
 
-        regulated_token::grant_role(&admin, MINTER_ROLE, MINTER1); // Native minter
-        regulated_token::grant_role(&admin, BRIDGE_MINTER_OR_BURNER_ROLE, BRIDGE_MINTER); // Bridge minter
-        regulated_token::grant_role(&admin, RECOVERY_ROLE, RECOVERY1); // Recover funds
+        regulated_token::grant_role(admin, BURNER_ROLE, BURNER1); // Native burner
+        regulated_token::grant_role(admin, BRIDGE_MINTER_OR_BURNER_ROLE, BRIDGE_BURNER); // Bridge burner
+        regulated_token::grant_role(admin, RECOVERY_ROLE, RECOVERY1); // Recover funds
 
-        regulated_token::grant_role(&admin, BURNER_ROLE, BURNER1); // Native burner
-        regulated_token::grant_role(&admin, BRIDGE_MINTER_OR_BURNER_ROLE, BRIDGE_BURNER); // Bridge burner
-        regulated_token::grant_role(&admin, RECOVERY_ROLE, RECOVERY1); // Recover funds
+        regulated_token::grant_role(admin, PAUSER_ROLE, PAUSER1);
+        regulated_token::grant_role(admin, PAUSER_ROLE, PAUSER2);
+        regulated_token::grant_role(admin, UNPAUSER_ROLE, UNPAUSER1);
 
-        regulated_token::grant_role(&admin, PAUSER_ROLE, PAUSER1);
-        regulated_token::grant_role(&admin, PAUSER_ROLE, PAUSER2);
-        regulated_token::grant_role(&admin, UNPAUSER_ROLE, UNPAUSER1);
-
-        regulated_token::grant_role(&admin, FREEZER_ROLE, FREEZER1);
-        regulated_token::grant_role(&admin, FREEZER_ROLE, FREEZER2);
-        regulated_token::grant_role(&admin, UNFREEZER_ROLE, UNFREEZER1);
+        regulated_token::grant_role(admin, FREEZER_ROLE, FREEZER1);
+        regulated_token::grant_role(admin, FREEZER_ROLE, FREEZER2);
+        regulated_token::grant_role(admin, UNFREEZER_ROLE, UNFREEZER1);
 
         token_metadata
     }

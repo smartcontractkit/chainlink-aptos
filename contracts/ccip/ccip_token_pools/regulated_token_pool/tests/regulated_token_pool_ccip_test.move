@@ -6,7 +6,9 @@ module regulated_token_pool::regulated_token_pool_ccip_test {
     use std::primary_fungible_store;
     use std::signer;
     use std::string;
+    use std::option;
     use std::timestamp;
+
     use ccip::auth;
     use ccip::rmn_remote;
     use ccip::state_object;
@@ -79,8 +81,18 @@ module regulated_token_pool::regulated_token_pool_ccip_test {
             object::address_from_constructor_ref(&regulated_token_constructor_ref)
         );
 
-        // Initialize regulated token
         regulated_token::init_module_for_testing(regulated_token);
+        regulated_token::initialize(
+            admin,
+            option::none(),
+            string::utf8(b"Regulated Token"),
+            string::utf8(b"RT"),
+            6,
+            string::utf8(
+                b"https://regulatedtoken.com/images/pic.png"
+            ),
+            string::utf8(b"https://regulatedtoken.com")
+        );
 
         // Grant admin the BRIDGE_MINTER_OR_BURNER role for token operations
         setup_regulated_token_roles(admin);

@@ -3,6 +3,8 @@ module regulated_token::ownership_test {
     use std::signer;
     use std::account;
     use std::object;
+    use std::option;
+    use std::string;
 
     use regulated_token::regulated_token;
 
@@ -13,18 +15,26 @@ module regulated_token::ownership_test {
     const USER1: address = @0x500;
     const USER2: address = @0x600;
 
-    fun setup(owner: &signer, regulated_token: &signer) {
-        account::create_account_for_test(signer::address_of(owner));
-        account::create_account_for_test(ADMIN);
-        account::create_account_for_test(NEW_OWNER);
-        account::create_account_for_test(UNAUTHORIZED);
-
-        let constructor_ref = object::create_named_object(owner, b"regulated_token");
+    fun setup(admin: &signer, regulated_token: &signer) {
+        let constructor_ref = object::create_named_object(admin, b"regulated_token");
         account::create_account_for_test(
             object::address_from_constructor_ref(&constructor_ref)
         );
 
         regulated_token::init_module_for_testing(regulated_token);
+
+        // Initialize the token with default parameters - use the admin signer
+        regulated_token::initialize(
+            admin,
+            option::none(), // max_supply
+            string::utf8(b"Regulated Token"), // name
+            string::utf8(b"RT"), // symbol
+            6, // decimals
+            string::utf8(
+                b"https://regulatedtoken.com/images/pic.png"
+            ), // icon
+            string::utf8(b"https://regulatedtoken.com") // project
+        );
     }
 
     // ================================================================

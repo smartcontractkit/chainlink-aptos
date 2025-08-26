@@ -22,6 +22,9 @@ var (
 )
 
 type RegulatedTokenInterface interface {
+	TypeAndVersion(opts *bind.CallOpts) (string, error)
+	TokenStateAddress(opts *bind.CallOpts) (aptos.AccountAddress, error)
+	TokenStateObject(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	TokenAddress(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	TokenMetadata(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	IsPaused(opts *bind.CallOpts) (bool, error)
@@ -47,11 +50,13 @@ type RegulatedTokenInterface interface {
 	PendingTransferTo(opts *bind.CallOpts) (*aptos.AccountAddress, error)
 	PendingTransferAccepted(opts *bind.CallOpts) (*bool, error)
 
+	Initialize(opts *bind.TransactOpts, maxSupply **big.Int, name string, symbol string, decimals byte, icon string, project string) (*api.PendingTransaction, error)
 	Mint(opts *bind.TransactOpts, to aptos.AccountAddress, amount uint64) (*api.PendingTransaction, error)
 	Burn(opts *bind.TransactOpts, from aptos.AccountAddress, amount uint64) (*api.PendingTransaction, error)
 	BatchBurnFrozenFunds(opts *bind.TransactOpts, accounts []aptos.AccountAddress) (*api.PendingTransaction, error)
 	BurnFrozenFunds(opts *bind.TransactOpts, from aptos.AccountAddress) (*api.PendingTransaction, error)
 	GrantRole(opts *bind.TransactOpts, roleNumber byte, account aptos.AccountAddress) (*api.PendingTransaction, error)
+	RevokeRole(opts *bind.TransactOpts, roleNumber byte, account aptos.AccountAddress) (*api.PendingTransaction, error)
 	FreezeAccounts(opts *bind.TransactOpts, accounts []aptos.AccountAddress) (*api.PendingTransaction, error)
 	FreezeAccount(opts *bind.TransactOpts, account aptos.AccountAddress) (*api.PendingTransaction, error)
 	UnfreezeAccounts(opts *bind.TransactOpts, accounts []aptos.AccountAddress) (*api.PendingTransaction, error)
@@ -73,6 +78,9 @@ type RegulatedTokenInterface interface {
 }
 
 type RegulatedTokenEncoder interface {
+	TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TokenStateAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TokenStateObject() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TokenAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TokenMetadata() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	IsPaused() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -97,11 +105,13 @@ type RegulatedTokenEncoder interface {
 	PendingTransferFrom() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	PendingTransferTo() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	PendingTransferAccepted() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	Initialize(maxSupply **big.Int, name string, symbol string, decimals byte, icon string, project string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Mint(to aptos.AccountAddress, amount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Burn(from aptos.AccountAddress, amount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	BatchBurnFrozenFunds(accounts []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	BurnFrozenFunds(from aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GrantRole(roleNumber byte, account aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	RevokeRole(roleNumber byte, account aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	FreezeAccounts(accounts []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	FreezeAccount(account aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	UnfreezeAccounts(accounts []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -117,21 +127,23 @@ type RegulatedTokenEncoder interface {
 	TransferOwnership(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	TokenAddressInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TokenStateObjectInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TokenStateAddressInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TokenMetadataFromStateObj(stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TokenMetadataInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	IsPausedInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AssertNotPaused() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	AssertPauser(tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	AssertUnpauser(tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	AssertFreezer(tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	AssertUnfreezer(tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	AssertRecoveryRole(tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	AssertBridgeMinterOrBurner(tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	AssertBurnerAndGetType(burner aptos.AccountAddress, tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	AssertNotFrozen(store aptos.AccountAddress, tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	AssertPauser(stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	AssertUnpauser(stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	AssertFreezer(stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	AssertUnfreezer(stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	AssertRecoveryRole(stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	AssertBridgeMinterOrBurner(stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	AssertBurnerAndGetType(burner aptos.AccountAddress, stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	AssertNotFrozen(store aptos.AccountAddress, stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"regulated_token","module":"regulated_token","name":"accept_ownership","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"apply_freezer_updates","parameters":[{"name":"freezers_to_remove","type":"vector\u003caddress\u003e"},{"name":"freezers_to_add","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"apply_pauser_updates","parameters":[{"name":"pausers_to_remove","type":"vector\u003caddress\u003e"},{"name":"pausers_to_add","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"apply_unfreezer_updates","parameters":[{"name":"unfreezers_to_remove","type":"vector\u003caddress\u003e"},{"name":"unfreezers_to_add","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_bridge_minter_or_burner","parameters":[{"name":"token_metadata","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_burner_and_get_type","parameters":[{"name":"burner","type":"address"},{"name":"token_metadata","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_freezer","parameters":[{"name":"token_metadata","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_not_frozen","parameters":[{"name":"store","type":"address"},{"name":"token_metadata","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_not_paused","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"assert_pauser","parameters":[{"name":"token_metadata","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_recovery_role","parameters":[{"name":"token_metadata","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_unfreezer","parameters":[{"name":"token_metadata","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_unpauser","parameters":[{"name":"token_metadata","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"batch_burn_frozen_funds","parameters":[{"name":"accounts","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"batch_recover_frozen_funds","parameters":[{"name":"accounts","type":"vector\u003caddress\u003e"},{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"burn","parameters":[{"name":"from","type":"address"},{"name":"amount","type":"u64"}]},{"package":"regulated_token","module":"regulated_token","name":"burn_frozen_funds","parameters":[{"name":"from","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"freeze_account","parameters":[{"name":"account","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"freeze_accounts","parameters":[{"name":"accounts","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"grant_role","parameters":[{"name":"role_number","type":"u8"},{"name":"account","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"is_paused_internal","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"mint","parameters":[{"name":"to","type":"address"},{"name":"amount","type":"u64"}]},{"package":"regulated_token","module":"regulated_token","name":"pause","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"recover_frozen_funds","parameters":[{"name":"from","type":"address"},{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"recover_tokens","parameters":[{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"token_address_internal","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"token_metadata_internal","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"unfreeze_account","parameters":[{"name":"account","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"unfreeze_accounts","parameters":[{"name":"accounts","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"unpause","parameters":null}]`
+const FunctionInfo = `[{"package":"regulated_token","module":"regulated_token","name":"accept_ownership","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"apply_freezer_updates","parameters":[{"name":"freezers_to_remove","type":"vector\u003caddress\u003e"},{"name":"freezers_to_add","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"apply_pauser_updates","parameters":[{"name":"pausers_to_remove","type":"vector\u003caddress\u003e"},{"name":"pausers_to_add","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"apply_unfreezer_updates","parameters":[{"name":"unfreezers_to_remove","type":"vector\u003caddress\u003e"},{"name":"unfreezers_to_add","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_bridge_minter_or_burner","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_burner_and_get_type","parameters":[{"name":"burner","type":"address"},{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_freezer","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_not_frozen","parameters":[{"name":"store","type":"address"},{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_not_paused","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"assert_pauser","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_recovery_role","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_unfreezer","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_unpauser","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"batch_burn_frozen_funds","parameters":[{"name":"accounts","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"batch_recover_frozen_funds","parameters":[{"name":"accounts","type":"vector\u003caddress\u003e"},{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"burn","parameters":[{"name":"from","type":"address"},{"name":"amount","type":"u64"}]},{"package":"regulated_token","module":"regulated_token","name":"burn_frozen_funds","parameters":[{"name":"from","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"freeze_account","parameters":[{"name":"account","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"freeze_accounts","parameters":[{"name":"accounts","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"grant_role","parameters":[{"name":"role_number","type":"u8"},{"name":"account","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"initialize","parameters":[{"name":"max_supply","type":"0x1::option::Option\u003cu128\u003e"},{"name":"name","type":"0x1::string::String"},{"name":"symbol","type":"0x1::string::String"},{"name":"decimals","type":"u8"},{"name":"icon","type":"0x1::string::String"},{"name":"project","type":"0x1::string::String"}]},{"package":"regulated_token","module":"regulated_token","name":"is_paused_internal","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"mint","parameters":[{"name":"to","type":"address"},{"name":"amount","type":"u64"}]},{"package":"regulated_token","module":"regulated_token","name":"pause","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"recover_frozen_funds","parameters":[{"name":"from","type":"address"},{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"recover_tokens","parameters":[{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"revoke_role","parameters":[{"name":"role_number","type":"u8"},{"name":"account","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"token_metadata_from_state_obj","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"token_metadata_internal","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"token_state_address_internal","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"token_state_object_internal","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"unfreeze_account","parameters":[{"name":"account","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"unfreeze_accounts","parameters":[{"name":"accounts","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"unpause","parameters":null}]`
 
 func NewRegulatedToken(address aptos.AccountAddress, client aptos.AptosRpcClient) RegulatedTokenInterface {
 	contract := bind.NewBoundContract(address, "regulated_token", "regulated_token", client)
@@ -143,8 +155,13 @@ func NewRegulatedToken(address aptos.AccountAddress, client aptos.AptosRpcClient
 
 // Structs
 
-type TokenState struct {
+type TokenStateDeployment struct {
 	Paused bool `move:"bool"`
+}
+
+type TokenState struct {
+	Paused bool           `move:"bool"`
+	Token  bind.StdObject `move:"aptos_framework::object::Object"`
 }
 
 type TokenMetadataRefs struct {
@@ -152,6 +169,7 @@ type TokenMetadataRefs struct {
 
 type InitializeToken struct {
 	Publisher aptos.AccountAddress `move:"address"`
+	Token     bind.StdObject       `move:"aptos_framework::object::Object"`
 	MaxSupply **big.Int            `move:"0x1::option::Option<u128>"`
 	Decimals  byte                 `move:"u8"`
 	Icon      string               `move:"0x1::string::String"`
@@ -236,6 +254,69 @@ func (c RegulatedTokenContract) Encoder() RegulatedTokenEncoder {
 }
 
 // View Functions
+
+func (c RegulatedTokenContract) TypeAndVersion(opts *bind.CallOpts) (string, error) {
+	module, function, typeTags, args, err := c.regulatedTokenEncoder.TypeAndVersion()
+	if err != nil {
+		return *new(string), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(string), err
+	}
+
+	var (
+		r0 string
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(string), err
+	}
+	return r0, nil
+}
+
+func (c RegulatedTokenContract) TokenStateAddress(opts *bind.CallOpts) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.regulatedTokenEncoder.TokenStateAddress()
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	var (
+		r0 aptos.AccountAddress
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+	return r0, nil
+}
+
+func (c RegulatedTokenContract) TokenStateObject(opts *bind.CallOpts) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.regulatedTokenEncoder.TokenStateObject()
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	var (
+		r0 bind.StdObject
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+	return r0.Address(), nil
+}
 
 func (c RegulatedTokenContract) TokenAddress(opts *bind.CallOpts) (aptos.AccountAddress, error) {
 	module, function, typeTags, args, err := c.regulatedTokenEncoder.TokenAddress()
@@ -745,6 +826,15 @@ func (c RegulatedTokenContract) PendingTransferAccepted(opts *bind.CallOpts) (*b
 
 // Entry Functions
 
+func (c RegulatedTokenContract) Initialize(opts *bind.TransactOpts, maxSupply **big.Int, name string, symbol string, decimals byte, icon string, project string) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.regulatedTokenEncoder.Initialize(maxSupply, name, symbol, decimals, icon, project)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
 func (c RegulatedTokenContract) Mint(opts *bind.TransactOpts, to aptos.AccountAddress, amount uint64) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.regulatedTokenEncoder.Mint(to, amount)
 	if err != nil {
@@ -783,6 +873,15 @@ func (c RegulatedTokenContract) BurnFrozenFunds(opts *bind.TransactOpts, from ap
 
 func (c RegulatedTokenContract) GrantRole(opts *bind.TransactOpts, roleNumber byte, account aptos.AccountAddress) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.regulatedTokenEncoder.GrantRole(roleNumber, account)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c RegulatedTokenContract) RevokeRole(opts *bind.TransactOpts, roleNumber byte, account aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.regulatedTokenEncoder.RevokeRole(roleNumber, account)
 	if err != nil {
 		return nil, err
 	}
@@ -930,6 +1029,18 @@ type regulatedTokenEncoder struct {
 	*bind.BoundContract
 }
 
+func (c regulatedTokenEncoder) TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("type_and_version", nil, []string{}, []any{})
+}
+
+func (c regulatedTokenEncoder) TokenStateAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("token_state_address", nil, []string{}, []any{})
+}
+
+func (c regulatedTokenEncoder) TokenStateObject() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("token_state_object", nil, []string{}, []any{})
+}
+
 func (c regulatedTokenEncoder) TokenAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("token_address", nil, []string{}, []any{})
 }
@@ -1056,6 +1167,24 @@ func (c regulatedTokenEncoder) PendingTransferAccepted() (bind.ModuleInformation
 	return c.BoundContract.Encode("pending_transfer_accepted", nil, []string{}, []any{})
 }
 
+func (c regulatedTokenEncoder) Initialize(maxSupply **big.Int, name string, symbol string, decimals byte, icon string, project string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("initialize", nil, []string{
+		"0x1::option::Option<u128>",
+		"0x1::string::String",
+		"0x1::string::String",
+		"u8",
+		"0x1::string::String",
+		"0x1::string::String",
+	}, []any{
+		maxSupply,
+		name,
+		symbol,
+		decimals,
+		icon,
+		project,
+	})
+}
+
 func (c regulatedTokenEncoder) Mint(to aptos.AccountAddress, amount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("mint", nil, []string{
 		"address",
@@ -1094,6 +1223,16 @@ func (c regulatedTokenEncoder) BurnFrozenFunds(from aptos.AccountAddress) (bind.
 
 func (c regulatedTokenEncoder) GrantRole(roleNumber byte, account aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("grant_role", nil, []string{
+		"u8",
+		"address",
+	}, []any{
+		roleNumber,
+		account,
+	})
+}
+
+func (c regulatedTokenEncoder) RevokeRole(roleNumber byte, account aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("revoke_role", nil, []string{
 		"u8",
 		"address",
 	}, []any{
@@ -1220,8 +1359,20 @@ func (c regulatedTokenEncoder) ExecuteOwnershipTransfer(to aptos.AccountAddress)
 	})
 }
 
-func (c regulatedTokenEncoder) TokenAddressInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("token_address_internal", nil, []string{}, []any{})
+func (c regulatedTokenEncoder) TokenStateObjectInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("token_state_object_internal", nil, []string{}, []any{})
+}
+
+func (c regulatedTokenEncoder) TokenStateAddressInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("token_state_address_internal", nil, []string{}, []any{})
+}
+
+func (c regulatedTokenEncoder) TokenMetadataFromStateObj(stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("token_metadata_from_state_obj", nil, []string{
+		"address",
+	}, []any{
+		stateObj,
+	})
 }
 
 func (c regulatedTokenEncoder) TokenMetadataInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
@@ -1236,70 +1387,70 @@ func (c regulatedTokenEncoder) AssertNotPaused() (bind.ModuleInformation, string
 	return c.BoundContract.Encode("assert_not_paused", nil, []string{}, []any{})
 }
 
-func (c regulatedTokenEncoder) AssertPauser(tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c regulatedTokenEncoder) AssertPauser(stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("assert_pauser", nil, []string{
 		"address",
 	}, []any{
-		tokenMetadata,
+		stateObj,
 	})
 }
 
-func (c regulatedTokenEncoder) AssertUnpauser(tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c regulatedTokenEncoder) AssertUnpauser(stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("assert_unpauser", nil, []string{
 		"address",
 	}, []any{
-		tokenMetadata,
+		stateObj,
 	})
 }
 
-func (c regulatedTokenEncoder) AssertFreezer(tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c regulatedTokenEncoder) AssertFreezer(stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("assert_freezer", nil, []string{
 		"address",
 	}, []any{
-		tokenMetadata,
+		stateObj,
 	})
 }
 
-func (c regulatedTokenEncoder) AssertUnfreezer(tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c regulatedTokenEncoder) AssertUnfreezer(stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("assert_unfreezer", nil, []string{
 		"address",
 	}, []any{
-		tokenMetadata,
+		stateObj,
 	})
 }
 
-func (c regulatedTokenEncoder) AssertRecoveryRole(tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c regulatedTokenEncoder) AssertRecoveryRole(stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("assert_recovery_role", nil, []string{
 		"address",
 	}, []any{
-		tokenMetadata,
+		stateObj,
 	})
 }
 
-func (c regulatedTokenEncoder) AssertBridgeMinterOrBurner(tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c regulatedTokenEncoder) AssertBridgeMinterOrBurner(stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("assert_bridge_minter_or_burner", nil, []string{
 		"address",
 	}, []any{
-		tokenMetadata,
+		stateObj,
 	})
 }
 
-func (c regulatedTokenEncoder) AssertBurnerAndGetType(burner aptos.AccountAddress, tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c regulatedTokenEncoder) AssertBurnerAndGetType(burner aptos.AccountAddress, stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("assert_burner_and_get_type", nil, []string{
 		"address",
 		"address",
 	}, []any{
 		burner,
-		tokenMetadata,
+		stateObj,
 	})
 }
 
-func (c regulatedTokenEncoder) AssertNotFrozen(store aptos.AccountAddress, tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c regulatedTokenEncoder) AssertNotFrozen(store aptos.AccountAddress, stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("assert_not_frozen", nil, []string{
 		"address",
 		"address",
 	}, []any{
 		store,
-		tokenMetadata,
+		stateObj,
 	})
 }

@@ -11,6 +11,7 @@ module regulated_token::regulated_token {
     use std::object::{Self, ExtendRef, Object, TransferRef as ObjectTransferRef};
     use std::option::{Self, Option};
     use std::primary_fungible_store;
+    use std::account;
     use std::signer;
     use std::string::{Self, String};
     use std::dispatchable_fungible_asset;
@@ -19,6 +20,8 @@ module regulated_token::regulated_token {
 
     use regulated_token::access_control::{Self};
     use regulated_token::ownable::{Self, OwnableState};
+
+    const TOKEN_STATE_SEED: vector<u8> = b"regulated_token::regulated_token::token_state";
 
     const PAUSER_ROLE: u8 = 0;
     const UNPAUSER_ROLE: u8 = 1;
@@ -40,11 +43,14 @@ module regulated_token::regulated_token {
         RECOVERY_ROLE(u8)
     }
 
-    const REGULATED_TOKEN_NAME: vector<u8> = b"Regulated Token";
-    const REGULATED_TOKEN_SYMBOL: vector<u8> = b"RT";
-    const REGULATED_TOKEN_DECIMALS: u8 = 6;
-    const REGULATED_TOKEN_PROJECT_URI: vector<u8> = b"https://regulatedtoken.com";
-    const REGULATED_TOKEN_ICON_URI: vector<u8> = b"https://regulatedtoken.com/images/pic.png";
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+    struct TokenStateDeployment has key {
+        extend_ref: ExtendRef,
+        transfer_ref: ObjectTransferRef,
+        paused: bool,
+        frozen_accounts: BigOrderedMap<address, bool>,
+        ownable_state: OwnableState
+    }
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct TokenState has key {
@@ -52,7 +58,8 @@ module regulated_token::regulated_token {
         transfer_ref: ObjectTransferRef,
         paused: bool,
         frozen_accounts: BigOrderedMap<address, bool>,
-        ownable_state: OwnableState
+        ownable_state: OwnableState,
+        token: Object<Metadata>
     }
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
@@ -66,6 +73,7 @@ module regulated_token::regulated_token {
     #[event]
     struct InitializeToken has drop, store {
         publisher: address,
+        token: Object<Metadata>,
         max_supply: Option<u128>,
         decimals: u8,
         icon: String,
@@ -151,37 +159,75 @@ module regulated_token::regulated_token {
         new_admin: address
     }
 
-    const E_TOKEN_NOT_INITIALIZED: u64 = 1;
-    const E_ONLY_BURNER_OR_BRIDGE: u64 = 2;
-    const E_ONLY_MINTER_OR_BRIDGE: u64 = 3;
-    const E_INVALID_ASSET: u64 = 4;
-    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 5;
-    const E_CANNOT_TRANSFER_TO_REGULATED_TOKEN: u64 = 6;
-    const E_PAUSED: u64 = 7;
-    const E_ACCOUNT_FROZEN: u64 = 8;
-    const E_INVALID_ROLE_NUMBER: u64 = 9;
-    const E_INVALID_STORE: u64 = 10;
+    const E_NOT_PUBLISHER: u64 = 1;
+    const E_TOKEN_NOT_INITIALIZED: u64 = 2;
+    const E_ONLY_BURNER_OR_BRIDGE: u64 = 3;
+    const E_ONLY_MINTER_OR_BRIDGE: u64 = 4;
+    const E_INVALID_ASSET: u64 = 5;
+    const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 6;
+    const E_CANNOT_TRANSFER_TO_REGULATED_TOKEN: u64 = 7;
+    const E_PAUSED: u64 = 8;
+    const E_ACCOUNT_FROZEN: u64 = 9;
+    const E_INVALID_ROLE_NUMBER: u64 = 10;
+    const E_INVALID_STORE: u64 = 11;
+    const E_TOKEN_ALREADY_INITIALIZED: u64 = 12;
+    const E_TOKEN_STATE_DEPLOYMENT_ALREADY_INITIALIZED: u64 = 13;
 
     #[view]
-    public fun token_address(): address {
-        token_address_internal()
-    }
-
-    inline fun token_address_internal(): address {
-        object::create_object_address(&@regulated_token, REGULATED_TOKEN_SYMBOL)
+    public fun type_and_version(): String {
+        string::utf8(b"RegulatedToken 1.0.0")
     }
 
     #[view]
-    public fun token_metadata(): Object<Metadata> {
+    public fun token_state_address(): address {
+        token_state_address_internal()
+    }
+
+    #[view]
+    public fun token_state_object(): Object<TokenState> {
+        token_state_object_internal()
+    }
+
+    inline fun token_state_object_internal(): Object<TokenState> {
+        let token_state_address = token_state_address_internal();
         assert!(
-            exists<TokenState>(token_address_internal()),
+            exists<TokenState>(token_state_address),
             E_TOKEN_NOT_INITIALIZED
         );
+        object::address_to_object(token_state_address)
+    }
+
+    inline fun token_state_address_internal(): address {
+        object::create_object_address(&@regulated_token, TOKEN_STATE_SEED)
+    }
+
+    #[view]
+    public fun token_address(): address acquires TokenState {
+        assert!(
+            exists<TokenState>(token_state_address_internal()),
+            E_TOKEN_NOT_INITIALIZED
+        );
+        object::object_address(&token_metadata_internal())
+    }
+
+    #[view]
+    public fun token_metadata(): Object<Metadata> acquires TokenState {
         token_metadata_internal()
     }
 
+    inline fun token_metadata_from_state_obj(
+        state_obj: Object<TokenState>
+    ): Object<Metadata> {
+        TokenState[object::object_address(&state_obj)].token
+    }
+
     inline fun token_metadata_internal(): Object<Metadata> {
-        object::address_to_object(token_address_internal())
+        let state_address = token_state_address_internal();
+        assert!(
+            exists<TokenState>(state_address),
+            E_TOKEN_NOT_INITIALIZED
+        );
+        TokenState[state_address].token
     }
 
     #[view]
@@ -190,82 +236,88 @@ module regulated_token::regulated_token {
     }
 
     inline fun is_paused_internal(): bool {
-        TokenState[token_address_internal()].paused
+        TokenState[token_state_address_internal()].paused
     }
 
     #[view]
     public fun get_role_members(role_number: u8): vector<address> {
         let role = get_role(role_number);
-        access_control::get_role_members(token_metadata_internal(), role)
+        access_control::get_role_members(token_state_object_internal(), role)
     }
 
     #[view]
     public fun get_role_member_count(role_number: u8): u64 {
         let role = get_role(role_number);
-        access_control::get_role_member_count(token_metadata_internal(), role)
+        access_control::get_role_member_count(token_state_object_internal(), role)
     }
 
     #[view]
     public fun get_role_member(role_number: u8, index: u64): address {
         let role = get_role(role_number);
-        access_control::get_role_member(token_metadata_internal(), role, index)
+        access_control::get_role_member(token_state_object_internal(), role, index)
     }
 
     #[view]
     public fun get_admin(): address {
-        access_control::admin<Metadata, Role>(token_metadata_internal())
+        access_control::admin<TokenState, Role>(token_state_object_internal())
     }
 
     #[view]
     public fun get_minters(): vector<address> {
-        access_control::get_role_members(token_metadata_internal(), minter_role())
+        access_control::get_role_members(token_state_object_internal(), minter_role())
     }
 
     #[view]
     public fun get_bridge_minters_or_burners(): vector<address> {
         access_control::get_role_members(
-            token_metadata_internal(), bridge_minter_or_burner_role()
+            token_state_object_internal(), bridge_minter_or_burner_role()
         )
     }
 
     #[view]
     public fun get_burners(): vector<address> {
-        access_control::get_role_members(token_metadata_internal(), burner_role())
+        access_control::get_role_members(token_state_object_internal(), burner_role())
     }
 
     #[view]
     public fun get_freezers(): vector<address> {
-        access_control::get_role_members(token_metadata_internal(), freezer_role())
+        access_control::get_role_members(token_state_object_internal(), freezer_role())
     }
 
     #[view]
     public fun get_unfreezers(): vector<address> {
-        access_control::get_role_members(token_metadata_internal(), unfreezer_role())
+        access_control::get_role_members(
+            token_state_object_internal(), unfreezer_role()
+        )
     }
 
     #[view]
     public fun get_pausers(): vector<address> {
-        access_control::get_role_members(token_metadata_internal(), pauser_role())
+        access_control::get_role_members(token_state_object_internal(), pauser_role())
     }
 
     #[view]
     public fun get_unpausers(): vector<address> {
-        access_control::get_role_members(token_metadata_internal(), unpauser_role())
+        access_control::get_role_members(
+            token_state_object_internal(), unpauser_role()
+        )
     }
 
     #[view]
     public fun get_recovery_managers(): vector<address> {
-        access_control::get_role_members(token_metadata_internal(), recovery_role())
+        access_control::get_role_members(
+            token_state_object_internal(), recovery_role()
+        )
     }
 
     #[view]
     public fun get_pending_admin(): address {
-        access_control::pending_admin<Metadata, Role>(token_metadata_internal())
+        access_control::pending_admin<TokenState, Role>(token_state_object_internal())
     }
 
     #[view]
     public fun is_frozen(account: address): bool acquires TokenState {
-        TokenState[token_address_internal()].frozen_accounts.contains(&account)
+        TokenState[token_state_address_internal()].frozen_accounts.contains(&account)
     }
 
     #[view]
@@ -285,7 +337,7 @@ module regulated_token::regulated_token {
     public fun get_all_frozen_accounts(
         start_key: address, max_count: u64
     ): (vector<address>, address, bool) acquires TokenState {
-        let frozen_accounts = &TokenState[token_address_internal()].frozen_accounts;
+        let frozen_accounts = &TokenState[token_state_address_internal()].frozen_accounts;
         let result = vector[];
 
         let current_key_opt = frozen_accounts.next_key(&start_key);
@@ -319,15 +371,16 @@ module regulated_token::regulated_token {
 
     #[view]
     public fun has_role(account: address, role: u8): bool {
-        access_control::has_role(token_metadata_internal(), account, get_role(role))
+        access_control::has_role(token_state_object_internal(), account, get_role(role))
     }
 
     public fun deposit<T: key>(
         store: Object<T>, fa: FungibleAsset, transfer_ref: &TransferRef
     ) acquires TokenState {
-        let token_metadata = token_metadata_internal();
+        let state_obj = token_state_object_internal();
+        let token_metadata = token_metadata_from_state_obj(state_obj);
         assert_not_paused();
-        assert_not_frozen(store, token_metadata);
+        assert_not_frozen(store, state_obj);
         assert_correct_asset(transfer_ref, token_metadata);
 
         fungible_asset::deposit_with_ref(transfer_ref, store, fa);
@@ -336,73 +389,29 @@ module regulated_token::regulated_token {
     public fun withdraw<T: key>(
         store: Object<T>, amount: u64, transfer_ref: &TransferRef
     ): FungibleAsset acquires TokenState {
-        let token_metadata = token_metadata_internal();
+        let state_obj = token_state_object_internal();
+        let token_metadata = token_metadata_from_state_obj(state_obj);
         assert_not_paused();
-        assert_not_frozen(store, token_metadata);
+        assert_not_frozen(store, state_obj);
         assert_correct_asset(transfer_ref, token_metadata);
 
         fungible_asset::withdraw_with_ref(transfer_ref, store, amount)
     }
 
+    /// `publisher` is the code object, deployed through object_code_deployment
     fun init_module(publisher: &signer) {
-        let constructor_ref =
-            &object::create_named_object(publisher, REGULATED_TOKEN_SYMBOL);
+        assert!(object::is_object(@regulated_token), E_NOT_PUBLISHER);
+
+        // Create object owned by code object
+        let constructor_ref = &object::create_named_object(publisher, TOKEN_STATE_SEED);
         let token_state_signer = &object::generate_signer(constructor_ref);
 
-        primary_fungible_store::create_primary_store_enabled_fungible_asset(
-            constructor_ref,
-            option::none(),
-            string::utf8(REGULATED_TOKEN_NAME),
-            string::utf8(REGULATED_TOKEN_SYMBOL),
-            REGULATED_TOKEN_DECIMALS,
-            string::utf8(REGULATED_TOKEN_ICON_URI),
-            string::utf8(REGULATED_TOKEN_PROJECT_URI)
-        );
-
-        fungible_asset::set_untransferable(constructor_ref);
+        // Create an Account on the object for event handles.
+        account::create_account_if_does_not_exist(signer::address_of(token_state_signer));
 
         move_to(
             token_state_signer,
-            TokenMetadataRefs {
-                extend_ref: object::generate_extend_ref(constructor_ref),
-                mint_ref: fungible_asset::generate_mint_ref(constructor_ref),
-                burn_ref: fungible_asset::generate_burn_ref(constructor_ref),
-                transfer_ref: fungible_asset::generate_transfer_ref(constructor_ref)
-            }
-        );
-
-        let deposit =
-            function_info::new_function_info(
-                publisher,
-                string::utf8(b"regulated_token"),
-                string::utf8(b"deposit")
-            );
-        let withdraw =
-            function_info::new_function_info(
-                publisher,
-                string::utf8(b"regulated_token"),
-                string::utf8(b"withdraw")
-            );
-        dispatchable_fungible_asset::register_dispatch_functions(
-            constructor_ref,
-            option::some(withdraw),
-            option::some(deposit),
-            option::none()
-        );
-
-        event::emit(
-            InitializeToken {
-                publisher: signer::address_of(publisher),
-                max_supply: option::none(),
-                decimals: REGULATED_TOKEN_DECIMALS,
-                icon: string::utf8(REGULATED_TOKEN_ICON_URI),
-                project: string::utf8(REGULATED_TOKEN_PROJECT_URI)
-            }
-        );
-
-        move_to(
-            token_state_signer,
-            TokenState {
+            TokenStateDeployment {
                 extend_ref: object::generate_extend_ref(constructor_ref),
                 transfer_ref: object::generate_transfer_ref(constructor_ref),
                 paused: false,
@@ -415,24 +424,123 @@ module regulated_token::regulated_token {
         access_control::init<Role>(constructor_ref, @admin);
     }
 
+    /// Only owner of this code object can initialize a token once
+    public entry fun initialize(
+        publisher: &signer,
+        max_supply: Option<u128>,
+        name: String,
+        symbol: String,
+        decimals: u8,
+        icon: String,
+        project: String
+    ) acquires TokenStateDeployment {
+        let publisher_addr = signer::address_of(publisher);
+        let token_state_address = token_state_address_internal();
+
+        assert!(
+            exists<TokenStateDeployment>(token_state_address),
+            E_TOKEN_STATE_DEPLOYMENT_ALREADY_INITIALIZED
+        );
+
+        let TokenStateDeployment {
+            extend_ref,
+            transfer_ref,
+            paused,
+            frozen_accounts,
+            ownable_state
+        } = move_from<TokenStateDeployment>(token_state_address);
+
+        ownable::assert_only_owner(publisher_addr, &ownable_state);
+
+        let token_state_signer = &object::generate_signer_for_extending(&extend_ref);
+
+        // Code object owns token state, which owns the fungible asset
+        // Code object => token state => fungible asset
+        let constructor_ref =
+            &object::create_named_object(token_state_signer, *symbol.bytes());
+        primary_fungible_store::create_primary_store_enabled_fungible_asset(
+            constructor_ref,
+            max_supply,
+            name,
+            symbol,
+            decimals,
+            icon,
+            project
+        );
+
+        fungible_asset::set_untransferable(constructor_ref);
+
+        move_to(
+            &object::generate_signer(constructor_ref),
+            TokenMetadataRefs {
+                extend_ref: object::generate_extend_ref(constructor_ref),
+                mint_ref: fungible_asset::generate_mint_ref(constructor_ref),
+                burn_ref: fungible_asset::generate_burn_ref(constructor_ref),
+                transfer_ref: fungible_asset::generate_transfer_ref(constructor_ref)
+            }
+        );
+
+        // Set up dynamic dispatch functions
+        let deposit =
+            function_info::new_function_info_from_address(
+                @regulated_token,
+                string::utf8(b"regulated_token"),
+                string::utf8(b"deposit")
+            );
+        let withdraw =
+            function_info::new_function_info_from_address(
+                @regulated_token,
+                string::utf8(b"regulated_token"),
+                string::utf8(b"withdraw")
+            );
+        dispatchable_fungible_asset::register_dispatch_functions(
+            constructor_ref,
+            option::some(withdraw),
+            option::some(deposit),
+            option::none()
+        );
+
+        let token = object::object_from_constructor_ref(constructor_ref);
+        event::emit(
+            InitializeToken {
+                publisher: publisher_addr,
+                token,
+                max_supply,
+                decimals,
+                icon,
+                project
+            }
+        );
+
+        move_to(
+            token_state_signer,
+            TokenState {
+                extend_ref,
+                transfer_ref,
+                paused,
+                frozen_accounts,
+                ownable_state,
+                token
+            }
+        );
+    }
+
     public entry fun mint(
         caller: &signer, to: address, amount: u64
     ) acquires TokenMetadataRefs, TokenState {
         assert_not_paused();
 
-        let token_metadata = token_metadata_internal();
+        let state_obj = token_state_object_internal();
+        let token_metadata = token_metadata_from_state_obj(state_obj);
         let to_store =
             primary_fungible_store::ensure_primary_store_exists(to, token_metadata);
 
-        assert_not_frozen(to_store, token_metadata);
+        assert_not_frozen(to_store, state_obj);
 
         let minter = signer::address_of(caller);
         let is_bridge_minter =
-            access_control::has_role(
-                token_metadata, minter, bridge_minter_or_burner_role()
-            );
-        let is_native_minter =
-            access_control::has_role(token_metadata, minter, minter_role());
+            access_control::has_role(state_obj, minter, bridge_minter_or_burner_role());
+        let is_native_minter = access_control::has_role(state_obj, minter, minter_role());
 
         assert!(is_bridge_minter || is_native_minter, E_ONLY_MINTER_OR_BRIDGE);
 
@@ -450,12 +558,13 @@ module regulated_token::regulated_token {
     ) acquires TokenMetadataRefs, TokenState {
         assert_not_paused();
 
-        let token_metadata = token_metadata_internal();
+        let state_obj = token_state_object_internal();
+        let token_metadata = token_metadata_from_state_obj(state_obj);
         let from_store = primary_fungible_store::primary_store(from, token_metadata);
-        assert_not_frozen(from_store, token_metadata);
+        assert_not_frozen(from_store, state_obj);
 
         let burner = signer::address_of(caller);
-        let (is_bridge_burner, _) = assert_burner_and_get_type(burner, token_metadata);
+        let (is_bridge_burner, _) = assert_burner_and_get_type(burner, state_obj);
 
         primary_fungible_store::burn(
             &borrow_token_metadata_refs().burn_ref, from, amount
@@ -477,12 +586,13 @@ module regulated_token::regulated_token {
     ): FungibleAsset acquires TokenMetadataRefs, TokenState {
         assert_not_paused();
 
-        let token_metadata = token_metadata_internal();
-        assert_bridge_minter_or_burner(caller, token_metadata);
+        let state_obj = token_state_object_internal();
+        assert_bridge_minter_or_burner(caller, state_obj);
 
+        let token_metadata = token_metadata_from_state_obj(state_obj);
         let to_store =
             primary_fungible_store::ensure_primary_store_exists(to, token_metadata);
-        assert_not_frozen(to_store, token_metadata);
+        assert_not_frozen(to_store, state_obj);
 
         let fa = fungible_asset::mint(&borrow_token_metadata_refs().mint_ref, amount);
 
@@ -500,11 +610,12 @@ module regulated_token::regulated_token {
     ) acquires TokenMetadataRefs, TokenState {
         assert_not_paused();
 
-        let token_metadata = token_metadata_internal();
-        assert_bridge_minter_or_burner(caller, token_metadata);
+        let state_obj = token_state_object_internal();
+        assert_bridge_minter_or_burner(caller, state_obj);
 
+        let token_metadata = token_metadata_from_state_obj(state_obj);
         let from_store = primary_fungible_store::primary_store(from, token_metadata);
-        assert_not_frozen(from_store, token_metadata);
+        assert_not_frozen(from_store, state_obj);
 
         let amount = fungible_asset::amount(&fa);
         fungible_asset::burn(&borrow_token_metadata_refs().burn_ref, fa);
@@ -526,10 +637,11 @@ module regulated_token::regulated_token {
         assert_not_paused();
 
         let burner = signer::address_of(caller);
-        let token_metadata = token_metadata_internal();
+        let state_obj = token_state_object_internal();
 
-        let (is_bridge_burner, _) = assert_burner_and_get_type(burner, token_metadata);
+        let (is_bridge_burner, _) = assert_burner_and_get_type(burner, state_obj);
 
+        let token_metadata = token_metadata_from_state_obj(state_obj);
         if (primary_fungible_store::is_frozen(from, token_metadata)) {
             let balance = primary_fungible_store::balance(from, token_metadata);
             if (balance > 0) {
@@ -547,7 +659,6 @@ module regulated_token::regulated_token {
     }
 
     /// Periphery function to apply roles to accounts
-    /// This is because we cannot pass enums to entry functions
     public entry fun grant_role(
         caller: &signer, role_number: u8, account: address
     ) {
@@ -555,7 +666,7 @@ module regulated_token::regulated_token {
 
         access_control::grant_role(
             caller,
-            token_metadata_internal(),
+            token_state_object_internal(),
             role,
             account
         );
@@ -572,6 +683,18 @@ module regulated_token::regulated_token {
         }
     }
 
+    public entry fun revoke_role(
+        caller: &signer, role_number: u8, account: address
+    ) {
+        let role = get_role(role_number);
+        access_control::revoke_role(
+            caller,
+            token_state_object_internal(),
+            role,
+            account
+        );
+    }
+
     public entry fun freeze_accounts(
         caller: &signer, accounts: vector<address>
     ) acquires TokenMetadataRefs, TokenState {
@@ -584,13 +707,13 @@ module regulated_token::regulated_token {
         caller: &signer, account: address
     ) acquires TokenMetadataRefs, TokenState {
         let caller_addr = signer::address_of(caller);
-        assert_freezer(caller, token_metadata_internal());
+        assert_freezer(caller, token_state_object_internal());
 
         primary_fungible_store::set_frozen_flag(
             &borrow_token_metadata_refs().transfer_ref, account, true
         );
 
-        TokenState[token_address_internal()].frozen_accounts.upsert(account, true);
+        TokenState[token_state_address_internal()].frozen_accounts.upsert(account, true);
 
         event::emit(AccountFrozen { freezer: caller_addr, account });
     }
@@ -606,13 +729,13 @@ module regulated_token::regulated_token {
     public entry fun unfreeze_account(
         caller: &signer, account: address
     ) acquires TokenMetadataRefs, TokenState {
-        assert_unfreezer(caller, token_metadata_internal());
+        assert_unfreezer(caller, token_state_object_internal());
 
         primary_fungible_store::set_frozen_flag(
             &borrow_token_metadata_refs().transfer_ref, account, false
         );
 
-        TokenState[token_address_internal()].frozen_accounts.remove(&account);
+        TokenState[token_state_address_internal()].frozen_accounts.remove(&account);
 
         event::emit(AccountUnfrozen { freezer: signer::address_of(caller), account });
     }
@@ -627,7 +750,7 @@ module regulated_token::regulated_token {
         for (i in 0..pausers_to_remove.length()) {
             access_control::revoke_role(
                 caller,
-                token_metadata_internal(),
+                token_state_object_internal(),
                 pauser_role(),
                 pausers_to_remove[i]
             );
@@ -635,7 +758,7 @@ module regulated_token::regulated_token {
         for (i in 0..pausers_to_add.length()) {
             access_control::grant_role(
                 caller,
-                token_metadata_internal(),
+                token_state_object_internal(),
                 pauser_role(),
                 pausers_to_add[i]
             );
@@ -652,7 +775,7 @@ module regulated_token::regulated_token {
         for (i in 0..freezers_to_remove.length()) {
             access_control::revoke_role(
                 caller,
-                token_metadata_internal(),
+                token_state_object_internal(),
                 freezer_role(),
                 freezers_to_remove[i]
             );
@@ -660,7 +783,7 @@ module regulated_token::regulated_token {
         for (i in 0..freezers_to_add.length()) {
             access_control::grant_role(
                 caller,
-                token_metadata_internal(),
+                token_state_object_internal(),
                 freezer_role(),
                 freezers_to_add[i]
             );
@@ -677,7 +800,7 @@ module regulated_token::regulated_token {
         for (i in 0..unfreezers_to_remove.length()) {
             access_control::revoke_role(
                 caller,
-                token_metadata_internal(),
+                token_state_object_internal(),
                 unfreezer_role(),
                 unfreezers_to_remove[i]
             );
@@ -685,7 +808,7 @@ module regulated_token::regulated_token {
         for (i in 0..unfreezers_to_add.length()) {
             access_control::grant_role(
                 caller,
-                token_metadata_internal(),
+                token_state_object_internal(),
                 unfreezer_role(),
                 unfreezers_to_add[i]
             );
@@ -693,10 +816,10 @@ module regulated_token::regulated_token {
     }
 
     public entry fun pause(caller: &signer) acquires TokenState {
-        let token_metadata = token_metadata_internal();
-        assert_pauser(caller, token_metadata);
+        let state_obj = token_state_object_internal();
+        assert_pauser(caller, state_obj);
 
-        let state = &mut TokenState[token_address_internal()];
+        let state = &mut TokenState[token_state_address_internal()];
         if (!state.paused) {
             state.paused = true;
             event::emit(Paused { pauser: signer::address_of(caller) });
@@ -704,10 +827,10 @@ module regulated_token::regulated_token {
     }
 
     public entry fun unpause(caller: &signer) acquires TokenState {
-        let token_metadata = token_metadata_internal();
-        assert_unpauser(caller, token_metadata);
+        let state_obj = token_state_object_internal();
+        assert_unpauser(caller, state_obj);
 
-        let state = &mut TokenState[token_address_internal()];
+        let state = &mut TokenState[token_state_address_internal()];
         if (state.paused) {
             state.paused = false;
             event::emit(Unpaused { unpauser: signer::address_of(caller) });
@@ -722,13 +845,14 @@ module regulated_token::regulated_token {
         assert_not_paused();
         assert!(to != @0x0, E_ZERO_ADDRESS_NOT_ALLOWED);
         assert!(
-            to != @regulated_token && to != token_address_internal(),
+            to != @regulated_token && to != token_state_address_internal(),
             E_CANNOT_TRANSFER_TO_REGULATED_TOKEN
         );
 
-        let token_metadata = token_metadata_internal();
-        assert_recovery_role(caller, token_metadata);
+        let state_obj = token_state_object_internal();
+        assert_recovery_role(caller, state_obj);
 
+        let token_metadata = token_metadata_from_state_obj(state_obj);
         if (primary_fungible_store::is_frozen(from, token_metadata)) {
             let balance = primary_fungible_store::balance(from, token_metadata);
             if (balance > 0) {
@@ -760,18 +884,21 @@ module regulated_token::regulated_token {
 
     /// In case regulated tokens get stuck in the contract or token state, this function can be used to recover them
     /// This function can only be called by the recovery role
-    public entry fun recover_tokens(caller: &signer, to: address) acquires TokenMetadataRefs {
-        let token_state_address = token_address_internal();
+    public entry fun recover_tokens(
+        caller: &signer, to: address
+    ) acquires TokenMetadataRefs, TokenState {
+        let token_state_address = token_state_address_internal();
         assert!(to != @0x0, E_ZERO_ADDRESS_NOT_ALLOWED);
         assert!(
             to != @regulated_token && to != token_state_address,
             E_CANNOT_TRANSFER_TO_REGULATED_TOKEN
         );
 
-        let token_metadata = object::address_to_object(token_state_address);
-        assert_recovery_role(caller, token_metadata);
+        let state_obj = token_state_object_internal();
+        assert_recovery_role(caller, state_obj);
 
         let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
+        let token_metadata = token_metadata_from_state_obj(state_obj);
 
         // Recover regulated tokens sent to contract
         let balance = primary_fungible_store::balance(@regulated_token, token_metadata);
@@ -817,70 +944,67 @@ module regulated_token::regulated_token {
     }
 
     inline fun assert_pauser(
-        caller: &signer, token_metadata: Object<Metadata>
+        caller: &signer, state_obj: Object<TokenState>
     ) {
         access_control::assert_role(
-            token_metadata,
+            state_obj,
             signer::address_of(caller),
             pauser_role()
         );
     }
 
     inline fun assert_unpauser(
-        caller: &signer, token_metadata: Object<Metadata>
+        caller: &signer, state_obj: Object<TokenState>
     ) {
         access_control::assert_role(
-            token_metadata,
+            state_obj,
             signer::address_of(caller),
             unpauser_role()
         );
     }
 
     inline fun assert_freezer(
-        caller: &signer, token_metadata: Object<Metadata>
+        caller: &signer, state_obj: Object<TokenState>
     ) {
         access_control::assert_role(
-            token_metadata,
+            state_obj,
             signer::address_of(caller),
             freezer_role()
         );
     }
 
     inline fun assert_unfreezer(
-        caller: &signer, token_metadata: Object<Metadata>
+        caller: &signer, state_obj: Object<TokenState>
     ) {
         access_control::assert_role(
-            token_metadata,
+            state_obj,
             signer::address_of(caller),
             unfreezer_role()
         );
     }
 
     inline fun assert_recovery_role(
-        caller: &signer, token_metadata: Object<Metadata>
+        caller: &signer, state_obj: Object<TokenState>
     ) {
         access_control::assert_role(
-            token_metadata, signer::address_of(caller), recovery_role()
+            state_obj, signer::address_of(caller), recovery_role()
         );
     }
 
     fun assert_bridge_minter_or_burner(
-        caller: &signer, token_metadata: Object<Metadata>
+        caller: &signer, state_obj: Object<TokenState>
     ) {
         access_control::assert_role(
-            token_metadata, signer::address_of(caller), bridge_minter_or_burner_role()
+            state_obj, signer::address_of(caller), bridge_minter_or_burner_role()
         );
     }
 
     inline fun assert_burner_and_get_type(
-        burner: address, token_metadata: Object<Metadata>
+        burner: address, state_obj: Object<TokenState>
     ): (bool, bool) {
         let is_bridge_burner =
-            access_control::has_role(
-                token_metadata, burner, bridge_minter_or_burner_role()
-            );
-        let is_native_burner =
-            access_control::has_role(token_metadata, burner, burner_role());
+            access_control::has_role(state_obj, burner, bridge_minter_or_burner_role());
+        let is_native_burner = access_control::has_role(state_obj, burner, burner_role());
 
         assert!(is_bridge_burner || is_native_burner, E_ONLY_BURNER_OR_BRIDGE);
 
@@ -888,15 +1012,16 @@ module regulated_token::regulated_token {
     }
 
     fun assert_not_frozen<T: key>(
-        store: Object<T>, token_metadata: Object<Metadata>
-    ) {
+        store: Object<T>, state_obj: Object<TokenState>
+    ) acquires TokenState {
         if (fungible_asset::store_exists(object::object_address(&store))) {
             assert!(
                 !fungible_asset::is_frozen(store),
                 E_ACCOUNT_FROZEN
             );
+            let token_state = &TokenState[object::object_address(&state_obj)];
             assert!(
-                fungible_asset::store_metadata(store) == token_metadata,
+                fungible_asset::store_metadata(store) == token_state.token,
                 E_INVALID_STORE
             );
         }
@@ -933,8 +1058,13 @@ module regulated_token::regulated_token {
         }
     }
 
+    inline fun borrow_state_from_object(state_obj: Object<TokenState>): &TokenState {
+        &TokenState[object::object_address(&state_obj)]
+    }
+
     inline fun borrow_token_metadata_refs(): &TokenMetadataRefs {
-        &TokenMetadataRefs[token_address_internal()]
+        let token_metadata = token_metadata_internal();
+        &TokenMetadataRefs[object::object_address(&token_metadata)]
     }
 
     public fun pauser_role(): Role {
@@ -973,47 +1103,51 @@ module regulated_token::regulated_token {
 
     #[view]
     public fun owner(): address acquires TokenState {
-        ownable::owner(&TokenState[token_address_internal()].ownable_state)
+        ownable::owner(&TokenState[token_state_address_internal()].ownable_state)
     }
 
     #[view]
     public fun has_pending_transfer(): bool acquires TokenState {
-        ownable::has_pending_transfer(&TokenState[token_address_internal()].ownable_state)
+        ownable::has_pending_transfer(
+            &TokenState[token_state_address_internal()].ownable_state
+        )
     }
 
     #[view]
     public fun pending_transfer_from(): Option<address> acquires TokenState {
         ownable::pending_transfer_from(
-            &TokenState[token_address_internal()].ownable_state
+            &TokenState[token_state_address_internal()].ownable_state
         )
     }
 
     #[view]
     public fun pending_transfer_to(): Option<address> acquires TokenState {
-        ownable::pending_transfer_to(&TokenState[token_address_internal()].ownable_state)
+        ownable::pending_transfer_to(
+            &TokenState[token_state_address_internal()].ownable_state
+        )
     }
 
     #[view]
     public fun pending_transfer_accepted(): Option<bool> acquires TokenState {
         ownable::pending_transfer_accepted(
-            &TokenState[token_address_internal()].ownable_state
+            &TokenState[token_state_address_internal()].ownable_state
         )
     }
 
     public entry fun transfer_ownership(caller: &signer, to: address) acquires TokenState {
-        let state = &mut TokenState[token_address_internal()];
+        let state = &mut TokenState[token_state_address_internal()];
         ownable::transfer_ownership(caller, &mut state.ownable_state, to)
     }
 
     public entry fun accept_ownership(caller: &signer) acquires TokenState {
-        let state = &mut TokenState[token_address_internal()];
+        let state = &mut TokenState[token_state_address_internal()];
         ownable::accept_ownership(caller, &mut state.ownable_state)
     }
 
     public entry fun execute_ownership_transfer(
         caller: &signer, to: address
     ) acquires TokenState {
-        let state = &mut TokenState[token_address_internal()];
+        let state = &mut TokenState[token_state_address_internal()];
         ownable::execute_ownership_transfer(caller, &mut state.ownable_state, to)
     }
 

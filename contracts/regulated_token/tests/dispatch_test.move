@@ -14,13 +14,26 @@ module regulated_token::dispatch_test {
     const USER1: address = @0x200;
     const USER2: address = @0x300;
 
-    fun setup(owner: &signer, regulated_token: &signer) {
-        let constructor_ref = object::create_named_object(owner, b"regulated_token");
+    fun setup(admin: &signer, regulated_token: &signer) {
+        let constructor_ref = object::create_named_object(admin, b"regulated_token");
         account::create_account_if_does_not_exist(
             object::address_from_constructor_ref(&constructor_ref)
         );
 
         regulated_token::init_module_for_testing(regulated_token);
+
+        // Initialize the token with default parameters - use the admin signer
+        regulated_token::initialize(
+            admin,
+            option::none(), // max_supply
+            string::utf8(b"Regulated Token"), // name
+            string::utf8(b"RT"), // symbol
+            6, // decimals
+            string::utf8(
+                b"https://regulatedtoken.com/images/pic.png"
+            ), // icon
+            string::utf8(b"https://regulatedtoken.com") // project
+        );
     }
 
     fun setup_roles(admin: &signer) {

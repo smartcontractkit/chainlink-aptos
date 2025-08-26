@@ -5,6 +5,7 @@ module regulated_token_pool::regulated_token_pool_test {
     use std::object;
     use std::string;
     use std::timestamp;
+    use std::option;
 
     use ccip::state_object;
     use ccip::auth;
@@ -57,9 +58,20 @@ module regulated_token_pool::regulated_token_pool_test {
         account::create_account_for_test(
             object::address_from_constructor_ref(&regulated_token_constructor_ref)
         );
-        regulated_token::init_module_for_testing(regulated_token);
 
-        // Setup regulated token pool
+        regulated_token::init_module_for_testing(regulated_token);
+        regulated_token::initialize(
+            admin,
+            option::none(),
+            string::utf8(b"Regulated Token"),
+            string::utf8(b"RT"),
+            6,
+            string::utf8(
+                b"https://regulatedtoken.com/images/pic.png"
+            ),
+            string::utf8(b"https://regulatedtoken.com")
+        );
+
         regulated_token_pool::test_init_module(regulated_token_pool);
     }
 
