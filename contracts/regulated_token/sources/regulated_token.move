@@ -34,14 +34,14 @@ module regulated_token::regulated_token {
     const RECOVERY_ROLE: u8 = 7;
 
     enum Role has copy, drop, store {
-        PAUSER_ROLE(u8),
-        UNPAUSER_ROLE(u8),
-        FREEZER_ROLE(u8),
-        UNFREEZER_ROLE(u8),
-        MINTER_ROLE(u8),
-        BURNER_ROLE(u8),
-        BRIDGE_MINTER_OR_BURNER_ROLE(u8),
-        RECOVERY_ROLE(u8)
+        PAUSER_ROLE,
+        UNPAUSER_ROLE,
+        FREEZER_ROLE,
+        UNFREEZER_ROLE,
+        MINTER_ROLE,
+        BURNER_ROLE,
+        BRIDGE_MINTER_OR_BURNER_ROLE,
+        RECOVERY_ROLE
     }
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
@@ -370,7 +370,7 @@ module regulated_token::regulated_token {
         let state_obj = token_state_object_internal();
         let token_metadata = token_metadata_from_state_obj(state_obj);
         assert_not_paused();
-        assert_not_frozen(store, state_obj);
+        assert_not_frozen(store, token_metadata);
         assert_correct_asset(transfer_ref, token_metadata);
 
         fungible_asset::deposit_with_ref(transfer_ref, store, fa);
@@ -382,7 +382,7 @@ module regulated_token::regulated_token {
         let state_obj = token_state_object_internal();
         let token_metadata = token_metadata_from_state_obj(state_obj);
         assert_not_paused();
-        assert_not_frozen(store, state_obj);
+        assert_not_frozen(store, token_metadata);
         assert_correct_asset(transfer_ref, token_metadata);
 
         fungible_asset::withdraw_with_ref(transfer_ref, store, amount)
@@ -525,7 +525,7 @@ module regulated_token::regulated_token {
         let to_store =
             primary_fungible_store::ensure_primary_store_exists(to, token_metadata);
 
-        assert_not_frozen(to_store, state_obj);
+        assert_not_frozen(to_store, token_metadata);
 
         let minter = signer::address_of(caller);
         let is_bridge_minter =
@@ -551,7 +551,7 @@ module regulated_token::regulated_token {
         let state_obj = token_state_object_internal();
         let token_metadata = token_metadata_from_state_obj(state_obj);
         let from_store = get_from_store(from, token_metadata);
-        assert_not_frozen(from_store, state_obj);
+        assert_not_frozen(from_store, token_metadata);
 
         let burner = signer::address_of(caller);
         let (is_bridge_burner, _) = assert_burner_and_get_type(burner, state_obj);
@@ -582,7 +582,7 @@ module regulated_token::regulated_token {
         let token_metadata = token_metadata_from_state_obj(state_obj);
         let to_store =
             primary_fungible_store::ensure_primary_store_exists(to, token_metadata);
-        assert_not_frozen(to_store, state_obj);
+        assert_not_frozen(to_store, token_metadata);
 
         let fa = fungible_asset::mint(&borrow_token_metadata_refs().mint_ref, amount);
 
@@ -605,7 +605,7 @@ module regulated_token::regulated_token {
 
         let token_metadata = token_metadata_from_state_obj(state_obj);
         let from_store = get_from_store(from, token_metadata);
-        assert_not_frozen(from_store, state_obj);
+        assert_not_frozen(from_store, token_metadata);
 
         let amount = fungible_asset::amount(&fa);
         fungible_asset::burn(&borrow_token_metadata_refs().burn_ref, fa);
@@ -1084,16 +1084,15 @@ module regulated_token::regulated_token {
     }
 
     fun assert_not_frozen<T: key>(
-        store: Object<T>, state_obj: Object<TokenState>
-    ) acquires TokenState {
+        store: Object<T>, token_metadata: Object<Metadata>
+    ) {
         if (fungible_asset::store_exists(object::object_address(&store))) {
             assert!(
                 !fungible_asset::is_frozen(store),
                 E_ACCOUNT_FROZEN
             );
-            let token_state = &TokenState[object::object_address(&state_obj)];
             assert!(
-                fungible_asset::store_metadata(store) == token_state.token,
+                fungible_asset::store_metadata(store) == token_metadata,
                 E_INVALID_STORE
             );
         }
@@ -1136,35 +1135,35 @@ module regulated_token::regulated_token {
     }
 
     public fun pauser_role(): Role {
-        Role::PAUSER_ROLE(PAUSER_ROLE)
+        Role::PAUSER_ROLE
     }
 
     public fun unpauser_role(): Role {
-        Role::UNPAUSER_ROLE(UNPAUSER_ROLE)
+        Role::UNPAUSER_ROLE
     }
 
     public fun freezer_role(): Role {
-        Role::FREEZER_ROLE(FREEZER_ROLE)
+        Role::FREEZER_ROLE
     }
 
     public fun unfreezer_role(): Role {
-        Role::UNFREEZER_ROLE(UNFREEZER_ROLE)
+        Role::UNFREEZER_ROLE
     }
 
     public fun minter_role(): Role {
-        Role::MINTER_ROLE(MINTER_ROLE)
+        Role::MINTER_ROLE
     }
 
     public fun burner_role(): Role {
-        Role::BURNER_ROLE(BURNER_ROLE)
+        Role::BURNER_ROLE
     }
 
     public fun bridge_minter_or_burner_role(): Role {
-        Role::BRIDGE_MINTER_OR_BURNER_ROLE(BRIDGE_MINTER_OR_BURNER_ROLE)
+        Role::BRIDGE_MINTER_OR_BURNER_ROLE
     }
 
     public fun recovery_role(): Role {
-        Role::RECOVERY_ROLE(RECOVERY_ROLE)
+        Role::RECOVERY_ROLE
     }
 
     // ====================== Ownable Functions ======================
