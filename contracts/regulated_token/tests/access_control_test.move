@@ -384,23 +384,6 @@ module regulated_token::access_control_test {
     }
 
     #[test(creator = @0x999)]
-    #[
-        expected_failure(
-            abort_code = access_control::E_MISSING_ROLE,
-            location = regulated_token::access_control
-        )
-    ]
-    fun test_get_role_member_out_of_bounds(creator: &signer) {
-        account::create_account_for_test(signer::address_of(creator));
-        account::create_account_for_test(ADMIN);
-
-        let access_obj = setup_token_metadata(creator);
-
-        // Should abort since there are no members for USER_ROLE
-        access_control::get_role_member(access_obj, TestRole::USER_ROLE, 0);
-    }
-
-    #[test(creator = @0x999)]
     #[expected_failure]
     // Vector index out of bounds gives different error code
     fun test_get_role_member_beyond_valid_index(creator: &signer) {
@@ -1144,5 +1127,33 @@ module regulated_token::access_control_test {
         // Verify admin state is consistent
         assert!(access_control::admin<Metadata, TestRole>(access_obj) == USER1, 30);
         assert!(access_control::pending_admin<Metadata, TestRole>(access_obj) == @0x0, 31);
+    }
+
+    #[test(creator = @0x999)]
+    #[
+        expected_failure(
+            abort_code = access_control::E_INDEX_OUT_OF_BOUNDS,
+            location = regulated_token::access_control
+        )
+    ]
+    fun test_get_role_member_out_of_bounds(creator: &signer) {
+        account::create_account_for_test(signer::address_of(creator));
+        account::create_account_for_test(ADMIN);
+        account::create_account_for_test(USER1);
+
+        let access_obj = setup_token_metadata(creator);
+        let admin = account::create_signer_for_test(ADMIN);
+
+        // Grant role to one user so role exists
+        access_control::grant_role(&admin, access_obj, TestRole::USER_ROLE, USER1);
+
+        // Verify we can access valid index
+        let member_0 = access_control::get_role_member(
+            access_obj, TestRole::USER_ROLE, 0
+        );
+        assert!(member_0 == USER1);
+
+        // This should fail with bounds check error - trying to access index 1 when only 1 member exists
+        access_control::get_role_member(access_obj, TestRole::USER_ROLE, 1);
     }
 }

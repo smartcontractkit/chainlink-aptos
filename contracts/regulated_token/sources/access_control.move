@@ -45,12 +45,12 @@ module regulated_token::access_control {
     const E_ROLE_STATE_NOT_INITIALIZED: u64 = 1;
     /// Caller does not have the required role
     const E_MISSING_ROLE: u64 = 2;
-    /// Cannot grant or revoke the default admin role
-    const E_CANNOT_MODIFY_DEFAULT_ADMIN: u64 = 3;
     /// Caller is not the admin
-    const E_NOT_ADMIN: u64 = 4;
+    const E_NOT_ADMIN: u64 = 3;
     /// Cannot transfer admin to same address
-    const E_SAME_ADMIN: u64 = 5;
+    const E_SAME_ADMIN: u64 = 4;
+    /// Index out of bounds
+    const E_INDEX_OUT_OF_BOUNDS: u64 = 5;
 
     public fun init<Role: copy + drop + store>(
         constructor_ref: &ConstructorRef, admin: address
@@ -104,6 +104,7 @@ module regulated_token::access_control {
         assert!(roles.contains(&role), E_MISSING_ROLE);
 
         let addresses = roles.borrow(&role);
+        assert!(index < addresses.length(), E_INDEX_OUT_OF_BOUNDS);
         addresses[index]
     }
 
