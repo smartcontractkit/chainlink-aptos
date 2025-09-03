@@ -296,13 +296,12 @@ module regulated_token_pool::regulated_token_pool {
             @regulated_token_pool, CallbackProof {}, local_amount
         );
 
-        let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
         let remote_chain_selector =
             token_admin_registry::get_release_or_mint_remote_chain_selector(&input);
 
         token_pool::emit_released_or_minted(
             &mut pool.token_pool_state,
-            recipient,
+            receiver,
             local_amount,
             remote_chain_selector
         );
