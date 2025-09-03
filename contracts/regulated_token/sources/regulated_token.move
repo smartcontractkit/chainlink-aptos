@@ -148,18 +148,35 @@ module regulated_token::regulated_token {
         amount: u64
     }
 
+    /// The caller is not the signer of this contract
     const E_NOT_PUBLISHER: u64 = 1;
+    /// TokenState has not been initialized yet
     const E_TOKEN_NOT_INITIALIZED: u64 = 2;
+    /// Caller must have either BURNER_ROLE or BRIDGE_MINTER_OR_BURNER_ROLE
     const E_ONLY_BURNER_OR_BRIDGE: u64 = 3;
+    /// Caller must have either MINTER_ROLE or BRIDGE_MINTER_OR_BURNER_ROLE
     const E_ONLY_MINTER_OR_BRIDGE: u64 = 4;
+    /// Invalid fungible asset for transfer ref
     const E_INVALID_ASSET: u64 = 5;
+    /// Zero address (0x0) is not allowed
     const E_ZERO_ADDRESS_NOT_ALLOWED: u64 = 6;
+    /// Cannot transfer tokens to the regulated token contract address
     const E_CANNOT_TRANSFER_TO_REGULATED_TOKEN: u64 = 7;
+    /// Contract is paused
     const E_PAUSED: u64 = 8;
+    /// Account is frozen and cannot perform token operations
     const E_ACCOUNT_FROZEN: u64 = 9;
+    /// Contract is already paused
+    const E_ALREADY_PAUSED: u64 = 14;
+    /// Contract is not paused
+    const E_NOT_PAUSED: u64 = 15;
+    /// Invalid role number provided
     const E_INVALID_ROLE_NUMBER: u64 = 10;
+    /// Invalid fungible store provided for token metadata
     const E_INVALID_STORE: u64 = 11;
+    /// Fungible store does not exist for this account
     const E_STORE_DOES_NOT_EXIST: u64 = 12;
+    /// TokenState deployment has already been initialized
     const E_TOKEN_STATE_DEPLOYMENT_ALREADY_INITIALIZED: u64 = 13;
 
     #[view]
@@ -614,20 +631,27 @@ module regulated_token::regulated_token {
     }
 
     fun freeze_account_internal(
-        caller_addr: address, account: address, transfer_ref: &TransferRef
-    ) acquires TokenState {
-        primary_fungible_store::set_frozen_flag(transfer_ref, account, true);
-        TokenState[token_state_address_internal()].frozen_accounts.upsert(account, true);
-        event::emit(AccountFrozen { freezer: caller_addr, account });
+        caller_addr: address,
+        account: address,
+        transfer_ref: &TransferRef,
+        token_state: &mut TokenState
+    ) {
+        if (!token_state.frozen_accounts.contains(&account)) {
+            primary_fungible_store::set_frozen_flag(transfer_ref, account, true);
+            token_state.frozen_accounts.add(account, true);
+            event::emit(AccountFrozen { freezer: caller_addr, account });
+        };
     }
 
     fun unfreeze_account_internal(
-        caller_addr: address, account: address, transfer_ref: &TransferRef
-    ) acquires TokenState {
-        primary_fungible_store::set_frozen_flag(transfer_ref, account, false);
-
-        if (TokenState[token_state_address_internal()].frozen_accounts.contains(&account)) {
-            TokenState[token_state_address_internal()].frozen_accounts.remove(&account);
+        caller_addr: address,
+        account: address,
+        transfer_ref: &TransferRef,
+        token_state: &mut TokenState
+    ) {
+        if (token_state.frozen_accounts.contains(&account)) {
+            primary_fungible_store::set_frozen_flag(transfer_ref, account, false);
+            token_state.frozen_accounts.remove(&account);
             event::emit(AccountUnfrozen { unfreezer: caller_addr, account });
         };
     }
@@ -711,117 +735,88 @@ module regulated_token::regulated_token {
     public entry fun freeze_accounts(
         caller: &signer, accounts: vector<address>
     ) acquires TokenMetadataRefs, TokenState {
-        assert_freezer(caller, token_state_object_internal());
+        let state_obj = token_state_object_internal();
+        assert_freezer(caller, state_obj);
 
         let caller_addr = signer::address_of(caller);
         let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
         for (i in 0..accounts.length()) {
-            freeze_account_internal(caller_addr, accounts[i], transfer_ref);
+            freeze_account_internal(
+                caller_addr,
+                accounts[i],
+                transfer_ref,
+                &mut TokenState[object::object_address(&state_obj)]
+            );
         };
     }
 
     public entry fun freeze_account(
         caller: &signer, account: address
     ) acquires TokenMetadataRefs, TokenState {
-        assert_freezer(caller, token_state_object_internal());
+        let state_obj = token_state_object_internal();
+        assert_freezer(caller, state_obj);
 
         let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
-        freeze_account_internal(signer::address_of(caller), account, transfer_ref);
+        freeze_account_internal(
+            signer::address_of(caller),
+            account,
+            transfer_ref,
+            &mut TokenState[object::object_address(&state_obj)]
+        );
     }
 
     public entry fun unfreeze_accounts(
         caller: &signer, accounts: vector<address>
     ) acquires TokenMetadataRefs, TokenState {
-        assert_unfreezer(caller, token_state_object_internal());
+        let state_obj = token_state_object_internal();
+        assert_unfreezer(caller, state_obj);
 
         let caller_addr = signer::address_of(caller);
         let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
         for (i in 0..accounts.length()) {
-            unfreeze_account_internal(caller_addr, accounts[i], transfer_ref);
+            unfreeze_account_internal(
+                caller_addr,
+                accounts[i],
+                transfer_ref,
+                &mut TokenState[object::object_address(&state_obj)]
+            );
         };
     }
 
     public entry fun unfreeze_account(
         caller: &signer, account: address
     ) acquires TokenMetadataRefs, TokenState {
-        assert_unfreezer(caller, token_state_object_internal());
+        let state_obj = token_state_object_internal();
+        assert_unfreezer(caller, state_obj);
 
         let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
-        unfreeze_account_internal(signer::address_of(caller), account, transfer_ref);
+        unfreeze_account_internal(
+            signer::address_of(caller),
+            account,
+            transfer_ref,
+            &mut TokenState[object::object_address(&state_obj)]
+        );
     }
 
-    /// Batch revoke and grant pauser roles
-    /// `revoke_role` and `grant_role` assert that the caller is the admin
-    public entry fun apply_pauser_updates(
+    /// Batch revoke and grant roles by role number
+    /// `batch_revoke_role` and `batch_grant_role` assert that the caller is the admin
+    public entry fun apply_role_updates(
         caller: &signer,
-        pausers_to_remove: vector<address>,
-        pausers_to_add: vector<address>
+        role_number: u8,
+        addresses_to_remove: vector<address>,
+        addresses_to_add: vector<address>
     ) {
-        for (i in 0..pausers_to_remove.length()) {
-            access_control::revoke_role(
-                caller,
-                token_state_object_internal(),
-                pauser_role(),
-                pausers_to_remove[i]
-            );
-        };
-        for (i in 0..pausers_to_add.length()) {
-            access_control::grant_role(
-                caller,
-                token_state_object_internal(),
-                pauser_role(),
-                pausers_to_add[i]
-            );
-        };
-    }
+        let role = get_role(role_number);
+        let state_obj = token_state_object_internal();
 
-    /// Batch revoke and grant freezer roles
-    /// `revoke_role` and `grant_role` assert that the caller is the admin
-    public entry fun apply_freezer_updates(
-        caller: &signer,
-        freezers_to_remove: vector<address>,
-        freezers_to_add: vector<address>
-    ) {
-        for (i in 0..freezers_to_remove.length()) {
-            access_control::revoke_role(
-                caller,
-                token_state_object_internal(),
-                freezer_role(),
-                freezers_to_remove[i]
+        if (addresses_to_remove.length() > 0) {
+            access_control::batch_revoke_role(
+                caller, state_obj, role, addresses_to_remove
             );
         };
-        for (i in 0..freezers_to_add.length()) {
-            access_control::grant_role(
-                caller,
-                token_state_object_internal(),
-                freezer_role(),
-                freezers_to_add[i]
-            );
-        };
-    }
 
-    /// Batch revoke and grant unfreezer roles
-    /// `revoke_role` and `grant_role` assert that the caller is the admin
-    public entry fun apply_unfreezer_updates(
-        caller: &signer,
-        unfreezers_to_remove: vector<address>,
-        unfreezers_to_add: vector<address>
-    ) {
-        for (i in 0..unfreezers_to_remove.length()) {
-            access_control::revoke_role(
-                caller,
-                token_state_object_internal(),
-                unfreezer_role(),
-                unfreezers_to_remove[i]
-            );
-        };
-        for (i in 0..unfreezers_to_add.length()) {
-            access_control::grant_role(
-                caller,
-                token_state_object_internal(),
-                unfreezer_role(),
-                unfreezers_to_add[i]
-            );
+        if (addresses_to_add.length() > 0) {
+            access_control::batch_grant_role(caller, state_obj, role, addresses_to_add);
         };
     }
 
@@ -829,22 +824,22 @@ module regulated_token::regulated_token {
         let state_obj = token_state_object_internal();
         assert_pauser(caller, state_obj);
 
-        let state = &mut TokenState[token_state_address_internal()];
-        if (!state.paused) {
-            state.paused = true;
-            event::emit(Paused { pauser: signer::address_of(caller) });
-        }
+        let state = &mut TokenState[object::object_address(&state_obj)];
+        assert!(!state.paused, E_ALREADY_PAUSED);
+
+        state.paused = true;
+        event::emit(Paused { pauser: signer::address_of(caller) });
     }
 
     public entry fun unpause(caller: &signer) acquires TokenState {
         let state_obj = token_state_object_internal();
         assert_unpauser(caller, state_obj);
 
-        let state = &mut TokenState[token_state_address_internal()];
-        if (state.paused) {
-            state.paused = false;
-            event::emit(Unpaused { unpauser: signer::address_of(caller) });
-        }
+        let state = &mut TokenState[object::object_address(&state_obj)];
+        assert!(state.paused, E_NOT_PAUSED);
+
+        state.paused = false;
+        event::emit(Unpaused { unpauser: signer::address_of(caller) });
     }
 
     /// Validates and sets up burn frozen funds operation.
@@ -931,16 +926,19 @@ module regulated_token::regulated_token {
         };
     }
 
-    inline fun validate_recovery_procedure(
-        caller: &signer, to: address
-    ): (&TransferRef, Object<Metadata>) {
-        assert_not_paused();
-
+    inline fun assert_valid_recovery_recipient(to: address) {
         assert!(to != @0x0, E_ZERO_ADDRESS_NOT_ALLOWED);
         assert!(
             to != @regulated_token && to != token_state_address_internal(),
             E_CANNOT_TRANSFER_TO_REGULATED_TOKEN
         );
+    }
+
+    inline fun validate_recovery_procedure(
+        caller: &signer, to: address
+    ): (&TransferRef, Object<Metadata>) {
+        assert_not_paused();
+        assert_valid_recovery_recipient(to);
 
         let state_obj = token_state_object_internal();
         assert_recovery_role(caller, state_obj);
@@ -965,50 +963,55 @@ module regulated_token::regulated_token {
         );
     }
 
+    /// Helper function to recover tokens from a specific address
+    fun recover_tokens_from_address(
+        caller_addr: address,
+        from: address,
+        to: address,
+        transfer_ref: &TransferRef,
+        token_metadata: Object<Metadata>
+    ) {
+        let balance = primary_fungible_store::balance(from, token_metadata);
+        if (balance > 0) {
+            primary_fungible_store::transfer_with_ref(transfer_ref, from, to, balance);
+            event::emit(
+                TokensRecovered {
+                    caller: caller_addr,
+                    token_metadata,
+                    from,
+                    to,
+                    amount: balance
+                }
+            );
+        }
+    }
+
     /// In case regulated tokens get stuck in the contract or token state, this function can be used to recover them
     /// This function can only be called by the recovery role
     public entry fun recover_tokens(
         caller: &signer, to: address
     ) acquires TokenMetadataRefs, TokenState {
         let (transfer_ref, token_metadata) = validate_recovery_procedure(caller, to);
+        let caller_addr = signer::address_of(caller);
 
         // Recover regulated tokens sent to contract
-        let balance = primary_fungible_store::balance(@regulated_token, token_metadata);
-        if (balance > 0) {
-            primary_fungible_store::transfer_with_ref(
-                transfer_ref, @regulated_token, to, balance
-            );
-            event::emit(
-                TokensRecovered {
-                    caller: signer::address_of(caller),
-                    token_metadata,
-                    from: @regulated_token,
-                    to,
-                    amount: balance
-                }
-            );
-        };
-
-        let token_state_address = token_state_address_internal();
-        // Recover regulated tokens sent to token state address
-        let balance = primary_fungible_store::balance(
-            token_state_address, token_metadata
+        recover_tokens_from_address(
+            caller_addr,
+            @regulated_token,
+            to,
+            transfer_ref,
+            token_metadata
         );
-        if (balance > 0) {
-            primary_fungible_store::transfer_with_ref(
-                transfer_ref, token_state_address, to, balance
-            );
 
-            event::emit(
-                TokensRecovered {
-                    caller: signer::address_of(caller),
-                    token_metadata,
-                    from: token_state_address,
-                    to,
-                    amount: balance
-                }
-            );
-        }
+        // Recover regulated tokens sent to token state address
+        let token_state_address = token_state_address_internal();
+        recover_tokens_from_address(
+            caller_addr,
+            token_state_address,
+            to,
+            transfer_ref,
+            token_metadata
+        );
     }
 
     fun get_from_store(from: address, token_metadata: Object<Metadata>): Object<FungibleStore> {

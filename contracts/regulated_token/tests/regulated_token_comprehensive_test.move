@@ -1191,27 +1191,6 @@ module regulated_token::regulated_token_comprehensive_test {
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
-    fun test_double_pause_idempotent(
-        admin: &signer, regulated_token: &signer
-    ) {
-        setup_token_and_roles(admin, regulated_token);
-
-        let pauser1 = account::create_signer_for_test(PAUSER1);
-        let pauser2 = account::create_signer_for_test(PAUSER2);
-
-        // Pause once
-        regulated_token::pause(&pauser1);
-        assert!(regulated_token::is_paused());
-
-        // Pause again - should be idempotent (no error)
-        regulated_token::pause(&pauser2);
-        assert!(regulated_token::is_paused());
-
-        // Should still be paused
-        assert!(regulated_token::is_paused());
-    }
-
-    #[test(admin = @admin, regulated_token = @regulated_token)]
     fun test_double_freeze_idempotent(
         admin: &signer, regulated_token: &signer
     ) {
@@ -1319,20 +1298,23 @@ module regulated_token::regulated_token_comprehensive_test {
         let admin = account::create_signer_for_test(ADMIN);
 
         // Test comprehensive batch role updates
-        regulated_token::apply_pauser_updates(
+        regulated_token::apply_role_updates(
             &admin,
+            PAUSER_ROLE,
             vector[PAUSER2], // Remove PAUSER2
             vector[USER1, USER2] // Add USER1, USER2 as pausers
         );
 
-        regulated_token::apply_freezer_updates(
+        regulated_token::apply_role_updates(
             &admin,
+            FREEZER_ROLE,
             vector[FREEZER2], // Remove FREEZER2
             vector[USER1] // Add USER1 as freezer (in addition to pauser)
         );
 
-        regulated_token::apply_unfreezer_updates(
+        regulated_token::apply_role_updates(
             &admin,
+            UNFREEZER_ROLE,
             vector[], // Remove none
             vector[USER3] // Add USER3 as unfreezer
         );
@@ -1455,5 +1437,48 @@ module regulated_token::regulated_token_comprehensive_test {
         assert!(frozen_after_unfreeze.length() == 1);
         assert!(frozen_after_unfreeze[0] == USER3);
         assert!(!frozen_after_unfreeze.contains(&USER1)); // USER1 no longer in frozen list
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::regulated_token::E_ALREADY_PAUSED,
+            location = regulated_token::regulated_token
+        )
+    ]
+    fun test_pause_already_paused_contract_fails(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup_token_and_roles(admin, regulated_token);
+
+        let pauser1 = account::create_signer_for_test(PAUSER1);
+
+        // Pause the contract first
+        regulated_token::pause(&pauser1);
+        assert!(regulated_token::is_paused());
+
+        // Try to pause again - should fail with E_ALREADY_PAUSED
+        regulated_token::pause(&pauser1);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::regulated_token::E_NOT_PAUSED,
+            location = regulated_token::regulated_token
+        )
+    ]
+    fun test_unpause_not_paused_contract_fails(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup_token_and_roles(admin, regulated_token);
+
+        let unpauser1 = account::create_signer_for_test(UNPAUSER1);
+
+        // Contract is not paused by default
+        assert!(!regulated_token::is_paused());
+
+        // Try to unpause when not paused - should fail with E_NOT_PAUSED
+        regulated_token::unpause(&unpauser1);
     }
 }

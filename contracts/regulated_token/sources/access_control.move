@@ -122,6 +122,22 @@ module regulated_token::access_control {
         borrow<T, Role>(state_obj).pending_admin
     }
 
+    public entry fun batch_grant_role<T: key, Role: copy + drop + store>(
+        caller: &signer,
+        state_obj: Object<T>,
+        role: Role,
+        accounts: vector<address>
+    ) acquires AccessControlState {
+        if (accounts.length() == 0) return;
+
+        let state = authorized_borrow_mut<T, Role>(caller, state_obj);
+        let sender = signer::address_of(caller);
+
+        for (i in 0..accounts.length()) {
+            grant_role_internal(state, role, accounts[i], sender);
+        };
+    }
+
     public entry fun grant_role<T: key, Role: copy + drop + store>(
         caller: &signer,
         state_obj: Object<T>,
@@ -129,17 +145,43 @@ module regulated_token::access_control {
         account: address
     ) acquires AccessControlState {
         let state = authorized_borrow_mut<T, Role>(caller, state_obj);
+        let sender = signer::address_of(caller);
 
+        grant_role_internal(state, role, account, sender);
+    }
+
+    fun grant_role_internal<Role: copy + drop + store>(
+        state: &mut AccessControlState<Role>,
+        role: Role,
+        account: address,
+        sender: address
+    ) {
         if (state.roles.contains(&role)) {
             let addresses = state.roles.borrow_mut(&role);
             if (!addresses.contains(&account)) {
                 addresses.push_back(account);
+                event::emit(RoleGranted { role, account, sender });
             }
         } else {
             state.roles.add(role, vector[account]);
-        };
+            event::emit(RoleGranted { role, account, sender });
+        }
+    }
 
-        event::emit(RoleGranted { role, account, sender: signer::address_of(caller) });
+    public entry fun batch_revoke_role<T: key, Role: copy + drop + store>(
+        caller: &signer,
+        state_obj: Object<T>,
+        role: Role,
+        accounts: vector<address>
+    ) acquires AccessControlState {
+        if (accounts.length() == 0) return;
+
+        let state = authorized_borrow_mut<T, Role>(caller, state_obj);
+        let sender = signer::address_of(caller);
+
+        for (i in 0..accounts.length()) {
+            revoke_role_internal(state, role, accounts[i], sender);
+        };
     }
 
     public entry fun revoke_role<T: key, Role: copy + drop + store>(
@@ -149,17 +191,25 @@ module regulated_token::access_control {
         account: address
     ) acquires AccessControlState {
         let state = authorized_borrow_mut<T, Role>(caller, state_obj);
+        let sender = signer::address_of(caller);
 
+        revoke_role_internal(state, role, account, sender);
+    }
+
+    fun revoke_role_internal<Role: copy + drop + store>(
+        state: &mut AccessControlState<Role>,
+        role: Role,
+        account: address,
+        sender: address
+    ) {
         if (state.roles.contains(&role)) {
             let addresses = state.roles.borrow_mut(&role);
             let (found, index) = addresses.index_of(&account);
             if (found) {
                 addresses.remove(index);
-                event::emit(
-                    RoleRevoked { role, account, sender: signer::address_of(caller) }
-                );
+                event::emit(RoleRevoked { role, account, sender });
             }
-        };
+        }
     }
 
     public entry fun renounce_role<T: key, Role: copy + drop + store>(

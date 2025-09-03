@@ -61,9 +61,7 @@ type RegulatedTokenInterface interface {
 	FreezeAccount(opts *bind.TransactOpts, account aptos.AccountAddress) (*api.PendingTransaction, error)
 	UnfreezeAccounts(opts *bind.TransactOpts, accounts []aptos.AccountAddress) (*api.PendingTransaction, error)
 	UnfreezeAccount(opts *bind.TransactOpts, account aptos.AccountAddress) (*api.PendingTransaction, error)
-	ApplyPauserUpdates(opts *bind.TransactOpts, pausersToRemove []aptos.AccountAddress, pausersToAdd []aptos.AccountAddress) (*api.PendingTransaction, error)
-	ApplyFreezerUpdates(opts *bind.TransactOpts, freezersToRemove []aptos.AccountAddress, freezersToAdd []aptos.AccountAddress) (*api.PendingTransaction, error)
-	ApplyUnfreezerUpdates(opts *bind.TransactOpts, unfreezersToRemove []aptos.AccountAddress, unfreezersToAdd []aptos.AccountAddress) (*api.PendingTransaction, error)
+	ApplyRoleUpdates(opts *bind.TransactOpts, roleNumber byte, addressesToRemove []aptos.AccountAddress, addressesToAdd []aptos.AccountAddress) (*api.PendingTransaction, error)
 	Pause(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 	Unpause(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 	BatchBurnFrozenFunds(opts *bind.TransactOpts, accounts []aptos.AccountAddress) (*api.PendingTransaction, error)
@@ -120,9 +118,7 @@ type RegulatedTokenEncoder interface {
 	FreezeAccount(account aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	UnfreezeAccounts(accounts []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	UnfreezeAccount(account aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	ApplyPauserUpdates(pausersToRemove []aptos.AccountAddress, pausersToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	ApplyFreezerUpdates(freezersToRemove []aptos.AccountAddress, freezersToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	ApplyUnfreezerUpdates(unfreezersToRemove []aptos.AccountAddress, unfreezersToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	ApplyRoleUpdates(roleNumber byte, addressesToRemove []aptos.AccountAddress, addressesToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Pause() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Unpause() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	BatchBurnFrozenFunds(accounts []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -140,6 +136,7 @@ type RegulatedTokenEncoder interface {
 	TokenMetadataFromStateObj(stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TokenMetadataInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	IsPausedInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	AssertValidRecoveryRecipient(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetFromStore(from aptos.AccountAddress, tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AssertNotPaused() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AssertPauser(stateObj aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -152,7 +149,7 @@ type RegulatedTokenEncoder interface {
 	AssertNotFrozen(store aptos.AccountAddress, tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"regulated_token","module":"regulated_token","name":"accept_admin","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"accept_ownership","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"apply_freezer_updates","parameters":[{"name":"freezers_to_remove","type":"vector\u003caddress\u003e"},{"name":"freezers_to_add","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"apply_pauser_updates","parameters":[{"name":"pausers_to_remove","type":"vector\u003caddress\u003e"},{"name":"pausers_to_add","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"apply_unfreezer_updates","parameters":[{"name":"unfreezers_to_remove","type":"vector\u003caddress\u003e"},{"name":"unfreezers_to_add","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_bridge_minter_or_burner","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_burner_and_get_type","parameters":[{"name":"burner","type":"address"},{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_freezer","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_not_frozen","parameters":[{"name":"store","type":"address"},{"name":"token_metadata","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_not_paused","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"assert_pauser","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_recovery_role","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_unfreezer","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_unpauser","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"batch_burn_frozen_funds","parameters":[{"name":"accounts","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"batch_recover_frozen_funds","parameters":[{"name":"accounts","type":"vector\u003caddress\u003e"},{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"burn","parameters":[{"name":"from","type":"address"},{"name":"amount","type":"u64"}]},{"package":"regulated_token","module":"regulated_token","name":"burn_frozen_funds","parameters":[{"name":"from","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"freeze_account","parameters":[{"name":"account","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"freeze_accounts","parameters":[{"name":"accounts","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"get_from_store","parameters":[{"name":"from","type":"address"},{"name":"token_metadata","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"grant_role","parameters":[{"name":"role_number","type":"u8"},{"name":"account","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"initialize","parameters":[{"name":"max_supply","type":"0x1::option::Option\u003cu128\u003e"},{"name":"name","type":"0x1::string::String"},{"name":"symbol","type":"0x1::string::String"},{"name":"decimals","type":"u8"},{"name":"icon","type":"0x1::string::String"},{"name":"project","type":"0x1::string::String"}]},{"package":"regulated_token","module":"regulated_token","name":"is_paused_internal","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"mint","parameters":[{"name":"to","type":"address"},{"name":"amount","type":"u64"}]},{"package":"regulated_token","module":"regulated_token","name":"pause","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"recover_frozen_funds","parameters":[{"name":"from","type":"address"},{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"recover_tokens","parameters":[{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"revoke_role","parameters":[{"name":"role_number","type":"u8"},{"name":"account","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"token_metadata_from_state_obj","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"token_metadata_internal","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"token_state_address_internal","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"token_state_object_internal","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"transfer_admin","parameters":[{"name":"new_admin","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"unfreeze_account","parameters":[{"name":"account","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"unfreeze_accounts","parameters":[{"name":"accounts","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"unpause","parameters":null}]`
+const FunctionInfo = `[{"package":"regulated_token","module":"regulated_token","name":"accept_admin","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"accept_ownership","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"apply_role_updates","parameters":[{"name":"role_number","type":"u8"},{"name":"addresses_to_remove","type":"vector\u003caddress\u003e"},{"name":"addresses_to_add","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_bridge_minter_or_burner","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_burner_and_get_type","parameters":[{"name":"burner","type":"address"},{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_freezer","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_not_frozen","parameters":[{"name":"store","type":"address"},{"name":"token_metadata","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_not_paused","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"assert_pauser","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_recovery_role","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_unfreezer","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_unpauser","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"assert_valid_recovery_recipient","parameters":[{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"batch_burn_frozen_funds","parameters":[{"name":"accounts","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"batch_recover_frozen_funds","parameters":[{"name":"accounts","type":"vector\u003caddress\u003e"},{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"burn","parameters":[{"name":"from","type":"address"},{"name":"amount","type":"u64"}]},{"package":"regulated_token","module":"regulated_token","name":"burn_frozen_funds","parameters":[{"name":"from","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"freeze_account","parameters":[{"name":"account","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"freeze_accounts","parameters":[{"name":"accounts","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"get_from_store","parameters":[{"name":"from","type":"address"},{"name":"token_metadata","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"grant_role","parameters":[{"name":"role_number","type":"u8"},{"name":"account","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"initialize","parameters":[{"name":"max_supply","type":"0x1::option::Option\u003cu128\u003e"},{"name":"name","type":"0x1::string::String"},{"name":"symbol","type":"0x1::string::String"},{"name":"decimals","type":"u8"},{"name":"icon","type":"0x1::string::String"},{"name":"project","type":"0x1::string::String"}]},{"package":"regulated_token","module":"regulated_token","name":"is_paused_internal","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"mint","parameters":[{"name":"to","type":"address"},{"name":"amount","type":"u64"}]},{"package":"regulated_token","module":"regulated_token","name":"pause","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"recover_frozen_funds","parameters":[{"name":"from","type":"address"},{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"recover_tokens","parameters":[{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"revoke_role","parameters":[{"name":"role_number","type":"u8"},{"name":"account","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"token_metadata_from_state_obj","parameters":[{"name":"state_obj","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"token_metadata_internal","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"token_state_address_internal","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"token_state_object_internal","parameters":null},{"package":"regulated_token","module":"regulated_token","name":"transfer_admin","parameters":[{"name":"new_admin","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"unfreeze_account","parameters":[{"name":"account","type":"address"}]},{"package":"regulated_token","module":"regulated_token","name":"unfreeze_accounts","parameters":[{"name":"accounts","type":"vector\u003caddress\u003e"}]},{"package":"regulated_token","module":"regulated_token","name":"unpause","parameters":null}]`
 
 func NewRegulatedToken(address aptos.AccountAddress, client aptos.AptosRpcClient) RegulatedTokenInterface {
 	contract := bind.NewBoundContract(address, "regulated_token", "regulated_token", client)
@@ -948,26 +945,8 @@ func (c RegulatedTokenContract) UnfreezeAccount(opts *bind.TransactOpts, account
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (c RegulatedTokenContract) ApplyPauserUpdates(opts *bind.TransactOpts, pausersToRemove []aptos.AccountAddress, pausersToAdd []aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.regulatedTokenEncoder.ApplyPauserUpdates(pausersToRemove, pausersToAdd)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c RegulatedTokenContract) ApplyFreezerUpdates(opts *bind.TransactOpts, freezersToRemove []aptos.AccountAddress, freezersToAdd []aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.regulatedTokenEncoder.ApplyFreezerUpdates(freezersToRemove, freezersToAdd)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c RegulatedTokenContract) ApplyUnfreezerUpdates(opts *bind.TransactOpts, unfreezersToRemove []aptos.AccountAddress, unfreezersToAdd []aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.regulatedTokenEncoder.ApplyUnfreezerUpdates(unfreezersToRemove, unfreezersToAdd)
+func (c RegulatedTokenContract) ApplyRoleUpdates(opts *bind.TransactOpts, roleNumber byte, addressesToRemove []aptos.AccountAddress, addressesToAdd []aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.regulatedTokenEncoder.ApplyRoleUpdates(roleNumber, addressesToRemove, addressesToAdd)
 	if err != nil {
 		return nil, err
 	}
@@ -1324,33 +1303,15 @@ func (c regulatedTokenEncoder) UnfreezeAccount(account aptos.AccountAddress) (bi
 	})
 }
 
-func (c regulatedTokenEncoder) ApplyPauserUpdates(pausersToRemove []aptos.AccountAddress, pausersToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("apply_pauser_updates", nil, []string{
+func (c regulatedTokenEncoder) ApplyRoleUpdates(roleNumber byte, addressesToRemove []aptos.AccountAddress, addressesToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("apply_role_updates", nil, []string{
+		"u8",
 		"vector<address>",
 		"vector<address>",
 	}, []any{
-		pausersToRemove,
-		pausersToAdd,
-	})
-}
-
-func (c regulatedTokenEncoder) ApplyFreezerUpdates(freezersToRemove []aptos.AccountAddress, freezersToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("apply_freezer_updates", nil, []string{
-		"vector<address>",
-		"vector<address>",
-	}, []any{
-		freezersToRemove,
-		freezersToAdd,
-	})
-}
-
-func (c regulatedTokenEncoder) ApplyUnfreezerUpdates(unfreezersToRemove []aptos.AccountAddress, unfreezersToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("apply_unfreezer_updates", nil, []string{
-		"vector<address>",
-		"vector<address>",
-	}, []any{
-		unfreezersToRemove,
-		unfreezersToAdd,
+		roleNumber,
+		addressesToRemove,
+		addressesToAdd,
 	})
 }
 
@@ -1460,6 +1421,14 @@ func (c regulatedTokenEncoder) TokenMetadataInternal() (bind.ModuleInformation, 
 
 func (c regulatedTokenEncoder) IsPausedInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("is_paused_internal", nil, []string{}, []any{})
+}
+
+func (c regulatedTokenEncoder) AssertValidRecoveryRecipient(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("assert_valid_recovery_recipient", nil, []string{
+		"address",
+	}, []any{
+		to,
+	})
 }
 
 func (c regulatedTokenEncoder) GetFromStore(from aptos.AccountAddress, tokenMetadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {

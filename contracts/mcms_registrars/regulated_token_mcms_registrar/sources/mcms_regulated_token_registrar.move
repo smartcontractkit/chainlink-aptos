@@ -157,47 +157,23 @@ module regulated_token::mcms_regulated_token_registrar {
             bcs_stream::assert_is_consumed(&stream);
 
             regulated_token::recover_tokens(&caller, to)
-        } else if (function_bytes == b"apply_pauser_updates") {
-            let pausers_to_remove =
+        } else if (function_bytes == b"apply_role_updates") {
+            let role_number = bcs_stream::deserialize_u8(&mut stream);
+            let addresses_to_remove =
                 bcs_stream::deserialize_vector(
                     &mut stream, |stream| bcs_stream::deserialize_address(stream)
                 );
-            let pausers_to_add =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
-                );
-            bcs_stream::assert_is_consumed(&stream);
-
-            regulated_token::apply_pauser_updates(
-                &caller, pausers_to_remove, pausers_to_add
-            )
-        } else if (function_bytes == b"apply_freezer_updates") {
-            let freezers_to_remove =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
-                );
-            let freezers_to_add =
+            let addresses_to_add =
                 bcs_stream::deserialize_vector(
                     &mut stream, |stream| bcs_stream::deserialize_address(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
 
-            regulated_token::apply_freezer_updates(
-                &caller, freezers_to_remove, freezers_to_add
-            )
-        } else if (function_bytes == b"apply_unfreezer_updates") {
-            let unfreezers_to_remove =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
-                );
-            let unfreezers_to_add =
-                bcs_stream::deserialize_vector(
-                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
-                );
-            bcs_stream::assert_is_consumed(&stream);
-
-            regulated_token::apply_unfreezer_updates(
-                &caller, unfreezers_to_remove, unfreezers_to_add
+            regulated_token::apply_role_updates(
+                &caller,
+                role_number,
+                addresses_to_remove,
+                addresses_to_add
             )
         } else if (function_bytes == b"transfer_ownership") {
             let to = bcs_stream::deserialize_address(&mut stream);
