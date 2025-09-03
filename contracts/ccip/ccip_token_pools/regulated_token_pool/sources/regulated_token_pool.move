@@ -79,8 +79,6 @@ module regulated_token_pool::regulated_token_pool {
             signer::address_of(&store_signer), metadata
         );
 
-        let store_signer = account::create_signer_with_capability(&store_signer_cap);
-
         let pool = RegulatedTokenPoolState {
             ownable_state: ownable::new(&store_signer, @regulated_token_pool),
             store_signer_address: signer::address_of(&store_signer),
