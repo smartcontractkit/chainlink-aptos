@@ -28,7 +28,6 @@ const (
 	RegulatedToken     = Package("regulated_token")
 	ManagedTokenFaucet = Package("managed_token_faucet")
 
-	MCMSRegistrars              = Package("mcms_registrars")
 	ManagedTokenMCMSRegistrar   = Package("managed_token_mcms_registrar")
 	RegulatedTokenMCMSRegistrar = Package("regulated_token_mcms_registrar")
 
@@ -64,7 +63,6 @@ var Contracts map[Package]string = map[Package]string{
 	RegulatedToken:     filepath.Join("regulated_token"),
 	ManagedTokenFaucet: filepath.Join("managed_token_faucet"),
 
-	MCMSRegistrars:              filepath.Join("mcms_registrars"),
 	ManagedTokenMCMSRegistrar:   filepath.Join("mcms_registrars", "managed_token_mcms_registrar"),
 	RegulatedTokenMCMSRegistrar: filepath.Join("mcms_registrars", "regulated_token_mcms_registrar"),
 
