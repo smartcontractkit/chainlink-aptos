@@ -636,11 +636,14 @@ module regulated_token::regulated_token {
         transfer_ref: &TransferRef,
         token_state: &mut TokenState
     ) {
+        // Ensure the account is frozen at the primary store level
+        primary_fungible_store::set_frozen_flag(transfer_ref, account, true);
+
         if (!token_state.frozen_accounts.contains(&account)) {
-            primary_fungible_store::set_frozen_flag(transfer_ref, account, true);
             token_state.frozen_accounts.add(account, true);
-            event::emit(AccountFrozen { freezer: caller_addr, account });
         };
+
+        event::emit(AccountFrozen { freezer: caller_addr, account });
     }
 
     fun unfreeze_account_internal(
@@ -649,11 +652,14 @@ module regulated_token::regulated_token {
         transfer_ref: &TransferRef,
         token_state: &mut TokenState
     ) {
+        // Ensure the account is unfrozen at the primary store level
+        primary_fungible_store::set_frozen_flag(transfer_ref, account, false);
+
         if (token_state.frozen_accounts.contains(&account)) {
-            primary_fungible_store::set_frozen_flag(transfer_ref, account, false);
             token_state.frozen_accounts.remove(&account);
-            event::emit(AccountUnfrozen { unfreezer: caller_addr, account });
         };
+
+        event::emit(AccountUnfrozen { unfreezer: caller_addr, account });
     }
 
     fun burn_frozen_funds_internal(
