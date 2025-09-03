@@ -55,8 +55,6 @@ type RegulatedTokenInterface interface {
 	Initialize(opts *bind.TransactOpts, maxSupply **big.Int, name string, symbol string, decimals byte, icon string, project string) (*api.PendingTransaction, error)
 	Mint(opts *bind.TransactOpts, to aptos.AccountAddress, amount uint64) (*api.PendingTransaction, error)
 	Burn(opts *bind.TransactOpts, from aptos.AccountAddress, amount uint64) (*api.PendingTransaction, error)
-	BatchBurnFrozenFunds(opts *bind.TransactOpts, accounts []aptos.AccountAddress) (*api.PendingTransaction, error)
-	BurnFrozenFunds(opts *bind.TransactOpts, from aptos.AccountAddress) (*api.PendingTransaction, error)
 	GrantRole(opts *bind.TransactOpts, roleNumber byte, account aptos.AccountAddress) (*api.PendingTransaction, error)
 	RevokeRole(opts *bind.TransactOpts, roleNumber byte, account aptos.AccountAddress) (*api.PendingTransaction, error)
 	FreezeAccounts(opts *bind.TransactOpts, accounts []aptos.AccountAddress) (*api.PendingTransaction, error)
@@ -68,6 +66,8 @@ type RegulatedTokenInterface interface {
 	ApplyUnfreezerUpdates(opts *bind.TransactOpts, unfreezersToRemove []aptos.AccountAddress, unfreezersToAdd []aptos.AccountAddress) (*api.PendingTransaction, error)
 	Pause(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 	Unpause(opts *bind.TransactOpts) (*api.PendingTransaction, error)
+	BatchBurnFrozenFunds(opts *bind.TransactOpts, accounts []aptos.AccountAddress) (*api.PendingTransaction, error)
+	BurnFrozenFunds(opts *bind.TransactOpts, from aptos.AccountAddress) (*api.PendingTransaction, error)
 	RecoverFrozenFunds(opts *bind.TransactOpts, from aptos.AccountAddress, to aptos.AccountAddress) (*api.PendingTransaction, error)
 	BatchRecoverFrozenFunds(opts *bind.TransactOpts, accounts []aptos.AccountAddress, to aptos.AccountAddress) (*api.PendingTransaction, error)
 	TransferAdmin(opts *bind.TransactOpts, newAdmin aptos.AccountAddress) (*api.PendingTransaction, error)
@@ -114,8 +114,6 @@ type RegulatedTokenEncoder interface {
 	Initialize(maxSupply **big.Int, name string, symbol string, decimals byte, icon string, project string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Mint(to aptos.AccountAddress, amount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Burn(from aptos.AccountAddress, amount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	BatchBurnFrozenFunds(accounts []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	BurnFrozenFunds(from aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GrantRole(roleNumber byte, account aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	RevokeRole(roleNumber byte, account aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	FreezeAccounts(accounts []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -127,6 +125,8 @@ type RegulatedTokenEncoder interface {
 	ApplyUnfreezerUpdates(unfreezersToRemove []aptos.AccountAddress, unfreezersToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Pause() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Unpause() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	BatchBurnFrozenFunds(accounts []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	BurnFrozenFunds(from aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	RecoverFrozenFunds(from aptos.AccountAddress, to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	BatchRecoverFrozenFunds(accounts []aptos.AccountAddress, to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TransferAdmin(newAdmin aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -894,24 +894,6 @@ func (c RegulatedTokenContract) Burn(opts *bind.TransactOpts, from aptos.Account
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (c RegulatedTokenContract) BatchBurnFrozenFunds(opts *bind.TransactOpts, accounts []aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.regulatedTokenEncoder.BatchBurnFrozenFunds(accounts)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
-func (c RegulatedTokenContract) BurnFrozenFunds(opts *bind.TransactOpts, from aptos.AccountAddress) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.regulatedTokenEncoder.BurnFrozenFunds(from)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BoundContract.Transact(opts, module, function, typeTags, args)
-}
-
 func (c RegulatedTokenContract) GrantRole(opts *bind.TransactOpts, roleNumber byte, account aptos.AccountAddress) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.regulatedTokenEncoder.GrantRole(roleNumber, account)
 	if err != nil {
@@ -1004,6 +986,24 @@ func (c RegulatedTokenContract) Pause(opts *bind.TransactOpts) (*api.PendingTran
 
 func (c RegulatedTokenContract) Unpause(opts *bind.TransactOpts) (*api.PendingTransaction, error) {
 	module, function, typeTags, args, err := c.regulatedTokenEncoder.Unpause()
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c RegulatedTokenContract) BatchBurnFrozenFunds(opts *bind.TransactOpts, accounts []aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.regulatedTokenEncoder.BatchBurnFrozenFunds(accounts)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
+func (c RegulatedTokenContract) BurnFrozenFunds(opts *bind.TransactOpts, from aptos.AccountAddress) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.regulatedTokenEncoder.BurnFrozenFunds(from)
 	if err != nil {
 		return nil, err
 	}
@@ -1272,22 +1272,6 @@ func (c regulatedTokenEncoder) Burn(from aptos.AccountAddress, amount uint64) (b
 	})
 }
 
-func (c regulatedTokenEncoder) BatchBurnFrozenFunds(accounts []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("batch_burn_frozen_funds", nil, []string{
-		"vector<address>",
-	}, []any{
-		accounts,
-	})
-}
-
-func (c regulatedTokenEncoder) BurnFrozenFunds(from aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("burn_frozen_funds", nil, []string{
-		"address",
-	}, []any{
-		from,
-	})
-}
-
 func (c regulatedTokenEncoder) GrantRole(roleNumber byte, account aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("grant_role", nil, []string{
 		"u8",
@@ -1376,6 +1360,22 @@ func (c regulatedTokenEncoder) Pause() (bind.ModuleInformation, string, []aptos.
 
 func (c regulatedTokenEncoder) Unpause() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("unpause", nil, []string{}, []any{})
+}
+
+func (c regulatedTokenEncoder) BatchBurnFrozenFunds(accounts []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("batch_burn_frozen_funds", nil, []string{
+		"vector<address>",
+	}, []any{
+		accounts,
+	})
+}
+
+func (c regulatedTokenEncoder) BurnFrozenFunds(from aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("burn_frozen_funds", nil, []string{
+		"address",
+	}, []any{
+		from,
+	})
 }
 
 func (c regulatedTokenEncoder) RecoverFrozenFunds(from aptos.AccountAddress, to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {

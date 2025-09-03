@@ -637,9 +637,10 @@ module regulated_token::regulated_token {
         account: address,
         burn_ref: &BurnRef,
         token_metadata: Object<Metadata>,
+        is_frozen: bool,
         is_bridge_burner: bool
     ) {
-        if (primary_fungible_store::is_frozen(account, token_metadata)) {
+        if (is_frozen) {
             let balance = primary_fungible_store::balance(account, token_metadata);
             if (balance > 0) {
                 primary_fungible_store::burn(burn_ref, account, balance);
@@ -668,48 +669,6 @@ module regulated_token::regulated_token {
                 );
             };
         };
-    }
-
-    public entry fun batch_burn_frozen_funds(
-        caller: &signer, accounts: vector<address>
-    ) acquires TokenMetadataRefs, TokenState {
-        assert_not_paused();
-
-        let burner = signer::address_of(caller);
-        let state_obj = token_state_object_internal();
-        let (is_bridge_burner, _) = assert_burner_and_get_type(burner, state_obj);
-        let token_metadata = token_metadata_from_state_obj(state_obj);
-        let burn_ref = &borrow_token_metadata_refs().burn_ref;
-
-        for (i in 0..accounts.length()) {
-            burn_frozen_funds_internal(
-                burner,
-                accounts[i],
-                burn_ref,
-                token_metadata,
-                is_bridge_burner
-            );
-        };
-    }
-
-    public entry fun burn_frozen_funds(
-        caller: &signer, from: address
-    ) acquires TokenMetadataRefs, TokenState {
-        assert_not_paused();
-
-        let burner = signer::address_of(caller);
-        let state_obj = token_state_object_internal();
-        let (is_bridge_burner, _) = assert_burner_and_get_type(burner, state_obj);
-        let token_metadata = token_metadata_from_state_obj(state_obj);
-        let burn_ref = &borrow_token_metadata_refs().burn_ref;
-
-        burn_frozen_funds_internal(
-            burner,
-            from,
-            burn_ref,
-            token_metadata,
-            is_bridge_burner
-        );
     }
 
     /// Periphery function to apply roles to accounts
@@ -886,6 +845,56 @@ module regulated_token::regulated_token {
             state.paused = false;
             event::emit(Unpaused { unpauser: signer::address_of(caller) });
         }
+    }
+
+    /// Validates and sets up burn frozen funds operation.
+    inline fun validate_burn_frozen_funds(
+        caller: &signer
+    ): (address, &BurnRef, Object<Metadata>, &TokenState, bool) {
+        assert_not_paused();
+
+        let burner = signer::address_of(caller);
+        let state_obj = token_state_object_internal();
+        let token_state = &TokenState[object::object_address(&state_obj)];
+        let (is_bridge_burner, _) = assert_burner_and_get_type(burner, state_obj);
+        let token_metadata = token_metadata_from_state_obj(state_obj);
+        let burn_ref = &borrow_token_metadata_refs().burn_ref;
+
+        (burner, burn_ref, token_metadata, token_state, is_bridge_burner)
+    }
+
+    public entry fun batch_burn_frozen_funds(
+        caller: &signer, accounts: vector<address>
+    ) acquires TokenMetadataRefs, TokenState {
+        let (burner, burn_ref, token_metadata, token_state, is_bridge_burner) =
+            validate_burn_frozen_funds(caller);
+
+        for (i in 0..accounts.length()) {
+            burn_frozen_funds_internal(
+                burner,
+                accounts[i],
+                burn_ref,
+                token_metadata,
+                token_state.frozen_accounts.contains(&accounts[i]),
+                is_bridge_burner
+            );
+        };
+    }
+
+    public entry fun burn_frozen_funds(
+        caller: &signer, from: address
+    ) acquires TokenMetadataRefs, TokenState {
+        let (burner, burn_ref, token_metadata, token_state, is_bridge_burner) =
+            validate_burn_frozen_funds(caller);
+
+        burn_frozen_funds_internal(
+            burner,
+            from,
+            burn_ref,
+            token_metadata,
+            token_state.frozen_accounts.contains(&from),
+            is_bridge_burner
+        );
     }
 
     /// Recovers funds from frozen accounts by transferring them to a specified account.
