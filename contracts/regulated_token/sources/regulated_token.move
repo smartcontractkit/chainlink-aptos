@@ -202,10 +202,6 @@ module regulated_token::regulated_token {
 
     #[view]
     public fun token_address(): address acquires TokenState {
-        assert!(
-            exists<TokenState>(token_state_address_internal()),
-            E_TOKEN_NOT_INITIALIZED
-        );
         object::object_address(&token_metadata_internal())
     }
 
@@ -347,11 +343,6 @@ module regulated_token::regulated_token {
         let current_key = *current_key_opt.borrow();
 
         result.push_back(current_key);
-
-        if (max_count == 1) {
-            let has_more = frozen_accounts.next_key(&current_key).is_some();
-            return (result, current_key, has_more);
-        };
 
         for (_i in 1..max_count) {
             let next_key_opt = frozen_accounts.next_key(&current_key);
