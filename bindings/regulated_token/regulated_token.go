@@ -65,14 +65,14 @@ func DeployToObject(
 	return address, tx, Bind(address, client), nil
 }
 
-// CompileMCMSRegistrar compiles the mcms-registrar package
+// CompileMCMSRegistrar compiles the regulated_token_mcms_registrar package
 func CompileMCMSRegistrar(
-	regulatedTokenAddress,
-	mcmsAddress aptos.AccountAddress,
+	regulatedTokenAddress, adminAddress, mcmsAddress aptos.AccountAddress,
 	registerMCMSEntrypoints bool,
 ) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"regulated_token":           regulatedTokenAddress,
+		"admin":                     adminAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
@@ -80,10 +80,10 @@ func CompileMCMSRegistrar(
 		namedAddresses["mcms_register_entrypoints"] = aptos.AccountOne
 	}
 	// Compile using CLI
-	return compile.CompilePackage(contracts.MCMSRegistrar, namedAddresses)
+	return compile.CompilePackage(contracts.RegulatedTokenMCMSRegistrar, namedAddresses)
 }
 
-// DeployMCMSRegistrarToExistingObject deploys the mcms-registrar package to an existing code object (regulatedTokenAddress).
+// DeployMCMSRegistrarToExistingObject deploys the regulated_token_mcms_registrar package to an existing code object (regulatedTokenAddress).
 func DeployMCMSRegistrarToExistingObject(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
@@ -99,7 +99,7 @@ func DeployMCMSRegistrarToExistingObject(
 	if registerMCMSEntrypoints {
 		namedAddresses["mcms_register_entrypoints"] = aptos.AccountOne
 	}
-	tx, err := bind.UpgradePackageToObject(auth, client, contracts.MCMSRegistrar, namedAddresses, regulatedTokenAddress)
+	tx, err := bind.UpgradePackageToObject(auth, client, contracts.RegulatedTokenMCMSRegistrar, namedAddresses, regulatedTokenAddress)
 	if err != nil {
 		return nil, nil, err
 	}

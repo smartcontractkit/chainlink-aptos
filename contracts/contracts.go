@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 )
 
-//go:embed ccip large_packages mcms vendored data-feeds platform platform_secondary managed_token mcms-registrar managed_token_faucet regulated_token
+//go:embed ccip large_packages mcms vendored data-feeds platform platform_secondary managed_token mcms_registrars managed_token_faucet regulated_token
 var Embed embed.FS
 
 type Package string
@@ -25,10 +25,12 @@ const (
 	CCIPOnramp             = Package("ccip_onramp")
 
 	ManagedToken       = Package("managed_token")
-	MCMSRegistrar      = Package("mcms-registrar")
+	RegulatedToken     = Package("regulated_token")
 	ManagedTokenFaucet = Package("managed_token_faucet")
 
-	RegulatedToken = Package("regulated_token")
+	MCMSRegistrars              = Package("mcms_registrars")
+	ManagedTokenMCMSRegistrar   = Package("managed_token_mcms_registrar")
+	RegulatedTokenMCMSRegistrar = Package("regulated_token_mcms_registrar")
 
 	DataFeeds         = Package("data_feeds")
 	Platform          = Package("platform")
@@ -59,10 +61,12 @@ var Contracts map[Package]string = map[Package]string{
 	PlatformSecondary:      "platform_secondary",
 
 	ManagedToken:       filepath.Join("managed_token"),
-	MCMSRegistrar:      filepath.Join("mcms-registrar"),
+	RegulatedToken:     filepath.Join("regulated_token"),
 	ManagedTokenFaucet: filepath.Join("managed_token_faucet"),
 
-	RegulatedToken: filepath.Join("regulated_token"),
+	MCMSRegistrars:              filepath.Join("mcms_registrars"),
+	ManagedTokenMCMSRegistrar:   filepath.Join("mcms_registrars", "managed_token_mcms_registrar"),
+	RegulatedTokenMCMSRegistrar: filepath.Join("mcms_registrars", "regulated_token_mcms_registrar"),
 
 	MCMS:     filepath.Join("mcms", "mcms"),
 	MCMSTest: filepath.Join("mcms", "mcms_test"),

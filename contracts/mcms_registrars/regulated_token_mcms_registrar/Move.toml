@@ -1,22 +1,23 @@
 [package]
-name = "MCMSRegistrar"
+name = "RegulatedTokenMCMSRegistrar"
 version = "1.0.0"
 authors = []
 
 [addresses]
-managed_token = "_"
+regulated_token = "_"
+admin = "_"
 mcms = "_"
 mcms_register_entrypoints = "_"
 
 [dev-addresses]
-# Matches `@link` address in `link-token` package
-managed_token = "0x121dfbc38157d675d96eef0bcc54e70e9801714138ce54028b5655459c6376ee"
+regulated_token = "0x27093661ff0eb2560771b6a616ac60788a7252f6917c8cdb29942052fa8567a"
+admin = "0x456"
 mcms = "0x4001"
 mcms_register_entrypoints = "0x9999"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }
-ChainlinkManyChainMultisig = { local = "../mcms/mcms", addr_subst = { 'mcms_owner' = '0x0' } }
-ManagedToken = { local = "../managed_token" }
+ChainlinkManyChainMultisig = { local = "../../mcms/mcms", addr_subst = { 'mcms_owner' = '0x0' } }
+RegulatedToken = { local = "../../regulated_token" }
 
 [dev-dependencies]
