@@ -945,7 +945,13 @@ module regulated_token::regulated_token_test {
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
-    fun test_recover_tokens_after_failed_operations(
+    #[
+        expected_failure(
+            abort_code = regulated_token::regulated_token::E_PAUSED,
+            location = regulated_token::regulated_token
+        )
+    ]
+    fun test_recover_tokens_fails_if_paused(
         admin: &signer, regulated_token: &signer
     ) {
         let recovery_signer = setup_with_recovery_role(admin, regulated_token);
@@ -965,7 +971,7 @@ module regulated_token::regulated_token_test {
 
         // 4. Pause the contract to simulate emergency state
         regulated_token::pause(admin);
-        assert!(regulated_token::is_paused(), 1);
+        assert!(regulated_token::is_paused());
 
         // Verify tokens are stuck in both problematic locations
         let stuck_contract =
@@ -975,25 +981,8 @@ module regulated_token::regulated_token_test {
         assert!(stuck_contract == 400);
         assert!(stuck_state == 300);
 
-        // Recovery should work even when contract is paused (emergency recovery)
+        // Recovery should fail when contract is paused (emergency recovery)
         regulated_token::recover_tokens(&recovery_signer, RECIPIENT);
-
-        // Verify all stuck tokens were recovered
-        let final_contract_balance =
-            primary_fungible_store::balance(@regulated_token, metadata_obj);
-        let final_state_balance =
-            primary_fungible_store::balance(token_state_address, metadata_obj);
-        let final_recipient_balance =
-            primary_fungible_store::balance(RECIPIENT, metadata_obj);
-
-        assert!(final_contract_balance == 0);
-        assert!(final_state_balance == 0);
-        assert!(
-            final_recipient_balance == stuck_contract + stuck_state
-        );
-
-        // Contract should still be paused after recovery
-        assert!(regulated_token::is_paused(), 7);
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
@@ -1300,22 +1289,104 @@ module regulated_token::regulated_token_test {
         let (res, _next_key, has_more) =
             regulated_token::get_all_frozen_accounts(@0x0, 10);
         assert!(res.length() == 3);
-        assert!(res.contains(&@0x1));
-        assert!(!res.contains(&@0x2)); // Should not be in frozen list
-        assert!(res.contains(&@0x3));
-        assert!(res.contains(&@0x4));
+        assert!(res[0] == @0x1);
+        assert!(res[1] == @0x3);
+        assert!(res[2] == @0x4);
         assert!(!has_more);
+    }
 
-        // Unfreeze all remaining
-        regulated_token::unfreeze_accounts(admin, vector[@0x1, @0x3, @0x4]);
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    fun test_transfer_admin_wrapper(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let admin_addr = signer::address_of(admin);
+        let new_admin = @0x123;
 
-        // Verify empty list
-        let (res, next_key, has_more) = regulated_token::get_all_frozen_accounts(
-            @0x0, 10
-        );
-        assert!(res.length() == 0);
-        assert!(next_key == @0x0);
-        assert!(!has_more);
+        // Test transfer_admin wrapper function
+        regulated_token::transfer_admin(admin, new_admin);
+
+        // Verify it correctly delegates to access_control
+        let pending = regulated_token::pending_admin();
+        assert!(pending == new_admin);
+
+        // Verify admin unchanged until acceptance
+        let current_admin = regulated_token::admin();
+        assert!(current_admin == admin_addr);
+    }
+
+    #[test(new_admin = @0x123, regulated_token = @regulated_token, admin = @admin)]
+    fun test_accept_admin_wrapper(
+        new_admin: &signer, regulated_token: &signer, admin: &signer
+    ) {
+        setup(admin, regulated_token);
+        let new_admin_addr = signer::address_of(new_admin);
+
+        // First transfer admin
+        regulated_token::transfer_admin(admin, new_admin_addr);
+
+        // Test accept_admin wrapper function
+        regulated_token::accept_admin(new_admin);
+
+        // Verify it correctly delegates to access_control
+        let current_admin = regulated_token::admin();
+        assert!(current_admin == new_admin_addr);
+
+        let pending = regulated_token::pending_admin();
+        assert!(pending == @0x0);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::access_control::E_SAME_ADMIN,
+            location = regulated_token::access_control
+        )
+    ]
+    // E_SAME_ADMIN from access_control
+    fun test_transfer_admin_same_address(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let admin_addr = signer::address_of(admin);
+
+        // Should fail when transferring to same admin
+        regulated_token::transfer_admin(admin, admin_addr);
+    }
+
+    #[test(non_admin = @0x876, regulated_token = @regulated_token, admin = @admin)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::access_control::E_NOT_ADMIN,
+            location = regulated_token::access_control
+        )
+    ]
+    // E_NOT_ADMIN from access_control
+    fun test_transfer_admin_unauthorized(
+        non_admin: &signer, regulated_token: &signer, admin: &signer
+    ) {
+        setup(admin, regulated_token);
+
+        // Should fail when non-admin tries to transfer
+        regulated_token::transfer_admin(non_admin, signer::address_of(non_admin));
+    }
+
+    #[test(wrong_admin = @0x999, regulated_token = @regulated_token, admin = @admin)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::access_control::E_NOT_ADMIN,
+            location = regulated_token::access_control
+        )
+    ]
+    // E_NOT_ADMIN from access_control
+    fun test_accept_admin_unauthorized(
+        wrong_admin: &signer, regulated_token: &signer, admin: &signer
+    ) {
+        setup(admin, regulated_token);
+        regulated_token::transfer_admin(admin, @0xb0b);
+
+        // Should fail when wrong account tries to accept
+        regulated_token::accept_admin(wrong_admin);
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]

@@ -134,7 +134,7 @@ module regulated_token::regulated_token {
 
     #[event]
     struct AccountUnfrozen has drop, store {
-        freezer: address,
+        unfreezer: address,
         account: address
     }
 
@@ -145,18 +145,6 @@ module regulated_token::regulated_token {
         from: address,
         to: address,
         amount: u64
-    }
-
-    #[event]
-    struct TransferAdmin has drop, store {
-        admin: address,
-        pending_admin: address
-    }
-
-    #[event]
-    struct AcceptAdmin has drop, store {
-        old_admin: address,
-        new_admin: address
     }
 
     const E_NOT_PUBLISHER: u64 = 1;
@@ -170,8 +158,7 @@ module regulated_token::regulated_token {
     const E_ACCOUNT_FROZEN: u64 = 9;
     const E_INVALID_ROLE_NUMBER: u64 = 10;
     const E_INVALID_STORE: u64 = 11;
-    const E_TOKEN_ALREADY_INITIALIZED: u64 = 12;
-    const E_TOKEN_STATE_DEPLOYMENT_ALREADY_INITIALIZED: u64 = 13;
+    const E_TOKEN_STATE_DEPLOYMENT_ALREADY_INITIALIZED: u64 = 12;
 
     #[view]
     public fun type_and_version(): String {
@@ -186,6 +173,16 @@ module regulated_token::regulated_token {
     #[view]
     public fun token_state_object(): Object<TokenState> {
         token_state_object_internal()
+    }
+
+    #[view]
+    public fun admin(): address {
+        access_control::admin<TokenState, Role>(token_state_object_internal())
+    }
+
+    #[view]
+    public fun pending_admin(): address {
+        access_control::pending_admin<TokenState, Role>(token_state_object_internal())
     }
 
     inline fun token_state_object_internal(): Object<TokenState> {
@@ -623,12 +620,83 @@ module regulated_token::regulated_token {
         event::emit(BridgeBurn { burner: signer::address_of(caller), from, amount });
     }
 
+    fun freeze_account_internal(
+        caller_addr: address, account: address, transfer_ref: &TransferRef
+    ) acquires TokenState {
+        primary_fungible_store::set_frozen_flag(transfer_ref, account, true);
+        TokenState[token_state_address_internal()].frozen_accounts.upsert(account, true);
+        event::emit(AccountFrozen { freezer: caller_addr, account });
+    }
+
+    fun unfreeze_account_internal(
+        caller_addr: address, account: address, transfer_ref: &TransferRef
+    ) acquires TokenState {
+        primary_fungible_store::set_frozen_flag(transfer_ref, account, false);
+
+        if (TokenState[token_state_address_internal()].frozen_accounts.contains(&account)) {
+            TokenState[token_state_address_internal()].frozen_accounts.remove(&account);
+            event::emit(AccountUnfrozen { unfreezer: caller_addr, account });
+        };
+    }
+
+    fun burn_frozen_funds_internal(
+        burner: address,
+        account: address,
+        burn_ref: &BurnRef,
+        token_metadata: Object<Metadata>,
+        is_bridge_burner: bool
+    ) {
+        if (primary_fungible_store::is_frozen(account, token_metadata)) {
+            let balance = primary_fungible_store::balance(account, token_metadata);
+            if (balance > 0) {
+                primary_fungible_store::burn(burn_ref, account, balance);
+                if (is_bridge_burner) {
+                    event::emit(BridgeBurn { burner, from: account, amount: balance });
+                } else {
+                    event::emit(NativeBurn { burner, from: account, amount: balance });
+                };
+            };
+        };
+    }
+
+    fun recover_frozen_funds_internal(
+        caller: address,
+        from: address,
+        to: address,
+        transfer_ref: &TransferRef,
+        token_metadata: Object<Metadata>
+    ) {
+        if (primary_fungible_store::is_frozen(from, token_metadata)) {
+            let balance = primary_fungible_store::balance(from, token_metadata);
+            if (balance > 0) {
+                primary_fungible_store::transfer_with_ref(transfer_ref, from, to, balance);
+                event::emit(
+                    TokensRecovered { caller, token_metadata, from, to, amount: balance }
+                );
+            };
+        };
+    }
+
     public entry fun batch_burn_frozen_funds(
         caller: &signer, accounts: vector<address>
     ) acquires TokenMetadataRefs, TokenState {
+        assert_not_paused();
+
+        let burner = signer::address_of(caller);
+        let state_obj = token_state_object_internal();
+        let (is_bridge_burner, _) = assert_burner_and_get_type(burner, state_obj);
+        let token_metadata = token_metadata_from_state_obj(state_obj);
+        let burn_ref = &borrow_token_metadata_refs().burn_ref;
+
         for (i in 0..accounts.length()) {
-            burn_frozen_funds(caller, accounts[i]);
-        }
+            burn_frozen_funds_internal(
+                burner,
+                accounts[i],
+                burn_ref,
+                token_metadata,
+                is_bridge_burner
+            );
+        };
     }
 
     public entry fun burn_frozen_funds(
@@ -638,24 +706,17 @@ module regulated_token::regulated_token {
 
         let burner = signer::address_of(caller);
         let state_obj = token_state_object_internal();
-
         let (is_bridge_burner, _) = assert_burner_and_get_type(burner, state_obj);
-
         let token_metadata = token_metadata_from_state_obj(state_obj);
-        if (primary_fungible_store::is_frozen(from, token_metadata)) {
-            let balance = primary_fungible_store::balance(from, token_metadata);
-            if (balance > 0) {
-                primary_fungible_store::burn(
-                    &borrow_token_metadata_refs().burn_ref, from, balance
-                );
+        let burn_ref = &borrow_token_metadata_refs().burn_ref;
 
-                if (is_bridge_burner) {
-                    event::emit(BridgeBurn { burner, from, amount: balance });
-                } else {
-                    event::emit(NativeBurn { burner, from, amount: balance });
-                }
-            }
-        };
+        burn_frozen_funds_internal(
+            burner,
+            from,
+            burn_ref,
+            token_metadata,
+            is_bridge_burner
+        );
     }
 
     /// Periphery function to apply roles to accounts
@@ -698,32 +759,34 @@ module regulated_token::regulated_token {
     public entry fun freeze_accounts(
         caller: &signer, accounts: vector<address>
     ) acquires TokenMetadataRefs, TokenState {
+        assert_freezer(caller, token_state_object_internal());
+
+        let caller_addr = signer::address_of(caller);
+        let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
         for (i in 0..accounts.length()) {
-            freeze_account(caller, accounts[i]);
-        }
+            freeze_account_internal(caller_addr, accounts[i], transfer_ref);
+        };
     }
 
     public entry fun freeze_account(
         caller: &signer, account: address
     ) acquires TokenMetadataRefs, TokenState {
-        let caller_addr = signer::address_of(caller);
         assert_freezer(caller, token_state_object_internal());
 
-        primary_fungible_store::set_frozen_flag(
-            &borrow_token_metadata_refs().transfer_ref, account, true
-        );
-
-        TokenState[token_state_address_internal()].frozen_accounts.upsert(account, true);
-
-        event::emit(AccountFrozen { freezer: caller_addr, account });
+        let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
+        freeze_account_internal(signer::address_of(caller), account, transfer_ref);
     }
 
     public entry fun unfreeze_accounts(
         caller: &signer, accounts: vector<address>
     ) acquires TokenMetadataRefs, TokenState {
+        assert_unfreezer(caller, token_state_object_internal());
+
+        let caller_addr = signer::address_of(caller);
+        let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
         for (i in 0..accounts.length()) {
-            unfreeze_account(caller, accounts[i]);
-        }
+            unfreeze_account_internal(caller_addr, accounts[i], transfer_ref);
+        };
     }
 
     public entry fun unfreeze_account(
@@ -731,13 +794,8 @@ module regulated_token::regulated_token {
     ) acquires TokenMetadataRefs, TokenState {
         assert_unfreezer(caller, token_state_object_internal());
 
-        primary_fungible_store::set_frozen_flag(
-            &borrow_token_metadata_refs().transfer_ref, account, false
-        );
-
-        TokenState[token_state_address_internal()].frozen_accounts.remove(&account);
-
-        event::emit(AccountUnfrozen { freezer: signer::address_of(caller), account });
+        let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
+        unfreeze_account_internal(signer::address_of(caller), account, transfer_ref);
     }
 
     /// Batch revoke and grant pauser roles
@@ -842,7 +900,40 @@ module regulated_token::regulated_token {
     public entry fun recover_frozen_funds(
         caller: &signer, from: address, to: address
     ) acquires TokenMetadataRefs, TokenState {
+        let (transfer_ref, token_metadata) = validate_recovery_procedure(caller, to);
+        recover_frozen_funds_internal(
+            signer::address_of(caller),
+            from,
+            to,
+            transfer_ref,
+            token_metadata
+        );
+    }
+
+    /// Batch version of recover_frozen_funds for processing multiple frozen accounts.
+    /// Only callable by accounts with RECOVERY_ROLE.
+    public entry fun batch_recover_frozen_funds(
+        caller: &signer, accounts: vector<address>, to: address
+    ) acquires TokenMetadataRefs, TokenState {
+        let caller_addr = signer::address_of(caller);
+        let (transfer_ref, token_metadata) = validate_recovery_procedure(caller, to);
+
+        for (i in 0..accounts.length()) {
+            recover_frozen_funds_internal(
+                caller_addr,
+                accounts[i],
+                to,
+                transfer_ref,
+                token_metadata
+            );
+        };
+    }
+
+    inline fun validate_recovery_procedure(
+        caller: &signer, to: address
+    ): (&TransferRef, Object<Metadata>) {
         assert_not_paused();
+
         assert!(to != @0x0, E_ZERO_ADDRESS_NOT_ALLOWED);
         assert!(
             to != @regulated_token && to != token_state_address_internal(),
@@ -853,33 +944,23 @@ module regulated_token::regulated_token {
         assert_recovery_role(caller, state_obj);
 
         let token_metadata = token_metadata_from_state_obj(state_obj);
-        if (primary_fungible_store::is_frozen(from, token_metadata)) {
-            let balance = primary_fungible_store::balance(from, token_metadata);
-            if (balance > 0) {
-                let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
-                primary_fungible_store::transfer_with_ref(transfer_ref, from, to, balance);
+        let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
 
-                event::emit(
-                    TokensRecovered {
-                        caller: signer::address_of(caller),
-                        token_metadata,
-                        from,
-                        to,
-                        amount: balance
-                    }
-                );
-            }
-        };
+        (transfer_ref, token_metadata)
     }
 
-    /// Batch version of recover_frozen_funds for processing multiple frozen accounts.
-    /// Only callable by accounts with RECOVERY_ROLE.
-    public entry fun batch_recover_frozen_funds(
-        caller: &signer, accounts: vector<address>, to: address
-    ) acquires TokenMetadataRefs, TokenState {
-        for (i in 0..accounts.length()) {
-            recover_frozen_funds(caller, accounts[i], to);
-        }
+    public entry fun transfer_admin(caller: &signer, new_admin: address) {
+        access_control::transfer_admin<TokenState, Role>(
+            caller,
+            token_state_object_internal(),
+            new_admin
+        );
+    }
+
+    public entry fun accept_admin(caller: &signer) {
+        access_control::accept_admin<TokenState, Role>(
+            caller, token_state_object_internal()
+        );
     }
 
     /// In case regulated tokens get stuck in the contract or token state, this function can be used to recover them
@@ -887,26 +968,14 @@ module regulated_token::regulated_token {
     public entry fun recover_tokens(
         caller: &signer, to: address
     ) acquires TokenMetadataRefs, TokenState {
-        let token_state_address = token_state_address_internal();
-        assert!(to != @0x0, E_ZERO_ADDRESS_NOT_ALLOWED);
-        assert!(
-            to != @regulated_token && to != token_state_address,
-            E_CANNOT_TRANSFER_TO_REGULATED_TOKEN
-        );
-
-        let state_obj = token_state_object_internal();
-        assert_recovery_role(caller, state_obj);
-
-        let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
-        let token_metadata = token_metadata_from_state_obj(state_obj);
+        let (transfer_ref, token_metadata) = validate_recovery_procedure(caller, to);
 
         // Recover regulated tokens sent to contract
         let balance = primary_fungible_store::balance(@regulated_token, token_metadata);
-        primary_fungible_store::transfer_with_ref(
-            transfer_ref, @regulated_token, to, balance
-        );
-
         if (balance > 0) {
+            primary_fungible_store::transfer_with_ref(
+                transfer_ref, @regulated_token, to, balance
+            );
             event::emit(
                 TokensRecovered {
                     caller: signer::address_of(caller),
@@ -918,15 +987,16 @@ module regulated_token::regulated_token {
             );
         };
 
+        let token_state_address = token_state_address_internal();
         // Recover regulated tokens sent to token state address
         let balance = primary_fungible_store::balance(
             token_state_address, token_metadata
         );
-
         if (balance > 0) {
             primary_fungible_store::transfer_with_ref(
                 transfer_ref, token_state_address, to, balance
             );
+
             event::emit(
                 TokensRecovered {
                     caller: signer::address_of(caller),
@@ -1056,10 +1126,6 @@ module regulated_token::regulated_token {
         } else {
             abort E_INVALID_ROLE_NUMBER
         }
-    }
-
-    inline fun borrow_state_from_object(state_obj: Object<TokenState>): &TokenState {
-        &TokenState[object::object_address(&state_obj)]
     }
 
     inline fun borrow_token_metadata_refs(): &TokenMetadataRefs {
