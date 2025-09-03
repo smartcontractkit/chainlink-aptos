@@ -6,7 +6,8 @@ module regulated_token::regulated_token {
         FungibleAsset,
         Metadata,
         MintRef,
-        TransferRef
+        TransferRef,
+        FungibleStore
     };
     use std::object::{Self, ExtendRef, Object, TransferRef as ObjectTransferRef};
     use std::option::{Self, Option};
@@ -158,7 +159,8 @@ module regulated_token::regulated_token {
     const E_ACCOUNT_FROZEN: u64 = 9;
     const E_INVALID_ROLE_NUMBER: u64 = 10;
     const E_INVALID_STORE: u64 = 11;
-    const E_TOKEN_STATE_DEPLOYMENT_ALREADY_INITIALIZED: u64 = 12;
+    const E_STORE_DOES_NOT_EXIST: u64 = 12;
+    const E_TOKEN_STATE_DEPLOYMENT_ALREADY_INITIALIZED: u64 = 13;
 
     #[view]
     public fun type_and_version(): String {
@@ -557,7 +559,7 @@ module regulated_token::regulated_token {
 
         let state_obj = token_state_object_internal();
         let token_metadata = token_metadata_from_state_obj(state_obj);
-        let from_store = primary_fungible_store::primary_store(from, token_metadata);
+        let from_store = get_from_store(from, token_metadata);
         assert_not_frozen(from_store, state_obj);
 
         let burner = signer::address_of(caller);
@@ -611,7 +613,7 @@ module regulated_token::regulated_token {
         assert_bridge_minter_or_burner(caller, state_obj);
 
         let token_metadata = token_metadata_from_state_obj(state_obj);
-        let from_store = primary_fungible_store::primary_store(from, token_metadata);
+        let from_store = get_from_store(from, token_metadata);
         assert_not_frozen(from_store, state_obj);
 
         let amount = fungible_asset::amount(&fa);
@@ -1007,6 +1009,15 @@ module regulated_token::regulated_token {
                 }
             );
         }
+    }
+
+    fun get_from_store(from: address, token_metadata: Object<Metadata>): Object<FungibleStore> {
+        let from_store = primary_fungible_store::primary_store(from, token_metadata);
+        assert!(
+            fungible_asset::store_exists(object::object_address(&from_store)),
+            E_STORE_DOES_NOT_EXIST
+        );
+        from_store
     }
 
     fun assert_not_paused() acquires TokenState {
