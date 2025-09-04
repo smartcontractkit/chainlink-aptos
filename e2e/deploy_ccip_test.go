@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
+	"github.com/aptos-labs/aptos-go-sdk/bcs"
 	"github.com/aptos-labs/aptos-go-sdk/crypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	chain_selectors "github.com/smartcontractkit/chain-selectors"
-	"github.com/smartcontractkit/chainlink-evm/pkg/utils"
 	mcmslib "github.com/smartcontractkit/mcms"
 	mcmssdk "github.com/smartcontractkit/mcms/sdk"
 	aptossdk "github.com/smartcontractkit/mcms/sdk/aptos"
@@ -38,7 +38,7 @@ import (
 var DestChainSelector = chain_selectors.ETHEREUM_TESTNET_SEPOLIA.Selector
 
 func Test_DeployCCIP(t *testing.T) {
-	localnet := false
+	localnet := true
 
 	deployerKey := &crypto.Ed25519PrivateKey{}
 	require.NoError(t, deployerKey.FromHex(os.Getenv("DEPLOYER_KEY")))
@@ -264,9 +264,6 @@ func Test_DeployCCIP(t *testing.T) {
 	require.NoError(t, err)
 	fmt.Printf("Token Pool owner address: %v\n", tokenPoolOwnerAddress.StringLong())
 
-	// Register the token pool owner as a custom token registrar
-	addToProposal(ccipContract.TokenAdminRegistry().Encoder().SetTokenRegistrar(linkTokenMetadataAddress, tokenPoolOwnerAddress))
-
 	// Deploy token pool to a new object
 	tokenPoolPayload, err := token_pool.Compile(tokenPoolObjectAddress, ccipObjectAddress, mcmsAddress)
 	require.NoError(t, err)
@@ -281,7 +278,7 @@ func Test_DeployCCIP(t *testing.T) {
 	}
 
 	// Deploy ManagedTokenPool on top of link token
-	managedTokenPoolPayload, err := managed_token_pool.Compile(tokenPoolObjectAddress, ccipObjectAddress, mcmsAddress, tokenPoolObjectAddress, linkTokenObjectAddress, linkTokenOwnerAddress, true)
+	managedTokenPoolPayload, err := managed_token_pool.Compile(tokenPoolObjectAddress, ccipObjectAddress, mcmsAddress, tokenPoolObjectAddress, linkTokenObjectAddress, true)
 	require.NoError(t, err)
 	chunks, err = bind.CreateChunks(managedTokenPoolPayload, bind.ChunkSizeInBytes)
 	require.NoError(t, err)
@@ -322,8 +319,12 @@ func Test_DeployCCIP(t *testing.T) {
 		0,
 		10,
 	))
-	addToProposal(managedTokenPoolContract.ManagedTokenPool().Encoder().ApplyChainUpdates(nil, []uint64{DestChainSelector}, [][][]byte{{common.LeftPadBytes(common.HexToAddress("0x1111111B536498Bcd6326722E5Fd22D8234F1c7C").Bytes(), 32)}}, [][]byte{common.LeftPadBytes(common.HexToAddress("0x222222aF075ef84856A4DF03555E9777b2d227f6").Bytes(), 32)}))
+	addToProposal(managedTokenPoolContract.ManagedTokenPool().Encoder().ApplyChainUpdates(nil, []uint64{DestChainSelector}, [][][]byte{{common.HexToAddress("0x1111111B536498Bcd6326722E5Fd22D8234F1c7C").Bytes()}}, [][]byte{common.LeftPadBytes(common.HexToAddress("0x222222aF075ef84856A4DF03555E9777b2d227f6").Bytes(), 32)}))
 	addToProposal(managedTokenPoolContract.ManagedTokenPool().Encoder().SetChainRateLimiterConfig(DestChainSelector, false, 0, 0, false, 0, 0))
+	// Set Administrator and call set_pool
+	addToProposal(ccipContract.TokenAdminRegistry().Encoder().ProposeAdministrator(linkTokenMetadataAddress, ccipOwnerAddress))
+	addToProposal(ccipContract.TokenAdminRegistry().Encoder().AcceptAdminRole(linkTokenMetadataAddress))
+	addToProposal(ccipContract.TokenAdminRegistry().Encoder().SetPool(linkTokenMetadataAddress, tokenPoolObjectAddress))
 
 	// Build, setRoot and execute proposal
 	timelockProposal, err := proposalBuilder.Build()
@@ -380,7 +381,7 @@ func Test_DeployCCIP(t *testing.T) {
 }
 
 func Test_CCIPSend(t *testing.T) {
-	localnet := false
+	localnet := true
 
 	deployerKey := &crypto.Ed25519PrivateKey{}
 	require.NoError(t, deployerKey.FromHex(os.Getenv("DEPLOYER_KEY")))
@@ -401,19 +402,19 @@ func Test_CCIPSend(t *testing.T) {
 	}
 
 	ccipAddress := aptos.AccountAddress{}
-	_ = ccipAddress.ParseStringRelaxed("0x9b4d2a493e72ef2c2fa877220c405a0980fc7eb353cbd3a9546ad02721a09805")
+	_ = ccipAddress.ParseStringRelaxed("0xcac225f8bca207cccefb15ad1f3bbdfa475c17e53905800dcf3e88d2c6578f31")
 
 	feeTokenAddress := aptos.AccountAddress{}
 	_ = feeTokenAddress.ParseStringRelaxed("0xa")
 
 	linkTokenAddress := aptos.AccountAddress{}
-	_ = linkTokenAddress.ParseStringRelaxed("0x595ed92387173759ec1fa29ee9ebf4599775138f229662f7f8ec946d67dca3a0")
+	_ = linkTokenAddress.ParseStringRelaxed("0x74050880bfa2c086f5765f1ee49dfd948053a4e7696582e8d9ad2504ece194a9")
 
 	tokenStoreAddress := aptos.AccountAddress{}
 
 	toAddress := common.LeftPadBytes(common.HexToAddress("0x90392A1E8A941098a3C75E0BDB172cFdE7E4f1f4").Bytes(), 32)
 
-	extraArgs, _ := GetEVMExtraArgsV2(big.NewInt(100), false)
+	extraArgs := MakeBCSEVMExtraArgsV2(big.NewInt(100), false)
 
 	ccipRouterContract := ccip_router.Bind(ccipAddress, client)
 	fee, err := ccipRouterContract.Router().GetFee(nil, DestChainSelector, toAddress, []byte("Hello, world!"), []aptos.AccountAddress{linkTokenAddress}, []uint64{1e8}, []aptos.AccountAddress{tokenStoreAddress}, feeTokenAddress, aptos.AccountZero, extraArgs)
@@ -442,14 +443,13 @@ func Must[T any](t T, err error) T {
 	return t
 }
 
-func GetEVMExtraArgsV2(gasLimit *big.Int, allowOutOfOrder bool) ([]byte, error) {
-	// see Client.sol.
-	EVMV2Tag := hexutil.MustDecode("0x181dcf10")
+const GenericExtraArgsV2Tag = "0x181dcf10"
 
-	encodedArgs, err := utils.ABIEncode(`[{"type":"uint256"},{"type":"bool"}]`, gasLimit, allowOutOfOrder)
-	if err != nil {
-		return nil, err
-	}
-
-	return append(EVMV2Tag, encodedArgs...), nil
+// MakeBCSEVMExtraArgsV2 makes the BCS encoded extra args for a message sent from an Move based chain that is destined for an EVM chain.
+// The extra args are used to specify the gas limit and allow out of order flag for the message.
+func MakeBCSEVMExtraArgsV2(gasLimit *big.Int, allowOOO bool) []byte {
+	s := &bcs.Serializer{}
+	s.U256(*gasLimit)
+	s.Bool(allowOOO)
+	return append(hexutil.MustDecode(GenericExtraArgsV2Tag), s.ToBytes()...)
 }
