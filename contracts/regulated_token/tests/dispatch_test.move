@@ -431,7 +431,7 @@ module regulated_token::dispatch_test {
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
-    #[expected_failure(abort_code = regulated_token::regulated_token::E_INVALID_STORE)]
+    #[expected_failure(abort_code = regulated_token::regulated_token::E_INVALID_ASSET)]
     fun test_dispatch_with_invalid_store(
         admin: &signer, regulated_token: &signer
     ) {
@@ -457,7 +457,7 @@ module regulated_token::dispatch_test {
         let transfer_ref = fungible_asset::generate_transfer_ref(constructor_ref_2);
 
         // Try to use our regulated token metadata with other token's store
-        // This should fail in assert_not_frozen() -> assert_correct_store() check
+        // This should fail in assert_correct_asset() check with E_INVALID_ASSET
         let fa = regulated_token::withdraw(other_store, 100, &transfer_ref);
         primary_fungible_store::deposit(USER1, fa);
     }

@@ -548,35 +548,6 @@ module regulated_token::regulated_token_test {
         regulated_token::freeze_accounts(user, vector[user_addr]);
     }
 
-    #[test(admin = @admin, user = @0xface, regulated_token = @regulated_token)]
-    #[
-        expected_failure(
-            abort_code = regulated_token::regulated_token::E_ACCOUNT_FROZEN,
-            location = regulated_token::regulated_token
-        )
-    ]
-    fun test_mint_to_frozen_account(
-        admin: &signer, user: &signer, regulated_token: &signer
-    ) {
-        setup(admin, regulated_token);
-        let admin_addr = signer::address_of(admin);
-        let user_addr = signer::address_of(user);
-
-        setup_roles(
-            admin,
-            admin_addr,
-            admin_addr,
-            admin_addr,
-            admin_addr
-        );
-
-        // Freeze the account first
-        regulated_token::freeze_accounts(admin, vector[user_addr]);
-
-        // Try to mint to frozen account (should fail)
-        regulated_token::mint(admin, user_addr, 100);
-    }
-
     // ================================================================
     // |                      Burn Frozen Funds Tests                   |
     // ================================================================

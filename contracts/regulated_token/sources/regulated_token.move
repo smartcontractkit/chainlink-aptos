@@ -244,10 +244,6 @@ module regulated_token::regulated_token {
 
     #[view]
     public fun is_paused(): bool acquires TokenState {
-        is_paused_internal()
-    }
-
-    inline fun is_paused_internal(): bool {
         TokenState[token_state_address_internal()].paused
     }
 
@@ -386,9 +382,11 @@ module regulated_token::regulated_token {
     ) acquires TokenState {
         let state_obj = token_state_object_internal();
         let token_metadata = token_metadata_from_state_obj(state_obj);
-        assert_not_paused();
-        assert_not_frozen(store, token_metadata);
-        assert_correct_asset(transfer_ref, token_metadata);
+        let token_state = &TokenState[object::object_address(&state_obj)];
+
+        assert_not_paused(token_state);
+        assert_not_frozen(object::owner(store), token_state);
+        assert_correct_asset(transfer_ref, token_metadata, store);
 
         fungible_asset::deposit_with_ref(transfer_ref, store, fa);
     }
@@ -398,9 +396,11 @@ module regulated_token::regulated_token {
     ): FungibleAsset acquires TokenState {
         let state_obj = token_state_object_internal();
         let token_metadata = token_metadata_from_state_obj(state_obj);
-        assert_not_paused();
-        assert_not_frozen(store, token_metadata);
-        assert_correct_asset(transfer_ref, token_metadata);
+        let token_state = &TokenState[object::object_address(&state_obj)];
+
+        assert_not_paused(token_state);
+        assert_not_frozen(object::owner(store), token_state);
+        assert_correct_asset(transfer_ref, token_metadata, store);
 
         fungible_asset::withdraw_with_ref(transfer_ref, store, amount)
     }
@@ -535,14 +535,11 @@ module regulated_token::regulated_token {
     public entry fun mint(
         caller: &signer, to: address, amount: u64
     ) acquires TokenMetadataRefs, TokenState {
-        assert_not_paused();
-
         let state_obj = token_state_object_internal();
-        let token_metadata = token_metadata_from_state_obj(state_obj);
-        let to_store =
-            primary_fungible_store::ensure_primary_store_exists(to, token_metadata);
+        let token_state = &TokenState[object::object_address(&state_obj)];
 
-        assert_not_frozen(to_store, token_metadata);
+        assert_not_paused(token_state);
+        assert_not_frozen(to, token_state);
 
         let minter = signer::address_of(caller);
         let is_bridge_minter =
@@ -563,12 +560,11 @@ module regulated_token::regulated_token {
     public entry fun burn(
         caller: &signer, from: address, amount: u64
     ) acquires TokenMetadataRefs, TokenState {
-        assert_not_paused();
-
         let state_obj = token_state_object_internal();
-        let token_metadata = token_metadata_from_state_obj(state_obj);
-        let from_store = get_from_store(from, token_metadata);
-        assert_not_frozen(from_store, token_metadata);
+        let token_state = &TokenState[object::object_address(&state_obj)];
+
+        assert_not_paused(token_state);
+        assert_not_frozen(from, token_state);
 
         let burner = signer::address_of(caller);
         let (is_bridge_burner, _) = assert_burner_and_get_type(burner, state_obj);
@@ -591,15 +587,12 @@ module regulated_token::regulated_token {
     public fun bridge_mint(
         caller: &signer, to: address, amount: u64
     ): FungibleAsset acquires TokenMetadataRefs, TokenState {
-        assert_not_paused();
-
         let state_obj = token_state_object_internal();
-        assert_bridge_minter_or_burner(caller, state_obj);
+        let token_state = &TokenState[object::object_address(&state_obj)];
 
-        let token_metadata = token_metadata_from_state_obj(state_obj);
-        let to_store =
-            primary_fungible_store::ensure_primary_store_exists(to, token_metadata);
-        assert_not_frozen(to_store, token_metadata);
+        assert_not_paused(token_state);
+        assert_bridge_minter_or_burner(caller, state_obj);
+        assert_not_frozen(to, token_state);
 
         let fa = fungible_asset::mint(&borrow_token_metadata_refs().mint_ref, amount);
 
@@ -615,14 +608,12 @@ module regulated_token::regulated_token {
     public fun bridge_burn(
         caller: &signer, from: address, fa: FungibleAsset
     ) acquires TokenMetadataRefs, TokenState {
-        assert_not_paused();
-
         let state_obj = token_state_object_internal();
-        assert_bridge_minter_or_burner(caller, state_obj);
+        let token_state = &TokenState[object::object_address(&state_obj)];
 
-        let token_metadata = token_metadata_from_state_obj(state_obj);
-        let from_store = get_from_store(from, token_metadata);
-        assert_not_frozen(from_store, token_metadata);
+        assert_not_paused(token_state);
+        assert_bridge_minter_or_burner(caller, state_obj);
+        assert_not_frozen(from, token_state);
 
         let amount = fungible_asset::amount(&fa);
         fungible_asset::burn(&borrow_token_metadata_refs().burn_ref, fa);
@@ -852,11 +843,11 @@ module regulated_token::regulated_token {
     inline fun validate_burn_frozen_funds(
         caller: &signer
     ): (address, &BurnRef, Object<Metadata>, &TokenState, bool) {
-        assert_not_paused();
-
-        let burner = signer::address_of(caller);
         let state_obj = token_state_object_internal();
         let token_state = &TokenState[object::object_address(&state_obj)];
+        assert_not_paused(token_state);
+
+        let burner = signer::address_of(caller);
         let (is_bridge_burner, _) = assert_burner_and_get_type(burner, state_obj);
         let token_metadata = token_metadata_from_state_obj(state_obj);
         let burn_ref = &borrow_token_metadata_refs().burn_ref;
@@ -903,13 +894,13 @@ module regulated_token::regulated_token {
     public entry fun recover_frozen_funds(
         caller: &signer, from: address, to: address
     ) acquires TokenMetadataRefs, TokenState {
-        let (transfer_ref, token_metadata) = validate_recovery_procedure(caller, to);
+        let transfer_ref = validate_recovery_procedure(caller, to);
         recover_frozen_funds_internal(
             signer::address_of(caller),
             from,
             to,
             transfer_ref,
-            token_metadata
+            fungible_asset::transfer_ref_metadata(transfer_ref)
         );
     }
 
@@ -919,7 +910,7 @@ module regulated_token::regulated_token {
         caller: &signer, accounts: vector<address>, to: address
     ) acquires TokenMetadataRefs, TokenState {
         let caller_addr = signer::address_of(caller);
-        let (transfer_ref, token_metadata) = validate_recovery_procedure(caller, to);
+        let transfer_ref = validate_recovery_procedure(caller, to);
 
         for (i in 0..accounts.length()) {
             recover_frozen_funds_internal(
@@ -927,32 +918,31 @@ module regulated_token::regulated_token {
                 accounts[i],
                 to,
                 transfer_ref,
-                token_metadata
+                fungible_asset::transfer_ref_metadata(transfer_ref)
             );
         };
     }
 
-    inline fun assert_valid_recovery_recipient(to: address) {
+    inline fun assert_valid_recovery_recipient(
+        to: address, token_state: &TokenState
+    ) {
         assert!(to != @0x0, E_ZERO_ADDRESS_NOT_ALLOWED);
         assert!(
             to != @regulated_token && to != token_state_address_internal(),
             E_CANNOT_TRANSFER_TO_REGULATED_TOKEN
         );
+        assert_not_frozen(to, token_state);
     }
 
-    inline fun validate_recovery_procedure(
-        caller: &signer, to: address
-    ): (&TransferRef, Object<Metadata>) {
-        assert_not_paused();
-        assert_valid_recovery_recipient(to);
-
+    inline fun validate_recovery_procedure(caller: &signer, to: address): &TransferRef {
         let state_obj = token_state_object_internal();
+        let token_state = &TokenState[object::object_address(&state_obj)];
+
+        assert_not_paused(token_state);
         assert_recovery_role(caller, state_obj);
+        assert_valid_recovery_recipient(to, token_state);
 
-        let token_metadata = token_metadata_from_state_obj(state_obj);
-        let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
-
-        (transfer_ref, token_metadata)
+        &borrow_token_metadata_refs().transfer_ref
     }
 
     public entry fun transfer_admin(caller: &signer, new_admin: address) {
@@ -997,7 +987,8 @@ module regulated_token::regulated_token {
     public entry fun recover_tokens(
         caller: &signer, to: address
     ) acquires TokenMetadataRefs, TokenState {
-        let (transfer_ref, token_metadata) = validate_recovery_procedure(caller, to);
+        let transfer_ref = validate_recovery_procedure(caller, to);
+        let token_metadata = fungible_asset::transfer_ref_metadata(transfer_ref);
         let caller_addr = signer::address_of(caller);
 
         // Recover regulated tokens sent to contract
@@ -1020,17 +1011,17 @@ module regulated_token::regulated_token {
         );
     }
 
-    fun get_from_store(from: address, token_metadata: Object<Metadata>): Object<FungibleStore> {
-        let from_store = primary_fungible_store::primary_store(from, token_metadata);
+    fun get_store(account: address, token_metadata: Object<Metadata>): Object<FungibleStore> {
+        let store = primary_fungible_store::primary_store(account, token_metadata);
         assert!(
-            fungible_asset::store_exists(object::object_address(&from_store)),
+            fungible_asset::store_exists(object::object_address(&store)),
             E_STORE_DOES_NOT_EXIST
         );
-        from_store
+        store
     }
 
-    fun assert_not_paused() acquires TokenState {
-        assert!(!is_paused_internal(), E_PAUSED);
+    fun assert_not_paused(token_state: &TokenState) {
+        assert!(!token_state.paused, E_PAUSED);
     }
 
     inline fun assert_pauser(
@@ -1101,27 +1092,23 @@ module regulated_token::regulated_token {
         (is_bridge_burner, is_native_burner)
     }
 
-    fun assert_not_frozen<T: key>(
-        store: Object<T>, token_metadata: Object<Metadata>
-    ) {
-        if (fungible_asset::store_exists(object::object_address(&store))) {
-            assert!(
-                !fungible_asset::is_frozen(store),
-                E_ACCOUNT_FROZEN
-            );
-            assert!(
-                fungible_asset::store_metadata(store) == token_metadata,
-                E_INVALID_STORE
-            );
-        }
+    fun assert_not_frozen(account: address, token_state: &TokenState) {
+        assert!(
+            !token_state.frozen_accounts.contains(&account),
+            E_ACCOUNT_FROZEN
+        );
     }
 
-    fun assert_correct_asset(
-        transfer_ref: &TransferRef, token_metadata: Object<Metadata>
+    fun assert_correct_asset<T: key>(
+        transfer_ref: &TransferRef, token_metadata: Object<Metadata>, store: Object<T>
     ) {
         assert!(
             fungible_asset::transfer_ref_metadata(transfer_ref) == token_metadata,
             E_INVALID_ASSET
+        );
+        assert!(
+            fungible_asset::store_metadata(store) == token_metadata,
+            E_INVALID_STORE
         );
     }
 

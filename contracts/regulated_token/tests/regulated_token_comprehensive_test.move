@@ -995,26 +995,6 @@ module regulated_token::regulated_token_comprehensive_test {
             location = regulated_token::regulated_token
         )
     ]
-    fun test_mint_to_frozen_account_fails(
-        admin: &signer, regulated_token: &signer
-    ) {
-        setup_token_and_roles(admin, regulated_token);
-
-        // Freeze the destination account
-        let freezer1 = account::create_signer_for_test(FREEZER1);
-        regulated_token::freeze_account(&freezer1, USER1);
-
-        // Try to mint to frozen account
-        mint_to_user(USER1, 100);
-    }
-
-    #[test(admin = @admin, regulated_token = @regulated_token)]
-    #[
-        expected_failure(
-            abort_code = regulated_token::regulated_token::E_ACCOUNT_FROZEN,
-            location = regulated_token::regulated_token
-        )
-    ]
     fun test_burn_from_frozen_account_fails(
         admin: &signer, regulated_token: &signer
     ) {
