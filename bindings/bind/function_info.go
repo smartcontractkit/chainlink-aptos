@@ -4,6 +4,11 @@ import (
 	"encoding/json"
 )
 
+type FunctionParameter struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
 type FunctionInfo struct {
 	Package    string              `json:"package"`
 	Module     string              `json:"module"`
@@ -11,12 +16,25 @@ type FunctionInfo struct {
 	Parameters []FunctionParameter `json:"parameters"`
 }
 
-type FunctionParameter struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
+func (f FunctionInfo) String() string {
+	out, err := json.Marshal(f)
+	if err != nil {
+		panic(err)
+	}
+	return string(out)
 }
 
-func ParseFunctionInfo(info ...string) ([]FunctionInfo, error) {
+type FunctionInfos []FunctionInfo
+
+func (f FunctionInfos) String() string {
+	out, err := json.Marshal(f)
+	if err != nil {
+		panic(err)
+	}
+	return string(out)
+}
+
+func ParseFunctionInfo(info ...string) (FunctionInfos, error) {
 	var result []FunctionInfo
 	for _, s := range info {
 		var temp []FunctionInfo
@@ -28,10 +46,18 @@ func ParseFunctionInfo(info ...string) ([]FunctionInfo, error) {
 	return result, nil
 }
 
-func MustParseFunctionInfo(info ...string) []FunctionInfo {
-	result, err := ParseFunctionInfo(info...)
+func MustParseFunctionInfo(info ...string) FunctionInfos {
+	infos, err := ParseFunctionInfo(info...)
 	if err != nil {
 		panic(err)
+	}
+	return infos
+}
+
+func CombineFunctionInfos(infos ...FunctionInfos) FunctionInfos {
+	var result []FunctionInfo
+	for _, info := range infos {
+		result = append(result, info...)
 	}
 	return result
 }

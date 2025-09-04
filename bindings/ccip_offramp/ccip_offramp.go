@@ -5,6 +5,7 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk/api"
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
+	module_ocr3_base "github.com/smartcontractkit/chainlink-aptos/bindings/ccip_offramp/ocr3_base"
 	module_offramp "github.com/smartcontractkit/chainlink-aptos/bindings/ccip_offramp/offramp"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/compile"
 	"github.com/smartcontractkit/chainlink-aptos/contracts"
@@ -34,6 +35,7 @@ func (c CCIPOfframpContract) Offramp() module_offramp.OfframpInterface {
 
 var FunctionInfo = bind.MustParseFunctionInfo(
 	module_offramp.FunctionInfo,
+	module_ocr3_base.FunctionInfo,
 )
 
 func Compile(ccipAddress, mcmsAddress aptos.AccountAddress, registerMCMSEntrypoints bool) (compile.CompiledPackage, error) {

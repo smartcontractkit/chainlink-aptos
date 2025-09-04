@@ -107,9 +107,7 @@ func TestDeployMCMSAndCCIPInChunks(t *testing.T) {
 }
 
 func chunkMetadata(metadata []byte, chunkSize int) []TimelockOperation {
-	var metadataOps []TimelockOperation
-
-	// Split the metadata into chunks
+	var ops []TimelockOperation
 	for i := 0; i < len(metadata); i += chunkSize {
 		end := i + chunkSize
 		if end > len(metadata) {
@@ -117,45 +115,49 @@ func chunkMetadata(metadata []byte, chunkSize int) []TimelockOperation {
 		}
 		chunk := metadata[i:end]
 
-		// Create operation for this chunk
-		metadataData, _ := SerializeStageCodeChunkParams(chunk, []uint16{}, [][]byte{}, []byte{})
-		metadataOp := TimelockOperation{
+		// Use the 3-parameter version for stage_code_chunk
+		data, err := SerializeStageCodeChunkParams(chunk, []uint16{}, [][]byte{})
+		if err != nil {
+			panic(err)
+		}
+		ops = append(ops, TimelockOperation{
 			Target:       deployMcmsAccount,
 			ModuleName:   "mcms_deployer",
 			FunctionName: "stage_code_chunk",
-			Data:         metadataData,
-		}
-		metadataOps = append(metadataOps, metadataOp)
+			Data:         data,
+		})
 	}
-
-	return metadataOps
+	return ops
 }
 
-func chunkBytecode(bytecodeModules [][]byte, chunkSize int) []TimelockOperation {
-	var moduleOps []TimelockOperation
-
-	for moduleIdx, moduleBytes := range bytecodeModules {
-		// Split each module bytecode into chunks
-		for i := 0; i < len(moduleBytes); i += chunkSize {
-			end := i + chunkSize
-			if end > len(moduleBytes) {
-				end = len(moduleBytes)
-			}
-			chunk := moduleBytes[i:end]
-
-			// Create operation for this chunk
-			moduleData, _ := SerializeStageCodeChunkParams([]byte{}, []uint16{uint16(moduleIdx)}, [][]byte{chunk}, []byte{})
-			moduleOp := TimelockOperation{
-				Target:       deployMcmsAccount,
-				ModuleName:   "mcms_deployer",
-				FunctionName: "stage_code_chunk",
-				Data:         moduleData,
-			}
-			moduleOps = append(moduleOps, moduleOp)
+func chunkBytecode(modules [][]byte, chunkSize int) []TimelockOperation {
+	var ops []TimelockOperation
+	for i := 0; i < len(modules); i += chunkSize {
+		end := i + chunkSize
+		if end > len(modules) {
+			end = len(modules)
 		}
-	}
+		chunks := modules[i:end]
 
-	return moduleOps
+		// Create code indices for this chunk
+		var indices []uint16
+		for j := 0; j < len(chunks); j++ {
+			indices = append(indices, uint16(i+j))
+		}
+
+		// Use the 3-parameter version for stage_code_chunk
+		data, err := SerializeStageCodeChunkParams([]byte{}, indices, chunks)
+		if err != nil {
+			panic(err)
+		}
+		ops = append(ops, TimelockOperation{
+			Target:       deployMcmsAccount,
+			ModuleName:   "mcms_deployer",
+			FunctionName: "stage_code_chunk",
+			Data:         data,
+		})
+	}
+	return ops
 }
 
 func scheduleAndExecuteOperations(
@@ -200,7 +202,9 @@ func scheduleAndExecuteOperations(
 	// Schedule each operation through MCMS
 	for i, op := range operations {
 		proof := merkleTree.GetProof(i + 1)
-		require.True(t, merkleTree.VerifyProof(proof, HashOp(&ops[i])))
+		hashOp, err := HashOp(&ops[i])
+		require.NoError(t, err)
+		require.True(t, merkleTree.VerifyProof(proof, hashOp))
 		txId := ScheduleSingleOperationAsDeployer(t, logger, txm, deployMcmsAccount,
 			deployerAddress, deployerPublicKeyHex, []TimelockOperation{op},
 			predecessor, salt, delay, role, chainID, ops[i].Nonce, proof, simulateTx)
@@ -322,9 +326,15 @@ func runDeployMCMSAndCCIPInChunks(t *testing.T, logger logger.Logger, rpcURL str
 	// 3. Create bytecode module chunk operations
 	moduleOps := chunkBytecode(compileResult.BytecodeModules, CHUNK_SIZE)
 
-	// 4. Create final publish operation
-	publishData, err := SerializeStageCodeChunkParams([]byte{}, []uint16{}, [][]byte{}, newOwnerSeed)
-	require.NoError(t, err)
+	// 4. Create final publish operation with remaining data (if any)
+	// The approach: use stage_code_chunk_and_publish_to_object to publish all staged chunks
+	// For a complete chunked approach, we end with empty final data since all chunks are already staged
+	// Move contract function expects to stage final chunks AND publish
+	// So we pass empty parameters to trigger publish of already-staged chunks
+	publishData, err := SerializeStageCodeChunkAndPublishParams([]byte{}, []uint16{}, [][]byte{}, newOwnerSeed)
+	if err != nil {
+		t.Fatalf("Failed to serialize stage_code_chunk_and_publish_to_object params: %v", err)
+	}
 	publishOp := TimelockOperation{
 		Target:       deployMcmsAccount,
 		ModuleName:   "mcms_deployer",

@@ -77,23 +77,24 @@ module ccip::rmn_remote {
         subjects: vector<vector<u8>>
     }
 
-    const E_ALREADY_CURSED: u64 = 1;
-    const E_CONFIG_NOT_SET: u64 = 2;
-    const E_DUPLICATE_SIGNER: u64 = 3;
-    const E_INVALID_SIGNATURE: u64 = 4;
-    const E_INVALID_SIGNER_ORDER: u64 = 5;
-    const E_NOT_ENOUGH_SIGNERS: u64 = 6;
-    const E_NOT_CURSED: u64 = 7;
-    const E_OUT_OF_ORDER_SIGNATURES: u64 = 8;
-    const E_THRESHOLD_NOT_MET: u64 = 9;
-    const E_UNEXPECTED_SIGNER: u64 = 10;
-    const E_ZERO_VALUE_NOT_ALLOWED: u64 = 11;
-    const E_MERKLE_ROOT_LENGTH_MISMATCH: u64 = 12;
-    const E_INVALID_DIGEST_LENGTH: u64 = 13;
-    const E_SIGNERS_MISMATCH: u64 = 14;
-    const E_INVALID_SUBJECT_LENGTH: u64 = 15;
-    const E_INVALID_PUBLIC_KEY_LENGTH: u64 = 16;
-    const E_UNKNOWN_FUNCTION: u64 = 17;
+    const E_ALREADY_INITIALIZED: u64 = 1;
+    const E_ALREADY_CURSED: u64 = 2;
+    const E_CONFIG_NOT_SET: u64 = 3;
+    const E_DUPLICATE_SIGNER: u64 = 4;
+    const E_INVALID_SIGNATURE: u64 = 5;
+    const E_INVALID_SIGNER_ORDER: u64 = 6;
+    const E_NOT_ENOUGH_SIGNERS: u64 = 7;
+    const E_NOT_CURSED: u64 = 8;
+    const E_OUT_OF_ORDER_SIGNATURES: u64 = 9;
+    const E_THRESHOLD_NOT_MET: u64 = 10;
+    const E_UNEXPECTED_SIGNER: u64 = 11;
+    const E_ZERO_VALUE_NOT_ALLOWED: u64 = 12;
+    const E_MERKLE_ROOT_LENGTH_MISMATCH: u64 = 13;
+    const E_INVALID_DIGEST_LENGTH: u64 = 14;
+    const E_SIGNERS_MISMATCH: u64 = 15;
+    const E_INVALID_SUBJECT_LENGTH: u64 = 16;
+    const E_INVALID_PUBLIC_KEY_LENGTH: u64 = 17;
+    const E_UNKNOWN_FUNCTION: u64 = 18;
 
     #[view]
     public fun type_and_version(): String {
@@ -103,9 +104,7 @@ module ccip::rmn_remote {
     fun init_module(publisher: &signer) {
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints == @0x1) {
-            mcms_registry::register_entrypoint(
-                publisher, string::utf8(b"rmn_remote"), McmsCallback {}
-            );
+            register_mcms_entrypoint(publisher);
         };
     }
 
@@ -117,6 +116,10 @@ module ccip::rmn_remote {
         assert!(
             local_chain_selector != 0,
             error::invalid_argument(E_ZERO_VALUE_NOT_ALLOWED)
+        );
+        assert!(
+            !exists<RMNRemoteState>(state_object::object_address()),
+            error::invalid_argument(E_ALREADY_INITIALIZED)
         );
 
         let state_object_signer = state_object::object_signer();
@@ -140,12 +143,14 @@ module ccip::rmn_remote {
 
     inline fun calculate_digest(report: &Report): vector<u8> {
         let digest = vector[];
-        eth_abi::encode_bytes32(&mut digest, get_report_digest_header());
+        eth_abi::encode_right_padded_bytes32(&mut digest, get_report_digest_header());
         eth_abi::encode_u64(&mut digest, report.dest_chain_id);
         eth_abi::encode_u64(&mut digest, report.dest_chain_selector);
         eth_abi::encode_address(&mut digest, report.rmn_remote_contract_address);
         eth_abi::encode_address(&mut digest, report.off_ramp_address);
-        eth_abi::encode_bytes32(&mut digest, report.rmn_home_contract_config_digest);
+        eth_abi::encode_right_padded_bytes32(
+            &mut digest, report.rmn_home_contract_config_digest
+        );
         report.merkle_roots.for_each_ref(
             |merkle_root| {
                 let merkle_root: &MerkleRoot = merkle_root;
@@ -153,7 +158,7 @@ module ccip::rmn_remote {
                 eth_abi::encode_bytes(&mut digest, merkle_root.on_ramp_address);
                 eth_abi::encode_u64(&mut digest, merkle_root.min_seq_nr);
                 eth_abi::encode_u64(&mut digest, merkle_root.max_seq_nr);
-                eth_abi::encode_bytes32(&mut digest, merkle_root.merkle_root);
+                eth_abi::encode_right_padded_bytes32(&mut digest, merkle_root.merkle_root);
             }
         );
         aptos_hash::keccak256(digest)
@@ -161,6 +166,7 @@ module ccip::rmn_remote {
 
     #[view]
     public fun verify(
+        off_ramp_address: address,
         merkle_root_source_chain_selectors: vector<u64>,
         merkle_root_on_ramp_addresses: vector<vector<u8>>,
         merkle_root_min_seq_nrs: vector<u64>,
@@ -219,7 +225,7 @@ module ccip::rmn_remote {
             dest_chain_id: (chain_id::get() as u64),
             dest_chain_selector: state.local_chain_selector,
             rmn_remote_contract_address: @ccip,
-            off_ramp_address: @ccip,
+            off_ramp_address,
             rmn_home_contract_config_digest: state.config.rmn_home_contract_config_digest,
             merkle_roots
         };
@@ -334,8 +340,6 @@ module ccip::rmn_remote {
         let new_config_count = state.config_count + 1;
         state.config_count = new_config_count;
 
-        event::emit(ConfigSet { version: new_config_count, config: new_config });
-
         event::emit_event(
             &mut state.config_set_events,
             ConfigSet { version: new_config_count, config: new_config }
@@ -383,7 +387,6 @@ module ccip::rmn_remote {
                 state.cursed_subjects.add(subject, true);
             }
         );
-        event::emit(Cursed { subjects });
         event::emit_event(&mut state.cursed_events, Cursed { subjects });
     }
 
@@ -406,7 +409,6 @@ module ccip::rmn_remote {
             );
             state.cursed_subjects.remove(subject);
         });
-        event::emit(Uncursed { subjects });
         event::emit_event(&mut state.uncursed_events, Uncursed { subjects });
     }
 
@@ -510,5 +512,12 @@ module ccip::rmn_remote {
         };
 
         option::none()
+    }
+
+    /// Callable during upgrades
+    public(friend) fun register_mcms_entrypoint(publisher: &signer) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(b"rmn_remote"), McmsCallback {}
+        );
     }
 }

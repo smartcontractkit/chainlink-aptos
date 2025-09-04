@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/go-viper/mapstructure/v2"
@@ -24,14 +27,14 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/loop"
 	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
 type aptosChainReader struct {
 	types.UnimplementedContractReader
 
-	logger  logger.Logger
+	lggr    logger.Logger
 	config  config.ChainReaderConfig
 	dbStore *db.DBStore
 
@@ -39,10 +42,12 @@ type aptosChainReader struct {
 	eventSyncCancelFunc context.CancelFunc
 	txSyncCancelFunc    context.CancelFunc
 
+	// Mutex to protect concurrent access to maps
+	mu                    sync.RWMutex
 	moduleAddresses       map[string]aptos.AccountAddress
 	eventAccountAddresses map[string]aptos.AccountAddress
 
-	transmitters map[aptos.AccountAddress]uint64
+	logPoller *logpoller.AptosLogPoller
 
 	client aptos.AptosRpcClient
 }
@@ -54,25 +59,67 @@ type ExtendedContractReader interface {
 	QueryKeyWithMetadata(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]config.SequenceWithMetadata, error)
 }
 
-func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config config.ChainReaderConfig, ds sqlutil.DataSource) types.ContractReader {
+func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config config.ChainReaderConfig, ds sqlutil.DataSource, poller *logpoller.AptosLogPoller) types.ContractReader {
+	lggr := logger.Named(lgr, "AptosChainReader")
 	reader := &aptosChainReader{
-		logger:                logger.Named(lgr, "AptosChainReader"),
+		lggr:                  lggr,
 		client:                client,
 		config:                config,
+		logPoller:             poller,
 		moduleAddresses:       map[string]aptos.AccountAddress{},
 		eventAccountAddresses: map[string]aptos.AccountAddress{},
-		transmitters:          map[aptos.AccountAddress]uint64{},
 	}
 
 	if ds != nil {
-		reader.dbStore = db.NewDBStore(ds)
+		reader.dbStore = db.NewDBStore(ds, lggr)
 	}
 
 	return reader
 }
 
+func (a *aptosChainReader) getModuleAddress(contractName string) (aptos.AccountAddress, bool) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	address, ok := a.moduleAddresses[contractName]
+	return address, ok
+}
+
+func (a *aptosChainReader) setModuleAddresses(addresses map[string]aptos.AccountAddress) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for contractName, address := range addresses {
+		a.lggr.Infow("Binding contract", "name", contractName, "address", address.String())
+		a.moduleAddresses[contractName] = address
+	}
+}
+
+func (a *aptosChainReader) deleteModuleAddress(contractName string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if _, ok := a.moduleAddresses[contractName]; ok {
+		a.lggr.Infow("Unbinding contract", "name", contractName)
+		delete(a.moduleAddresses, contractName)
+		return true
+	}
+	a.lggr.Warnw("Attempted to unbind non-existent contract", "name", contractName)
+	return false
+}
+
+func (a *aptosChainReader) getEventAccountAddress(cacheKey string) (aptos.AccountAddress, bool) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	address, ok := a.eventAccountAddresses[cacheKey]
+	return address, ok
+}
+
+func (a *aptosChainReader) setEventAccountAddress(cacheKey string, address aptos.AccountAddress) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.eventAccountAddresses[cacheKey] = address
+}
+
 func (a *aptosChainReader) Name() string {
-	return a.logger.Name()
+	return a.lggr.Name()
 }
 
 func (a *aptosChainReader) Ready() error {
@@ -84,34 +131,21 @@ func (a *aptosChainReader) HealthReport() map[string]error {
 }
 
 func (a *aptosChainReader) Start(ctx context.Context) error {
+	deadline, hasDeadline := ctx.Deadline()
+	a.lggr.Infow("ChainReader Start() called",
+		"ctx_err", ctx.Err(),
+		"has_deadline", hasDeadline,
+		"deadline", deadline,
+		"ctx_type", fmt.Sprintf("%T", ctx),
+	)
+
 	return a.starter.StartOnce(a.Name(), func() error {
-		if a.dbStore != nil {
-
-			var syncEventCtx context.Context
-			syncEventCtx, a.eventSyncCancelFunc = context.WithCancel(ctx)
-			go a.startEventPolling(syncEventCtx)
-			a.logger.Infow("AptosChainReader started event polling", "interval", a.config.EventSyncInterval)
-
-			var syncTxCtx context.Context
-			syncTxCtx, a.txSyncCancelFunc = context.WithCancel(ctx)
-			go a.startTxPolling(syncTxCtx)
-			a.logger.Infow("AptosChainReader started transaction polling", "interval", a.config.TxSyncInterval)
-		}
-
 		return nil
 	})
 }
 
 func (a *aptosChainReader) Close() error {
 	return a.starter.StopOnce(a.Name(), func() error {
-		if a.eventSyncCancelFunc != nil {
-			a.eventSyncCancelFunc()
-		}
-
-		if a.txSyncCancelFunc != nil {
-			a.txSyncCancelFunc()
-		}
-
 		return nil
 	})
 }
@@ -127,7 +161,7 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 	_address, contractName, method := readComponents[0], readComponents[1], readComponents[2]
 
 	// Source the read configuration, by contract name
-	address, ok := a.moduleAddresses[contractName]
+	address, ok := a.getModuleAddress(contractName)
 	if !ok {
 		return fmt.Errorf("no bound address for module %s", contractName)
 	}
@@ -154,7 +188,10 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 	argMap := make(map[string]interface{})
 
 	if a.config.IsLoopPlugin {
-		paramBytes := params.(*[]byte)
+		paramBytes, ok := params.(*[]byte)
+		if !ok {
+			return fmt.Errorf("expected params to be of type *[]byte, got %T", params)
+		}
 
 		// use json.Number to decode uint64 correctly. when we serialize into bcs, serializeArg will convert it into the appropriate number type.
 		decoder := json.NewDecoder(bytes.NewReader(*paramBytes))
@@ -299,10 +336,15 @@ func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request typ
 			result types.BatchReadResult
 		}, len(batch))
 
-		for i, read := range batch {
-			go func(index int, read types.BatchRead) {
-				readResult := types.BatchReadResult{ReadName: read.ReadName}
+		var wg sync.WaitGroup
+		wg.Add(len(batch))
 
+		for i, read := range batch {
+			// Pass contract as an argument to avoid closing over the loop variable.
+			go func(index int, read types.BatchRead, contract types.BoundContract) {
+				defer wg.Done() // Ensure WaitGroup is decremented even if GetLatestValue panics.
+
+				readResult := types.BatchReadResult{ReadName: read.ReadName}
 				err := a.GetLatestValue(ctx, contract.ReadIdentifier(read.ReadName), primitives.Finalized, read.Params, read.ReturnVal)
 				readResult.SetResult(read.ReturnVal, err)
 
@@ -312,18 +354,31 @@ func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request typ
 					result types.BatchReadResult
 				}{index, readResult}:
 				case <-ctx.Done():
+					// If context is cancelled, the goroutine will exit.
+					// wg.Done() will be called by the defer.
 					return
 				}
-			}(i, read)
+			}(i, read, contract)
 		}
 
-		for range batch {
-			select {
-			case res := <-resultChan:
-				batchResults[res.index] = res.result
-			case <-ctx.Done():
-				return nil, ctx.Err()
+		// Start a new goroutine to wait for all workers to finish and then close the channel.
+		go func() {
+			wg.Wait()
+			close(resultChan)
+		}()
+
+		resultsReceived := 0
+		for res := range resultChan {
+			batchResults[res.index] = res.result
+			resultsReceived++
+		}
+
+		if resultsReceived != len(batch) {
+			// Check if the lack of results was due to a context cancellation or time out.
+			if err := ctx.Err(); err != nil {
+				return nil, err
 			}
+			return nil, fmt.Errorf("batch processing failed: expected %d results, but received %d. This may be due to a panic in a worker goroutine", len(batch), resultsReceived)
 		}
 
 		result[contract] = batchResults
@@ -333,13 +388,18 @@ func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request typ
 }
 
 func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]types.Sequence, error) {
+	start := time.Now()
+
+	if sequenceDataType == nil {
+		return nil, errors.New("sequence data type is nil")
+	}
+
 	if a.dbStore == nil {
 		return nil, fmt.Errorf("QueryKey only operates in persistent mode")
 	}
 
 	contractName := contract.Name
-	address, ok := a.moduleAddresses[contractName]
-
+	address, ok := a.getModuleAddress(contractName)
 	if !ok {
 		return nil, fmt.Errorf("no bound address for module %s", contractName)
 	}
@@ -358,6 +418,12 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		}
 		expressions = convertedExpressions
 	}
+
+	a.lggr.Debugw("QueryKey received request",
+		"contract", address.String(),
+		"key", filter.Key,
+		"expressions", expressions,
+		"limitAndSort", limitAndSort)
 
 	moduleConfig, ok := a.config.Modules[contractName]
 	if !ok {
@@ -389,11 +455,6 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	}
 
 	eventHandle := address.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
-
-	// Always sync event to get the latest data
-	if err := a.syncEvent(ctx, address, eventConfig, eventModuleName); err != nil {
-		return nil, fmt.Errorf("syncEvent error: %w", err)
-	}
 
 	if eventConfig.EventFilterRenames != nil {
 		expressions = crutils.ApplyEventFilterRenames(expressions, eventConfig.EventFilterRenames)
@@ -436,10 +497,21 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 		sequences = append(sequences, sequence)
 	}
 
+	elapsed := time.Since(start)
+	a.lggr.Infow("QueryKey returning results",
+		"contract", address.String(),
+		"key", filter.Key,
+		"resultCount", len(sequences),
+		"duration", elapsed)
+
 	return sequences, nil
 }
 
 func (a *aptosChainReader) QueryKeyWithMetadata(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]config.SequenceWithMetadata, error) {
+	if sequenceDataType == nil {
+		return nil, errors.New("sequence data type is nil")
+	}
+
 	seqs, err := a.QueryKey(ctx, contract, filter, limitAndSort, sequenceDataType)
 	if err != nil {
 		return nil, err
@@ -473,6 +545,7 @@ func (a *aptosChainReader) QueryKeyWithMetadata(ctx context.Context, contract ty
 }
 
 func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContract) error {
+	a.lggr.Infow("Bind called", "bindings", bindings)
 	newBindings := map[string]aptos.AccountAddress{}
 	for _, binding := range bindings {
 		moduleAddress := &aptos.AccountAddress{}
@@ -481,22 +554,41 @@ func (a *aptosChainReader) Bind(ctx context.Context, bindings []types.BoundContr
 			return fmt.Errorf("failed to convert module address %s: %+w", binding.Address, err)
 		}
 		newBindings[binding.Name] = *moduleAddress
+
+		if a.logPoller != nil {
+			moduleConfig, ok := a.config.Modules[binding.Name]
+			if ok && moduleConfig.Events != nil {
+				a.lggr.Infow("Registering module with LogPoller",
+					"module", binding.Name,
+					"address", binding.Address)
+
+				if err := a.logPoller.RegisterModule(ctx, binding.Name, *moduleAddress, moduleConfig.Name, moduleConfig.Events); err != nil {
+					return fmt.Errorf("failed to register module with LogPoller: %w", err)
+				}
+			}
+		}
 	}
 
-	for name, address := range newBindings {
-		a.moduleAddresses[name] = address
-	}
+	a.setModuleAddresses(newBindings)
 
 	return nil
 }
 
 func (a *aptosChainReader) Unbind(ctx context.Context, bindings []types.BoundContract) error {
-
+	a.lggr.Infow("Unbind called", "bindings", bindings)
 	for _, binding := range bindings {
 		key := binding.Name
-		if _, ok := a.moduleAddresses[key]; ok {
-			delete(a.moduleAddresses, key)
-		} else {
+
+		if a.logPoller != nil {
+			a.lggr.Infow("Unregistering module from LogPoller", "module", key)
+
+			if err := a.logPoller.UnregisterModule(ctx, key); err != nil {
+				a.lggr.Errorw("Failed to unregister module from LogPoller",
+					"module", key, "error", err)
+			}
+		}
+
+		if !a.deleteModuleAddress(key) {
 			return fmt.Errorf("no such binding: %s", key)
 		}
 	}
@@ -538,9 +630,11 @@ func (a *aptosChainReader) computeEventAccountAddress(boundAddress aptos.Account
 			return eventAccountAddress, fmt.Errorf("invalid event account address definition: %s", eventConfig.EventAccountAddress)
 		}
 		cacheKey := addressFunctionAddress.String() + "::" + addressFunctionModuleName + "::" + addressFunctionFunctionName
-		if cached, ok := a.eventAccountAddresses[cacheKey]; ok {
+
+		if cached, ok := a.getEventAccountAddress(cacheKey); ok {
 			return cached, nil
 		}
+
 		viewPayload := &aptos.ViewPayload{
 			Module: aptos.ModuleId{
 				Address: addressFunctionAddress,
@@ -558,60 +652,7 @@ func (a *aptosChainReader) computeEventAccountAddress(boundAddress aptos.Account
 		if err != nil {
 			return eventAccountAddress, fmt.Errorf("failed to decode event account address function output: %+w", err)
 		}
-		a.eventAccountAddresses[cacheKey] = eventAccountAddress
+		a.setEventAccountAddress(cacheKey, eventAccountAddress)
 		return eventAccountAddress, nil
 	}
-}
-
-func (a *aptosChainReader) getEventConfig(moduleKey, eventKey string) (eventAccountAddress aptos.AccountAddress, eventHandle string, eventConfig *config.ChainReaderEvent, err error) {
-	moduleConfig, ok := a.config.Modules[moduleKey]
-	if !ok {
-		return aptos.AccountAddress{}, "", nil, fmt.Errorf("no module config found for key: %s", moduleKey)
-	}
-
-	boundAddress, ok := a.moduleAddresses[moduleKey]
-	if !ok {
-		return aptos.AccountAddress{}, "", nil, fmt.Errorf("no bound address for module: %s", moduleKey)
-	}
-
-	eventConfig, ok = moduleConfig.Events[eventKey]
-	if !ok {
-		return aptos.AccountAddress{}, "", nil, fmt.Errorf("no event config found for module %s, event %s", moduleKey, eventKey)
-	}
-
-	var eventModuleName string
-	if moduleConfig.Name != "" {
-		eventModuleName = moduleConfig.Name
-	} else {
-		eventModuleName = moduleKey
-	}
-
-	eventAccountAddress, err = a.computeEventAccountAddress(boundAddress, eventConfig)
-	if err != nil {
-		return aptos.AccountAddress{}, "", nil, fmt.Errorf("failed to compute event account address: %w", err)
-	}
-
-	eventHandle = boundAddress.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
-
-	return eventAccountAddress, eventHandle, eventConfig, nil
-}
-
-func (a *aptosChainReader) getBlockHead(version uint64) (types.Head, error) {
-	block, err := a.client.BlockByVersion(version, false)
-	if err != nil {
-		return types.Head{}, fmt.Errorf("failed to get block by version: %w", err)
-	}
-
-	hexBytes, err := utils.DecodeHexRelaxed(block.BlockHash)
-	if err != nil {
-		return types.Head{}, fmt.Errorf("failed to decode block hash: %w", err)
-	}
-
-	head := types.Head{
-		Height:    fmt.Sprintf("%d", block.BlockHeight),
-		Hash:      hexBytes,
-		Timestamp: block.BlockTimestamp / 1000000, // microseconds to seconds conversion
-	}
-
-	return head, nil
 }

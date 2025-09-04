@@ -23,7 +23,7 @@ var (
 
 type RMNRemoteInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
-	Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootOnRampAddresses [][]byte, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error)
+	Verify(opts *bind.CallOpts, offRampAddress aptos.AccountAddress, merkleRootSourceChainSelectors []uint64, merkleRootOnRampAddresses [][]byte, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error)
 	GetArm(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	GetVersionedConfig(opts *bind.CallOpts) (uint32, Config, error)
 	GetLocalChainSelector(opts *bind.CallOpts) (uint64, error)
@@ -46,7 +46,7 @@ type RMNRemoteInterface interface {
 
 type RMNRemoteEncoder interface {
 	TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	Verify(merkleRootSourceChainSelectors []uint64, merkleRootOnRampAddresses [][]byte, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	Verify(offRampAddress aptos.AccountAddress, merkleRootSourceChainSelectors []uint64, merkleRootOnRampAddresses [][]byte, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetArm() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetVersionedConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetLocalChainSelector() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -62,9 +62,10 @@ type RMNRemoteEncoder interface {
 	Uncurse(subject []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	UncurseMultiple(subjects [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	RegisterMCMSEntrypoint() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"rmn_remote","name":"curse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"curse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"initialize","parameters":[{"name":"local_chain_selector","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"rmn_remote","name":"set_config","parameters":[{"name":"rmn_home_contract_config_digest","type":"vector\u003cu8\u003e"},{"name":"signer_onchain_public_keys","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"node_indexes","type":"vector\u003cu64\u003e"},{"name":"f_sign","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]}]`
+const FunctionInfo = `[{"package":"ccip","module":"rmn_remote","name":"curse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"curse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"initialize","parameters":[{"name":"local_chain_selector","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"rmn_remote","name":"register_mcms_entrypoint","parameters":null},{"package":"ccip","module":"rmn_remote","name":"set_config","parameters":[{"name":"rmn_home_contract_config_digest","type":"vector\u003cu8\u003e"},{"name":"signer_onchain_public_keys","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"node_indexes","type":"vector\u003cu64\u003e"},{"name":"f_sign","type":"u64"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse","parameters":[{"name":"subject","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"rmn_remote","name":"uncurse_multiple","parameters":[{"name":"subjects","type":"vector\u003cvector\u003cu8\u003e\u003e"}]}]`
 
 func NewRMNRemote(address aptos.AccountAddress, client aptos.AptosRpcClient) RMNRemoteInterface {
 	contract := bind.NewBoundContract(address, "ccip", "rmn_remote", client)
@@ -160,8 +161,8 @@ func (c RMNRemoteContract) TypeAndVersion(opts *bind.CallOpts) (string, error) {
 	return r0, nil
 }
 
-func (c RMNRemoteContract) Verify(opts *bind.CallOpts, merkleRootSourceChainSelectors []uint64, merkleRootOnRampAddresses [][]byte, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error) {
-	module, function, typeTags, args, err := c.rmnRemoteEncoder.Verify(merkleRootSourceChainSelectors, merkleRootOnRampAddresses, merkleRootMinSeqNrs, merkleRootMaxSeqNrs, merkleRootValues, signatures)
+func (c RMNRemoteContract) Verify(opts *bind.CallOpts, offRampAddress aptos.AccountAddress, merkleRootSourceChainSelectors []uint64, merkleRootOnRampAddresses [][]byte, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bool, error) {
+	module, function, typeTags, args, err := c.rmnRemoteEncoder.Verify(offRampAddress, merkleRootSourceChainSelectors, merkleRootOnRampAddresses, merkleRootMinSeqNrs, merkleRootMaxSeqNrs, merkleRootValues, signatures)
 	if err != nil {
 		return *new(bool), err
 	}
@@ -415,8 +416,9 @@ func (c rmnRemoteEncoder) TypeAndVersion() (bind.ModuleInformation, string, []ap
 	return c.BoundContract.Encode("type_and_version", nil, []string{}, []any{})
 }
 
-func (c rmnRemoteEncoder) Verify(merkleRootSourceChainSelectors []uint64, merkleRootOnRampAddresses [][]byte, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c rmnRemoteEncoder) Verify(offRampAddress aptos.AccountAddress, merkleRootSourceChainSelectors []uint64, merkleRootOnRampAddresses [][]byte, merkleRootMinSeqNrs []uint64, merkleRootMaxSeqNrs []uint64, merkleRootValues [][]byte, signatures [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("verify", nil, []string{
+		"address",
 		"vector<u64>",
 		"vector<vector<u8>>",
 		"vector<u64>",
@@ -424,6 +426,7 @@ func (c rmnRemoteEncoder) Verify(merkleRootSourceChainSelectors []uint64, merkle
 		"vector<vector<u8>>",
 		"vector<vector<u8>>",
 	}, []any{
+		offRampAddress,
 		merkleRootSourceChainSelectors,
 		merkleRootOnRampAddresses,
 		merkleRootMinSeqNrs,
@@ -533,4 +536,8 @@ func (c rmnRemoteEncoder) MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.Mo
 	}, []any{
 		Metadata,
 	})
+}
+
+func (c rmnRemoteEncoder) RegisterMCMSEntrypoint() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("register_mcms_entrypoint", nil, []string{}, []any{})
 }

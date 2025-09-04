@@ -2,6 +2,7 @@
 /// information and pricing.
 module ccip::fee_quoter {
     use std::account;
+    use std::bcs;
     use std::error;
     use std::event::{Self, EventHandle};
     use std::fungible_asset::Metadata;
@@ -42,6 +43,7 @@ module ccip::fee_quoter {
     const MOVE_PRECOMPILE_SPACE: u256 = 0x0b;
 
     const GAS_PRICE_BITS: u8 = 112;
+    const GAS_PRICE_MASK_112_BITS: u256 = 0xffffffffffffffffffffffffffff; // 28 f's
 
     const MESSAGE_FIXED_BYTES: u64 = 32 * 15;
     const MESSAGE_FIXED_BYTES_PER_TOKEN: u64 = 32 * (4 + (3 + 2));
@@ -83,7 +85,7 @@ module ccip::fee_quoter {
 
     // Link has 8 decimals on Aptos and 18 decimals on it's native chain, Ethereum. We want to emit
     // the fee in juels (1e18) denomination for consistency across chains. This means we multiply
-    // the fee by 1e8 on Aptos before we emit it in the event.
+    // the fee by 1e10 on Aptos before we emit it in the event.
     const LOCAL_8_TO_18_DECIMALS_LINK_MULTIPLIER: u256 = 10_000_000_000;
 
     struct FeeQuoterState has key, store {
@@ -97,7 +99,6 @@ module ccip::fee_quoter {
         dest_chain_configs: SmartTable<u64, DestChainConfig>,
         // dest chain selector -> local token -> TokenTransferFeeConfig
         token_transfer_fee_configs: SmartTable<u64, SmartTable<address, TokenTransferFeeConfig>>,
-        // TODO: update calculations - should this be octa per apt?
         premium_multiplier_wei_per_eth: SmartTable<address, u64>,
         fee_token_added_events: EventHandle<FeeTokenAdded>,
         fee_token_removed_events: EventHandle<FeeTokenRemoved>,
@@ -242,6 +243,10 @@ module ccip::fee_quoter {
     const E_ZERO_TOKEN_PRICE: u64 = 31;
     const E_TOO_MANY_SVM_EXTRA_ARGS_ACCOUNTS: u64 = 32;
     const E_INVALID_SVM_EXTRA_ARGS_WRITABLE_BITMAP: u64 = 33;
+    const E_INVALID_FEE_RANGE: u64 = 34;
+    const E_INVALID_DEST_BYTES_OVERHEAD: u64 = 35;
+    const E_INVALID_SVM_RECEIVER_LENGTH: u64 = 36;
+    const E_TOKEN_AMOUNT_MISMATCH: u64 = 37;
 
     #[view]
     public fun type_and_version(): String {
@@ -251,9 +256,7 @@ module ccip::fee_quoter {
     fun init_module(publisher: &signer) {
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints == @0x1) {
-            mcms_registry::register_entrypoint(
-                publisher, string::utf8(b"fee_quoter"), McmsCallback {}
-            );
+            register_mcms_entrypoint(publisher);
         };
     }
 
@@ -391,7 +394,6 @@ module ccip::fee_quoter {
             let (found, index) = state.fee_tokens.index_of(&fee_token);
             if (found) {
                 state.fee_tokens.remove(index);
-                event::emit(FeeTokenRemoved { fee_token });
                 event::emit_event(
                     &mut state.fee_token_removed_events, FeeTokenRemoved { fee_token }
                 );
@@ -404,7 +406,6 @@ module ccip::fee_quoter {
             let (found, _) = state.fee_tokens.index_of(&fee_token);
             if (!found) {
                 state.fee_tokens.push_back(fee_token);
-                event::emit(FeeTokenAdded { fee_token });
                 event::emit_event(
                     &mut state.fee_token_added_events, FeeTokenAdded { fee_token }
                 );
@@ -512,15 +513,17 @@ module ccip::fee_quoter {
                 is_enabled
             };
 
+            if (token_transfer_fee_config.min_fee_usd_cents
+                >= token_transfer_fee_config.max_fee_usd_cents) {
+                abort error::invalid_argument(E_INVALID_FEE_RANGE);
+            };
+            if (token_transfer_fee_config.dest_bytes_overhead
+                < CCIP_LOCK_OR_BURN_V1_RET_BYTES) {
+                abort error::invalid_argument(E_INVALID_DEST_BYTES_OVERHEAD);
+            };
+
             token_transfer_fee_configs.upsert(token, token_transfer_fee_config);
 
-            event::emit(
-                TokenTransferFeeConfigAdded {
-                    dest_chain_selector,
-                    token,
-                    token_transfer_fee_config
-                }
-            );
             event::emit_event(
                 &mut state.token_transfer_fee_config_added_events,
                 TokenTransferFeeConfigAdded {
@@ -531,22 +534,17 @@ module ccip::fee_quoter {
             );
         };
 
-        remove_tokens.for_each_ref(
-            |token| {
-                let token: address = *token;
-                if (token_transfer_fee_configs.contains(token)) {
-                    token_transfer_fee_configs.remove(token);
+        remove_tokens.for_each_ref(|token| {
+            let token: address = *token;
+            if (token_transfer_fee_configs.contains(token)) {
+                token_transfer_fee_configs.remove(token);
 
-                    event::emit(
-                        TokenTransferFeeConfigRemoved { dest_chain_selector, token }
-                    );
-                    event::emit_event(
-                        &mut state.token_transfer_fee_config_removed_events,
-                        TokenTransferFeeConfigRemoved { dest_chain_selector, token }
-                    );
-                }
+                event::emit_event(
+                    &mut state.token_transfer_fee_config_removed_events,
+                    TokenTransferFeeConfigRemoved { dest_chain_selector, token }
+                );
             }
-        );
+        });
     }
 
     public fun update_prices(
@@ -578,13 +576,6 @@ module ccip::fee_quoter {
                     timestamp
                 };
                 state.usd_per_token.upsert(*token, timestamped_price);
-                event::emit(
-                    UsdPerTokenUpdated {
-                        token: *token,
-                        usd_per_token: *usd_per_token,
-                        timestamp
-                    }
-                );
                 event::emit_event(
                     &mut state.usd_per_token_updated_events,
                     UsdPerTokenUpdated {
@@ -605,13 +596,6 @@ module ccip::fee_quoter {
                     *dest_chain_selector, timestamped_price
                 );
 
-                event::emit(
-                    UsdPerUnitGasUpdated {
-                        dest_chain_selector: *dest_chain_selector,
-                        usd_per_unit_gas: *usd_per_unit_gas,
-                        timestamp
-                    }
-                );
                 event::emit_event(
                     &mut state.usd_per_unit_gas_updated_events,
                     UsdPerUnitGasUpdated {
@@ -690,7 +674,6 @@ module ccip::fee_quoter {
                 state, dest_chain_config, dest_chain_selector
             );
 
-        // TODO: this should probably be premium_fee_usd_octa for aptos?
         let (premium_fee_usd_wei, token_transfer_gas, token_transfer_bytes_overhead) =
             if (tokens_len > 0) {
                 get_token_transfer_cost(
@@ -711,10 +694,9 @@ module ccip::fee_quoter {
 
         let data_availability_cost_usd_36_decimals =
             if (dest_chain_config.dest_data_availability_multiplier_bps > 0) {
-                // TODO: on EVM, the gas price is uint224 and the top 112 bits are used. here we're using a u256
-                // and expecting that the extra top 22 bits are zeroes. update this and `gas_cost` below
-                // if needed.
-                let data_availability_gas_price = packed_gas_price >> GAS_PRICE_BITS;
+                // Extract data availability gas price (upper 112 bits) - matches EVM uint112 behavior
+                let data_availability_gas_price =
+                    (packed_gas_price >> GAS_PRICE_BITS) & GAS_PRICE_MASK_112_BITS;
                 get_data_availability_cost(
                     dest_chain_config,
                     data_availability_gas_price,
@@ -746,7 +728,7 @@ module ccip::fee_quoter {
             (dest_chain_config.dest_gas_overhead as u256) + (token_transfer_gas as u256)
                 + dest_call_data_cost + gas_limit;
 
-        let gas_cost = packed_gas_price & (MAX_U256 >> (255 - GAS_PRICE_BITS + 1));
+        let gas_cost = packed_gas_price & GAS_PRICE_MASK_112_BITS;
 
         let total_cost_usd =
             (
@@ -779,12 +761,6 @@ module ccip::fee_quoter {
                 let premium_multiplier_wei_per_eth: u64 = *premium_multiplier_wei_per_eth;
                 state.premium_multiplier_wei_per_eth.upsert(
                     token, premium_multiplier_wei_per_eth
-                );
-                event::emit(
-                    PremiumMultiplierWeiPerEthUpdated {
-                        token,
-                        premium_multiplier_wei_per_eth
-                    }
                 );
                 event::emit_event(
                     &mut state.premium_multiplier_wei_per_eth_updated_events,
@@ -866,6 +842,11 @@ module ccip::fee_quoter {
         // tokens. Below, token and account overhead will count towards maxDataBytes.
         let svm_expanded_data_length = data_len;
 
+        // The receiver length has not yet been validated before this point.
+        assert!(
+            receiver.length() == 32,
+            error::invalid_argument(E_INVALID_SVM_RECEIVER_LENGTH)
+        );
         let receiver_uint = eth_abi::decode_u256_value(receiver);
         if (receiver_uint == 0) {
             // When message receiver is zero, CCIP receiver is not invoked on SVM.
@@ -950,9 +931,10 @@ module ccip::fee_quoter {
     }
 
     inline fun decode_generic_extra_args_v2(extra_args: vector<u8>): (u256, bool) {
-        let stream = eth_abi::new_stream(extra_args);
-        let gas_limit = eth_abi::decode_u256(&mut stream);
-        let allow_out_of_order_execution = eth_abi::decode_bool(&mut stream);
+        let stream = bcs_stream::new(extra_args);
+        let gas_limit = bcs_stream::deserialize_u256(&mut stream);
+        let allow_out_of_order_execution = bcs_stream::deserialize_bool(&mut stream);
+        bcs_stream::assert_is_consumed(&stream);
         (gas_limit, allow_out_of_order_execution)
     }
 
@@ -977,16 +959,17 @@ module ccip::fee_quoter {
     inline fun decode_svm_extra_args_v1(
         extra_args: vector<u8>
     ): (u32, u64, bool, vector<u8>, vector<vector<u8>>) {
-        let stream = eth_abi::new_stream(extra_args);
-        let compute_units = eth_abi::decode_u32(&mut stream);
-        let account_is_writable_bitmap = eth_abi::decode_u64(&mut stream);
-        let allow_out_of_order_execution = eth_abi::decode_bool(&mut stream);
-        let token_receiver = eth_abi::decode_bytes32(&mut stream);
+        let stream = bcs_stream::new(extra_args);
+        let compute_units = bcs_stream::deserialize_u32(&mut stream);
+        let account_is_writable_bitmap = bcs_stream::deserialize_u64(&mut stream);
+        let allow_out_of_order_execution = bcs_stream::deserialize_bool(&mut stream);
+        let token_receiver = bcs_stream::deserialize_vector_u8(&mut stream);
         let accounts =
-            eth_abi::decode_vector(
+            bcs_stream::deserialize_vector(
                 &mut stream,
-                |stream| { eth_abi::decode_bytes32(stream) }
+                |stream| bcs_stream::deserialize_vector_u8(stream)
             );
+        bcs_stream::assert_is_consumed(&stream);
         (
             compute_units,
             account_is_writable_bitmap,
@@ -1098,6 +1081,30 @@ module ccip::fee_quoter {
     }
 
     #[view]
+    public fun get_token_receiver(
+        dest_chain_selector: u64, extra_args: vector<u8>, message_receiver: vector<u8>
+    ): vector<u8> acquires FeeQuoterState {
+        let chain_family_selector =
+            get_dest_chain_config_internal(borrow_state(), dest_chain_selector).chain_family_selector;
+        if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM
+            || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
+            || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI) {
+            message_receiver
+        } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
+            let (
+                _compute_units,
+                _account_is_writable_bitmap,
+                _allow_out_of_order_execution,
+                token_receiver,
+                _accounts
+            ) = decode_svm_extra_args(extra_args);
+            token_receiver
+        } else {
+            abort error::invalid_argument(E_UNKNOWN_CHAIN_FAMILY_SELECTOR)
+        }
+    }
+
+    #[view]
     /// @returns (msg_fee_juels, is_out_of_order_execution, converted_extra_args, dest_exec_data_per_token)
     public fun process_message_args(
         dest_chain_selector: u64,
@@ -1181,7 +1188,7 @@ module ccip::fee_quoter {
             (extra_args_v2, allow_out_of_order_execution)
         } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
             let (
-                _compute_units,
+                compute_units,
                 _account_is_writable_bitmap,
                 allow_out_of_order_execution,
                 token_receiver,
@@ -1198,6 +1205,16 @@ module ccip::fee_quoter {
                     error::invalid_argument(E_INVALID_TOKEN_RECEIVER)
                 );
             };
+
+            assert!(
+                !dest_chain_config.enforce_out_of_order || allow_out_of_order_execution,
+                error::invalid_argument(E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE)
+            );
+            assert!(
+                compute_units <= dest_chain_config.max_per_msg_gas_limit,
+                error::invalid_argument(E_MESSAGE_COMPUTE_UNIT_LIMIT_TOO_HIGH)
+            );
+
             (extra_args, allow_out_of_order_execution)
         } else {
             abort error::invalid_argument(E_UNKNOWN_CHAIN_FAMILY_SELECTOR)
@@ -1215,6 +1232,10 @@ module ccip::fee_quoter {
         let chain_family_selector = dest_chain_config.chain_family_selector;
 
         let tokens_len = dest_token_addresses.length();
+        assert!(
+            tokens_len == dest_pool_datas.length(),
+            error::invalid_argument(E_TOKEN_AMOUNT_MISMATCH)
+        );
 
         let dest_exec_data_per_token = vector[];
         for (i in 0..tokens_len) {
@@ -1226,7 +1247,6 @@ module ccip::fee_quoter {
                 get_token_transfer_fee_config_internal(
                     state, dest_chain_selector, local_token_address
                 );
-
             if (dest_pool_data_len > (CCIP_LOCK_OR_BURN_V1_RET_BYTES as u64)) {
                 assert!(
                     dest_pool_data_len
@@ -1246,8 +1266,7 @@ module ccip::fee_quoter {
                     dest_chain_config.default_token_dest_gas_overhead
                 };
 
-            let dest_exec_data = vector[];
-            eth_abi::encode_u32(&mut dest_exec_data, dest_gas_amount);
+            let dest_exec_data = bcs::to_bytes(&dest_gas_amount);
             dest_exec_data_per_token.push_back(dest_exec_data);
         };
 
@@ -1341,14 +1360,12 @@ module ccip::fee_quoter {
             let dest_chain_config_ref =
                 state.dest_chain_configs.borrow_mut(dest_chain_selector);
             *dest_chain_config_ref = dest_chain_config;
-            event::emit(DestChainConfigUpdated { dest_chain_selector, dest_chain_config });
             event::emit_event(
                 &mut state.dest_chain_config_updated_events,
                 DestChainConfigUpdated { dest_chain_selector, dest_chain_config }
             );
         } else {
             state.dest_chain_configs.add(dest_chain_selector, dest_chain_config);
-            event::emit(DestChainAdded { dest_chain_selector, dest_chain_config });
             event::emit_event(
                 &mut state.dest_chain_added_events,
                 DestChainAdded { dest_chain_selector, dest_chain_config }
@@ -1372,6 +1389,17 @@ module ccip::fee_quoter {
 
     inline fun borrow_state_mut(): &mut FeeQuoterState {
         borrow_global_mut<FeeQuoterState>(state_object::object_address())
+    }
+
+    inline fun get_validated_token_price(
+        state: &FeeQuoterState, token: address
+    ): TimestampedPrice {
+        let token_price = get_token_price_internal(state, token);
+        assert!(
+            token_price.value > 0 && token_price.timestamp > 0,
+            error::invalid_state(E_TOKEN_NOT_SUPPORTED)
+        );
+        token_price
     }
 
     // Token prices can be stale. On EVM we have additional fallbacks to a price feed, if configured. Since these
@@ -1419,9 +1447,8 @@ module ccip::fee_quoter {
         from_token_amount: u64,
         to_token: address
     ): u64 {
-        let from_token_price = get_token_price_internal(state, from_token);
-        let to_token_price = get_token_price_internal(state, to_token);
-
+        let from_token_price = get_validated_token_price(state, from_token);
+        let to_token_price = get_validated_token_price(state, to_token);
         let to_token_amount =
             ((from_token_amount as u256) * from_token_price.value) / to_token_price.value;
         assert!(
@@ -1693,6 +1720,13 @@ module ccip::fee_quoter {
         option::none()
     }
 
+    /// Callable during upgrades
+    public(friend) fun register_mcms_entrypoint(publisher: &signer) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(b"fee_quoter"), McmsCallback {}
+        );
+    }
+
     public fun dest_chain_config_values(
         config: DestChainConfig
     ): (
@@ -1766,5 +1800,69 @@ module ccip::fee_quoter {
         extra_args: vector<u8>
     ): (u32, u64, bool, vector<u8>, vector<vector<u8>>) {
         decode_svm_extra_args(extra_args)
+    }
+
+    #[test_only]
+    public fun test_decode_generic_extra_args(
+        dest_chain_config: &DestChainConfig, extra_args: vector<u8>
+    ): (u256, bool) {
+        decode_generic_extra_args(dest_chain_config, extra_args)
+    }
+
+    #[test_only]
+    public fun test_decode_generic_extra_args_v2(extra_args: vector<u8>): (u256, bool) {
+        decode_generic_extra_args_v2(extra_args)
+    }
+
+    #[test_only]
+    public fun test_decode_svm_extra_args_v1(
+        extra_args: vector<u8>
+    ): (u32, u64, bool, vector<u8>, vector<vector<u8>>) {
+        decode_svm_extra_args_v1(extra_args)
+    }
+
+    #[test_only]
+    public fun test_create_dest_chain_config(
+        is_enabled: bool,
+        max_number_of_tokens_per_msg: u16,
+        max_data_bytes: u32,
+        max_per_msg_gas_limit: u32,
+        dest_gas_overhead: u32,
+        dest_gas_per_payload_byte_base: u8,
+        dest_gas_per_payload_byte_high: u8,
+        dest_gas_per_payload_byte_threshold: u16,
+        dest_data_availability_overhead_gas: u32,
+        dest_gas_per_data_availability_byte: u16,
+        dest_data_availability_multiplier_bps: u16,
+        chain_family_selector: vector<u8>,
+        enforce_out_of_order: bool,
+        default_token_fee_usd_cents: u16,
+        default_token_dest_gas_overhead: u32,
+        default_tx_gas_limit: u32,
+        gas_multiplier_wei_per_eth: u64,
+        gas_price_staleness_threshold: u32,
+        network_fee_usd_cents: u32
+    ): DestChainConfig {
+        DestChainConfig {
+            is_enabled,
+            max_number_of_tokens_per_msg,
+            max_data_bytes,
+            max_per_msg_gas_limit,
+            dest_gas_overhead,
+            dest_gas_per_payload_byte_base,
+            dest_gas_per_payload_byte_high,
+            dest_gas_per_payload_byte_threshold,
+            dest_data_availability_overhead_gas,
+            dest_gas_per_data_availability_byte,
+            dest_data_availability_multiplier_bps,
+            chain_family_selector,
+            enforce_out_of_order,
+            default_token_fee_usd_cents,
+            default_token_dest_gas_overhead,
+            default_tx_gas_limit,
+            gas_multiplier_wei_per_eth,
+            gas_price_staleness_threshold,
+            network_fee_usd_cents
+        }
     }
 }

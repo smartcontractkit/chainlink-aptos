@@ -3,8 +3,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"net/url"
-	"slices"
 	"strings"
 	"time"
 
@@ -13,6 +11,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/config"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target"
@@ -23,6 +22,7 @@ const ChainFamilyName = "aptos"
 
 var DefaultConfigSet = ConfigSet{
 	TransactionManager: txm.DefaultConfigSet,
+	LogPoller:          logpoller.DefaultConfigSet,
 	BalanceMonitor: monitor.GenericBalanceConfig{
 		BalancePollPeriod: *config.MustNewDuration(10 * time.Second),
 	},
@@ -31,6 +31,7 @@ var DefaultConfigSet = ConfigSet{
 
 type ConfigSet struct { //nolint:revive
 	TransactionManager txm.Config
+	LogPoller          logpoller.Config
 	BalanceMonitor     monitor.GenericBalanceConfig
 	WriteTargetCap     write_target.Config
 }
@@ -43,6 +44,7 @@ type WorkflowConfig struct {
 
 type Chain struct {
 	TransactionManager *txm.Config
+	LogPoller          *logpoller.Config
 	BalanceMonitor     *monitor.GenericBalanceConfig
 	WriteTargetCap     *write_target.Config
 	Workflow           *WorkflowConfig
@@ -66,62 +68,6 @@ func (n *Node) ValidateConfig() (err error) {
 
 	return
 }
-
-type TOMLConfigs []*TOMLConfig
-
-func (cs TOMLConfigs) ValidateConfig() (err error) {
-	return cs.validateKeys()
-}
-
-func (cs TOMLConfigs) validateKeys() (err error) {
-	// Unique chain IDs
-	chainIDs := config.UniqueStrings{}
-	for i, c := range cs {
-		if chainIDs.IsDupe(&c.ChainID) {
-			err = errors.Join(err, config.NewErrDuplicate(fmt.Sprintf("%d.ChainID", i), c.ChainID))
-		}
-	}
-
-	// Unique node names
-	names := config.UniqueStrings{}
-	for i, c := range cs {
-		for j, n := range c.Nodes {
-			if names.IsDupe(n.Name) {
-				err = errors.Join(err, config.NewErrDuplicate(fmt.Sprintf("%d.Nodes.%d.Name", i, j), *n.Name))
-			}
-		}
-	}
-
-	// Unique URLs
-	urls := config.UniqueStrings{}
-	for i, c := range cs {
-		for j, n := range c.Nodes {
-			u := (*url.URL)(n.URL)
-			if urls.IsDupeFmt(u) {
-				err = errors.Join(err, config.NewErrDuplicate(fmt.Sprintf("%d.Nodes.%d.URL", i, j), u.String()))
-			}
-		}
-	}
-	return
-}
-
-// func (cs *TOMLConfigs) SetFrom(fs *TOMLConfigs) (err error) {
-// 	if err1 := fs.validateKeys(); err1 != nil {
-// 		return err1
-// 	}
-// 	for _, f := range *fs {
-// 		if f.ChainID == nil {
-// 			*cs = append(*cs, f)
-// 		} else if i := slices.IndexFunc(*cs, func(c *TOMLConfig) bool {
-// 			return c.ChainID != nil && *c.ChainID == *f.ChainID
-// 		}); i == -1 {
-// 			*cs = append(*cs, f)
-// 		} else {
-// 			(*cs)[i].SetFrom(f)
-// 		}
-// 	}
-// 	return
-// }
 
 type TOMLConfig struct {
 	// Do not access directly. Use [IsEnabled]
@@ -164,20 +110,12 @@ func (c *TOMLConfig) IsEnabled() bool {
 	return c.Enabled == nil || *c.Enabled
 }
 
-func (c *TOMLConfig) SetFrom(f *TOMLConfig) {
-	c.Enabled = f.Enabled
-
-	c.ChainID = f.ChainID
-	c.NetworkName = f.NetworkName
-	c.NetworkNameFull = f.NetworkNameFull
-
-	setFromChain(&c.Chain, &f.Chain)
-	c.Nodes.SetFrom(&f.Nodes)
-}
-
 func (c *TOMLConfig) SetDefaults() {
 	if c.TransactionManager == nil {
 		c.TransactionManager = &DefaultConfigSet.TransactionManager
+	}
+	if c.LogPoller == nil {
+		c.LogPoller = &DefaultConfigSet.LogPoller
 	}
 	if c.BalanceMonitor == nil {
 		c.BalanceMonitor = &DefaultConfigSet.BalanceMonitor
@@ -201,19 +139,6 @@ func (c *TOMLConfig) SetDefaults() {
 	if c.NetworkNameFull == "" {
 		c.NetworkNameFull = fmt.Sprintf("%s-%s", ChainFamilyName, c.NetworkName)
 	}
-}
-
-func setFromChain(c, f *Chain) {
-	if f.TransactionManager != nil {
-		c.TransactionManager = f.TransactionManager
-	}
-	if f.BalanceMonitor != nil {
-		c.BalanceMonitor = f.BalanceMonitor
-	}
-	if f.WriteTargetCap != nil {
-		c.WriteTargetCap = f.WriteTargetCap
-	}
-	c.Workflow = f.Workflow
 }
 
 func (c *TOMLConfig) ValidateConfig() (err error) {
@@ -250,26 +175,3 @@ func (c *TOMLConfig) TOMLString() (string, error) {
 }
 
 type Nodes []*Node
-
-func (ns *Nodes) SetFrom(fs *Nodes) {
-	for _, f := range *fs {
-		if f.Name == nil {
-			*ns = append(*ns, f)
-		} else if i := slices.IndexFunc(*ns, func(n *Node) bool {
-			return n.Name != nil && *n.Name == *f.Name
-		}); i == -1 {
-			*ns = append(*ns, f)
-		} else {
-			setFromNode((*ns)[i], f)
-		}
-	}
-}
-
-func setFromNode(n, f *Node) {
-	if f.Name != nil {
-		n.Name = f.Name
-	}
-	if f.URL != nil {
-		n.URL = f.URL
-	}
-}

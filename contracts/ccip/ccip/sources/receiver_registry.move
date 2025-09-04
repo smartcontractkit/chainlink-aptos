@@ -43,6 +43,8 @@ module ccip::receiver_registry {
     const E_UNKNOWN_PROOF_TYPE: u64 = 3;
     const E_MISSING_INPUT: u64 = 4;
     const E_NON_EMPTY_INPUT: u64 = 5;
+    const E_PROOF_TYPE_ACCOUNT_MISMATCH: u64 = 6;
+    const E_PROOF_TYPE_MODULE_MISMATCH: u64 = 7;
 
     #[view]
     public fun type_and_version(): String {
@@ -81,6 +83,14 @@ module ccip::receiver_registry {
                 string::utf8(b"ccip_receive")
             );
         let proof_typeinfo = type_info::type_of<ProofType>();
+        assert!(
+            proof_typeinfo.account_address() == receiver_address,
+            E_PROOF_TYPE_ACCOUNT_MISMATCH
+        );
+        assert!(
+            proof_typeinfo.module_name() == receiver_module_name,
+            E_PROOF_TYPE_MODULE_MISMATCH
+        );
 
         let state = borrow_state_mut();
         let dispatch_signer = object::generate_signer_for_extending(&state.extend_ref);
@@ -122,7 +132,6 @@ module ccip::receiver_registry {
             }
         );
 
-        event::emit(ReceiverRegistered { receiver_address, receiver_module_name });
         event::emit_event(
             &mut state.receiver_registered_events,
             ReceiverRegistered { receiver_address, receiver_module_name }

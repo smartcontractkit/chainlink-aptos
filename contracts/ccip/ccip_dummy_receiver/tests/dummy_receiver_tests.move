@@ -1,11 +1,9 @@
 #[test_only]
 module ccip_dummy_receiver::dummy_receiver_tests {
-    use std::vector;
-    use std::event;
     use std::object::{Self};
     use std::signer;
     use aptos_framework::timestamp;
-    use ccip_dummy_receiver::dummy_receiver::{Self, ReceivedMessage};
+    use ccip_dummy_receiver::dummy_receiver::{Self};
     use ccip::client;
     use ccip::receiver_registry;
     use ccip::state_object;
@@ -48,7 +46,7 @@ module ccip_dummy_receiver::dummy_receiver_tests {
         );
 
         state_object::init_module_for_testing(ccip);
-        auth::test_init_module(owner);
+        auth::test_init_module(ccip);
 
         receiver_registry::init_module_for_testing(owner);
 
@@ -76,9 +74,9 @@ module ccip_dummy_receiver::dummy_receiver_tests {
         receiver_dispatcher::dispatch_receive(owner, @ccip_dummy_receiver, message);
 
         // Verify the event was emitted
-        let events = event::emitted_events<ReceivedMessage>();
-        assert!(vector::length(&events) == 1, 1);
+        let events = dummy_receiver::get_received_message_events();
+        assert!(events.length() == 1);
         let expected_event = dummy_receiver::new_received_message_event(TEST_DATA);
-        assert!(vector::borrow(&events, 0) == &expected_event, 2);
+        assert!(events.borrow(0) == &expected_event);
     }
 }

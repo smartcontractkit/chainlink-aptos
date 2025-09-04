@@ -76,8 +76,8 @@ module ccip::fee_quoter_mcms {
         vector::append(&mut data, std::bcs::to_bytes(&vector[1 as u32])); // add_min_fee_usd_cents
         vector::append(&mut data, std::bcs::to_bytes(&vector[12 as u32])); // add_max_fee_usd_cents
         vector::append(&mut data, std::bcs::to_bytes(&vector[0 as u16])); // add_deci_bps
-        vector::append(&mut data, std::bcs::to_bytes(&vector[0 as u32])); // add_dest_gas_overhead
-        vector::append(&mut data, std::bcs::to_bytes(&vector[0 as u32])); // add_dest_bytes_overhead
+        vector::append(&mut data, std::bcs::to_bytes(&vector[33 as u32])); // add_dest_gas_overhead
+        vector::append(&mut data, std::bcs::to_bytes(&vector[33 as u32])); // add_dest_bytes_overhead
         vector::append(&mut data, std::bcs::to_bytes(&vector[true])); // add_is_enabled
         vector::append(
             &mut data,
@@ -108,8 +108,8 @@ module ccip::fee_quoter_mcms {
         assert!(min_fee_usd_cents == 1);
         assert!(max_fee_usd_cents == 12);
         assert!(deci_bps == 0);
-        assert!(dest_gas_overhead == 0);
-        assert!(dest_bytes_overhead == 0);
+        assert!(dest_gas_overhead == 33);
+        assert!(dest_bytes_overhead == 33);
         assert!(is_enabled == true);
 
         // ============ fee_quoter::update_prices ============

@@ -2,6 +2,7 @@ package codec
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -99,19 +100,36 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 			// hex.DecodeString does not support odd length strings
 			str = "0" + str
 		}
-		return hex.DecodeString(str)
+		bytes, err := hex.DecodeString(str)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode hex string %q: %w", str, err)
+		}
+		return bytes, nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return strconv.ParseUint(str, 16, 64)
+		val, err := strconv.ParseUint(str, 16, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse hex to uint: %w", err)
+		}
+		if overflowUint(t, val) {
+			return nil, fmt.Errorf("value %d overflows %v", val, t)
+		}
+		return reflect.ValueOf(val).Convert(t).Interface(), nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		val, err := strconv.ParseInt(str, 16, 64)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse hex to int: %w", err)
 		}
+		if overflowInt(t, val) {
+			return nil, fmt.Errorf("value %d overflows %v", val, t)
+		}
 		return reflect.ValueOf(val).Convert(t).Interface(), nil
 	case reflect.Ptr:
 		if t == reflect.TypeOf((*big.Int)(nil)) {
 			bi := new(big.Int)
-			bi.SetString(str, 16)
+			_, ok := bi.SetString(str, 16)
+			if !ok {
+				return nil, fmt.Errorf("failed to parse hex string as big.Int: %s", str)
+			}
 			return bi, nil
 		}
 		if t == reflect.TypeOf((*common.Address)(nil)) {
@@ -151,9 +169,13 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 			if err != nil {
 				return nil, fmt.Errorf("failed to decode hex string %q: %w", str, err)
 			}
-			out := make([]uint8, t.Len())
-			copy(out, bytes)
-			return out, nil
+			if len(bytes) != t.Len() {
+				return nil, fmt.Errorf("hex string %q has incorrect length for u8 array, got %d, expected %d", str, len(bytes), t.Len())
+			}
+			// Create array of the correct type and copy bytes into it
+			arrayVal := reflect.New(t).Elem()
+			reflect.Copy(arrayVal, reflect.ValueOf(bytes))
+			return arrayVal.Interface(), nil
 		}
 		return nil, fmt.Errorf("unsupported target array element type for hex string conversion: %v", t.Elem().Kind())
 	default:
@@ -163,12 +185,13 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 }
 
 func numericStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
-	if f.Kind() != reflect.String {
-		return data, nil
-	}
-
-	str, ok := data.(string)
-	if !ok {
+	var str string
+	switch v := data.(type) {
+	case string:
+		str = v
+	case json.Number:
+		str = v.String()
+	default:
 		return data, nil
 	}
 
@@ -178,7 +201,7 @@ func numericStringHook(f reflect.Type, t reflect.Type, data interface{}) (interf
 		fieldPtr := newStructVal.Field(0).Addr().Interface()
 
 		// Decode the original numeric string data into the field pointer
-		if err := DecodeAptosJsonValue(data, fieldPtr); err != nil {
+		if err := DecodeAptosJsonValue(str, fieldPtr); err != nil {
 			return nil, fmt.Errorf("failed decoding numeric string for single-field struct %v field %s (%v): %w", t, field.Name, field.Type, err)
 		}
 		return newStructVal.Interface(), nil
@@ -186,7 +209,7 @@ func numericStringHook(f reflect.Type, t reflect.Type, data interface{}) (interf
 
 	switch t.Kind() {
 	case reflect.String:
-		return data, nil
+		return str, nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		val, err := strconv.ParseInt(str, 10, 64)
 		if err != nil {

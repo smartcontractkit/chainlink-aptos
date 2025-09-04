@@ -8,14 +8,20 @@ import (
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/shopspring/decimal"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
 	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
+	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
+
+// On Aptos, we're unable to specify the gas limit for the receiver, so we need to add on a baseline execute overhead so the transaction will always at least be attempted on-chain.
+// TODO: This should be configurable and passed in as a CW config param.
+const AptosCCIPExecuteGasLimitOverhead = 34
 
 type aptosChainWriter struct {
 	logger    logger.Logger
@@ -24,7 +30,6 @@ type aptosChainWriter struct {
 	config    ChainWriterConfig
 
 	starter utils.StartStopOnce
-	stop    chan struct{}
 }
 
 func NewChainWriter(lgr logger.Logger, feeClient aptos.AptosRpcClient, txm *txm.AptosTxm, config ChainWriterConfig) commontypes.ContractWriter {
@@ -51,14 +56,13 @@ func (a *aptosChainWriter) HealthReport() map[string]error {
 }
 
 func (a *aptosChainWriter) Start(ctx context.Context) error {
-	return a.starter.StartOnce("aptosChainWriter", func() error {
+	return a.starter.StartOnce(a.Name(), func() error {
 		return nil
 	})
 }
 
 func (a *aptosChainWriter) Close() error {
-	return a.starter.StopOnce("aptosChainWriter", func() error {
-		close(a.stop)
+	return a.starter.StopOnce(a.Name(), func() error {
 		return nil
 	})
 }
@@ -84,6 +88,10 @@ func convertFunctionParams(argMap map[string]interface{}, params []crconfig.Apto
 }
 
 func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, method string, args any, transactionID string, toAddress string, meta *commontypes.TxMeta, value *big.Int) error {
+	if value != nil && value.Sign() != 0 {
+		return fmt.Errorf("value is not supported")
+	}
+
 	moduleConfig, ok := a.config.Modules[contractName]
 	if !ok {
 		return fmt.Errorf("no such contract: %s", contractName)
@@ -125,6 +133,13 @@ func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, 
 
 	ctxLogger := txm.GetContexedTxLogger(a.logger, transactionID, meta)
 
+	// temp: extract and set gas limit for CCIP offramp:execute
+	meta, err = adjustTxMetaForCCIPExecute(meta, moduleName, functionName, paramValues)
+	if err != nil {
+		ctxLogger.Errorw("failed to adjust transaction meta for CCIP offramp::execute", "toAddress", toAddress, "error", err)
+		return fmt.Errorf("failed to adjust transaction meta for CCIP offramp::execute: %+w", err)
+	}
+
 	err = a.txm.Enqueue(
 		transactionID,
 		meta,
@@ -148,6 +163,14 @@ func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, 
 
 func (a *aptosChainWriter) GetTransactionStatus(ctx context.Context, transactionID string) (commontypes.TransactionStatus, error) {
 	return a.txm.GetStatus(transactionID)
+}
+
+func (a *aptosChainWriter) GetTransactionFee(ctx context.Context, transactionID string) (decimal.Decimal, error) {
+	fee, err := a.txm.GetTransactionFee(ctx, transactionID)
+	if err != nil {
+		return decimal.Decimal{}, err
+	}
+	return decimal.NewFromBigInt(fee, -8), nil // Convert from octas (1e-8 APT) to APT
 }
 
 func (a *aptosChainWriter) GetFeeComponents(ctx context.Context) (*commontypes.ChainFeeComponents, error) {
@@ -180,4 +203,55 @@ func (a *aptosChainWriter) GetFeeComponents(ctx context.Context) (*commontypes.C
 
 func (a *aptosChainWriter) GetEstimateFee(ctx context.Context, contract, method string, args any, toAddress string, meta *commontypes.TxMeta, val *big.Int) (commontypes.EstimateFee, error) {
 	return commontypes.EstimateFee{}, errors.New("not implemented")
+}
+
+func adjustTxMetaForCCIPExecute(meta *commontypes.TxMeta, moduleName, functionName string, paramValues []any) (*commontypes.TxMeta, error) {
+	// Skip non-CCIP offramp:execute tx
+	if moduleName != "offramp" || functionName != "execute" {
+		return meta, nil
+	}
+
+	// Skip gas limit already set
+	if meta != nil && meta.GasLimit != nil {
+		return meta, nil
+	}
+
+	if len(paramValues) < 2 {
+		return meta, fmt.Errorf("expected 2 parameters for %s::%s, got %d", moduleName, functionName, len(paramValues))
+	}
+
+	reportBytes, ok := paramValues[1].([]byte)
+	if !ok {
+		return meta, fmt.Errorf("expected report parameter to be []byte, got %T", paramValues[1])
+	}
+
+	report, err := crutils.DeserializeExecutionReport(reportBytes)
+	if err != nil {
+		return meta, fmt.Errorf("failed to deserialize execution report: %+w", err)
+	}
+
+	if report == nil {
+		return meta, fmt.Errorf("execution report is nil")
+	}
+
+	if report.Message.GasLimit == nil {
+		return meta, fmt.Errorf("execution report gas limit is nil")
+	}
+
+	totalGasLimit := new(big.Int).Add(report.Message.GasLimit, big.NewInt(AptosCCIPExecuteGasLimitOverhead))
+
+	for _, tokenAmount := range report.Message.TokenAmounts {
+		destGasAmount := new(big.Int).SetUint64(uint64(tokenAmount.DestGasAmount))
+		totalGasLimit.Add(totalGasLimit, destGasAmount)
+	}
+
+	if meta == nil {
+		meta = &commontypes.TxMeta{
+			GasLimit: totalGasLimit,
+		}
+	} else {
+		meta.GasLimit = totalGasLimit
+	}
+
+	return meta, nil
 }

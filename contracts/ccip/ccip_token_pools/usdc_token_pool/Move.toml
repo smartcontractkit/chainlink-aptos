@@ -7,7 +7,6 @@ authors = []
 ccip = "_"
 ccip_token_pool = "_"
 usdc_token_pool = "_"
-token_pool_administrator = "_"
 mcms = "_"
 mcms_register_entrypoints = "_"
 local_token = "_"
@@ -20,20 +19,19 @@ stablecoin = "_"
 deployer = "_"
 
 [dev-addresses]
-ccip = "0x1000"
-ccip_token_pool = "0x2000"
-usdc_token_pool = "0x2003"
-token_pool_administrator = "0x2900"
+ccip = "0x30b33dec3fcac5ef3ea775128d88722b64ba59a4598277e537f284917403df29"
+ccip_token_pool = "0x8d62e11f76e6e92563c59e7a5e842a540f8c6c3a4ed8a32f40a5ad3425b55f86"
+usdc_token_pool = "0xd98860930ecd5176072f58aeb13d9cf72751560eef68bdd1560f4dd353246cbe"
 mcms = "0x4000"
 mcms_register_entrypoints = "0x4001"
-local_token = "0x9000"
+local_token = "0x551817a69c86cb8919862823d6462c9d8d6039d9793f0610ee16888cb7043e15"
 
 # Circle addresses
-message_transmitter = "0x0990"
-token_messenger_minter = "0x0991"
-aptos_extensions = "0x0992"
-stablecoin = "0x0993"
-deployer = "0x0994"
+message_transmitter = "0xebe6e5b8db973b4c8f5c3fbe7f5802e7a823b7ae4b70e5b6b1ce978418e5dad5"
+token_messenger_minter = "0x4e0d4a160a8490565c7f61cd21531a320ccda0f55b9c7d20131b3717650db043"
+aptos_extensions = "5ba1674a3ffa843ed88aa4a0a051b9a52f76459a8853e5cd62b22bcc488d2765"
+stablecoin = "0xd59e6aa0af32155459919e5ed2792eecd8fedcac70f2bf59840431446ed36973"
+deployer = "c06c5aa31d28c27be8345770a83b48314b829039ec5a33b79265216c13c66071"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }

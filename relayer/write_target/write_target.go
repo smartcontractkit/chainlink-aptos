@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
@@ -55,8 +56,8 @@ type contractReader interface {
 }
 
 type contractWriter interface {
-	SubmitTransaction(ctx context.Context, contractName, method string, args any, transactionID string, toAddress string, meta *commontypes.TxMeta, value *big.Int) error
-	GetTransactionStatus(ctx context.Context, transactionID string) (commontypes.TransactionStatus, error)
+	commontypes.ContractWriter
+	GetTransactionFee(ctx context.Context, transactionID string) (decimal.Decimal, error)
 }
 
 type writeTarget struct {
@@ -194,6 +195,11 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	// Helper to build monitoring (Beholder) messages
 	builder := NewMessageBuilder(c.chainInfo, capInfo)
 
+	if request.Config == nil {
+		msg := builder.buildWriteError(info, 0, "empty request config", "empty request config")
+		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
+	}
+
 	// Parse the request (WT-specific) config
 	var reqConfig ReqConfig
 	err := request.Config.UnwrapTo(&reqConfig)
@@ -211,6 +217,11 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 
 	// Source the receiver address from the config
 	info.receiver = reqConfig.Address
+
+	if request.Inputs == nil {
+		msg := builder.buildWriteError(info, 0, "empty request inputs", "empty request inputs")
+		return capabilities.CapabilityResponse{}, c.asEmittedError(ctx, msg)
+	}
 
 	// Source the signed report from the request
 	signedReport, ok := request.Inputs.Underlying[KeySignedReport]
@@ -415,7 +426,25 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	if err != nil {
 		return capabilities.CapabilityResponse{}, err
 	}
-	return success(), nil
+
+	// Get the transaction fee
+	fee, err := c.cw.GetTransactionFee(ctx, txID.String())
+	if err != nil {
+		c.lggr.Errorw("failed to get transaction fee", "error", err)
+		return success(), nil
+	}
+
+	return capabilities.CapabilityResponse{
+		Metadata: capabilities.ResponseMetadata{
+			Metering: []capabilities.MeteringNodeDetail{
+				{
+					// Peer2PeerID from remote peers is ignored by engine
+					SpendUnit:  "GAS." + c.chainInfo.ChainID,
+					SpendValue: fee.String(),
+				},
+			},
+		},
+	}, nil
 }
 
 func decodeReport(report []byte, metadata capabilities.RequestMetadata) (*platform.Report, error) {
@@ -429,7 +458,7 @@ func decodeReport(report []byte, metadata capabilities.RequestMetadata) (*platfo
 	if reportDecoded.ExecutionID != metadata.WorkflowExecutionID {
 		return nil, errors.New("decoded report execution ID does not match the request")
 	} else if reportDecoded.WorkflowID != metadata.WorkflowID {
-		return nil, errors.New("decoded report execution ID does not match the request")
+		return nil, errors.New("decoded report workflow ID does not match the request")
 	}
 
 	return reportDecoded, nil

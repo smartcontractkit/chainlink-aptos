@@ -1,7 +1,7 @@
 module ccip::auth {
     use std::error;
     use std::object;
-    use std::option;
+    use std::option::{Self, Option};
     use std::signer;
     use std::string;
 
@@ -51,9 +51,7 @@ module ccip::auth {
 
         // Register the entrypoint with mcms
         if (@mcms_register_entrypoints == @0x1) {
-            mcms_registry::register_entrypoint(
-                publisher, string::utf8(b"auth"), McmsCallback {}
-            );
+            register_mcms_entrypoint(publisher);
         };
     }
 
@@ -149,6 +147,26 @@ module ccip::auth {
         ownable::owner(&borrow_state().ownable_state)
     }
 
+    #[view]
+    public fun has_pending_transfer(): bool acquires AuthState {
+        ownable::has_pending_transfer(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_from(): Option<address> acquires AuthState {
+        ownable::pending_transfer_from(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_to(): Option<address> acquires AuthState {
+        ownable::pending_transfer_to(&borrow_state().ownable_state)
+    }
+
+    #[view]
+    public fun pending_transfer_accepted(): Option<bool> acquires AuthState {
+        ownable::pending_transfer_accepted(&borrow_state().ownable_state)
+    }
+
     public fun assert_only_owner(caller: address) acquires AuthState {
         ownable::assert_only_owner(caller, &borrow_state().ownable_state)
     }
@@ -227,6 +245,13 @@ module ccip::auth {
         };
 
         option::none()
+    }
+
+    /// Callable during upgrades
+    public(friend) fun register_mcms_entrypoint(publisher: &signer) {
+        mcms_registry::register_entrypoint(
+            publisher, string::utf8(b"auth"), McmsCallback {}
+        );
     }
 
     // ========================== TEST ONLY ==========================

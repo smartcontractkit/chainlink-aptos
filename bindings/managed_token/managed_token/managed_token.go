@@ -30,6 +30,10 @@ type ManagedTokenInterface interface {
 	IsMinterAllowed(opts *bind.CallOpts, minter aptos.AccountAddress) (bool, error)
 	IsBurnerAllowed(opts *bind.CallOpts, burner aptos.AccountAddress) (bool, error)
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
+	HasPendingTransfer(opts *bind.CallOpts) (bool, error)
+	PendingTransferFrom(opts *bind.CallOpts) (*aptos.AccountAddress, error)
+	PendingTransferTo(opts *bind.CallOpts) (*aptos.AccountAddress, error)
+	PendingTransferAccepted(opts *bind.CallOpts) (*bool, error)
 
 	Initialize(opts *bind.TransactOpts, maxSupply **big.Int, name string, symbol string, decimals byte, icon string, project string) (*api.PendingTransaction, error)
 	ApplyAllowedMinterUpdates(opts *bind.TransactOpts, mintersToRemove []aptos.AccountAddress, mintersToAdd []aptos.AccountAddress) (*api.PendingTransaction, error)
@@ -53,6 +57,10 @@ type ManagedTokenEncoder interface {
 	IsMinterAllowed(minter aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	IsBurnerAllowed(burner aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	HasPendingTransfer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferFrom() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferTo() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	PendingTransferAccepted() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Initialize(maxSupply **big.Int, name string, symbol string, decimals byte, icon string, project string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplyAllowedMinterUpdates(mintersToRemove []aptos.AccountAddress, mintersToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ApplyAllowedBurnerUpdates(burnersToRemove []aptos.AccountAddress, burnersToAdd []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -62,12 +70,9 @@ type ManagedTokenEncoder interface {
 	AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TokenStateAddressInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	TokenMetadataInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	AssertIsAllowedMinter(caller aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	AssertIsAllowedBurner(caller aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"managed_token","module":"managed_token","name":"accept_ownership","parameters":null},{"package":"managed_token","module":"managed_token","name":"apply_allowed_burner_updates","parameters":[{"name":"burners_to_remove","type":"vector\u003caddress\u003e"},{"name":"burners_to_add","type":"vector\u003caddress\u003e"}]},{"package":"managed_token","module":"managed_token","name":"apply_allowed_minter_updates","parameters":[{"name":"minters_to_remove","type":"vector\u003caddress\u003e"},{"name":"minters_to_add","type":"vector\u003caddress\u003e"}]},{"package":"managed_token","module":"managed_token","name":"assert_is_allowed_burner","parameters":[{"name":"caller","type":"address"}]},{"package":"managed_token","module":"managed_token","name":"assert_is_allowed_minter","parameters":[{"name":"caller","type":"address"}]},{"package":"managed_token","module":"managed_token","name":"burn","parameters":[{"name":"from","type":"address"},{"name":"amount","type":"u64"}]},{"package":"managed_token","module":"managed_token","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"managed_token","module":"managed_token","name":"initialize","parameters":[{"name":"max_supply","type":"0x1::option::Option\u003cu128\u003e"},{"name":"name","type":"0x1::string::String"},{"name":"symbol","type":"0x1::string::String"},{"name":"decimals","type":"u8"},{"name":"icon","type":"0x1::string::String"},{"name":"project","type":"0x1::string::String"}]},{"package":"managed_token","module":"managed_token","name":"mint","parameters":[{"name":"to","type":"address"},{"name":"amount","type":"u64"}]},{"package":"managed_token","module":"managed_token","name":"token_metadata_internal","parameters":null},{"package":"managed_token","module":"managed_token","name":"token_state_address_internal","parameters":null},{"package":"managed_token","module":"managed_token","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
+const FunctionInfo = `[{"package":"managed_token","module":"managed_token","name":"accept_ownership","parameters":null},{"package":"managed_token","module":"managed_token","name":"apply_allowed_burner_updates","parameters":[{"name":"burners_to_remove","type":"vector\u003caddress\u003e"},{"name":"burners_to_add","type":"vector\u003caddress\u003e"}]},{"package":"managed_token","module":"managed_token","name":"apply_allowed_minter_updates","parameters":[{"name":"minters_to_remove","type":"vector\u003caddress\u003e"},{"name":"minters_to_add","type":"vector\u003caddress\u003e"}]},{"package":"managed_token","module":"managed_token","name":"burn","parameters":[{"name":"from","type":"address"},{"name":"amount","type":"u64"}]},{"package":"managed_token","module":"managed_token","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"managed_token","module":"managed_token","name":"initialize","parameters":[{"name":"max_supply","type":"0x1::option::Option\u003cu128\u003e"},{"name":"name","type":"0x1::string::String"},{"name":"symbol","type":"0x1::string::String"},{"name":"decimals","type":"u8"},{"name":"icon","type":"0x1::string::String"},{"name":"project","type":"0x1::string::String"}]},{"package":"managed_token","module":"managed_token","name":"mint","parameters":[{"name":"to","type":"address"},{"name":"amount","type":"u64"}]},{"package":"managed_token","module":"managed_token","name":"token_state_address_internal","parameters":null},{"package":"managed_token","module":"managed_token","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
 
 func NewManagedToken(address aptos.AccountAddress, client aptos.AptosRpcClient) ManagedTokenInterface {
 	contract := bind.NewBoundContract(address, "managed_token", "managed_token", client)
@@ -291,6 +296,90 @@ func (c ManagedTokenContract) Owner(opts *bind.CallOpts) (aptos.AccountAddress, 
 	return r0, nil
 }
 
+func (c ManagedTokenContract) HasPendingTransfer(opts *bind.CallOpts) (bool, error) {
+	module, function, typeTags, args, err := c.managedTokenEncoder.HasPendingTransfer()
+	if err != nil {
+		return *new(bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	var (
+		r0 bool
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(bool), err
+	}
+	return r0, nil
+}
+
+func (c ManagedTokenContract) PendingTransferFrom(opts *bind.CallOpts) (*aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.managedTokenEncoder.PendingTransferFrom()
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	var (
+		r0 bind.StdOption[aptos.AccountAddress]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+	return r0.Value(), nil
+}
+
+func (c ManagedTokenContract) PendingTransferTo(opts *bind.CallOpts) (*aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.managedTokenEncoder.PendingTransferTo()
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+
+	var (
+		r0 bind.StdOption[aptos.AccountAddress]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*aptos.AccountAddress), err
+	}
+	return r0.Value(), nil
+}
+
+func (c ManagedTokenContract) PendingTransferAccepted(opts *bind.CallOpts) (*bool, error) {
+	module, function, typeTags, args, err := c.managedTokenEncoder.PendingTransferAccepted()
+	if err != nil {
+		return *new(*bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(*bool), err
+	}
+
+	var (
+		r0 bind.StdOption[bool]
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(*bool), err
+	}
+	return r0.Value(), nil
+}
+
 // Entry Functions
 
 func (c ManagedTokenContract) Initialize(opts *bind.TransactOpts, maxSupply **big.Int, name string, symbol string, decimals byte, icon string, project string) (*api.PendingTransaction, error) {
@@ -410,6 +499,22 @@ func (c managedTokenEncoder) Owner() (bind.ModuleInformation, string, []aptos.Ty
 	return c.BoundContract.Encode("owner", nil, []string{}, []any{})
 }
 
+func (c managedTokenEncoder) HasPendingTransfer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("has_pending_transfer", nil, []string{}, []any{})
+}
+
+func (c managedTokenEncoder) PendingTransferFrom() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_from", nil, []string{}, []any{})
+}
+
+func (c managedTokenEncoder) PendingTransferTo() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_to", nil, []string{}, []any{})
+}
+
+func (c managedTokenEncoder) PendingTransferAccepted() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("pending_transfer_accepted", nil, []string{}, []any{})
+}
+
 func (c managedTokenEncoder) Initialize(maxSupply **big.Int, name string, symbol string, decimals byte, icon string, project string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("initialize", nil, []string{
 		"0x1::option::Option<u128>",
@@ -490,24 +595,4 @@ func (c managedTokenEncoder) ExecuteOwnershipTransfer(to aptos.AccountAddress) (
 
 func (c managedTokenEncoder) TokenStateAddressInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("token_state_address_internal", nil, []string{}, []any{})
-}
-
-func (c managedTokenEncoder) TokenMetadataInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("token_metadata_internal", nil, []string{}, []any{})
-}
-
-func (c managedTokenEncoder) AssertIsAllowedMinter(caller aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("assert_is_allowed_minter", nil, []string{
-		"address",
-	}, []any{
-		caller,
-	})
-}
-
-func (c managedTokenEncoder) AssertIsAllowedBurner(caller aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("assert_is_allowed_burner", nil, []string{
-		"address",
-	}, []any{
-		caller,
-	})
 }

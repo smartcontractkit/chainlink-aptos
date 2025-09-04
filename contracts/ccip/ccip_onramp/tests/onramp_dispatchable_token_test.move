@@ -6,6 +6,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
     use std::vector;
     use std::object::{Self, Object, ExtendRef, ObjectCore};
     use std::account;
+    use std::bcs;
     use std::fungible_asset::{
         Self,
         Metadata,
@@ -16,7 +17,6 @@ module ccip_onramp::onramp_dispatchable_token_test {
     };
     use std::primary_fungible_store;
     use std::timestamp;
-    use std::event;
 
     use ccip::token_admin_registry;
     use ccip::rmn_remote;
@@ -28,7 +28,6 @@ module ccip_onramp::onramp_dispatchable_token_test {
     use ccip::fee_quoter::{Self};
     use ccip_onramp::mock_token;
 
-    use ccip_token_pool::token_pool;
     use burn_mint_token_pool::burn_mint_token_pool;
     use lock_release_token_pool::lock_release_token_pool;
 
@@ -209,14 +208,18 @@ module ccip_onramp::onramp_dispatchable_token_test {
         assert!(token_pool_balance == result.sent_amount);
 
         assert!(
-            event::emitted_events<token_pool::LockedOrBurned>().length() == 1
+            lock_release_token_pool::get_locked_or_burned_events(
+                lock_release_token_pool::get_store_address()
+            ).length() == 1
         );
     }
 
     fun assert_burn_mint_pool_success(result: &CCIPSendResult) {
         assert_ccip_send_success(result);
         assert!(
-            event::emitted_events<token_pool::LockedOrBurned>().length() == 1
+            burn_mint_token_pool::get_locked_or_burned_events(
+                burn_mint_token_pool::get_store_address()
+            ).length() == 1
         );
     }
 
@@ -489,7 +492,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
         };
 
         state_object::init_module_for_testing(ccip);
-        auth::test_init_module(owner);
+        auth::test_init_module(ccip);
         rmn_remote::initialize(owner, SOURCE_CHAIN_SELECTOR);
 
         token_admin_registry::init_module_for_testing(ccip);
@@ -533,11 +536,11 @@ module ccip_onramp::onramp_dispatchable_token_test {
             owner,
             DEST_CHAIN_SELECTOR, // dest_chain_selector
             vector[token_addr], // add_tokens
-            vector[0], // add_min_fee_usd_cents
-            vector[0], // add_max_fee_usd_cents
-            vector[0], // add_deci_bps
-            vector[0], // add_dest_gas_overhead
-            vector[0], // add_dest_bytes_overhead
+            vector[50], // add_min_fee_usd_cents
+            vector[500], // add_max_fee_usd_cents
+            vector[25], // add_deci_bps
+            vector[5], // add_dest_gas_overhead
+            vector[100], // add_dest_bytes_overhead
             vector[true], // add_is_enabled
             vector[] // remove_tokens
         );
@@ -646,7 +649,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
 
         if (pool_type == BURN_MINT_TOKEN_POOL) {
             burn_mint_token_pool::test_init_module(burn_mint_token_pool);
-            burn_mint_token_pool::initialize(burn_mint_token_pool, burn_ref, mint_ref);
+            burn_mint_token_pool::initialize(owner, burn_ref, mint_ref);
             burn_mint_token_pool::apply_chain_updates(
                 owner,
                 vector[],
@@ -664,10 +667,20 @@ module ccip_onramp::onramp_dispatchable_token_test {
                 INBOUND_CAPACITY, // inbound_capacity
                 INBOUND_RATE // inbound_rate
             );
+            // Set admin for token
+            token_admin_registry::propose_administrator(
+                owner, token_addr, signer::address_of(owner)
+            );
+            token_admin_registry::accept_admin_role(owner, token_addr);
+            token_admin_registry::set_pool(
+                owner,
+                token_addr,
+                signer::address_of(burn_mint_token_pool)
+            );
         } else {
             lock_release_token_pool::test_init_module(lock_release_token_pool);
             lock_release_token_pool::initialize(
-                lock_release_token_pool,
+                owner,
                 transfer_ref,
                 signer::address_of(owner)
             );
@@ -687,6 +700,16 @@ module ccip_onramp::onramp_dispatchable_token_test {
                 true,
                 INBOUND_CAPACITY, // inbound_capacity
                 INBOUND_RATE // inbound_rate
+            );
+            // Set admin for token
+            token_admin_registry::propose_administrator(
+                owner, token_addr, signer::address_of(owner)
+            );
+            token_admin_registry::accept_admin_role(owner, token_addr);
+            token_admin_registry::set_pool(
+                owner,
+                token_addr,
+                signer::address_of(lock_release_token_pool)
             );
         };
 
@@ -713,20 +736,9 @@ module ccip_onramp::onramp_dispatchable_token_test {
 
     fun create_valid_extra_args(): vector<u8> {
         let extra_args = vector[];
-
-        // Add the V2 tag as first 4 bytes
         vector::append(&mut extra_args, GENERIC_EXTRA_ARGS_V2_TAG);
-
-        // Add eth_abi encoded gas limit (100000 as u256)
-        let gas_limit_data = vector[];
-        eth_abi::encode_u256(&mut gas_limit_data, (GAS_LIMIT as u256));
-        vector::append(&mut extra_args, gas_limit_data);
-
-        // Add eth_abi encoded boolean (true) for allow_out_of_order_execution
-        let execution_flag_data = vector[];
-        eth_abi::encode_bool(&mut execution_flag_data, ALLOW_OUT_OF_ORDER_EXECUTION);
-        vector::append(&mut extra_args, execution_flag_data);
-
+        vector::append(&mut extra_args, bcs::to_bytes(&(GAS_LIMIT as u256)));
+        vector::append(&mut extra_args, bcs::to_bytes(&ALLOW_OUT_OF_ORDER_EXECUTION));
         extra_args
     }
 }

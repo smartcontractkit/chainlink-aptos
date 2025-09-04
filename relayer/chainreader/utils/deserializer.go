@@ -76,7 +76,6 @@ func DeserializeExecutionReport(data []byte) (*ExecutionReport, error) {
 	sequenceNumber := deserializer.U64()
 	nonce := deserializer.U64()
 
-	// Validate the source chain selectors match
 	if sourceChainSelector != headerSourceChain {
 		return nil, fmt.Errorf("source chain selector mismatch: %d != %d", sourceChainSelector, headerSourceChain)
 	}
@@ -107,38 +106,29 @@ func DeserializeExecutionReport(data []byte) (*ExecutionReport, error) {
 	tokenAmounts := make([]Any2AptosTokenTransfer, tokenAmountsLen)
 
 	for i := uint32(0); i < tokenAmountsLen; i++ {
-		// Read source_pool_address
 		sourcePoolAddr := deserializer.ReadBytes()
 
-		// Read dest_token_address
 		destToken := aptos.AccountAddress{}
 		deserializer.Struct(&destToken)
 
-		// Read dest_gas_amount (u32)
 		destGas := deserializer.U32()
-
-		// Read extra_data
 		extraData := deserializer.ReadBytes()
-
-		// Read amount (u256)
 		amount := deserializer.U256()
 
-		// FIXED: Use the proper type (aptos.AccountAddress directly, not sliced)
 		tokenAmounts[i] = Any2AptosTokenTransfer{
 			SourcePoolAddress: sourcePoolAddr,
-			DestTokenAddress:  destToken, // Don't slice this anymore
+			DestTokenAddress:  destToken,
 			DestGasAmount:     destGas,
 			ExtraData:         extraData,
 			Amount:            &amount,
 		}
 	}
 
-	// FIXED: Use the proper types for the message
 	message := Any2AptosRampMessage{
 		Header:       header,
 		Sender:       sender,
 		Data:         msgData,
-		Receiver:     receiver, // Don't slice this anymore
+		Receiver:     receiver,
 		GasLimit:     &gasLimit,
 		TokenAmounts: tokenAmounts,
 	}
@@ -156,11 +146,9 @@ func DeserializeExecutionReport(data []byte) (*ExecutionReport, error) {
 	proofs := make([][]byte, proofsLen)
 
 	for i := uint32(0); i < proofsLen; i++ {
-		// For fixed-length 32-byte proofs
 		proofs[i] = deserializer.ReadFixedBytes(32)
 	}
 
-	// Check if there was an error during deserialization
 	if err := deserializer.Error(); err != nil {
 		return nil, fmt.Errorf("failed to deserialize execution report: %w", err)
 	}

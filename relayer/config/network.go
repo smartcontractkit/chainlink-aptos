@@ -17,10 +17,10 @@ func GetNetworkConfig(chainID string) (aptos.NetworkConfig, error) {
 		return aptos.NetworkConfig{}, errors.New("chainID is required")
 	}
 
-	// Check if chain ID is an integer
-	id, err := strconv.Atoi(chainID)
+	// Check if chain ID is a uint8
+	id, err := strconv.ParseUint(chainID, 10, 8)
 	if err != nil {
-		return aptos.NetworkConfig{}, fmt.Errorf("chainID '%s' must be an integer: %w", chainID, err)
+		return aptos.NetworkConfig{}, fmt.Errorf("chainID '%s' must be a valid uint8 (0-255): %w", chainID, err)
 	}
 
 	// Find network with matching chain ID
