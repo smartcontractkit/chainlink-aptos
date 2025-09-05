@@ -423,7 +423,7 @@ module regulated_token::regulated_token {
                 transfer_ref: object::generate_transfer_ref(constructor_ref),
                 paused: false,
                 frozen_accounts: big_ordered_map::new_with_config(0, 0, false),
-                ownable_state: ownable::new(publisher, @regulated_token)
+                ownable_state: ownable::new(token_state_signer, @regulated_token)
             }
         );
 
