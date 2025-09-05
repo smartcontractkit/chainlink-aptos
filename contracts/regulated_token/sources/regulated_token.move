@@ -6,8 +6,7 @@ module regulated_token::regulated_token {
         FungibleAsset,
         Metadata,
         MintRef,
-        TransferRef,
-        FungibleStore
+        TransferRef
     };
     use std::object::{Self, ExtendRef, Object, TransferRef as ObjectTransferRef};
     use std::option::{Self, Option};
@@ -178,6 +177,8 @@ module regulated_token::regulated_token {
     const E_STORE_DOES_NOT_EXIST: u64 = 12;
     /// TokenState deployment has already been initialized
     const E_TOKEN_STATE_DEPLOYMENT_ALREADY_INITIALIZED: u64 = 13;
+    /// Account msut be frozen for recovery
+    const E_ACCOUNT_MUST_BE_FROZEN_FOR_RECOVERY: u64 = 14;
 
     #[view]
     public fun type_and_version(): String {
@@ -679,16 +680,25 @@ module regulated_token::regulated_token {
         from: address,
         to: address,
         transfer_ref: &TransferRef,
-        token_metadata: Object<Metadata>
+        token_state: &TokenState
     ) {
-        if (primary_fungible_store::is_frozen(from, token_metadata)) {
-            let balance = primary_fungible_store::balance(from, token_metadata);
-            if (balance > 0) {
-                primary_fungible_store::transfer_with_ref(transfer_ref, from, to, balance);
-                event::emit(
-                    TokensRecovered { caller, token_metadata, from, to, amount: balance }
-                );
-            };
+        assert!(
+            token_state.frozen_accounts.contains(&from),
+            E_ACCOUNT_MUST_BE_FROZEN_FOR_RECOVERY
+        );
+
+        let balance = primary_fungible_store::balance(from, token_state.token);
+        if (balance > 0) {
+            primary_fungible_store::transfer_with_ref(transfer_ref, from, to, balance);
+            event::emit(
+                TokensRecovered {
+                    caller,
+                    token_metadata: token_state.token,
+                    from,
+                    to,
+                    amount: balance
+                }
+            );
         };
     }
 
@@ -894,13 +904,13 @@ module regulated_token::regulated_token {
     public entry fun recover_frozen_funds(
         caller: &signer, from: address, to: address
     ) acquires TokenMetadataRefs, TokenState {
-        let transfer_ref = validate_recovery_procedure(caller, to);
+        let (transfer_ref, token_state) = validate_recovery_procedure(caller, to);
         recover_frozen_funds_internal(
             signer::address_of(caller),
             from,
             to,
             transfer_ref,
-            fungible_asset::transfer_ref_metadata(transfer_ref)
+            token_state
         );
     }
 
@@ -910,7 +920,7 @@ module regulated_token::regulated_token {
         caller: &signer, accounts: vector<address>, to: address
     ) acquires TokenMetadataRefs, TokenState {
         let caller_addr = signer::address_of(caller);
-        let transfer_ref = validate_recovery_procedure(caller, to);
+        let (transfer_ref, token_state) = validate_recovery_procedure(caller, to);
 
         for (i in 0..accounts.length()) {
             recover_frozen_funds_internal(
@@ -918,7 +928,7 @@ module regulated_token::regulated_token {
                 accounts[i],
                 to,
                 transfer_ref,
-                fungible_asset::transfer_ref_metadata(transfer_ref)
+                token_state
             );
         };
     }
@@ -934,7 +944,8 @@ module regulated_token::regulated_token {
         assert_not_frozen(to, token_state);
     }
 
-    inline fun validate_recovery_procedure(caller: &signer, to: address): &TransferRef {
+    inline fun validate_recovery_procedure(caller: &signer, to: address):
+        (&TransferRef, &TokenState) {
         let state_obj = token_state_object_internal();
         let token_state = &TokenState[object::object_address(&state_obj)];
 
@@ -942,7 +953,7 @@ module regulated_token::regulated_token {
         assert_recovery_role(caller, state_obj);
         assert_valid_recovery_recipient(to, token_state);
 
-        &borrow_token_metadata_refs().transfer_ref
+        (&borrow_token_metadata_refs().transfer_ref, token_state)
     }
 
     public entry fun transfer_admin(caller: &signer, new_admin: address) {
@@ -964,9 +975,9 @@ module regulated_token::regulated_token {
         caller_addr: address,
         from: address,
         to: address,
-        transfer_ref: &TransferRef,
-        token_metadata: Object<Metadata>
+        transfer_ref: &TransferRef
     ) {
+        let token_metadata = fungible_asset::transfer_ref_metadata(transfer_ref);
         let balance = primary_fungible_store::balance(from, token_metadata);
         if (balance > 0) {
             primary_fungible_store::transfer_with_ref(transfer_ref, from, to, balance);
@@ -987,8 +998,7 @@ module regulated_token::regulated_token {
     public entry fun recover_tokens(
         caller: &signer, to: address
     ) acquires TokenMetadataRefs, TokenState {
-        let transfer_ref = validate_recovery_procedure(caller, to);
-        let token_metadata = fungible_asset::transfer_ref_metadata(transfer_ref);
+        let (transfer_ref, _token_state) = validate_recovery_procedure(caller, to);
         let caller_addr = signer::address_of(caller);
 
         // Recover regulated tokens sent to contract
@@ -996,28 +1006,16 @@ module regulated_token::regulated_token {
             caller_addr,
             @regulated_token,
             to,
-            transfer_ref,
-            token_metadata
+            transfer_ref
         );
 
         // Recover regulated tokens sent to token state address
-        let token_state_address = token_state_address_internal();
         recover_tokens_from_address(
             caller_addr,
-            token_state_address,
+            token_state_address_internal(),
             to,
-            transfer_ref,
-            token_metadata
+            transfer_ref
         );
-    }
-
-    fun get_store(account: address, token_metadata: Object<Metadata>): Object<FungibleStore> {
-        let store = primary_fungible_store::primary_store(account, token_metadata);
-        assert!(
-            fungible_asset::store_exists(object::object_address(&store)),
-            E_STORE_DOES_NOT_EXIST
-        );
-        store
     }
 
     fun assert_not_paused(token_state: &TokenState) {

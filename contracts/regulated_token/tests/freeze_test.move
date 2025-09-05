@@ -605,7 +605,13 @@ module regulated_token::freeze_test {
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
-    fun test_recover_frozen_funds_unfrozen_account_no_op(
+    #[
+        expected_failure(
+            abort_code = regulated_token::E_ACCOUNT_MUST_BE_FROZEN_FOR_RECOVERY,
+            location = regulated_token::regulated_token
+        )
+    ]
+    fun test_recover_frozen_funds_from_unfrozen_account_reverts(
         admin: &signer, regulated_token: &signer
     ) {
         setup(admin, regulated_token);
@@ -626,21 +632,13 @@ module regulated_token::freeze_test {
         // Grant recovery role to recovery_manager
         regulated_token::grant_role(&admin_signer, 7, recovery_manager); // RECOVERY_ROLE = 7
 
-        let metadata = regulated_token::token_metadata();
-
         // Mint tokens to unfrozen user (don't freeze)
         regulated_token::mint(&freezer, unfrozen_user, initial_amount);
 
-        // Try to recover from unfrozen account - should be no-op
+        // Try to recover from unfrozen account - should revert
         regulated_token::recover_frozen_funds(
             &recovery_signer, unfrozen_user, recovery_recipient
         );
-
-        // Verify no funds were transferred (account was not frozen)
-        assert!(
-            primary_fungible_store::balance(unfrozen_user, metadata) == initial_amount
-        );
-        assert!(primary_fungible_store::balance(recovery_recipient, metadata) == 0);
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
