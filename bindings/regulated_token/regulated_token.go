@@ -57,8 +57,12 @@ func Bind(address aptos.AccountAddress, client aptos.AptosRpcClient) RegulatedTo
 func DeployToObject(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
+	adminAddress aptos.AccountAddress,
 ) (aptos.AccountAddress, *api.PendingTransaction, RegulatedToken, error) {
-	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.RegulatedToken, nil)
+	namedAddresses := map[string]aptos.AccountAddress{
+		"admin": adminAddress,
+	}
+	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.RegulatedToken, namedAddresses)
 	if err != nil {
 		return aptos.AccountAddress{}, nil, nil, err
 	}
@@ -88,11 +92,13 @@ func DeployMCMSRegistrarToExistingObject(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
 	regulatedTokenAddress aptos.AccountAddress,
+	adminAddress aptos.AccountAddress,
 	mcmsAddress aptos.AccountAddress,
 	registerMCMSEntrypoints bool,
 ) (*api.PendingTransaction, RegulatedToken, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"regulated_token":           regulatedTokenAddress,
+		"admin":                     adminAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}
