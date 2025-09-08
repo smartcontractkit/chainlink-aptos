@@ -22,6 +22,9 @@ type Config struct {
 
 	// TxBatchSize is the maximum number of transactions to fetch in a single request
 	TxBatchSize uint64
+
+	// TXPollerDisabled if this is true, the TX poller will not run on log poller start
+	TXPollerDisabled bool
 }
 
 // DefaultConfigSet is the default configuration for LogPoller
@@ -31,4 +34,5 @@ var DefaultConfigSet = Config{
 	PollTimeout:          *config.MustNewDuration(10 * time.Second),
 	EventBatchSize:       100,
 	TxBatchSize:          100,
+	TXPollerDisabled:     false,
 }
