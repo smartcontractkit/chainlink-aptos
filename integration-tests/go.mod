@@ -6,7 +6,7 @@ toolchain go1.24.7
 
 require (
 	github.com/BurntSushi/toml v1.4.0
-	github.com/docker/docker v28.3.1+incompatible
+	github.com/docker/docker v28.3.3+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/go-resty/resty/v2 v2.16.5
 	github.com/joho/godotenv v1.5.1
