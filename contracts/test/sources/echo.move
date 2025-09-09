@@ -41,7 +41,9 @@ module test::echo {
             EventStore {
                 single_value_events: account::new_event_handle<SingleValueEvent>(account),
                 double_value_events: account::new_event_handle<DoubleValueEvent>(account),
-                vector_vector_events: account::new_event_handle<VectorVectorEvent>(account),
+                vector_vector_events: account::new_event_handle<VectorVectorEvent>(
+                    account
+                ),
                 complex_struct_events: account::new_event_handle<ComplexStruct>(account)
             }
         );

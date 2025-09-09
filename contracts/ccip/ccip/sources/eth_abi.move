@@ -75,7 +75,9 @@ module ccip::eth_abi {
         };
     }
 
-    public inline fun encode_bytes(out: &mut vector<u8>, value: vector<u8>) {
+    public inline fun encode_bytes(
+        out: &mut vector<u8>, value: vector<u8>
+    ) {
         encode_u256(out, (value.length() as u256));
 
         out.append(value);
