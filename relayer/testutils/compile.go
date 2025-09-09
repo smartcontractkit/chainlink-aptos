@@ -65,7 +65,7 @@ func CompileMovePackage(
 
 	err = cmd.Run()
 	if err != nil {
-		t.Fatalf("Failed to compile contract: %v\nStderr: %s", err, stderr.String())
+		t.Fatalf("Failed to compile contract: %v\nStderr: %s\n\nStdout: %s", err, stderr.String(), stdout.String())
 	}
 
 	if stderr.Len() > 0 {
