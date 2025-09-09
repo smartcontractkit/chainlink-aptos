@@ -6,7 +6,10 @@ module regulated_token::regulated_token {
         FungibleAsset,
         Metadata,
         MintRef,
-        TransferRef
+        TransferRef,
+        RawBalanceRef,
+        RawSupplyRef,
+        MutateMetadataRef
     };
     use std::object::{Self, ExtendRef, Object, TransferRef as ObjectTransferRef};
     use std::option::{Self, Option};
@@ -67,7 +70,10 @@ module regulated_token::regulated_token {
         extend_ref: ExtendRef,
         mint_ref: MintRef,
         burn_ref: BurnRef,
-        transfer_ref: TransferRef
+        transfer_ref: TransferRef,
+        raw_balance_ref: RawBalanceRef,
+        raw_supply_ref: RawSupplyRef,
+        mutate_metadata_ref: MutateMetadataRef
     }
 
     #[event]
@@ -484,7 +490,12 @@ module regulated_token::regulated_token {
                 extend_ref: object::generate_extend_ref(constructor_ref),
                 mint_ref: fungible_asset::generate_mint_ref(constructor_ref),
                 burn_ref: fungible_asset::generate_burn_ref(constructor_ref),
-                transfer_ref: fungible_asset::generate_transfer_ref(constructor_ref)
+                transfer_ref: fungible_asset::generate_transfer_ref(constructor_ref),
+                raw_balance_ref: fungible_asset::generate_raw_balance_ref(constructor_ref),
+                raw_supply_ref: fungible_asset::generate_raw_supply_ref(constructor_ref),
+                mutate_metadata_ref: fungible_asset::generate_mutate_metadata_ref(
+                    constructor_ref
+                )
             }
         );
 
