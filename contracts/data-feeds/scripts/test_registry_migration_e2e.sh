@@ -89,6 +89,8 @@ run() {
 # ──────────────────────────────────────────────────────────────────────────────
 #  Constants / Inputs
 # ──────────────────────────────────────────────────────────────────────────────
+DATA_FEEDS_PACKAGE_NAME="data-feeds"
+
 ORACLE_PUBKEYS=(
       "247d0189f65f58be83a4e7d87ff338aaf8956e9acb9fcc783f34f9edc29d1b40"
       "ba20d3da9b07663f1e8039081a514649fd61a48be2d241bc63537ee47d028fcd"
@@ -363,7 +365,7 @@ run "Set config on Forwarder 2" _out \
 run "Deploy data-feeds (legacy, pre-migration)" OUT_DF_LEGACY \
   aptos move create-object-and-publish-package \
     --profile "$PUBLISHER_PROFILE" \
-    --package-dir "$CONTRACTS_ROOT/data-feeds/legacy/data-feeds-pre-migration" \
+    --package-dir "$CONTRACTS_ROOT/$DATA_FEEDS_PACKAGE_NAME/legacy/data-feeds-pre-migration" \
     --address-name data_feeds \
     --named-addresses platform="$PLATFORM_FORWARDER_ADDR",owner="$PUBLISHER_ADDR" \
     --max-gas 50000 --assume-yes
@@ -421,7 +423,7 @@ BENCHMARK_1=$(print "$OUT_REPORT1_READ" | jq -r '.Result[0][0].feed.benchmark')
 run "Upgrade registry contract (supports benchmark reports & 2 forwarders)" _out \
   aptos move upgrade-object \
     --profile "$PUBLISHER_PROFILE" \
-    --package-dir "$CONTRACTS_ROOT/data-feeds" \
+    --package-dir "$CONTRACTS_ROOT/$DATA_FEEDS_PACKAGE_NAME" \
     --object-address "$DATA_FEEDS_ADDR" \
     --address-name data_feeds \
     --named-addresses data_feeds="$DATA_FEEDS_ADDR",platform="$PLATFORM_FORWARDER_ADDR",owner="$PUBLISHER_ADDR",platform_secondary="$PLATFORM_SECONDARY_FORWARDER_ADDR",owner_secondary="$PUBLISHER_ADDR" \

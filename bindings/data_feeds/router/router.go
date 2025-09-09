@@ -69,6 +69,10 @@ type OwnershipTransferred struct {
 	To   aptos.AccountAddress `move:"address"`
 }
 
+type FeedRead struct {
+	FeedIds [][]byte `move:"vector<vector<u8>>"`
+}
+
 type RouterContract struct {
 	*bind.BoundContract
 	routerEncoder
