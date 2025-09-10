@@ -68,12 +68,14 @@ func DeployToObject(
 	ccipAddress,
 	mcmsAddress,
 	ccipTokenPoolAddress,
-	localTokenAddress aptos.AccountAddress,
+	localTokenAddress,
+	adminAddress aptos.AccountAddress,
 ) (aptos.AccountAddress, *api.PendingTransaction, RegulatedTokenPool, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
 		"ccip_token_pool":           ccipTokenPoolAddress,
 		"regulated_token":           localTokenAddress,
+		"admin":                     adminAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
 	}

@@ -47,19 +47,21 @@ Before deploying or interacting with the regulated token, ensure you have:
 
 1. **Aptos CLI installed and configured**
 
-   1.  Install the Aptos CLI: https://aptos.dev/build/cli
+   1. Install the Aptos CLI: https://aptos.dev/build/cli
    2. Configure your CLI with a profile by running this in the root of the repository:
+
    ```bash
    aptos init
    ```
-   
+
 Setup multiple profiles if needed:
-   ```bash
-   aptos init --profile admin
-   aptos init --profile minter
-   aptos init --profile burner
-   aptos init --profile freezer
-   ```
+
+```bash
+aptos init --profile admin
+aptos init --profile minter
+aptos init --profile burner
+aptos init --profile freezer
+```
 
 ### Deployment
 
@@ -87,8 +89,8 @@ aptos move deploy-object \
 
 After deployment, initialize the token with metadata and activate it:
 
-For maximum supply, pass 0 for unlimited, or a specific number for capped supply.
-Below we use `0` for unlimited supply.
+For maximum supply, pass empty vector for unlimited, or a specific number for capped supply.
+Below we use 'u128:[]' for unlimited supply.
 
 ```bash
 aptos move run \
@@ -98,12 +100,12 @@ aptos move run \
 # Example with actual token address:
 aptos move run \
   --function-id 0x772225b9cc6f60891b1866c5c57f3f8d8fb236173ab12fbb296cd77cc5a2b7ae::regulated_token::initialize \
-  --args u8:0 string:"RegulatedToken" string:"TKN" u8:8 string:"https://regulatedtoken.com/icon.png" string:"RegulatedToken"
+  --args 'u128:[]' string:"RegulatedToken" string:"TKN" u8:8 string:"https://regulatedtoken.com/icon.png" string:"RegulatedToken"
 ```
 
 **Parameters:**
 
-- `max_supply`: Optional maximum supply (use `0` for unlimited, or any number (`1000000000`) for capped)
+- `max_supply`: Optional maximum supply (use 'u128:[]' for unlimited, or any number ('u128:[100000000]') for capped)
 - `name`: Token name
 - `symbol`: Token symbol (e.g., "MRT")
 - `decimals`: Number of decimal places (typically 8)
