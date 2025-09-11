@@ -221,7 +221,9 @@ func (c *chain) GetClient() (aptos.AptosRpcClient, error) {
 	c.lggr.Debugw("Created client", "name", node.Name, "url", node.URL)
 
 	rateLimitedClient := ratelimit.NewRateLimitedClient(client,
-		100,            // max requests in-flight
+		c.id,
+		node.URL.String(),
+		500,            // max requests in-flight
 		30*time.Second, // timeout
 	)
 
