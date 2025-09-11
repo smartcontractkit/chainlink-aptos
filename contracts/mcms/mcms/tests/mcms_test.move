@@ -296,7 +296,9 @@ module mcms::mcms_tests {
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
-    #[expected_failure(abort_code = mcms::mcms::E_ALREADY_SEEN_HASH, location = mcms::mcms)]
+    #[expected_failure(
+        abort_code = mcms::mcms::E_ALREADY_SEEN_HASH, location = mcms::mcms
+    )]
     public fun test_set_root__already_seen_hash(
         deployer: &signer, owner: &signer, framework: &signer
     ) {
@@ -730,9 +732,11 @@ module mcms::mcms_tests {
     }
 
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
-    #[expected_failure(
-        abort_code = mcms::mcms::E_OUT_OF_BOUNDS_GROUP, location = mcms::mcms
-    )]
+    #[
+        expected_failure(
+            abort_code = mcms::mcms::E_OUT_OF_BOUNDS_GROUP, location = mcms::mcms
+        )
+    ]
     public fun test_set_config__out_of_bounds_signer_group(
         deployer: &signer, owner: &signer, framework: &signer
     ) {

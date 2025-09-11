@@ -86,6 +86,11 @@ func (l *AptosLogPoller) Start(ctx context.Context) error {
 			syncEventCtx, l.eventCtxCancel = context.WithCancel(context.Background())
 			go l.startEventPolling(syncEventCtx)
 
+			if l.config.TXPollerDisabled == true {
+				l.lggr.Info("Skipping transaction polling as TXPollerDisabled is set to true")
+				return nil
+			}
+
 			var syncTxCtx context.Context
 			syncTxCtx, l.txCtxCancel = context.WithCancel(context.Background())
 			go l.startTxPolling(syncTxCtx)
