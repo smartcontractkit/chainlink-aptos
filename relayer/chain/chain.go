@@ -127,7 +127,7 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 		return nil, err
 	}
 
-	ch.logPoller, err = logpoller.NewLogPoller(lggr, getClient, ds, cfg.LogPoller)
+	ch.logPoller, err = logpoller.NewLogPoller(lggr, cfg.ChainID, getClient, ds, cfg.LogPoller)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create log poller: %w", err)
 	}

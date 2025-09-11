@@ -31,6 +31,7 @@ type AptosLogPoller struct {
 	dbStore *db.DBStore
 	config  *Config
 	client  aptos.AptosRpcClient
+	chainID string
 
 	mu      sync.RWMutex
 	modules map[string]*moduleInfo
@@ -46,7 +47,7 @@ type AptosLogPoller struct {
 	txCtxCancel    context.CancelFunc
 }
 
-func NewLogPoller(lggr logger.Logger, getClient func() (aptos.AptosRpcClient, error), ds sqlutil.DataSource, cfg *Config) (*AptosLogPoller, error) {
+func NewLogPoller(lggr logger.Logger, chainID string, getClient func() (aptos.AptosRpcClient, error), ds sqlutil.DataSource, cfg *Config) (*AptosLogPoller, error) {
 	client, err := getClient()
 	if err != nil {
 		return nil, err
@@ -66,6 +67,7 @@ func NewLogPoller(lggr logger.Logger, getClient func() (aptos.AptosRpcClient, er
 		dbStore: dbStore,
 		config:  cfg,
 		client:  client,
+		chainID: chainID,
 
 		modules: make(map[string]*moduleInfo),
 
