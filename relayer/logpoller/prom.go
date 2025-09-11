@@ -13,7 +13,7 @@ var (
 	promLpEventsInserted = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "log_poller_events_inserted",
 		Help: "Counter to track number of events inserted by LogPoller",
-	}, []string{"chainFamily", "chainID", "networkName", "event", "is_synthetic"})
+	}, []string{"chainFamily", "chainID", "networkName", "event", "isSynthetic"})
 )
 
 func ReportEventsInserted(chainInfo monitor.ChainInfo, event string, isSynthetic bool, count int) {
