@@ -127,22 +127,14 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 		return nil, err
 	}
 
-	ch.logPoller, err = logpoller.NewLogPoller(lggr, cfg.ChainID, getClient, ds, cfg.LogPoller)
+	ch.logPoller, err = logpoller.NewLogPoller(lggr, ch.chainInfo(), getClient, ds, cfg.LogPoller)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create log poller: %w", err)
 	}
 
-	// Construct the chain information from the config
-	chainInfo := monitor.ChainInfo{
-		ChainFamilyName: config.ChainFamilyName, // static for this plugin
-		ChainID:         cfg.ChainID,
-		NetworkName:     cfg.NetworkName,
-		NetworkNameFull: cfg.NetworkNameFull,
-	}
-
 	// Setup accounts balance monitor
 	ch.balanceMonitor, err = monitor.NewBalanceMonitor(monitor.BalanceMonitorOpts{
-		ChainInfo: chainInfo,
+		ChainInfo: ch.chainInfo(),
 
 		Config:    *cfg.BalanceMonitor,
 		Logger:    lggr,
@@ -201,13 +193,16 @@ func (c *chain) GetClient() (aptos.AptosRpcClient, error) {
 			c.lggr.Warnw("failed to create node", "name", node.Name, "aptos-url", node.URL, "err", err)
 			continue
 		}
+
 		chainId, err := client.GetChainId()
 		if err != nil {
 			c.lggr.Errorw("failed to fetch chain id", "name", node.Name, "err", err)
 			continue
 		}
-		if strconv.FormatUint(uint64(chainId), 10) != c.id {
-			c.lggr.Errorw("unexpected chain id", "name", node.Name, "localChainId", c.id, "remoteChainId", chainId)
+
+		chainInfo := c.chainInfo()
+		if strconv.FormatUint(uint64(chainId), 10) != chainInfo.ChainID {
+			c.lggr.Errorw("unexpected chain id", "name", node.Name, "localChainId", chainInfo.ChainID, "remoteChainId", chainId)
 			continue
 		}
 		// if all checks passed, mark found and break loop
@@ -221,7 +216,7 @@ func (c *chain) GetClient() (aptos.AptosRpcClient, error) {
 	c.lggr.Debugw("Created client", "name", node.Name, "url", node.URL)
 
 	rateLimitedClient := ratelimit.NewRateLimitedClient(client,
-		c.id,
+		c.chainInfo(),
 		node.URL.String(),
 		500,            // max requests in-flight
 		30*time.Second, // timeout
@@ -364,4 +359,13 @@ func nodeStatus(n *config.Node, id string) (types.NodeStatus, error) {
 	}
 	s.Config = string(b)
 	return s, nil
+}
+
+func (c *chain) chainInfo() monitor.ChainInfo {
+	return monitor.ChainInfo{
+		ChainFamilyName: config.ChainFamilyName,
+		ChainID:         c.id,
+		NetworkName:     c.cfg.NetworkName,
+		NetworkNameFull: c.cfg.NetworkNameFull,
+	}
 }

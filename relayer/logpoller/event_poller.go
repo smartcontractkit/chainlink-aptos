@@ -242,7 +242,7 @@ eventLoop:
 					return fmt.Errorf("syncEvent: failed to insert batch of events: %w", err)
 				}
 
-				ReportEventsInserted(l.chainID, eventFieldName, false, len(batchRecords))
+				ReportEventsInserted(l.chainInfo, eventFieldName, false, len(batchRecords))
 
 				totalProcessed += len(batchRecords)
 				l.lggr.Debugw("syncEvent: saved batch of events",

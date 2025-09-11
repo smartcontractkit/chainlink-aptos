@@ -5,6 +5,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 )
 
 var (
@@ -18,17 +20,30 @@ var (
 		Name:    "cr_query_duration",
 		Help:    "Measures duration of ChainReader's queries fetching events",
 		Buckets: sqlLatencyBuckets,
-	}, []string{"chainFamily", "chainID", "query", "event"})
+	}, []string{"chainFamily", "chainID", "networkName", "query", "event"})
+
 	promCRQueryDataSets = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "cr_query_dataset_size",
 		Help: "Measures size of the datasets returned by ChainReader's queries",
-	}, []string{"chainFamily", "chainID", "query", "event"})
+	}, []string{"chainFamily", "chainID", "networkName", "query", "event"})
 )
 
-func RecordQueryDuration(chainID, queryType, eventKey string, duration time.Duration) {
-	promCRQueryDuration.WithLabelValues("aptos", chainID, queryType, eventKey).Observe(float64(duration.Milliseconds()))
+func RecordQueryDuration(chainInfo monitor.ChainInfo, queryType, eventKey string, duration time.Duration) {
+	promCRQueryDuration.WithLabelValues(
+		chainInfo.ChainFamilyName,
+		chainInfo.ChainID,
+		chainInfo.NetworkName,
+		queryType,
+		eventKey,
+	).Observe(float64(duration.Milliseconds()))
 }
 
-func RecordQueryResultSize(chainID, queryType, eventKey string, count int) {
-	promCRQueryDataSets.WithLabelValues("aptos", chainID, queryType, eventKey).Set(float64(count))
+func RecordQueryResultSize(chainInfo monitor.ChainInfo, queryType, eventKey string, count int) {
+	promCRQueryDataSets.WithLabelValues(
+		chainInfo.ChainFamilyName,
+		chainInfo.ChainID,
+		chainInfo.NetworkName,
+		queryType,
+		eventKey,
+	).Set(float64(count))
 }

@@ -17,6 +17,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/db"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 )
 
 type moduleInfo struct {
@@ -27,11 +28,11 @@ type moduleInfo struct {
 }
 
 type AptosLogPoller struct {
-	lggr    logger.Logger
-	dbStore *db.DBStore
-	config  *Config
-	client  aptos.AptosRpcClient
-	chainID string
+	lggr      logger.Logger
+	dbStore   *db.DBStore
+	config    *Config
+	client    aptos.AptosRpcClient
+	chainInfo monitor.ChainInfo
 
 	mu      sync.RWMutex
 	modules map[string]*moduleInfo
@@ -47,7 +48,7 @@ type AptosLogPoller struct {
 	txCtxCancel    context.CancelFunc
 }
 
-func NewLogPoller(lggr logger.Logger, chainID string, getClient func() (aptos.AptosRpcClient, error), ds sqlutil.DataSource, cfg *Config) (*AptosLogPoller, error) {
+func NewLogPoller(lggr logger.Logger, chainInfo monitor.ChainInfo, getClient func() (aptos.AptosRpcClient, error), ds sqlutil.DataSource, cfg *Config) (*AptosLogPoller, error) {
 	client, err := getClient()
 	if err != nil {
 		return nil, err
@@ -63,11 +64,11 @@ func NewLogPoller(lggr logger.Logger, chainID string, getClient func() (aptos.Ap
 	cleanupInterval := 30 * time.Minute
 
 	return &AptosLogPoller{
-		lggr:    logger.Named(lggr, "AptosLogPoller"),
-		dbStore: dbStore,
-		config:  cfg,
-		client:  client,
-		chainID: chainID,
+		lggr:      logger.Named(lggr, "AptosLogPoller"),
+		dbStore:   dbStore,
+		config:    cfg,
+		client:    client,
+		chainInfo: chainInfo,
 
 		modules: make(map[string]*moduleInfo),
 
@@ -201,6 +202,6 @@ func (l *AptosLogPoller) getEventConfig(moduleKey, eventKey string) (aptos.Accou
 	return eventAccountAddress, eventHandle, eventConfig, nil
 }
 
-func (l *AptosLogPoller) GetChainID() string {
-	return l.chainID
+func (l *AptosLogPoller) GetChainInfo() monitor.ChainInfo {
+	return l.chainInfo
 }

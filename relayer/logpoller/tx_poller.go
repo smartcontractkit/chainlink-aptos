@@ -343,7 +343,7 @@ func (l *AptosLogPoller) syncTransmitterTxs(ctx context.Context, transmitter apt
 				return totalProcessed, fmt.Errorf("failed to insert events: %w", err)
 			}
 
-			ReportEventsInserted(l.chainID, eventConfig.EventHandleFieldName, true, len(records))
+			ReportEventsInserted(l.chainInfo, eventConfig.EventHandleFieldName, true, len(records))
 
 			l.lggr.Debugw("Inserted synthetic ExecutionStateChanged events",
 				"count", len(records), "transmitter", transmitter.String())
