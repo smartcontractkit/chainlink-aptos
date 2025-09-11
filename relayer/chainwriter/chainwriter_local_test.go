@@ -21,6 +21,7 @@ import (
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
@@ -64,7 +65,12 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 	client, err := aptos.NewNodeClient(rpcURL, 0)
 	require.NoError(t, err)
 
-	rlClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
+	chainInfo := monitor.ChainInfo{
+		ChainFamilyName: "aptos",
+		ChainID:         "3",
+		NetworkName:     "testnet",
+	}
+	rlClient := ratelimit.NewRateLimitedClient(client, chainInfo, rpcURL, 100, 30*time.Second)
 	getClient := func() (aptos.AptosRpcClient, error) { return rlClient, nil }
 
 	txmConfig := txm.DefaultConfigSet

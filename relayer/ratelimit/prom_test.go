@@ -31,7 +31,7 @@ func TestSetClientLatency(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, metrics, 1)
 	mf := metrics[0]
-	require.Equal(t, "rpc_call_latency", mf.GetName())
+	require.Equal(t, "aptos_rpc_call_latency", mf.GetName())
 	require.Len(t, mf.Metric, 2)
 
 	foundSuccess, foundFailure := false, false
