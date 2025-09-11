@@ -200,3 +200,7 @@ func (l *AptosLogPoller) getEventConfig(moduleKey, eventKey string) (aptos.Accou
 	eventHandle := moduleInfo.address.String() + "::" + moduleInfo.name + "::" + eventConfig.EventHandleStructName
 	return eventAccountAddress, eventHandle, eventConfig, nil
 }
+
+func (l *AptosLogPoller) GetChainID() string {
+	return l.chainID
+}

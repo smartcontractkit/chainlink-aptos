@@ -498,6 +498,10 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	}
 
 	elapsed := time.Since(start)
+	if a.logPoller != nil {
+		RecordQueryDuration(a.logPoller.GetChainID(), "QueryKey", filter.Key, elapsed)
+		RecordQueryResultSize(a.logPoller.GetChainID(), "QueryKey", filter.Key, len(sequences))
+	}
 	a.lggr.Infow("QueryKey returning results",
 		"contract", address.String(),
 		"key", filter.Key,
