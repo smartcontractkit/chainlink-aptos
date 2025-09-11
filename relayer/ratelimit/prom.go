@@ -13,7 +13,7 @@ import (
 // because it does not have all the required labels
 var (
 	rpcCallLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "rpc_call_latency",
+		Name: "aptos_rpc_call_latency",
 		Help: "The duration of an RPC call in milliseconds",
 		Buckets: []float64{
 			float64(50 * time.Millisecond),

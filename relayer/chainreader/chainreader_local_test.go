@@ -29,6 +29,7 @@ import (
 	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/loop"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
@@ -123,7 +124,12 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 	client, err := aptos.NewNodeClient(rpcUrl, 0)
 	require.NoError(t, err)
 
-	rateLimitedClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
+	chainInfo := monitor.ChainInfo{
+		ChainFamilyName: "aptos",
+		ChainID:         "3",
+		NetworkName:     "testnet",
+	}
+	rateLimitedClient := ratelimit.NewRateLimitedClient(client, chainInfo, rpcUrl, 100, 30*time.Second)
 
 	getClient := func() (aptos.AptosRpcClient, error) { return rateLimitedClient, nil }
 
@@ -297,7 +303,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		Address: accountAddress.String(),
 	}
 
-	logPoller, err := logpoller.NewLogPoller(logger, getClient, nil, nil)
+	logPoller, err := logpoller.NewLogPoller(logger, chainInfo, getClient, nil, nil)
 	require.NoError(t, err)
 
 	chainReader := NewChainReader(logger, rateLimitedClient, config, nil, logPoller)
@@ -546,9 +552,14 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 	client, err := aptos.NewNodeClient(rpcUrl, 0)
 	require.NoError(t, err)
 
-	rateLimitedClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
-
+	chainInfo := monitor.ChainInfo{
+		ChainFamilyName: "aptos",
+		ChainID:         "3",
+		NetworkName:     "testnet",
+	}
+	rateLimitedClient := ratelimit.NewRateLimitedClient(client, chainInfo, rpcUrl, 100, 30*time.Second)
 	getClient := func() (aptos.AptosRpcClient, error) { return rateLimitedClient, nil }
+
 	txmgr, err := txm.New(logger, keystore, txm.DefaultConfigSet, getClient)
 	require.NoError(t, err)
 	err = txmgr.Start(context.Background())
@@ -579,8 +590,7 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 		},
 	}
 
-	// Create ChainReader with persistence enabled.
-	logPoller, err := logpoller.NewLogPoller(logger, getClient, db, nil)
+	logPoller, err := logpoller.NewLogPoller(logger, chainInfo, getClient, db, nil)
 	require.NoError(t, err)
 	err = logPoller.Start(context.Background())
 	require.NoError(t, err)
@@ -867,7 +877,13 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 	require.NoError(t, err)
 	err = testutils.FundWithFaucet(lg, client, acctAddr, "http://localhost:8081")
 	require.NoError(t, err)
-	rlClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
+
+	chainInfo := monitor.ChainInfo{
+		ChainFamilyName: "aptos",
+		ChainID:         "3",
+		NetworkName:     "testnet",
+	}
+	rlClient := ratelimit.NewRateLimitedClient(client, chainInfo, rpcURL, 100, 30*time.Second)
 
 	// Compile and deploy the contract.
 	compRes := testutils.CompileTestModule(t, acctAddr)
@@ -963,7 +979,7 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 	setupTestDatabase(t, db)
 
 	// Create ChainReader with persistence enabled.
-	logPoller, err := logpoller.NewLogPoller(lg, getClient, db, nil)
+	logPoller, err := logpoller.NewLogPoller(lg, chainInfo, getClient, db, nil)
 	require.NoError(t, err)
 	err = logPoller.Start(context.Background())
 	require.NoError(t, err)
