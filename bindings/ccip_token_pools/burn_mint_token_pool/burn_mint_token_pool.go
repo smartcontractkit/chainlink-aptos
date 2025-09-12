@@ -68,6 +68,7 @@ func DeployToObject(
 	mcmsAddress,
 	ccipTokenPoolAddress,
 	localTokenAddress aptos.AccountAddress,
+	registerMCMSEntrypoints bool,
 ) (aptos.AccountAddress, *api.PendingTransaction, BurnMintTokenPool, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
@@ -75,6 +76,9 @@ func DeployToObject(
 		"burn_mint_local_token":     localTokenAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
+	}
+	if registerMCMSEntrypoints {
+		namedAddresses["mcms_register_entrypoints"] = aptos.AccountOne
 	}
 	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.CCIPBurnMintPool, namedAddresses)
 	if err != nil {
@@ -90,6 +94,7 @@ func DeployToExistingObject(
 	mcmsAddress,
 	ccipTokenPoolAddress,
 	localTokenAddress aptos.AccountAddress,
+	registerMCMSEntrypoints bool,
 ) (*api.PendingTransaction, BurnMintTokenPool, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
@@ -97,6 +102,9 @@ func DeployToExistingObject(
 		"burn_mint_local_token":     localTokenAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
+	}
+	if registerMCMSEntrypoints {
+		namedAddresses["mcms_register_entrypoints"] = aptos.AccountOne
 	}
 	tx, err := bind.UpgradePackageToObject(auth, client, contracts.CCIPBurnMintPool, namedAddresses, ccipTokenPoolAddress)
 	if err != nil {
