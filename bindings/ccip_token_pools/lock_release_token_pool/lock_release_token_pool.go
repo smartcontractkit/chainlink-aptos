@@ -82,3 +82,25 @@ func DeployToObject(
 	}
 	return address, tx, Bind(address, client), nil
 }
+
+func DeployToExistingObject(
+	auth aptos.TransactionSigner,
+	client aptos.AptosRpcClient,
+	ccipAddress,
+	mcmsAddress,
+	ccipTokenPoolAddress,
+	localTokenAddress aptos.AccountAddress,
+) (*api.PendingTransaction, LockReleaseTokenPool, error) {
+	namedAddresses := map[string]aptos.AccountAddress{
+		"ccip":                      ccipAddress,
+		"ccip_token_pool":           ccipTokenPoolAddress,
+		"lock_release_local_token":  localTokenAddress,
+		"mcms":                      mcmsAddress,
+		"mcms_register_entrypoints": aptos.AccountZero,
+	}
+	tx, err := bind.UpgradePackageToObject(auth, client, contracts.CCIPLockReleasePool, namedAddresses, ccipTokenPoolAddress)
+	if err != nil {
+		return nil, nil, err
+	}
+	return tx, Bind(ccipTokenPoolAddress, client), nil
+}
