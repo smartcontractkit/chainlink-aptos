@@ -88,6 +88,16 @@ type Burn struct {
 	Amount uint64               `move:"u64"`
 }
 
+type DepositHook struct {
+	Account aptos.AccountAddress `move:"address"`
+	Amount  uint64               `move:"u64"`
+}
+
+type WithdrawHook struct {
+	Account aptos.AccountAddress `move:"address"`
+	Amount  uint64               `move:"u64"`
+}
+
 type TestTokenContract struct {
 	*bind.BoundContract
 	testTokenEncoder

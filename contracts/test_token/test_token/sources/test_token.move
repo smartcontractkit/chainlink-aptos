@@ -2,12 +2,21 @@ module test_token::test_token {
     use std::event;
     use std::error;
     use std::fungible_asset::{Self, BurnRef, Metadata, MintRef, TransferRef};
-    use std::object::{Self, ExtendRef, Object, TransferRef as ObjectTransferRef, ObjectCore};
+    use std::object::{
+        Self,
+        ExtendRef,
+        Object,
+        TransferRef as ObjectTransferRef,
+        ObjectCore
+    };
     use std::option;
-    use std::option::{Option, borrow};
+    use std::option::{Option};
     use std::primary_fungible_store;
     use std::signer;
     use std::string::{Self, String};
+    use aptos_framework::dispatchable_fungible_asset;
+    use aptos_framework::function_info;
+    use aptos_framework::fungible_asset::FungibleAsset;
 
     const TOKEN_STATE_SEED: vector<u8> = b"test_token::test_token::token_state";
 
@@ -138,17 +147,34 @@ module test_token::test_token {
         let constructor_ref =
             &object::create_named_object(token_state_signer, *symbol.bytes());
 
-        if (enable_dispatch_hook) {}
-        else {
-            primary_fungible_store::create_primary_store_enabled_fungible_asset(
+        primary_fungible_store::create_primary_store_enabled_fungible_asset(
+            constructor_ref,
+            max_supply,
+            name,
+            symbol,
+            decimals,
+            icon,
+            project
+        );
+        if (enable_dispatch_hook) {
+            let deposit =
+                function_info::new_function_info_from_address(
+                    @test_token,
+                    string::utf8(b"test_token"),
+                    string::utf8(b"deposit")
+                );
+            let withdraw =
+                function_info::new_function_info_from_address(
+                    @test_token,
+                    string::utf8(b"test_token"),
+                    string::utf8(b"withdraw")
+                );
+            dispatchable_fungible_asset::register_dispatch_functions(
                 constructor_ref,
-                max_supply,
-                name,
-                symbol,
-                decimals,
-                icon,
-                project
-            );
+                option::some(withdraw),
+                option::some(deposit),
+                option::none()
+            )
         };
 
         let metadata_object_signer = &object::generate_signer(constructor_ref);
@@ -188,6 +214,41 @@ module test_token::test_token {
             token_state_signer,
             TokenState { extend_ref, transfer_ref, token }
         );
+    }
+
+    // Hooks
+
+    #[event]
+    struct DepositHook has drop, store {
+        account: address,
+        amount: u64
+    }
+
+    public fun deposit<T: key>(
+        store: Object<T>, fa: FungibleAsset, transfer_ref: &TransferRef
+    ) {
+        event::emit(
+            DepositHook {
+                account: object::owner(store),
+                amount: fungible_asset::amount(&fa)
+            }
+        );
+
+        fungible_asset::deposit_with_ref(transfer_ref, store, fa)
+    }
+
+    #[event]
+    struct WithdrawHook has drop, store {
+        account: address,
+        amount: u64
+    }
+
+    public fun withdraw<T: key>(
+        store: Object<T>, amount: u64, transfer_ref: &TransferRef
+    ): FungibleAsset {
+        event::emit(WithdrawHook { account: object::owner(store), amount });
+
+        fungible_asset::withdraw_with_ref(transfer_ref, store, amount)
     }
 
     // ================================================================
@@ -265,13 +326,12 @@ module test_token::test_token {
     }
 
     fun assert_can_get_refs(caller_address: address) {
-        if (caller_address == @test_token) {return};
+        if (caller_address == @test_token) { return };
 
         if (object::is_object(@test_token)) {
             let test_token_object = object::address_to_object<ObjectCore>(@test_token);
-            if (caller_address == object::owner(test_token_object) || caller_address == object::root_owner(test_token_object)) {
-                return
-            };
+            if (caller_address == object::owner(test_token_object)
+                || caller_address == object::root_owner(test_token_object)) { return };
         };
 
         abort error::permission_denied(E_NOT_PUBLISHER)
