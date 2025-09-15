@@ -23,6 +23,7 @@ var (
 
 type LnrRegistrarInterface interface {
 	Initialize(opts *bind.TransactOpts) (*api.PendingTransaction, error)
+	InitializeWithoutTransferRef(opts *bind.TransactOpts) (*api.PendingTransaction, error)
 
 	// Encoder returns the encoder implementation of this module.
 	Encoder() LnrRegistrarEncoder
@@ -30,9 +31,10 @@ type LnrRegistrarInterface interface {
 
 type LnrRegistrarEncoder interface {
 	Initialize() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	InitializeWithoutTransferRef() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"test_token","module":"lnr_registrar","name":"initialize","parameters":null}]`
+const FunctionInfo = `[{"package":"test_token","module":"lnr_registrar","name":"initialize","parameters":null},{"package":"test_token","module":"lnr_registrar","name":"initialize_without_transfer_ref","parameters":null}]`
 
 func NewLnrRegistrar(address aptos.AccountAddress, client aptos.AptosRpcClient) LnrRegistrarInterface {
 	contract := bind.NewBoundContract(address, "test_token", "lnr_registrar", client)
@@ -68,6 +70,15 @@ func (c LnrRegistrarContract) Initialize(opts *bind.TransactOpts) (*api.PendingT
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
+func (c LnrRegistrarContract) InitializeWithoutTransferRef(opts *bind.TransactOpts) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.lnrRegistrarEncoder.InitializeWithoutTransferRef()
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BoundContract.Transact(opts, module, function, typeTags, args)
+}
+
 // Encoder
 type lnrRegistrarEncoder struct {
 	*bind.BoundContract
@@ -75,4 +86,8 @@ type lnrRegistrarEncoder struct {
 
 func (c lnrRegistrarEncoder) Initialize() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("initialize", nil, []string{}, []any{})
+}
+
+func (c lnrRegistrarEncoder) InitializeWithoutTransferRef() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("initialize_without_transfer_ref", nil, []string{}, []any{})
 }

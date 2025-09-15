@@ -9,4 +9,8 @@ module test_token::lnr_registrar {
 
         lock_release_token_pool::initialize(caller, option::some(transfer_ref), signer::address_of(caller));
     }
+
+    public entry fun initialize_without_transfer_ref(caller: &signer) {
+        lock_release_token_pool::initialize(caller, option::none(), signer::address_of(caller))
+    }
 }
