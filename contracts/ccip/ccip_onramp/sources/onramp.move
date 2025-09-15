@@ -449,9 +449,7 @@ module ccip_onramp::onramp {
                 error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
             );
 
-            let dest_chain_config =
-                state.dest_chain_configs.borrow_mut(dest_chain_selector);
-
+            let dest_chain_config = state.dest_chain_configs.borrow(dest_chain_selector);
             if (dest_chain_config.allowlist_enabled) {
                 assert!(
                     dest_chain_config.allowed_senders.contains(
@@ -466,13 +464,13 @@ module ccip_onramp::onramp {
                 error::invalid_argument(E_MUST_BE_CALLED_BY_ROUTER)
             );
         } else {
-            let dest_chain_configs_v2 = borrow_dest_chain_configs_v2_mut();
+            let dest_chain_configs_v2 = borrow_dest_chain_configs_v2();
             assert!(
                 dest_chain_configs_v2.dest_chain_configs.contains(dest_chain_selector),
                 error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
             );
             let dest_chain_config_v2 =
-                dest_chain_configs_v2.dest_chain_configs.borrow_mut(dest_chain_selector);
+                dest_chain_configs_v2.dest_chain_configs.borrow(dest_chain_selector);
 
             if (dest_chain_config_v2.allowlist_enabled) {
                 assert!(
@@ -772,7 +770,8 @@ module ccip_onramp::onramp {
 
             let dest_chain_config_v2 =
                 dest_chain_configs_v2.dest_chain_configs.borrow(dest_chain_selector);
-            (dest_chain_config_v2.allowlist_enabled, dest_chain_config_v2.allowed_senders)
+            (dest_chain_config_v2.allowlist_enabled,
+            dest_chain_config_v2.allowed_senders)
         }
     }
 
@@ -1509,8 +1508,20 @@ module ccip_onramp::onramp {
             bcs_stream::assert_is_consumed(&stream);
             execute_ownership_transfer(&caller, to)
         } else if (function_bytes == b"migrate_dest_chain_configs_to_v2") {
+            let dest_chain_selectors =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let router_module_addresses =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_address(stream)
+                );
             bcs_stream::assert_is_consumed(&stream);
-            migrate_dest_chain_configs_to_v2(&caller)
+            migrate_dest_chain_configs_to_v2(
+                &caller, dest_chain_selectors, router_module_addresses
+            )
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };
@@ -1538,13 +1549,17 @@ module ccip_onramp::onramp {
 
     // ========================= MIGRATION ==========================
 
-    public entry fun migrate_dest_chain_configs_to_v2(caller: &signer) acquires OnRampState {
+    public entry fun migrate_dest_chain_configs_to_v2(
+        caller: &signer,
+        dest_chain_selectors: vector<u64>,
+        router_module_addresses: vector<address>
+    ) acquires OnRampState {
         let state = borrow_state_mut();
         ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
-        let router_state_address = get_state_address_internal();
+        let state_address = get_state_address_internal();
         assert!(
-            !exists<DestChainConfigsV2>(router_state_address),
+            !exists<DestChainConfigsV2>(state_address),
             error::invalid_state(E_DEST_CHAIN_CONFIGS_V2_ALREADY_INITIALIZED)
         );
 
@@ -1559,7 +1574,8 @@ module ccip_onramp::onramp {
         migrate_dest_chain_configs_v2_internal(
             state,
             &mut mut_dest_chain_configs_v2,
-            router_state_address
+            dest_chain_selectors,
+            router_module_addresses
         );
 
         move_to(state_signer, mut_dest_chain_configs_v2);
@@ -1568,61 +1584,66 @@ module ccip_onramp::onramp {
     inline fun migrate_dest_chain_configs_v2_internal(
         state: &mut OnRampState,
         dest_chain_configs_v2: &mut DestChainConfigsV2,
-        router_state_address: address
+        dest_chain_selectors: vector<u64>,
+        router_module_addresses: vector<address>
     ) {
-        let dest_chain_selectors = vector[];
-        state.dest_chain_configs.for_each_ref(|key, _value| {
-            dest_chain_selectors.push_back(*key)
-        });
+        assert!(
+            dest_chain_selectors.length() == router_module_addresses.length(),
+            error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
+        );
 
-        dest_chain_selectors.for_each_ref(
-            |dest_chain_selector| {
-                let dest_chain_selector = *dest_chain_selector;
+        // Migrate V1 configs to V2 for provided parameters
+        for (i in 0..dest_chain_selectors.length()) {
+            let dest_chain_selector = dest_chain_selectors[i];
+            let router_module_address = router_module_addresses[i];
 
-                let DestChainConfig {
-                    sequence_number,
-                    allowlist_enabled,
-                    router,
-                    allowed_senders
-                } = state.dest_chain_configs.remove(dest_chain_selector);
+            assert!(
+                state.dest_chain_configs.contains(dest_chain_selector),
+                error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
+            );
 
-                let dest_chain_config_v2 =
-                    DestChainConfigV2 {
+            let DestChainConfig {
+                sequence_number,
+                allowlist_enabled,
+                router: router_state_address,
+                allowed_senders
+            } = state.dest_chain_configs.remove(dest_chain_selector);
+
+            let dest_chain_config_v2 = DestChainConfigV2 {
+                sequence_number,
+                allowlist_enabled,
+                router: router_module_address,
+                router_state_address,
+                allowed_senders
+            };
+
+            // Only add if it doesn't exist in V2
+            if (!dest_chain_configs_v2.dest_chain_configs.contains(dest_chain_selector)) {
+                dest_chain_configs_v2.dest_chain_configs.add(
+                    dest_chain_selector, dest_chain_config_v2
+                );
+
+                event::emit_event(
+                    &mut state.dest_chain_config_set_events,
+                    DestChainConfigSet {
+                        dest_chain_selector,
                         sequence_number,
                         allowlist_enabled,
-                        router,
+                        router: router_module_address
+                    }
+                );
+                event::emit_event(
+                    &mut dest_chain_configs_v2.dest_chain_config_v2_set_events,
+                    DestChainConfigSetV2 {
+                        dest_chain_selector,
+                        sequence_number,
+                        router: router_module_address,
                         router_state_address,
-                        allowed_senders
-                    };
-
-                // Only add if it doesn't exist in V2
-                if (!dest_chain_configs_v2.dest_chain_configs.contains(dest_chain_selector)) {
-                    dest_chain_configs_v2.dest_chain_configs.add(
-                        dest_chain_selector, dest_chain_config_v2
-                    );
-
-                    event::emit_event(
-                        &mut state.dest_chain_config_set_events,
-                        DestChainConfigSet {
-                            dest_chain_selector,
-                            sequence_number,
-                            allowlist_enabled,
-                            router
-                        }
-                    );
-                    event::emit_event(
-                        &mut dest_chain_configs_v2.dest_chain_config_v2_set_events,
-                        DestChainConfigSetV2 {
-                            dest_chain_selector,
-                            sequence_number,
-                            router,
-                            router_state_address,
-                            allowlist_enabled
-                        }
-                    );
-                }
+                        allowlist_enabled
+                    }
+                );
             }
-        );
+        };
     }
 
     // ========================== TEST ONLY ==========================
