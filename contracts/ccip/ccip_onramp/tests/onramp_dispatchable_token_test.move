@@ -96,6 +96,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
         let (_owner_addr, token_obj) =
             setup(
                 aptos_framework,
+                router,
                 ccip,
                 ccip_onramp,
                 owner,
@@ -318,6 +319,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -333,6 +335,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
     ]
     fun test_dispatchable_token_without_transfer_ref_lock_release_token_pool(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -344,6 +347,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
         let (_owner_addr, _token_obj) =
             setup(
                 aptos_framework,
+                router,
                 ccip,
                 ccip_onramp,
                 owner,
@@ -440,6 +444,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
 
     fun setup(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -521,6 +526,16 @@ module ccip_onramp::onramp_dispatchable_token_test {
             vector[DEST_CHAIN_SELECTOR], // dest_chain_selectors
             vector[ROUTER], // dest_chain_routers
             vector[false] // dest_chain_allowlist_enabled
+        );
+
+        // apply_dest_chain_config_updates_v2 with router state addresses
+        let router_state_address = signer::address_of(router);
+        onramp::apply_dest_chain_config_updates_v2(
+            owner,
+            vector[DEST_CHAIN_SELECTOR],
+            vector[ROUTER],
+            vector[router_state_address],
+            vector[false]
         );
         assert!(onramp::owner() == owner_addr);
 

@@ -263,14 +263,27 @@ module ccip_onramp::onramp {
 
         set_dynamic_config_internal(&mut state, fee_aggregator, allowlist_admin);
 
-        apply_dest_chain_config_updates_internal(
+        let dest_chain_configs_v2 = DestChainConfigsV2 {
+            dest_chain_configs: smart_table::new(),
+            dest_chain_config_v2_set_events: account::new_event_handle(state_signer)
+        };
+
+        // Since we cannot change initialize function signature, we need to set router state addresses to @0x0
+        // To update, call apply_dest_chain_config_updates_v2 with the new router state addresses
+        let router_state_addresses = dest_chain_routers.map_ref((|_| { @0x0 }));
+
+        // Initialize V2 configs using routers for both module and state addresses
+        apply_dest_chain_config_updates_v2_internal(
             &mut state,
+            &mut dest_chain_configs_v2,
             dest_chain_selectors,
-            dest_chain_routers,
+            dest_chain_routers, // router module addresses
+            router_state_addresses,
             dest_chain_allowlist_enabled
         );
 
         move_to(state_signer, state);
+        move_to(state_signer, dest_chain_configs_v2);
     }
 
     #[view]
@@ -673,22 +686,31 @@ module ccip_onramp::onramp {
         dest_chain_selectors: vector<u64>,
         dest_chain_routers: vector<address>,
         dest_chain_allowlist_enabled: vector<bool>
-    ) acquires OnRampState {
-        // Revert if V2 already exists - V1 functions should not be used after migration
-        assert!(
-            !exists<DestChainConfigsV2>(get_state_address_internal()),
-            error::invalid_state(E_DEST_CHAIN_CONFIGS_V2_ALREADY_INITIALIZED)
-        );
+    ) acquires OnRampState, DestChainConfigsV2 {
+        // Route to V2 when available, V1 for legacy deployments
+        if (exists<DestChainConfigsV2>(get_state_address_internal())) {
+            // Use V2 function with routers for both module and state addresses
+            apply_dest_chain_config_updates_v2(
+                caller,
+                dest_chain_selectors,
+                dest_chain_routers,
+                dest_chain_routers, // use same addresses for router_state_address
+                dest_chain_allowlist_enabled
+            );
+        } else {
+            // Original V1 logic for legacy deployments
+            let state = borrow_state_mut();
+            ownable::assert_only_owner(
+                signer::address_of(caller), &state.ownable_state
+            );
 
-        let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
-
-        apply_dest_chain_config_updates_internal(
-            state,
-            dest_chain_selectors,
-            dest_chain_routers,
-            dest_chain_allowlist_enabled
-        )
+            apply_dest_chain_config_updates_internal(
+                state,
+                dest_chain_selectors,
+                dest_chain_routers,
+                dest_chain_allowlist_enabled
+            );
+        }
     }
 
     #[view]
@@ -1670,5 +1692,57 @@ module ccip_onramp::onramp {
         event::emitted_events_by_handle<DestChainConfigSetV2>(
             &borrow_dest_chain_configs_v2().dest_chain_config_v2_set_events
         )
+    }
+
+    #[test_only]
+    public entry fun initialize_v1(
+        caller: &signer,
+        chain_selector: u64,
+        fee_aggregator: address,
+        allowlist_admin: address,
+        dest_chain_selectors: vector<u64>,
+        dest_chain_routers: vector<address>,
+        dest_chain_allowlist_enabled: vector<bool>
+    ) acquires OnRampDeployment {
+        assert!(chain_selector != 0, E_ZERO_CHAIN_SELECTOR);
+        assert!(
+            exists<OnRampDeployment>(@ccip_onramp),
+            error::invalid_state(E_ALREADY_INITIALIZED)
+        );
+
+        let OnRampDeployment { state_signer_cap } =
+            move_from<OnRampDeployment>(@ccip_onramp);
+
+        let state_signer = &account::create_signer_with_capability(&state_signer_cap);
+
+        let ownable_state = ownable::new(state_signer, @ccip_onramp);
+
+        ownable::assert_only_owner(signer::address_of(caller), &ownable_state);
+
+        let state = OnRampState {
+            state_signer_cap,
+            ownable_state,
+            chain_selector,
+            fee_aggregator: @0x0,
+            allowlist_admin: @0x0,
+            dest_chain_configs: smart_table::new(),
+            config_set_events: account::new_event_handle(state_signer),
+            dest_chain_config_set_events: account::new_event_handle(state_signer),
+            ccip_message_sent_events: account::new_event_handle(state_signer),
+            allowlist_senders_added_events: account::new_event_handle(state_signer),
+            allowlist_senders_removed_events: account::new_event_handle(state_signer),
+            fee_token_withdrawn_events: account::new_event_handle(state_signer)
+        };
+
+        set_dynamic_config_internal(&mut state, fee_aggregator, allowlist_admin);
+
+        apply_dest_chain_config_updates_internal(
+            &mut state,
+            dest_chain_selectors,
+            dest_chain_routers,
+            dest_chain_allowlist_enabled
+        );
+
+        move_to(state_signer, state);
     }
 }

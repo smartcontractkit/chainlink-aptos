@@ -1,14 +1,30 @@
 #[test_only]
 module ccip_onramp::onramp_migration_test {
+    use std::signer;
+    use std::account;
+    use std::object;
+    use std::object::{Object, ObjectCore};
+    use std::fungible_asset::{Metadata};
+    use std::timestamp;
+    use ccip::state_object;
+    use ccip::auth;
+    use ccip::rmn_remote;
+    use ccip::token_admin_registry;
+    use ccip::nonce_manager;
+    use ccip::fee_quoter;
     use ccip_onramp::onramp::{Self};
     use ccip_onramp::onramp_test;
 
     const BURN_MINT_TOKEN_POOL: u8 = 0;
     const LOCK_RELEASE_TOKEN_POOL: u8 = 1;
 
+    const SOURCE_CHAIN_SELECTOR: u64 = 1;
     const DEST_CHAIN_SELECTOR: u64 = 5678;
     const CHAIN_SELECTOR_2: u64 = 743186221051783445;
     const CHAIN_SELECTOR_3: u64 = 421614986313391145;
+    const FEE_AGGREGATOR: address = @0x300;
+    const ALLOWLIST_ADMIN: address = @0x400;
+    const ROUTER: address = @0x200;
 
     fun init_onramp_for_test(
         aptos_framework: &signer,
@@ -18,7 +34,7 @@ module ccip_onramp::onramp_migration_test {
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer
     ): address {
-        onramp_test::setup(
+        setup(
             aptos_framework,
             ccip,
             ccip_onramp,
@@ -552,8 +568,7 @@ module ccip_onramp::onramp_migration_test {
             lock_release_token_pool = @lock_release_token_pool
         )
     ]
-    #[expected_failure(abort_code = 196631, location = ccip_onramp::onramp)]
-    fun test_v1_function_reverts_after_v2_migration(
+    fun test_v1_function_works_with_v2_migration(
         aptos_framework: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
@@ -587,13 +602,22 @@ module ccip_onramp::onramp_migration_test {
         );
         assert!(onramp::dest_chain_configs_v2_exists());
 
-        // Now trying to use V1 function should fail with E_DEST_CHAIN_CONFIGS_V2_ALREADY_INITIALIZED
+        // Now V1 function should work via smart compatibility - routes to V2 function
         onramp::apply_dest_chain_config_updates(
             owner,
             vector[CHAIN_SELECTOR_2],
             vector[router_address_2],
             vector[false]
         );
+
+        // Verify the new chain config was added via V2
+        assert!(onramp::is_chain_supported(CHAIN_SELECTOR_2));
+        let (seq, enabled, router, router_state) =
+            onramp::get_dest_chain_config_v2(CHAIN_SELECTOR_2);
+        assert!(seq == 0);
+        assert!(enabled == false);
+        assert!(router == router_address_2);
+        assert!(router_state == router_address_2); // Smart compatibility uses same address
     }
 
     #[
@@ -746,5 +770,99 @@ module ccip_onramp::onramp_migration_test {
         assert!(enabled2 == true);
         assert!(router2 == @0xabc);
         assert!(router_state2 == onramp::get_state_address()); // V2 config created directly
+    }
+
+    fun setup(
+        aptos_framework: &signer,
+        ccip: &signer,
+        ccip_onramp: &signer,
+        owner: &signer,
+        burn_mint_token_pool: &signer,
+        lock_release_token_pool: &signer,
+        pool_type: u8, // 0 for burn_mint, 1 for lock_release
+        seed: vector<u8>,
+        is_dispatchable: bool
+    ): (address, Object<Metadata>) {
+        timestamp::set_time_has_started_for_testing(aptos_framework);
+        timestamp::update_global_time_for_test_secs(100000);
+
+        let owner_addr = signer::address_of(owner);
+        account::create_account_for_test(signer::address_of(burn_mint_token_pool));
+        account::create_account_for_test(signer::address_of(lock_release_token_pool));
+
+        // Create object for @ccip_onramp
+        let _constructor_ref = object::create_named_object(owner, b"ccip_onramp");
+
+        // Create object for @ccip
+        let _constructor_ref = object::create_named_object(owner, b"ccip");
+
+        // Create object for @burn_mint_token_pool
+        let constructor_ref = object::create_named_object(
+            owner, b"burn_mint_token_pool"
+        );
+        let burn_mint_token_pool_obj_signer = &object::generate_signer(&constructor_ref);
+
+        // Create object for @lock_release_token_pool
+        let constructor_ref =
+            object::create_named_object(owner, b"lock_release_token_pool");
+        let lock_release_token_pool_obj_signer =
+            &object::generate_signer(&constructor_ref);
+
+        // Create object for @ccip_token_pool
+        let constructor_ref =
+            object::create_named_object(
+                burn_mint_token_pool_obj_signer, b"ccip_token_pool"
+            );
+        let ccip_token_pool_obj =
+            object::object_from_constructor_ref<ObjectCore>(&constructor_ref);
+        // We need to transfer ownership of ccip_token_pool to lock_release_token_pool
+        if (pool_type == LOCK_RELEASE_TOKEN_POOL) {
+            // transfer ownership of ccip_token_pool to lock_release_token_pool
+            object::transfer(
+                burn_mint_token_pool_obj_signer,
+                ccip_token_pool_obj,
+                signer::address_of(lock_release_token_pool_obj_signer)
+            );
+        };
+
+        state_object::init_module_for_testing(ccip);
+        auth::test_init_module(ccip);
+        rmn_remote::initialize(owner, SOURCE_CHAIN_SELECTOR);
+
+        token_admin_registry::init_module_for_testing(ccip);
+        onramp::test_init_module(ccip_onramp);
+        nonce_manager::test_init_module(ccip_onramp);
+
+        let (token_obj, token_addr) =
+            onramp_test::create_test_token_and_pool(
+                owner,
+                burn_mint_token_pool,
+                lock_release_token_pool,
+                pool_type,
+                seed,
+                is_dispatchable
+            );
+
+        let one_e_18 = 1_000_000_000_000_000_000;
+
+        fee_quoter::initialize(
+            owner,
+            200 * one_e_18, // 200 link
+            token_addr,
+            12400,
+            vector[token_addr]
+        );
+
+        onramp::initialize_v1(
+            owner,
+            SOURCE_CHAIN_SELECTOR,
+            FEE_AGGREGATOR,
+            ALLOWLIST_ADMIN,
+            vector[DEST_CHAIN_SELECTOR],
+            vector[ROUTER],
+            vector[false]
+        );
+
+        (owner_addr, token_obj)
     }
 }
