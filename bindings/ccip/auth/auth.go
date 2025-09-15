@@ -74,6 +74,14 @@ func NewAuth(address aptos.AccountAddress, client aptos.AptosRpcClient) AuthInte
 	}
 }
 
+// Constants
+const (
+	E_UNKNOWN_FUNCTION    uint64 = 1
+	E_NOT_ALLOWED_ONRAMP  uint64 = 2
+	E_NOT_ALLOWED_OFFRAMP uint64 = 3
+	E_NOT_OWNER_OR_CCIP   uint64 = 4
+)
+
 // Structs
 
 type AuthState struct {

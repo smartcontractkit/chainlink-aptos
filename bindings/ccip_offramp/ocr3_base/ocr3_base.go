@@ -45,6 +45,34 @@ func NewOcr3Base(address aptos.AccountAddress, client aptos.AptosRpcClient) Ocr3
 	}
 }
 
+// Constants
+const (
+	MAX_NUM_ORACLES                   uint64 = 256
+	OCR_PLUGIN_TYPE_COMMIT            byte   = 0
+	OCR_PLUGIN_TYPE_EXECUTION         byte   = 1
+	E_BIG_F_MUST_BE_POSITIVE          uint64 = 1
+	E_STATIC_CONFIG_CANNOT_BE_CHANGED uint64 = 2
+	E_TOO_MANY_SIGNERS                uint64 = 3
+	E_BIG_F_TOO_HIGH                  uint64 = 4
+	E_TOO_MANY_TRANSMITTERS           uint64 = 5
+	E_NO_TRANSMITTERS                 uint64 = 6
+	E_REPEATED_SIGNERS                uint64 = 7
+	E_REPEATED_TRANSMITTERS           uint64 = 8
+	E_FORKED_CHAIN                    uint64 = 9
+	E_CONFIG_DIGEST_MISMATCH          uint64 = 10
+	E_UNAUTHORIZED_TRANSMITTER        uint64 = 11
+	E_WRONG_NUMBER_OF_SIGNATURES      uint64 = 12
+	E_COULD_NOT_VALIDATE_SIGNER_KEY   uint64 = 13
+	E_INVALID_REPORT_CONTEXT_LENGTH   uint64 = 14
+	E_INVALID_CONFIG_DIGEST_LENGTH    uint64 = 15
+	E_INVALID_SEQUENCE_LENGTH         uint64 = 16
+	E_UNAUTHORIZED_SIGNER             uint64 = 17
+	E_NON_UNIQUE_SIGNATURES           uint64 = 18
+	E_INVALID_SIGNATURE               uint64 = 19
+	E_ZERO_ADDRESS_NOT_ALLOWED        uint64 = 20
+	E_INVALID_SIGNATURE_LENGTH        uint64 = 21
+)
+
 // Structs
 
 type ConfigInfo struct {
