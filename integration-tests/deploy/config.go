@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"testing"
 )
 
 var (
@@ -214,6 +215,9 @@ func ValidateGeth() (*GethConfig, error) {
 func ValidateDevnet() (*DevnetConfig, error) {
 	var errs []string
 	name := "chainlink-aptos.devnet"
+	if testing.Testing() {
+		name += "-" + strconv.Itoa(os.Getpid())
+	}
 
 	devnetImage, ok := os.LookupEnv("DEVNET_IMAGE")
 
