@@ -42,6 +42,11 @@ func NewTokenPoolRateLimiter(address aptos.AccountAddress, client aptos.AptosRpc
 	}
 }
 
+// Constants
+const (
+	E_BUCKET_NOT_FOUND uint64 = 1
+)
+
 // Structs
 
 type RateLimitState struct {

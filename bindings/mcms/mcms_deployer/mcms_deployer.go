@@ -49,6 +49,11 @@ func NewMCMSDeployer(address aptos.AccountAddress, client aptos.AptosRpcClient) 
 	}
 }
 
+// Constants
+const (
+	E_CODE_MISMATCH uint64 = 1
+)
+
 // Structs
 
 type StagingArea struct {
