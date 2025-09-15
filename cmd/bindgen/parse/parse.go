@@ -37,6 +37,7 @@ type ExternalStruct struct {
 	Module  string
 	Name    string
 }
+
 type Const struct {
 	Name  string
 	Type  string
