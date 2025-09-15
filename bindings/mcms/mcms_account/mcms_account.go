@@ -52,6 +52,13 @@ func NewMCMSAccount(address aptos.AccountAddress, client aptos.AptosRpcClient) M
 	}
 }
 
+// Constants
+const (
+	E_CANNOT_TRANSFER_TO_SELF uint64 = 1
+	E_MUST_BE_PROPOSED_OWNER  uint64 = 2
+	E_UNAUTHORIZED            uint64 = 3
+)
+
 // Structs
 
 type AccountState struct {

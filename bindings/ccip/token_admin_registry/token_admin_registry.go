@@ -70,6 +70,39 @@ func NewTokenAdminRegistry(address aptos.AccountAddress, client aptos.AptosRpcCl
 	}
 }
 
+// Constants
+const (
+	E_INVALID_FUNGIBLE_ASSET           uint64 = 1
+	E_NOT_FUNGIBLE_ASSET_OWNER         uint64 = 2
+	E_INVALID_TOKEN_POOL               uint64 = 3
+	E_ALREADY_REGISTERED               uint64 = 4
+	E_UNKNOWN_FUNCTION                 uint64 = 5
+	E_PROOF_NOT_IN_TOKEN_POOL_MODULE   uint64 = 6
+	E_PROOF_NOT_AT_TOKEN_POOL_ADDRESS  uint64 = 7
+	E_UNKNOWN_PROOF_TYPE               uint64 = 8
+	E_NOT_IN_IDLE_STATE                uint64 = 9
+	E_NOT_IN_LOCK_OR_BURN_STATE        uint64 = 10
+	E_NOT_IN_RELEASE_OR_MINT_STATE     uint64 = 11
+	E_NON_EMPTY_LOCK_OR_BURN_INPUT     uint64 = 12
+	E_NON_EMPTY_LOCK_OR_BURN_OUTPUT    uint64 = 13
+	E_NON_EMPTY_RELEASE_OR_MINT_INPUT  uint64 = 14
+	E_NON_EMPTY_RELEASE_OR_MINT_OUTPUT uint64 = 15
+	E_MISSING_LOCK_OR_BURN_INPUT       uint64 = 16
+	E_MISSING_LOCK_OR_BURN_OUTPUT      uint64 = 17
+	E_MISSING_RELEASE_OR_MINT_INPUT    uint64 = 18
+	E_MISSING_RELEASE_OR_MINT_OUTPUT   uint64 = 19
+	E_TOKEN_POOL_NOT_OBJECT            uint64 = 20
+	E_ADMIN_FOR_TOKEN_ALREADY_SET      uint64 = 21
+	E_FUNGIBLE_ASSET_NOT_REGISTERED    uint64 = 22
+	E_NOT_ADMINISTRATOR                uint64 = 23
+	E_NOT_PENDING_ADMINISTRATOR        uint64 = 24
+	E_NOT_AUTHORIZED                   uint64 = 25
+	E_INVALID_TOKEN_FOR_POOL           uint64 = 26
+	E_ADMIN_NOT_SET_FOR_TOKEN          uint64 = 27
+	E_ADMIN_ALREADY_SET_FOR_TOKEN      uint64 = 28
+	E_ZERO_ADDRESS                     uint64 = 29
+)
+
 // Structs
 
 type TokenAdminRegistryState struct {

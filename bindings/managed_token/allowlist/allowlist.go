@@ -43,6 +43,11 @@ func NewAllowlist(address aptos.AccountAddress, client aptos.AptosRpcClient) All
 	}
 }
 
+// Constants
+const (
+	E_ALLOWLIST_NOT_ENABLED uint64 = 1
+)
+
 // Structs
 
 type AllowlistState struct {
