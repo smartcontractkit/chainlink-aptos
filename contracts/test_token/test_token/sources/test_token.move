@@ -258,10 +258,10 @@ module test_token::test_token {
     public entry fun mint(
         minter: &signer, to: address, amount: u64
     ) acquires TokenMetadataRefs, TokenState {
+        if (amount == 0) { return };
+        
         let minter_addr = signer::address_of(minter);
         let state = &mut TokenState[token_state_address_internal()];
-
-        if (amount == 0) { return };
 
         primary_fungible_store::mint(
             &borrow_token_metadata_refs(state).mint_ref, to, amount
@@ -273,10 +273,10 @@ module test_token::test_token {
     public entry fun burn(
         burner: &signer, from: address, amount: u64
     ) acquires TokenMetadataRefs, TokenState {
+        if (amount == 0) { return };
+        
         let burner_addr = signer::address_of(burner);
         let state = &mut TokenState[token_state_address_internal()];
-
-        if (amount == 0) { return };
 
         primary_fungible_store::burn(
             &borrow_token_metadata_refs(state).burn_ref, from, amount
