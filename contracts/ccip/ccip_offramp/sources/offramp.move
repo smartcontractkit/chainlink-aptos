@@ -241,6 +241,7 @@ module ccip_offramp::offramp {
     const E_SIGNATURE_VERIFICATION_NOT_ALLOWED_IN_EXECUTION_PLUGIN: u64 = 23;
     const E_RMN_BLESSING_MISMATCH: u64 = 24;
     const E_INVALID_ON_RAMP_UPDATE: u64 = 25;
+    const E_CALCULATE_MESSAGE_HASH_INVALID_ARGUMENTS: u64 = 26;
 
     #[view]
     public fun type_and_version(): String {
@@ -423,15 +424,14 @@ module ccip_offramp::offramp {
         let source_chain_config =
             state.source_chain_configs.borrow(source_chain_selector);
         let metadata_hash =
-            calculate_metadata_hash(
+            calculate_metadata_hash_inlined(
                 source_chain_selector,
                 state.chain_selector,
                 source_chain_config.on_ramp
             );
 
-        let hashed_leaf = calculate_message_hash(
-            &execution_report.message, metadata_hash
-        );
+        let hashed_leaf =
+            calculate_message_hash_inlined(&execution_report.message, metadata_hash);
 
         let root = merkle_proof::merkle_root(hashed_leaf, execution_report.proofs);
 
@@ -1016,7 +1016,7 @@ module ccip_offramp::offramp {
     // |                        Metadata hash                         |
     // ================================================================
 
-    inline fun calculate_metadata_hash(
+    inline fun calculate_metadata_hash_inlined(
         source_chain_selector: u64, dest_chain_selector: u64, on_ramp: vector<u8>
     ): vector<u8> {
         let packed = vector[];
@@ -1029,7 +1029,79 @@ module ccip_offramp::offramp {
         aptos_hash::keccak256(packed)
     }
 
-    inline fun calculate_message_hash(
+    #[view]
+    public fun calculate_metadata_hash(
+        source_chain_selector: u64, dest_chain_selector: u64, on_ramp: vector<u8>
+    ): vector<u8> {
+        calculate_metadata_hash_inlined(
+            source_chain_selector, dest_chain_selector, on_ramp
+        )
+    }
+
+    #[view]
+    public fun calculate_message_hash(
+        message_id: vector<u8>,
+        source_chain_selector: u64,
+        dest_chain_selector: u64,
+        sequence_number: u64,
+        nonce: u64,
+        sender: vector<u8>,
+        receiver: address,
+        on_ramp: vector<u8>,
+        data: vector<u8>,
+        gas_limit: u256,
+        source_pool_addresses: vector<vector<u8>>,
+        dest_token_addresses: vector<address>,
+        dest_gas_amounts: vector<u32>,
+        extra_datas: vector<vector<u8>>,
+        amounts: vector<u256>
+    ): vector<u8> {
+        let source_pool_addresses_len = source_pool_addresses.length();
+        assert!(
+            source_pool_addresses_len == dest_token_addresses.length()
+                && source_pool_addresses_len == dest_gas_amounts.length()
+                && source_pool_addresses_len == extra_datas.length()
+                && source_pool_addresses_len == amounts.length(),
+            error::invalid_argument(E_CALCULATE_MESSAGE_HASH_INVALID_ARGUMENTS)
+        );
+
+        let metadata_hash =
+            calculate_metadata_hash_inlined(
+                source_chain_selector, dest_chain_selector, on_ramp
+            );
+
+        let token_amounts = vector[];
+        for (i in 0..source_pool_addresses_len) {
+            token_amounts.push_back(
+                Any2AptosTokenTransfer {
+                    source_pool_address: source_pool_addresses[i],
+                    dest_token_address: dest_token_addresses[i],
+                    dest_gas_amount: dest_gas_amounts[i],
+                    extra_data: extra_datas[i],
+                    amount: amounts[i]
+                }
+            );
+        };
+
+        let message = Any2AptosRampMessage {
+            header: RampMessageHeader {
+                message_id,
+                source_chain_selector,
+                dest_chain_selector,
+                sequence_number,
+                nonce
+            },
+            sender,
+            data,
+            receiver,
+            gas_limit,
+            token_amounts
+        };
+
+        calculate_message_hash_inlined(&message, metadata_hash)
+    }
+
+    inline fun calculate_message_hash_inlined(
         message: &Any2AptosRampMessage, metadata_hash: vector<u8>
     ): vector<u8> {
         let outer_hash = vector[];
@@ -1205,6 +1277,8 @@ module ccip_offramp::offramp {
                 &mut stream,
                 |stream| bcs_stream::deserialize_fixed_vector_u8(stream, 32)
             );
+
+        bcs_stream::assert_is_consumed(&stream);
 
         ExecutionReport { source_chain_selector, message, offchain_token_data, proofs }
     }
@@ -1526,14 +1600,16 @@ module ccip_offramp::offramp {
     public fun test_calculate_metadata_hash(
         source_chain_selector: u64, dest_chain_selector: u64, onramp: vector<u8>
     ): vector<u8> {
-        calculate_metadata_hash(source_chain_selector, dest_chain_selector, onramp)
+        calculate_metadata_hash_inlined(
+            source_chain_selector, dest_chain_selector, onramp
+        )
     }
 
     #[test_only]
     public fun test_calculate_message_hash(
         message: &Any2AptosRampMessage, metadata_hash: vector<u8>
     ): vector<u8> {
-        calculate_message_hash(message, metadata_hash)
+        calculate_message_hash_inlined(message, metadata_hash)
     }
 
     #[test_only]

@@ -27,6 +27,8 @@ module data_feeds::registry {
         callback_registered: bool
     }
 
+    // The report field is now unused, and will be an empty
+    // vector<u8> in all future writes
     struct Feed has key, store, drop, copy {
         description: String,
         config_id: vector<u8>,
@@ -35,7 +37,7 @@ module data_feeds::registry {
         observation_timestamp: u256
     }
 
-    struct Benchmark has store, drop {
+    struct Benchmark has store, drop, copy {
         benchmark: u256,
         observation_timestamp: u256
     }
@@ -83,6 +85,8 @@ module data_feeds::registry {
         feed_id: vector<u8>
     }
 
+    // The report field is now unused, and will be an empty
+    // vector<u8> in all future writes
     #[event]
     struct FeedUpdated has drop, store {
         feed_id: vector<u8>,
@@ -96,6 +100,11 @@ module data_feeds::registry {
         feed_id: vector<u8>,
         latest_timestamp: u256,
         report_timestamp: u256
+    }
+
+    #[event]
+    struct WriteSkippedFeedNotSet has drop, store {
+        feed_id: vector<u8>
     }
 
     #[event]
@@ -215,8 +224,7 @@ module data_feeds::registry {
         );
 
         let registry = borrow_global_mut<Registry>(get_state_addr());
-        let extend_ref = &registry.extend_ref;
-        let object_signer = object::generate_signer_for_extending(extend_ref);
+        let object_signer = object::generate_signer_for_extending(&registry.extend_ref);
 
         // callback for on_report_secondary function
         let cb_secondary =
@@ -492,6 +500,8 @@ module data_feeds::registry {
         }
     }
 
+    // N.B. This FeedConfig type has a report field. These report fields are now being
+    // set to an empty vector<u8> on the on_report path(s).
     #[view]
     public fun get_feeds(): vector<FeedConfig> acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());
@@ -601,10 +611,12 @@ module data_feeds::registry {
     fun perform_update(
         registry: &mut Registry, feed_id: vector<u8>, report_data: vector<u8>
     ) {
-        assert!(
-            simple_map::contains_key(&registry.feeds, &feed_id),
-            error::invalid_argument(EFEED_NOT_CONFIGURED)
-        );
+        if (!simple_map::contains_key(&registry.feeds, &feed_id)) {
+            event::emit(WriteSkippedFeedNotSet { feed_id });
+
+            return
+        };
+
         let feed = simple_map::borrow_mut(&mut registry.feeds, &feed_id);
 
         let is_v03 = vector::length(&report_data) == 9 * 32; // 288 bytes
@@ -645,14 +657,18 @@ module data_feeds::registry {
 
         feed.observation_timestamp = observation_timestamp;
         feed.benchmark = benchmark_price;
-        feed.report = report_data;
+
+        if (vector::length(&feed.report) != 0) {
+            // Set to empty as value, as reports are deprecated.
+            feed.report = vector::empty<u8>();
+        };
 
         event::emit(
             FeedUpdated {
                 feed_id,
                 timestamp: observation_timestamp,
                 benchmark: benchmark_price,
-                report: report_data
+                report: vector::empty<u8>()
             }
         );
     }
@@ -973,6 +989,78 @@ module data_feeds::registry {
         assert!(benchmark.observation_timestamp == expected_timestamp, 1);
     }
 
+    #[
+        test(
+            owner = @owner,
+            publisher = @data_feeds,
+            platform = @platform,
+            platform_secondary = @platform_secondary
+        )
+    ]
+    #[expected_failure(abort_code = 65540, location = data_feeds::registry)]
+    fun test_perform_update_not_set(
+        owner: &signer,
+        publisher: &signer,
+        platform: &signer,
+        platform_secondary: &signer
+    ) acquires Registry {
+        set_up_test(publisher, platform, platform_secondary);
+
+        let report_data =
+            x"0000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a8";
+
+        // Feed ID not stored in this report format
+        let feed_id = x"0003111111111111111100000000000000000000000000000000000000000000";
+        let expected_timestamp = 0x000066c2e36c;
+        let expected_benchmark = 0x0000000494a8;
+
+        let config_id = vector[1];
+
+        let report_data_not_set =
+            x"0003acdb4fce42f65d6032b18aee53efdf526cc734ad296cb57565979d883bdd0000000000000000000000000000000000000000000000000000000066ed173e0000000000000000000000000000000000000000000000000000000066ed174200000000000000007fffffffffffffffffffffffffffffffffffffffffffffff00000000000000007fffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000066ee68c2000000000000000000000000000000000000000000000d808cc35e6ed670bd00000000000000000000000000000000000000000000000d808590c35425347980000000000000000000000000000000000000000000000d8093f5f989878e7c00";
+        let feed_id_not_set =
+            x"0003222222222222222200000000000000000000000000000000000000000000";
+
+        // Only set one of the feed configs
+        set_feeds(
+            owner,
+            vector[feed_id],
+            vector[string::utf8(b"description")],
+            config_id
+        );
+
+        let registry = borrow_global_mut<Registry>(get_state_addr());
+
+        // Test this doesn't block the next update
+        perform_update(registry, feed_id_not_set, report_data_not_set);
+
+        perform_update(registry, feed_id, report_data);
+
+        let benchmarks = get_benchmarks(owner, vector[feed_id]);
+        assert!(vector::length(&benchmarks) == 1, 1);
+
+        let benchmark = vector::borrow(&benchmarks, 0);
+
+        assert!(benchmark.benchmark == expected_benchmark, 1);
+        assert!(benchmark.observation_timestamp == expected_timestamp, 1);
+
+        registry = borrow_global_mut<Registry>(get_state_addr());
+
+        // Test this doesn't undo the previous update
+        perform_update(registry, feed_id_not_set, report_data_not_set);
+
+        benchmarks = get_benchmarks(owner, vector[feed_id]);
+        assert!(vector::length(&benchmarks) == 1, 1);
+
+        benchmark = vector::borrow(&benchmarks, 0);
+
+        assert!(benchmark.benchmark == expected_benchmark, 1);
+        assert!(benchmark.observation_timestamp == expected_timestamp, 1);
+
+        // Fail on attempting to fetch benchmark for feed_id_not_set
+        get_benchmarks(owner, vector[feed_id_not_set]);
+    }
+
     #[test]
     fun test_parse_raw_report_v3() {
         // request_context = 00018463f564e082c55b7237add2a03bd6b3c35789d38be0f6964d9aba82f1a8000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000
@@ -1012,8 +1100,6 @@ module data_feeds::registry {
             x"00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000001c000031111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000012000031111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800032222222222222222000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000012000032222222222222222000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000066b3a12c0000000000000000000000000000000000000000000000000000000066b3a12c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a80000000000000000000000000000000000000000000000000000000066c2e36c00000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a800000000000000000000000000000000000000000000000000000000000494a8";
 
         let (feed_ids, reports) = parse_raw_report(&data);
-        std::debug::print(&feed_ids);
-        std::debug::print(&reports);
 
         assert!(
             feed_ids
@@ -1072,6 +1158,75 @@ module data_feeds::registry {
 
         assert!(benchmark.benchmark == expected_benchmark, 1);
         assert!(benchmark.observation_timestamp == expected_timestamp, 1);
+    }
+
+    #[
+        test(
+            owner = @owner,
+            publisher = @data_feeds,
+            platform = @platform,
+            platform_secondary = @platform_secondary
+        )
+    ]
+    #[expected_failure(abort_code = 65540, location = data_feeds::registry)]
+    fun test_perform_update_v3_feed_not_set(
+        owner: &signer,
+        publisher: &signer,
+        platform: &signer,
+        platform_secondary: &signer
+    ) acquires Registry {
+        set_up_test(publisher, platform, platform_secondary);
+
+        let report_data =
+            x"0003fbba4fce42f65d6032b18aee53efdf526cc734ad296cb57565979d883bdd0000000000000000000000000000000000000000000000000000000066ed173e0000000000000000000000000000000000000000000000000000000066ed174200000000000000007fffffffffffffffffffffffffffffffffffffffffffffff00000000000000007fffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000066ee68c2000000000000000000000000000000000000000000000d808cc35e6ed670bd00000000000000000000000000000000000000000000000d808590c35425347980000000000000000000000000000000000000000000000d8093f5f989878e7c00";
+        let feed_id = vector::slice(&report_data, 0, 32);
+        let expected_timestamp = 0x000066ed1742;
+        let expected_benchmark = 0x000d808cc35e6ed670bd00;
+
+        let config_id = vector[1];
+
+        let report_data_not_set =
+            x"0003acdb4fce42f65d6032b18aee53efdf526cc734ad296cb57565979d883bdd0000000000000000000000000000000000000000000000000000000076ed173e0000000000000000000000000000000000000000000000000000000076ed174200000000000000004affffffffffffffffffffffffffffffffffffffffffffff00000000000000004affffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000076ee68c2000000000000000000000000000000000000000000000e808cc35e6ed670bd00000000000000000000000000000000000000000000000e808590c35425347980000000000000000000000000000000000000000000000e8093f5f989878e7c00";
+        let feed_id_not_set = vector::slice(&report_data_not_set, 0, 32);
+
+        // Only set one of the feed configs
+        set_feeds(
+            owner,
+            vector[feed_id],
+            vector[string::utf8(b"description")],
+            config_id
+        );
+
+        let registry = borrow_global_mut<Registry>(get_state_addr());
+
+        // Test this doesn't block the next update
+        perform_update(registry, feed_id_not_set, report_data_not_set);
+
+        perform_update(registry, feed_id, report_data);
+
+        let benchmarks = get_benchmarks(owner, vector[feed_id]);
+        assert!(vector::length(&benchmarks) == 1, 1);
+
+        let benchmark = vector::borrow(&benchmarks, 0);
+
+        assert!(benchmark.benchmark == expected_benchmark, 1);
+        assert!(benchmark.observation_timestamp == expected_timestamp, 1);
+
+        registry = borrow_global_mut<Registry>(get_state_addr());
+
+        // Test this doesn't undo the previous update
+        perform_update(registry, feed_id_not_set, report_data_not_set);
+
+        benchmarks = get_benchmarks(owner, vector[feed_id]);
+        assert!(vector::length(&benchmarks) == 1, 1);
+
+        benchmark = vector::borrow(&benchmarks, 0);
+
+        assert!(benchmark.benchmark == expected_benchmark, 1);
+        assert!(benchmark.observation_timestamp == expected_timestamp, 1);
+
+        // Fail on attempting to fetch benchmark for feed_id_not_set
+        get_benchmarks(owner, vector[feed_id_not_set]);
     }
 
     #[

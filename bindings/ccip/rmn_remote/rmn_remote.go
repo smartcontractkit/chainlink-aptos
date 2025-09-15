@@ -75,6 +75,28 @@ func NewRMNRemote(address aptos.AccountAddress, client aptos.AptosRpcClient) RMN
 	}
 }
 
+// Constants
+const (
+	E_ALREADY_INITIALIZED         uint64 = 1
+	E_ALREADY_CURSED              uint64 = 2
+	E_CONFIG_NOT_SET              uint64 = 3
+	E_DUPLICATE_SIGNER            uint64 = 4
+	E_INVALID_SIGNATURE           uint64 = 5
+	E_INVALID_SIGNER_ORDER        uint64 = 6
+	E_NOT_ENOUGH_SIGNERS          uint64 = 7
+	E_NOT_CURSED                  uint64 = 8
+	E_OUT_OF_ORDER_SIGNATURES     uint64 = 9
+	E_THRESHOLD_NOT_MET           uint64 = 10
+	E_UNEXPECTED_SIGNER           uint64 = 11
+	E_ZERO_VALUE_NOT_ALLOWED      uint64 = 12
+	E_MERKLE_ROOT_LENGTH_MISMATCH uint64 = 13
+	E_INVALID_DIGEST_LENGTH       uint64 = 14
+	E_SIGNERS_MISMATCH            uint64 = 15
+	E_INVALID_SUBJECT_LENGTH      uint64 = 16
+	E_INVALID_PUBLIC_KEY_LENGTH   uint64 = 17
+	E_UNKNOWN_FUNCTION            uint64 = 18
+)
+
 // Structs
 
 type RMNRemoteState struct {

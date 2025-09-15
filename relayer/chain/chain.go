@@ -21,6 +21,7 @@ import (
 	commonutils "github.com/smartcontractkit/chainlink-common/pkg/utils"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/config"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
@@ -35,6 +36,7 @@ type Chain interface {
 	DataSource() sqlutil.DataSource
 
 	TxManager() *txm.AptosTxm
+	LogPoller() *logpoller.AptosLogPoller
 	GetClient() (aptos.AptosRpcClient, error)
 }
 
@@ -77,6 +79,7 @@ type chain struct {
 
 	// Sub-services
 	txm            *txm.AptosTxm
+	logPoller      *logpoller.AptosLogPoller
 	balanceMonitor services.Service
 }
 
@@ -124,6 +127,11 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 		return nil, err
 	}
 
+	ch.logPoller, err = logpoller.NewLogPoller(lggr, getClient, ds, cfg.LogPoller)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create log poller: %w", err)
+	}
+
 	// Construct the chain information from the config
 	chainInfo := monitor.ChainInfo{
 		ChainFamilyName: config.ChainFamilyName, // static for this plugin
@@ -158,6 +166,10 @@ func (c *chain) Config() *config.TOMLConfig {
 
 func (c *chain) TxManager() *txm.AptosTxm {
 	return c.txm
+}
+
+func (c *chain) LogPoller() *logpoller.AptosLogPoller {
+	return c.logPoller
 }
 
 func (c *chain) DataSource() sqlutil.DataSource {
@@ -220,10 +232,11 @@ func (c *chain) Start(ctx context.Context) error {
 	return c.starter.StartOnce("Chain", func() error {
 		c.lggr.Debug("Starting")
 		c.lggr.Debug("Starting txm")
+		c.lggr.Debug("Starting logPoller")
 		c.lggr.Debug("Starting balance monitor")
 
 		var ms services.MultiStart
-		return ms.Start(ctx, c.txm, c.balanceMonitor)
+		return ms.Start(ctx, c.txm, c.logPoller, c.balanceMonitor)
 	})
 }
 
@@ -231,19 +244,21 @@ func (c *chain) Close() error {
 	return c.starter.StopOnce("Chain", func() error {
 		c.lggr.Debug("Stopping")
 		c.lggr.Debug("Stopping txm")
+		c.lggr.Debug("Stopping logPoller")
 		c.lggr.Debug("Stopping balance monitor")
 
-		return services.CloseAll(c.txm, c.balanceMonitor)
+		return services.CloseAll(c.txm, c.logPoller, c.balanceMonitor)
 	})
 }
 
 func (c *chain) Ready() error {
-	return errors.Join(c.starter.Ready(), c.txm.Ready(), c.balanceMonitor.Ready())
+	return errors.Join(c.starter.Ready(), c.txm.Ready(), c.logPoller.Ready(), c.balanceMonitor.Ready())
 }
 
 func (c *chain) HealthReport() map[string]error {
 	report := map[string]error{c.Name(): c.starter.Healthy()}
 	services.CopyHealth(report, c.txm.HealthReport())
+	services.CopyHealth(report, c.logPoller.HealthReport())
 	services.CopyHealth(report, c.balanceMonitor.HealthReport())
 	return report
 }

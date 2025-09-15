@@ -8,6 +8,7 @@ import (
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/shopspring/decimal"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
@@ -17,6 +18,10 @@ import (
 	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
+
+// On Aptos, we're unable to specify the gas limit for the receiver, so we need to add on a baseline execute overhead so the transaction will always at least be attempted on-chain.
+// TODO: This should be configurable and passed in as a CW config param.
+const AptosCCIPExecuteGasLimitOverhead = 34
 
 type aptosChainWriter struct {
 	logger    logger.Logger
@@ -160,6 +165,14 @@ func (a *aptosChainWriter) GetTransactionStatus(ctx context.Context, transaction
 	return a.txm.GetStatus(transactionID)
 }
 
+func (a *aptosChainWriter) GetTransactionFee(ctx context.Context, transactionID string) (decimal.Decimal, error) {
+	fee, err := a.txm.GetTransactionFee(ctx, transactionID)
+	if err != nil {
+		return decimal.Decimal{}, err
+	}
+	return decimal.NewFromBigInt(fee, -8), nil // Convert from octas (1e-8 APT) to APT
+}
+
 func (a *aptosChainWriter) GetFeeComponents(ctx context.Context) (*commontypes.ChainFeeComponents, error) {
 	if a.feeClient == nil {
 		return nil, errors.New("fee estimation not available")
@@ -225,7 +238,7 @@ func adjustTxMetaForCCIPExecute(meta *commontypes.TxMeta, moduleName, functionNa
 		return meta, fmt.Errorf("execution report gas limit is nil")
 	}
 
-	totalGasLimit := new(big.Int).Set(report.Message.GasLimit)
+	totalGasLimit := new(big.Int).Add(report.Message.GasLimit, big.NewInt(AptosCCIPExecuteGasLimitOverhead))
 
 	for _, tokenAmount := range report.Message.TokenAmounts {
 		destGasAmount := new(big.Int).SetUint64(uint64(tokenAmount.DestGasAmount))

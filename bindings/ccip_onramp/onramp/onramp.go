@@ -32,6 +32,8 @@ type OnrampInterface interface {
 	GetOutboundNonce(opts *bind.CallOpts, destChainSelector uint64, sender aptos.AccountAddress) (uint64, error)
 	GetStaticConfig(opts *bind.CallOpts) (StaticConfig, error)
 	GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, error)
+	CalculateMetadataHash(opts *bind.CallOpts, sourceChainSelector uint64, destChainSelector uint64) ([]byte, error)
+	CalculateMessageHash(opts *bind.CallOpts, messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender aptos.AccountAddress, receiver []byte, data []byte, feeToken aptos.AccountAddress, feeTokenAmount uint64, sourcePoolAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, extraDatas [][]byte, amounts []uint64, destExecDatas [][]byte, extraArgs []byte) ([]byte, error)
 	Owner(opts *bind.CallOpts) (aptos.AccountAddress, error)
 	HasPendingTransfer(opts *bind.CallOpts) (bool, error)
 	PendingTransferFrom(opts *bind.CallOpts) (*aptos.AccountAddress, error)
@@ -62,6 +64,8 @@ type OnrampEncoder interface {
 	GetOutboundNonce(destChainSelector uint64, sender aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStaticConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetDynamicConfig() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	CalculateMetadataHash(sourceChainSelector uint64, destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	CalculateMessageHash(messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender aptos.AccountAddress, receiver []byte, data []byte, feeToken aptos.AccountAddress, feeTokenAmount uint64, sourcePoolAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, extraDatas [][]byte, amounts []uint64, destExecDatas [][]byte, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	HasPendingTransfer() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	PendingTransferFrom() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -79,13 +83,13 @@ type OnrampEncoder interface {
 	ResolveFungibleAsset(token aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ResolveFungibleStore(owner aptos.AccountAddress, token aptos.AccountAddress, storeAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CCIPSend(destChainSelector uint64, receiver []byte, data []byte, tokenAddresses []aptos.AccountAddress, tokenAmounts []uint64, tokenStoreAddresses []aptos.AccountAddress, feeToken aptos.AccountAddress, feeTokenStore aptos.AccountAddress, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	CalculateMetadataHash(sourceChainSelector uint64, destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	CalculateMetadataHashInlined(sourceChainSelector uint64, destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetStateAddressInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	RegisterMCMSEntrypoint() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip_onramp","module":"onramp","name":"accept_ownership","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"apply_allowlist_updates","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"},{"name":"dest_chain_add_allowed_senders","type":"vector\u003cvector\u003caddress\u003e\u003e"},{"name":"dest_chain_remove_allowed_senders","type":"vector\u003cvector\u003caddress\u003e\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"apply_dest_chain_config_updates","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"calculate_metadata_hash","parameters":[{"name":"source_chain_selector","type":"u64"},{"name":"dest_chain_selector","type":"u64"}]},{"package":"ccip_onramp","module":"onramp","name":"ccip_send","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"get_fee_internal","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"get_state_address_internal","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"initialize","parameters":[{"name":"chain_selector","type":"u64"},{"name":"fee_aggregator","type":"address"},{"name":"allowlist_admin","type":"address"},{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"register_mcms_entrypoint","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"resolve_fungible_asset","parameters":[{"name":"token","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"resolve_fungible_store","parameters":[{"name":"owner","type":"address"},{"name":"token","type":"address"},{"name":"store_address","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"set_dynamic_config","parameters":[{"name":"fee_aggregator","type":"address"},{"name":"allowlist_admin","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"withdraw_fee_tokens","parameters":[{"name":"fee_tokens","type":"vector\u003caddress\u003e"}]}]`
+const FunctionInfo = `[{"package":"ccip_onramp","module":"onramp","name":"accept_ownership","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"apply_allowlist_updates","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"},{"name":"dest_chain_add_allowed_senders","type":"vector\u003cvector\u003caddress\u003e\u003e"},{"name":"dest_chain_remove_allowed_senders","type":"vector\u003cvector\u003caddress\u003e\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"apply_dest_chain_config_updates","parameters":[{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"calculate_metadata_hash_inlined","parameters":[{"name":"source_chain_selector","type":"u64"},{"name":"dest_chain_selector","type":"u64"}]},{"package":"ccip_onramp","module":"onramp","name":"ccip_send","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"get_fee_internal","parameters":[{"name":"dest_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"token_addresses","type":"vector\u003caddress\u003e"},{"name":"token_amounts","type":"vector\u003cu64\u003e"},{"name":"token_store_addresses","type":"vector\u003caddress\u003e"},{"name":"fee_token","type":"address"},{"name":"fee_token_store","type":"address"},{"name":"extra_args","type":"vector\u003cu8\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"get_state_address_internal","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"initialize","parameters":[{"name":"chain_selector","type":"u64"},{"name":"fee_aggregator","type":"address"},{"name":"allowlist_admin","type":"address"},{"name":"dest_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"dest_chain_routers","type":"vector\u003caddress\u003e"},{"name":"dest_chain_allowlist_enabled","type":"vector\u003cbool\u003e"}]},{"package":"ccip_onramp","module":"onramp","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"register_mcms_entrypoint","parameters":null},{"package":"ccip_onramp","module":"onramp","name":"resolve_fungible_asset","parameters":[{"name":"token","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"resolve_fungible_store","parameters":[{"name":"owner","type":"address"},{"name":"token","type":"address"},{"name":"store_address","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"set_dynamic_config","parameters":[{"name":"fee_aggregator","type":"address"},{"name":"allowlist_admin","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]},{"package":"ccip_onramp","module":"onramp","name":"withdraw_fee_tokens","parameters":[{"name":"fee_tokens","type":"vector\u003caddress\u003e"}]}]`
 
 func NewOnramp(address aptos.AccountAddress, client aptos.AptosRpcClient) OnrampInterface {
 	contract := bind.NewBoundContract(address, "ccip_onramp", "onramp", client)
@@ -94,6 +98,32 @@ func NewOnramp(address aptos.AccountAddress, client aptos.AptosRpcClient) Onramp
 		onrampEncoder: onrampEncoder{BoundContract: contract},
 	}
 }
+
+// Constants
+const (
+	E_ALREADY_INITIALIZED                       uint64 = 1
+	E_DEST_CHAIN_ARGUMENT_MISMATCH              uint64 = 2
+	E_INVALID_DEST_CHAIN_SELECTOR               uint64 = 3
+	E_UNKNOWN_DEST_CHAIN_SELECTOR               uint64 = 4
+	E_UNKNOWN_FUNCTION                          uint64 = 5
+	E_SENDER_NOT_ALLOWED                        uint64 = 6
+	E_ONLY_CALLABLE_BY_OWNER_OR_ALLOWLIST_ADMIN uint64 = 7
+	E_INVALID_ALLOWLIST_REQUEST                 uint64 = 8
+	E_INVALID_ALLOWLIST_ADDRESS                 uint64 = 9
+	E_UNSUPPORTED_TOKEN                         uint64 = 10
+	E_INVALID_FEE_TOKEN                         uint64 = 11
+	E_CURSED_BY_RMN                             uint64 = 12
+	E_INVALID_TOKEN                             uint64 = 13
+	E_INVALID_TOKEN_STORE                       uint64 = 14
+	E_UNEXPECTED_WITHDRAW_AMOUNT                uint64 = 15
+	E_UNEXPECTED_FUNGIBLE_ASSET                 uint64 = 16
+	E_FEE_AGGREGATOR_NOT_SET                    uint64 = 17
+	E_MUST_BE_CALLED_BY_ROUTER                  uint64 = 18
+	E_TOKEN_AMOUNT_MISMATCH                     uint64 = 19
+	E_CANNOT_SEND_ZERO_TOKENS                   uint64 = 20
+	E_ZERO_CHAIN_SELECTOR                       uint64 = 21
+	E_CALCULATE_MESSAGE_HASH_INVALID_ARGUMENTS  uint64 = 22
+)
 
 // Structs
 
@@ -413,6 +443,48 @@ func (c OnrampContract) GetDynamicConfig(opts *bind.CallOpts) (DynamicConfig, er
 	return r0, nil
 }
 
+func (c OnrampContract) CalculateMetadataHash(opts *bind.CallOpts, sourceChainSelector uint64, destChainSelector uint64) ([]byte, error) {
+	module, function, typeTags, args, err := c.onrampEncoder.CalculateMetadataHash(sourceChainSelector, destChainSelector)
+	if err != nil {
+		return *new([]byte), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new([]byte), err
+	}
+
+	var (
+		r0 []byte
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new([]byte), err
+	}
+	return r0, nil
+}
+
+func (c OnrampContract) CalculateMessageHash(opts *bind.CallOpts, messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender aptos.AccountAddress, receiver []byte, data []byte, feeToken aptos.AccountAddress, feeTokenAmount uint64, sourcePoolAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, extraDatas [][]byte, amounts []uint64, destExecDatas [][]byte, extraArgs []byte) ([]byte, error) {
+	module, function, typeTags, args, err := c.onrampEncoder.CalculateMessageHash(messageId, sourceChainSelector, destChainSelector, sequenceNumber, nonce, sender, receiver, data, feeToken, feeTokenAmount, sourcePoolAddresses, destTokenAddresses, extraDatas, amounts, destExecDatas, extraArgs)
+	if err != nil {
+		return *new([]byte), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new([]byte), err
+	}
+
+	var (
+		r0 []byte
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new([]byte), err
+	}
+	return r0, nil
+}
+
 func (c OnrampContract) Owner(opts *bind.CallOpts) (aptos.AccountAddress, error) {
 	module, function, typeTags, args, err := c.onrampEncoder.Owner()
 	if err != nil {
@@ -679,6 +751,54 @@ func (c onrampEncoder) GetDynamicConfig() (bind.ModuleInformation, string, []apt
 	return c.BoundContract.Encode("get_dynamic_config", nil, []string{}, []any{})
 }
 
+func (c onrampEncoder) CalculateMetadataHash(sourceChainSelector uint64, destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("calculate_metadata_hash", nil, []string{
+		"u64",
+		"u64",
+	}, []any{
+		sourceChainSelector,
+		destChainSelector,
+	})
+}
+
+func (c onrampEncoder) CalculateMessageHash(messageId []byte, sourceChainSelector uint64, destChainSelector uint64, sequenceNumber uint64, nonce uint64, sender aptos.AccountAddress, receiver []byte, data []byte, feeToken aptos.AccountAddress, feeTokenAmount uint64, sourcePoolAddresses []aptos.AccountAddress, destTokenAddresses [][]byte, extraDatas [][]byte, amounts []uint64, destExecDatas [][]byte, extraArgs []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("calculate_message_hash", nil, []string{
+		"vector<u8>",
+		"u64",
+		"u64",
+		"u64",
+		"u64",
+		"address",
+		"vector<u8>",
+		"vector<u8>",
+		"address",
+		"u64",
+		"vector<address>",
+		"vector<vector<u8>>",
+		"vector<vector<u8>>",
+		"vector<u64>",
+		"vector<vector<u8>>",
+		"vector<u8>",
+	}, []any{
+		messageId,
+		sourceChainSelector,
+		destChainSelector,
+		sequenceNumber,
+		nonce,
+		sender,
+		receiver,
+		data,
+		feeToken,
+		feeTokenAmount,
+		sourcePoolAddresses,
+		destTokenAddresses,
+		extraDatas,
+		amounts,
+		destExecDatas,
+		extraArgs,
+	})
+}
+
 func (c onrampEncoder) Owner() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("owner", nil, []string{}, []any{})
 }
@@ -849,8 +969,8 @@ func (c onrampEncoder) CCIPSend(destChainSelector uint64, receiver []byte, data 
 	})
 }
 
-func (c onrampEncoder) CalculateMetadataHash(sourceChainSelector uint64, destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("calculate_metadata_hash", nil, []string{
+func (c onrampEncoder) CalculateMetadataHashInlined(sourceChainSelector uint64, destChainSelector uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("calculate_metadata_hash_inlined", nil, []string{
 		"u64",
 		"u64",
 	}, []any{

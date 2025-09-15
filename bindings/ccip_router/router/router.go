@@ -80,6 +80,15 @@ func NewRouter(address aptos.AccountAddress, client aptos.AptosRpcClient) Router
 	}
 }
 
+// Constants
+const (
+	E_UNKNOWN_FUNCTION              uint64 = 1
+	E_UNSUPPORTED_DESTINATION_CHAIN uint64 = 2
+	E_UNSUPPORTED_ON_RAMP_VERSION   uint64 = 3
+	E_INVALID_ON_RAMP_VERSION       uint64 = 4
+	E_SET_ON_RAMP_VERSIONS_MISMATCH uint64 = 5
+)
+
 // Structs
 
 type RouterState struct {

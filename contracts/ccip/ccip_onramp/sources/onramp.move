@@ -154,6 +154,7 @@ module ccip_onramp::onramp {
     const E_TOKEN_AMOUNT_MISMATCH: u64 = 19;
     const E_CANNOT_SEND_ZERO_TOKENS: u64 = 20;
     const E_ZERO_CHAIN_SELECTOR: u64 = 21;
+    const E_CALCULATE_MESSAGE_HASH_INVALID_ARGUMENTS: u64 = 22;
 
     #[view]
     public fun type_and_version(): String {
@@ -535,8 +536,8 @@ module ccip_onramp::onramp {
             token_amounts: token_transfers
         };
         let metadata_hash =
-            calculate_metadata_hash(state.chain_selector, dest_chain_selector);
-        let message_id = calculate_message_hash(&message, metadata_hash);
+            calculate_metadata_hash_inlined(state.chain_selector, dest_chain_selector);
+        let message_id = calculate_message_hash_inlined(&message, metadata_hash);
         message.header.message_id = message_id;
 
         event::emit_event(
@@ -785,7 +786,7 @@ module ccip_onramp::onramp {
         );
     }
 
-    inline fun calculate_metadata_hash(
+    inline fun calculate_metadata_hash_inlined(
         source_chain_selector: u64, dest_chain_selector: u64
     ): vector<u8> {
         let packed = vector[];
@@ -798,7 +799,79 @@ module ccip_onramp::onramp {
         aptos_hash::keccak256(packed)
     }
 
-    inline fun calculate_message_hash(
+    #[view]
+    public fun calculate_metadata_hash(
+        source_chain_selector: u64, dest_chain_selector: u64
+    ): vector<u8> {
+        calculate_metadata_hash_inlined(source_chain_selector, dest_chain_selector)
+    }
+
+    #[view]
+    public fun calculate_message_hash(
+        message_id: vector<u8>,
+        source_chain_selector: u64,
+        dest_chain_selector: u64,
+        sequence_number: u64,
+        nonce: u64,
+        sender: address,
+        receiver: vector<u8>,
+        data: vector<u8>,
+        fee_token: address,
+        fee_token_amount: u64,
+        source_pool_addresses: vector<address>,
+        dest_token_addresses: vector<vector<u8>>,
+        extra_datas: vector<vector<u8>>,
+        amounts: vector<u64>,
+        dest_exec_datas: vector<vector<u8>>,
+        extra_args: vector<u8>
+    ): vector<u8> {
+        let source_pool_addresses_len = source_pool_addresses.length();
+        assert!(
+            source_pool_addresses_len == dest_token_addresses.length()
+                && source_pool_addresses_len == extra_datas.length()
+                && source_pool_addresses_len == amounts.length()
+                && source_pool_addresses_len == dest_exec_datas.length(),
+            error::invalid_argument(E_CALCULATE_MESSAGE_HASH_INVALID_ARGUMENTS)
+        );
+
+        let metadata_hash =
+            calculate_metadata_hash_inlined(source_chain_selector, dest_chain_selector);
+
+        let token_amounts = vector[];
+        for (i in 0..source_pool_addresses_len) {
+            token_amounts.push_back(
+                Aptos2AnyTokenTransfer {
+                    source_pool_address: source_pool_addresses[i],
+                    dest_token_address: dest_token_addresses[i],
+                    extra_data: extra_datas[i],
+                    amount: amounts[i],
+                    dest_exec_data: dest_exec_datas[i]
+                }
+            );
+        };
+
+        let message = Aptos2AnyRampMessage {
+            header: RampMessageHeader {
+                message_id,
+                source_chain_selector,
+                dest_chain_selector,
+                sequence_number,
+                nonce
+            },
+            sender,
+            data,
+            receiver,
+            extra_args,
+            fee_token,
+            fee_token_amount,
+            fee_value_juels: 0, // Not used in hashing
+            token_amounts
+        };
+
+        calculate_message_hash_inlined(&message, metadata_hash)
+    }
+
+    inline fun calculate_message_hash_inlined(
         message: &Aptos2AnyRampMessage, metadata_hash: vector<u8>
     ): vector<u8> {
         let outer_hash = vector[];

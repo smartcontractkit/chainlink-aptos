@@ -716,6 +716,18 @@ module usdc_token_pool::usdc_token_pool {
         ownable::execute_ownership_transfer(caller, &mut pool.ownable_state, to)
     }
 
+    public fun domain_allowed_caller(domain: &Domain): vector<u8> {
+        domain.allowed_caller
+    }
+
+    public fun domain_domain_identifier(domain: &Domain): u32 {
+        domain.domain_identifier
+    }
+
+    public fun domain_enabled(domain: &Domain): bool {
+        domain.enabled
+    }
+
     // ================================================================
     // |                      MCMS entrypoint                         |
     // ================================================================
@@ -892,5 +904,12 @@ module usdc_token_pool::usdc_token_pool {
         mcms_registry::register_entrypoint(
             publisher, string::utf8(module_name), McmsCallback {}
         );
+    }
+
+    // ============== Test functions ==============
+
+    #[test_only]
+    public fun test_init_module(publisher: &signer) {
+        init_module(publisher);
     }
 }

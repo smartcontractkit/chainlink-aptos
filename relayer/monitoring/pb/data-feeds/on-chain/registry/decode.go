@@ -48,7 +48,7 @@ func lloReportToFeedUpdated(m *wt_msg.WriteConfirmed, lloReports *llo.Reports) (
 	msgs := make([]*FeedUpdated, 0, len(*lloReports))
 
 	for _, rf := range *lloReports {
-		msgs = append(msgs, newFeedUpdated(m, rf.RemappedID, rf.Timestamp, rf.Price, []byte{}, false))
+		msgs = append(msgs, newFeedUpdated(m, rf.RemappedID, rf.Timestamp, rf.Price, []byte{}, true))
 	}
 	return msgs, nil
 }

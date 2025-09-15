@@ -110,7 +110,6 @@ module ccip::fee_quoter_bcs {
             );
 
         let (decoded_cu, decoded_bitmap, decoded_ooo, decoded_receiver, decoded_accounts) =
-
             fee_quoter::test_decode_svm_extra_args(encoded_svm_max);
 
         assert!(decoded_cu == max_compute_units);
