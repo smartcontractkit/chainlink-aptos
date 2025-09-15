@@ -11,5 +11,7 @@ for dir in $directories; do
     continue
   fi
   echo "$ aptos move test --skip-fetch-latest-git-deps --package-dir \"${dir}\""
-  aptos move test --skip-fetch-latest-git-deps --package-dir "$dir"
+  aptos move test --skip-fetch-latest-git-deps --package-dir "$dir" &
 done
+
+wait
