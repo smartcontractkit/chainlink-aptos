@@ -102,6 +102,18 @@ func NewBurnMintTokenPool(address aptos.AccountAddress, client aptos.AptosRpcCli
 	}
 }
 
+// Constants
+const (
+	E_NOT_PUBLISHER          uint64 = 1
+	E_ALREADY_INITIALIZED    uint64 = 2
+	E_INVALID_FUNGIBLE_ASSET uint64 = 3
+	E_LOCAL_TOKEN_MISMATCH   uint64 = 4
+	E_INVALID_ARGUMENTS      uint64 = 5
+	E_UNKNOWN_FUNCTION       uint64 = 6
+	E_MINT_REF_NOT_SET       uint64 = 7
+	E_BURN_REF_NOT_SET       uint64 = 8
+)
+
 // Structs
 
 type BurnMintTokenPoolDeployment struct {

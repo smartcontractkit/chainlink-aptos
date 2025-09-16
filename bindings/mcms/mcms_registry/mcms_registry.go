@@ -61,6 +61,30 @@ func NewMCMSRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) 
 	}
 }
 
+// Constants
+const (
+	E_CALLBACK_PARAMS_ALREADY_EXISTS uint64 = 1
+	E_MISSING_CALLBACK_PARAMS        uint64 = 2
+	E_WRONG_PROOF_TYPE               uint64 = 3
+	E_CALLBACK_PARAMS_NOT_CONSUMED   uint64 = 4
+	E_PROOF_NOT_AT_ACCOUNT_ADDRESS   uint64 = 5
+	E_PROOF_NOT_IN_MODULE            uint64 = 6
+	E_MODULE_ALREADY_REGISTERED      uint64 = 7
+	E_EMPTY_MODULE_NAME              uint64 = 8
+	E_MODULE_NAME_TOO_LONG           uint64 = 9
+	E_ADDRESS_NOT_REGISTERED         uint64 = 10
+	E_INVALID_CODE_OBJECT            uint64 = 11
+	E_OWNER_ALREADY_REGISTERED       uint64 = 12
+	E_NOT_CODE_OBJECT_OWNER          uint64 = 13
+	E_UNGATED_TRANSFER_DISABLED      uint64 = 14
+	E_NO_PENDING_TRANSFER            uint64 = 15
+	E_TRANSFER_ALREADY_ACCEPTED      uint64 = 16
+	E_NEW_OWNER_MISMATCH             uint64 = 17
+	E_TRANSFER_NOT_ACCEPTED          uint64 = 18
+	E_NOT_PROPOSED_OWNER             uint64 = 19
+	E_MODULE_NOT_REGISTERED          uint64 = 20
+)
+
 // Structs
 
 type RegistryState struct {
