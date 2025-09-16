@@ -70,6 +70,7 @@ func DeployToObject(
 	ccipTokenPoolAddress,
 	localTokenAddress,
 	adminAddress aptos.AccountAddress,
+	registerMCMSEntrypoints bool,
 ) (aptos.AccountAddress, *api.PendingTransaction, RegulatedTokenPool, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip":                      ccipAddress,
@@ -78,6 +79,9 @@ func DeployToObject(
 		"admin":                     adminAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
+	}
+	if registerMCMSEntrypoints {
+		namedAddresses["mcms_register_entrypoints"] = aptos.AccountOne
 	}
 	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.CCIPRegulatedTokenPool, namedAddresses)
 	if err != nil {

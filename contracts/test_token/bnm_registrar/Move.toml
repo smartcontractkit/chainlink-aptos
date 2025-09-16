@@ -1,0 +1,30 @@
+[package]
+name = "BnM Registrar"
+version = "1.0.0"
+authors = []
+
+[addresses]
+test_token = "_"
+ccip = "_"
+ccip_token_pool = "_"
+burn_mint_token_pool = "_"
+mcms = "_"
+mcms_register_entrypoints = "_"
+burn_mint_local_token = "_"
+
+[dev-addresses]
+test_token = "0x100"
+ccip = "0x1000"
+ccip_token_pool = "0x2000"
+burn_mint_token_pool = "0x2001"
+mcms = "0x4000"
+mcms_register_entrypoints = "0x4001"
+burn_mint_local_token = "0x9000"
+
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }
+TestToken = { local = "../test_token" }
+BurnMintTokenPool = { local = "../../ccip/ccip_token_pools/burn_mint_token_pool"}
+
+[dev-dependencies]
