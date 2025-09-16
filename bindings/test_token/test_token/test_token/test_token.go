@@ -55,6 +55,16 @@ func NewTestToken(address aptos.AccountAddress, client aptos.AptosRpcClient) Tes
 	}
 }
 
+// Constants
+const (
+	E_NOT_PUBLISHER                              uint64 = 1
+	E_NOT_ALLOWED_MINTER                         uint64 = 2
+	E_NOT_ALLOWED_BURNER                         uint64 = 3
+	E_TOKEN_NOT_INITIALIZED                      uint64 = 4
+	E_TOKEN_ALREADY_INITIALIZED                  uint64 = 5
+	E_TOKEN_STATE_DEPLOYMENT_ALREADY_INITIALIZED uint64 = 6
+)
+
 // Structs
 
 type TokenStateDeployment struct {
