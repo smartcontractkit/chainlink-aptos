@@ -17,7 +17,6 @@ require (
 	github.com/shopspring/decimal v1.4.0
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	github.com/smartcontractkit/chainlink-common v0.7.1-0.20250519161208-80bc8b13c0e7
-	github.com/smartcontractkit/chainlink-framework/metrics v0.0.0-20250818175541-3389ac08a563
 	github.com/stretchr/testify v1.10.0
 	github.com/valyala/fastjson v1.6.4
 	go.opentelemetry.io/otel v1.35.0

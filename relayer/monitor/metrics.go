@@ -8,7 +8,6 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
-	"github.com/smartcontractkit/chainlink-framework/metrics"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/metric/utils"
 )
@@ -34,7 +33,7 @@ func (g *GaugeAccBalance) Record(ctx context.Context, balance float64, account s
 	g.gauge.Record(ctx, balance, oAttrs)
 
 	// Also record in Prom for availability to NOPs
-	metrics.NodeBalance.WithLabelValues(account, chainInfo.ChainID, chainInfo.ChainFamilyName).Set(balance)
+	// metrics.NodeBalance.WithLabelValues(account, chainInfo.ChainID, chainInfo.ChainFamilyName).Set(balance)
 }
 
 func (g *GaugeAccBalance) GetAttributes(account string, chainInfo ChainInfo) attribute.Set {
