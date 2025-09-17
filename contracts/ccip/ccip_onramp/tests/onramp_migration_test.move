@@ -191,8 +191,7 @@ module ccip_onramp::onramp_migration_test {
             lock_release_token_pool = @lock_release_token_pool
         )
     ]
-    #[expected_failure(abort_code = 196631, location = ccip_onramp::onramp)]
-    fun test_double_migration_fails(
+    fun test_multiple_migration_calls_allowed(
         aptos_framework: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
@@ -229,28 +228,33 @@ module ccip_onramp::onramp_migration_test {
         // First migration - migrate all chains
         onramp::migrate_dest_chain_configs_to_v2(
             owner,
-            vector[DEST_CHAIN_SELECTOR, CHAIN_SELECTOR_2, CHAIN_SELECTOR_3],
-            vector[router_address, router_address_2, router_address_3]
+            vector[DEST_CHAIN_SELECTOR, CHAIN_SELECTOR_2],
+            vector[router_address, router_address_2]
         );
 
-        // Verify events were emitted for all 3 migrated chains (1 + 3 + 3)
-        assert!(onramp::get_dest_chain_config_set_events().length() == 7);
+        // Verify events were emitted for all 3 migrated chains (1 + 3 + 2)
+        assert!(onramp::get_dest_chain_config_set_events().length() == 6);
 
-        // Verify 3 events emitted for DestChainConfigSetV2 after migration
-        assert!(onramp::get_dest_chain_config_v2_set_events().length() == 3);
+        // Verify 2 events emitted for DestChainConfigSetV2 after migration
+        assert!(onramp::get_dest_chain_config_v2_set_events().length() == 2);
 
         assert!(onramp::is_chain_supported(DEST_CHAIN_SELECTOR));
         assert!(onramp::is_chain_supported(CHAIN_SELECTOR_2));
-        assert!(onramp::is_chain_supported(CHAIN_SELECTOR_3));
+        assert!(!onramp::is_chain_supported(CHAIN_SELECTOR_3));
 
         let (_, _, _, _) = onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
 
-        // This should fail with E_DEST_CHAIN_CONFIGS_V2_ALREADY_INITIALIZED
+        // Second migration call should succeed (no longer blocks multiple calls)
         onramp::migrate_dest_chain_configs_to_v2(
             owner,
-            vector[DEST_CHAIN_SELECTOR, CHAIN_SELECTOR_2, CHAIN_SELECTOR_3],
-            vector[router_address, router_address_2, router_address_3]
+            vector[CHAIN_SELECTOR_3],
+            vector[router_address_3]
         );
+
+        // Verify all chains are still supported after second migration
+        assert!(onramp::is_chain_supported(DEST_CHAIN_SELECTOR));
+        assert!(onramp::is_chain_supported(CHAIN_SELECTOR_2));
+        assert!(onramp::is_chain_supported(CHAIN_SELECTOR_3));
     }
 
     #[

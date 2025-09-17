@@ -1575,32 +1575,29 @@ module ccip_onramp::onramp {
         caller: &signer,
         dest_chain_selectors: vector<u64>,
         router_module_addresses: vector<address>
-    ) acquires OnRampState {
+    ) acquires OnRampState, DestChainConfigsV2 {
         let state = borrow_state_mut();
         ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
         let state_address = get_state_address_internal();
-        assert!(
-            !exists<DestChainConfigsV2>(state_address),
-            error::invalid_state(E_DEST_CHAIN_CONFIGS_V2_ALREADY_INITIALIZED)
-        );
 
         let state_signer =
             &account::create_signer_with_capability(&state.state_signer_cap);
 
-        let mut_dest_chain_configs_v2 = DestChainConfigsV2 {
-            dest_chain_configs: smart_table::new(),
-            dest_chain_config_v2_set_events: account::new_event_handle(state_signer)
+        if (!exists<DestChainConfigsV2>(state_address)) {
+            let dest_chain_configs_v2 = DestChainConfigsV2 {
+                dest_chain_configs: smart_table::new(),
+                dest_chain_config_v2_set_events: account::new_event_handle(state_signer)
+            };
+            move_to(state_signer, dest_chain_configs_v2);
         };
 
         migrate_dest_chain_configs_v2_internal(
             state,
-            &mut mut_dest_chain_configs_v2,
+            borrow_dest_chain_configs_v2_mut(),
             dest_chain_selectors,
             router_module_addresses
         );
-
-        move_to(state_signer, mut_dest_chain_configs_v2);
     }
 
     inline fun migrate_dest_chain_configs_v2_internal(
