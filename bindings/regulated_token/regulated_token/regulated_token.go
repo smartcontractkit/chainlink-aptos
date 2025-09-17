@@ -154,6 +154,34 @@ func NewRegulatedToken(address aptos.AccountAddress, client aptos.AptosRpcClient
 	}
 }
 
+// Constants
+const (
+	PAUSER_ROLE                                  byte   = 0
+	UNPAUSER_ROLE                                byte   = 1
+	FREEZER_ROLE                                 byte   = 2
+	UNFREEZER_ROLE                               byte   = 3
+	MINTER_ROLE                                  byte   = 4
+	BURNER_ROLE                                  byte   = 5
+	BRIDGE_MINTER_OR_BURNER_ROLE                 byte   = 6
+	RECOVERY_ROLE                                byte   = 7
+	E_NOT_PUBLISHER                              uint64 = 1
+	E_TOKEN_NOT_INITIALIZED                      uint64 = 2
+	E_ONLY_BURNER_OR_BRIDGE                      uint64 = 3
+	E_ONLY_MINTER_OR_BRIDGE                      uint64 = 4
+	E_INVALID_ASSET                              uint64 = 5
+	E_ZERO_ADDRESS_NOT_ALLOWED                   uint64 = 6
+	E_CANNOT_TRANSFER_TO_REGULATED_TOKEN         uint64 = 7
+	E_PAUSED                                     uint64 = 8
+	E_ACCOUNT_FROZEN                             uint64 = 9
+	E_ALREADY_PAUSED                             uint64 = 14
+	E_NOT_PAUSED                                 uint64 = 15
+	E_INVALID_ROLE_NUMBER                        uint64 = 10
+	E_INVALID_STORE                              uint64 = 11
+	E_STORE_DOES_NOT_EXIST                       uint64 = 12
+	E_TOKEN_STATE_DEPLOYMENT_ALREADY_INITIALIZED uint64 = 13
+	E_ACCOUNT_MUST_BE_FROZEN_FOR_RECOVERY        uint64 = 14
+)
+
 // Structs
 
 type TokenStateDeployment struct {

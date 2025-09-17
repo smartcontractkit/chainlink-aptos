@@ -133,6 +133,70 @@ func NewMCMS(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMSInte
 	}
 }
 
+// Constants
+const (
+	BYPASSER_ROLE                           byte   = 0
+	CANCELLER_ROLE                          byte   = 1
+	PROPOSER_ROLE                           byte   = 2
+	TIMELOCK_ROLE                           byte   = 3
+	MAX_ROLE                                byte   = 4
+	NUM_GROUPS                              uint64 = 32
+	MAX_NUM_SIGNERS                         uint64 = 200
+	DONE_TIMESTAMP                          uint64 = 1
+	E_ALREADY_SEEN_HASH                     uint64 = 1
+	E_POST_OP_COUNT_REACHED                 uint64 = 2
+	E_WRONG_CHAIN_ID                        uint64 = 3
+	E_WRONG_MULTISIG                        uint64 = 4
+	E_ROOT_EXPIRED                          uint64 = 5
+	E_WRONG_NONCE                           uint64 = 6
+	E_VALID_UNTIL_EXPIRED                   uint64 = 7
+	E_INVALID_SIGNER                        uint64 = 8
+	E_MISSING_CONFIG                        uint64 = 9
+	E_INSUFFICIENT_SIGNERS                  uint64 = 10
+	E_PROOF_CANNOT_BE_VERIFIED              uint64 = 11
+	E_PENDING_OPS                           uint64 = 12
+	E_WRONG_PRE_OP_COUNT                    uint64 = 13
+	E_WRONG_POST_OP_COUNT                   uint64 = 14
+	E_INVALID_NUM_SIGNERS                   uint64 = 15
+	E_SIGNER_GROUPS_LEN_MISMATCH            uint64 = 16
+	E_INVALID_GROUP_QUORUM_LEN              uint64 = 17
+	E_INVALID_GROUP_PARENTS_LEN             uint64 = 18
+	E_OUT_OF_BOUNDS_GROUP                   uint64 = 19
+	E_GROUP_TREE_NOT_WELL_FORMED            uint64 = 20
+	E_SIGNER_IN_DISABLED_GROUP              uint64 = 21
+	E_OUT_OF_BOUNDS_GROUP_QUORUM            uint64 = 22
+	E_SIGNER_ADDR_MUST_BE_INCREASING        uint64 = 23
+	E_INVALID_SIGNER_ADDR_LEN               uint64 = 24
+	E_UNKNOWN_MCMS_MODULE_FUNCTION          uint64 = 25
+	E_UNKNOWN_FRAMEWORK_MODULE_FUNCTION     uint64 = 26
+	E_UNKNOWN_FRAMEWORK_MODULE              uint64 = 27
+	E_SELF_CALL_ROLE_MISMATCH               uint64 = 28
+	E_NOT_BYPASSER_ROLE                     uint64 = 29
+	E_INVALID_ROLE                          uint64 = 30
+	E_NOT_AUTHORIZED_ROLE                   uint64 = 31
+	E_NOT_AUTHORIZED                        uint64 = 32
+	E_OPERATION_ALREADY_SCHEDULED           uint64 = 33
+	E_INSUFFICIENT_DELAY                    uint64 = 34
+	E_OPERATION_NOT_READY                   uint64 = 35
+	E_MISSING_DEPENDENCY                    uint64 = 36
+	E_OPERATION_CANNOT_BE_CANCELLED         uint64 = 37
+	E_FUNCTION_BLOCKED                      uint64 = 38
+	E_INVALID_INDEX                         uint64 = 39
+	E_UNKNOWN_MCMS_ACCOUNT_MODULE_FUNCTION  uint64 = 40
+	E_UNKNOWN_MCMS_DEPLOYER_MODULE_FUNCTION uint64 = 41
+	E_UNKNOWN_MCMS_REGISTRY_MODULE_FUNCTION uint64 = 42
+	E_INVALID_PARAMETERS                    uint64 = 43
+	E_INVALID_SIGNATURE_LEN                 uint64 = 44
+	E_INVALID_V_SIGNATURE                   uint64 = 45
+	E_FAILED_ECDSA_RECOVER                  uint64 = 46
+	E_INVALID_MODULE_NAME                   uint64 = 47
+	E_UNKNOWN_MCMS_TIMELOCK_FUNCTION        uint64 = 48
+	E_INVALID_ROOT_LEN                      uint64 = 49
+	E_NOT_CANCELLER_ROLE                    uint64 = 50
+	E_NOT_TIMELOCK_ROLE                     uint64 = 51
+	E_UNKNOWN_MCMS_MODULE                   uint64 = 52
+)
+
 // Structs
 
 type MultisigState struct {

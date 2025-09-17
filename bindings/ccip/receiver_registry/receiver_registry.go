@@ -45,6 +45,17 @@ func NewReceiverRegistry(address aptos.AccountAddress, client aptos.AptosRpcClie
 	}
 }
 
+// Constants
+const (
+	E_ALREADY_REGISTERED          uint64 = 1
+	E_UNKNOWN_RECEIVER            uint64 = 2
+	E_UNKNOWN_PROOF_TYPE          uint64 = 3
+	E_MISSING_INPUT               uint64 = 4
+	E_NON_EMPTY_INPUT             uint64 = 5
+	E_PROOF_TYPE_ACCOUNT_MISMATCH uint64 = 6
+	E_PROOF_TYPE_MODULE_MISMATCH  uint64 = 7
+)
+
 // Structs
 
 type ReceiverRegistryState struct {

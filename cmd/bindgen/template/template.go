@@ -23,6 +23,7 @@ type tmplData struct {
 	Module       string
 	FunctionInfo string
 	Structs      []*tmplStruct
+	Consts       []*tmplConst
 	ViewFuncs    []*tmplFunc
 	EntryFuncs   []*tmplFunc
 	OtherFuncs   []*tmplFunc
@@ -32,6 +33,12 @@ type tmplData struct {
 type tmplStruct struct {
 	Name   string
 	Fields []*tmplField
+}
+
+type tmplConst struct {
+	Name  string
+	Type  tmplType
+	Value string
 }
 
 type tmplOption struct {
@@ -69,7 +76,7 @@ type tmplFunc struct {
 	Returns  []tmplType
 }
 
-func Convert(pkg, mod string, structs []parse.Struct, functions []parse.Func, externalStructs []parse.ExternalStruct) (tmplData, error) {
+func Convert(pkg, mod string, structs []parse.Struct, functions []parse.Func, consts []parse.Const, externalStructs []parse.ExternalStruct) (tmplData, error) {
 	data := tmplData{
 		Package: pkg,
 		Module:  mod,
@@ -100,6 +107,25 @@ func Convert(pkg, mod string, structs []parse.Struct, functions []parse.Func, ex
 				importMap[goType.Import.Path] = goType.Import
 			}
 		}
+	}
+
+	// Constants
+	for _, c := range consts {
+		out := &tmplConst{
+			Name:  c.Name,
+			Type:  tmplType{},
+			Value: c.Value,
+		}
+		typ, err := createGoTypeFromMove(c.Type, nil, nil)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to parse const %v: %v", c.Name, err))
+		}
+		if !typ.IsGoConstant() {
+			// Skip constants that cannot be expressed as Go constants
+			continue
+		}
+		out.Type = typ
+		data.Consts = append(data.Consts, out)
 	}
 
 	var functionInfos []bind.FunctionInfo

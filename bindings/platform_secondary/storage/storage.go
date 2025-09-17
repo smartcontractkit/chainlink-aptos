@@ -48,6 +48,12 @@ func NewStorage(address aptos.AccountAddress, client aptos.AptosRpcClient) Stora
 	}
 }
 
+// Constants
+const (
+	E_UNKNOWN_RECEIVER        uint64 = 1
+	E_INVALID_METADATA_LENGTH uint64 = 2
+)
+
 // Structs
 
 type Entry struct {

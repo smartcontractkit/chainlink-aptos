@@ -49,6 +49,22 @@ func NewTokenPool(address aptos.AccountAddress, client aptos.AptosRpcClient) Tok
 	}
 }
 
+// Constants
+const (
+	E_NOT_ALLOWED_CALLER            uint64 = 1
+	E_UNKNOWN_FUNGIBLE_ASSET        uint64 = 2
+	E_UNKNOWN_REMOTE_CHAIN_SELECTOR uint64 = 3
+	E_ZERO_ADDRESS_NOT_ALLOWED      uint64 = 4
+	E_REMOTE_POOL_ALREADY_ADDED     uint64 = 5
+	E_UNKNOWN_REMOTE_POOL           uint64 = 6
+	E_REMOTE_CHAIN_TO_ADD_MISMATCH  uint64 = 7
+	E_REMOTE_CHAIN_ALREADY_EXISTS   uint64 = 8
+	E_INVALID_REMOTE_CHAIN_DECIMALS uint64 = 9
+	E_INVALID_ENCODED_AMOUNT        uint64 = 10
+	E_DECIMAL_OVERFLOW              uint64 = 11
+	E_CURSED_CHAIN                  uint64 = 12
+)
+
 // Structs
 
 type TokenPoolState struct {

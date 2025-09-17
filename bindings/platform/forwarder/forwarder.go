@@ -66,6 +66,27 @@ func NewForwarder(address aptos.AccountAddress, client aptos.AptosRpcClient) For
 	}
 }
 
+// Constants
+const (
+	E_INVALID_DATA_LENGTH              uint64 = 1
+	E_INVALID_SIGNER                   uint64 = 2
+	E_DUPLICATE_SIGNER                 uint64 = 3
+	E_INVALID_SIGNATURE_COUNT          uint64 = 4
+	E_INVALID_SIGNATURE                uint64 = 5
+	E_ALREADY_PROCESSED                uint64 = 6
+	E_NOT_OWNER                        uint64 = 7
+	E_MALFORMED_SIGNATURE              uint64 = 8
+	E_FAULT_TOLERANCE_MUST_BE_POSITIVE uint64 = 9
+	E_EXCESS_SIGNERS                   uint64 = 10
+	E_INSUFFICIENT_SIGNERS             uint64 = 11
+	E_CALLBACK_DATA_NOT_CONSUMED       uint64 = 12
+	E_CANNOT_TRANSFER_TO_SELF          uint64 = 13
+	E_NOT_PROPOSED_OWNER               uint64 = 14
+	E_CONFIG_ID_NOT_FOUND              uint64 = 15
+	E_INVALID_REPORT_VERSION           uint64 = 16
+	MAX_ORACLES                        uint64 = 31
+)
+
 // Structs
 
 type ConfigId struct {

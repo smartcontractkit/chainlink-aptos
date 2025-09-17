@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 )
 
-//go:embed ccip large_packages mcms vendored data-feeds platform platform_secondary managed_token mcms_registrars managed_token_faucet regulated_token
+//go:embed ccip large_packages mcms vendored data-feeds platform platform_secondary managed_token mcms_registrars managed_token_faucet regulated_token test_token
 var Embed embed.FS
 
 type Package string
@@ -39,6 +39,10 @@ const (
 	MCMSTest = Package("mcms_test")
 
 	LargePackages = Package("large_packages")
+
+	TestToken             = Package("test_token")
+	TestTokenBnMRegistrar = Package("bnm_registrar")
+	TestTokenLnRRegistrar = Package("lnr_registrar")
 )
 
 // Contracts maps packages to their respective root directories within Embed
@@ -70,4 +74,8 @@ var Contracts map[Package]string = map[Package]string{
 	MCMSTest: filepath.Join("mcms", "mcms_test"),
 
 	LargePackages: "large_packages",
+
+	TestToken:             filepath.Join("test_token", "test_token"),
+	TestTokenBnMRegistrar: filepath.Join("test_token", "bnm_registrar"),
+	TestTokenLnRRegistrar: filepath.Join("test_token", "lnr_registrar"),
 }
