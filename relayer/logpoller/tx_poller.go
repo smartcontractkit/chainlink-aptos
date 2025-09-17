@@ -114,7 +114,7 @@ func (l *AptosLogPoller) SyncAllTransmitterTxs(ctx context.Context) error {
 		return nil
 	}
 
-	batchSize := l.config.TxBatchSize
+	batchSize := *l.config.TxBatchSize
 	var totalProcessed int
 
 	for _, transmitter := range transmitters {

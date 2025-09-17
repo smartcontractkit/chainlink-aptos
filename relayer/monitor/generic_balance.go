@@ -23,7 +23,7 @@ type ChainInfo struct {
 
 // Config defines the balance monitor configuration.
 type GenericBalanceConfig struct {
-	BalancePollPeriod config.Duration
+	BalancePollPeriod *config.Duration
 }
 
 // GenericBalanceClient defines the interface for getting account balances.

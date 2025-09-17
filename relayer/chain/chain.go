@@ -83,9 +83,13 @@ type chain struct {
 	balanceMonitor services.Service
 }
 
+func (c *chain) GetChainInfo(ctx context.Context) (types.ChainInfo, error) {
+	return c.cfg.GetChainInfo(), nil
+}
+
 func NewChain(cfg *config.TOMLConfig, opts ChainOpts) (Chain, error) {
 	if !cfg.IsEnabled() {
-		return nil, fmt.Errorf("cannot create new chain with ID %s: chain is disabled", cfg.ChainID)
+		return nil, fmt.Errorf("cannot create new chain with ID %v: chain is disabled", cfg.ChainID)
 	}
 	return newChain(cfg, opts.KeyStore, opts.Logger, opts.DS)
 }
@@ -102,9 +106,11 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 		return nil, fmt.Errorf("No aptos account available")
 	}
 
-	_, err = strconv.ParseUint(cfg.ChainID, 10, 8)
+	chainInfo := cfg.GetChainInfo()
+
+	_, err = strconv.ParseUint(chainInfo.ChainID, 10, 8)
 	if err != nil {
-		return nil, fmt.Errorf("invalid chain ID %s: could not parse as an integer: %w", cfg.ChainID, err)
+		return nil, fmt.Errorf("invalid chain ID %s: could not parse as an integer: %w", chainInfo.ChainID, err)
 	}
 
 	if cfg.Chain.Workflow != nil {
@@ -112,7 +118,7 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 	}
 
 	ch := &chain{
-		id:   cfg.ChainID,
+		id:   chainInfo.ChainID,
 		cfg:  cfg,
 		lggr: logger.Named(lggr, "Chain"),
 		ds:   ds,
@@ -132,18 +138,14 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 		return nil, fmt.Errorf("failed to create log poller: %w", err)
 	}
 
-	// Construct the chain information from the config
-	chainInfo := monitor.ChainInfo{
-		ChainFamilyName: config.ChainFamilyName, // static for this plugin
-		ChainID:         cfg.ChainID,
-		NetworkName:     cfg.NetworkName,
-		NetworkNameFull: cfg.NetworkNameFull,
-	}
-
 	// Setup accounts balance monitor
 	ch.balanceMonitor, err = monitor.NewBalanceMonitor(monitor.BalanceMonitorOpts{
-		ChainInfo: chainInfo,
-
+		ChainInfo: monitor.ChainInfo{
+			ChainFamilyName: chainInfo.FamilyName,
+			ChainID:         chainInfo.ChainID,
+			NetworkName:     chainInfo.NetworkName,
+			NetworkNameFull: chainInfo.NetworkNameFull,
+		},
 		Config:    *cfg.BalanceMonitor,
 		Logger:    lggr,
 		Keystore:  loopKs,

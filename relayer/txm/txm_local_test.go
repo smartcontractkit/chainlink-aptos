@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/sha3"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
@@ -55,9 +56,9 @@ func TestTxmLocal(t *testing.T) {
 	keystore := testutils.NewTestKeystore(t)
 	keystore.AddKey(privateKey)
 
-	config := DefaultConfigSet
+	config := config.Defaults().TransactionManager
 
-	runTxmTest(t, logger, config, rpcUrl, keystore, accountAddress, publicKey, 5)
+	runTxmTest(t, logger, *config, rpcUrl, keystore, accountAddress, publicKey, 5)
 }
 
 func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string, keystore loop.Keystore, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, iterations int) {

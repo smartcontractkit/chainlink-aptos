@@ -192,12 +192,12 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 	}
 
 	a.transactionsLock.Lock()
-	if (currentTimestamp - a.transactionsLastPruneTime) > a.config.PruneIntervalSecs {
+	if time.Duration(currentTimestamp-a.transactionsLastPruneTime)*time.Second > a.config.PruneInterval.Duration() {
 		for txID, tx := range a.transactions {
 			if tx.Status != commontypes.Finalized && tx.Status != commontypes.Failed && tx.Status != commontypes.Fatal {
 				continue
 			}
-			if (currentTimestamp - tx.Timestamp) < a.config.PruneTxExpirationSecs {
+			if time.Duration(currentTimestamp-tx.Timestamp)*time.Second < a.config.PruneTxExpiration.Duration() {
 				continue
 			}
 			ctxLogger.Debugw("Pruning transaction", "status", tx.Status)
@@ -325,7 +325,7 @@ func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, nonce u
 		return nil, fmt.Errorf("failed to fetch ledger timestamp: %w", err)
 	}
 
-	expirationTimestampSecs := ledgerTimestampSecs + a.config.TxExpirationSecs
+	expirationTimestampSecs := ledgerTimestampSecs + uint64(a.config.TxExpiration.Duration()/time.Second)
 
 	payload := aptos.TransactionPayload{
 		Payload: &aptos.EntryFunction{
@@ -543,7 +543,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			}
 
 			ctxLogger.Errorw("failed to submit signed tx, retrying..", "error", httpError)
-			time.Sleep(time.Duration(a.config.SubmitDelayDuration) * time.Second)
+			time.Sleep(a.config.SubmitDelayDuration.Duration())
 
 			httpErrorBody := string(httpError.Body)
 			if strings.Contains(httpErrorBody, "SEQUENCE_NUMBER_TOO_OLD") || strings.Contains(httpErrorBody, "SEQUENCE_NUMBER_TOO_NEW") {
@@ -563,7 +563,7 @@ func (a *AptosTxm) confirmLoop() {
 	_, cancel := commonutils.ContextFromChan(a.stop)
 	defer cancel()
 
-	pollDuration := time.Duration(a.config.ConfirmPollSecs) * time.Second
+	pollDuration := a.config.ConfirmPoll.Duration()
 	tick := time.After(pollDuration)
 
 	a.baseLogger.Debugw("confirmLoop: started")

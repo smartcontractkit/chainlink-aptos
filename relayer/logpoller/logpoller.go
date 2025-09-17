@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	cache "github.com/patrickmn/go-cache"
+	"github.com/patrickmn/go-cache"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 
@@ -83,7 +83,7 @@ func (l *AptosLogPoller) Start(ctx context.Context) error {
 			syncEventCtx, l.eventCtxCancel = context.WithCancel(context.Background())
 			go l.startEventPolling(syncEventCtx)
 
-			if l.config.TXPollerDisabled == true {
+			if b := l.config.TXPollerDisabled; b != nil && *b == true {
 				l.lggr.Info("Skipping transaction polling as TXPollerDisabled is set to true")
 				return nil
 			}

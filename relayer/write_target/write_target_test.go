@@ -8,6 +8,10 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
+
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/consensus/ocr3/types"
@@ -16,10 +20,7 @@ import (
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils/tests"
-	"github.com/smartcontractkit/chainlink-common/pkg/values"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap/zapcore"
+	"github.com/smartcontractkit/chainlink-protos/cre/go/values"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/report/platform"
@@ -159,8 +160,8 @@ func newMockedWriteTarget(t *testing.T, lggr logger.Logger) mockedWriteTarget {
 	wt := newWriteTarget(WriteTargetOpts{
 		ID: "write_aptos-1@1.0.0",
 		Config: Config{
-			ConfirmerPollPeriod: *config.MustNewDuration(100 * time.Millisecond),
-			ConfirmerTimeout:    *config.MustNewDuration(300 * time.Millisecond),
+			ConfirmerPollPeriod: config.MustNewDuration(100 * time.Millisecond),
+			ConfirmerTimeout:    config.MustNewDuration(300 * time.Millisecond),
 		},
 		ChainInfo:        ChainInfo{},
 		Logger:           lggr,

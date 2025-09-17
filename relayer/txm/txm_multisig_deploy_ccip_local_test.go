@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/sha3"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 
@@ -261,8 +262,8 @@ func runDeployMCMSAndCCIPInChunks(t *testing.T, logger logger.Logger, rpcURL str
 	require.NoError(t, err)
 	deployChainIdBig = new(big.Int).SetUint64(uint64(chainId))
 
-	config := DefaultConfigSet
-	txm, err := New(logger, keystore, config, getClient)
+	config := config.Defaults().TransactionManager
+	txm, err := New(logger, keystore, *config, getClient)
 	require.NoError(t, err)
 	err = txm.Start(context.Background())
 	require.NoError(t, err)

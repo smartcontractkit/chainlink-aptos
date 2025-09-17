@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	cache "github.com/patrickmn/go-cache"
+	"github.com/patrickmn/go-cache"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/api"
@@ -200,7 +200,7 @@ eventLoop:
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			events, err := l.client.EventsByCreationNumber(eventAccountAddress, creationNumber, &latestOffset, &batchSize)
+			events, err := l.client.EventsByCreationNumber(eventAccountAddress, creationNumber, &latestOffset, batchSize)
 			if err != nil {
 				l.lggr.Errorw("syncEvent: failed to fetch new events", "error", err)
 				return fmt.Errorf("syncEvent: failed to fetch events: %w", err)
@@ -253,7 +253,7 @@ eventLoop:
 			latestOffset = events[len(events)-1].SequenceNumber + 1
 
 			// If we received fewer events than the batch size, we're caught up
-			if uint64(len(events)) < batchSize {
+			if uint64(len(events)) < *batchSize {
 				break eventLoop
 			}
 		}

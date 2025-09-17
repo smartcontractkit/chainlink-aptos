@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/sha3"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	_ "github.com/smartcontractkit/chainlink-common/pkg/sqlutil"
 	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil/sqltest"
@@ -127,8 +128,8 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 
 	getClient := func() (aptos.AptosRpcClient, error) { return rateLimitedClient, nil }
 
-	txmConfig := txm.DefaultConfigSet
-	txmgr, err := txm.New(logger, keystore, txmConfig, getClient)
+	txmConfig := config.Defaults().TransactionManager
+	txmgr, err := txm.New(logger, keystore, *txmConfig, getClient)
 	require.NoError(t, err)
 
 	err = txmgr.Start(context.Background())
@@ -549,7 +550,7 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 	rateLimitedClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
 
 	getClient := func() (aptos.AptosRpcClient, error) { return rateLimitedClient, nil }
-	txmgr, err := txm.New(logger, keystore, txm.DefaultConfigSet, getClient)
+	txmgr, err := txm.New(logger, keystore, *config.Defaults().TransactionManager, getClient)
 	require.NoError(t, err)
 	err = txmgr.Start(context.Background())
 	require.NoError(t, err)
@@ -874,7 +875,7 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 	keystore := testutils.NewTestKeystore(t)
 	keystore.AddKey(privKey)
 	getClient := func() (aptos.AptosRpcClient, error) { return rlClient, nil }
-	txmgr, err := txm.New(lg, keystore, txm.DefaultConfigSet, getClient)
+	txmgr, err := txm.New(lg, keystore, *config.Defaults().TransactionManager, getClient)
 	require.NoError(t, err)
 	err = txmgr.Start(context.Background())
 	require.NoError(t, err)
@@ -1347,9 +1348,9 @@ func waitForTx(t *testing.T, txmgr *txm.AptosTxm, txId string) {
 	}
 	require.True(t, confirmed)
 }
-func getSampleTxMetadata() *commontypes.TxMeta {
+func getSampleTxMetadata() *types.TxMeta {
 	workflowID := "sample-workflow-id"
-	return &commontypes.TxMeta{
+	return &types.TxMeta{
 		WorkflowExecutionID: &workflowID,
 		GasLimit:            big.NewInt(210000),
 	}

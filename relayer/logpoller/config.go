@@ -9,30 +9,33 @@ import (
 // Config holds configuration for the LogPoller
 type Config struct {
 	// EventPollingInterval is the interval at which events are polled
-	EventPollingInterval config.Duration
+	EventPollingInterval *config.Duration
 
 	// TxPollingInterval is the interval at which transactions are polled
-	TxPollingInterval config.Duration
+	TxPollingInterval *config.Duration
 
 	// PollTimeout is the maximum time a single polling operation can take
-	PollTimeout config.Duration
+	PollTimeout *config.Duration
 
 	// EventBatchSize is the maximum number of events to fetch in a single request
-	EventBatchSize uint64
+	EventBatchSize *uint64
 
 	// TxBatchSize is the maximum number of transactions to fetch in a single request
-	TxBatchSize uint64
+	TxBatchSize *uint64
 
 	// TXPollerDisabled if this is true, the TX poller will not run on log poller start
-	TXPollerDisabled bool
+	TXPollerDisabled *bool
 }
 
+//TODO remove?
 // DefaultConfigSet is the default configuration for LogPoller
 var DefaultConfigSet = Config{
-	EventPollingInterval: *config.MustNewDuration(12 * time.Second),
-	TxPollingInterval:    *config.MustNewDuration(12 * time.Second),
-	PollTimeout:          *config.MustNewDuration(10 * time.Second),
-	EventBatchSize:       100,
-	TxBatchSize:          100,
-	TXPollerDisabled:     false,
+	EventPollingInterval: config.MustNewDuration(12 * time.Second),
+	TxPollingInterval:    config.MustNewDuration(12 * time.Second),
+	PollTimeout:          config.MustNewDuration(10 * time.Second),
+	EventBatchSize:       ptr[uint64](100),
+	TxBatchSize:          ptr[uint64](100),
+	TXPollerDisabled:     ptr(false),
 }
+
+func ptr[T any](v T) *T { return &v }
