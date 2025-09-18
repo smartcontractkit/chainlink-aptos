@@ -18,9 +18,9 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 
-	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
 )
 
 // This test ensures that the node returns errors as expected by the txm.
@@ -64,7 +64,7 @@ func runErrorsTest(t *testing.T, logger logger.Logger, config Config, rpcURL str
 	client, err := aptos.NewNodeClient(rpcURL, 0)
 	require.NoError(t, err)
 
-	chainInfo := monitor.ChainInfo{
+	chainInfo := types.ChainInfo{
 		ChainFamilyName: "aptos",
 		ChainID:         "3",
 		NetworkName:     "testnet",

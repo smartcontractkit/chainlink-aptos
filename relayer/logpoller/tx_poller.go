@@ -16,6 +16,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/db"
 	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/prom"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
@@ -343,7 +344,7 @@ func (l *AptosLogPoller) syncTransmitterTxs(ctx context.Context, transmitter apt
 				return totalProcessed, fmt.Errorf("failed to insert events: %w", err)
 			}
 
-			ReportEventsInserted(l.chainInfo, eventConfig.EventHandleFieldName, true, len(records))
+			prom.ReportEventsInserted(l.chainInfo, eventConfig.EventHandleFieldName, true, len(records))
 
 			l.lggr.Debugw("Inserted synthetic ExecutionStateChanged events",
 				"count", len(records), "transmitter", transmitter.String())

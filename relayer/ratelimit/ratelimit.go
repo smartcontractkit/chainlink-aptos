@@ -8,12 +8,13 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk/api"
 	"golang.org/x/sync/semaphore"
 
-	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/prom"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
 )
 
 type rateLimitedClient struct {
 	client    *aptos.NodeClient
-	chainInfo monitor.ChainInfo
+	chainInfo types.ChainInfo
 	baseURL   string
 
 	sem     *semaphore.Weighted
@@ -22,7 +23,7 @@ type rateLimitedClient struct {
 
 var _ aptos.AptosRpcClient = &rateLimitedClient{}
 
-func NewRateLimitedClient(client *aptos.NodeClient, chainInfo monitor.ChainInfo, baseURL string, maxConcurrent int64, timeout time.Duration) *rateLimitedClient {
+func NewRateLimitedClient(client *aptos.NodeClient, chainInfo types.ChainInfo, baseURL string, maxConcurrent int64, timeout time.Duration) *rateLimitedClient {
 	return &rateLimitedClient{
 		client:    client,
 		chainInfo: chainInfo,
@@ -46,7 +47,7 @@ func (c *rateLimitedClient) withRateLimit(f func() error, rpcCallName string) er
 	err := f()
 	duration := time.Since(start)
 
-	SetClientLatency(c.chainInfo, duration, rpcCallName, c.baseURL, err)
+	prom.SetClientLatency(c.chainInfo, duration, rpcCallName, c.baseURL, err)
 	return err
 }
 

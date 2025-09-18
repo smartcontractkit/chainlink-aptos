@@ -20,9 +20,9 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 
-	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
 )
 
 func TestTxmLocal(t *testing.T) {
@@ -65,7 +65,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 	client, err := aptos.NewNodeClient(rpcURL, 0) // TODO: chainId
 	require.NoError(t, err)
 
-	chainInfo := monitor.ChainInfo{
+	chainInfo := types.ChainInfo{
 		ChainFamilyName: "aptos",
 		ChainID:         "3",
 		NetworkName:     "testnet",

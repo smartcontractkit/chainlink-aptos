@@ -29,10 +29,10 @@ import (
 	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/loop"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
 )
 
 func TestChainReaderLocal(t *testing.T) {
@@ -124,7 +124,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 	client, err := aptos.NewNodeClient(rpcUrl, 0)
 	require.NoError(t, err)
 
-	chainInfo := monitor.ChainInfo{
+	chainInfo := types.ChainInfo{
 		ChainFamilyName: "aptos",
 		ChainID:         "3",
 		NetworkName:     "testnet",
@@ -552,7 +552,7 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 	client, err := aptos.NewNodeClient(rpcUrl, 0)
 	require.NoError(t, err)
 
-	chainInfo := monitor.ChainInfo{
+	chainInfo := types.ChainInfo{
 		ChainFamilyName: "aptos",
 		ChainID:         "3",
 		NetworkName:     "testnet",
@@ -878,7 +878,7 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 	err = testutils.FundWithFaucet(lg, client, acctAddr, "http://localhost:8081")
 	require.NoError(t, err)
 
-	chainInfo := monitor.ChainInfo{
+	chainInfo := types.ChainInfo{
 		ChainFamilyName: "aptos",
 		ChainID:         "3",
 		NetworkName:     "testnet",

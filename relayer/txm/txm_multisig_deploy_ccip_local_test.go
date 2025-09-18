@@ -24,9 +24,9 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 
-	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
 )
 
 var (
@@ -253,7 +253,7 @@ func runDeployMCMSAndCCIPInChunks(t *testing.T, logger logger.Logger, rpcURL str
 	require.NoError(t, err)
 	deployClient = client
 
-	chainInfo := monitor.ChainInfo{
+	chainInfo := types.ChainInfo{
 		ChainFamilyName: "aptos",
 		ChainID:         "3",
 		NetworkName:     "testnet",

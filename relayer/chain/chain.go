@@ -25,6 +25,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
+	rtypes "github.com/smartcontractkit/chainlink-aptos/relayer/types"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
@@ -361,8 +362,8 @@ func nodeStatus(n *config.Node, id string) (types.NodeStatus, error) {
 	return s, nil
 }
 
-func (c *chain) chainInfo() monitor.ChainInfo {
-	return monitor.ChainInfo{
+func (c *chain) chainInfo() rtypes.ChainInfo {
+	return rtypes.ChainInfo{
 		ChainFamilyName: config.ChainFamilyName,
 		ChainID:         c.id,
 		NetworkName:     c.cfg.NetworkName,

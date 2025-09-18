@@ -17,7 +17,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/db"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
 )
 
 type moduleInfo struct {
@@ -32,7 +32,7 @@ type AptosLogPoller struct {
 	dbStore   *db.DBStore
 	config    *Config
 	client    aptos.AptosRpcClient
-	chainInfo monitor.ChainInfo
+	chainInfo types.ChainInfo
 
 	mu      sync.RWMutex
 	modules map[string]*moduleInfo
@@ -48,7 +48,7 @@ type AptosLogPoller struct {
 	txCtxCancel    context.CancelFunc
 }
 
-func NewLogPoller(lggr logger.Logger, chainInfo monitor.ChainInfo, getClient func() (aptos.AptosRpcClient, error), ds sqlutil.DataSource, cfg *Config) (*AptosLogPoller, error) {
+func NewLogPoller(lggr logger.Logger, chainInfo types.ChainInfo, getClient func() (aptos.AptosRpcClient, error), ds sqlutil.DataSource, cfg *Config) (*AptosLogPoller, error) {
 	client, err := getClient()
 	if err != nil {
 		return nil, err
@@ -207,6 +207,6 @@ func (l *AptosLogPoller) getEventConfig(moduleKey, eventKey string) (aptos.Accou
 	return eventAccountAddress, eventHandle, eventConfig, nil
 }
 
-func (l *AptosLogPoller) GetChainInfo() monitor.ChainInfo {
+func (l *AptosLogPoller) GetChainInfo() types.ChainInfo {
 	return l.chainInfo
 }

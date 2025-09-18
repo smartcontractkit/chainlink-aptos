@@ -54,8 +54,7 @@ func DeployToObject(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
 ) (aptos.AccountAddress, *api.PendingTransaction, TestToken, error) {
-	namedAddresses := map[string]aptos.AccountAddress{
-	}
+	namedAddresses := map[string]aptos.AccountAddress{}
 	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.TestToken, namedAddresses)
 	if err != nil {
 		return aptos.AccountAddress{}, nil, TestTokenContract{}, err

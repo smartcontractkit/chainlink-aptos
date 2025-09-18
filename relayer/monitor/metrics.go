@@ -10,6 +10,8 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/metric/utils"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/prom"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
 )
 
 // Define a new gauge metric for account balance
@@ -28,15 +30,15 @@ func NewGaugeAccBalance(unitStr string) (*GaugeAccBalance, error) {
 	return &GaugeAccBalance{gauge}, nil
 }
 
-func (g *GaugeAccBalance) Record(ctx context.Context, balance float64, account string, chainInfo ChainInfo) {
+func (g *GaugeAccBalance) Record(ctx context.Context, balance float64, account string, chainInfo types.ChainInfo) {
 	oAttrs := metric.WithAttributeSet(g.GetAttributes(account, chainInfo))
 	g.gauge.Record(ctx, balance, oAttrs)
 
 	// Also record in Prom for availability to NOPs
-	// metrics.NodeBalance.WithLabelValues(account, chainInfo.ChainID, chainInfo.ChainFamilyName).Set(balance)
+	prom.SetAccountBalance(chainInfo, account, balance)
 }
 
-func (g *GaugeAccBalance) GetAttributes(account string, chainInfo ChainInfo) attribute.Set {
+func (g *GaugeAccBalance) GetAttributes(account string, chainInfo types.ChainInfo) attribute.Set {
 	return attribute.NewSet(
 		attribute.String("account", account),
 

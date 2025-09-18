@@ -21,10 +21,10 @@ import (
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
 )
 
 func TestChainWriterLocal(t *testing.T) {
@@ -65,7 +65,7 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 	client, err := aptos.NewNodeClient(rpcURL, 0)
 	require.NoError(t, err)
 
-	chainInfo := monitor.ChainInfo{
+	chainInfo := types.ChainInfo{
 		ChainFamilyName: "aptos",
 		ChainID:         "3",
 		NetworkName:     "testnet",
