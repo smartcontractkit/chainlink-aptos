@@ -23,6 +23,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/report/platform"
+	rtypes "github.com/smartcontractkit/chainlink-aptos/relayer/types"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target/mocks"
 )
 
@@ -162,7 +163,7 @@ func newMockedWriteTarget(t *testing.T, lggr logger.Logger) mockedWriteTarget {
 			ConfirmerPollPeriod: *config.MustNewDuration(100 * time.Millisecond),
 			ConfirmerTimeout:    *config.MustNewDuration(300 * time.Millisecond),
 		},
-		ChainInfo:        ChainInfo{},
+		ChainInfo:        rtypes.ChainInfo{},
 		Logger:           lggr,
 		Beholder:         bh,
 		ChainService:     cs,

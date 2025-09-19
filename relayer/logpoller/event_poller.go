@@ -17,6 +17,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/db"
 	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/prom"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
@@ -241,6 +242,8 @@ eventLoop:
 				if err := l.dbStore.InsertEvents(ctx, batchRecords); err != nil {
 					return fmt.Errorf("syncEvent: failed to insert batch of events: %w", err)
 				}
+
+				prom.ReportEventsInserted(l.chainInfo, eventFieldName, false, len(batchRecords))
 
 				totalProcessed += len(batchRecords)
 				l.lggr.Debugw("syncEvent: saved batch of events",
