@@ -48,3 +48,7 @@ package aptos
 
 //go:generate go run ./cmd/bindgen --input ./contracts/platform_secondary/sources/forwarder.move --output ./bindings/platform_secondary/forwarder
 //go:generate go run ./cmd/bindgen --input ./contracts/platform_secondary/sources/storage.move --output ./bindings/platform_secondary/storage
+
+//go:generate go run ./cmd/bindgen --input ./contracts/test_token/test_token/sources/test_token.move --output ./bindings/test_token/test_token/test_token
+//go:generate go run ./cmd/bindgen --input ./contracts/test_token/bnm_registrar/sources/bnm_registrar.move --output ./bindings/test_token/bnm_registrar/bnm_registrar
+//go:generate go run ./cmd/bindgen --input ./contracts/test_token/lnr_registrar/sources/lnr_registrar.move --output ./bindings/test_token/lnr_registrar/lnr_registrar

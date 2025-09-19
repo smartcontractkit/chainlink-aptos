@@ -91,6 +91,55 @@ func NewFeeQuoter(address aptos.AccountAddress, client aptos.AptosRpcClient) Fee
 	}
 }
 
+// Constants
+const (
+	GAS_PRICE_BITS                                  byte   = 112
+	MESSAGE_FIXED_BYTES                             uint64 = 32 * 15
+	MESSAGE_FIXED_BYTES_PER_TOKEN                   uint64 = 32 * (4 + (3 + 2))
+	CCIP_LOCK_OR_BURN_V1_RET_BYTES                  uint32 = 32
+	SVM_EXTRA_ARGS_MAX_ACCOUNTS                     uint64 = 64
+	SVM_MESSAGING_ACCOUNTS_OVERHEAD                 uint64 = 2
+	SVM_ACCOUNT_BYTE_SIZE                           uint64 = 32
+	SVM_TOKEN_TRANSFER_DATA_OVERHEAD                uint64 = (4 + 32) + 32 + 4 + 4 + 32 + 32 + 32 + 32 + 32 + 32 + 32
+	E_ALREADY_INITIALIZED                           uint64 = 1
+	E_INVALID_LINK_TOKEN                            uint64 = 2
+	E_UNKNOWN_DEST_CHAIN_SELECTOR                   uint64 = 3
+	E_UNKNOWN_TOKEN                                 uint64 = 4
+	E_DEST_CHAIN_NOT_ENABLED                        uint64 = 5
+	E_TOKEN_UPDATE_MISMATCH                         uint64 = 6
+	E_GAS_UPDATE_MISMATCH                           uint64 = 7
+	E_TOKEN_TRANSFER_FEE_CONFIG_MISMATCH            uint64 = 8
+	E_FEE_TOKEN_NOT_SUPPORTED                       uint64 = 9
+	E_TOKEN_NOT_SUPPORTED                           uint64 = 10
+	E_UNKNOWN_CHAIN_FAMILY_SELECTOR                 uint64 = 11
+	E_STALE_GAS_PRICE                               uint64 = 12
+	E_MESSAGE_TOO_LARGE                             uint64 = 13
+	E_UNSUPPORTED_NUMBER_OF_TOKENS                  uint64 = 14
+	E_INVALID_EVM_ADDRESS                           uint64 = 15
+	E_INVALID_32BYTES_ADDRESS                       uint64 = 16
+	E_FEE_TOKEN_COST_TOO_HIGH                       uint64 = 17
+	E_MESSAGE_GAS_LIMIT_TOO_HIGH                    uint64 = 18
+	E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE uint64 = 19
+	E_INVALID_EXTRA_ARGS_TAG                        uint64 = 20
+	E_INVALID_EXTRA_ARGS_DATA                       uint64 = 21
+	E_INVALID_TOKEN_RECEIVER                        uint64 = 22
+	E_MESSAGE_COMPUTE_UNIT_LIMIT_TOO_HIGH           uint64 = 23
+	E_MESSAGE_FEE_TOO_HIGH                          uint64 = 24
+	E_SOURCE_TOKEN_DATA_TOO_LARGE                   uint64 = 25
+	E_INVALID_DEST_CHAIN_SELECTOR                   uint64 = 26
+	E_INVALID_GAS_LIMIT                             uint64 = 27
+	E_INVALID_CHAIN_FAMILY_SELECTOR                 uint64 = 28
+	E_TO_TOKEN_AMOUNT_TOO_LARGE                     uint64 = 29
+	E_UNKNOWN_FUNCTION                              uint64 = 30
+	E_ZERO_TOKEN_PRICE                              uint64 = 31
+	E_TOO_MANY_SVM_EXTRA_ARGS_ACCOUNTS              uint64 = 32
+	E_INVALID_SVM_EXTRA_ARGS_WRITABLE_BITMAP        uint64 = 33
+	E_INVALID_FEE_RANGE                             uint64 = 34
+	E_INVALID_DEST_BYTES_OVERHEAD                   uint64 = 35
+	E_INVALID_SVM_RECEIVER_LENGTH                   uint64 = 36
+	E_TOKEN_AMOUNT_MISMATCH                         uint64 = 37
+)
+
 // Structs
 
 type FeeQuoterState struct {

@@ -42,6 +42,12 @@ func NewRateLimiter(address aptos.AccountAddress, client aptos.AptosRpcClient) R
 	}
 }
 
+// Constants
+const (
+	E_TOKEN_MAX_CAPACITY_EXCEEDED uint64 = 1
+	E_TOKEN_RATE_LIMIT_REACHED    uint64 = 2
+)
+
 // Structs
 
 type TokenBucket struct {

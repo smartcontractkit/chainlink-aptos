@@ -13,6 +13,7 @@ require (
 	github.com/jpillora/backoff v1.0.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pelletier/go-toml/v2 v2.2.3
+	github.com/prometheus/client_golang v1.22.0
 	github.com/shopspring/decimal v1.4.0
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	github.com/smartcontractkit/chainlink-common v0.7.1-0.20250519161208-80bc8b13c0e7
@@ -94,7 +95,6 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/prometheus/client_golang v1.21.1 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.63.0 // indirect
 	github.com/prometheus/procfs v0.16.0 // indirect
