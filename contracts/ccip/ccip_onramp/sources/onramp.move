@@ -474,7 +474,7 @@ module ccip_onramp::onramp {
 
             assert!(
                 dest_chain_config.router == signer::address_of(router),
-                error::invalid_argument(E_MUST_BE_CALLED_BY_ROUTER)
+                error::permission_denied(E_MUST_BE_CALLED_BY_ROUTER)
             );
         } else {
             let dest_chain_configs_v2 = borrow_dest_chain_configs_v2();
@@ -496,7 +496,7 @@ module ccip_onramp::onramp {
 
             assert!(
                 dest_chain_config_v2.router_state_address == signer::address_of(router),
-                error::invalid_argument(E_MUST_BE_CALLED_BY_ROUTER)
+                error::permission_denied(E_MUST_BE_CALLED_BY_ROUTER)
             );
         };
 
