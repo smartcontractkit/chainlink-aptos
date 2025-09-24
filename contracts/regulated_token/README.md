@@ -179,6 +179,94 @@ aptos move view \
 
 ### Command-Line Operations
 
+#### Transferring Tokens
+
+Users can transfer tokens between accounts using the standard Fungible Asset transfer function:
+
+**⚠️ Note**:
+
+- For `Object<T>` parameters in Move functions, use `address:<OBJECT_ADDRESS>` in the CLI (not `object:`). The CLI only supports: `['address','bool','hex','string','u8','u16','u32','u64','u128','u256','raw']`.
+- For functions with generic types like `<T: key>`, you must specify `--type-args 0x1::fungible_asset::Metadata` for Fungible Assets.
+
+```bash
+# Transfer tokens between accounts
+aptos move run \
+  --function-id 0x1::primary_fungible_store::transfer \
+  --type-args 0x1::fungible_asset::Metadata \
+  --args address:<METADATA_OBJECT_ADDRESS> address:<RECIPIENT_ADDRESS> u64:<AMOUNT> \
+  --profile <SENDER_PROFILE>
+
+# Example: Transfer 100 tokens (assuming 8 decimals = 100 * 10^8)
+aptos move run \
+  --function-id 0x1::primary_fungible_store::transfer \
+  --type-args 0x1::fungible_asset::Metadata \
+  --args address:0x27093661ff0eb2560771b6a616ac60788a7252f6917c8cdb29942052fa8567a address:0x742d35cc6551c76ffc4b3f2b78c5dd1e99aada3a3a8e8becc024df3c23ed36e8 u64:10000000000 \
+  --profile sender
+```
+
+**Parameters:**
+
+- `--type-args 0x1::fungible_asset::Metadata`: Required for generic function calls
+- `address:<METADATA_OBJECT_ADDRESS>`: The metadata object address of the regulated token (obtained from deployment/initialization)
+- `address:<RECIPIENT_ADDRESS>`: The recipient's account address
+- `u64:<AMOUNT>`: Amount in smallest units (e.g., for 8 decimals, multiply by 10^8)
+
+**Getting the Metadata Object Address:**
+
+```bash
+# Get the token metadata address
+aptos move view \
+  --function-id <REGULATED_TOKEN_ADDRESS>::regulated_token::token_metadata
+```
+
+#### Checking Balances
+
+```bash
+# Check account balance
+aptos move view \
+  --function-id 0x1::primary_fungible_store::balance \
+  --type-args 0x1::fungible_asset::Metadata \
+  --args address:<ACCOUNT_ADDRESS> address:<METADATA_OBJECT_ADDRESS>
+
+# Example: Check balance
+aptos move view \
+  --function-id 0x1::primary_fungible_store::balance \
+  --type-args 0x1::fungible_asset::Metadata \
+  --args address:0x742d35cc6551c76ffc4b3f2b78c5dd1e99aada3a3a8e8becc024df3c23ed36e8 address:0x27093661ff0eb2560771b6a616ac60788a7252f6917c8cdb29942052fa8567a
+```
+
+#### Transfer Considerations for Regulated Tokens
+
+⚠️ **Important**: Transfers may fail if:
+
+1. **Sender account is frozen**: Check with `is_frozen` before attempting transfer
+2. **Recipient account is frozen**: Recipient must be unfrozen to receive tokens
+3. **Contract is paused**: No transfers allowed when contract is paused
+4. **Insufficient balance**: Sender must have enough tokens
+
+```bash
+# Pre-transfer checks
+# 1. Check if contract is paused
+aptos move view \
+  --function-id <REGULATED_TOKEN_ADDRESS>::regulated_token::is_paused
+
+# 2. Check if sender is frozen
+aptos move view \
+  --function-id <REGULATED_TOKEN_ADDRESS>::regulated_token::is_frozen \
+  --args address:<SENDER_ADDRESS>
+
+# 3. Check if recipient is frozen
+aptos move view \
+  --function-id <REGULATED_TOKEN_ADDRESS>::regulated_token::is_frozen \
+  --args address:<RECIPIENT_ADDRESS>
+
+# 4. Check sender balance
+aptos move view \
+  --function-id 0x1::primary_fungible_store::balance \
+  --type-args 0x1::fungible_asset::Metadata \
+  --args address:<SENDER_ADDRESS> address:<METADATA_OBJECT_ADDRESS>
+```
+
 #### Minting Tokens
 
 Accounts with `MINTER_ROLE` or `BRIDGE_MINTER_OR_BURNER_ROLE` can mint tokens:
