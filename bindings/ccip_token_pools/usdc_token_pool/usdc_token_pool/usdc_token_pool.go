@@ -109,6 +109,26 @@ func NewUSDCTokenPool(address aptos.AccountAddress, client aptos.AptosRpcClient)
 	}
 }
 
+// Constants
+const (
+	SUPPORTED_USDC_VERSION     uint32 = 0
+	E_NOT_PUBLISHER            uint64 = 1
+	E_ALREADY_INITIALIZED      uint64 = 2
+	E_INVALID_FUNGIBLE_ASSET   uint64 = 3
+	E_INVALID_ARGUMENTS        uint64 = 4
+	E_DOMAIN_NOT_FOUND         uint64 = 5
+	E_DOMAIN_ENABLED           uint64 = 6
+	E_UNKNOWN_FUNCTION         uint64 = 7
+	E_DOMAIN_MISMATCH          uint64 = 8
+	E_NONCE_MISMATCH           uint64 = 9
+	E_DESTINATION_MISMATCH     uint64 = 10
+	E_DOMAIN_DISABLED          uint64 = 11
+	E_ZERO_CHAIN_SELECTOR      uint64 = 12
+	E_EMPTY_ALLOWED_CALLER     uint64 = 13
+	E_INVALID_MESSAGE_VERSION  uint64 = 14
+	E_ZERO_ADDRESS_NOT_ALLOWED uint64 = 15
+)
+
 // Structs
 
 type USDCTokenPoolDeployment struct {

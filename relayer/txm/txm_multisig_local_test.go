@@ -28,6 +28,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
@@ -140,7 +141,12 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	client, err := aptos.NewNodeClient(rpcURL, 0)
 	require.NoError(t, err)
 
-	rlClient := ratelimit.NewRateLimitedClient(client, 20, 30*time.Second)
+	chainInfo := types.ChainInfo{
+		ChainFamilyName: "aptos",
+		ChainID:         "3",
+		NetworkName:     "testnet",
+	}
+	rlClient := ratelimit.NewRateLimitedClient(client, chainInfo, rpcURL, 100, 30*time.Second)
 	getClient := func() (aptos.AptosRpcClient, error) {
 		return rlClient, nil
 	}

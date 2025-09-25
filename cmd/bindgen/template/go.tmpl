@@ -61,6 +61,15 @@ func New{{toUpperCamel .Module}}(address aptos.AccountAddress, client aptos.Apto
   }
 }
 
+{{- if (gt (.Consts | len) 0)}}
+// Constants
+  const (
+  {{- range .Consts}}
+    {{.Name}} {{.Type.GoType}} = {{.Value}}
+  {{- end}}
+  )
+{{- end}}
+
 // Structs
 
 {{$structs := .Structs}}

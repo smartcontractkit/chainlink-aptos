@@ -6,6 +6,8 @@ package aptos
 
 //go:generate go run ./cmd/bindgen --input ./contracts/managed_token_faucet/sources/faucet.move --output ./bindings/managed_token_faucet/faucet
 
+//go:generate go run ./cmd/bindgen --input ./contracts/regulated_token/sources/regulated_token.move --output ./bindings/regulated_token/regulated_token
+
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/auth.move --output ./bindings/ccip/auth
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/fee_quoter.move --output ./bindings/ccip/fee_quoter
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip/sources/nonce_manager.move --output ./bindings/ccip/nonce_manager
@@ -24,6 +26,7 @@ package aptos
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip_token_pools/lock_release_token_pool/sources/lock_release_token_pool.move --output ./bindings/ccip_token_pools/lock_release_token_pool/lock_release_token_pool --externalStructs ccip_token_pool::rate_limiter::TokenBucket=github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/token_pool/rate_limiter
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip_token_pools/usdc_token_pool/sources/usdc_token_pool.move --output ./bindings/ccip_token_pools/usdc_token_pool/usdc_token_pool --externalStructs ccip_token_pool::rate_limiter::TokenBucket=github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/token_pool/rate_limiter
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip_token_pools/managed_token_pool/sources/managed_token_pool.move --output ./bindings/ccip_token_pools/managed_token_pool/managed_token_pool --externalStructs ccip_token_pool::rate_limiter::TokenBucket=github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/token_pool/rate_limiter
+//go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip_token_pools/regulated_token_pool/sources/regulated_token_pool.move --output ./bindings/ccip_token_pools/regulated_token_pool/regulated_token_pool --externalStructs ccip_token_pool::rate_limiter::TokenBucket=github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/token_pool/rate_limiter
 
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip_token_pools/token_pool/sources/rate_limiter.move --output ./bindings/ccip_token_pools/token_pool/rate_limiter
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip_token_pools/token_pool/sources/token_pool.move --output ./bindings/ccip_token_pools/token_pool/token_pool
@@ -45,3 +48,7 @@ package aptos
 
 //go:generate go run ./cmd/bindgen --input ./contracts/platform_secondary/sources/forwarder.move --output ./bindings/platform_secondary/forwarder
 //go:generate go run ./cmd/bindgen --input ./contracts/platform_secondary/sources/storage.move --output ./bindings/platform_secondary/storage
+
+//go:generate go run ./cmd/bindgen --input ./contracts/test_token/test_token/sources/test_token.move --output ./bindings/test_token/test_token/test_token
+//go:generate go run ./cmd/bindgen --input ./contracts/test_token/bnm_registrar/sources/bnm_registrar.move --output ./bindings/test_token/bnm_registrar/bnm_registrar
+//go:generate go run ./cmd/bindgen --input ./contracts/test_token/lnr_registrar/sources/lnr_registrar.move --output ./bindings/test_token/lnr_registrar/lnr_registrar

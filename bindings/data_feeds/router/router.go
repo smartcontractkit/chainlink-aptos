@@ -52,6 +52,14 @@ func NewRouter(address aptos.AccountAddress, client aptos.AptosRpcClient) Router
 	}
 }
 
+// Constants
+const (
+	ENOT_OWNER               uint64 = 0
+	ECANNOT_TRANSFER_TO_SELF uint64 = 1
+	ENOT_PROPOSED_OWNER      uint64 = 2
+	EREPORTS_DEPRECATED      uint64 = 3
+)
+
 // Structs
 
 type Router struct {

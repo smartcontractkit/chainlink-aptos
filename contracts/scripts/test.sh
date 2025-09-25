@@ -10,6 +10,6 @@ for dir in $directories; do
   if [[ "$dir" == *"vendored"* ]]; then
     continue
   fi
-  echo "$ aptos move test --package-dir \"${dir}\""
-  aptos move test --package-dir "$dir"
+  echo "$ aptos move test --skip-fetch-latest-git-deps --package-dir \"${dir}\""
+  aptos move test --skip-fetch-latest-git-deps --package-dir "$dir"
 done

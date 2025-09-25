@@ -10,16 +10,9 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
-)
 
-// TODO: duplicate of "github.com/smartcontractkit/chainlink-aptos/relayer/write_target.ChainInfo" (reuse)
-// ChainInfo contains the chain information (used as execution context)
-type ChainInfo struct {
-	ChainFamilyName string
-	ChainID         string
-	NetworkName     string
-	NetworkNameFull string
-}
+	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
+)
 
 // Config defines the balance monitor configuration.
 type GenericBalanceConfig struct {
@@ -33,7 +26,7 @@ type GenericBalanceClient interface {
 
 // GenericBalanceMonitorOpts contains the options for creating a new balance monitor.
 type GenericBalanceMonitorOpts struct {
-	ChainInfo           ChainInfo
+	ChainInfo           types.ChainInfo
 	ChainNativeCurrency string
 
 	Config                  GenericBalanceConfig

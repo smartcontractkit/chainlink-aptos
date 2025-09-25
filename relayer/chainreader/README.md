@@ -200,3 +200,35 @@ The ChainReader implements multi-layer caching:
 - **TTL**: 15 minutes
 - **Use Case**: Avoid re-computing dynamic event addresses
 
+## Metrics
+
+The ChainReader system exposes several Prometheus metrics to monitor performance, reliability, and data flow across its components. These metrics track RPC latency, event ingestion, query performance, dataset sizes, and account balances.
+
+### Exposed Metrics
+
+- **aptos_account_balance**  
+  *Type*: GaugeVec  
+  *Labels*: `chainFamily`, `chainID`, `networkName`, `account`  
+  *Description*: Tracks the balance of Aptos accounts.
+
+- **aptos_rpc_call_latency**  
+  *Type*: HistogramVec  
+  *Labels*: `chainFamily`, `chainID`, `networkName`, `rpcUrl`, `success`, `rpcCallName`  
+  *Description*: Measures the duration of Aptos RPC calls in milliseconds, labeled by chain info, RPC endpoint, call name, and success status.
+
+- **aptos_log_poller_events_inserted**  
+  *Type*: CounterVec  
+  *Labels*: `chainFamily`, `chainID`, `networkName`, `event`, `isSynthetic`  
+  *Description*: Counts the number of events inserted by LogPoller, distinguishing between real and synthetic events.
+
+- **aptos_cr_query_duration**  
+  *Type*: HistogramVec  
+  *Labels*: `chainFamily`, `chainID`, `networkName`, `query`, `event`  
+  *Description*: Tracks the duration of ChainReader queries fetching events from the database.
+
+- **aptos_cr_query_dataset_size**  
+  *Type*: GaugeVec  
+  *Labels*: `chainFamily`, `chainID`, `networkName`, `query`, `event`  
+  *Description*: Records the size of datasets returned by ChainReader queries.
+
+
