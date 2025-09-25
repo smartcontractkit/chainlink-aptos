@@ -26,6 +26,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_offramp"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_onramp"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_router"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/managed_token_pool"
@@ -209,6 +210,19 @@ func Test_DeployCCIP(t *testing.T) {
 	onrampPayload, err := ccip_onramp.Compile(ccipObjectAddress, mcmsContract.Address(), true)
 	require.NoError(t, err)
 	chunks, err = bind.CreateChunks(onrampPayload, bind.ChunkSizeInBytes)
+	require.NoError(t, err)
+	for i, chunk := range chunks {
+		if i == len(chunks)-1 {
+			addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunkAndUpgradeObjectCode(chunk.Metadata, chunk.CodeIndices, chunk.Chunks, ccipObjectAddress))
+			break
+		}
+		addToProposal(mcmsContract.MCMSDeployer().Encoder().StageCodeChunk(chunk.Metadata, chunk.CodeIndices, chunk.Chunks))
+	}
+
+	// Deploy OffRamp
+	offrampPayload, err := ccip_offramp.Compile(ccipObjectAddress, mcmsContract.Address(), true)
+	require.NoError(t, err)
+	chunks, err = bind.CreateChunks(offrampPayload, bind.ChunkSizeInBytes)
 	require.NoError(t, err)
 	for i, chunk := range chunks {
 		if i == len(chunks)-1 {
