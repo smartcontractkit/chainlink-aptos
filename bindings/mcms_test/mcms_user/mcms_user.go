@@ -43,6 +43,11 @@ func NewMCMSUser(address aptos.AccountAddress, client aptos.AptosRpcClient) MCMS
 	}
 }
 
+// Constants
+const (
+	EUNKNOWN_FUNCTION uint64 = 1
+)
+
 // Structs
 
 type UserData struct {

@@ -99,6 +99,32 @@ func NewOnramp(address aptos.AccountAddress, client aptos.AptosRpcClient) Onramp
 	}
 }
 
+// Constants
+const (
+	E_ALREADY_INITIALIZED                       uint64 = 1
+	E_DEST_CHAIN_ARGUMENT_MISMATCH              uint64 = 2
+	E_INVALID_DEST_CHAIN_SELECTOR               uint64 = 3
+	E_UNKNOWN_DEST_CHAIN_SELECTOR               uint64 = 4
+	E_UNKNOWN_FUNCTION                          uint64 = 5
+	E_SENDER_NOT_ALLOWED                        uint64 = 6
+	E_ONLY_CALLABLE_BY_OWNER_OR_ALLOWLIST_ADMIN uint64 = 7
+	E_INVALID_ALLOWLIST_REQUEST                 uint64 = 8
+	E_INVALID_ALLOWLIST_ADDRESS                 uint64 = 9
+	E_UNSUPPORTED_TOKEN                         uint64 = 10
+	E_INVALID_FEE_TOKEN                         uint64 = 11
+	E_CURSED_BY_RMN                             uint64 = 12
+	E_INVALID_TOKEN                             uint64 = 13
+	E_INVALID_TOKEN_STORE                       uint64 = 14
+	E_UNEXPECTED_WITHDRAW_AMOUNT                uint64 = 15
+	E_UNEXPECTED_FUNGIBLE_ASSET                 uint64 = 16
+	E_FEE_AGGREGATOR_NOT_SET                    uint64 = 17
+	E_MUST_BE_CALLED_BY_ROUTER                  uint64 = 18
+	E_TOKEN_AMOUNT_MISMATCH                     uint64 = 19
+	E_CANNOT_SEND_ZERO_TOKENS                   uint64 = 20
+	E_ZERO_CHAIN_SELECTOR                       uint64 = 21
+	E_CALCULATE_MESSAGE_HASH_INVALID_ARGUMENTS  uint64 = 22
+)
+
 // Structs
 
 type OnRampDeployment struct {

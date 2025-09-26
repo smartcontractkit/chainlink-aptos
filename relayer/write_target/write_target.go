@@ -27,6 +27,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 
 	wt "github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/platform/write-target"
+	rtypes "github.com/smartcontractkit/chainlink-aptos/relayer/types"
 )
 
 var (
@@ -64,7 +65,7 @@ type writeTarget struct {
 	capabilities.CapabilityInfo
 
 	config    Config
-	chainInfo ChainInfo
+	chainInfo rtypes.ChainInfo
 
 	lggr logger.Logger
 	// Local beholder client, also hosting the protobuf emitter
@@ -87,7 +88,7 @@ type WriteTargetOpts struct {
 	Config Config
 	// ChainInfo contains the chain information (used as execution context)
 	// TODO: simplify by passing via ChainService.GetChainStatus fn
-	ChainInfo ChainInfo
+	ChainInfo rtypes.ChainInfo
 
 	Logger   logger.Logger
 	Beholder *monitor.BeholderClient

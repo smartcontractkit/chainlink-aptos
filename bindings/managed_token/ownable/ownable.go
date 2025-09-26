@@ -42,6 +42,18 @@ func NewOwnable(address aptos.AccountAddress, client aptos.AptosRpcClient) Ownab
 	}
 }
 
+// Constants
+const (
+	E_MUST_BE_PROPOSED_OWNER    uint64 = 1
+	E_CANNOT_TRANSFER_TO_SELF   uint64 = 2
+	E_ONLY_CALLABLE_BY_OWNER    uint64 = 3
+	E_PROPOSED_OWNER_MISMATCH   uint64 = 4
+	E_OWNER_CHANGED             uint64 = 5
+	E_NO_PENDING_TRANSFER       uint64 = 6
+	E_TRANSFER_NOT_ACCEPTED     uint64 = 7
+	E_TRANSFER_ALREADY_ACCEPTED uint64 = 8
+)
+
 // Structs
 
 type OwnableState struct {

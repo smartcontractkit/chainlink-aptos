@@ -1,0 +1,33 @@
+[package]
+name = "RegulatedTokenPool"
+version = "1.0.0"
+authors = []
+
+[addresses]
+ccip = "_"
+ccip_token_pool = "_"
+regulated_token_pool = "_"
+mcms = "_"
+mcms_register_entrypoints = "_"
+regulated_token = "_"
+admin = "_"
+
+[dev-addresses]
+# This address is created for tests, which is an object address
+ccip = "0x4d4fe4c4e5966a425127f999c2d3603e1a2337b9f1d6550689027be98346b2cd"
+ccip_token_pool = "0x2000"
+# This address is created for tests, which is an object address
+regulated_token_pool = "0x7e44cbd34463548fc1c9005d465cddda3c9dfef5d9d6f77c4998218224bfb694"
+mcms = "0x4000"
+mcms_register_entrypoints = "0x4001"
+# This address is created for tests, which is an object address
+regulated_token = "0x27093661ff0eb2560771b6a616ac60788a7252f6917c8cdb29942052fa8567a"
+admin = "0x456"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }
+ChainlinkCCIP = { local = "../../ccip" }
+CCIPTokenPool = { local = "../token_pool" }
+RegulatedToken = { local = "../../../regulated_token" }
+
+[dev-dependencies]

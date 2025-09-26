@@ -51,6 +51,7 @@ func CompileMovePackage(
 		"aptos",
 		"move", "build-publish-payload",
 		"--override-size-check",
+		"--skip-fetch-latest-git-deps",
 		"--package-dir", packageDir,
 		"--named-addresses", namedAddressesArg,
 		"--included-artifacts=sparse",
@@ -65,7 +66,7 @@ func CompileMovePackage(
 
 	err = cmd.Run()
 	if err != nil {
-		t.Fatalf("Failed to compile contract: %v\nStderr: %s", err, stderr.String())
+		t.Fatalf("Failed to compile contract: %v\nStderr: %s\n\nStdout: %s", err, stderr.String(), stdout.String())
 	}
 
 	if stderr.Len() > 0 {

@@ -116,6 +116,20 @@ func NewLockReleaseTokenPool(address aptos.AccountAddress, client aptos.AptosRpc
 	}
 }
 
+// Constants
+const (
+	E_NOT_PUBLISHER                           uint64 = 1
+	E_ALREADY_INITIALIZED                     uint64 = 2
+	E_INVALID_FUNGIBLE_ASSET                  uint64 = 3
+	E_INVALID_ARGUMENTS                       uint64 = 4
+	E_UNKNOWN_FUNCTION                        uint64 = 5
+	E_LOCAL_TOKEN_MISMATCH                    uint64 = 6
+	E_DISPATCHABLE_TOKEN_WITHOUT_TRANSFER_REF uint64 = 7
+	E_UNAUTHORIZED                            uint64 = 8
+	E_INSUFFICIENT_LIQUIDITY                  uint64 = 9
+	E_TRANSFER_REF_NOT_SET                    uint64 = 10
+)
+
 // Structs
 
 type LockReleaseTokenPoolDeployment struct {

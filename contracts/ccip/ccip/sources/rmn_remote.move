@@ -77,23 +77,24 @@ module ccip::rmn_remote {
         subjects: vector<vector<u8>>
     }
 
-    const E_ALREADY_CURSED: u64 = 1;
-    const E_CONFIG_NOT_SET: u64 = 2;
-    const E_DUPLICATE_SIGNER: u64 = 3;
-    const E_INVALID_SIGNATURE: u64 = 4;
-    const E_INVALID_SIGNER_ORDER: u64 = 5;
-    const E_NOT_ENOUGH_SIGNERS: u64 = 6;
-    const E_NOT_CURSED: u64 = 7;
-    const E_OUT_OF_ORDER_SIGNATURES: u64 = 8;
-    const E_THRESHOLD_NOT_MET: u64 = 9;
-    const E_UNEXPECTED_SIGNER: u64 = 10;
-    const E_ZERO_VALUE_NOT_ALLOWED: u64 = 11;
-    const E_MERKLE_ROOT_LENGTH_MISMATCH: u64 = 12;
-    const E_INVALID_DIGEST_LENGTH: u64 = 13;
-    const E_SIGNERS_MISMATCH: u64 = 14;
-    const E_INVALID_SUBJECT_LENGTH: u64 = 15;
-    const E_INVALID_PUBLIC_KEY_LENGTH: u64 = 16;
-    const E_UNKNOWN_FUNCTION: u64 = 17;
+    const E_ALREADY_INITIALIZED: u64 = 1;
+    const E_ALREADY_CURSED: u64 = 2;
+    const E_CONFIG_NOT_SET: u64 = 3;
+    const E_DUPLICATE_SIGNER: u64 = 4;
+    const E_INVALID_SIGNATURE: u64 = 5;
+    const E_INVALID_SIGNER_ORDER: u64 = 6;
+    const E_NOT_ENOUGH_SIGNERS: u64 = 7;
+    const E_NOT_CURSED: u64 = 8;
+    const E_OUT_OF_ORDER_SIGNATURES: u64 = 9;
+    const E_THRESHOLD_NOT_MET: u64 = 10;
+    const E_UNEXPECTED_SIGNER: u64 = 11;
+    const E_ZERO_VALUE_NOT_ALLOWED: u64 = 12;
+    const E_MERKLE_ROOT_LENGTH_MISMATCH: u64 = 13;
+    const E_INVALID_DIGEST_LENGTH: u64 = 14;
+    const E_SIGNERS_MISMATCH: u64 = 15;
+    const E_INVALID_SUBJECT_LENGTH: u64 = 16;
+    const E_INVALID_PUBLIC_KEY_LENGTH: u64 = 17;
+    const E_UNKNOWN_FUNCTION: u64 = 18;
 
     #[view]
     public fun type_and_version(): String {
@@ -115,6 +116,10 @@ module ccip::rmn_remote {
         assert!(
             local_chain_selector != 0,
             error::invalid_argument(E_ZERO_VALUE_NOT_ALLOWED)
+        );
+        assert!(
+            !exists<RMNRemoteState>(state_object::object_address()),
+            error::invalid_argument(E_ALREADY_INITIALIZED)
         );
 
         let state_object_signer = state_object::object_signer();

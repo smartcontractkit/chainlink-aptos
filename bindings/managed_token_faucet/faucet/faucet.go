@@ -45,6 +45,11 @@ func NewFaucet(address aptos.AccountAddress, client aptos.AptosRpcClient) Faucet
 	}
 }
 
+// Constants
+const (
+	E_NOT_PUBLISHER uint64 = 1
+)
+
 // Structs
 
 type FaucetState struct {

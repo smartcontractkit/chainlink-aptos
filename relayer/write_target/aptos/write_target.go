@@ -15,6 +15,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainwriter"
 	aptosconfig "github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target"
 
@@ -112,7 +113,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 				},
 			},
 		},
-	}, chain.DataSource())
+	}, chain.DataSource(), chain.LogPoller())
 
 	err = cr.Bind(ctx, []commontypes.BoundContract{{
 		Address: config.Workflow.ForwarderAddress,
@@ -174,7 +175,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	}
 
 	// Construct the chain information from the config
-	chainInfo := write_target.ChainInfo{
+	chainInfo := types.ChainInfo{
 		ChainFamilyName: aptosconfig.ChainFamilyName, // static for this plugin
 		ChainID:         config.ChainID,
 		NetworkName:     config.NetworkName,

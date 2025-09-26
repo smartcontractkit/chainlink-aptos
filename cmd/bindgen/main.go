@@ -90,9 +90,18 @@ func main() {
 	for i, structt := range structs {
 		log.Println(i, structt)
 	}
-
 	log.Println("----")
-	data, err := template.Convert(pkg, mod, structs, funcs, extStructs)
+	consts, err := parse.Consts([]byte(moduleContent))
+	if err != nil {
+		panic(err)
+	}
+	log.Println("Parsed consts:")
+	for i, constt := range consts {
+		log.Println(i, constt)
+	}
+	log.Println("----")
+
+	data, err := template.Convert(pkg, mod, structs, funcs, consts, extStructs)
 	if err != nil {
 		log.Fatal(err)
 	}
