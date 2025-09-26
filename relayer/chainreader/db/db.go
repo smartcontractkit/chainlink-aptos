@@ -30,61 +30,12 @@ func NewDBStore(ds sqlutil.DataSource, logger logger.Logger) *DBStore {
 	}
 }
 
-func (s *DBStore) EnsureSchema(ctx context.Context) error {
-	if s.schemaEnsured {
-		return nil
-	}
-
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
-
-	schemaSQL := `
-CREATE SCHEMA IF NOT EXISTS aptos;
-`
-	_, err := s.ds.ExecContext(ctx, schemaSQL)
-	if err != nil {
-		return fmt.Errorf("failed to create aptos schema: %w", err)
-	}
-
-	createTableSQL := `
-CREATE TABLE IF NOT EXISTS aptos.events (
-		id BIGSERIAL PRIMARY KEY,
-    event_account_address TEXT NOT NULL,
-    event_handle TEXT NOT NULL,
-		event_field_name TEXT NOT NULL,
-    event_offset BIGINT,
-    tx_version BIGINT NOT NULL,
-    block_height TEXT NOT NULL,
-    block_hash BYTEA NOT NULL,
-    block_timestamp BIGINT NOT NULL,
-    data JSONB NOT NULL,
-		UNIQUE (event_account_address, event_handle, event_field_name, tx_version)
-);
-`
-	_, err = s.ds.ExecContext(ctx, createTableSQL)
-	if err != nil {
-		return fmt.Errorf("failed to create aptos.events table: %w", err)
-	}
-
-	indexSQL := `
-CREATE INDEX IF NOT EXISTS idx_events_account_handle_offset
-ON aptos.events(event_account_address, event_handle, event_field_name, event_offset);
-`
-	_, err = s.ds.ExecContext(ctx, indexSQL)
-	if err != nil {
-		return fmt.Errorf("failed to create index on aptos.events: %w", err)
-	}
-
-	s.schemaEnsured = true
-	return nil
-}
-
 type EventRecord struct {
 	ID                  uint64
 	EventAccountAddress string
 	EventHandle         string
 	EventFieldName      string
-	EventOffset         *uint64
+	EventOffset         uint64
 	TxVersion           uint64
 	BlockHeight         string
 	BlockHash           []byte
@@ -97,14 +48,11 @@ func (s *DBStore) InsertEvents(ctx context.Context, records []EventRecord) error
 		return nil
 	}
 
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
-
 	insertSQL := `
 INSERT INTO aptos.events (
     event_account_address,
     event_handle,
-		event_field_name,
+    event_field_name,
     event_offset,
     tx_version,
     block_height,
@@ -112,7 +60,7 @@ INSERT INTO aptos.events (
     block_timestamp,
     data
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-ON CONFLICT (event_account_address, event_handle, event_field_name, tx_version)
+ON CONFLICT (event_account_address, event_handle, event_field_name, event_offset, tx_version)
 DO NOTHING;
 `
 
@@ -130,6 +78,7 @@ DO NOTHING;
 			continue
 		}
 
+		s.rwMutex.Lock()
 		_, err = s.ds.ExecContext(ctx, insertSQL,
 			record.EventAccountAddress,
 			record.EventHandle,
@@ -141,6 +90,7 @@ DO NOTHING;
 			record.BlockTimestamp,
 			data,
 		)
+		s.rwMutex.Unlock()
 
 		if err != nil {
 			errMsg := fmt.Errorf("failed to insert event (handle: %s, field_name: %s, offset: %v): %w",
@@ -164,9 +114,6 @@ DO NOTHING;
 }
 
 func (s *DBStore) QueryEvents(ctx context.Context, eventAccountAddress, eventHandle, eventFieldName string, expressions []query.Expression, limitAndSort query.LimitAndSort) ([]EventRecord, error) {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
-
 	baseSQL := `
 SELECT id, event_account_address, event_handle, event_field_name, event_offset, tx_version, block_height, block_hash, block_timestamp, data
 FROM aptos.events
@@ -201,7 +148,7 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 		if sortDir, ok := limitAndSort.SortBy[0].(query.SortBySequence); ok && sortDir.GetDirection() == query.Desc {
 			direction = "DESC"
 		}
-		baseSQL += " ORDER BY tx_version " + direction
+		baseSQL += " ORDER BY (tx_version, event_offset) " + direction
 	}
 
 	var maxLimit uint64 = 2000
@@ -224,7 +171,10 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 		"params", args,
 		"limitCount", limitAndSort.Limit.Count)
 
+	s.rwMutex.RLock()
 	rows, err := s.ds.QueryContext(ctx, baseSQL, args...)
+	s.rwMutex.RUnlock()
+
 	if err != nil {
 		return nil, fmt.Errorf("query events failed: %w", err)
 	}
@@ -250,20 +200,25 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 		records = append(records, record)
 	}
 
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during row iteration: %w", err)
+	}
+
 	return records, nil
 }
 
 func (s *DBStore) GetLatestOffset(ctx context.Context, eventAccountAddress, eventHandle, eventFieldName string) (uint64, error) {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
-
 	querySQL := `
-SELECT COALESCE(MAX(event_offset), 0) FROM aptos.events
+SELECT COALESCE(MAX(event_offset) + 1, 0) FROM aptos.events
 WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 `
 
+	s.rwMutex.RLock()
+	row := s.ds.QueryRowxContext(ctx, querySQL, eventAccountAddress, eventHandle, eventFieldName)
+	s.rwMutex.RUnlock()
+
 	var offset uint64
-	err := s.ds.QueryRowxContext(ctx, querySQL, eventAccountAddress, eventHandle, eventFieldName).Scan(&offset)
+	err := row.Scan(&offset)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get latest offset: %w", err)
 	}
@@ -272,21 +227,62 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 }
 
 func (s *DBStore) GetTxVersionByID(ctx context.Context, id uint64) (uint64, error) {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
-
 	querySQL := `
 SELECT tx_version FROM aptos.events
 WHERE id = $1
 `
 
+	s.rwMutex.RLock()
+	row := s.ds.QueryRowxContext(ctx, querySQL, id)
+	s.rwMutex.RUnlock()
+
 	var txVersion uint64
-	err := s.ds.QueryRowxContext(ctx, querySQL, id).Scan(&txVersion)
+	err := row.Scan(&txVersion)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch tx_version for id %d: %w", id, err)
 	}
 
 	return txVersion, nil
+}
+
+func (s *DBStore) GetTransmitterSequenceNum(ctx context.Context, transmitterAddress string) (uint64, error) {
+	querySQL := `
+SELECT COALESCE(
+  (SELECT ts.sequence_number FROM aptos.transmitter_sequence_nums ts WHERE ts.transmitter_address = $1), 0
+)
+ `
+
+	s.rwMutex.RLock()
+	row := s.ds.QueryRowxContext(ctx, querySQL, transmitterAddress)
+	s.rwMutex.RUnlock()
+
+	var sequenceNumber uint64
+	err := row.Scan(&sequenceNumber)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get transmitter sequence: %w", err)
+	}
+
+	return sequenceNumber, nil
+}
+
+func (s *DBStore) UpdateTransmitterSequence(ctx context.Context, transmitterAddress string, sequenceNumber uint64) error {
+	upsertSQL := `
+INSERT INTO aptos.transmitter_sequence_nums (transmitter_address, sequence_number, updated_at)
+VALUES ($1, $2, NOW())
+ON CONFLICT (transmitter_address) DO UPDATE
+SET sequence_number = EXCLUDED.sequence_number, updated_at = NOW()
+WHERE aptos.transmitter_sequence_nums.sequence_number < EXCLUDED.sequence_number
+`
+
+	s.rwMutex.Lock()
+	_, err := s.ds.ExecContext(ctx, upsertSQL, transmitterAddress, sequenceNumber)
+	s.rwMutex.Unlock()
+
+	if err != nil {
+		return fmt.Errorf("failed to update transmitter sequence: %w", err)
+	}
+
+	return nil
 }
 
 func (s *DBStore) buildSQLCondition(expr query.Expression, args *[]any, argCount *int) (string, error) {

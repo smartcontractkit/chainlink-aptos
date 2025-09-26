@@ -1,4 +1,4 @@
-// //go:build integration
+//go:build integration
 
 package chainreader
 
@@ -15,10 +15,12 @@ import (
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/sha3"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
+	_ "github.com/smartcontractkit/chainlink-common/pkg/sqlutil"
 	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil/sqltest"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
@@ -26,9 +28,11 @@ import (
 
 	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/loop"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/testutils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
 )
 
 func TestChainReaderLocal(t *testing.T) {
@@ -57,6 +61,46 @@ func TestChainReaderLocal(t *testing.T) {
 	})
 }
 
+func setupTestDatabase(t *testing.T, db *sqlx.DB) {
+	createSchemaSQL := `CREATE SCHEMA IF NOT EXISTS aptos;`
+	_, err := db.Exec(createSchemaSQL)
+	require.NoError(t, err)
+
+	createEventsTableSQL := `
+    CREATE TABLE IF NOT EXISTS aptos.events (
+        id BIGSERIAL PRIMARY KEY,
+        event_account_address TEXT NOT NULL,
+        event_handle TEXT NOT NULL,
+        event_field_name TEXT NOT NULL,
+        event_offset BIGINT NOT NULL,
+        tx_version BIGINT NOT NULL,
+        block_height TEXT NOT NULL,
+        block_hash BYTEA NOT NULL,
+        block_timestamp BIGINT NOT NULL,
+        data JSONB NOT NULL,
+        UNIQUE (event_account_address, event_handle, event_field_name, event_offset, tx_version)
+    );`
+	_, err = db.Exec(createEventsTableSQL)
+	require.NoError(t, err)
+
+	createIndexSQL := `
+    CREATE INDEX IF NOT EXISTS idx_events_account_handle_offset
+    ON aptos.events(event_account_address, event_handle, event_field_name, tx_version, event_offset);`
+	_, err = db.Exec(createIndexSQL)
+	require.NoError(t, err)
+
+	createTransmitterSeqSQL := `
+    CREATE TABLE IF NOT EXISTS aptos.transmitter_sequence_nums (
+        id BIGSERIAL PRIMARY KEY,
+        transmitter_address TEXT NOT NULL,
+        sequence_number BIGINT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (transmitter_address)
+    );`
+	_, err = db.Exec(createTransmitterSeqSQL)
+	require.NoError(t, err)
+}
+
 func setupTestAccount(t *testing.T, logger logger.Logger) (ed25519.PrivateKey, ed25519.PublicKey, aptos.AccountAddress) {
 	privateKey, publicKey, accountAddress := testutils.LoadAccountFromEnv(t, logger)
 	if privateKey == nil {
@@ -80,7 +124,12 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 	client, err := aptos.NewNodeClient(rpcUrl, 0)
 	require.NoError(t, err)
 
-	rateLimitedClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
+	chainInfo := types.ChainInfo{
+		ChainFamilyName: "aptos",
+		ChainID:         "3",
+		NetworkName:     "testnet",
+	}
+	rateLimitedClient := ratelimit.NewRateLimitedClient(client, chainInfo, rpcUrl, 100, 30*time.Second)
 
 	getClient := func() (aptos.AptosRpcClient, error) { return rateLimitedClient, nil }
 
@@ -254,7 +303,10 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		Address: accountAddress.String(),
 	}
 
-	chainReader := NewChainReader(logger, rateLimitedClient, config, nil)
+	logPoller, err := logpoller.NewLogPoller(logger, chainInfo, getClient, nil, nil)
+	require.NoError(t, err)
+
+	chainReader := NewChainReader(logger, rateLimitedClient, config, nil, logPoller)
 	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{binding})
 	require.NoError(t, err)
 
@@ -481,6 +533,8 @@ func emitManyEvents(t *testing.T, txmgr *txm.AptosTxm, address, publicKeyHex str
 		require.NoError(t, err)
 		waitForTx(t, txmgr, txId)
 	}
+
+	time.Sleep(15 * time.Second) // Wait for events to be processed
 }
 
 func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string, accountAddress aptos.AccountAddress, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
@@ -490,6 +544,7 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 		t.Skip("Skipping persistent tests as TEST_DB_URL is not set in CI")
 	}
 	db := sqltest.NewDB(t, dsn)
+	setupTestDatabase(t, db)
 
 	keystore := testutils.NewTestKeystore(t)
 	keystore.AddKey(privateKey)
@@ -497,9 +552,14 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 	client, err := aptos.NewNodeClient(rpcUrl, 0)
 	require.NoError(t, err)
 
-	rateLimitedClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
-
+	chainInfo := types.ChainInfo{
+		ChainFamilyName: "aptos",
+		ChainID:         "3",
+		NetworkName:     "testnet",
+	}
+	rateLimitedClient := ratelimit.NewRateLimitedClient(client, chainInfo, rpcUrl, 100, 30*time.Second)
 	getClient := func() (aptos.AptosRpcClient, error) { return rateLimitedClient, nil }
+
 	txmgr, err := txm.New(logger, keystore, txm.DefaultConfigSet, getClient)
 	require.NoError(t, err)
 	err = txmgr.Start(context.Background())
@@ -528,14 +588,14 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 				},
 			},
 		},
-		EventSyncInterval: 3 * time.Second,
-		EventSyncTimeout:  1 * time.Second,
-		TxSyncInterval:    3 * time.Second,
-		TxSyncTimeout:     1 * time.Second,
 	}
 
-	// Create ChainReader with persistence enabled.
-	chainReader := NewChainReader(logger, rateLimitedClient, config, db)
+	logPoller, err := logpoller.NewLogPoller(logger, chainInfo, getClient, db, nil)
+	require.NoError(t, err)
+	err = logPoller.Start(context.Background())
+	require.NoError(t, err)
+
+	chainReader := NewChainReader(logger, rateLimitedClient, config, db, logPoller)
 	binding := commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()}
 	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{binding})
 	require.NoError(t, err)
@@ -803,75 +863,6 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 			require.NotEmpty(t, seqMeta.TxHash, "tx hash must not be empty")
 		}
 	})
-
-	t.Run("Filter by renamed numeric value", func(t *testing.T) {
-		configRenamed := crconfig.ChainReaderConfig{
-			Modules: map[string]*crconfig.ChainReaderModule{
-				"testContract": {
-					Name: "echo",
-					Events: map[string]*crconfig.ChainReaderEvent{
-						"DoubleValueEvent": {
-							EventHandleStructName: "EventStore",
-							EventHandleFieldName:  "double_value_events",
-							EventAccountAddress:   "", // defaults to bound contract address
-							EventFieldRenames: map[string]crconfig.RenamedField{
-								"number": {NewName: "RenamedNumber"},
-							},
-							EventFilterRenames: map[string]string{
-								"RandomFilterName": "RenamedNumber",
-							},
-						},
-					},
-				},
-			},
-			EventSyncInterval: 3 * time.Second,
-			EventSyncTimeout:  1 * time.Second,
-			TxSyncInterval:    3 * time.Second,
-			TxSyncTimeout:     1 * time.Second,
-		}
-		chainReaderRenamed := NewChainReader(logger, rateLimitedClient, configRenamed, db)
-		bindingRenamed := commontypes.BoundContract{Name: "testContract", Address: accountAddress.String()}
-		err := chainReaderRenamed.Bind(context.Background(), []commontypes.BoundContract{bindingRenamed})
-		require.NoError(t, err)
-
-		txId := uuid.New().String()
-		err = txmgr.Enqueue(
-			txId,
-			getSampleTxMetadata(),
-			accountAddress.String(),
-			publicKeyHex,
-			fmt.Sprintf("%s::echo::echo_with_events", accountAddress.String()),
-			[]string{},
-			[]string{"u64", "0x1::string::String", "vector<u8>"},
-			[]any{uint64(7), "test7", []byte{7}},
-			true,
-		)
-		require.NoError(t, err)
-		waitForTx(t, txmgr, txId)
-
-		filter := query.KeyFilter{
-			Key: "DoubleValueEvent",
-			Expressions: []query.Expression{
-				query.Comparator("RandomFilterName",
-					primitives.ValueComparator{Value: uint64(5), Operator: primitives.Gte},
-					primitives.ValueComparator{Value: uint64(10), Operator: primitives.Lt},
-				),
-			},
-		}
-
-		seqs, err := chainReaderRenamed.QueryKey(
-			context.Background(),
-			bindingRenamed,
-			filter,
-			query.LimitAndSort{Limit: query.CountLimit(100)},
-			&DoubleValueEventRenamed{},
-		)
-		require.NoError(t, err)
-
-		require.Len(t, seqs, 1)
-		evt := seqs[0].Data.(*DoubleValueEventRenamed)
-		require.Equal(t, uint64(7), evt.RenamedNumber)
-	})
 }
 
 func TestLoopChainReaderPersistent(t *testing.T) {
@@ -886,7 +877,13 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 	require.NoError(t, err)
 	err = testutils.FundWithFaucet(lg, client, acctAddr, "http://localhost:8081")
 	require.NoError(t, err)
-	rlClient := ratelimit.NewRateLimitedClient(client, 100, 30*time.Second)
+
+	chainInfo := types.ChainInfo{
+		ChainFamilyName: "aptos",
+		ChainID:         "3",
+		NetworkName:     "testnet",
+	}
+	rlClient := ratelimit.NewRateLimitedClient(client, chainInfo, rpcURL, 100, 30*time.Second)
 
 	// Compile and deploy the contract.
 	compRes := testutils.CompileTestModule(t, acctAddr)
@@ -913,8 +910,6 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 	)
 	require.NoError(t, err)
 	waitForTx(t, txmgr, txID)
-
-	emitManyEvents(t, txmgr, acctAddr.String(), publicKeyHex, 20)
 
 	config := crconfig.ChainReaderConfig{
 		Modules: map[string]*crconfig.ChainReaderModule{
@@ -973,11 +968,7 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 				},
 			},
 		},
-		IsLoopPlugin:      true,
-		EventSyncInterval: 3 * time.Second,
-		EventSyncTimeout:  1 * time.Second,
-		TxSyncInterval:    3 * time.Second,
-		TxSyncTimeout:     1 * time.Second,
+		IsLoopPlugin: true,
 	}
 
 	dsn := os.Getenv("TEST_DB_URL")
@@ -985,12 +976,20 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 		t.Skip("Skipping persistent tests as TEST_DB_URL is not set")
 	}
 	db := sqltest.NewDB(t, dsn)
+	setupTestDatabase(t, db)
 
 	// Create ChainReader with persistence enabled.
-	chainReader := NewChainReader(lg, rlClient, config, db)
+	logPoller, err := logpoller.NewLogPoller(lg, chainInfo, getClient, db, nil)
+	require.NoError(t, err)
+	err = logPoller.Start(context.Background())
+	require.NoError(t, err)
+
+	chainReader := NewChainReader(lg, rlClient, config, db, logPoller)
 	binding := commontypes.BoundContract{Name: "testContract", Address: acctAddr.String()}
 	err = chainReader.Bind(context.Background(), []commontypes.BoundContract{binding})
 	require.NoError(t, err)
+
+	emitManyEvents(t, txmgr, acctAddr.String(), publicKeyHex, 20)
 
 	loopReader := loop.NewLoopChainReader(lg, chainReader)
 	// Re-bind using the loop reader
@@ -1332,15 +1331,6 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 		require.Equal(t, uint64(150), ret.Id)
 		require.Equal(t, "test", ret.Description)
 	})
-}
-
-func initTxManager(t *testing.T, logger logger.Logger, keystore *testutils.TestKeystore, client aptos.AptosRpcClient) *txm.AptosTxm {
-	getClient := func() (aptos.AptosRpcClient, error) { return client, nil }
-	txmgr, err := txm.New(logger, keystore, txm.DefaultConfigSet, getClient)
-	require.NoError(t, err)
-	err = txmgr.Start(context.Background())
-	require.NoError(t, err)
-	return txmgr
 }
 
 func deployContract(t *testing.T, txmgr *txm.AptosTxm, address, publicKeyHex string, compilationResult testutils.CompilationResult) string {

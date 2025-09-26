@@ -118,7 +118,7 @@ func (r *relayer) NewContractReader(ctx context.Context, configBytes []byte) (ty
 		return nil, fmt.Errorf("failed to get client: %w", err)
 	}
 
-	chainReader := chainreader.NewChainReader(r.lggr, client, cfg, r.chain.DataSource())
+	chainReader := chainreader.NewChainReader(r.lggr, client, cfg, r.chain.DataSource(), r.chain.LogPoller())
 	return chainReader, nil
 }
 

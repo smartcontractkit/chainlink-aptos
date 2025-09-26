@@ -21,9 +21,11 @@ import (
 	commonutils "github.com/smartcontractkit/chainlink-common/pkg/utils"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/config"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/ratelimit"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
+	rtypes "github.com/smartcontractkit/chainlink-aptos/relayer/types"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
@@ -35,6 +37,7 @@ type Chain interface {
 	DataSource() sqlutil.DataSource
 
 	TxManager() *txm.AptosTxm
+	LogPoller() *logpoller.AptosLogPoller
 	GetClient() (aptos.AptosRpcClient, error)
 }
 
@@ -77,6 +80,7 @@ type chain struct {
 
 	// Sub-services
 	txm            *txm.AptosTxm
+	logPoller      *logpoller.AptosLogPoller
 	balanceMonitor services.Service
 }
 
@@ -124,17 +128,14 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 		return nil, err
 	}
 
-	// Construct the chain information from the config
-	chainInfo := monitor.ChainInfo{
-		ChainFamilyName: config.ChainFamilyName, // static for this plugin
-		ChainID:         cfg.ChainID,
-		NetworkName:     cfg.NetworkName,
-		NetworkNameFull: cfg.NetworkNameFull,
+	ch.logPoller, err = logpoller.NewLogPoller(lggr, ch.chainInfo(), getClient, ds, cfg.LogPoller)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create log poller: %w", err)
 	}
 
 	// Setup accounts balance monitor
 	ch.balanceMonitor, err = monitor.NewBalanceMonitor(monitor.BalanceMonitorOpts{
-		ChainInfo: chainInfo,
+		ChainInfo: ch.chainInfo(),
 
 		Config:    *cfg.BalanceMonitor,
 		Logger:    lggr,
@@ -158,6 +159,10 @@ func (c *chain) Config() *config.TOMLConfig {
 
 func (c *chain) TxManager() *txm.AptosTxm {
 	return c.txm
+}
+
+func (c *chain) LogPoller() *logpoller.AptosLogPoller {
+	return c.logPoller
 }
 
 func (c *chain) DataSource() sqlutil.DataSource {
@@ -189,13 +194,16 @@ func (c *chain) GetClient() (aptos.AptosRpcClient, error) {
 			c.lggr.Warnw("failed to create node", "name", node.Name, "aptos-url", node.URL, "err", err)
 			continue
 		}
+
 		chainId, err := client.GetChainId()
 		if err != nil {
 			c.lggr.Errorw("failed to fetch chain id", "name", node.Name, "err", err)
 			continue
 		}
-		if strconv.FormatUint(uint64(chainId), 10) != c.id {
-			c.lggr.Errorw("unexpected chain id", "name", node.Name, "localChainId", c.id, "remoteChainId", chainId)
+
+		chainInfo := c.chainInfo()
+		if strconv.FormatUint(uint64(chainId), 10) != chainInfo.ChainID {
+			c.lggr.Errorw("unexpected chain id", "name", node.Name, "localChainId", chainInfo.ChainID, "remoteChainId", chainId)
 			continue
 		}
 		// if all checks passed, mark found and break loop
@@ -209,7 +217,9 @@ func (c *chain) GetClient() (aptos.AptosRpcClient, error) {
 	c.lggr.Debugw("Created client", "name", node.Name, "url", node.URL)
 
 	rateLimitedClient := ratelimit.NewRateLimitedClient(client,
-		100,            // max requests in-flight
+		c.chainInfo(),
+		node.URL.String(),
+		500,            // max requests in-flight
 		30*time.Second, // timeout
 	)
 
@@ -220,10 +230,11 @@ func (c *chain) Start(ctx context.Context) error {
 	return c.starter.StartOnce("Chain", func() error {
 		c.lggr.Debug("Starting")
 		c.lggr.Debug("Starting txm")
+		c.lggr.Debug("Starting logPoller")
 		c.lggr.Debug("Starting balance monitor")
 
 		var ms services.MultiStart
-		return ms.Start(ctx, c.txm, c.balanceMonitor)
+		return ms.Start(ctx, c.txm, c.logPoller, c.balanceMonitor)
 	})
 }
 
@@ -231,19 +242,21 @@ func (c *chain) Close() error {
 	return c.starter.StopOnce("Chain", func() error {
 		c.lggr.Debug("Stopping")
 		c.lggr.Debug("Stopping txm")
+		c.lggr.Debug("Stopping logPoller")
 		c.lggr.Debug("Stopping balance monitor")
 
-		return services.CloseAll(c.txm, c.balanceMonitor)
+		return services.CloseAll(c.txm, c.logPoller, c.balanceMonitor)
 	})
 }
 
 func (c *chain) Ready() error {
-	return errors.Join(c.starter.Ready(), c.txm.Ready(), c.balanceMonitor.Ready())
+	return errors.Join(c.starter.Ready(), c.txm.Ready(), c.logPoller.Ready(), c.balanceMonitor.Ready())
 }
 
 func (c *chain) HealthReport() map[string]error {
 	report := map[string]error{c.Name(): c.starter.Healthy()}
 	services.CopyHealth(report, c.txm.HealthReport())
+	services.CopyHealth(report, c.logPoller.HealthReport())
 	services.CopyHealth(report, c.balanceMonitor.HealthReport())
 	return report
 }
@@ -347,4 +360,13 @@ func nodeStatus(n *config.Node, id string) (types.NodeStatus, error) {
 	}
 	s.Config = string(b)
 	return s, nil
+}
+
+func (c *chain) chainInfo() rtypes.ChainInfo {
+	return rtypes.ChainInfo{
+		ChainFamilyName: config.ChainFamilyName,
+		ChainID:         c.id,
+		NetworkName:     c.cfg.NetworkName,
+		NetworkNameFull: c.cfg.NetworkNameFull,
+	}
 }

@@ -163,3 +163,13 @@ func isGenericType(s string, typ string) (innerType string, moveType string, ok 
 
 	return "", "", false
 }
+
+// IsGoConstant returns true if the type can be expressed as a Go constant/is immutable.
+func (t tmplType) IsGoConstant() bool {
+	switch t.GoType {
+	case "byte", "uint8", "uint16", "uint32", "uint64", "bool":
+		return true
+	default:
+		return false
+	}
+}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 
 	wt "github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/platform/write-target"
+	rtypes "github.com/smartcontractkit/chainlink-aptos/relayer/types"
 )
 
 var (
@@ -55,15 +57,15 @@ type contractReader interface {
 }
 
 type contractWriter interface {
-	SubmitTransaction(ctx context.Context, contractName, method string, args any, transactionID string, toAddress string, meta *commontypes.TxMeta, value *big.Int) error
-	GetTransactionStatus(ctx context.Context, transactionID string) (commontypes.TransactionStatus, error)
+	commontypes.ContractWriter
+	GetTransactionFee(ctx context.Context, transactionID string) (decimal.Decimal, error)
 }
 
 type writeTarget struct {
 	capabilities.CapabilityInfo
 
 	config    Config
-	chainInfo ChainInfo
+	chainInfo rtypes.ChainInfo
 
 	lggr logger.Logger
 	// Local beholder client, also hosting the protobuf emitter
@@ -86,7 +88,7 @@ type WriteTargetOpts struct {
 	Config Config
 	// ChainInfo contains the chain information (used as execution context)
 	// TODO: simplify by passing via ChainService.GetChainStatus fn
-	ChainInfo ChainInfo
+	ChainInfo rtypes.ChainInfo
 
 	Logger   logger.Logger
 	Beholder *monitor.BeholderClient
@@ -425,7 +427,25 @@ func (c *writeTarget) Execute(ctx context.Context, request capabilities.Capabili
 	if err != nil {
 		return capabilities.CapabilityResponse{}, err
 	}
-	return success(), nil
+
+	// Get the transaction fee
+	fee, err := c.cw.GetTransactionFee(ctx, txID.String())
+	if err != nil {
+		c.lggr.Errorw("failed to get transaction fee", "error", err)
+		return success(), nil
+	}
+
+	return capabilities.CapabilityResponse{
+		Metadata: capabilities.ResponseMetadata{
+			Metering: []capabilities.MeteringNodeDetail{
+				{
+					// Peer2PeerID from remote peers is ignored by engine
+					SpendUnit:  "GAS." + c.chainInfo.ChainID,
+					SpendValue: fee.String(),
+				},
+			},
+		},
+	}, nil
 }
 
 func decodeReport(report []byte, metadata capabilities.RequestMetadata) (*platform.Report, error) {

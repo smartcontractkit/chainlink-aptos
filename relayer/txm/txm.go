@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
+	"math/big"
 	"sort"
 	"strings"
 	"sync"
@@ -240,6 +241,29 @@ func (a *AptosTxm) GetStatus(transactionID string) (commontypes.TransactionStatu
 	return tx.Status, nil
 }
 
+func (a *AptosTxm) GetTransactionFee(ctx context.Context, transactionID string) (*big.Int, error) {
+	if transactionID == "" {
+		return nil, errors.New("nil tx id")
+	}
+
+	a.transactionsLock.RLock()
+	defer a.transactionsLock.RUnlock()
+	tx, ok := a.transactions[transactionID]
+	if !ok {
+		return nil, errors.New("no such tx")
+	}
+
+	if tx.Status != commontypes.Finalized {
+		return nil, fmt.Errorf("transaction not finalized, current status: %v", tx.Status)
+	}
+
+	if tx.Fee == nil {
+		return nil, errors.New("transaction fee not available")
+	}
+
+	return tx.Fee, nil
+}
+
 func (a *AptosTxm) broadcastLoop() {
 	defer a.done.Done()
 
@@ -419,6 +443,12 @@ func (a *AptosTxm) updateTransactionStatus(tx *AptosTx, status commontypes.Trans
 	tx.Status = status
 }
 
+func (a *AptosTxm) updateTransactionFee(tx *AptosTx, fee *big.Int) {
+	a.transactionsLock.Lock()
+	defer a.transactionsLock.Unlock()
+	tx.Fee = fee
+}
+
 func (a *AptosTxm) incrementTransactionAttempt(tx *AptosTx) {
 	a.transactionsLock.Lock()
 	defer a.transactionsLock.Unlock()
@@ -583,6 +613,15 @@ func (a *AptosTxm) checkUnconfirmed() {
 					if ok {
 						if userTx.Success {
 							ctxLogger.Infow("confirmed tx: successful", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
+
+							// Calculate and store the transaction fee
+							gasUsed := userTx.GasUsed
+							gasUnitPrice := userTx.GasUnitPrice
+							if gasUsed > 0 && gasUnitPrice > 0 {
+								fee := new(big.Int).SetUint64(gasUsed * gasUnitPrice)
+								a.updateTransactionFee(unconfirmedTx.Tx, fee)
+								ctxLogger.Debugw("stored transaction fee", "fee", fee.String(), "gasUsed", gasUsed, "gasUnitPrice", gasUnitPrice)
+							}
 						} else {
 							ctxLogger.Infow("confirmed tx: unsuccessful", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
 							if userTx.VmStatus == "Out of gas" {
@@ -695,6 +734,11 @@ func (a *AptosTxm) resyncNonce(client aptos.AptosRpcClient, tx *AptosTx) error {
 	}
 
 	txStore := a.accountStore.GetTxStore(address.String())
+	// this should never occur, as resyncNonce is only called after ensuring a TxStore exists in
+	// signAndBroadcast.
+	if txStore == nil {
+		return fmt.Errorf("failed to get tx store for address %s", address.String())
+	}
 	ctxLogger := GetContexedTxLogger(a.baseLogger, tx.ID, tx.Metadata)
 
 	previousNextNonce := txStore.GetNextNonce()

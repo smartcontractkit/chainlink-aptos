@@ -1334,6 +1334,7 @@ module mcms::mcms {
             bcs_stream::assert_is_consumed(&stream);
             mcms_account::transfer_ownership(self_signer, target);
         } else if (function_name_bytes == b"accept_ownership") {
+            bcs_stream::assert_is_consumed(&stream);
             mcms_account::accept_ownership(self_signer);
         } else {
             abort E_UNKNOWN_MCMS_ACCOUNT_MODULE_FUNCTION;

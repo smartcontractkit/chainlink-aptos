@@ -77,6 +77,26 @@ func NewRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) Regi
 	}
 }
 
+// Constants
+const (
+	ENOT_OWNER                   uint64 = 1
+	EDUPLICATE_ELEMENTS          uint64 = 2
+	EFEED_EXISTS                 uint64 = 3
+	EFEED_NOT_CONFIGURED         uint64 = 4
+	ECONFIG_NOT_CONFIGURED       uint64 = 5
+	EUNEQUAL_ARRAY_LENGTHS       uint64 = 6
+	EINVALID_REPORT              uint64 = 7
+	EUNAUTHORIZED_WORKFLOW_NAME  uint64 = 8
+	EUNAUTHORIZED_WORKFLOW_OWNER uint64 = 9
+	ECANNOT_TRANSFER_TO_SELF     uint64 = 10
+	ENOT_PROPOSED_OWNER          uint64 = 11
+	EEMPTY_WORKFLOW_OWNERS       uint64 = 12
+	EINVALID_RAW_REPORT          uint64 = 13
+	EALREADY_MIGRATED            uint64 = 14
+	SCHEMA_V3                    uint16 = 3
+	SCHEMA_V4                    uint16 = 4
+)
+
 // Structs
 
 type Registry struct {
@@ -154,6 +174,10 @@ type StaleReport struct {
 	FeedId          []byte   `move:"vector<u8>"`
 	LatestTimestamp *big.Int `move:"u256"`
 	ReportTimestamp *big.Int `move:"u256"`
+}
+
+type WriteSkippedFeedNotSet struct {
+	FeedId []byte `move:"vector<u8>"`
 }
 
 type OwnershipTransferRequested struct {

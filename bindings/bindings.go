@@ -1,4 +1,4 @@
-package platform_secondary
+package bindings
 
 import (
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
@@ -10,6 +10,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/burn_mint_token_pool"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/lock_release_token_pool"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/managed_token_pool"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/regulated_token_pool"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/token_pool"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/usdc_token_pool"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/data_feeds"
@@ -18,6 +19,10 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/bindings/mcms"
 	mcmstest "github.com/smartcontractkit/chainlink-aptos/bindings/mcms_test"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/platform"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/regulated_token"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/test_token/bnm_registrar"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/test_token/lnr_registrar"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/test_token/test_token"
 )
 
 var GlobalFunctionInfo = bind.CombineFunctionInfos(
@@ -37,6 +42,11 @@ var GlobalFunctionInfo = bind.CombineFunctionInfos(
 	mcms.FunctionInfo,
 	mcmstest.FunctionInfo,
 	platform.FunctionInfo,
+	regulated_token.FunctionInfo,
+	regulated_token_pool.FunctionInfo,
+	test_token.FunctionInfo,
+	bnm_registrar.FunctionInfo,
+	lnr_registrar.FunctionInfo,
 )
 
 // package -> module -> function name

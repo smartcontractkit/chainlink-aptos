@@ -38,6 +38,12 @@ type ExternalStruct struct {
 	Name    string
 }
 
+type Const struct {
+	Name  string
+	Type  string
+	Value string
+}
+
 // PackageModule parses the input file and returns the first module it finds.
 // `#[test_only]` modules will be filtered out
 func PackageModule(module []byte) (pkg string, mod string, moduleContent string, err error) {
@@ -288,4 +294,67 @@ func Structs(module []byte) ([]Struct, error) {
 		structs = append(structs, s)
 	}
 	return structs, nil
+}
+
+func Consts(module []byte) ([]Const, error) {
+	lang := tree_sitter.NewLanguage(tree_sitter_move_on_aptos.Language())
+	n, err := tree_sitter.ParseCtx(context.Background(), module, lang)
+	if err != nil {
+		return nil, fmt.Errorf("parsing AST: %w", err)
+	}
+
+	// query to select all consts
+	queryStructs, err := tree_sitter.NewQuery([]byte(`
+(declaration
+  (constant_decl
+	name: (identifier) @name
+    type: (type) @type
+	_
+    _ @value
+    _
+  )
+)
+	`), lang)
+	if err != nil {
+		panic(err)
+	}
+
+	constsCursor := tree_sitter.NewQueryCursor()
+	constsCursor.Exec(queryStructs, n)
+
+	var consts []Const
+	for {
+		m, ok := constsCursor.NextMatch()
+		if !ok {
+			break
+		}
+
+		m = constsCursor.FilterPredicates(m, module)
+
+		c := Const{
+			Name:  "",
+			Type:  "",
+			Value: "",
+		}
+		for _, capture := range m.Captures {
+			switch capture.Index {
+			case 0: // @name
+				c.Name = capture.Node.Content(module)
+			case 1: // @type
+				c.Type = capture.Node.Content(module)
+			case 2: // @value
+				c.Value = capture.Node.Content(module)
+				// Remove comments and newlines
+				b := strings.Builder{}
+				for l := range strings.Lines(c.Value) {
+					l := strings.TrimSpace(l)
+					b.WriteString(strings.Split(l, "//")[0])
+				}
+				c.Value = b.String()
+			}
+		}
+		consts = append(consts, c)
+	}
+
+	return consts, nil
 }

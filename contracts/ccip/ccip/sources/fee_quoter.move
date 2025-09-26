@@ -43,6 +43,7 @@ module ccip::fee_quoter {
     const MOVE_PRECOMPILE_SPACE: u256 = 0x0b;
 
     const GAS_PRICE_BITS: u8 = 112;
+    const GAS_PRICE_MASK_112_BITS: u256 = 0xffffffffffffffffffffffffffff; // 28 f's
 
     const MESSAGE_FIXED_BYTES: u64 = 32 * 15;
     const MESSAGE_FIXED_BYTES_PER_TOKEN: u64 = 32 * (4 + (3 + 2));
@@ -98,7 +99,6 @@ module ccip::fee_quoter {
         dest_chain_configs: SmartTable<u64, DestChainConfig>,
         // dest chain selector -> local token -> TokenTransferFeeConfig
         token_transfer_fee_configs: SmartTable<u64, SmartTable<address, TokenTransferFeeConfig>>,
-        // TODO: update calculations - should this be octa per apt?
         premium_multiplier_wei_per_eth: SmartTable<address, u64>,
         fee_token_added_events: EventHandle<FeeTokenAdded>,
         fee_token_removed_events: EventHandle<FeeTokenRemoved>,
@@ -674,7 +674,6 @@ module ccip::fee_quoter {
                 state, dest_chain_config, dest_chain_selector
             );
 
-        // TODO: this should probably be premium_fee_usd_octa for aptos?
         let (premium_fee_usd_wei, token_transfer_gas, token_transfer_bytes_overhead) =
             if (tokens_len > 0) {
                 get_token_transfer_cost(
@@ -695,10 +694,9 @@ module ccip::fee_quoter {
 
         let data_availability_cost_usd_36_decimals =
             if (dest_chain_config.dest_data_availability_multiplier_bps > 0) {
-                // TODO: on EVM, the gas price is uint224 and the top 112 bits are used. here we're using a u256
-                // and expecting that the extra top 22 bits are zeroes. update this and `gas_cost` below
-                // if needed.
-                let data_availability_gas_price = packed_gas_price >> GAS_PRICE_BITS;
+                // Extract data availability gas price (upper 112 bits) - matches EVM uint112 behavior
+                let data_availability_gas_price =
+                    (packed_gas_price >> GAS_PRICE_BITS) & GAS_PRICE_MASK_112_BITS;
                 get_data_availability_cost(
                     dest_chain_config,
                     data_availability_gas_price,
@@ -730,7 +728,7 @@ module ccip::fee_quoter {
             (dest_chain_config.dest_gas_overhead as u256) + (token_transfer_gas as u256)
                 + dest_call_data_cost + gas_limit;
 
-        let gas_cost = packed_gas_price & (MAX_U256 >> (255 - GAS_PRICE_BITS + 1));
+        let gas_cost = packed_gas_price & GAS_PRICE_MASK_112_BITS;
 
         let total_cost_usd =
             (
@@ -1190,7 +1188,7 @@ module ccip::fee_quoter {
             (extra_args_v2, allow_out_of_order_execution)
         } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
             let (
-                _compute_units,
+                compute_units,
                 _account_is_writable_bitmap,
                 allow_out_of_order_execution,
                 token_receiver,
@@ -1207,6 +1205,16 @@ module ccip::fee_quoter {
                     error::invalid_argument(E_INVALID_TOKEN_RECEIVER)
                 );
             };
+
+            assert!(
+                !dest_chain_config.enforce_out_of_order || allow_out_of_order_execution,
+                error::invalid_argument(E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE)
+            );
+            assert!(
+                compute_units <= dest_chain_config.max_per_msg_gas_limit,
+                error::invalid_argument(E_MESSAGE_COMPUTE_UNIT_LIMIT_TOO_HIGH)
+            );
+
             (extra_args, allow_out_of_order_execution)
         } else {
             abort error::invalid_argument(E_UNKNOWN_CHAIN_FAMILY_SELECTOR)
@@ -1383,6 +1391,17 @@ module ccip::fee_quoter {
         borrow_global_mut<FeeQuoterState>(state_object::object_address())
     }
 
+    inline fun get_validated_token_price(
+        state: &FeeQuoterState, token: address
+    ): TimestampedPrice {
+        let token_price = get_token_price_internal(state, token);
+        assert!(
+            token_price.value > 0 && token_price.timestamp > 0,
+            error::invalid_state(E_TOKEN_NOT_SUPPORTED)
+        );
+        token_price
+    }
+
     // Token prices can be stale. On EVM we have additional fallbacks to a price feed, if configured. Since these
     // fallbacks don't exist on Aptos, we simply return the price as is.
     inline fun get_token_price_internal(
@@ -1428,9 +1447,8 @@ module ccip::fee_quoter {
         from_token_amount: u64,
         to_token: address
     ): u64 {
-        let from_token_price = get_token_price_internal(state, from_token);
-        let to_token_price = get_token_price_internal(state, to_token);
-
+        let from_token_price = get_validated_token_price(state, from_token);
+        let to_token_price = get_validated_token_price(state, to_token);
         let to_token_amount =
             ((from_token_amount as u256) * from_token_price.value) / to_token_price.value;
         assert!(

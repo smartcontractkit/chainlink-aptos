@@ -30,9 +30,16 @@ module data_feeds::router {
         to: address
     }
 
+    #[event]
+    struct FeedRead has drop, store {
+        feed_ids: vector<vector<u8>>,
+        benchmarks: vector<Benchmark>
+    }
+
     const ENOT_OWNER: u64 = 0;
     const ECANNOT_TRANSFER_TO_SELF: u64 = 1;
     const ENOT_PROPOSED_OWNER: u64 = 2;
+    const EREPORTS_DEPRECATED: u64 = 3;
 
     fun assert_is_owner(router: &Router, target_address: address) {
         assert!(
@@ -69,15 +76,21 @@ module data_feeds::router {
     ): vector<Benchmark> acquires Router {
         let _router = borrow_global<Router>(get_state_addr());
 
-        registry::get_benchmarks_unchecked(feed_ids)
+        let benchmarks = registry::get_benchmarks_unchecked(feed_ids);
+
+        event::emit(FeedRead { feed_ids: feed_ids, benchmarks: benchmarks });
+
+        benchmarks
     }
 
+    // This function has been disabled
     public fun get_reports(
         _authority: &signer, feed_ids: vector<vector<u8>>, _billing_data: vector<u8>
-    ): vector<Report> acquires Router {
-        let _router = borrow_global<Router>(get_state_addr());
+    ): vector<Report> {
 
-        registry::get_reports_unchecked(feed_ids)
+        abort error::not_implemented(EREPORTS_DEPRECATED);
+
+        vector::empty<Report>() /* unreachable */
     }
 
     #[view]
@@ -193,5 +206,21 @@ module data_feeds::router {
 
         transfer_ownership(owner, @0xfeeb);
         accept_ownership(new_owner);
+    }
+
+    #[test(owner = @owner, publisher = @data_feeds, new_owner = @0xbeef)]
+    #[expected_failure(abort_code = 786435, location = data_feeds::router)]
+    fun test_get_reports_failure_deprecated_call(
+        owner: &signer, publisher: &signer, new_owner: &signer
+    ) acquires Router {
+        set_up_test(publisher);
+
+        assert!(get_owner() == @owner, 1);
+
+        get_reports(
+            owner,
+            vector::empty<vector<u8>>(),
+            vector::empty<u8>()
+        );
     }
 }
