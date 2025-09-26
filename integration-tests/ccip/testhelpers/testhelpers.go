@@ -522,7 +522,7 @@ func DeployCCIP(ctx context.Context, deployer *aptos.Account, rpcClient aptos.Ap
 func SendMessageFromAptos(ctx context.Context, deployer *aptos.Account, rpcClient aptos.AptosRpcClient, deployment CCIPDeployment) (string, error) {
 	opts := &bind.TransactOpts{Signer: deployer}
 
-	toAddress := common.LeftPadBytes(common.HexToAddress("0x90392A1E8A941098a3C75E0BDB172cFdE7E4f1f4").Bytes(), 32)
+	toAddress := common.LeftPadBytes(common.HexToAddress("0x1234567890Be219c60A5940643A5cE7885223fC1").Bytes(), 32)
 
 	extraArgs := MakeBCSEVMExtraArgsV2(big.NewInt(100), false)
 
