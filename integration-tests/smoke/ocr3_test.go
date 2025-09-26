@@ -2,8 +2,6 @@ package smoke_test
 
 import (
 	"fmt"
-	"integration-tests/deploy"
-	"integration-tests/scripts"
 	"os"
 	"slices"
 	"strconv"
@@ -11,6 +9,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/smartcontractkit/chainlink-aptos/integration-tests/deploy"
+	"github.com/smartcontractkit/chainlink-aptos/integration-tests/scripts"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
