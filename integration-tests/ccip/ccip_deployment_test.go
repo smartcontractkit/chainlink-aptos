@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/smartcontractkit/chainlink-aptos/integration-tests/ccip/testhelpers"
+	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/crypto"
@@ -13,6 +14,7 @@ import (
 )
 
 func Test_CCIPDeployment(t *testing.T) {
+	lggr := logger.Test(t)
 	b, err := blockchain.NewBlockchainNetwork(&blockchain.Input{
 		Type: blockchain.TypeAptos,
 	})
@@ -20,7 +22,7 @@ func Test_CCIPDeployment(t *testing.T) {
 
 	rpcUrl := b.Nodes[0].ExternalHTTPUrl + "/v1"
 
-	t.Logf("Started Aptos Localnet at: %v", rpcUrl)
+	lggr.Infof("Started Aptos Localnet at: %s", rpcUrl)
 
 	client, err := aptos.NewNodeClient(rpcUrl, 0)
 	require.NoError(t, err)
@@ -35,17 +37,18 @@ func Test_CCIPDeployment(t *testing.T) {
 
 	bal, err := client.AccountAPTBalance(account.AccountAddress())
 	require.NoError(t, err)
-	t.Logf("Using account %v, balance: %v APT", account.Address.String(), bal/1e8)
+	lggr.Infof("Using account %v, balance %v APT", account.Address.StringLong(), bal/1e8)
 
-	ccipDeployment, err := testhelpers.DeployCCIP(t.Context(), account, client)
+	ccipDeployment, err := testhelpers.DeployCCIP(t.Context(), lggr, account, client)
 	require.NoError(t, err)
-	t.Logf("CCIP deployment successful:")
-	t.Logf("\t CCIP: %v", ccipDeployment.CCIPAddress.StringLong())
-	t.Logf("\t MCMS: %v", ccipDeployment.MCMSAddress.StringLong())
-	t.Logf("\t LINK: %v", ccipDeployment.LINKAddress.StringLong())
-	t.Logf("\t Token Pool: %v", ccipDeployment.TokenPoolAddress.StringLong())
+	lggr.Infow("CCIP deployment successful.",
+		"CCIP", ccipDeployment.CCIPAddress.StringLong(),
+		"MCMS", ccipDeployment.MCMSAddress.StringLong(),
+		"LINK", ccipDeployment.LINKAddress.StringLong(),
+		"tokenPool", ccipDeployment.TokenPoolAddress.StringLong(),
+	)
 
-	tx, err := testhelpers.SendMessageFromAptos(t.Context(), account, client, ccipDeployment)
+	tx, err := testhelpers.SendMessageFromAptos(t.Context(), lggr, account, client, ccipDeployment)
 	require.NoError(t, err)
-	t.Logf("Message sent successfully in tx: %v", tx)
+	lggr.Infof("Message sent successfully in tx: %v", tx)
 }

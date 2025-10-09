@@ -33,6 +33,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/bindings/managed_token"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/mcms"
 	module_mcms "github.com/smartcontractkit/chainlink-aptos/bindings/mcms/mcms"
+	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 )
 
 type CCIPDeployment struct {
@@ -44,7 +45,7 @@ type CCIPDeployment struct {
 
 var destChainSelector = chain_selectors.ETHEREUM_TESTNET_SEPOLIA.Selector
 
-func DeployCCIP(ctx context.Context, deployer *aptos.Account, rpcClient aptos.AptosRpcClient) (CCIPDeployment, error) {
+func DeployCCIP(ctx context.Context, lggr logger.Logger, deployer *aptos.Account, rpcClient aptos.AptosRpcClient) (CCIPDeployment, error) {
 	opts := &bind.TransactOpts{Signer: deployer}
 	chainID, err := rpcClient.GetChainId()
 	if err != nil {
@@ -77,7 +78,7 @@ func DeployCCIP(ctx context.Context, deployer *aptos.Account, rpcClient aptos.Ap
 	if err := waitForTransaction(err, tx); err != nil {
 		return CCIPDeployment{}, fmt.Errorf("failed to deploy MCMS: %w", err)
 	}
-	fmt.Printf("📃 Deployed MCMS to %v in tx %v\n", mcmsAddress.StringLong(), tx.Hash)
+	lggr.Infof("📃 Deployed MCMS to %v in tx %v", mcmsAddress.StringLong(), tx.Hash)
 
 	// Configure MCMS - use two random signers
 	signers := [2]common.Address{}
@@ -99,13 +100,13 @@ func DeployCCIP(ctx context.Context, deployer *aptos.Account, rpcClient aptos.Ap
 	if waitForTransaction(err, &api.PendingTransaction{Hash: result.Hash}) != nil {
 		return CCIPDeployment{}, fmt.Errorf("failed to set config on MCMS contract %v: %w", mcmsAddress.StringLong(), err)
 	}
-	fmt.Printf("✅ Set bypasser config on MCMS contract %v\n", mcmsAddress.StringLong())
+	lggr.Debugf("✅ Set bypasser config on MCMS contract %v", mcmsAddress.StringLong())
 	// Initiate ownership transfer
 	tx, err = mcmsContract.MCMSAccount().TransferOwnershipToSelf(opts)
 	if waitForTransaction(err, tx) != nil {
 		return CCIPDeployment{}, fmt.Errorf("failed to transfer ownership of MCMs to itself: %w", err)
 	}
-	fmt.Printf("↗️ Initiated ownership transfer of MCMS contract to itself\n")
+	lggr.Debugf("↗️ Initiated ownership transfer of MCMS contract to itself")
 
 	// Build proposal
 	validUntil := uint32(time.Now().Add(time.Hour).Unix())
@@ -140,7 +141,7 @@ func DeployCCIP(ctx context.Context, deployer *aptos.Account, rpcClient aptos.Ap
 			ChainSelector: aptosChainSelector,
 			Transactions:  []mcmstypes.Transaction{transaction},
 		})
-		fmt.Printf("Added operation %v to proposal: %s::%s::%s\n", opCounter, module.PackageName, module.ModuleName, function)
+		lggr.Debugf("Added operation %v to proposal: %s::%s::%s", opCounter, module.PackageName, module.ModuleName, function)
 		opCounter++
 		return nil
 	}
@@ -156,17 +157,17 @@ func DeployCCIP(ctx context.Context, deployer *aptos.Account, rpcClient aptos.Ap
 	if err != nil {
 		return CCIPDeployment{}, fmt.Errorf("failed to get new code object address for seed %v: %w", linkTokenSeed, err)
 	}
-	fmt.Printf("🪙 Deploying LINK token to: %v\n", linkTokenObjectAddress.StringLong())
+	lggr.Infof("🪙 Deploying LINK token to: %v", linkTokenObjectAddress.StringLong())
 	linkTokenOwnerAddress, err := mcmsContract.MCMSRegistry().GetNewCodeObjectOwnerAddress(nil, []byte(linkTokenSeed))
 	if err != nil {
 		return CCIPDeployment{}, fmt.Errorf("failed to get new code object owner address for seed %v: %w", linkTokenSeed, err)
 	}
-	fmt.Printf("LINK token owner address: %v\n", linkTokenOwnerAddress.StringLong())
+	lggr.Debugf("LINK token owner address: %v", linkTokenOwnerAddress.StringLong())
 
 	linkTokenStateAddress := linkTokenObjectAddress.NamedObjectAddress([]byte("managed_token::managed_token::token_state"))
-	fmt.Printf("LINK Token State address: %v\n", linkTokenStateAddress.StringLong())
+	lggr.Debugf("LINK Token State address: %v", linkTokenStateAddress.StringLong())
 	linkTokenMetadataAddress := linkTokenStateAddress.NamedObjectAddress([]byte("LINK"))
-	fmt.Printf("LINK Token Metadata address: %v\n", linkTokenMetadataAddress.StringLong())
+	lggr.Debugf("LINK Token Metadata address: %v", linkTokenMetadataAddress.StringLong())
 
 	linkTokenPayload, err := managed_token.Compile(linkTokenObjectAddress)
 	if err != nil {
@@ -222,7 +223,7 @@ func DeployCCIP(ctx context.Context, deployer *aptos.Account, rpcClient aptos.Ap
 	if err != nil {
 		return CCIPDeployment{}, fmt.Errorf("failed to get new code object address for seed %v: %w", ccip.DefaultSeed, err)
 	}
-	fmt.Printf("🔗 Deploying CCIP to %v\n", ccipObjectAddress.StringLong())
+	lggr.Infof("🔗 Deploying CCIP to %v", ccipObjectAddress.StringLong())
 
 	ccipPayload, err := ccip.Compile(ccipObjectAddress, mcmsContract.Address(), true)
 	if err != nil {
@@ -343,12 +344,12 @@ func DeployCCIP(ctx context.Context, deployer *aptos.Account, rpcClient aptos.Ap
 	if err != nil {
 		return CCIPDeployment{}, fmt.Errorf("failed to get new code object address for seed %v: %w", tokenPoolSeed, err)
 	}
-	fmt.Printf("Deploying Token Pool token to: %v\n", tokenPoolObjectAddress.StringLong())
+	lggr.Infof("Deploying Token Pool token to: %v", tokenPoolObjectAddress.StringLong())
 	tokenPoolOwnerAddress, err := mcmsContract.MCMSRegistry().GetNewCodeObjectOwnerAddress(nil, []byte(tokenPoolSeed))
 	if err != nil {
 		return CCIPDeployment{}, fmt.Errorf("failed to get new code object owner address for seed %v: %w", tokenPoolSeed, err)
 	}
-	fmt.Printf("Token Pool owner address: %v\n", tokenPoolOwnerAddress.StringLong())
+	lggr.Debugf("Token Pool owner address: %v", tokenPoolOwnerAddress.StringLong())
 
 	// Deploy token pool to a new object
 	tokenPoolPayload, err := token_pool.Compile(tokenPoolObjectAddress, ccipObjectAddress, mcmsAddress)
@@ -387,8 +388,8 @@ func DeployCCIP(ctx context.Context, deployer *aptos.Account, rpcClient aptos.Ap
 	}
 	managedTokenPoolContract := managed_token_pool.Bind(tokenPoolObjectAddress, rpcClient)
 	managedTokenPoolStoreAddress := tokenPoolObjectAddress.ResourceAccount([]byte("CcipManagedTokenPool"))
-	fmt.Printf("Deployed Managed Token Pool to: %v\n", tokenPoolObjectAddress.StringLong())
-	fmt.Printf("\tStore resource account address: %v\n", managedTokenPoolStoreAddress)
+	lggr.Debugf("Deployed Managed Token Pool to: %v", tokenPoolObjectAddress.StringLong())
+	lggr.Debugf("Store resource account address: %v", managedTokenPoolStoreAddress)
 	if err := addToProposal(linkTokenContract.ManagedToken().Encoder().ApplyAllowedMinterUpdates(nil, []aptos.AccountAddress{managedTokenPoolStoreAddress})); err != nil {
 		return CCIPDeployment{}, err
 	}
@@ -481,13 +482,13 @@ func DeployCCIP(ctx context.Context, deployer *aptos.Account, rpcClient aptos.Ap
 		return CCIPDeployment{}, fmt.Errorf("failed to create executable from proposal: %w", err)
 	}
 
-	fmt.Println("⏳ Proposal built, starting execution...")
+	lggr.Infof("⏳ Proposal built, starting execution...")
 	// Set Root
 	result, err = executable.SetRoot(ctx, aptosChainSelector)
 	if err := waitForTransaction(err, &api.PendingTransaction{Hash: result.Hash}); err != nil {
 		return CCIPDeployment{}, fmt.Errorf("failed to set root: %w", err)
 	}
-	fmt.Printf("✅ Set root in tx %v\n", result.Hash)
+	lggr.Debugf("✅ Set root in tx %v", result.Hash)
 
 	// Execute
 	decoder := aptossdk.NewDecoder()
@@ -498,18 +499,19 @@ func DeployCCIP(ctx context.Context, deployer *aptos.Account, rpcClient aptos.Ap
 			return CCIPDeployment{}, fmt.Errorf("failed to decode operation: %w", err)
 		}
 		method, args, err := decodedOp.String()
+		_ = args
 		if err != nil {
 			return CCIPDeployment{}, fmt.Errorf("failed to convert decoded proposal to string: %w", err)
 		}
-		fmt.Printf("Executing Operation %d (%v):\n", i, method)
-		fmt.Println(args)
+		lggr.Debugf("Executing Operation %d (%v)\n", i, method)
+		// lggr.Debugf(args)
 
 		result, err = executable.Execute(ctx, i)
 		if err := waitForTransaction(err, &api.PendingTransaction{Hash: result.Hash}); err != nil {
 			return CCIPDeployment{}, fmt.Errorf("failed to execute operation: %w", err)
 		}
 	}
-	fmt.Println("🚀 All executed successfully")
+	lggr.Info("🚀 All executed successfully")
 
 	return CCIPDeployment{
 		MCMSAddress:      mcmsAddress,
@@ -519,7 +521,7 @@ func DeployCCIP(ctx context.Context, deployer *aptos.Account, rpcClient aptos.Ap
 	}, nil
 }
 
-func SendMessageFromAptos(ctx context.Context, deployer *aptos.Account, rpcClient aptos.AptosRpcClient, deployment CCIPDeployment) (string, error) {
+func SendMessageFromAptos(ctx context.Context, lggr logger.Logger, deployer *aptos.Account, rpcClient aptos.AptosRpcClient, deployment CCIPDeployment) (string, error) {
 	opts := &bind.TransactOpts{Signer: deployer}
 
 	toAddress := common.LeftPadBytes(common.HexToAddress("0x1234567890Be219c60A5940643A5cE7885223fC1").Bytes(), 32)
@@ -531,7 +533,7 @@ func SendMessageFromAptos(ctx context.Context, deployer *aptos.Account, rpcClien
 	if err != nil {
 		return "", fmt.Errorf("failed to get fee for message: %w", err)
 	}
-	fmt.Printf("Estimated fee: %v\n", fee)
+	lggr.Debugf("Estimated fee for message: %v", fee)
 
 	tx, err := ccipRouterContract.Router().CCIPSend(opts, destChainSelector, toAddress, []byte("Hello, world!"), []aptos.AccountAddress{deployment.LINKAddress}, []uint64{1e8}, []aptos.AccountAddress{aptos.AccountZero}, deployment.LINKAddress, aptos.AccountZero, extraArgs)
 	if err != nil {
@@ -545,12 +547,14 @@ func SendMessageFromAptos(ctx context.Context, deployer *aptos.Account, rpcClien
 		return "", fmt.Errorf("transaction %v failed: %w", tx.Hash, data.VmStatus)
 	}
 
-	fmt.Println("CCIP Message sent in transaction:", tx.Hash)
-
+	var eventsLog []any
+	eventsLog = append(eventsLog, "tx", tx.Hash)
 	for i, event := range data.Events {
-		fmt.Println("Event", i, event.Type)
-		fmt.Printf("\t%+v\n", event.Data)
+		eventsLog = append(eventsLog, fmt.Sprintf("[%v]%v", i, event.Type), fmt.Sprintf("%+v", event.Data))
 	}
+
+	lggr.Infow("CCIP Message sent", eventsLog...)
+
 	return tx.Hash, nil
 }
 
