@@ -28,8 +28,118 @@ The token supports dynamic dispatch for seamless integration with cross-chain pr
 
 ### 👑 **Administrative Controls**
 
-- **Two-Step Ownership Transfer**: Secure admin role transfers with confirmation
+- **Three-Step Ownership Transfer**: Secure admin role transfers with confirmation and execution
 - **Role Management**: Admin can grant/revoke roles
+
+## Ownership Transfer Process
+
+The Regulated Token uses a **3-step ownership transfer** process to ensure secure transfer of administrative control. This is different from typical 2-step processes and is required due to Aptos's security model.
+
+### Why 3 Steps?
+
+Aptos's `0x1::object::transfer` function requires the **original owner's signer** to execute the transfer. This security requirement means:
+
+- The new owner cannot complete the transfer on their own
+- The original owner must authorize and execute the final transfer
+- Both parties must explicitly agree to the transfer
+
+### The 3-Step Process
+
+#### Step 1: Original Owner Initiates Transfer
+
+The current owner calls `transfer_ownership` to propose a new owner:
+
+```bash
+aptos move run \
+  --function-id <REGULATED_TOKEN_ADDRESS>::regulated_token::transfer_ownership \
+  --args address:<NEW_OWNER_ADDRESS> \
+  --profile current_owner
+
+# Example:
+aptos move run \
+  --function-id 0x772225b9cc6f60891b1866c5c57f3f8d8fb236173ab12fbb296cd77cc5a2b7ae::regulated_token::transfer_ownership \
+  --args address:0x742d35cc6551c76ffc4b3f2b78c5dd1e99aada3a3a8e8becc024df3c23ed36e8 \
+  --profile current_owner
+```
+
+**What happens:**
+
+- Creates a pending transfer request
+- Emits `OwnershipTransferRequested` event
+- Original owner remains in control
+
+#### Step 2: New Owner Accepts Transfer
+
+The proposed new owner calls `accept_ownership` to confirm they want ownership:
+
+```bash
+aptos move run \
+  --function-id <REGULATED_TOKEN_ADDRESS>::regulated_token::accept_ownership \
+  --profile new_owner
+
+# Example:
+aptos move run \
+  --function-id 0x772225b9cc6f60891b1866c5c57f3f8d8fb236173ab12fbb296cd77cc5a2b7ae::regulated_token::accept_ownership \
+  --profile new_owner
+```
+
+**What happens:**
+
+- Validates the caller is the proposed owner
+- Marks the transfer as accepted
+- Emits `OwnershipTransferAccepted` event
+- Transfer still NOT complete - original owner still has control
+
+#### Step 3: Original Owner Executes Transfer
+
+**⚠️ CRITICAL STEP:** The original owner must call `execute_ownership_transfer` to finalize:
+
+```bash
+aptos move run \
+  --function-id <REGULATED_TOKEN_ADDRESS>::regulated_token::execute_ownership_transfer \
+  --args address:<NEW_OWNER_ADDRESS> \
+  --profile current_owner
+
+# Example:
+aptos move run \
+  --function-id 0x772225b9cc6f60891b1866c5c57f3f8d8fb236173ab12fbb296cd77cc5a2b7ae::regulated_token::execute_ownership_transfer \
+  --args address:0x742d35cc6551c76ffc4b3f2b78c5dd1e99aada3a3a8e8becc024df3c23ed36e8 \
+  --profile current_owner
+```
+
+**What happens:**
+
+- Validates both steps 1 and 2 are complete
+- Calls `0x1::object::transfer` with original owner's signer
+- Transfers ownership to new address
+- Emits `OwnershipTransferred` event
+- New owner now has full control
+
+### Checking Transfer Status
+
+Monitor the ownership transfer process:
+
+```bash
+# Check current owner
+aptos move view \
+  --function-id <REGULATED_TOKEN_ADDRESS>::regulated_token::admin
+
+# Check if there's a pending transfer
+aptos move view \
+  --function-id <REGULATED_TOKEN_ADDRESS>::regulated_token::has_pending_transfer
+
+# Check who the transfer is from
+aptos move view \
+  --function-id <REGULATED_TOKEN_ADDRESS>::regulated_token::pending_transfer_from
+
+# Check who the transfer is to
+aptos move view \
+  --function-id <REGULATED_TOKEN_ADDRESS>::regulated_token::pending_transfer_to
+
+# Check if new owner has accepted
+aptos move view \
+  --function-id <REGULATED_TOKEN_ADDRESS>::regulated_token::pending_transfer_accepted
+```
 
 ## Security Considerations
 
