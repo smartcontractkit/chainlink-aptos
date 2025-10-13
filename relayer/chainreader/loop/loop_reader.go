@@ -198,7 +198,7 @@ func (a *loopChainReader) QueryKey(ctx context.Context, contract types.BoundCont
 		}
 
 		eventData := reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
-		err = codec.DecodeAptosJsonValue(jsonData, &eventData)
+		err = codec.DecodeAptosJsonValue(jsonData, eventData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode LOOP sourced event data (`%s`) into an Aptos value: %+w", string(*jsonBytes), err)
 		}
