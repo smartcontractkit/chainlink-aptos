@@ -478,8 +478,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 			eventData = &resultBytes
 		} else {
 			decoded := reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
-
-			if err := codec.DecodeAptosJsonValue(rec.Data, &decoded); err != nil {
+			if err := codec.DecodeAptosJsonValue(rec.Data, decoded); err != nil {
 				return nil, fmt.Errorf("failed to decode event data: %w", err)
 			}
 
