@@ -10,6 +10,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
     use aptos_framework::fungible_asset::{BurnRef, MintRef};
 
     use ccip::token_admin_registry;
+    use ccip::receiver_registry;
     use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
@@ -34,6 +35,10 @@ module burn_mint_token_pool::burn_mint_token_pool {
         mint_ref: Option<MintRef>
     }
 
+    struct BurnMintTokenPoolEvents has key, store {
+        token_pool_events: token_pool::TokenPoolEvents
+    }
+
     const E_NOT_PUBLISHER: u64 = 1;
     const E_ALREADY_INITIALIZED: u64 = 2;
     const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
@@ -42,6 +47,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
     const E_UNKNOWN_FUNCTION: u64 = 6;
     const E_MINT_REF_NOT_SET: u64 = 7;
     const E_BURN_REF_NOT_SET: u64 = 8;
+    const E_NOT_EXECUTING_RECEIVER: u64 = 9;
 
     // ================================================================
     // |                             Init                             |
@@ -139,6 +145,32 @@ module burn_mint_token_pool::burn_mint_token_pool {
         };
 
         move_to(&store_signer, pool);
+
+        move_to(
+            &store_signer,
+            BurnMintTokenPoolEvents {
+                token_pool_events: token_pool::create_transfer_events(&store_signer)
+            }
+        );
+    }
+
+    public fun initialize_token_pool_events(caller: &signer) acquires BurnMintTokenPoolState {
+        assert_can_initialize(signer::address_of(caller));
+
+        let store_signer =
+            &account::create_signer_with_capability(&borrow_pool().store_signer_cap);
+
+        assert!(
+            !exists<BurnMintTokenPoolEvents>(signer::address_of(store_signer)),
+            error::already_exists(E_ALREADY_INITIALIZED)
+        );
+
+        move_to(
+            store_signer,
+            BurnMintTokenPoolEvents {
+                token_pool_events: token_pool::create_transfer_events(store_signer)
+            }
+        );
     }
 
     // ================================================================
@@ -355,6 +387,32 @@ module burn_mint_token_pool::burn_mint_token_pool {
         fa
     }
 
+    /// Caller must be the receiver contract address when `ccip_receive` is called.
+    /// Transfer the fungible asset from the receiver to `to` address.
+    public fun transfer(
+        receiver: &signer, to: address, amount: u64
+    ) acquires BurnMintTokenPoolState, BurnMintTokenPoolEvents {
+        let receiver_addr = signer::address_of(receiver);
+        assert!(
+            receiver_registry::is_executing_receiver_in_progress(receiver_addr),
+            error::permission_denied(E_NOT_EXECUTING_RECEIVER)
+        );
+
+        let pool = borrow_pool_mut();
+        assert!(pool.burn_ref.is_some(), E_BURN_REF_NOT_SET);
+        assert!(pool.mint_ref.is_some(), E_MINT_REF_NOT_SET);
+
+        primary_fungible_store::burn(pool.burn_ref.borrow(), receiver_addr, amount);
+        primary_fungible_store::mint(pool.mint_ref.borrow(), to, amount);
+
+        token_pool::emit_transfer(
+            &mut borrow_mut_events().token_pool_events,
+            receiver_addr,
+            to,
+            amount
+        );
+    }
+
     // ================================================================
     // |                    Rate limit config                         |
     // ================================================================
@@ -475,6 +533,10 @@ module burn_mint_token_pool::burn_mint_token_pool {
 
     inline fun borrow_pool_mut(): &mut BurnMintTokenPoolState {
         borrow_global_mut<BurnMintTokenPoolState>(store_address())
+    }
+
+    inline fun borrow_mut_events(): &mut BurnMintTokenPoolEvents {
+        borrow_global_mut<BurnMintTokenPoolEvents>(store_address())
     }
 
     // ================================================================

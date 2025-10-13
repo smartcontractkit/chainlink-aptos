@@ -18,8 +18,13 @@ mcms_register_entrypoints = "0x4001"
 ccip_token_pool = "0x8d62e11f76e6e92563c59e7a5e842a540f8c6c3a4ed8a32f40a5ad3425b55f86"
 burn_mint_token_pool = "0x8e03eb21315649c06acb9a860a72c2b8cef5bd36775402008b89af397756dad7"
 lock_release_token_pool = "0x2e1f4cc8fbc2c7ccd2c67ff453e00526919098304d70708ef504af944d6fede8"
+managed_token_pool = "0xc0a1d7586bddbd46c9b3445cf9ad82c020dcb82818e6092c9683b51bfecc6633"
+regulated_token_pool = "0xb761d8e8425c11486ecb38444aab3493baf7c45381ce973a0bc99618c35021d5"
 burn_mint_local_token = "0x15c084d10b071a4b180c8d050e421a533bd07d13f9d9386335709da567183768"
 lock_release_local_token = "0x6d1c246126d36fea774b12486de0a3737997f1b9b23806c67ca5ce72859ff5fa"
+managed_token = "0xfda529bc9c3e1cd8bd3df66bd96bb20a36553ed454c909a96e6a0dadb728e896"
+regulated_token = "0xb3cec8e3442cafe0c378411012bbcae6787bfc0fbdd528ee9a00aaaf0c88d1b6"
+admin = "0x100"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }
@@ -28,3 +33,5 @@ ChainlinkCCIP = { local = "../ccip" }
 [dev-dependencies]
 BurnMintTokenPool = { local = "../ccip_token_pools/burn_mint_token_pool", addr_subst = {} }
 LockReleaseTokenPool = { local = "../ccip_token_pools/lock_release_token_pool", addr_subst = {} }
+ManagedTokenPool = { local = "../ccip_token_pools/managed_token_pool", addr_subst = {} }
+RegulatedTokenPool = { local = "../ccip_token_pools/regulated_token_pool", addr_subst = {} }

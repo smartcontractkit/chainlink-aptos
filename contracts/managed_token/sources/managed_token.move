@@ -336,6 +336,35 @@ module managed_token::managed_token {
         );
     }
 
+    public fun bridge_transfer(
+        caller: &signer, to: address, amount: u64
+    ) acquires TokenMetadataRefs, TokenState {
+        let caller_addr = signer::address_of(caller);
+        let state = &mut TokenState[token_state_address_internal()];
+
+        // Must be allowed as both minter and burner to transfer
+        assert_is_allowed_minter(caller_addr, state);
+        assert_is_allowed_burner(caller_addr, state);
+
+        if (amount == 0) { return };
+
+        primary_fungible_store::transfer_with_ref(
+            &borrow_token_metadata_refs(state).transfer_ref,
+            caller_addr,
+            to,
+            amount
+        );
+
+        event::emit_event(
+            &mut state.burn_events,
+            Burn { burner: caller_addr, from: caller_addr, amount }
+        );
+        event::emit_event(
+            &mut state.mint_events,
+            Mint { minter: caller_addr, to, amount }
+        );
+    }
+
     inline fun assert_is_allowed_minter(
         caller: address, state: &TokenState
     ) {

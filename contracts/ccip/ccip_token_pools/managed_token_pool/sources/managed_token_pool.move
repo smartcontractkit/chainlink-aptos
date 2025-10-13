@@ -10,6 +10,7 @@ module managed_token_pool::managed_token_pool {
 
     use managed_token::managed_token;
 
+    use ccip::receiver_registry;
     use ccip::token_admin_registry;
     use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
@@ -27,12 +28,17 @@ module managed_token_pool::managed_token_pool {
         store_signer_address: address
     }
 
+    struct ManagedTokenPoolEvents has key, store {
+        token_pool_events: token_pool::TokenPoolEvents
+    }
+
     const E_NOT_PUBLISHER: u64 = 1;
     const E_ALREADY_INITIALIZED: u64 = 2;
     const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
     const E_LOCAL_TOKEN_MISMATCH: u64 = 4;
     const E_INVALID_ARGUMENTS: u64 = 5;
     const E_UNKNOWN_FUNCTION: u64 = 6;
+    const E_NOT_EXECUTING_RECEIVER: u64 = 9;
 
     // ================================================================
     // |                             Init                             |
@@ -91,6 +97,33 @@ module managed_token_pool::managed_token_pool {
         };
 
         move_to(&store_signer, pool);
+
+        move_to(
+            &store_signer,
+            ManagedTokenPoolEvents {
+                token_pool_events: token_pool::create_transfer_events(&store_signer)
+            }
+        );
+    }
+
+    public fun initialize_token_pool_events(caller: &signer) acquires ManagedTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+
+        let store_signer =
+            &account::create_signer_with_capability(&pool.store_signer_cap);
+
+        assert!(
+            !exists<ManagedTokenPoolEvents>(signer::address_of(store_signer)),
+            error::already_exists(E_ALREADY_INITIALIZED)
+        );
+
+        move_to(
+            store_signer,
+            ManagedTokenPoolEvents {
+                token_pool_events: token_pool::create_transfer_events(store_signer)
+            }
+        );
     }
 
     // ================================================================
@@ -319,6 +352,26 @@ module managed_token_pool::managed_token_pool {
         fa
     }
 
+    /// Caller must be the receiver contract address when `ccip_receive` is called.
+    /// Transfer the fungible asset from the receiver to `to` address.
+    public fun transfer(caller: &signer, to: address, amount: u64) acquires ManagedTokenPoolEvents {
+        let caller_addr = signer::address_of(caller);
+
+        assert!(
+            receiver_registry::is_executing_receiver_in_progress(caller_addr),
+            error::permission_denied(E_NOT_EXECUTING_RECEIVER)
+        );
+
+        managed_token::bridge_transfer(caller, to, amount);
+
+        token_pool::emit_transfer(
+            &mut borrow_mut_events().token_pool_events,
+            caller_addr,
+            to,
+            amount
+        );
+    }
+
     // ================================================================
     // |                    Rate limit config                         |
     // ================================================================
@@ -424,6 +477,10 @@ module managed_token_pool::managed_token_pool {
 
     inline fun borrow_pool_mut(): &mut ManagedTokenPoolState {
         borrow_global_mut<ManagedTokenPoolState>(store_address())
+    }
+
+    inline fun borrow_mut_events(): &mut ManagedTokenPoolEvents {
+        borrow_global_mut<ManagedTokenPoolEvents>(store_address())
     }
 
     // ================================================================

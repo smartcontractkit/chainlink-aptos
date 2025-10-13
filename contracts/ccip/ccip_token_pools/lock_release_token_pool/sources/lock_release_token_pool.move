@@ -9,6 +9,7 @@ module lock_release_token_pool::lock_release_token_pool {
     use std::signer;
     use std::string::{Self, String};
 
+    use ccip::receiver_registry;
     use ccip::token_admin_registry;
     use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
@@ -34,6 +35,10 @@ module lock_release_token_pool::lock_release_token_pool {
         rebalancer: address
     }
 
+    struct LockReleaseTokenPoolEvents has key, store {
+        token_pool_events: token_pool::TokenPoolEvents
+    }
+
     const E_NOT_PUBLISHER: u64 = 1;
     const E_ALREADY_INITIALIZED: u64 = 2;
     const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
@@ -44,6 +49,7 @@ module lock_release_token_pool::lock_release_token_pool {
     const E_UNAUTHORIZED: u64 = 8;
     const E_INSUFFICIENT_LIQUIDITY: u64 = 9;
     const E_TRANSFER_REF_NOT_SET: u64 = 10;
+    const E_NOT_EXECUTING_RECEIVER: u64 = 11;
 
     // ================================================================
     // |                             Init                             |
@@ -156,6 +162,32 @@ module lock_release_token_pool::lock_release_token_pool {
             rebalancer
         };
         move_to(&store_signer, pool);
+
+        move_to(
+            &store_signer,
+            LockReleaseTokenPoolEvents {
+                token_pool_events: token_pool::create_transfer_events(&store_signer)
+            }
+        );
+    }
+
+    public fun initialize_token_pool_events(caller: &signer) acquires LockReleaseTokenPoolState {
+        assert_can_initialize(signer::address_of(caller));
+
+        let store_signer =
+            &account::create_signer_with_capability(&borrow_pool().store_signer_cap);
+
+        assert!(
+            !exists<LockReleaseTokenPoolEvents>(signer::address_of(store_signer)),
+            error::already_exists(E_ALREADY_INITIALIZED)
+        );
+
+        move_to(
+            store_signer,
+            LockReleaseTokenPoolEvents {
+                token_pool_events: token_pool::create_transfer_events(store_signer)
+            }
+        );
     }
 
     // ================================================================
@@ -423,6 +455,35 @@ module lock_release_token_pool::lock_release_token_pool {
         fa
     }
 
+    /// Caller must be the receiver contract address when `ccip_receive` is called.
+    /// Transfer the fungible asset from the receiver to `to` address.
+    public fun transfer(
+        caller: &signer, to: address, amount: u64
+    ) acquires LockReleaseTokenPoolState, LockReleaseTokenPoolEvents {
+        let caller_addr = signer::address_of(caller);
+        assert!(
+            receiver_registry::is_executing_receiver_in_progress(caller_addr),
+            error::permission_denied(E_NOT_EXECUTING_RECEIVER)
+        );
+
+        let pool = borrow_pool_mut();
+        assert!(pool.transfer_ref.is_some(), E_TRANSFER_REF_NOT_SET);
+
+        primary_fungible_store::transfer_with_ref(
+            pool.transfer_ref.borrow(),
+            caller_addr,
+            to,
+            amount
+        );
+
+        token_pool::emit_transfer(
+            &mut borrow_mut_events().token_pool_events,
+            caller_addr,
+            to,
+            amount
+        );
+    }
+
     // ================================================================
     // |                    Rate limit config                         |
     // ================================================================
@@ -660,6 +721,10 @@ module lock_release_token_pool::lock_release_token_pool {
 
     inline fun borrow_pool_mut(): &mut LockReleaseTokenPoolState {
         borrow_global_mut<LockReleaseTokenPoolState>(store_address())
+    }
+
+    inline fun borrow_mut_events(): &mut LockReleaseTokenPoolEvents {
+        borrow_global_mut<LockReleaseTokenPoolEvents>(store_address())
     }
 
     // ================================================================

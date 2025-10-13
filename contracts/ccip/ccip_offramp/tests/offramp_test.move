@@ -10,6 +10,7 @@ module ccip_offramp::offramp_test {
     use aptos_framework::primary_fungible_store;
     use aptos_framework::timestamp;
     use ccip_offramp::bcs_helper;
+    use ccip_offramp::mock_token;
 
     use ccip::merkle_proof;
     use ccip::token_admin_registry;
@@ -23,6 +24,10 @@ module ccip_offramp::offramp_test {
 
     use burn_mint_token_pool::burn_mint_token_pool;
     use lock_release_token_pool::lock_release_token_pool;
+    use managed_token::managed_token;
+    use managed_token_pool::managed_token_pool;
+    use regulated_token_pool::regulated_token_pool;
+    use regulated_token::regulated_token;
 
     const CHAIN_ID: u8 = 100;
     const EVM_SOURCE_CHAIN_SELECTOR: u64 = 909606746561742123;
@@ -41,9 +46,13 @@ module ccip_offramp::offramp_test {
 
     const BURN_MINT_TOKEN_POOL: u8 = 0;
     const LOCK_RELEASE_TOKEN_POOL: u8 = 1;
+    const MANAGED_TOKEN_POOL: u8 = 2;
+    const REGULATED_TOKEN_POOL: u8 = 3;
 
     const BURN_MINT_TOKEN_SEED: vector<u8> = b"TestToken";
     const LOCK_RELEASE_TOKEN_SEED: vector<u8> = b"LockReleaseToken";
+    const MANAGED_TOKEN_SEED: vector<u8> = b"ManagedToken";
+    const REGULATED_TOKEN_SEED: vector<u8> = b"RegulatedToken";
 
     const MOCK_EVM_ADDRESS: address = @0x4838B106FCe9647Bdf1E7877BF73cE8B0BAD5f97;
     const MOCK_EVM_ADDRESS_VECTOR: vector<u8> = x"4838B106FCe9647Bdf1E7877BF73cE8B0BAD5f97";
@@ -61,15 +70,20 @@ module ccip_offramp::offramp_test {
         timestamp::update_global_time_for_test_secs(timestamp_seconds);
     }
 
-    fun setup(
+    public fun setup(
         aptos_framework: &signer,
         ccip: &signer,
         ccip_offramp: &signer,
         owner: &signer,
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer,
+        managed_token_pool: &signer,
+        managed_token: &signer,
+        regulated_token_pool: &signer,
+        regulated_token: &signer,
         pool_type: u8,
-        seed: vector<u8>
+        seed: vector<u8>,
+        is_dispatchable: bool
     ): (address, Object<Metadata>) {
         let owner_addr = signer::address_of(owner);
         account::create_account_for_test(signer::address_of(burn_mint_token_pool));
@@ -124,10 +138,16 @@ module ccip_offramp::offramp_test {
         let (token_obj, token_addr) =
             create_test_token_and_pool(
                 owner,
+                ccip_offramp,
                 burn_mint_token_pool,
                 lock_release_token_pool,
+                managed_token_pool,
+                managed_token,
+                regulated_token_pool,
+                regulated_token,
                 pool_type,
-                seed
+                seed,
+                is_dispatchable
             );
 
         // Initialize fee quoter
@@ -153,10 +173,16 @@ module ccip_offramp::offramp_test {
 
     fun create_test_token_and_pool(
         owner: &signer,
+        ccip_offramp_signer: &signer,
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer,
+        managed_token_pool: &signer,
+        managed_token: &signer,
+        regulated_token_pool: &signer,
+        regulated_token: &signer,
         pool_type: u8,
-        seed: vector<u8>
+        seed: vector<u8>,
+        is_dispatchable: bool
     ): (Object<Metadata>, address) {
         let constructor_ref = object::create_named_object(owner, seed);
 
@@ -177,6 +203,13 @@ module ccip_offramp::offramp_test {
         let mint_ref = fungible_asset::generate_mint_ref(&constructor_ref);
         let burn_ref = fungible_asset::generate_burn_ref(&constructor_ref);
         let transfer_ref = fungible_asset::generate_transfer_ref(&constructor_ref);
+
+        // Add dynamic dispatch function to the token if it is dispatchable
+        if (is_dispatchable) {
+            mock_token::add_dynamic_dispatch_function(
+                ccip_offramp_signer, &constructor_ref
+            );
+        };
 
         let token_addr = object::object_address(&metadata);
 
@@ -210,7 +243,7 @@ module ccip_offramp::offramp_test {
                 token_addr,
                 signer::address_of(burn_mint_token_pool)
             );
-        } else {
+        } else if (pool_type == LOCK_RELEASE_TOKEN_POOL) {
             lock_release_token_pool::test_init_module(lock_release_token_pool);
             lock_release_token_pool::initialize(
                 owner,
@@ -244,17 +277,145 @@ module ccip_offramp::offramp_test {
                 token_addr,
                 signer::address_of(lock_release_token_pool)
             );
+        } else if (pool_type == MANAGED_TOKEN_POOL) {
+            let seed = b"MT";
+            let _constructor_ref = &object::create_named_object(owner, seed);
+            let _managed_token_pool_constructor_ref =
+                &object::create_named_object(owner, b"ManagedTokenPool");
+
+            managed_token::init_module_for_testing(managed_token);
+            managed_token::initialize(
+                owner,
+                option::none(),
+                string::utf8(b"Managed Token"),
+                string::utf8(seed),
+                6,
+                string::utf8(b"https://managedtoken.com/images/pic.png"),
+                string::utf8(b"https://managedtoken.com")
+            );
+
+            managed_token_pool::test_init_module(managed_token_pool);
+            managed_token_pool::apply_chain_updates(
+                owner,
+                vector[],
+                vector[EVM_SOURCE_CHAIN_SELECTOR],
+                vector[vector[MOCK_EVM_ADDRESS_VECTOR]],
+                vector[MOCK_EVM_ADDRESS_VECTOR]
+            );
+            managed_token_pool::set_chain_rate_limiter_config(
+                owner,
+                EVM_SOURCE_CHAIN_SELECTOR,
+                true,
+                OUTBOUND_CAPACITY,
+                OUTBOUND_RATE,
+                true,
+                INBOUND_CAPACITY,
+                INBOUND_RATE
+            );
+
+            token_addr = managed_token::token_metadata();
+            metadata = object::address_to_object(token_addr);
+
+            // Set admin for token
+            token_admin_registry::propose_administrator(
+                owner, token_addr, signer::address_of(owner)
+            );
+            token_admin_registry::accept_admin_role(owner, token_addr);
+            token_admin_registry::set_pool(
+                owner,
+                token_addr,
+                signer::address_of(managed_token_pool)
+            );
+            // Fund managed token pool
+            primary_fungible_store::mint(
+                &mint_ref,
+                managed_token_pool::get_store_address(),
+                1000
+            );
+        } else if (pool_type == REGULATED_TOKEN_POOL) {
+            account::create_account_for_test(signer::address_of(owner));
+            account::create_account_for_test(signer::address_of(regulated_token_pool));
+            account::create_account_for_test(signer::address_of(regulated_token));
+
+            // Create an object at @regulated_token for the ownable functionality
+            let regulated_token_pool_constructor_ref =
+                object::create_named_object(owner, b"regulated_token_pool");
+            account::create_account_for_test(
+                object::address_from_constructor_ref(
+                    &regulated_token_pool_constructor_ref
+                )
+            );
+
+            // Setup regulated token first (use admin as the object creator)
+            let regulated_token_constructor_ref =
+                object::create_named_object(owner, b"regulated_token");
+            account::create_account_for_test(
+                object::address_from_constructor_ref(&regulated_token_constructor_ref)
+            );
+
+            regulated_token::init_module_for_testing(regulated_token);
+            regulated_token::initialize(
+                owner,
+                option::none(),
+                string::utf8(b"Regulated Token"),
+                string::utf8(b"RT"),
+                6,
+                string::utf8(
+                    b"https://regulatedtoken.com/images/pic.png"
+                ),
+                string::utf8(b"https://regulatedtoken.com")
+            );
+
+            regulated_token_pool::test_init_module(regulated_token_pool);
+            regulated_token_pool::apply_chain_updates(
+                owner,
+                vector[],
+                vector[EVM_SOURCE_CHAIN_SELECTOR],
+                vector[vector[MOCK_EVM_ADDRESS_VECTOR]],
+                vector[MOCK_EVM_ADDRESS_VECTOR]
+            );
+            regulated_token_pool::set_chain_rate_limiter_config(
+                owner,
+                EVM_SOURCE_CHAIN_SELECTOR,
+                true,
+                OUTBOUND_CAPACITY,
+                OUTBOUND_RATE,
+                true,
+                INBOUND_CAPACITY,
+                INBOUND_RATE
+            );
+
+            token_addr = regulated_token::token_address();
+            metadata = regulated_token::token_metadata();
+
+            // Set admin for token
+            token_admin_registry::propose_administrator(
+                owner, token_addr, signer::address_of(owner)
+            );
+            token_admin_registry::accept_admin_role(owner, token_addr);
+            token_admin_registry::set_pool(
+                owner,
+                token_addr,
+                signer::address_of(regulated_token_pool)
+            );
+
+            // Fund regulated token pool
+            primary_fungible_store::mint(
+                &mint_ref,
+                regulated_token_pool::get_store_address(),
+                1000
+            );
         };
 
         let mint_ref = fungible_asset::generate_mint_ref(&constructor_ref);
         let burn_ref = fungible_asset::generate_burn_ref(&constructor_ref);
         let transfer_ref = fungible_asset::generate_transfer_ref(&constructor_ref);
 
-        // Fund lock/release token pool
+        // Fund lock/release token pool with sufficient liquidity for tests
         primary_fungible_store::mint(
             &mint_ref,
             lock_release_token_pool::get_store_address(),
-            1000
+            10000000 // 10M tokens for test liquidity
         );
 
         move_to(
@@ -354,7 +515,11 @@ module ccip_offramp::offramp_test {
             ccip_offramp = @ccip_offramp,
             owner = @0x100,
             burn_mint_token_pool = @burn_mint_token_pool,
-            lock_release_token_pool = @lock_release_token_pool
+            lock_release_token_pool = @lock_release_token_pool,
+            managed_token_pool = @managed_token_pool,
+            managed_token = @managed_token,
+            regulated_token_pool = @regulated_token_pool,
+            regulated_token = @regulated_token
         )
     ]
     fun test_initialize(
@@ -363,7 +528,11 @@ module ccip_offramp::offramp_test {
         ccip_offramp: &signer,
         owner: &signer,
         burn_mint_token_pool: &signer,
-        lock_release_token_pool: &signer
+        lock_release_token_pool: &signer,
+        managed_token_pool: &signer,
+        managed_token: &signer,
+        regulated_token_pool: &signer,
+        regulated_token: &signer
     ) {
         setup(
             aptos_framework,
@@ -372,8 +541,13 @@ module ccip_offramp::offramp_test {
             owner,
             burn_mint_token_pool,
             lock_release_token_pool,
+            managed_token_pool,
+            managed_token,
+            regulated_token_pool,
+            regulated_token,
             BURN_MINT_TOKEN_POOL,
-            BURN_MINT_TOKEN_SEED
+            BURN_MINT_TOKEN_SEED,
+            false
         );
 
         // Verify initialization was successful
@@ -762,7 +936,11 @@ module ccip_offramp::offramp_test {
             ccip_offramp = @ccip_offramp,
             owner = @0x100,
             burn_mint_token_pool = @burn_mint_token_pool,
-            lock_release_token_pool = @lock_release_token_pool
+            lock_release_token_pool = @lock_release_token_pool,
+            managed_token_pool = @managed_token_pool,
+            managed_token = @managed_token,
+            regulated_token_pool = @regulated_token_pool,
+            regulated_token = @regulated_token
         )
     ]
     fun test_commit_and_execute(
@@ -771,7 +949,11 @@ module ccip_offramp::offramp_test {
         ccip_offramp: &signer,
         owner: &signer,
         burn_mint_token_pool: &signer,
-        lock_release_token_pool: &signer
+        lock_release_token_pool: &signer,
+        managed_token_pool: &signer,
+        managed_token: &signer,
+        regulated_token_pool: &signer,
+        regulated_token: &signer
     ) {
         setup(
             aptos_framework,
@@ -780,8 +962,13 @@ module ccip_offramp::offramp_test {
             owner,
             burn_mint_token_pool,
             lock_release_token_pool,
+            managed_token_pool,
+            managed_token,
+            regulated_token_pool,
+            regulated_token,
             BURN_MINT_TOKEN_POOL,
-            BURN_MINT_TOKEN_SEED
+            BURN_MINT_TOKEN_SEED,
+            false
         );
         let config_digest =
             x"000aed76a87f048dab766bc14ecdbb966f4253e309d742585062a75abfc16c38";
@@ -943,7 +1130,11 @@ module ccip_offramp::offramp_test {
             ccip_offramp = @ccip_offramp,
             owner = @0x100,
             burn_mint_token_pool = @burn_mint_token_pool,
-            lock_release_token_pool = @lock_release_token_pool
+            lock_release_token_pool = @lock_release_token_pool,
+            managed_token_pool = @managed_token_pool,
+            managed_token = @managed_token,
+            regulated_token_pool = @regulated_token_pool,
+            regulated_token = @regulated_token
         )
     ]
     fun test_manually_execute(
@@ -952,7 +1143,11 @@ module ccip_offramp::offramp_test {
         ccip_offramp: &signer,
         owner: &signer,
         burn_mint_token_pool: &signer,
-        lock_release_token_pool: &signer
+        lock_release_token_pool: &signer,
+        managed_token_pool: &signer,
+        managed_token: &signer,
+        regulated_token_pool: &signer,
+        regulated_token: &signer
     ) {
         setup(
             aptos_framework,
@@ -961,8 +1156,13 @@ module ccip_offramp::offramp_test {
             owner,
             burn_mint_token_pool,
             lock_release_token_pool,
+            managed_token_pool,
+            managed_token,
+            regulated_token_pool,
+            regulated_token,
             BURN_MINT_TOKEN_POOL,
-            BURN_MINT_TOKEN_SEED
+            BURN_MINT_TOKEN_SEED,
+            false
         );
 
         let merkle_root =
@@ -985,6 +1185,10 @@ module ccip_offramp::offramp_test {
             owner = @0x100,
             burn_mint_token_pool = @burn_mint_token_pool,
             lock_release_token_pool = @lock_release_token_pool,
+            managed_token_pool = @managed_token_pool,
+            managed_token = @managed_token,
+            regulated_token_pool = @regulated_token_pool,
+            regulated_token = @regulated_token,
             receiver = @0xbed8
         )
     ]
@@ -995,6 +1199,10 @@ module ccip_offramp::offramp_test {
         owner: &signer,
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer,
+        managed_token_pool: &signer,
+        managed_token: &signer,
+        regulated_token_pool: &signer,
+        regulated_token: &signer,
         receiver: &signer
     ) {
         test_execute_single_report_with_token_transfer(
@@ -1004,9 +1212,14 @@ module ccip_offramp::offramp_test {
             owner,
             burn_mint_token_pool,
             lock_release_token_pool,
+            managed_token_pool,
+            managed_token,
+            regulated_token_pool,
+            regulated_token,
             receiver,
             BURN_MINT_TOKEN_POOL,
-            BURN_MINT_TOKEN_SEED
+            BURN_MINT_TOKEN_SEED,
+            false
         )
     }
 
@@ -1018,6 +1231,10 @@ module ccip_offramp::offramp_test {
             owner = @0x100,
             burn_mint_token_pool = @burn_mint_token_pool,
             lock_release_token_pool = @lock_release_token_pool,
+            managed_token_pool = @managed_token_pool,
+            managed_token = @managed_token,
+            regulated_token_pool = @regulated_token_pool,
+            regulated_token = @regulated_token,
             receiver = @0xbed8
         )
     ]
@@ -1028,6 +1245,10 @@ module ccip_offramp::offramp_test {
         owner: &signer,
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer,
+        managed_token_pool: &signer,
+        managed_token: &signer,
+        regulated_token_pool: &signer,
+        regulated_token: &signer,
         receiver: &signer
     ) {
         test_execute_single_report_with_token_transfer(
@@ -1037,9 +1258,14 @@ module ccip_offramp::offramp_test {
             owner,
             burn_mint_token_pool,
             lock_release_token_pool,
+            managed_token_pool,
+            managed_token,
+            regulated_token_pool,
+            regulated_token,
             receiver,
             LOCK_RELEASE_TOKEN_POOL,
-            LOCK_RELEASE_TOKEN_SEED
+            LOCK_RELEASE_TOKEN_SEED,
+            false
         )
     }
 
@@ -1052,9 +1278,14 @@ module ccip_offramp::offramp_test {
         owner: &signer,
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer,
+        managed_token_pool: &signer,
+        managed_token: &signer,
+        regulated_token_pool: &signer,
+        regulated_token: &signer,
         receiver: &signer,
         pool_type: u8,
-        token_seed: vector<u8>
+        token_seed: vector<u8>,
+        is_dispatchable: bool
     ) {
         let (_owner_addr, token_obj) =
             setup(
@@ -1064,8 +1295,13 @@ module ccip_offramp::offramp_test {
                 owner,
                 burn_mint_token_pool,
                 lock_release_token_pool,
+                managed_token_pool,
+                managed_token,
+                regulated_token_pool,
+                regulated_token,
                 pool_type,
-                token_seed
+                token_seed,
+                is_dispatchable
             );
 
         let token_addr = object::object_address(&token_obj);
@@ -1167,7 +1403,11 @@ module ccip_offramp::offramp_test {
             ccip_offramp = @ccip_offramp,
             owner = @0x100,
             burn_mint_token_pool = @burn_mint_token_pool,
-            lock_release_token_pool = @lock_release_token_pool
+            lock_release_token_pool = @lock_release_token_pool,
+            managed_token_pool = @managed_token_pool,
+            managed_token = @managed_token,
+            regulated_token_pool = @regulated_token_pool,
+            regulated_token = @regulated_token
         )
     ]
     fun test_transfer_ownership_flow(
@@ -1176,7 +1416,11 @@ module ccip_offramp::offramp_test {
         ccip_offramp: &signer,
         owner: &signer,
         burn_mint_token_pool: &signer,
-        lock_release_token_pool: &signer
+        lock_release_token_pool: &signer,
+        managed_token_pool: &signer,
+        managed_token: &signer,
+        regulated_token_pool: &signer,
+        regulated_token: &signer
     ) {
         setup(
             aptos_framework,
@@ -1185,8 +1429,13 @@ module ccip_offramp::offramp_test {
             owner,
             burn_mint_token_pool,
             lock_release_token_pool,
+            managed_token_pool,
+            managed_token,
+            regulated_token_pool,
+            regulated_token,
             BURN_MINT_TOKEN_POOL,
-            BURN_MINT_TOKEN_SEED
+            BURN_MINT_TOKEN_SEED,
+            false
         );
         let new_owner = signer::address_of(aptos_framework);
         account::create_account_for_test(new_owner);
@@ -1207,7 +1456,11 @@ module ccip_offramp::offramp_test {
             ccip_offramp = @ccip_offramp,
             owner = @0x100,
             burn_mint_token_pool = @burn_mint_token_pool,
-            lock_release_token_pool = @lock_release_token_pool
+            lock_release_token_pool = @lock_release_token_pool,
+            managed_token_pool = @managed_token_pool,
+            managed_token = @managed_token,
+            regulated_token_pool = @regulated_token_pool,
+            regulated_token = @regulated_token
         )
     ]
     fun test_getters(
@@ -1216,7 +1469,11 @@ module ccip_offramp::offramp_test {
         ccip_offramp: &signer,
         owner: &signer,
         burn_mint_token_pool: &signer,
-        lock_release_token_pool: &signer
+        lock_release_token_pool: &signer,
+        managed_token_pool: &signer,
+        managed_token: &signer,
+        regulated_token_pool: &signer,
+        regulated_token: &signer
     ) {
         setup(
             aptos_framework,
@@ -1225,8 +1482,13 @@ module ccip_offramp::offramp_test {
             owner,
             burn_mint_token_pool,
             lock_release_token_pool,
+            managed_token_pool,
+            managed_token,
+            regulated_token_pool,
+            regulated_token,
             BURN_MINT_TOKEN_POOL,
-            BURN_MINT_TOKEN_SEED
+            BURN_MINT_TOKEN_SEED,
+            false
         );
 
         let latest_price_sequence_number = offramp::get_latest_price_sequence_number();
@@ -1247,7 +1509,11 @@ module ccip_offramp::offramp_test {
             ccip_offramp = @ccip_offramp,
             owner = @0x100,
             burn_mint_token_pool = @burn_mint_token_pool,
-            lock_release_token_pool = @lock_release_token_pool
+            lock_release_token_pool = @lock_release_token_pool,
+            managed_token_pool = @managed_token_pool,
+            managed_token = @managed_token,
+            regulated_token_pool = @regulated_token_pool,
+            regulated_token = @regulated_token
         )
     ]
     #[expected_failure(abort_code = 65540, location = ccip_offramp::offramp)]
@@ -1257,7 +1523,11 @@ module ccip_offramp::offramp_test {
         ccip_offramp: &signer,
         owner: &signer,
         burn_mint_token_pool: &signer,
-        lock_release_token_pool: &signer
+        lock_release_token_pool: &signer,
+        managed_token_pool: &signer,
+        managed_token: &signer,
+        regulated_token_pool: &signer,
+        regulated_token: &signer
     ) {
         setup(
             aptos_framework,
@@ -1266,8 +1536,13 @@ module ccip_offramp::offramp_test {
             owner,
             burn_mint_token_pool,
             lock_release_token_pool,
+            managed_token_pool,
+            managed_token,
+            regulated_token_pool,
+            regulated_token,
             BURN_MINT_TOKEN_POOL,
-            BURN_MINT_TOKEN_SEED
+            BURN_MINT_TOKEN_SEED,
+            false
         );
 
         // E_UNKNOWN_SOURCE_CHAIN_SELECTOR
@@ -1281,7 +1556,11 @@ module ccip_offramp::offramp_test {
             ccip_offramp = @ccip_offramp,
             owner = @0x100,
             burn_mint_token_pool = @burn_mint_token_pool,
-            lock_release_token_pool = @lock_release_token_pool
+            lock_release_token_pool = @lock_release_token_pool,
+            managed_token_pool = @managed_token_pool,
+            managed_token = @managed_token,
+            regulated_token_pool = @regulated_token_pool,
+            regulated_token = @regulated_token
         )
     ]
     #[expected_failure(abort_code = 65550, location = ccip_offramp::offramp)]
@@ -1291,7 +1570,11 @@ module ccip_offramp::offramp_test {
         ccip_offramp: &signer,
         owner: &signer,
         burn_mint_token_pool: &signer,
-        lock_release_token_pool: &signer
+        lock_release_token_pool: &signer,
+        managed_token_pool: &signer,
+        managed_token: &signer,
+        regulated_token_pool: &signer,
+        regulated_token: &signer
     ) {
         setup(
             aptos_framework,
@@ -1300,8 +1583,13 @@ module ccip_offramp::offramp_test {
             owner,
             burn_mint_token_pool,
             lock_release_token_pool,
+            managed_token_pool,
+            managed_token,
+            regulated_token_pool,
+            regulated_token,
             BURN_MINT_TOKEN_POOL,
-            BURN_MINT_TOKEN_SEED
+            BURN_MINT_TOKEN_SEED,
+            false
         );
 
         // E_INVALID_ROOT

@@ -5,13 +5,15 @@ module ccip::receiver_registry {
     use std::error;
     use std::event::{Self, EventHandle};
     use std::function_info::{Self, FunctionInfo};
+    use std::table::{Self, Table};
     use std::type_info::{Self, TypeInfo};
     use std::fungible_asset::{Self, Metadata};
-    use std::object::{Self, ExtendRef, Object, TransferRef};
+    use std::object::{Self, ExtendRef, Object, TransferRef, ObjectCore};
     use std::option::{Self, Option};
     use std::signer;
     use std::string::{Self, String};
 
+    use ccip::auth;
     use ccip::client;
     use ccip::state_object;
 
@@ -32,6 +34,10 @@ module ccip::receiver_registry {
         executing_input: Option<client::Any2AptosMessage>
     }
 
+    struct CCIPReceiveState has key {
+        executing_receivers: Table<address, bool>
+    }
+
     #[event]
     struct ReceiverRegistered has store, drop {
         receiver_address: address,
@@ -45,6 +51,7 @@ module ccip::receiver_registry {
     const E_NON_EMPTY_INPUT: u64 = 5;
     const E_PROOF_TYPE_ACCOUNT_MISMATCH: u64 = 6;
     const E_PROOF_TYPE_MODULE_MISMATCH: u64 = 7;
+    const E_UNAUTHORIZED: u64 = 8;
 
     #[view]
     public fun type_and_version(): String {
@@ -65,6 +72,10 @@ module ccip::receiver_registry {
         };
 
         move_to(&state_object_signer, state);
+
+        move_to(
+            &state_object_signer, CCIPReceiveState { executing_receivers: table::new() }
+        );
     }
 
     public fun register_receiver<ProofType: drop>(
@@ -143,6 +154,13 @@ module ccip::receiver_registry {
         exists<CCIPReceiverRegistration>(receiver_address)
     }
 
+    #[view]
+    public fun is_executing_receiver_in_progress(
+        receiver_address: address
+    ): bool acquires CCIPReceiveState {
+        borrow_ccip_receive_state_mut().executing_receivers.contains(receiver_address)
+    }
+
     public fun get_receiver_input<ProofType: drop>(
         receiver_address: address, _proof: ProofType
     ): client::Any2AptosMessage acquires CCIPReceiverRegistration {
@@ -163,7 +181,7 @@ module ccip::receiver_registry {
 
     public(friend) fun start_receive(
         receiver_address: address, message: client::Any2AptosMessage
-    ): Object<Metadata> acquires CCIPReceiverRegistration {
+    ): Object<Metadata> acquires CCIPReceiverRegistration, CCIPReceiveState {
         let registration = get_registration_mut(receiver_address);
 
         assert!(
@@ -173,16 +191,22 @@ module ccip::receiver_registry {
 
         registration.executing_input.fill(message);
 
+        borrow_ccip_receive_state_mut().executing_receivers.add(receiver_address, true);
+
         registration.dispatch_metadata
     }
 
-    public(friend) fun finish_receive(receiver_address: address) acquires CCIPReceiverRegistration {
+    public(friend) fun finish_receive(
+        receiver_address: address
+    ) acquires CCIPReceiverRegistration, CCIPReceiveState {
         let registration = get_registration_mut(receiver_address);
 
         assert!(
             registration.executing_input.is_none(),
             error::invalid_state(E_NON_EMPTY_INPUT)
         );
+
+        borrow_ccip_receive_state_mut().executing_receivers.remove(receiver_address);
     }
 
     inline fun borrow_state(): &ReceiverRegistryState {
@@ -193,12 +217,27 @@ module ccip::receiver_registry {
         borrow_global_mut<ReceiverRegistryState>(state_object::object_address())
     }
 
+    inline fun borrow_ccip_receive_state_mut(): &mut CCIPReceiveState {
+        borrow_global_mut<CCIPReceiveState>(state_object::object_address())
+    }
+
     inline fun get_registration_mut(receiver_address: address): &mut CCIPReceiverRegistration {
         assert!(
             exists<CCIPReceiverRegistration>(receiver_address),
             error::invalid_argument(E_UNKNOWN_RECEIVER)
         );
         borrow_global_mut<CCIPReceiverRegistration>(receiver_address)
+    }
+
+    // ============================= Migrations =============================
+
+    public fun initialize_ccip_receive_state(caller: &signer) {
+        auth::assert_only_owner(signer::address_of(caller));
+
+        move_to(
+            &state_object::object_signer(),
+            CCIPReceiveState { executing_receivers: table::new() }
+        );
     }
 
     #[test_only]

@@ -1806,4 +1806,9 @@ module ccip_offramp::offramp {
     public fun merkle_root_merkle_root(root: &MerkleRoot): vector<u8> {
         root.merkle_root
     }
+
+    #[test_only]
+    public fun source_chain_config_on_ramp(config: &SourceChainConfig): vector<u8> {
+        config.on_ramp
+    }
 }
