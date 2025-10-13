@@ -611,7 +611,12 @@ module regulated_token::regulated_token {
         assert_not_frozen(caller_addr, token_state);
         assert_not_frozen(to, token_state);
 
-        primary_fungible_store::transfer_with_ref(&borrow_token_metadata_refs().transfer_ref, caller_addr, to, amount);
+        primary_fungible_store::transfer_with_ref(
+            &borrow_token_metadata_refs().transfer_ref,
+            caller_addr,
+            to,
+            amount
+        );
 
         event::emit(BridgeTransfer { caller: caller_addr, to, amount });
     }
