@@ -24,6 +24,7 @@ var (
 type ReceiverRegistryInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	IsRegisteredReceiver(opts *bind.CallOpts, receiverAddress aptos.AccountAddress) (bool, error)
+	IsExecutingReceiverInProgress(opts *bind.CallOpts, receiverAddress aptos.AccountAddress) (bool, error)
 
 	// Encoder returns the encoder implementation of this module.
 	Encoder() ReceiverRegistryEncoder
@@ -32,10 +33,12 @@ type ReceiverRegistryInterface interface {
 type ReceiverRegistryEncoder interface {
 	TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	IsRegisteredReceiver(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	IsExecutingReceiverInProgress(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	FinishReceive(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	InitializeCCIPReceiveState() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"receiver_registry","name":"finish_receive","parameters":[{"name":"receiver_address","type":"address"}]}]`
+const FunctionInfo = `[{"package":"ccip","module":"receiver_registry","name":"finish_receive","parameters":[{"name":"receiver_address","type":"address"}]},{"package":"ccip","module":"receiver_registry","name":"initialize_ccip_receive_state","parameters":null}]`
 
 func NewReceiverRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) ReceiverRegistryInterface {
 	contract := bind.NewBoundContract(address, "ccip", "receiver_registry", client)
@@ -54,6 +57,7 @@ const (
 	E_NON_EMPTY_INPUT             uint64 = 5
 	E_PROOF_TYPE_ACCOUNT_MISMATCH uint64 = 6
 	E_PROOF_TYPE_MODULE_MISMATCH  uint64 = 7
+	E_UNAUTHORIZED                uint64 = 8
 )
 
 // Structs
@@ -63,6 +67,9 @@ type ReceiverRegistryState struct {
 
 type CCIPReceiverRegistration struct {
 	DispatchMetadata bind.StdObject `move:"aptos_framework::object::Object"`
+}
+
+type CCIPReceiveState struct {
 }
 
 type ReceiverRegistered struct {
@@ -125,6 +132,27 @@ func (c ReceiverRegistryContract) IsRegisteredReceiver(opts *bind.CallOpts, rece
 	return r0, nil
 }
 
+func (c ReceiverRegistryContract) IsExecutingReceiverInProgress(opts *bind.CallOpts, receiverAddress aptos.AccountAddress) (bool, error) {
+	module, function, typeTags, args, err := c.receiverRegistryEncoder.IsExecutingReceiverInProgress(receiverAddress)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	var (
+		r0 bool
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(bool), err
+	}
+	return r0, nil
+}
+
 // Entry Functions
 
 // Encoder
@@ -144,10 +172,22 @@ func (c receiverRegistryEncoder) IsRegisteredReceiver(receiverAddress aptos.Acco
 	})
 }
 
+func (c receiverRegistryEncoder) IsExecutingReceiverInProgress(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("is_executing_receiver_in_progress", nil, []string{
+		"address",
+	}, []any{
+		receiverAddress,
+	})
+}
+
 func (c receiverRegistryEncoder) FinishReceive(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("finish_receive", nil, []string{
 		"address",
 	}, []any{
 		receiverAddress,
 	})
+}
+
+func (c receiverRegistryEncoder) InitializeCCIPReceiveState() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("initialize_ccip_receive_state", nil, []string{}, []any{})
 }

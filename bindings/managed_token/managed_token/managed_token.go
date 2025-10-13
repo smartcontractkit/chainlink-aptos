@@ -70,9 +70,10 @@ type ManagedTokenEncoder interface {
 	AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TokenStateAddressInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	BridgeTransfer(to aptos.AccountAddress, amount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"managed_token","module":"managed_token","name":"accept_ownership","parameters":null},{"package":"managed_token","module":"managed_token","name":"apply_allowed_burner_updates","parameters":[{"name":"burners_to_remove","type":"vector\u003caddress\u003e"},{"name":"burners_to_add","type":"vector\u003caddress\u003e"}]},{"package":"managed_token","module":"managed_token","name":"apply_allowed_minter_updates","parameters":[{"name":"minters_to_remove","type":"vector\u003caddress\u003e"},{"name":"minters_to_add","type":"vector\u003caddress\u003e"}]},{"package":"managed_token","module":"managed_token","name":"burn","parameters":[{"name":"from","type":"address"},{"name":"amount","type":"u64"}]},{"package":"managed_token","module":"managed_token","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"managed_token","module":"managed_token","name":"initialize","parameters":[{"name":"max_supply","type":"0x1::option::Option\u003cu128\u003e"},{"name":"name","type":"0x1::string::String"},{"name":"symbol","type":"0x1::string::String"},{"name":"decimals","type":"u8"},{"name":"icon","type":"0x1::string::String"},{"name":"project","type":"0x1::string::String"}]},{"package":"managed_token","module":"managed_token","name":"mint","parameters":[{"name":"to","type":"address"},{"name":"amount","type":"u64"}]},{"package":"managed_token","module":"managed_token","name":"token_state_address_internal","parameters":null},{"package":"managed_token","module":"managed_token","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
+const FunctionInfo = `[{"package":"managed_token","module":"managed_token","name":"accept_ownership","parameters":null},{"package":"managed_token","module":"managed_token","name":"apply_allowed_burner_updates","parameters":[{"name":"burners_to_remove","type":"vector\u003caddress\u003e"},{"name":"burners_to_add","type":"vector\u003caddress\u003e"}]},{"package":"managed_token","module":"managed_token","name":"apply_allowed_minter_updates","parameters":[{"name":"minters_to_remove","type":"vector\u003caddress\u003e"},{"name":"minters_to_add","type":"vector\u003caddress\u003e"}]},{"package":"managed_token","module":"managed_token","name":"bridge_transfer","parameters":[{"name":"to","type":"address"},{"name":"amount","type":"u64"}]},{"package":"managed_token","module":"managed_token","name":"burn","parameters":[{"name":"from","type":"address"},{"name":"amount","type":"u64"}]},{"package":"managed_token","module":"managed_token","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"managed_token","module":"managed_token","name":"initialize","parameters":[{"name":"max_supply","type":"0x1::option::Option\u003cu128\u003e"},{"name":"name","type":"0x1::string::String"},{"name":"symbol","type":"0x1::string::String"},{"name":"decimals","type":"u8"},{"name":"icon","type":"0x1::string::String"},{"name":"project","type":"0x1::string::String"}]},{"package":"managed_token","module":"managed_token","name":"mint","parameters":[{"name":"to","type":"address"},{"name":"amount","type":"u64"}]},{"package":"managed_token","module":"managed_token","name":"token_state_address_internal","parameters":null},{"package":"managed_token","module":"managed_token","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
 
 func NewManagedToken(address aptos.AccountAddress, client aptos.AptosRpcClient) ManagedTokenInterface {
 	contract := bind.NewBoundContract(address, "managed_token", "managed_token", client)
@@ -605,4 +606,14 @@ func (c managedTokenEncoder) ExecuteOwnershipTransfer(to aptos.AccountAddress) (
 
 func (c managedTokenEncoder) TokenStateAddressInternal() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("token_state_address_internal", nil, []string{}, []any{})
+}
+
+func (c managedTokenEncoder) BridgeTransfer(to aptos.AccountAddress, amount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("bridge_transfer", nil, []string{
+		"address",
+		"u64",
+	}, []any{
+		to,
+		amount,
+	})
 }
