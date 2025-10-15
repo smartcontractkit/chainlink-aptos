@@ -1429,21 +1429,18 @@ module data_feeds::registry {
         let older_timestamp = 0x1f4; // 500 in decimal
         let older_benchmark = 0x1388; // 5000 in decimal
 
-        // Verify that StaleReport event was NOT emitted after the first (successful) update
-        assert!(
-            !event::was_event_emitted(
-                &StaleReport {
-                    feed_id,
-                    latest_timestamp: newer_timestamp,
-                    report_timestamp: older_timestamp
-                }
-            ),
-            10
-        );
+        let stale_report_event =
+            &StaleReport {
+                feed_id,
+                latest_timestamp: newer_timestamp,
+                report_timestamp: older_timestamp
+            };
 
-        registry = borrow_global_mut<Registry>(get_state_addr());
+        // Verify that StaleReport event was NOT emitted after the first (successful) update
+        assert!(!event::was_event_emitted(stale_report_event), 10);
 
         // Perform the update with the older report
+        let registry = borrow_global_mut<Registry>(get_state_addr());
         perform_update(registry, feed_id, older_report_data);
 
         // Verify that the value did NOT update (should still be the newer values)
@@ -1454,16 +1451,7 @@ module data_feeds::registry {
         assert!(benchmark.observation_timestamp == newer_timestamp, 6); // Should still be newer timestamp
 
         // Verify that StaleReport event was emitted for the out-of-order update
-        assert!(
-            event::was_event_emitted(
-                &StaleReport {
-                    feed_id,
-                    latest_timestamp: newer_timestamp,
-                    report_timestamp: older_timestamp
-                }
-            ),
-            8
-        );
+        assert!(event::was_event_emitted(stale_report_event), 8);
 
         // Verify that FeedUpdated event was NOT emitted for the stale report
         assert!(
@@ -1479,3 +1467,4 @@ module data_feeds::registry {
         );
     }
 }
+
