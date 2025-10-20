@@ -1420,7 +1420,7 @@ module data_feeds::registry {
                     report: vector::empty<u8>()
                 }
             ),
-            7
+            4
         );
 
         // Now try to update with an older timestamp (500)
@@ -1437,7 +1437,13 @@ module data_feeds::registry {
             };
 
         // Verify that StaleReport event was NOT emitted after the first (successful) update
-        assert!(!event::was_event_emitted(stale_report_event), 10);
+        assert!(!event::was_event_emitted(stale_report_event), 5);
+
+        // Make sure no other events were emitted
+        assert!(
+            event::emitted_events<StaleReport>().length() == 0u64,
+            6
+        );
 
         // Perform the update with the older report
         let registry = borrow_global_mut<Registry>(get_state_addr());
@@ -1445,13 +1451,13 @@ module data_feeds::registry {
 
         // Verify that the value did NOT update (should still be the newer values)
         benchmarks = get_benchmarks(owner, vector[feed_id]);
-        assert!(vector::length(&benchmarks) == 1, 4);
+        assert!(vector::length(&benchmarks) == 1, 7);
         benchmark = vector::borrow(&benchmarks, 0);
-        assert!(benchmark.benchmark == newer_benchmark, 5); // Should still be newer value
-        assert!(benchmark.observation_timestamp == newer_timestamp, 6); // Should still be newer timestamp
+        assert!(benchmark.benchmark == newer_benchmark, 8); // Should still be newer value
+        assert!(benchmark.observation_timestamp == newer_timestamp, 9); // Should still be newer timestamp
 
         // Verify that StaleReport event was emitted for the out-of-order update
-        assert!(event::was_event_emitted(stale_report_event), 8);
+        assert!(event::was_event_emitted(stale_report_event), 10);
 
         // Verify that FeedUpdated event was NOT emitted for the stale report
         assert!(
@@ -1463,7 +1469,8 @@ module data_feeds::registry {
                     report: vector::empty<u8>()
                 }
             ),
-            9
+            11
         );
     }
 }
+
