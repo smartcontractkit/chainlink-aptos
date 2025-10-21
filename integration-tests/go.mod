@@ -527,6 +527,9 @@ replace (
 	// until merged upstream: https://github.com/mwitkow/grpc-proxy/pull/69
 	github.com/mwitkow/grpc-proxy => github.com/smartcontractkit/grpc-proxy v0.0.0-20230731113816-f1be6620749f
 
+	// pin to an older version of chainlink-solana to fix the error with `c.Solana[i].Chain.SetDefaults undefined`
+	github.com/smartcontractkit/chainlink-solana => github.com/smartcontractkit/chainlink-solana v0.0.0-20250905170534-87e867e6cf31
+
 	github.com/sourcegraph/sourcegraph/lib => github.com/sourcegraph/sourcegraph-public-snapshot/lib v0.0.0-20240822153003-c864f15af264
 )
 
