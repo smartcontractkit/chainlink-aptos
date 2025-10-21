@@ -1423,7 +1423,7 @@ module data_feeds::registry {
             4
         );
 
-        // Now try to update with an older timestamp (500)
+        // Create a report with an older timestamp (500)
         let older_report_data =
             x"00000000000000000000000000000000000000000000000000000000000001f40000000000000000000000000000000000000000000000000000000000001388";
         let older_timestamp = 0x1f4; // 500 in decimal
@@ -1441,7 +1441,7 @@ module data_feeds::registry {
 
         // Make sure no other events were emitted
         assert!(
-            event::emitted_events<StaleReport>().length() == 0u64,
+            event::emitted_events<StaleReport>().length() == 0,
             6
         );
 
@@ -1473,3 +1473,4 @@ module data_feeds::registry {
         );
     }
 }
+
