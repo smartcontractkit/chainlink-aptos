@@ -1473,4 +1473,3 @@ module data_feeds::registry {
         );
     }
 }
-
