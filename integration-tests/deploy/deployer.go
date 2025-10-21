@@ -102,6 +102,7 @@ func New(lggr *zerolog.Logger) *Deployer {
 	if err != nil {
 		panic("Could not create docker network")
 	}
+	lggr.Info().Msgf("Created docker network: %s", network)
 	return &Deployer{
 		lggr:          lggr,
 		Network:       network,
@@ -282,10 +283,12 @@ func (d *Deployer) DeployCore() error {
 		d.lggr.Info().Msg(buf.String())
 
 		dbUrl = fmt.Sprintf("postgresql://%s:%s@%s:%s/%s", d.Postgres.Config.Env["POSTGRES_USER"], d.Postgres.Config.Env["POSTGRES_PASSWORD"], d.Postgres.Config.Name, d.Postgres.Config.Ports[0], dbName)
+		d.lggr.Info().Msgf("Database URL: %s", dbUrl)
+		d.lggr.Info().Msgf("api_credentials: %s %s", coreConfig.Email, coreConfig.Password)
 		req := testcontainers.ContainerRequest{
 			Image:        coreConfig.Image,
 			ExposedPorts: coreConfig.Ports,
-			WaitingFor:   wait.ForLog("Listening and serving HTTP"),
+			WaitingFor:   wait.ForLog("Listening and serving HTTP").WithStartupTimeout(10 * time.Minute),
 			Networks:     []string{d.Network},
 			NetworkAliases: map[string][]string{
 				d.Network: {containerName},
