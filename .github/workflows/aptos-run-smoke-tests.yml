@@ -45,6 +45,7 @@ jobs:
     - name: Build chainlink image
       working-directory: temp/chainlink
       run: |
+        # TODO(gg): is this still needed?
         docker buildx build --build-arg COMMIT_SHA=$(git rev-parse HEAD) -t local_chainlink -f plugins/chainlink.Dockerfile .
 
     - name: Build chainlink-aptos image
@@ -111,9 +112,6 @@ jobs:
       run: |
         set -e
         cd integration-tests
-        # TODO: remove if scripts get fixed, see https://github.com/smartcontractkit/chainlink/commit/71f72665217bc17325c27109c107fb93b96e2607
-        echo "replace github.com/smartcontractkit/chainlink/core/scripts => ../temp/chainlink/core/scripts" >> go.mod
-        echo "replace github.com/smartcontractkit/chainlink/v2 => ../temp/chainlink" >> go.mod
         go mod tidy
         TEST_LOG_LEVEL=${{env.TEST_LOG_LEVEL}} go test -timeout 24h -count=1 -run TestOCR3Keystone ./smoke
 
