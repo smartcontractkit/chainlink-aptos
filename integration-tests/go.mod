@@ -17,9 +17,9 @@ require (
 	github.com/smartcontractkit/chain-selectors v1.0.72
 	github.com/smartcontractkit/chainlink-aptos v0.0.0-20250924143749-8ef0e7547ab2
 	github.com/smartcontractkit/chainlink-common v0.9.5-0.20250917190204-8817bb81d880
-	github.com/smartcontractkit/chainlink-deployments-framework v0.42.0
+	github.com/smartcontractkit/chainlink-deployments-framework v0.44.0
 	github.com/smartcontractkit/chainlink-testing-framework/framework v0.10.30
-	github.com/smartcontractkit/chainlink/core/scripts v0.0.0-20250908153844-03478edcd69f
+	github.com/smartcontractkit/chainlink/core/scripts v0.0.0-20250912135826-3da7aa755652
 	github.com/smartcontractkit/mcms v0.26.1
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.11.1
@@ -238,6 +238,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3 // indirect
 	github.com/gsterjov/go-libsecret v0.0.0-20161001094733-a6f4afe4910c // indirect
 	github.com/hako/durafmt v0.0.0-20200710122514-c0fb7b4da026 // indirect
+	github.com/hashicorp/consul/sdk v0.16.2 // indirect
 	github.com/hashicorp/go-bexpr v0.1.10 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-envparse v0.1.0 // indirect
@@ -395,9 +396,11 @@ require (
 	github.com/smartcontractkit/chainlink-testing-framework/lib v1.54.5 // indirect
 	github.com/smartcontractkit/chainlink-testing-framework/parrot v0.6.2 // indirect
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.2 // indirect
+	github.com/smartcontractkit/chainlink-ton v0.0.0-20250910183153-c26d4436b0db // indirect
+	github.com/smartcontractkit/chainlink-ton/deployment v0.0.0-20250910183153-c26d4436b0db // indirect
 	github.com/smartcontractkit/chainlink-tron/relayer v0.0.11-0.20250908203554-5bd9d2fe9513 // indirect
-	github.com/smartcontractkit/chainlink/deployment v0.0.0-20250908163016-f3f5413e0591 // indirect
-	github.com/smartcontractkit/chainlink/v2 v2.27.3-0.20250908153844-03478edcd69f // indirect
+	github.com/smartcontractkit/chainlink/deployment v0.0.0-20250912135826-3da7aa755652 // indirect
+	github.com/smartcontractkit/chainlink/v2 v2.27.3-0.20250912135826-3da7aa755652 // indirect
 	github.com/smartcontractkit/freeport v0.1.3-0.20250716200817-cb5dfd0e369e // indirect
 	github.com/smartcontractkit/grpc-proxy v0.0.0-20240830132753-a7e17fec5ab7 // indirect
 	github.com/smartcontractkit/libocr v0.0.0-20250905115425-2785a5cee79d // indirect
