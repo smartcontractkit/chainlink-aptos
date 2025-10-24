@@ -6,8 +6,9 @@ type Config struct {
 	ConfirmPollSecs   uint
 
 	DefaultMaxGasAmount uint64
-	MaxSimulateAttempts uint
+	GasLimitOverhead    uint64
 
+	MaxSimulateAttempts    uint
 	MaxSubmitRetryAttempts uint
 	SubmitDelayDuration    uint
 	TxExpirationSecs       uint64
@@ -23,8 +24,9 @@ var DefaultConfigSet = Config{
 
 	// https://github.com/aptos-labs/aptos-ts-sdk/blob/32d4360740392782c1368647f89ba62e1b6a2cb3/src/utils/const.ts#L21
 	DefaultMaxGasAmount: 200000,
-	MaxSimulateAttempts: 5,
+	GasLimitOverhead:    0,
 
+	MaxSimulateAttempts:    5,
 	MaxSubmitRetryAttempts: 10,
 	SubmitDelayDuration:    3,  // seconds
 	TxExpirationSecs:       10, // seconds
