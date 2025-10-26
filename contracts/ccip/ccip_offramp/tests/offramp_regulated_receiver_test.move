@@ -10,8 +10,7 @@ module ccip_offramp::offramp_regulated_receiver_test {
 
     use ccip_offramp::offramp_test;
     use ccip_offramp::offramp;
-    use ccip_offramp::non_dispatchable_receiver;
-    use ccip_offramp::regulated_dispatchable_receiver;
+    use ccip_offramp::mock_ccip_receiver;
     use ccip::receiver_registry;
     use regulated_token::regulated_token;
     use regulated_token_pool::regulated_token_pool;
@@ -24,20 +23,10 @@ module ccip_offramp::offramp_regulated_receiver_test {
     const EVM_SENDER: vector<u8> = x"d87929a32cf0cbdc9e2d07ffc7c33344079de727";
     const GAS_LIMIT: u64 = 1000000;
 
-    fun setup_non_dispatchable_receiver(
-        owner: &signer, ccip_offramp: &signer
-    ) {
+    fun setup_mock_ccip_receiver(owner: &signer, ccip_offramp: &signer) {
         account::create_account_if_does_not_exist(signer::address_of(ccip_offramp));
         receiver_registry::init_module_for_testing(owner);
-        non_dispatchable_receiver::test_init_module(ccip_offramp);
-    }
-
-    fun setup_dispatchable_receiver(
-        owner: &signer, ccip_offramp: &signer
-    ) {
-        account::create_account_if_does_not_exist(signer::address_of(ccip_offramp));
-        receiver_registry::init_module_for_testing(owner);
-        regulated_dispatchable_receiver::test_init_module(ccip_offramp);
+        mock_ccip_receiver::test_init_module(ccip_offramp);
     }
 
     struct TestMessage has drop {
@@ -165,14 +154,14 @@ module ccip_offramp::offramp_regulated_receiver_test {
             );
         let token_addr = object::object_address(&token_obj);
 
-        setup_dispatchable_receiver(owner, ccip_offramp);
+        setup_mock_ccip_receiver(owner, ccip_offramp);
 
         // Grant pool signer BRIDGE_MINTER_OR_BURNER_ROLE (role 6) for release_or_mint
         let pool_address = regulated_token_pool::get_store_address();
         regulated_token::grant_role(owner, 6, pool_address);
 
         // Grant receiver state signer BRIDGE_MINTER_OR_BURNER_ROLE (role 6) for transfer during forwarding
-        let state_signer_address = regulated_dispatchable_receiver::get_state_address();
+        let state_signer_address = mock_ccip_receiver::get_state_address();
         regulated_token::grant_role(owner, 6, state_signer_address);
 
         let token_amounts =
@@ -201,8 +190,7 @@ module ccip_offramp::offramp_regulated_receiver_test {
         let receiver_balance = fungible_asset::balance(receiver_store);
         assert!(receiver_balance == 100000);
 
-        let tokens_only_events =
-            regulated_dispatchable_receiver::get_received_tokens_only_events();
+        let tokens_only_events = mock_ccip_receiver::get_received_tokens_only_events();
         assert!(tokens_only_events.length() == 1);
     }
 
@@ -249,7 +237,7 @@ module ccip_offramp::offramp_regulated_receiver_test {
                 true
             );
 
-        setup_dispatchable_receiver(owner, ccip_offramp);
+        setup_mock_ccip_receiver(owner, ccip_offramp);
 
         let test_data = b"Hello from EVM chain!";
         let test_message =
@@ -263,13 +251,11 @@ module ccip_offramp::offramp_regulated_receiver_test {
 
         execute_message_and_verify_success(5, test_message, vector[]);
 
-        let received_events =
-            regulated_dispatchable_receiver::get_received_message_events();
+        let received_events = mock_ccip_receiver::get_received_message_events();
         assert!(received_events.length() == 1);
 
         let event = received_events.borrow(0);
-        let event_message =
-            regulated_dispatchable_receiver::received_message_get_message(event);
+        let event_message = mock_ccip_receiver::received_message_get_message(event);
         assert!(event_message == std::string::utf8(test_data));
     }
 
@@ -319,14 +305,14 @@ module ccip_offramp::offramp_regulated_receiver_test {
             );
         let token_addr = object::object_address(&token_obj);
 
-        setup_dispatchable_receiver(owner, ccip_offramp);
+        setup_mock_ccip_receiver(owner, ccip_offramp);
 
         // Grant pool signer BRIDGE_MINTER_OR_BURNER_ROLE (role 6) for release_or_mint
         let pool_address = regulated_token_pool::get_store_address();
         regulated_token::grant_role(owner, 6, pool_address);
 
         // Grant receiver state signer BRIDGE_MINTER_OR_BURNER_ROLE (role 6) for transfer during forwarding
-        let state_signer_address = regulated_dispatchable_receiver::get_state_address();
+        let state_signer_address = mock_ccip_receiver::get_state_address();
         regulated_token::grant_role(owner, 6, state_signer_address);
 
         let recipient_addr = signer::address_of(recipient);
@@ -365,65 +351,7 @@ module ccip_offramp::offramp_regulated_receiver_test {
         let recipient_balance = fungible_asset::balance(recipient_store);
         assert!(recipient_balance == 200000);
 
-        let forwarded_events =
-            regulated_dispatchable_receiver::get_forwarded_tokens_events();
+        let forwarded_events = mock_ccip_receiver::get_forwarded_tokens_events();
         assert!(forwarded_events.length() == 1);
-    }
-
-    // ================================================================
-    // |          Tests for execution context enforcement            |
-    // ================================================================
-
-    #[
-        test(
-            aptos_framework = @aptos_framework,
-            ccip = @ccip,
-            ccip_offramp = @ccip_offramp,
-            owner = @admin,
-            burn_mint_token_pool = @burn_mint_token_pool,
-            lock_release_token_pool = @lock_release_token_pool,
-            managed_token_pool = @managed_token_pool,
-            managed_token = @managed_token,
-            regulated_token_pool = @regulated_token_pool,
-            regulated_token = @regulated_token
-        ),
-        expected_failure(
-            abort_code = 327689, location = regulated_token_pool::regulated_token_pool
-        )
-    ]
-    fun test_transfer_outside_ccip_receive_fails(
-        aptos_framework: &signer,
-        ccip: &signer,
-        ccip_offramp: &signer,
-        owner: &signer,
-        burn_mint_token_pool: &signer,
-        lock_release_token_pool: &signer,
-        managed_token_pool: &signer,
-        managed_token: &signer,
-        regulated_token_pool: &signer,
-        regulated_token: &signer
-    ) {
-        let (_owner_addr, _token_obj) =
-            offramp_test::setup(
-                aptos_framework,
-                ccip,
-                ccip_offramp,
-                owner,
-                burn_mint_token_pool,
-                lock_release_token_pool,
-                managed_token_pool,
-                managed_token,
-                regulated_token_pool,
-                regulated_token,
-                REGULATED_TOKEN_POOL,
-                REGULATED_TOKEN_SEED,
-                true
-            );
-
-        setup_dispatchable_receiver(owner, ccip_offramp);
-
-        // Try to transfer tokens directly without ccip_receive context
-        // This should fail because is_executing_receiver_in_progress is false
-        regulated_token_pool::transfer(ccip_offramp, @0x999, 100000);
     }
 }

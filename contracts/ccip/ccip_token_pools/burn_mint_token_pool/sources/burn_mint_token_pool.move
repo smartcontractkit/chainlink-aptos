@@ -9,8 +9,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
     use std::string::{Self, String};
     use aptos_framework::fungible_asset::{BurnRef, MintRef};
 
-    use ccip::token_admin_registry;
-    use ccip::receiver_registry;
+    use ccip::token_admin_registry::{Self, ReleaseOrMintInputV1};
     use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
@@ -33,10 +32,6 @@ module burn_mint_token_pool::burn_mint_token_pool {
         store_signer_address: address,
         burn_ref: Option<BurnRef>,
         mint_ref: Option<MintRef>
-    }
-
-    struct BurnMintTokenPoolEvents has key, store {
-        token_pool_events: token_pool::TokenPoolEvents
     }
 
     const E_NOT_PUBLISHER: u64 = 1;
@@ -79,10 +74,23 @@ module burn_mint_token_pool::burn_mint_token_pool {
             register_mcms_entrypoint(publisher, token_pool_module_name);
         };
 
+        // Register V1 pool (for backward compatibility)
         token_admin_registry::register_pool(
             publisher,
             token_pool_module_name,
             @burn_mint_local_token,
+            CallbackProof {}
+        );
+
+        let lock_or_burn_closure = |fa, input| lock_or_burn_v2(fa, input);
+        let release_or_mint_closure = |input| release_or_mint_v2(input);
+
+        token_admin_registry::register_pool_v2(
+            publisher,
+            token_pool_module_name,
+            @burn_mint_local_token,
+            lock_or_burn_closure,
+            release_or_mint_closure,
             CallbackProof {}
         );
 
@@ -145,32 +153,6 @@ module burn_mint_token_pool::burn_mint_token_pool {
         };
 
         move_to(&store_signer, pool);
-
-        move_to(
-            &store_signer,
-            BurnMintTokenPoolEvents {
-                token_pool_events: token_pool::create_transfer_events(&store_signer)
-            }
-        );
-    }
-
-    public fun initialize_token_pool_events(caller: &signer) acquires BurnMintTokenPoolState {
-        assert_can_initialize(signer::address_of(caller));
-
-        let store_signer =
-            &account::create_signer_with_capability(&borrow_pool().store_signer_cap);
-
-        assert!(
-            !exists<BurnMintTokenPoolEvents>(signer::address_of(store_signer)),
-            error::already_exists(E_ALREADY_INITIALIZED)
-        );
-
-        move_to(
-            store_signer,
-            BurnMintTokenPoolEvents {
-                token_pool_events: token_pool::create_transfer_events(store_signer)
-            }
-        );
     }
 
     // ================================================================
@@ -387,30 +369,69 @@ module burn_mint_token_pool::burn_mint_token_pool {
         fa
     }
 
-    /// Caller must be the receiver contract address when `ccip_receive` is called.
-    /// Transfer the fungible asset from the receiver to `to` address.
-    public fun transfer(
-        receiver: &signer, to: address, amount: u64
-    ) acquires BurnMintTokenPoolState, BurnMintTokenPoolEvents {
-        let receiver_addr = signer::address_of(receiver);
-        assert!(
-            receiver_registry::is_executing_receiver_in_progress(receiver_addr),
-            error::permission_denied(E_NOT_EXECUTING_RECEIVER)
-        );
-
+    public fun lock_or_burn_v2(
+        fa: FungibleAsset, input: token_admin_registry::LockOrBurnInputV1
+    ): token_admin_registry::LockOrBurnOutputV1 acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();
+        let fa_amount = fungible_asset::amount(&fa);
+
+        // Validate the operation (same as V1)
+        let dest_token_address =
+            token_pool::validate_lock_or_burn(
+                &mut pool.token_pool_state,
+                &fa,
+                &input,
+                fa_amount
+            );
+
+        // Burn the token
         assert!(pool.burn_ref.is_some(), E_BURN_REF_NOT_SET);
-        assert!(pool.mint_ref.is_some(), E_MINT_REF_NOT_SET);
+        fungible_asset::burn(pool.burn_ref.borrow(), fa);
 
-        primary_fungible_store::burn(pool.burn_ref.borrow(), receiver_addr, amount);
-        primary_fungible_store::mint(pool.mint_ref.borrow(), to, amount);
+        // Emit event
+        let remote_chain_selector =
+            token_admin_registry::get_lock_or_burn_remote_chain_selector(&input);
 
-        token_pool::emit_transfer(
-            &mut borrow_mut_events().token_pool_events,
-            receiver_addr,
-            to,
-            amount
+        token_pool::emit_locked_or_burned(
+            &mut pool.token_pool_state, fa_amount, remote_chain_selector
         );
+
+        // Return output directly (no need to set in registry!)
+        token_admin_registry::new_lock_or_burn_output_v1(
+            dest_token_address,
+            b"" // empty dest_pool_data for burn/mint pools
+        )
+    }
+
+    /// V2 release_or_mint callback - receives input directly as parameter
+    public fun release_or_mint_v2(
+        input: ReleaseOrMintInputV1
+    ): (FungibleAsset, u64) acquires BurnMintTokenPoolState {
+        let pool = borrow_pool_mut();
+        let local_amount =
+            token_pool::calculate_release_or_mint_amount(&pool.token_pool_state, &input);
+
+        // Validate the operation (same as V1)
+        token_pool::validate_release_or_mint(
+            &mut pool.token_pool_state, &input, local_amount
+        );
+
+        // Mint the amount for release
+        assert!(pool.mint_ref.is_some(), E_MINT_REF_NOT_SET);
+        let fa = fungible_asset::mint(pool.mint_ref.borrow(), local_amount);
+
+        let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
+        let remote_chain_selector =
+            token_admin_registry::get_release_or_mint_remote_chain_selector(&input);
+
+        token_pool::emit_released_or_minted(
+            &mut pool.token_pool_state,
+            recipient,
+            local_amount,
+            remote_chain_selector
+        );
+
+        (fa, local_amount)
     }
 
     // ================================================================
@@ -533,10 +554,6 @@ module burn_mint_token_pool::burn_mint_token_pool {
 
     inline fun borrow_pool_mut(): &mut BurnMintTokenPoolState {
         borrow_global_mut<BurnMintTokenPoolState>(store_address())
-    }
-
-    inline fun borrow_mut_events(): &mut BurnMintTokenPoolEvents {
-        borrow_global_mut<BurnMintTokenPoolEvents>(store_address())
     }
 
     // ================================================================

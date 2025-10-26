@@ -66,4 +66,55 @@ module ccip::token_admin_dispatcher {
 
         (fa, destination_amount)
     }
+
+    // ============================================
+    // V2 Closure-Based Dispatch Functions
+    // ============================================
+
+    public fun dispatch_lock_or_burn_v2(
+        caller: &signer,
+        token_pool_address: address,
+        fa: FungibleAsset,
+        sender: address,
+        remote_chain_selector: u64,
+        receiver: vector<u8>
+    ): (vector<u8>, vector<u8>) {
+        token_admin_registry::lock_or_burn_v2(
+            caller,
+            token_pool_address,
+            fa,
+            sender,
+            remote_chain_selector,
+            receiver
+        )
+    }
+
+    public fun dispatch_release_or_mint_v2(
+        caller: &signer,
+        token_pool_address: address,
+        sender: vector<u8>,
+        receiver: address,
+        source_amount: u256,
+        local_token: address,
+        remote_chain_selector: u64,
+        source_pool_address: vector<u8>,
+        source_pool_data: vector<u8>,
+        offchain_token_data: vector<u8>
+    ): (FungibleAsset, u64) {
+        let (fa, destination_amount) =
+            token_admin_registry::release_or_mint_v2(
+                caller,
+                token_pool_address,
+                sender,
+                receiver,
+                source_amount,
+                local_token,
+                remote_chain_selector,
+                source_pool_address,
+                source_pool_data,
+                offchain_token_data
+            );
+
+        (fa, destination_amount)
+    }
 }

@@ -10,8 +10,7 @@ module regulated_token_pool::regulated_token_pool {
 
     use regulated_token::regulated_token::{Self};
 
-    use ccip::receiver_registry;
-    use ccip::token_admin_registry;
+    use ccip::token_admin_registry::{Self, LockOrBurnInputV1, ReleaseOrMintInputV1};
     use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
@@ -26,10 +25,6 @@ module regulated_token_pool::regulated_token_pool {
         ownable_state: ownable::OwnableState,
         token_pool_state: token_pool::TokenPoolState,
         store_signer_address: address
-    }
-
-    struct RegulatedTokenPoolEvents has key, store {
-        token_pool_events: token_pool::TokenPoolEvents
     }
 
     const E_NOT_PUBLISHER: u64 = 1;
@@ -67,10 +62,24 @@ module regulated_token_pool::regulated_token_pool {
         };
 
         let regulated_token_address = regulated_token::token_address();
+
+        // Register V1 pool (for backward compatibility)
         token_admin_registry::register_pool(
             publisher,
             token_pool_module_name,
             regulated_token_address,
+            CallbackProof {}
+        );
+
+        let lock_or_burn_closure = |fa, input| lock_or_burn_v2(fa, input);
+        let release_or_mint_closure = |input| release_or_mint_v2(input);
+
+        token_admin_registry::register_pool_v2(
+            publisher,
+            token_pool_module_name,
+            regulated_token_address,
+            lock_or_burn_closure,
+            release_or_mint_closure,
             CallbackProof {}
         );
 
@@ -96,33 +105,6 @@ module regulated_token_pool::regulated_token_pool {
         };
 
         move_to(&store_signer, pool);
-
-        move_to(
-            &store_signer,
-            RegulatedTokenPoolEvents {
-                token_pool_events: token_pool::create_transfer_events(&store_signer)
-            }
-        );
-    }
-
-    public fun initialize_token_pool_events(caller: &signer) acquires RegulatedTokenPoolState {
-        let pool = borrow_pool_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
-
-        let store_signer =
-            &account::create_signer_with_capability(&pool.store_signer_cap);
-
-        assert!(
-            !exists<RegulatedTokenPoolEvents>(signer::address_of(store_signer)),
-            error::already_exists(E_ALREADY_INITIALIZED)
-        );
-
-        move_to(
-            store_signer,
-            RegulatedTokenPoolEvents {
-                token_pool_events: token_pool::create_transfer_events(store_signer)
-            }
-        );
     }
 
     // ================================================================
@@ -342,26 +324,64 @@ module regulated_token_pool::regulated_token_pool {
         fa
     }
 
-    /// Caller must be the receiver contract address when `ccip_receive` is called.
-    /// Transfer the fungible asset from the receiver to `to` address.
-    public fun transfer(caller: &signer, to: address, amount: u64) acquires RegulatedTokenPoolEvents {
-        let caller_addr = signer::address_of(caller);
+    public fun lock_or_burn_v2(
+        fa: FungibleAsset, input: LockOrBurnInputV1
+    ): token_admin_registry::LockOrBurnOutputV1 acquires RegulatedTokenPoolState {
+        let pool = borrow_pool_mut();
+        let fa_amount = fungible_asset::amount(&fa);
 
-        assert!(
-            receiver_registry::is_executing_receiver_in_progress(caller_addr),
-            error::permission_denied(E_NOT_EXECUTING_RECEIVER)
+        let dest_token_address =
+            token_pool::validate_lock_or_burn(
+                &mut pool.token_pool_state,
+                &fa,
+                &input,
+                fa_amount
+            );
+
+        let pool_signer = &account::create_signer_with_capability(&pool.store_signer_cap);
+        let sender = token_admin_registry::get_lock_or_burn_sender(&input);
+        regulated_token::bridge_burn(pool_signer, sender, fa);
+
+        let remote_chain_selector =
+            token_admin_registry::get_lock_or_burn_remote_chain_selector(&input);
+
+        token_pool::emit_locked_or_burned(
+            &mut pool.token_pool_state, fa_amount, remote_chain_selector
         );
 
-        // Call into regulated_token to perform transfer using TransferRef
-        // The caller (receiver) must have tokens and the bridge_transfer will check permissions
-        regulated_token::bridge_transfer(caller, to, amount);
+        token_admin_registry::new_lock_or_burn_output_v1(
+            dest_token_address,
+            token_pool::encode_local_decimals(&pool.token_pool_state)
+        )
+    }
 
-        token_pool::emit_transfer(
-            &mut borrow_mut_events().token_pool_events,
-            caller_addr,
-            to,
-            amount
+    public fun release_or_mint_v2(
+        input: ReleaseOrMintInputV1
+    ): (FungibleAsset, u64) acquires RegulatedTokenPoolState {
+        let pool = borrow_pool_mut();
+        let local_amount =
+            token_pool::calculate_release_or_mint_amount(&pool.token_pool_state, &input);
+
+        token_pool::validate_release_or_mint(
+            &mut pool.token_pool_state, &input, local_amount
         );
+
+        // Mint the amount for release using regulated token's bridge mint function
+        let pool_signer = &account::create_signer_with_capability(&pool.store_signer_cap);
+        let receiver = token_admin_registry::get_release_or_mint_receiver(&input);
+        let fa = regulated_token::bridge_mint(pool_signer, receiver, local_amount);
+
+        let remote_chain_selector =
+            token_admin_registry::get_release_or_mint_remote_chain_selector(&input);
+
+        token_pool::emit_released_or_minted(
+            &mut pool.token_pool_state,
+            receiver,
+            local_amount,
+            remote_chain_selector
+        );
+
+        (fa, local_amount)
     }
 
     // ================================================================
@@ -469,10 +489,6 @@ module regulated_token_pool::regulated_token_pool {
 
     inline fun borrow_pool_mut(): &mut RegulatedTokenPoolState {
         borrow_global_mut<RegulatedTokenPoolState>(store_address())
-    }
-
-    inline fun borrow_mut_events(): &mut RegulatedTokenPoolEvents {
-        borrow_global_mut<RegulatedTokenPoolEvents>(store_address())
     }
 
     // ================================================================

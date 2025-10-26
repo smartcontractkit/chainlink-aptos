@@ -806,8 +806,14 @@ module ccip_offramp::offramp {
         // module.
         // ref: https://github.com/smartcontractkit/chainlink-ccip/blob/875e982e6437dc126710d8224dd7c792a197bea6/chains/evm/contracts/offRamp/OffRamp.sol#L633
 
-        if ((!message.data.is_empty() || message.gas_limit != 0)
-            && receiver_registry::is_registered_receiver(message.receiver)) {
+        let is_v1_receiver = receiver_registry::is_registered_receiver(message.receiver);
+        let is_v2_receiver =
+            receiver_registry::is_registered_receiver_v2(message.receiver);
+
+        if ((!message.data.is_empty()
+            || message.gas_limit != 0)
+            && (is_v1_receiver
+                || is_v2_receiver)) {
             let state_signer =
                 account::create_signer_with_capability(&state.state_signer_cap);
 
@@ -825,9 +831,16 @@ module ccip_offramp::offramp {
                     dest_token_amounts
                 );
 
-            receiver_dispatcher::dispatch_receive(
-                &state_signer, message.receiver, any2aptos_message
-            )
+            // Use V2 dispatch if available, else V1
+            if (is_v2_receiver) {
+                receiver_dispatcher::dispatch_receive_v2(
+                    &state_signer, message.receiver, any2aptos_message
+                )
+            } else {
+                receiver_dispatcher::dispatch_receive(
+                    &state_signer, message.receiver, any2aptos_message
+                )
+            }
         };
 
     }
@@ -894,7 +907,7 @@ module ccip_offramp::offramp {
             account::create_signer_with_capability(&state.state_signer_cap);
 
         let (fa, local_amount) =
-            token_admin_dispatcher::dispatch_release_or_mint(
+            token_admin_dispatcher::dispatch_release_or_mint_v2(
                 &state_signer,
                 token_pool_address,
                 sender,

@@ -26,6 +26,7 @@ type TokenAdminRegistryInterface interface {
 	GetPools(opts *bind.CallOpts, localTokens []aptos.AccountAddress) ([]aptos.AccountAddress, error)
 	GetPool(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, error)
 	GetPoolLocalToken(opts *bind.CallOpts, tokenPoolAddress aptos.AccountAddress) (aptos.AccountAddress, error)
+	GetPoolLocalTokenV2(opts *bind.CallOpts, tokenPoolAddress aptos.AccountAddress) (aptos.AccountAddress, error)
 	GetTokenConfig(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, aptos.AccountAddress, aptos.AccountAddress, error)
 	GetAllConfiguredTokens(opts *bind.CallOpts, startKey aptos.AccountAddress, maxCount uint64) ([]aptos.AccountAddress, aptos.AccountAddress, bool, error)
 	IsAdministrator(opts *bind.CallOpts, localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bool, error)
@@ -45,6 +46,7 @@ type TokenAdminRegistryEncoder interface {
 	GetPools(localTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetPool(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetPoolLocalToken(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetPoolLocalTokenV2(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetTokenConfig(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetAllConfiguredTokens(startKey aptos.AccountAddress, maxCount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	IsAdministrator(localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -53,6 +55,7 @@ type TokenAdminRegistryEncoder interface {
 	ProposeAdministrator(localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TransferAdminRole(localToken aptos.AccountAddress, newAdmin aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AcceptAdminRole(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	NewLockOrBurnOutputV1(destTokenAddress []byte, destPoolData []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	StartLockOrBurn(tokenPoolAddress aptos.AccountAddress, sender aptos.AccountAddress, remoteChainSelector uint64, receiver []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	FinishLockOrBurn(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	FinishReleaseOrMint(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -60,7 +63,7 @@ type TokenAdminRegistryEncoder interface {
 	RegisterMCMSEntrypoint() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip","module":"token_admin_registry","name":"accept_admin_role","parameters":[{"name":"local_token","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"finish_lock_or_burn","parameters":[{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"finish_release_or_mint","parameters":[{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"propose_administrator","parameters":[{"name":"local_token","type":"address"},{"name":"administrator","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"register_mcms_entrypoint","parameters":null},{"package":"ccip","module":"token_admin_registry","name":"set_pool","parameters":[{"name":"local_token","type":"address"},{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"start_lock_or_burn","parameters":[{"name":"token_pool_address","type":"address"},{"name":"sender","type":"address"},{"name":"remote_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"token_admin_registry","name":"transfer_admin_role","parameters":[{"name":"local_token","type":"address"},{"name":"new_admin","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"unregister_pool","parameters":[{"name":"local_token","type":"address"}]}]`
+const FunctionInfo = `[{"package":"ccip","module":"token_admin_registry","name":"accept_admin_role","parameters":[{"name":"local_token","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"finish_lock_or_burn","parameters":[{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"finish_release_or_mint","parameters":[{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"new_lock_or_burn_output_v1","parameters":[{"name":"dest_token_address","type":"vector\u003cu8\u003e"},{"name":"dest_pool_data","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"token_admin_registry","name":"propose_administrator","parameters":[{"name":"local_token","type":"address"},{"name":"administrator","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"register_mcms_entrypoint","parameters":null},{"package":"ccip","module":"token_admin_registry","name":"set_pool","parameters":[{"name":"local_token","type":"address"},{"name":"token_pool_address","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"start_lock_or_burn","parameters":[{"name":"token_pool_address","type":"address"},{"name":"sender","type":"address"},{"name":"remote_chain_selector","type":"u64"},{"name":"receiver","type":"vector\u003cu8\u003e"}]},{"package":"ccip","module":"token_admin_registry","name":"transfer_admin_role","parameters":[{"name":"local_token","type":"address"},{"name":"new_admin","type":"address"}]},{"package":"ccip","module":"token_admin_registry","name":"unregister_pool","parameters":[{"name":"local_token","type":"address"}]}]`
 
 func NewTokenAdminRegistry(address aptos.AccountAddress, client aptos.AptosRpcClient) TokenAdminRegistryInterface {
 	contract := bind.NewBoundContract(address, "ccip", "token_admin_registry", client)
@@ -101,6 +104,7 @@ const (
 	E_ADMIN_NOT_SET_FOR_TOKEN          uint64 = 27
 	E_ADMIN_ALREADY_SET_FOR_TOKEN      uint64 = 28
 	E_ZERO_ADDRESS                     uint64 = 29
+	E_POOL_NOT_REGISTERED              uint64 = 30
 )
 
 // Structs
@@ -148,6 +152,14 @@ type ReleaseOrMintInputV1 struct {
 
 type ReleaseOrMintOutputV1 struct {
 	DestinationAmount uint64 `move:"u64"`
+}
+
+type TokenPoolCallbacks struct {
+}
+
+type TokenPoolConfig struct {
+	Callbacks  TokenPoolCallbacks   `move:"TokenPoolCallbacks"`
+	LocalToken aptos.AccountAddress `move:"address"`
 }
 
 type PoolSet struct {
@@ -253,6 +265,27 @@ func (c TokenAdminRegistryContract) GetPool(opts *bind.CallOpts, localToken apto
 
 func (c TokenAdminRegistryContract) GetPoolLocalToken(opts *bind.CallOpts, tokenPoolAddress aptos.AccountAddress) (aptos.AccountAddress, error) {
 	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.GetPoolLocalToken(tokenPoolAddress)
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	var (
+		r0 aptos.AccountAddress
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+	return r0, nil
+}
+
+func (c TokenAdminRegistryContract) GetPoolLocalTokenV2(opts *bind.CallOpts, tokenPoolAddress aptos.AccountAddress) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.GetPoolLocalTokenV2(tokenPoolAddress)
 	if err != nil {
 		return *new(aptos.AccountAddress), err
 	}
@@ -419,6 +452,14 @@ func (c tokenAdminRegistryEncoder) GetPoolLocalToken(tokenPoolAddress aptos.Acco
 	})
 }
 
+func (c tokenAdminRegistryEncoder) GetPoolLocalTokenV2(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_pool_local_token_v2", nil, []string{
+		"address",
+	}, []any{
+		tokenPoolAddress,
+	})
+}
+
 func (c tokenAdminRegistryEncoder) GetTokenConfig(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("get_token_config", nil, []string{
 		"address",
@@ -490,6 +531,16 @@ func (c tokenAdminRegistryEncoder) AcceptAdminRole(localToken aptos.AccountAddre
 		"address",
 	}, []any{
 		localToken,
+	})
+}
+
+func (c tokenAdminRegistryEncoder) NewLockOrBurnOutputV1(destTokenAddress []byte, destPoolData []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("new_lock_or_burn_output_v1", nil, []string{
+		"vector<u8>",
+		"vector<u8>",
+	}, []any{
+		destTokenAddress,
+		destPoolData,
 	})
 }
 

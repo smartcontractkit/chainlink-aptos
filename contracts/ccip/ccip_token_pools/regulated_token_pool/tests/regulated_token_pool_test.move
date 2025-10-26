@@ -10,7 +10,6 @@ module regulated_token_pool::regulated_token_pool_test {
     use ccip::state_object;
     use ccip::auth;
     use ccip::token_admin_registry;
-    use ccip::receiver_registry;
 
     use regulated_token::regulated_token;
     use regulated_token_pool::regulated_token_pool;
@@ -793,45 +792,5 @@ module regulated_token_pool::regulated_token_pool_test {
         assert!(regulated_token_pool::pending_transfer_from().is_none());
         assert!(regulated_token_pool::pending_transfer_to().is_none());
         assert!(regulated_token_pool::pending_transfer_accepted().is_none());
-    }
-
-    // ================================================================
-    // |          Tests for execution context enforcement            |
-    // ================================================================
-
-    #[
-        test(
-            admin = @admin,
-            regulated_token = @regulated_token,
-            regulated_token_pool = @regulated_token_pool,
-            framework = @aptos_framework,
-            ccip = @ccip,
-            random_signer = @0x999
-        ),
-        expected_failure(
-            abort_code = 327689, location = regulated_token_pool::regulated_token_pool
-        )
-    ]
-    fun test_transfer_outside_ccip_receive_fails(
-        admin: &signer,
-        regulated_token: &signer,
-        regulated_token_pool: &signer,
-        framework: &signer,
-        ccip: &signer,
-        random_signer: &signer
-    ) {
-        setup(
-            admin,
-            regulated_token,
-            regulated_token_pool,
-            framework,
-            ccip
-        );
-
-        receiver_registry::init_module_for_testing(admin);
-
-        // Try to transfer tokens directly without ccip_receive context
-        // This should fail because is_executing_receiver_in_progress is false
-        regulated_token_pool::transfer(random_signer, @0x777, 100000);
     }
 }

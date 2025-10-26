@@ -35,10 +35,6 @@ module ccip_token_pool::token_pool {
         rebalancer_set_events: EventHandle<RebalancerSet>
     }
 
-    struct TokenPoolEvents has key, store {
-        transfer_events: EventHandle<Transfer>
-    }
-
     struct RemoteChainConfig has store, drop, copy {
         remote_token_address: vector<u8>,
         remote_pools: vector<vector<u8>>
@@ -112,13 +108,6 @@ module ccip_token_pool::token_pool {
         new_rebalancer: address
     }
 
-    #[event]
-    struct Transfer has store, drop {
-        from: address,
-        to: address,
-        amount: u64
-    }
-
     const E_NOT_ALLOWED_CALLER: u64 = 1;
     const E_UNKNOWN_FUNGIBLE_ASSET: u64 = 2;
     const E_UNKNOWN_REMOTE_CHAIN_SELECTOR: u64 = 3;
@@ -158,10 +147,6 @@ module ccip_token_pool::token_pool {
             liquidity_removed_events: account::new_event_handle(event_account),
             rebalancer_set_events: account::new_event_handle(event_account)
         }
-    }
-
-    public fun create_transfer_events(event_account: &signer): TokenPoolEvents {
-        TokenPoolEvents { transfer_events: account::new_event_handle(event_account) }
     }
 
     #[view]
@@ -493,18 +478,6 @@ module ccip_token_pool::token_pool {
         event::emit_event(
             &mut state.rebalancer_set_events,
             RebalancerSet { old_rebalancer, new_rebalancer }
-        );
-    }
-
-    public fun emit_transfer(
-        events: &mut TokenPoolEvents,
-        from: address,
-        to: address,
-        amount: u64
-    ) {
-        event::emit_event(
-            &mut events.transfer_events,
-            Transfer { from, to, amount }
         );
     }
 

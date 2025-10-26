@@ -1,12 +1,12 @@
 #[test_only]
-/// The `non_dispatchable_receiver` module should only be used with non-dispatchable tokens.
-module ccip_offramp::non_dispatchable_receiver {
+/// Compatible with dispatchable and non-dispatchable tokens
+/// When transferring tokens, use `primary_fungible_store::transfer` as this triggers the dispatchable fungible asset hook
+module ccip_offramp::mock_ccip_receiver {
     use std::account;
     use std::event;
-    use std::object::{Self, Object};
-    use std::option::{Self, Option};
+    use std::object::{Self};
     use std::string::{Self, String};
-    use std::fungible_asset::{Self, Metadata};
+    use std::fungible_asset::{Metadata};
     use std::primary_fungible_store;
     use std::from_bcs;
     use std::signer;
@@ -43,10 +43,10 @@ module ccip_offramp::non_dispatchable_receiver {
 
     #[view]
     public fun type_and_version(): String {
-        string::utf8(b"NonDispatchableReceiver 1.6.0")
+        string::utf8(b"MockCCIPReceiver 1.6.0")
     }
 
-    const MODULE_NAME: vector<u8> = b"non_dispatchable_receiver";
+    const MODULE_NAME: vector<u8> = b"mock_ccip_receiver";
 
     fun init_module(publisher: &signer) {
         // Create a signer capability for the receiver account
@@ -71,18 +71,27 @@ module ccip_offramp::non_dispatchable_receiver {
             }
         );
 
-        receiver_registry::register_receiver(publisher, MODULE_NAME, CCIPReceiverProof {});
+        receiver_registry::register_receiver_v2(
+            publisher,
+            MODULE_NAME,
+            |message| ccip_receive(message),
+            CCIPReceiverProof {}
+        );
+    }
+
+    #[view]
+    public fun get_state_address(): address acquires CCIPReceiverState {
+        let state = borrow_global<CCIPReceiverState>(@ccip_offramp);
+        let state_signer = account::create_signer_with_capability(&state.signer_cap);
+        signer::address_of(&state_signer)
     }
 
     struct CCIPReceiverProof has drop {}
 
-    public fun ccip_receive<T: key>(_metadata: Object<T>): Option<u128> acquires CCIPReceiverState {
+    public fun ccip_receive(message: client::Any2AptosMessage) acquires CCIPReceiverState {
         /* load state and rebuild a signer for the resource account */
         let state = borrow_global_mut<CCIPReceiverState>(@ccip_offramp);
         let state_signer = account::create_signer_with_capability(&state.signer_cap);
-
-        let message =
-            receiver_registry::get_receiver_input(@ccip_offramp, CCIPReceiverProof {});
 
         let data = client::get_data(&message);
 
@@ -99,20 +108,12 @@ module ccip_offramp::non_dispatchable_receiver {
                 // Implement the token transfer logic here
 
                 let fa_token = object::address_to_object<Metadata>(token_addr);
-                let fa_store_sender =
-                    primary_fungible_store::ensure_primary_store_exists(
-                        @ccip_offramp, fa_token
-                    );
-                let fa_store_receiver =
-                    primary_fungible_store::ensure_primary_store_exists(
-                        final_recipient, fa_token
-                    );
 
-                // For non-dispatchable tokens, we need to use `fungible_asset::transfer`
-                fungible_asset::transfer(
+                // Must use primary_fungible_store::transfer as token may be dispatchable
+                primary_fungible_store::transfer(
                     &state_signer,
-                    fa_store_sender,
-                    fa_store_receiver,
+                    fa_token,
+                    final_recipient,
                     amount
                 );
             };
@@ -145,8 +146,6 @@ module ccip_offramp::non_dispatchable_receiver {
         if (data == b"abort") {
             abort 1
         };
-
-        option::none()
     }
 
     public entry fun withdraw_token(
@@ -161,23 +160,11 @@ module ccip_offramp::non_dispatchable_receiver {
         let state_signer = account::create_signer_with_capability(&state.signer_cap);
 
         let fa_token = object::address_to_object<Metadata>(token_address);
-        let fa_store_sender =
-            primary_fungible_store::ensure_primary_store_exists(@ccip_offramp, fa_token);
-        let fa_store_receiver =
-            primary_fungible_store::ensure_primary_store_exists(recipient, fa_token);
+        let balance = primary_fungible_store::balance(@ccip_offramp, fa_token);
 
-        let balance = fungible_asset::balance(fa_store_sender);
-
-        // Check if there are tokens available to withdraw
         assert!(balance > 0, E_NO_TOKENS_AVAILABLE_TO_WITHDRAW);
 
-        // For non-dispatchable tokens, we need to use `fungible_asset::transfer`
-        fungible_asset::transfer(
-            &state_signer,
-            fa_store_sender,
-            fa_store_receiver,
-            balance
-        );
+        primary_fungible_store::transfer(&state_signer, fa_token, recipient, balance);
     }
 
     public fun test_init_module(publisher: &signer) {

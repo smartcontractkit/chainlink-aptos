@@ -13,7 +13,12 @@ module usdc_token_pool::usdc_token_pool {
 
     use ccip::address;
     use ccip::eth_abi;
-    use ccip::token_admin_registry;
+    use ccip::token_admin_registry::{
+        Self,
+        LockOrBurnInputV1,
+        ReleaseOrMintInputV1,
+        LockOrBurnOutputV1
+    };
     use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
@@ -117,6 +122,18 @@ module usdc_token_pool::usdc_token_pool {
             publisher,
             token_pool_module_name,
             @local_token,
+            CallbackProof {}
+        );
+
+        let lock_or_burn_closure = |fa, input| lock_or_burn_v2(fa, input);
+        let release_or_mint_closure = |input| release_or_mint_v2(input);
+
+        token_admin_registry::register_pool_v2(
+            publisher,
+            token_pool_module_name,
+            @local_token,
+            lock_or_burn_closure,
+            release_or_mint_closure,
             CallbackProof {}
         );
 
@@ -489,6 +506,112 @@ module usdc_token_pool::usdc_token_pool {
             destination_domain == expected_local_domain,
             error::invalid_argument(E_DESTINATION_MISMATCH)
         );
+    }
+
+    public fun lock_or_burn_v2(
+        fa: FungibleAsset, input: LockOrBurnInputV1
+    ): LockOrBurnOutputV1 acquires USDCTokenPoolState {
+        let pool = borrow_pool_mut();
+        let fa_amount = fungible_asset::amount(&fa);
+
+        let dest_token_address =
+            token_pool::validate_lock_or_burn(
+                &mut pool.token_pool_state,
+                &fa,
+                &input,
+                fa_amount
+            );
+
+        let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
+
+        let remote_chain_selector =
+            token_admin_registry::get_lock_or_burn_remote_chain_selector(&input);
+        assert!(
+            pool.chain_to_domain.contains(remote_chain_selector),
+            error::invalid_argument(E_DOMAIN_NOT_FOUND)
+        );
+
+        let remote_domain_info = pool.chain_to_domain.borrow(remote_chain_selector);
+
+        assert!(
+            remote_domain_info.enabled,
+            error::invalid_argument(E_DOMAIN_DISABLED)
+        );
+
+        let mint_recipient_bytes =
+            token_admin_registry::get_lock_or_burn_receiver(&input);
+        let mint_recipient = from_bcs::to_address(mint_recipient_bytes);
+        let nonce =
+            token_messenger::deposit_for_burn_with_caller(
+                &store_signer,
+                fa,
+                remote_domain_info.domain_identifier,
+                mint_recipient,
+                from_bcs::to_address(remote_domain_info.allowed_caller)
+            );
+
+        let dest_pool_data = encode_dest_pool_data(pool.local_domain_identifier, nonce);
+
+        token_pool::emit_locked_or_burned(
+            &mut pool.token_pool_state, fa_amount, remote_chain_selector
+        );
+
+        token_admin_registry::new_lock_or_burn_output_v1(
+            dest_token_address, dest_pool_data
+        )
+    }
+
+    public fun release_or_mint_v2(
+        input: ReleaseOrMintInputV1
+    ): (FungibleAsset, u64) acquires USDCTokenPoolState {
+        let pool = borrow_pool_mut();
+        let local_amount =
+            token_admin_registry::get_release_or_mint_source_amount(&input) as u64;
+
+        token_pool::validate_release_or_mint(
+            &mut pool.token_pool_state, &input, local_amount
+        );
+
+        let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
+
+        let (source_domain_identifier, nonce) =
+            decode_dest_pool_data(
+                token_admin_registry::get_release_or_mint_source_pool_data(&input)
+            );
+        let offchain_token_data =
+            token_admin_registry::get_release_or_mint_offchain_token_data(&input);
+
+        let (message_bytes, attestation) =
+            parse_message_and_attestation(offchain_token_data);
+
+        validate_message(
+            &message_bytes,
+            source_domain_identifier,
+            nonce,
+            pool.local_domain_identifier
+        );
+
+        let receipt =
+            message_transmitter::receive_message(
+                &store_signer, &message_bytes, &attestation
+            );
+
+        assert!(token_messenger::handle_receive_message(receipt));
+
+        let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
+        let remote_chain_selector =
+            token_admin_registry::get_release_or_mint_remote_chain_selector(&input);
+
+        token_pool::emit_released_or_minted(
+            &mut pool.token_pool_state,
+            recipient,
+            local_amount,
+            remote_chain_selector
+        );
+
+        let fa_metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
+
+        (fungible_asset::zero(fa_metadata), local_amount)
     }
 
     // ================================================================

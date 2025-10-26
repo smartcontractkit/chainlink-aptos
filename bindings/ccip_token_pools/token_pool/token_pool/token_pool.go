@@ -37,10 +37,9 @@ type TokenPoolEncoder interface {
 	CalculateLocalAmount(remoteAmount *big.Int, remoteDecimals byte, localDecimals byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CalculateLocalAmountInternal(remoteAmount *big.Int, remoteDecimals byte, localDecimals byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Initialize(localToken aptos.AccountAddress, allowlist []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	CreateTransferEvents() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"ccip_token_pool","module":"token_pool","name":"create_transfer_events","parameters":null},{"package":"ccip_token_pool","module":"token_pool","name":"initialize","parameters":[{"name":"local_token","type":"address"},{"name":"allowlist","type":"vector\u003caddress\u003e"}]}]`
+const FunctionInfo = `[{"package":"ccip_token_pool","module":"token_pool","name":"initialize","parameters":[{"name":"local_token","type":"address"},{"name":"allowlist","type":"vector\u003caddress\u003e"}]}]`
 
 func NewTokenPool(address aptos.AccountAddress, client aptos.AptosRpcClient) TokenPoolInterface {
 	contract := bind.NewBoundContract(address, "ccip_token_pool", "token_pool", client)
@@ -70,9 +69,6 @@ const (
 
 type TokenPoolState struct {
 	FaMetadata bind.StdObject `move:"aptos_framework::object::Object"`
-}
-
-type TokenPoolEvents struct {
 }
 
 type RemoteChainConfig struct {
@@ -135,12 +131,6 @@ type LiquidityRemoved struct {
 type RebalancerSet struct {
 	OldRebalancer aptos.AccountAddress `move:"address"`
 	NewRebalancer aptos.AccountAddress `move:"address"`
-}
-
-type Transfer struct {
-	From   aptos.AccountAddress `move:"address"`
-	To     aptos.AccountAddress `move:"address"`
-	Amount uint64               `move:"u64"`
 }
 
 type TokenPoolContract struct {
@@ -293,8 +283,4 @@ func (c tokenPoolEncoder) Initialize(localToken aptos.AccountAddress, allowlist 
 		localToken,
 		allowlist,
 	})
-}
-
-func (c tokenPoolEncoder) CreateTransferEvents() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("create_transfer_events", nil, []string{}, []any{})
 }

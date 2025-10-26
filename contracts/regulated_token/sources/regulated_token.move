@@ -115,13 +115,6 @@ module regulated_token::regulated_token {
     }
 
     #[event]
-    struct BridgeTransfer has drop, store {
-        caller: address,
-        to: address,
-        amount: u64
-    }
-
-    #[event]
     struct MinterAdded<R> has drop, store {
         admin: address,
         minter: address,
@@ -597,28 +590,6 @@ module regulated_token::regulated_token {
         } else {
             event::emit(NativeBurn { burner, from, amount });
         }
-    }
-
-    public fun bridge_transfer(
-        caller: &signer, to: address, amount: u64
-    ) acquires TokenMetadataRefs, TokenState {
-        let caller_addr = signer::address_of(caller);
-        let state_obj = token_state_object_internal();
-        let token_state = &TokenState[object::object_address(&state_obj)];
-
-        assert_not_paused(token_state);
-        assert_bridge_minter_or_burner(caller, state_obj);
-        assert_not_frozen(caller_addr, token_state);
-        assert_not_frozen(to, token_state);
-
-        primary_fungible_store::transfer_with_ref(
-            &borrow_token_metadata_refs().transfer_ref,
-            caller_addr,
-            to,
-            amount
-        );
-
-        event::emit(BridgeTransfer { caller: caller_addr, to, amount });
     }
 
     /// Bridge-specific function to mint tokens directly as `FungibleAsset`.

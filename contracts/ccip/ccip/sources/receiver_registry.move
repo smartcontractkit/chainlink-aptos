@@ -5,15 +5,13 @@ module ccip::receiver_registry {
     use std::error;
     use std::event::{Self, EventHandle};
     use std::function_info::{Self, FunctionInfo};
-    use std::table::{Self, Table};
     use std::type_info::{Self, TypeInfo};
     use std::fungible_asset::{Self, Metadata};
-    use std::object::{Self, ExtendRef, Object, TransferRef, ObjectCore};
+    use std::object::{Self, ExtendRef, Object, TransferRef};
     use std::option::{Self, Option};
     use std::signer;
     use std::string::{Self, String};
 
-    use ccip::auth;
     use ccip::client;
     use ccip::state_object;
 
@@ -34,8 +32,9 @@ module ccip::receiver_registry {
         executing_input: Option<client::Any2AptosMessage>
     }
 
-    struct CCIPReceiveState has key {
-        executing_receivers: Table<address, bool>
+    struct CCIPReceiverRegistrationV2 has key {
+        callback: |client::Any2AptosMessage| has drop + copy + store,
+        proof_typeinfo: TypeInfo,
     }
 
     #[event]
@@ -72,10 +71,6 @@ module ccip::receiver_registry {
         };
 
         move_to(&state_object_signer, state);
-
-        move_to(
-            &state_object_signer, CCIPReceiveState { executing_receivers: table::new() }
-        );
     }
 
     public fun register_receiver<ProofType: drop>(
@@ -149,16 +144,48 @@ module ccip::receiver_registry {
         );
     }
 
+    public fun register_receiver_v2<ProofType: drop>(
+        receiver_account: &signer,
+        receiver_module_name: vector<u8>,
+        callback: |client::Any2AptosMessage| has drop + copy + store,
+        _proof: ProofType
+    ) acquires ReceiverRegistryState {
+        let receiver_address = signer::address_of(receiver_account);
+        assert!(
+            !exists<CCIPReceiverRegistrationV2>(receiver_address),
+            error::invalid_argument(E_ALREADY_REGISTERED)
+        );
+
+        let proof_typeinfo = type_info::type_of<ProofType>();
+        assert!(
+            proof_typeinfo.account_address() == receiver_address,
+            E_PROOF_TYPE_ACCOUNT_MISMATCH
+        );
+        assert!(
+            proof_typeinfo.module_name() == receiver_module_name,
+            E_PROOF_TYPE_MODULE_MISMATCH
+        );
+
+        move_to(
+            receiver_account, 
+            CCIPReceiverRegistrationV2 { callback, proof_typeinfo }
+        );
+
+        let state = borrow_state_mut();
+        event::emit_event(
+            &mut state.receiver_registered_events,
+            ReceiverRegistered { receiver_address, receiver_module_name }
+        );
+    }
+
     #[view]
     public fun is_registered_receiver(receiver_address: address): bool {
         exists<CCIPReceiverRegistration>(receiver_address)
     }
 
     #[view]
-    public fun is_executing_receiver_in_progress(
-        receiver_address: address
-    ): bool acquires CCIPReceiveState {
-        borrow_ccip_receive_state_mut().executing_receivers.contains(receiver_address)
+    public fun is_registered_receiver_v2(receiver_address: address): bool {
+        exists<CCIPReceiverRegistrationV2>(receiver_address)
     }
 
     public fun get_receiver_input<ProofType: drop>(
@@ -181,7 +208,7 @@ module ccip::receiver_registry {
 
     public(friend) fun start_receive(
         receiver_address: address, message: client::Any2AptosMessage
-    ): Object<Metadata> acquires CCIPReceiverRegistration, CCIPReceiveState {
+    ): Object<Metadata> acquires CCIPReceiverRegistration {
         let registration = get_registration_mut(receiver_address);
 
         assert!(
@@ -191,22 +218,32 @@ module ccip::receiver_registry {
 
         registration.executing_input.fill(message);
 
-        borrow_ccip_receive_state_mut().executing_receivers.add(receiver_address, true);
-
         registration.dispatch_metadata
     }
 
     public(friend) fun finish_receive(
         receiver_address: address
-    ) acquires CCIPReceiverRegistration, CCIPReceiveState {
+    ) acquires CCIPReceiverRegistration {
         let registration = get_registration_mut(receiver_address);
 
         assert!(
             registration.executing_input.is_none(),
             error::invalid_state(E_NON_EMPTY_INPUT)
         );
+    }
 
-        borrow_ccip_receive_state_mut().executing_receivers.remove(receiver_address);
+    public(friend) fun invoke_ccip_receive_v2(
+        receiver_address: address,
+        message: client::Any2AptosMessage
+    ) acquires CCIPReceiverRegistrationV2 {
+        assert!(
+            exists<CCIPReceiverRegistrationV2>(receiver_address),
+            error::invalid_argument(E_UNKNOWN_RECEIVER)
+        );
+
+        let registration = borrow_global<CCIPReceiverRegistrationV2>(receiver_address);
+
+        (registration.callback)(message);
     }
 
     inline fun borrow_state(): &ReceiverRegistryState {
@@ -217,27 +254,12 @@ module ccip::receiver_registry {
         borrow_global_mut<ReceiverRegistryState>(state_object::object_address())
     }
 
-    inline fun borrow_ccip_receive_state_mut(): &mut CCIPReceiveState {
-        borrow_global_mut<CCIPReceiveState>(state_object::object_address())
-    }
-
     inline fun get_registration_mut(receiver_address: address): &mut CCIPReceiverRegistration {
         assert!(
             exists<CCIPReceiverRegistration>(receiver_address),
             error::invalid_argument(E_UNKNOWN_RECEIVER)
         );
         borrow_global_mut<CCIPReceiverRegistration>(receiver_address)
-    }
-
-    // ============================= Migrations =============================
-
-    public fun initialize_ccip_receive_state(caller: &signer) {
-        auth::assert_only_owner(signer::address_of(caller));
-
-        move_to(
-            &state_object::object_signer(),
-            CCIPReceiveState { executing_receivers: table::new() }
-        );
     }
 
     #[test_only]
