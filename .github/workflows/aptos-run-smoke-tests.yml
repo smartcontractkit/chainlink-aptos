@@ -51,6 +51,18 @@ jobs:
       run: |
         docker buildx build --build-arg BASE_IMAGE=local_chainlink -t chainlink-aptos -f ./Dockerfile .
 
+    # Clear up disk space, else we run out below:
+    # Unhandled exception. System.IO.IOException: No space left on device : '/home/runner/actions-runner/cached/_diag/Worker_20250801-102100-utc.log'
+    - name: Flatten chainlink-aptos image
+      run: |
+        set -e
+        df -h
+        docker save chainlink-aptos:latest -o chainlink-aptos.tar
+        docker system prune -a -f
+        docker load -i chainlink-aptos.tar
+        rm -vf chainlink-aptos.tar
+        df -h
+
     - name: Extract Go version
       uses: ./.github/actions/check-go-version
       id: go-version
@@ -97,7 +109,12 @@ jobs:
       env:
         TEST_LOG_LEVEL: debug
       run: |
+        set -e
         cd integration-tests
+        # TODO: remove if scripts get fixed, see https://github.com/smartcontractkit/chainlink/commit/71f72665217bc17325c27109c107fb93b96e2607
+        echo "replace github.com/smartcontractkit/chainlink/core/scripts => ../temp/chainlink/core/scripts" >> go.mod
+        echo "replace github.com/smartcontractkit/chainlink/v2 => ../temp/chainlink" >> go.mod
+        go mod tidy
         TEST_LOG_LEVEL=${{env.TEST_LOG_LEVEL}} go test -timeout 24h -count=1 -run TestOCR3Keystone ./smoke
 
     - name: Configure AWS Credentials

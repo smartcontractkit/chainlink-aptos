@@ -3,9 +3,10 @@ package deploy
 import (
 	"encoding/json"
 	"fmt"
-	"integration-tests/scripts"
 	"io"
 	"os"
+
+	"github.com/smartcontractkit/chainlink-aptos/integration-tests/scripts"
 
 	keystone "github.com/smartcontractkit/chainlink/core/scripts/keystone/src"
 )

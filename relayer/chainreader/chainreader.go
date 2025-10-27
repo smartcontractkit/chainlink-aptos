@@ -28,6 +28,7 @@ import (
 	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/prom"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 )
 
@@ -477,8 +478,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 			eventData = &resultBytes
 		} else {
 			decoded := reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
-
-			if err := codec.DecodeAptosJsonValue(rec.Data, &decoded); err != nil {
+			if err := codec.DecodeAptosJsonValue(rec.Data, decoded); err != nil {
 				return nil, fmt.Errorf("failed to decode event data: %w", err)
 			}
 
@@ -498,6 +498,12 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	}
 
 	elapsed := time.Since(start)
+	if a.logPoller != nil {
+		chainInfo := a.logPoller.GetChainInfo()
+		prom.RecordQueryDuration(chainInfo, "QueryKey", filter.Key, elapsed)
+		prom.RecordQueryResultSize(chainInfo, "QueryKey", filter.Key, len(sequences))
+	}
+
 	a.lggr.Infow("QueryKey returning results",
 		"contract", address.String(),
 		"key", filter.Key,

@@ -10,12 +10,13 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
 // BalanceMonitorOpts contains the options for creating a new Aptos account balance monitor.
 type BalanceMonitorOpts struct {
-	ChainInfo ChainInfo
+	ChainInfo types.ChainInfo
 
 	Config    GenericBalanceConfig
 	Logger    logger.Logger

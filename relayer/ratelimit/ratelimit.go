@@ -7,25 +7,34 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/api"
 	"golang.org/x/sync/semaphore"
+
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/prom"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
 )
 
 type rateLimitedClient struct {
-	client  *aptos.NodeClient
+	client    *aptos.NodeClient
+	chainInfo types.ChainInfo
+	baseURL   string
+
 	sem     *semaphore.Weighted
 	timeout time.Duration
 }
 
 var _ aptos.AptosRpcClient = &rateLimitedClient{}
 
-func NewRateLimitedClient(client *aptos.NodeClient, maxConcurrent int64, timeout time.Duration) *rateLimitedClient {
+func NewRateLimitedClient(client *aptos.NodeClient, chainInfo types.ChainInfo, baseURL string, maxConcurrent int64, timeout time.Duration) *rateLimitedClient {
 	return &rateLimitedClient{
-		client:  client,
+		client:    client,
+		chainInfo: chainInfo,
+		baseURL:   baseURL,
+
 		sem:     semaphore.NewWeighted(maxConcurrent),
 		timeout: timeout,
 	}
 }
 
-func (c *rateLimitedClient) withRateLimit(f func() error) error {
+func (c *rateLimitedClient) withRateLimit(f func() error, rpcCallName string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
@@ -34,7 +43,12 @@ func (c *rateLimitedClient) withRateLimit(f func() error) error {
 	}
 	defer c.sem.Release(1)
 
-	return f()
+	start := time.Now()
+	err := f()
+	duration := time.Since(start)
+
+	prom.SetClientLatency(c.chainInfo, duration, rpcCallName, c.baseURL, err)
+	return err
 }
 
 func (c *rateLimitedClient) View(payload *aptos.ViewPayload, ledgerVersion ...uint64) ([]any, error) {
@@ -43,7 +57,7 @@ func (c *rateLimitedClient) View(payload *aptos.ViewPayload, ledgerVersion ...ui
 		var err error
 		result, err = c.client.View(payload, ledgerVersion...)
 		return err
-	})
+	}, "View")
 	return result, err
 }
 
@@ -53,7 +67,7 @@ func (c *rateLimitedClient) EventsByHandle(address aptos.AccountAddress, eventHa
 		var err error
 		result, err = c.client.EventsByHandle(address, eventHandle, fieldName, start, limit)
 		return err
-	})
+	}, "EventsByHandle")
 	return result, err
 }
 
@@ -68,7 +82,7 @@ func (c *rateLimitedClient) EventsByCreationNumber(
 		var err error
 		result, err = c.client.EventsByCreationNumber(account, creationNumber, start, limit)
 		return err
-	})
+	}, "EventsByCreationNumber")
 	return result, err
 }
 
@@ -78,7 +92,7 @@ func (c *rateLimitedClient) Info() (aptos.NodeInfo, error) {
 		var err error
 		result, err = c.client.Info()
 		return err
-	})
+	}, "Info")
 	return result, err
 }
 
@@ -88,7 +102,7 @@ func (c *rateLimitedClient) Account(address aptos.AccountAddress, ledgerVersion 
 		var err error
 		result, err = c.client.Account(address, ledgerVersion...)
 		return err
-	})
+	}, "Account")
 	return result, err
 }
 
@@ -98,7 +112,7 @@ func (c *rateLimitedClient) TransactionByHash(hash string) (*api.Transaction, er
 		var err error
 		result, err = c.client.TransactionByHash(hash)
 		return err
-	})
+	}, "TransactionByHash")
 	return result, err
 }
 
@@ -108,7 +122,7 @@ func (c *rateLimitedClient) SubmitTransaction(signedTxn *aptos.SignedTransaction
 		var err error
 		result, err = c.client.SubmitTransaction(signedTxn)
 		return err
-	})
+	}, "SubmitTransaction")
 	return result, err
 }
 
@@ -118,7 +132,7 @@ func (c *rateLimitedClient) EstimateGasPrice() (aptos.EstimateGasInfo, error) {
 		var err error
 		result, err = c.client.EstimateGasPrice()
 		return err
-	})
+	}, "EstimateGasPrice")
 	return result, err
 }
 
@@ -128,7 +142,7 @@ func (c *rateLimitedClient) BlockByHeight(height uint64, withTransactions bool) 
 		var err error
 		result, err = c.client.BlockByHeight(height, withTransactions)
 		return err
-	})
+	}, "BlockByHeight")
 	return result, err
 }
 
@@ -138,7 +152,7 @@ func (c *rateLimitedClient) AccountAPTBalance(account aptos.AccountAddress, ledg
 		var err error
 		result, err = c.client.AccountAPTBalance(account, ledgerVersion...)
 		return err
-	})
+	}, "AccountAPTBalance")
 	return result, err
 }
 
@@ -148,7 +162,7 @@ func (c *rateLimitedClient) GetChainId() (uint8, error) {
 		var err error
 		result, err = c.client.GetChainId()
 		return err
-	})
+	}, "GetChainId")
 	return result, err
 }
 
@@ -158,7 +172,7 @@ func (c *rateLimitedClient) SimulateTransaction(rawTxn *aptos.RawTransaction, se
 		var err error
 		result, err = c.client.SimulateTransaction(rawTxn, sender, options...)
 		return err
-	})
+	}, "SimulateTransaction")
 	return result, err
 }
 
@@ -184,7 +198,7 @@ func (c *rateLimitedClient) AccountResource(address aptos.AccountAddress, resour
 		var err error
 		result, err = c.client.AccountResource(address, resourceType, ledgerVersion...)
 		return err
-	})
+	}, "AccountResource")
 	return result, err
 }
 
@@ -195,7 +209,7 @@ func (c *rateLimitedClient) AccountResources(address aptos.AccountAddress, ledge
 		var err error
 		result, err = c.client.AccountResources(address, ledgerVersion...)
 		return err
-	})
+	}, "AccountResources")
 	return result, err
 }
 
@@ -206,7 +220,7 @@ func (c *rateLimitedClient) AccountResourcesBCS(address aptos.AccountAddress, le
 		var err error
 		result, err = c.client.AccountResourcesBCS(address, ledgerVersion...)
 		return err
-	})
+	}, "AccountResourcesBCS")
 	return result, err
 }
 
@@ -217,18 +231,18 @@ func (c *rateLimitedClient) AccountModule(address aptos.AccountAddress, moduleNa
 		var err error
 		result, err = c.client.AccountModule(address, moduleName, ledgerVersion...)
 		return err
-	})
+	}, "AccountModule")
 	return result, err
 }
 
 // EntryFunctionWithArgs generates an EntryFunction from on-chain Module ABI
-func (c *rateLimitedClient) EntryFunctionWithArgs(moduleAddress aptos.AccountAddress, moduleName string, functionName string, typeArgs []any, args []any) (*aptos.EntryFunction, error) {
+func (c *rateLimitedClient) EntryFunctionWithArgs(moduleAddress aptos.AccountAddress, moduleName string, functionName string, typeArgs []any, args []any, options ...any) (*aptos.EntryFunction, error) {
 	var result *aptos.EntryFunction
 	err := c.withRateLimit(func() error {
 		var err error
-		result, err = c.client.EntryFunctionWithArgs(moduleAddress, moduleName, functionName, typeArgs, args)
+		result, err = c.client.EntryFunctionWithArgs(moduleAddress, moduleName, functionName, typeArgs, args, options...)
 		return err
-	})
+	}, "EntryFunctionWithArgs")
 	return result, err
 }
 
@@ -239,7 +253,7 @@ func (c *rateLimitedClient) BlockByVersion(ledgerVersion uint64, withTransaction
 		var err error
 		result, err = c.client.BlockByVersion(ledgerVersion, withTransactions)
 		return err
-	})
+	}, "BlockByVersion")
 	return result, err
 }
 
@@ -250,7 +264,7 @@ func (c *rateLimitedClient) WaitTransactionByHash(txnHash string) (*api.Transact
 		var err error
 		result, err = c.client.WaitTransactionByHash(txnHash)
 		return err
-	})
+	}, "WaitTransactionByHash")
 	return result, err
 }
 
@@ -261,7 +275,7 @@ func (c *rateLimitedClient) TransactionByVersion(version uint64) (*api.Committed
 		var err error
 		result, err = c.client.TransactionByVersion(version)
 		return err
-	})
+	}, "TransactionByVersion")
 	return result, err
 }
 
@@ -272,7 +286,7 @@ func (c *rateLimitedClient) PollForTransaction(hash string, options ...any) (*ap
 		var err error
 		result, err = c.client.PollForTransaction(hash, options...)
 		return err
-	})
+	}, "PollForTransaction")
 	return result, err
 }
 
@@ -280,7 +294,7 @@ func (c *rateLimitedClient) PollForTransaction(hash string, options ...any) (*ap
 func (c *rateLimitedClient) PollForTransactions(txnHashes []string, options ...any) error {
 	return c.withRateLimit(func() error {
 		return c.client.PollForTransactions(txnHashes, options...)
-	})
+	}, "PollForTransactions")
 }
 
 // WaitForTransaction does a long-GET for one transaction and waits for it to complete
@@ -290,7 +304,7 @@ func (c *rateLimitedClient) WaitForTransaction(txnHash string, options ...any) (
 		var err error
 		result, err = c.client.WaitForTransaction(txnHash, options...)
 		return err
-	})
+	}, "WaitForTransaction")
 	return result, err
 }
 
@@ -301,7 +315,7 @@ func (c *rateLimitedClient) Transactions(start *uint64, limit *uint64) ([]*api.C
 		var err error
 		result, err = c.client.Transactions(start, limit)
 		return err
-	})
+	}, "Transactions")
 	return result, err
 }
 
@@ -312,7 +326,7 @@ func (c *rateLimitedClient) AccountTransactions(address aptos.AccountAddress, st
 		var err error
 		result, err = c.client.AccountTransactions(address, start, limit)
 		return err
-	})
+	}, "AccountTransactions")
 	return result, err
 }
 
@@ -323,7 +337,7 @@ func (c *rateLimitedClient) BatchSubmitTransaction(signedTxns []*aptos.SignedTra
 		var err error
 		result, err = c.client.BatchSubmitTransaction(signedTxns)
 		return err
-	})
+	}, "BatchSubmitTransaction")
 	return result, err
 }
 
@@ -334,7 +348,7 @@ func (c *rateLimitedClient) SimulateTransactionMultiAgent(rawTxn *aptos.RawTrans
 		var err error
 		result, err = c.client.SimulateTransactionMultiAgent(rawTxn, sender, options...)
 		return err
-	})
+	}, "SimulateTransactionMultiAgent")
 	return result, err
 }
 
@@ -345,7 +359,7 @@ func (c *rateLimitedClient) BuildTransaction(sender aptos.AccountAddress, payloa
 		var err error
 		result, err = c.client.BuildTransaction(sender, payload, options...)
 		return err
-	})
+	}, "BuildTransaction")
 	return result, err
 }
 
@@ -356,7 +370,7 @@ func (c *rateLimitedClient) BuildTransactionMultiAgent(sender aptos.AccountAddre
 		var err error
 		result, err = c.client.BuildTransactionMultiAgent(sender, payload, options...)
 		return err
-	})
+	}, "BuildTransactionMultiAgent")
 	return result, err
 }
 
@@ -367,7 +381,7 @@ func (c *rateLimitedClient) BuildSignAndSubmitTransaction(sender aptos.Transacti
 		var err error
 		result, err = c.client.BuildSignAndSubmitTransaction(sender, payload, options...)
 		return err
-	})
+	}, "BuildSignAndSubmitTransaction")
 	return result, err
 }
 
@@ -378,6 +392,6 @@ func (c *rateLimitedClient) NodeAPIHealthCheck(durationSecs ...uint64) (api.Heal
 		var err error
 		result, err = c.client.NodeAPIHealthCheck(durationSecs...)
 		return err
-	})
+	}, "NodeAPIHealthCheck")
 	return result, err
 }

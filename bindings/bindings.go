@@ -20,6 +20,9 @@ import (
 	mcmstest "github.com/smartcontractkit/chainlink-aptos/bindings/mcms_test"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/platform"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/regulated_token"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/test_token/bnm_registrar"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/test_token/lnr_registrar"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/test_token/test_token"
 )
 
 var GlobalFunctionInfo = bind.CombineFunctionInfos(
@@ -41,6 +44,9 @@ var GlobalFunctionInfo = bind.CombineFunctionInfos(
 	platform.FunctionInfo,
 	regulated_token.FunctionInfo,
 	regulated_token_pool.FunctionInfo,
+	test_token.FunctionInfo,
+	bnm_registrar.FunctionInfo,
+	lnr_registrar.FunctionInfo,
 )
 
 // package -> module -> function name

@@ -51,6 +51,7 @@ func CompileMovePackage(
 		"aptos",
 		"move", "build-publish-payload",
 		"--override-size-check",
+		"--skip-fetch-latest-git-deps",
 		"--package-dir", packageDir,
 		"--named-addresses", namedAddressesArg,
 		"--included-artifacts=sparse",

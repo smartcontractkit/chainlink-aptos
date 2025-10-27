@@ -1,0 +1,37 @@
+name: CCIP Integration Tests
+permissions:
+  contents: read
+on:
+  push:
+    branches:
+      - develop
+      - main
+  pull_request:
+
+jobs:
+  test:
+    name: CCIP Deployment Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Extract Go version
+      uses: ./.github/actions/check-go-version
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.go_version }}
+
+    - name: Install Aptos CLI
+      uses: aptos-labs/actions/install-aptos-cli@ce57287eb852b9819c1d74fecc3be187677559fd # v0.1
+      with:
+        CLI_VERSION: 7.10.0
+
+    - name: Run tests
+      run: |
+        cd integration-tests
+        go test ./ccip -timeout 10m -v

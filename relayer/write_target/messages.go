@@ -8,24 +8,17 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 
 	wt "github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/platform/write-target"
+	rtypes "github.com/smartcontractkit/chainlink-aptos/relayer/types"
 )
-
-// ChainInfo contains the chain information (used as execution context)
-type ChainInfo struct {
-	ChainFamilyName string
-	ChainID         string
-	NetworkName     string
-	NetworkNameFull string
-}
 
 // messageBuilder is a helper component to build monitoring messages
 type messageBuilder struct {
-	ChainInfo ChainInfo
+	ChainInfo rtypes.ChainInfo
 	CapInfo   capabilities.CapabilityInfo
 }
 
 // NewMessageBuilder creates a new message builder
-func NewMessageBuilder(chainInfo ChainInfo, capInfo capabilities.CapabilityInfo) *messageBuilder {
+func NewMessageBuilder(chainInfo rtypes.ChainInfo, capInfo capabilities.CapabilityInfo) *messageBuilder {
 	return &messageBuilder{
 		ChainInfo: chainInfo,
 		CapInfo:   capInfo,
