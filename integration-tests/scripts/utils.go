@@ -13,11 +13,12 @@ import (
 var (
 	_, b, _, _ = runtime.Caller(0)
 	// ProjectRoot Root folder of this project
-	ProjectRoot = filepath.Join(filepath.Dir(b), "/../..")
-	Contracts   = fmt.Sprintf("%s/contracts", ProjectRoot)
-	Templates   = fmt.Sprintf("%s/integration-tests/templates", ProjectRoot)
-	Cache       = fmt.Sprintf("%s/integration-tests/.cache", ProjectRoot)
-	Logs        = fmt.Sprintf("%s/integration-tests/logs", ProjectRoot)
+	ProjectRoot   = filepath.Join(filepath.Dir(b), "/../..")
+	Contracts     = fmt.Sprintf("%s/contracts", ProjectRoot)
+	Templates     = fmt.Sprintf("%s/integration-tests/templates", ProjectRoot)
+	Cache         = fmt.Sprintf("%s/integration-tests/.cache", ProjectRoot)
+	ContractsJson = fmt.Sprintf("%s/contracts.json", Cache)
+	Logs          = fmt.Sprintf("%s/integration-tests/logs", ProjectRoot)
 )
 
 func LoadEnv() error {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -129,6 +130,10 @@ func (d *Deployer) FundDevnet(account string) error {
 
 func (d *Deployer) DeployPlatform() error {
 	d.lggr.Info().Msg("Deploying Platform")
+	if d.Contracts.KeystoneAddress != "" {
+		d.lggr.Info().Msg("Platform already deployed, skipping")
+		return nil
+	}
 
 	cmdStr := []string{
 		"aptos",
@@ -157,11 +162,16 @@ func (d *Deployer) DeployPlatform() error {
 
 	d.lggr.Info().Msg(out)
 	d.lggr.Info().Msg("Platform deployed successfully")
-	return nil
+
+	return d.saveContracts()
 }
 
 func (d *Deployer) DeployPlatformSecondary() error {
 	d.lggr.Info().Msg("Deploying Platform Secondary")
+	if d.Contracts.KeystoneSecondaryAddress != "" {
+		d.lggr.Info().Msg("Platform already deployed, skipping")
+		return nil
+	}
 
 	cmdStr := []string{
 		"aptos",
@@ -190,11 +200,16 @@ func (d *Deployer) DeployPlatformSecondary() error {
 
 	d.lggr.Info().Msg(out)
 	d.lggr.Info().Msg("Platform Secondary deployed successfully")
-	return nil
+
+	return d.saveContracts()
 }
 
 func (d *Deployer) DeployDataFeeds(platformAddress string, platformSecondaryAddress string) error {
 	d.lggr.Info().Msg("Deploying Data Feeds")
+	if d.Contracts.DataFeedsAddress != "" {
+		d.lggr.Info().Msg("Data Feeds already deployed, skipping")
+		return nil
+	}
 
 	cmdStr := []string{
 		"aptos",
@@ -223,7 +238,8 @@ func (d *Deployer) DeployDataFeeds(platformAddress string, platformSecondaryAddr
 
 	d.lggr.Info().Msg(out)
 	d.lggr.Info().Msg("Data Feeds deployed successfully")
-	return nil
+
+	return d.saveContracts()
 }
 
 func (d *Deployer) SetWorkflowConfigs(dataFeedsAddress string, workflowOwner string) error {
@@ -361,4 +377,18 @@ func (d *Deployer) GetTransactionDetailsByHash(hash string) (TransactionByHash, 
 	}
 
 	return transaction, nil
+}
+
+func (d *Deployer) saveContracts() error {
+	contracts, err := json.Marshal(d.Contracts)
+	if err != nil {
+		return fmt.Errorf("could not marshal contracts: %w", err)
+	}
+	err = os.WriteFile(scripts.ContractsJson, contracts, 0644)
+	if err != nil {
+		return fmt.Errorf("could not write contracts to file: %w", err)
+	}
+
+	d.lggr.Info().Msgf("Contracts saved successfully to %s", scripts.ContractsJson)
+	return nil
 }

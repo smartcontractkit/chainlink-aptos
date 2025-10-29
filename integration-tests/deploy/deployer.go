@@ -103,6 +103,23 @@ func New(lggr *zerolog.Logger) *Deployer {
 		panic("Could not create docker network")
 	}
 	lggr.Info().Msgf("Created docker network: %s", network)
+
+	var contracts Contracts
+	// check if contracts.json file exists
+	if _, err := os.Stat(scripts.ContractsJson); os.IsNotExist(err) {
+		contracts = Contracts{}
+	} else {
+		// read contracts.json file
+		contractsFile, err := os.ReadFile(scripts.ContractsJson)
+		if err != nil {
+			panic(fmt.Sprintf("Could not read contracts.json file: %v", err))
+		}
+
+		if err := json.Unmarshal(contractsFile, &contracts); err != nil {
+			panic(fmt.Sprintf("Could not unmarshal contracts.json file: %v", err))
+		}
+	}
+
 	return &Deployer{
 		lggr:          lggr,
 		Network:       network,
@@ -115,7 +132,7 @@ func New(lggr *zerolog.Logger) *Deployer {
 			NodesListFilePath: nodesListFile,
 			TestFolder:        testFolder,
 		},
-		Contracts: &Contracts{},
+		Contracts: &contracts,
 	}
 }
 
@@ -266,18 +283,20 @@ func (d *Deployer) DeployCore() error {
 
 		dbName := fmt.Sprintf("core_test_%d", i)
 		dbUrl := fmt.Sprintf("postgresql://%s:%s@127.0.0.1:%s/%s", d.Postgres.Config.Env["POSTGRES_USER"], d.Postgres.Config.Env["POSTGRES_PASSWORD"], d.Postgres.Config.Ports[0], d.Postgres.Config.Env["POSTGRES_DB"])
-		d.lggr.Info().Msgf("Creating database core_test_%d in %s", i, containerName)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
 		// check if database exists
+		d.lggr.Info().Msgf("Checking if database %s exists", dbName)
 		sc, _, err := d.Postgres.Client.Container.Exec(ctx, []string{"psql", dbUrl, "-c", fmt.Sprintf("SELECT 1 FROM pg_database WHERE datname = '%s'", dbName)})
 		if err != nil || sc != 0 {
 			return fmt.Errorf("failed to check if database exists, status code: %d, error: %w", sc, err)
 		}
 
-		// if database does not exist, create it
-		if sc != 0 {
+		if sc == 0 {
+			d.lggr.Info().Msgf("Database %s exists, skipping creation", dbName)
+		} else {
+			// if database does not exist, create it
 			d.lggr.Info().Msgf("Database %s does not exist, creating it", dbName)
 			sc, resp, err := d.Postgres.Client.Container.Exec(ctx, []string{"psql", dbUrl, "-c", fmt.Sprintf("CREATE DATABASE %s", dbName)})
 			if err != nil || sc != 0 {
@@ -291,6 +310,7 @@ func (d *Deployer) DeployCore() error {
 			}
 
 			d.lggr.Info().Msg(buf.String())
+			d.lggr.Info().Msgf("Database %s created", dbName)
 		}
 
 		dbUrl = fmt.Sprintf("postgresql://%s:%s@%s:%s/%s", d.Postgres.Config.Env["POSTGRES_USER"], d.Postgres.Config.Env["POSTGRES_PASSWORD"], d.Postgres.Config.Name, d.Postgres.Config.Ports[0], dbName)
@@ -529,6 +549,12 @@ func (d *Deployer) Cleanup() {
 				d.lggr.Error().Msgf("Error terminating Core container: %v", err)
 			}
 		}
+	}
+
+	// delete contracts.json file
+	err := os.Remove(scripts.ContractsJson)
+	if err != nil {
+		d.lggr.Error().Msgf("Error deleting contracts.json file: %v", err)
 	}
 }
 
