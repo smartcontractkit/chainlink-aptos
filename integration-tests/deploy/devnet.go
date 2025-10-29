@@ -18,6 +18,7 @@ import (
 )
 
 func (d *Deployer) DeployDevnet() error {
+	d.lggr.Info().Msg("Deploying Devnet")
 	devnetConfig, err := ValidateDevnet()
 
 	if err != nil {
@@ -102,10 +103,12 @@ func (d *Deployer) DeployDevnet() error {
 		return err
 	}
 
+	d.lggr.Info().Msg("Devnet deployed successfully")
 	return nil
 }
 
 func (d *Deployer) FundDevnet(account string) error {
+	d.lggr.Info().Msg("Funding Devnet")
 
 	cmdStr := []string{
 		"aptos",
@@ -120,10 +123,13 @@ func (d *Deployer) FundDevnet(account string) error {
 		return err
 	}
 
+	d.lggr.Info().Msg("Devnet funded successfully")
 	return nil
 }
 
 func (d *Deployer) DeployPlatform() error {
+	d.lggr.Info().Msg("Deploying Platform")
+
 	cmdStr := []string{
 		"aptos",
 		"move",
@@ -150,10 +156,13 @@ func (d *Deployer) DeployPlatform() error {
 	}
 
 	d.lggr.Info().Msg(out)
+	d.lggr.Info().Msg("Platform deployed successfully")
 	return nil
 }
 
 func (d *Deployer) DeployPlatformSecondary() error {
+	d.lggr.Info().Msg("Deploying Platform Secondary")
+
 	cmdStr := []string{
 		"aptos",
 		"move",
@@ -180,10 +189,13 @@ func (d *Deployer) DeployPlatformSecondary() error {
 	}
 
 	d.lggr.Info().Msg(out)
+	d.lggr.Info().Msg("Platform Secondary deployed successfully")
 	return nil
 }
 
 func (d *Deployer) DeployDataFeeds(platformAddress string, platformSecondaryAddress string) error {
+	d.lggr.Info().Msg("Deploying Data Feeds")
+
 	cmdStr := []string{
 		"aptos",
 		"move",
@@ -210,10 +222,13 @@ func (d *Deployer) DeployDataFeeds(platformAddress string, platformSecondaryAddr
 	}
 
 	d.lggr.Info().Msg(out)
+	d.lggr.Info().Msg("Data Feeds deployed successfully")
 	return nil
 }
 
 func (d *Deployer) SetWorkflowConfigs(dataFeedsAddress string, workflowOwner string) error {
+	d.lggr.Info().Msg("Setting Workflow Configs")
+
 	cmdStr := []string{
 		"aptos",
 		"move",
@@ -231,10 +246,13 @@ func (d *Deployer) SetWorkflowConfigs(dataFeedsAddress string, workflowOwner str
 		return err
 	}
 
+	d.lggr.Info().Msg("Workflow Configs set successfully")
 	return nil
 }
 
 func (d *Deployer) SetFeeds(dataFeedsAddress string) error {
+	d.lggr.Info().Msg("Setting Feeds")
+
 	cmdStr := []string{
 		"aptos",
 		"move",
@@ -271,10 +289,13 @@ func (d *Deployer) SetFeeds(dataFeedsAddress string) error {
 		return err
 	}
 
+	d.lggr.Info().Msg("Feeds set successfully")
 	return nil
 }
 
 func (d *Deployer) SetForwarderConfig(keystoneAddress string, keys []string) error {
+	d.lggr.Info().Msg("Setting Forwarder Config")
+
 	cmdStr := []string{
 		"aptos",
 		"move",
@@ -294,6 +315,7 @@ func (d *Deployer) SetForwarderConfig(keystoneAddress string, keys []string) err
 		return err
 	}
 
+	d.lggr.Info().Msg("Forwarder Config set successfully")
 	return nil
 }
 

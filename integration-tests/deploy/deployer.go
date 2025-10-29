@@ -120,6 +120,7 @@ func New(lggr *zerolog.Logger) *Deployer {
 }
 
 func (d *Deployer) DeployPostgres() error {
+	d.lggr.Info().Msg("Deploying Postgres")
 	pgConfig, err := ValidatePostgres()
 
 	if err != nil {
@@ -158,10 +159,12 @@ func (d *Deployer) DeployPostgres() error {
 		ExternalPort: externalPort.Int(),
 	}
 
+	d.lggr.Info().Msgf("Postgres container running with local exposed port %d", externalPort.Int())
 	return nil
 }
 
 func (d *Deployer) DeployGeth() error {
+	d.lggr.Info().Msg("Deploying Geth")
 	ctx := context.Background()
 	gethConfig, err := ValidateGeth()
 	d.Keystone.ChainId = gethConfig.ChainId
@@ -222,10 +225,12 @@ func (d *Deployer) DeployGeth() error {
 	}
 	d.Keystone.GethHttpRPC = fmt.Sprintf("http://127.0.0.1:%d", externalHttpPort.Int())
 
+	d.lggr.Info().Msgf("Geth container running with local exposed ports %d and %d", externalHttpPort.Int(), externalWSPort.Int())
 	return nil
 }
 
 func (d *Deployer) DeployCore() error {
+	d.lggr.Info().Msg("Deploying Core")
 	coreConfig, err := ValidateCore()
 	if err != nil {
 		return err
@@ -347,6 +352,7 @@ func (d *Deployer) DeployCore() error {
 		return d.Core[i].Name < d.Core[j].Name
 	})
 
+	d.lggr.Info().Msg("Core deployed successfully")
 	return nil
 }
 
@@ -367,10 +373,6 @@ func (d *Deployer) CreateNodesList() error {
 
 	output := strings.Join(nodeURLs, "\n")
 	_, err = lf.WriteString(output)
-	if err != nil {
-		return err
-	}
-
 	if err != nil {
 		return err
 	}
