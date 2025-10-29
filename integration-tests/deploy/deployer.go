@@ -270,22 +270,28 @@ func (d *Deployer) DeployCore() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		sc, resp, err := d.Postgres.Client.Container.Exec(ctx, []string{"psql", dbUrl, "-c", fmt.Sprintf("CREATE DATABASE %s;", dbName)})
-		if err != nil {
-			return err
+		// check if database exists
+		sc, _, err := d.Postgres.Client.Container.Exec(ctx, []string{"psql", dbUrl, "-c", fmt.Sprintf("SELECT 1 FROM pg_database WHERE datname = '%s'", dbName)})
+		if err != nil || sc != 0 {
+			return fmt.Errorf("failed to check if database exists, status code: %d, error: %w", sc, err)
 		}
 
+		// if database does not exist, create it
 		if sc != 0 {
-			return errors.New(fmt.Sprintf("Command returned non 0 status code, got %d", sc))
-		}
+			d.lggr.Info().Msgf("Database %s does not exist, creating it", dbName)
+			sc, resp, err := d.Postgres.Client.Container.Exec(ctx, []string{"psql", dbUrl, "-c", fmt.Sprintf("CREATE DATABASE %s", dbName)})
+			if err != nil || sc != 0 {
+				return fmt.Errorf("failed to create database, status code: %d, error: %w", sc, err)
+			}
 
-		buf := new(strings.Builder)
-		_, err = io.Copy(buf, resp)
-		if err != nil {
-			return err
-		}
+			buf := new(strings.Builder)
+			_, err = io.Copy(buf, resp)
+			if err != nil {
+				return err
+			}
 
-		d.lggr.Info().Msg(buf.String())
+			d.lggr.Info().Msg(buf.String())
+		}
 
 		dbUrl = fmt.Sprintf("postgresql://%s:%s@%s:%s/%s", d.Postgres.Config.Env["POSTGRES_USER"], d.Postgres.Config.Env["POSTGRES_PASSWORD"], d.Postgres.Config.Name, d.Postgres.Config.Ports[0], dbName)
 		d.lggr.Info().Msgf("Database URL: %s", dbUrl)
