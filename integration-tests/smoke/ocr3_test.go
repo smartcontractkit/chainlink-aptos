@@ -27,9 +27,12 @@ func TestOCR3Keystone(t *testing.T) {
 
 	deployer := deploy.New(&lggr)
 
-	t.Cleanup(func() {
-		deployer.Cleanup()
-	})
+	// cleanup only if ryuk is enabled
+	if !(os.Getenv("TESTCONTAINERS_RYUK_DISABLED") == "true") {
+		t.Cleanup(func() {
+			deployer.Cleanup()
+		})
+	}
 
 	err = deployer.DeployPostgres()
 	require.NoError(t, err, "Could not deploy Postgres")
