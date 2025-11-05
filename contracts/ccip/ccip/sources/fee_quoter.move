@@ -247,6 +247,7 @@ module ccip::fee_quoter {
     const E_INVALID_DEST_BYTES_OVERHEAD: u64 = 35;
     const E_INVALID_SVM_RECEIVER_LENGTH: u64 = 36;
     const E_TOKEN_AMOUNT_MISMATCH: u64 = 37;
+    const E_INVALID_SVM_ACCOUNT_LENGTH: u64 = 38;
 
     #[view]
     public fun type_and_version(): String {
@@ -862,6 +863,13 @@ module ccip::fee_quoter {
             svm_expanded_data_length +=((
                 accounts_length + SVM_MESSAGING_ACCOUNTS_OVERHEAD
             ) * SVM_ACCOUNT_BYTE_SIZE);
+        };
+
+        for (i in 0..accounts_length) {
+            assert!(
+                accounts[i].length() == 32,
+                error::invalid_argument(E_INVALID_SVM_ACCOUNT_LENGTH)
+            );
         };
 
         if (tokens_len > 0) {
