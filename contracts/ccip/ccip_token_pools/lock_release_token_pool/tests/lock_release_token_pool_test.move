@@ -611,4 +611,81 @@ module lock_release_token_pool::lock_release_token_pool_test {
                 == token_metadata
         );
     }
+
+    // ================================================================
+    // |                  Allowlist Tests                             |
+    // ================================================================
+
+    #[
+        test(
+            owner = @0x100,
+            ccip = @ccip,
+            lock_release_token_pool = @lock_release_token_pool,
+            rebalancer = @0x123
+        )
+    ]
+    fun test_set_allowlist_enabled(
+        owner: &signer,
+        ccip: &signer,
+        lock_release_token_pool: &signer,
+        rebalancer: &signer
+    ) acquires TestRefs {
+        let token_metadata = setup_test_environment(owner, ccip, lock_release_token_pool);
+        let rebalancer_addr = signer::address_of(rebalancer);
+
+        // Create a transfer ref for the token
+        let transfer_ref = extract_transfer_ref(token_metadata);
+
+        // Initialize pool with no initial allowlist (disabled by default)
+        lock_release_token_pool::initialize(
+            owner,
+            option::some(transfer_ref),
+            rebalancer_addr
+        );
+
+        // Allowlist should be disabled initially
+        assert!(!lock_release_token_pool::get_allowlist_enabled());
+
+        // Enable the allowlist
+        lock_release_token_pool::set_allowlist_enabled(owner, true);
+        assert!(lock_release_token_pool::get_allowlist_enabled());
+
+        // Disable the allowlist again
+        lock_release_token_pool::set_allowlist_enabled(owner, false);
+        assert!(!lock_release_token_pool::get_allowlist_enabled());
+    }
+
+    #[
+        test(
+            owner = @0x100,
+            ccip = @ccip,
+            lock_release_token_pool = @lock_release_token_pool,
+            rebalancer = @0x123,
+            unauthorized = @0x456
+        )
+    ]
+    #[expected_failure(abort_code = 327683, location = ccip_token_pool::ownable)]
+    fun test_set_allowlist_enabled_unauthorized(
+        owner: &signer,
+        ccip: &signer,
+        lock_release_token_pool: &signer,
+        rebalancer: &signer,
+        unauthorized: &signer
+    ) acquires TestRefs {
+        let token_metadata = setup_test_environment(owner, ccip, lock_release_token_pool);
+        let rebalancer_addr = signer::address_of(rebalancer);
+
+        // Create a transfer ref for the token
+        let transfer_ref = extract_transfer_ref(token_metadata);
+
+        // Initialize pool
+        lock_release_token_pool::initialize(
+            owner,
+            option::some(transfer_ref),
+            rebalancer_addr
+        );
+
+        // Try to enable allowlist as non-owner (should fail with E_ONLY_CALLABLE_BY_OWNER)
+        lock_release_token_pool::set_allowlist_enabled(unauthorized, true);
+    }
 }

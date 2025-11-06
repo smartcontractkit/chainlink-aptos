@@ -34,7 +34,7 @@ stablecoin = "0xd59e6aa0af32155459919e5ed2792eecd8fedcac70f2bf59840431446ed36973
 deployer = "c06c5aa31d28c27be8345770a83b48314b829039ec5a33b79265216c13c66071"
 
 [dependencies]
-AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "16beac69835f3a71564c96164a606a23f259099a", subdir = "aptos-move/framework/aptos-framework" }
 ChainlinkCCIP = { local = "../../ccip" }
 CCIPTokenPool = { local = "../token_pool" }
 
