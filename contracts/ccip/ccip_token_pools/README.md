@@ -6,16 +6,17 @@ CCIP Token Pools are smart contracts that manage the cross-chain transfer of tok
 
 ### Key Points
 
-Tokens with dynamic dispatch are supported for both pools, however the deposit and withdraw overrides are not invoked during `lock_or_burn` and `release_or_mint` functions.
+Tokens with dynamic dispatch are supported for most pools, however the deposit and withdraw overrides are not invoked during `lock_or_burn` and `release_or_mint` functions.
 
 ## Pool Types
 
-There are **4 types** of token pools available on Aptos:
+There are **5 types** of token pools available on Aptos:
 
 1. **Lock/Release Token Pool** (`lock_release_token_pool`)
 2. **Burn/Mint Token Pool** (`burn_mint_token_pool`)
 3. **USDC Token Pool** (`usdc_token_pool`)
 4. **Managed Token Pool** (`managed_token_pool`)
+5. **Regulated Token Pool** (`regulated_token_pool`)
 
 ### 1. Lock/Release Token Pool (`lock_release_token_pool`)
 
@@ -112,6 +113,39 @@ There are **4 types** of token pools available on Aptos:
 - Multiple protocol integrations while retaining developer control
 - **Cannot be used with existing standard fungible assets**
 
+### 5. Regulated Token Pool (`regulated_token_pool`)
+
+- **Automatically registers with CCIP Token Admin Registry** during deployment
+- Designed specifically for tokens deployed with the regulated token package
+- Uses **bridge functions** (`bridge_mint()` and `bridge_burn()`) to bypass dynamic dispatch conflicts
+- Requires `BRIDGE_MINTER_OR_BURNER_ROLE` authorization from the regulated token
+- Maintains all regulatory controls (freezing, pausing, recovery)
+
+**Operation Modes**:
+
+- Pool's store address must have `BRIDGE_MINTER_OR_BURNER_ROLE` on the regulated token
+- Pool calls `regulated_token::bridge_burn()` and `bridge_mint()` directly
+- Bridge functions use `MintRef`/`BurnRef` directly to avoid fungible_asset store operations
+- Resolves error 65564 caused by dynamic dispatch conflicts in standard pools
+
+**Mechanism**:
+
+- **Outbound**: Pool calls regulated token to burn tokens via bridge function, bypassing dispatch
+- **Inbound**: Pool calls regulated token to mint new tokens to recipient via bridge function
+
+**When to Use**:
+
+- For tokens deployed with the regulated token package
+- When you need regulatory compliance features (account freezing, pause, recovery)
+- Role-based access control with RBAC system
+- **Cannot be used with standard fungible assets**
+
+**Key Difference from Burn/Mint Pool**:
+
+- Uses specialized bridge functions instead of direct `fungible_asset` operations
+- Required because regulated tokens have dynamic dispatch enabled
+- Preserves all regulatory controls and security features
+
 ## Deployment Guide
 
 ### Prerequisites
@@ -172,6 +206,19 @@ aptos move deploy-object \
   --address-name managed_token_pool \
   --named-addresses managed_token=<MANAGED_TOKEN_ADDRESS>,\
 managed_token=<MANAGED_TOKEN_ADDRESS>,\
+ccip=<CCIP_ADDRESS>,\
+ccip_token_pool=<CCIP_TOKEN_POOL_ADDRESS>,\
+mcms=<MCMS_ADDRESS>,\
+mcms_register_entrypoints=<MCMS_REGISTER_ENTRYPOINTS_ADDRESS>
+```
+
+For **Regulated Token Pool**:
+
+```bash
+aptos move deploy-object \
+  --package-dir contracts/ccip/ccip_token_pools/regulated_token_pool \
+  --address-name regulated_token_pool \
+  --named-addresses regulated_token=<REGULATED_TOKEN_ADDRESS>,\
 ccip=<CCIP_ADDRESS>,\
 ccip_token_pool=<CCIP_TOKEN_POOL_ADDRESS>,\
 mcms=<MCMS_ADDRESS>,\
@@ -240,6 +287,40 @@ managed_token::apply_allowed_burner_updates(
     token_owner,
     vector[], // remove
     vector[pool_store_address] // add pool as burner
+);
+```
+
+**Regulated Token Pool**:
+
+```move
+// 1. Pool registers automatically during deployment
+
+// 2. Grant bridge role to pool's store address
+let pool_store_address = regulated_token_pool::get_store_address();
+regulated_token::grant_role(
+    admin_signer,
+    BRIDGE_MINTER_OR_BURNER_ROLE,
+    pool_store_address
+);
+
+// 3. Token owner proposes administrator
+token_admin_registry::propose_administrator(
+    token_owner,
+    regulated_token::token_metadata(),
+    administrator_address
+);
+
+// 4. Administrator accepts role
+token_admin_registry::accept_admin_role(
+    administrator_signer,
+    regulated_token::token_metadata()
+);
+
+// 5. Administrator activates the pool
+token_admin_registry::set_pool(
+    administrator_signer,
+    regulated_token::token_metadata(),
+    @regulated_token_pool
 );
 ```
 
@@ -644,6 +725,15 @@ apply_chain_updates(admin, vector[], chain_selectors, remote_pools, remote_token
   managed_token::apply_allowed_burner_updates(token_owner, vector[], vector[pool_store_address]);
   ```
 
+**"Missing role" or "Unauthorized" (Regulated Token Pool)**
+
+- **Cause**: Pool's store address doesn't have `BRIDGE_MINTER_OR_BURNER_ROLE`
+- **Solution**: Grant the bridge role to pool's store address:
+  ```move
+  let pool_store_address = regulated_token_pool::get_store_address();
+  regulated_token::grant_role(admin_signer, BRIDGE_MINTER_OR_BURNER_ROLE, pool_store_address);
+  ```
+
 ### Diagnostic Commands
 
 ```move
@@ -660,6 +750,10 @@ token_admin_registry::get_administrator(token_address);
 managed_token_pool::get_store_address(); // Get pool's resource account address
 managed_token::is_minter_allowed(pool_store_address); // Check minter permission
 managed_token::is_burner_allowed(pool_store_address); // Check burner permission
+
+// For regulated token pool specifically
+regulated_token_pool::get_store_address(); // Get pool's resource account address
+regulated_token::has_role(pool_store_address, BRIDGE_MINTER_OR_BURNER_ROLE); // Check bridge role
 ```
 
 ## Migration from Other Chains
@@ -674,8 +768,10 @@ When bringing tokens from EVM chains to Aptos:
 2. **Choose Pool Strategy**:
 
    - Keep original on source chain → Lock/Release
-   - Burn on source, mint on Aptos → Burn/Mint
+   - Burn on source, mint on Aptos → Burn/Mint or Managed or Regulated
    - USDC specifically → USDC Pool
+   - Regulatory compliance needed → Regulated Token Pool
+   - Allowlist-based control needed → Managed Token Pool
 
 3. **Handle Custom Logic**:
 
