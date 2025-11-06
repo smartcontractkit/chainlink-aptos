@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"integration-tests/scripts"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/smartcontractkit/chainlink-aptos/integration-tests/scripts"
 
 	"github.com/docker/go-connections/nat"
 	"github.com/go-resty/resty/v2"

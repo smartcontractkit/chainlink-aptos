@@ -11,6 +11,25 @@ jobs:
   test:
     name: Integration Tests
     runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: pass
+          POSTGRES_DB: testdb_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    env:
+      TEST_DB_URL: postgres://user:pass@localhost:5432/testdb_test
+    
     steps:
     - name: Check out code
       uses: actions/checkout@v4
@@ -26,7 +45,14 @@ jobs:
     - name: Install Aptos CLI
       uses: aptos-labs/actions/install-aptos-cli@ce57287eb852b9819c1d74fecc3be187677559fd # v0.1
       with:
-        CLI_VERSION: 7.8.1
+        CLI_VERSION: 7.10.0
+
+    - name: Wait for PostgreSQL
+      run: |
+        until pg_isready -h localhost -p 5432 -U user; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
 
     - name: Run tests
       run: cd relayer && go test -count=1 -p=1 -tags=integration ./...

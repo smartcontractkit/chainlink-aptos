@@ -236,11 +236,11 @@ func (c *rateLimitedClient) AccountModule(address aptos.AccountAddress, moduleNa
 }
 
 // EntryFunctionWithArgs generates an EntryFunction from on-chain Module ABI
-func (c *rateLimitedClient) EntryFunctionWithArgs(moduleAddress aptos.AccountAddress, moduleName string, functionName string, typeArgs []any, args []any) (*aptos.EntryFunction, error) {
+func (c *rateLimitedClient) EntryFunctionWithArgs(moduleAddress aptos.AccountAddress, moduleName string, functionName string, typeArgs []any, args []any, options ...any) (*aptos.EntryFunction, error) {
 	var result *aptos.EntryFunction
 	err := c.withRateLimit(func() error {
 		var err error
-		result, err = c.client.EntryFunctionWithArgs(moduleAddress, moduleName, functionName, typeArgs, args)
+		result, err = c.client.EntryFunctionWithArgs(moduleAddress, moduleName, functionName, typeArgs, args, options...)
 		return err
 	}, "EntryFunctionWithArgs")
 	return result, err
