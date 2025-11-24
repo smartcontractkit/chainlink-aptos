@@ -312,6 +312,14 @@ module lock_release_token_pool::lock_release_token_pool {
         token_pool::get_allowlist_enabled(&pool.token_pool_state)
     }
 
+    public entry fun set_allowlist_enabled(
+        caller: &signer, enabled: bool
+    ) acquires LockReleaseTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+        token_pool::set_allowlist_enabled(&mut pool.token_pool_state, enabled);
+    }
+
     #[view]
     public fun get_allowlist(): vector<address> acquires LockReleaseTokenPoolState {
         let pool = borrow_pool();
@@ -838,6 +846,10 @@ module lock_release_token_pool::lock_release_token_pool {
                 remote_pool_addresses_to_add,
                 remote_token_addresses_to_add
             );
+        } else if (function_bytes == b"set_allowlist_enabled") {
+            let enabled = bcs_stream::deserialize_bool(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            set_allowlist_enabled(&caller, enabled);
         } else if (function_bytes == b"apply_allowlist_updates") {
             let removes =
                 bcs_stream::deserialize_vector(

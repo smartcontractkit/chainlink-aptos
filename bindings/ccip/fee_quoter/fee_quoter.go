@@ -138,6 +138,7 @@ const (
 	E_INVALID_DEST_BYTES_OVERHEAD                   uint64 = 35
 	E_INVALID_SVM_RECEIVER_LENGTH                   uint64 = 36
 	E_TOKEN_AMOUNT_MISMATCH                         uint64 = 37
+	E_INVALID_SVM_ACCOUNT_LENGTH                    uint64 = 38
 )
 
 // Structs

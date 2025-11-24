@@ -630,6 +630,12 @@ module ccip_token_pool::token_pool {
         allowlist::get_allowlist_enabled(&state.allowlist_state)
     }
 
+    public fun set_allowlist_enabled(
+        state: &mut TokenPoolState, enabled: bool
+    ) {
+        allowlist::set_allowlist_enabled(&mut state.allowlist_state, enabled);
+    }
+
     public fun get_allowlist(state: &TokenPoolState): vector<address> {
         allowlist::get_allowlist(&state.allowlist_state)
     }

@@ -27,7 +27,7 @@ regulated_token = "0xb3cec8e3442cafe0c378411012bbcae6787bfc0fbdd528ee9a00aaaf0c8
 admin = "0x100"
 
 [dependencies]
-AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "837d04bd9bd0dd7156da4252bcfc1d080ed591ec", subdir = "aptos-move/framework/aptos-framework" }
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "16beac69835f3a71564c96164a606a23f259099a", subdir = "aptos-move/framework/aptos-framework" }
 ChainlinkCCIP = { local = "../ccip" }
 
 [dev-dependencies]
