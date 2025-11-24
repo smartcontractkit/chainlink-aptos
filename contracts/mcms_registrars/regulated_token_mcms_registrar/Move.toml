@@ -14,7 +14,6 @@ mcms_register_entrypoints = "_"
 regulated_token = "0x27093661ff0eb2560771b6a616ac60788a7252f6917c8cdb29942052fa8567a"
 admin = "0x456"
 mcms = "0x4001"
-mcms_owner = "0x4010"
 mcms_register_entrypoints = "0x9999"
 
 [dependencies]

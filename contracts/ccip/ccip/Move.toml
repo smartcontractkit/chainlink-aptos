@@ -16,7 +16,6 @@ ccip = "0x30b33dec3fcac5ef3ea775128d88722b64ba59a4598277e537f284917403df29"
 
 # MCMS: 4xxx
 mcms = "0x4000"
-mcms_owner = "0x4010"
 mcms_register_entrypoints = "0x4001"
 
 [dependencies]
