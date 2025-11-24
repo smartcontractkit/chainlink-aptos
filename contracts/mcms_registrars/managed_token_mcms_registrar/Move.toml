@@ -6,17 +6,19 @@ authors = []
 [addresses]
 managed_token = "_"
 mcms = "_"
+mcms_owner = "0x0"
 mcms_register_entrypoints = "_"
 
 [dev-addresses]
 # Matches `@link` address in `link-token` package
 managed_token = "0x121dfbc38157d675d96eef0bcc54e70e9801714138ce54028b5655459c6376ee"
 mcms = "0x4001"
+mcms_owner = "0x0"
 mcms_register_entrypoints = "0x9999"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "16beac69835f3a71564c96164a606a23f259099a", subdir = "aptos-move/framework/aptos-framework" }
-ChainlinkManyChainMultisig = { local = "../../mcms/mcms", addr_subst = { 'mcms_owner' = '0x0' } }
+ChainlinkManyChainMultisig = { local = "../../mcms/mcms" }
 ManagedToken = { local = "../../managed_token" }
 
 [dev-dependencies]
