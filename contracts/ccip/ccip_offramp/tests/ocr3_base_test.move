@@ -29,8 +29,8 @@ module ccip_offramp::ocr3_base_test {
     const SIGNATURE_VERIFICATION_ENABLED: bool = true;
     const SIGNATURE_VERIFICATION_DISABLED: bool = false;
 
-    fun setup(aptos_framework: &signer, owner: &signer, ccip: &signer):
-        ocr3_base::OCR3BaseState {
+    fun setup(aptos_framework: &signer, owner: &signer, ccip: &signer)
+        : ocr3_base::OCR3BaseState {
         account::create_account_for_test(signer::address_of(owner));
         account::create_account_for_test(signer::address_of(ccip));
         chain_id::initialize_for_test(aptos_framework, CHAIN_ID);

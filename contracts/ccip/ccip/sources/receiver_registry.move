@@ -254,7 +254,8 @@ module ccip::receiver_registry {
         borrow_global_mut<ReceiverRegistryState>(state_object::object_address())
     }
 
-    inline fun get_registration_mut(receiver_address: address): &mut CCIPReceiverRegistration {
+    inline fun get_registration_mut(receiver_address: address)
+        : &mut CCIPReceiverRegistration {
         assert!(
             exists<CCIPReceiverRegistration>(receiver_address),
             error::invalid_argument(E_UNKNOWN_RECEIVER)

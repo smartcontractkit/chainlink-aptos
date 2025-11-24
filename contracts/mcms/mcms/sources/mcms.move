@@ -710,12 +710,14 @@ module mcms::mcms {
         let group_children_counts = vector[];
         params::right_pad_vec(&mut group_children_counts, NUM_GROUPS);
         // first, we count the signers as children
-        signer_groups.for_each_ref(|group| {
-            let group: u64 = *group as u64;
-            assert!(group < NUM_GROUPS, E_OUT_OF_BOUNDS_GROUP);
-            let count = group_children_counts.borrow_mut(group);
-            *count += 1;
-        });
+        signer_groups.for_each_ref(
+            |group| {
+                let group: u64 = *group as u64;
+                assert!(group < NUM_GROUPS, E_OUT_OF_BOUNDS_GROUP);
+                let count = group_children_counts.borrow_mut(group);
+                *count += 1;
+            }
+        );
 
         // second, we iterate backwards so as to check each group and propagate counts from
         // child group to parent groups up the tree to the root
