@@ -100,7 +100,8 @@ module ccip_token_pool::token_pool_rate_limiter {
     ) {
         let outbound_config =
             state.outbound_rate_limiter_config.borrow_mut_with_default(
-                remote_chain_selector, rate_limiter::new(false, 0, 0)
+                remote_chain_selector,
+                rate_limiter::new(false, 0, 0)
             );
         rate_limiter::set_token_bucket_config(
             outbound_config,
@@ -111,7 +112,8 @@ module ccip_token_pool::token_pool_rate_limiter {
 
         let inbound_config =
             state.inbound_rate_limiter_config.borrow_mut_with_default(
-                remote_chain_selector, rate_limiter::new(false, 0, 0)
+                remote_chain_selector,
+                rate_limiter::new(false, 0, 0)
             );
         rate_limiter::set_token_bucket_config(
             inbound_config,

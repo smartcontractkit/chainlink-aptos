@@ -657,19 +657,21 @@ module ccip_onramp::onramp {
                     allowlist_enabled,
                     error::invalid_argument(E_INVALID_ALLOWLIST_REQUEST)
                 );
-                add_allowed_senders.for_each_ref(|sender_address| {
-                    let sender_address: address = *sender_address;
-                    assert!(
-                        sender_address != @0x0,
-                        error::invalid_argument(E_INVALID_ALLOWLIST_ADDRESS)
-                    );
+                add_allowed_senders.for_each_ref(
+                    |sender_address| {
+                        let sender_address: address = *sender_address;
+                        assert!(
+                            sender_address != @0x0,
+                            error::invalid_argument(E_INVALID_ALLOWLIST_ADDRESS)
+                        );
 
-                    let (found, _) =
-                        dest_chain_config.allowed_senders.index_of(&sender_address);
-                    if (!found) {
-                        dest_chain_config.allowed_senders.push_back(sender_address);
-                    };
-                });
+                        let (found, _) =
+                            dest_chain_config.allowed_senders.index_of(&sender_address);
+                        if (!found) {
+                            dest_chain_config.allowed_senders.push_back(sender_address);
+                        };
+                    }
+                );
 
                 event::emit_event(
                     &mut state.allowlist_senders_added_events,
@@ -681,13 +683,15 @@ module ccip_onramp::onramp {
             };
 
             if (remove_allowed_senders.length() > 0) {
-                remove_allowed_senders.for_each_ref(|sender_address| {
-                    let (found, i) =
-                        dest_chain_config.allowed_senders.index_of(sender_address);
-                    if (found) {
-                        dest_chain_config.allowed_senders.swap_remove(i);
+                remove_allowed_senders.for_each_ref(
+                    |sender_address| {
+                        let (found, i) =
+                            dest_chain_config.allowed_senders.index_of(sender_address);
+                        if (found) {
+                            dest_chain_config.allowed_senders.swap_remove(i);
+                        }
                     }
-                });
+                );
 
                 event::emit_event(
                     &mut state.allowlist_senders_removed_events,
@@ -905,7 +909,9 @@ module ccip_onramp::onramp {
                 eth_abi::encode_address(
                     &mut token_hash, token_transfer.source_pool_address
                 );
-                eth_abi::encode_bytes(&mut token_hash, token_transfer.dest_token_address);
+                eth_abi::encode_bytes(
+                    &mut token_hash, token_transfer.dest_token_address
+                );
                 eth_abi::encode_bytes(&mut token_hash, token_transfer.extra_data);
                 eth_abi::encode_u64(&mut token_hash, token_transfer.amount);
                 eth_abi::encode_bytes(&mut token_hash, token_transfer.dest_exec_data);
