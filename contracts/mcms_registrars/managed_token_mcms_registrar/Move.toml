@@ -13,7 +13,7 @@ mcms_register_entrypoints = "_"
 # Matches `@link` address in `link-token` package
 managed_token = "0x121dfbc38157d675d96eef0bcc54e70e9801714138ce54028b5655459c6376ee"
 mcms = "0x4001"
-mcms_owner = "0x0"
+mcms_owner = "0x4010"
 mcms_register_entrypoints = "0x9999"
 
 [dependencies]

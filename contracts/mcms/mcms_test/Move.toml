@@ -10,7 +10,7 @@ mcms_owner = "0x0"
 
 [dev-addresses]
 mcms = "0x4000"
-mcms_owner = "0x0"
+mcms_owner = "0x4010"
 mcms_test = "0x4900"
 
 [dependencies]
