@@ -49,10 +49,25 @@ module ccip_onramp::onramp {
         fee_token_withdrawn_events: EventHandle<FeeTokenWithdrawn>
     }
 
+    struct DestChainConfigsV2 has key, store {
+        dest_chain_configs: SmartTable<u64, DestChainConfigV2>,
+        dest_chain_config_v2_set_events: EventHandle<DestChainConfigSetV2>
+    }
+
     struct DestChainConfig has store, drop {
         sequence_number: u64,
         allowlist_enabled: bool,
         router: address,
+        allowed_senders: vector<address>
+    }
+
+    struct DestChainConfigV2 has store, drop {
+        sequence_number: u64,
+        allowlist_enabled: bool,
+        /// The address of the `router` module, used for offchain discovery.
+        router: address,
+        /// The address of the expected signer when the `router` calls `onramp`
+        router_state_address: address,
         allowed_senders: vector<address>
     }
 
@@ -108,6 +123,17 @@ module ccip_onramp::onramp {
     }
 
     #[event]
+    struct DestChainConfigSetV2 has store, drop {
+        dest_chain_selector: u64,
+        sequence_number: u64,
+        /// The address of the `router` module, used for offchain discovery.
+        router: address,
+        /// The address of the expected signer when the `router` calls `onramp`
+        router_state_address: address,
+        allowlist_enabled: bool
+    }
+
+    #[event]
     struct CCIPMessageSent has store, drop {
         dest_chain_selector: u64,
         sequence_number: u64,
@@ -153,8 +179,14 @@ module ccip_onramp::onramp {
     const E_MUST_BE_CALLED_BY_ROUTER: u64 = 18;
     const E_TOKEN_AMOUNT_MISMATCH: u64 = 19;
     const E_CANNOT_SEND_ZERO_TOKENS: u64 = 20;
+    /// Chain selector cannot be zero
     const E_ZERO_CHAIN_SELECTOR: u64 = 21;
+    /// Invalid arguments provided for message hash calculation
     const E_CALCULATE_MESSAGE_HASH_INVALID_ARGUMENTS: u64 = 22;
+    /// V2 destination chain configs have already been initialized
+    const E_DEST_CHAIN_CONFIGS_V2_ALREADY_INITIALIZED: u64 = 23;
+    /// V2 destination chain configs have not been initialized
+    const E_DEST_CHAIN_CONFIGS_V2_NOT_INITIALIZED: u64 = 24;
 
     #[view]
     public fun type_and_version(): String {
@@ -231,32 +263,65 @@ module ccip_onramp::onramp {
 
         set_dynamic_config_internal(&mut state, fee_aggregator, allowlist_admin);
 
-        apply_dest_chain_config_updates_internal(
+        let dest_chain_configs_v2 = DestChainConfigsV2 {
+            dest_chain_configs: smart_table::new(),
+            dest_chain_config_v2_set_events: account::new_event_handle(state_signer)
+        };
+
+        // Since we cannot change initialize function signature, we need to set router state addresses to @0x0
+        // To update, call apply_dest_chain_config_updates_v2 with the new router state addresses
+        let router_state_addresses = dest_chain_routers.map_ref((|_| { @0x0 }));
+
+        // Initialize V2 configs using routers for both module and state addresses
+        apply_dest_chain_config_updates_v2_internal(
             &mut state,
+            &mut dest_chain_configs_v2,
             dest_chain_selectors,
-            dest_chain_routers,
+            dest_chain_routers, // router module addresses
+            router_state_addresses,
             dest_chain_allowlist_enabled
         );
 
         move_to(state_signer, state);
+        move_to(state_signer, dest_chain_configs_v2);
     }
 
     #[view]
-    public fun is_chain_supported(dest_chain_selector: u64): bool acquires OnRampState {
-        let state = borrow_state();
-        state.dest_chain_configs.contains(dest_chain_selector)
+    public fun is_chain_supported(
+        dest_chain_selector: u64
+    ): bool acquires OnRampState, DestChainConfigsV2 {
+        // TODO: delete this clause after migration completes
+        if (!exists<DestChainConfigsV2>(get_state_address_internal())) {
+            let state = borrow_state();
+            state.dest_chain_configs.contains(dest_chain_selector)
+        } else {
+            let dest_chain_configs_v2 = borrow_dest_chain_configs_v2();
+            dest_chain_configs_v2.dest_chain_configs.contains(dest_chain_selector)
+        }
     }
 
     #[view]
     public fun get_expected_next_sequence_number(
         dest_chain_selector: u64
-    ): u64 acquires OnRampState {
-        let state = borrow_state();
+    ): u64 acquires OnRampState, DestChainConfigsV2 {
+        // TODO: delete this clause after migration completes
+        if (!exists<DestChainConfigsV2>(get_state_address_internal())) {
+            let state = borrow_state();
+            assert!(
+                state.dest_chain_configs.contains(dest_chain_selector),
+                error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
+            );
+            let dest_chain_config = state.dest_chain_configs.borrow(dest_chain_selector);
+            return dest_chain_config.sequence_number + 1
+        };
+
+        let dest_chain_configs_v2 = borrow_dest_chain_configs_v2();
         assert!(
-            state.dest_chain_configs.contains(dest_chain_selector),
+            dest_chain_configs_v2.dest_chain_configs.contains(dest_chain_selector),
             error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
         );
-        let dest_chain_config = state.dest_chain_configs.borrow(dest_chain_selector);
+        let dest_chain_config =
+            dest_chain_configs_v2.dest_chain_configs.borrow(dest_chain_selector);
         dest_chain_config.sequence_number + 1
     }
 
@@ -349,7 +414,7 @@ module ccip_onramp::onramp {
         fee_token: address,
         fee_token_store: address,
         extra_args: vector<u8>
-    ): vector<u8> acquires OnRampState {
+    ): vector<u8> acquires OnRampState, DestChainConfigsV2 {
         // get_fee_internal checks for curse status
         let fee_token_amount =
             get_fee_internal(
@@ -389,24 +454,51 @@ module ccip_onramp::onramp {
         };
 
         let state = borrow_state_mut();
-        assert!(
-            state.dest_chain_configs.contains(dest_chain_selector),
-            error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
-        );
 
-        let dest_chain_config = state.dest_chain_configs.borrow_mut(dest_chain_selector);
-
-        if (dest_chain_config.allowlist_enabled) {
+        // TODO: delete this clause after migration completes
+        if (!exists<DestChainConfigsV2>(get_state_address_internal())) {
             assert!(
-                dest_chain_config.allowed_senders.contains(&signer::address_of(caller)),
-                error::permission_denied(E_SENDER_NOT_ALLOWED)
+                state.dest_chain_configs.contains(dest_chain_selector),
+                error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
+            );
+
+            let dest_chain_config = state.dest_chain_configs.borrow(dest_chain_selector);
+            if (dest_chain_config.allowlist_enabled) {
+                assert!(
+                    dest_chain_config.allowed_senders.contains(
+                        &signer::address_of(caller)
+                    ),
+                    error::permission_denied(E_SENDER_NOT_ALLOWED)
+                );
+            };
+
+            assert!(
+                dest_chain_config.router == signer::address_of(router),
+                error::permission_denied(E_MUST_BE_CALLED_BY_ROUTER)
+            );
+        } else {
+            let dest_chain_configs_v2 = borrow_dest_chain_configs_v2();
+            assert!(
+                dest_chain_configs_v2.dest_chain_configs.contains(dest_chain_selector),
+                error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
+            );
+            let dest_chain_config_v2 =
+                dest_chain_configs_v2.dest_chain_configs.borrow(dest_chain_selector);
+
+            if (dest_chain_config_v2.allowlist_enabled) {
+                assert!(
+                    dest_chain_config_v2.allowed_senders.contains(
+                        &signer::address_of(caller)
+                    ),
+                    error::permission_denied(E_SENDER_NOT_ALLOWED)
+                );
+            };
+
+            assert!(
+                dest_chain_config_v2.router_state_address == signer::address_of(router),
+                error::permission_denied(E_MUST_BE_CALLED_BY_ROUTER)
             );
         };
-
-        assert!(
-            dest_chain_config.router == signer::address_of(router),
-            error::invalid_argument(E_MUST_BE_CALLED_BY_ROUTER)
-        );
 
         let sender = signer::address_of(caller);
 
@@ -481,9 +573,22 @@ module ccip_onramp::onramp {
             );
         };
 
-        dest_chain_config.sequence_number += 1;
-
-        let sequence_number = dest_chain_config.sequence_number;
+        // TODO: delete this clause after migration completes
+        let sequence_number =
+            if (!exists<DestChainConfigsV2>(get_state_address_internal())) {
+                let dest_chain_config =
+                    state.dest_chain_configs.borrow_mut(dest_chain_selector);
+                dest_chain_config.sequence_number += 1;
+                dest_chain_config.sequence_number
+            } else {
+                let dest_chain_configs_v2 = borrow_dest_chain_configs_v2_mut();
+                let dest_chain_config_v2 =
+                    dest_chain_configs_v2.dest_chain_configs.borrow_mut(
+                        dest_chain_selector
+                    );
+                dest_chain_config_v2.sequence_number += 1;
+                dest_chain_config_v2.sequence_number
+            };
 
         let (
             fee_value_juels,
@@ -556,57 +661,140 @@ module ccip_onramp::onramp {
         set_dynamic_config_internal(state, fee_aggregator, allowlist_admin)
     }
 
+    public entry fun apply_dest_chain_config_updates_v2(
+        caller: &signer,
+        dest_chain_selectors: vector<u64>,
+        dest_chain_routers: vector<address>,
+        dest_chain_router_state_addresses: vector<address>,
+        dest_chain_allowlist_enabled: vector<bool>
+    ) acquires OnRampState, DestChainConfigsV2 {
+        let state = borrow_state_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+
+        apply_dest_chain_config_updates_v2_internal(
+            state,
+            borrow_dest_chain_configs_v2_mut(),
+            dest_chain_selectors,
+            dest_chain_routers,
+            dest_chain_router_state_addresses,
+            dest_chain_allowlist_enabled
+        )
+    }
+
     public entry fun apply_dest_chain_config_updates(
         caller: &signer,
         dest_chain_selectors: vector<u64>,
         dest_chain_routers: vector<address>,
         dest_chain_allowlist_enabled: vector<bool>
-    ) acquires OnRampState {
-        let state = borrow_state_mut();
-        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+    ) acquires OnRampState, DestChainConfigsV2 {
+        // Route to V2 when available, V1 for legacy deployments
+        if (exists<DestChainConfigsV2>(get_state_address_internal())) {
+            // Use V2 function with routers for both module and state addresses
+            apply_dest_chain_config_updates_v2(
+                caller,
+                dest_chain_selectors,
+                dest_chain_routers,
+                dest_chain_routers, // use same addresses for router_state_address
+                dest_chain_allowlist_enabled
+            );
+        } else {
+            // Original V1 logic for legacy deployments
+            let state = borrow_state_mut();
+            ownable::assert_only_owner(
+                signer::address_of(caller), &state.ownable_state
+            );
 
-        apply_dest_chain_config_updates_internal(
-            state,
-            dest_chain_selectors,
-            dest_chain_routers,
-            dest_chain_allowlist_enabled
+            apply_dest_chain_config_updates_internal(
+                state,
+                dest_chain_selectors,
+                dest_chain_routers,
+                dest_chain_allowlist_enabled
+            );
+        }
+    }
+
+    #[view]
+    public fun get_dest_chain_config_v2(
+        dest_chain_selector: u64
+    ): (u64, bool, address, address) acquires DestChainConfigsV2 {
+        let dest_chain_configs_v2 = borrow_dest_chain_configs_v2();
+        assert!(
+            dest_chain_configs_v2.dest_chain_configs.contains(dest_chain_selector),
+            error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
+        );
+
+        let dest_chain_config_v2 =
+            dest_chain_configs_v2.dest_chain_configs.borrow(dest_chain_selector);
+        (
+            dest_chain_config_v2.sequence_number,
+            dest_chain_config_v2.allowlist_enabled,
+            dest_chain_config_v2.router,
+            dest_chain_config_v2.router_state_address
         )
     }
 
     #[view]
     public fun get_dest_chain_config(
         dest_chain_selector: u64
-    ): (u64, bool, address) acquires OnRampState {
-        let state = borrow_state();
+    ): (u64, bool, address) acquires OnRampState, DestChainConfigsV2 {
+        // If V2 exists, read from V2 but return only V1-compatible fields
+        if (exists<DestChainConfigsV2>(get_state_address_internal())) {
+            let dest_chain_configs_v2 = borrow_dest_chain_configs_v2();
+            assert!(
+                dest_chain_configs_v2.dest_chain_configs.contains(dest_chain_selector),
+                error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
+            );
 
-        assert!(
-            state.dest_chain_configs.contains(dest_chain_selector),
-            error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
-        );
+            let dest_chain_config_v2 =
+                dest_chain_configs_v2.dest_chain_configs.borrow(dest_chain_selector);
+            (
+                dest_chain_config_v2.sequence_number,
+                dest_chain_config_v2.allowlist_enabled,
+                dest_chain_config_v2.router
+            )
+        } else {
+            let state = borrow_state();
+            assert!(
+                state.dest_chain_configs.contains(dest_chain_selector),
+                error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
+            );
 
-        let dest_chain_config = state.dest_chain_configs.borrow(dest_chain_selector);
-
-        (
-            dest_chain_config.sequence_number,
-            dest_chain_config.allowlist_enabled,
-            dest_chain_config.router
-        )
+            let dest_chain_config = state.dest_chain_configs.borrow(dest_chain_selector);
+            (
+                dest_chain_config.sequence_number,
+                dest_chain_config.allowlist_enabled,
+                dest_chain_config.router
+            )
+        }
     }
 
     #[view]
     public fun get_allowed_senders_list(
         dest_chain_selector: u64
-    ): (bool, vector<address>) acquires OnRampState {
-        let state = borrow_state();
+    ): (bool, vector<address>) acquires OnRampState, DestChainConfigsV2 {
+        // TODO: delete this clause after migration completes
+        if (!exists<DestChainConfigsV2>(get_state_address_internal())) {
+            let state = borrow_state();
+            assert!(
+                state.dest_chain_configs.contains(dest_chain_selector),
+                error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
+            );
 
-        assert!(
-            state.dest_chain_configs.contains(dest_chain_selector),
-            error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
-        );
+            let dest_chain_config = state.dest_chain_configs.borrow(dest_chain_selector);
 
-        let dest_chain_config = state.dest_chain_configs.borrow(dest_chain_selector);
+            (dest_chain_config.allowlist_enabled, dest_chain_config.allowed_senders)
+        } else {
+            let dest_chain_configs_v2 = borrow_dest_chain_configs_v2();
+            assert!(
+                dest_chain_configs_v2.dest_chain_configs.contains(dest_chain_selector),
+                error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
+            );
 
-        (dest_chain_config.allowlist_enabled, dest_chain_config.allowed_senders)
+            let dest_chain_config_v2 =
+                dest_chain_configs_v2.dest_chain_configs.borrow(dest_chain_selector);
+            (dest_chain_config_v2.allowlist_enabled,
+            dest_chain_config_v2.allowed_senders)
+        }
     }
 
     public entry fun apply_allowlist_updates(
@@ -615,7 +803,7 @@ module ccip_onramp::onramp {
         dest_chain_allowlist_enabled: vector<bool>,
         dest_chain_add_allowed_senders: vector<vector<address>>,
         dest_chain_remove_allowed_senders: vector<vector<address>>
-    ) acquires OnRampState {
+    ) acquires OnRampState, DestChainConfigsV2 {
         let state = borrow_state_mut();
         assert!(
             signer::address_of(caller) == ownable::owner(&state.ownable_state)
@@ -639,26 +827,27 @@ module ccip_onramp::onramp {
 
         for (i in 0..dest_chains_len) {
             let dest_chain_selector = dest_chain_selectors[i];
-            assert!(
-                state.dest_chain_configs.contains(dest_chain_selector),
-                error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
-            );
-
-            let allowlist_enabled = dest_chain_allowlist_enabled[i];
-            let add_allowed_senders = dest_chain_add_allowed_senders[i];
-            let remove_allowed_senders = dest_chain_remove_allowed_senders[i];
-
-            let dest_chain_config =
-                state.dest_chain_configs.borrow_mut(dest_chain_selector);
-            dest_chain_config.allowlist_enabled = allowlist_enabled;
-
-            if (add_allowed_senders.length() > 0) {
+            // TODO: delete this clause after migration completes
+            if (!exists<DestChainConfigsV2>(get_state_address_internal())) {
                 assert!(
-                    allowlist_enabled,
-                    error::invalid_argument(E_INVALID_ALLOWLIST_REQUEST)
+                    state.dest_chain_configs.contains(dest_chain_selector),
+                    error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
                 );
-                add_allowed_senders.for_each_ref(
-                    |sender_address| {
+
+                let allowlist_enabled = dest_chain_allowlist_enabled[i];
+                let add_allowed_senders = dest_chain_add_allowed_senders[i];
+                let remove_allowed_senders = dest_chain_remove_allowed_senders[i];
+
+                let dest_chain_config =
+                    state.dest_chain_configs.borrow_mut(dest_chain_selector);
+                dest_chain_config.allowlist_enabled = allowlist_enabled;
+
+                if (add_allowed_senders.length() > 0) {
+                    assert!(
+                        allowlist_enabled,
+                        error::invalid_argument(E_INVALID_ALLOWLIST_REQUEST)
+                    );
+                    add_allowed_senders.for_each_ref(|sender_address| {
                         let sender_address: address = *sender_address;
                         assert!(
                             sender_address != @0x0,
@@ -670,37 +859,97 @@ module ccip_onramp::onramp {
                         if (!found) {
                             dest_chain_config.allowed_senders.push_back(sender_address);
                         };
-                    }
-                );
+                    });
 
-                event::emit_event(
-                    &mut state.allowlist_senders_added_events,
-                    AllowlistSendersAdded {
-                        dest_chain_selector,
-                        senders: add_allowed_senders
-                    }
-                );
-            };
+                    event::emit_event(
+                        &mut state.allowlist_senders_added_events,
+                        AllowlistSendersAdded {
+                            dest_chain_selector,
+                            senders: add_allowed_senders
+                        }
+                    );
+                };
 
-            if (remove_allowed_senders.length() > 0) {
-                remove_allowed_senders.for_each_ref(
-                    |sender_address| {
+                if (remove_allowed_senders.length() > 0) {
+                    remove_allowed_senders.for_each_ref(|sender_address| {
                         let (found, i) =
                             dest_chain_config.allowed_senders.index_of(sender_address);
                         if (found) {
                             dest_chain_config.allowed_senders.swap_remove(i);
                         }
-                    }
+                    });
+
+                    event::emit_event(
+                        &mut state.allowlist_senders_removed_events,
+                        AllowlistSendersRemoved {
+                            dest_chain_selector,
+                            senders: remove_allowed_senders
+                        }
+                    );
+                };
+            } else {
+                let dest_chain_configs_v2 = borrow_dest_chain_configs_v2_mut();
+                assert!(
+                    dest_chain_configs_v2.dest_chain_configs.contains(dest_chain_selector),
+                    error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
                 );
 
-                event::emit_event(
-                    &mut state.allowlist_senders_removed_events,
-                    AllowlistSendersRemoved {
-                        dest_chain_selector,
-                        senders: remove_allowed_senders
-                    }
-                );
-            };
+                let allowlist_enabled = dest_chain_allowlist_enabled[i];
+                let add_allowed_senders = dest_chain_add_allowed_senders[i];
+                let remove_allowed_senders = dest_chain_remove_allowed_senders[i];
+
+                let dest_chain_config_v2 =
+                    dest_chain_configs_v2.dest_chain_configs.borrow_mut(
+                        dest_chain_selector
+                    );
+                dest_chain_config_v2.allowlist_enabled = allowlist_enabled;
+
+                if (add_allowed_senders.length() > 0) {
+                    assert!(
+                        allowlist_enabled,
+                        error::invalid_argument(E_INVALID_ALLOWLIST_REQUEST)
+                    );
+                    add_allowed_senders.for_each_ref(|sender_address| {
+                        let sender_address: address = *sender_address;
+                        assert!(
+                            sender_address != @0x0,
+                            error::invalid_argument(E_INVALID_ALLOWLIST_ADDRESS)
+                        );
+
+                        let (found, _) =
+                            dest_chain_config_v2.allowed_senders.index_of(&sender_address);
+                        if (!found) {
+                            dest_chain_config_v2.allowed_senders.push_back(sender_address);
+                        };
+                    });
+
+                    event::emit_event(
+                        &mut state.allowlist_senders_added_events,
+                        AllowlistSendersAdded {
+                            dest_chain_selector,
+                            senders: add_allowed_senders
+                        }
+                    );
+                };
+
+                if (remove_allowed_senders.length() > 0) {
+                    remove_allowed_senders.for_each_ref(|sender_address| {
+                        let (found, i) =
+                            dest_chain_config_v2.allowed_senders.index_of(sender_address);
+                        if (found) {
+                            dest_chain_config_v2.allowed_senders.swap_remove(i);
+                        }
+                    });
+
+                    event::emit_event(
+                        &mut state.allowlist_senders_removed_events,
+                        AllowlistSendersRemoved {
+                            dest_chain_selector,
+                            senders: remove_allowed_senders
+                        }
+                    );
+                };
+            }
         };
     }
 
@@ -724,6 +973,11 @@ module ccip_onramp::onramp {
             fee_aggregator: state.fee_aggregator,
             allowlist_admin: state.allowlist_admin
         }
+    }
+
+    #[view]
+    public fun dest_chain_configs_v2_exists(): bool {
+        exists<DestChainConfigsV2>(get_state_address_internal())
     }
 
     public entry fun withdraw_fee_tokens(fee_tokens: vector<address>) acquires OnRampState {
@@ -909,9 +1163,7 @@ module ccip_onramp::onramp {
                 eth_abi::encode_address(
                     &mut token_hash, token_transfer.source_pool_address
                 );
-                eth_abi::encode_bytes(
-                    &mut token_hash, token_transfer.dest_token_address
-                );
+                eth_abi::encode_bytes(&mut token_hash, token_transfer.dest_token_address);
                 eth_abi::encode_bytes(&mut token_hash, token_transfer.extra_data);
                 eth_abi::encode_u64(&mut token_hash, token_transfer.amount);
                 eth_abi::encode_bytes(&mut token_hash, token_transfer.dest_exec_data);
@@ -926,6 +1178,78 @@ module ccip_onramp::onramp {
         );
 
         aptos_hash::keccak256(outer_hash)
+    }
+
+    inline fun apply_dest_chain_config_updates_v2_internal(
+        state: &mut OnRampState,
+        dest_chain_configs_v2: &mut DestChainConfigsV2,
+        dest_chain_selectors: vector<u64>,
+        dest_chain_routers: vector<address>,
+        dest_chain_router_state_addresses: vector<address>,
+        dest_chain_allowlist_enabled: vector<bool>
+    ) {
+        let dest_chains_len = dest_chain_selectors.length();
+        assert!(
+            dest_chains_len == dest_chain_routers.length(),
+            error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
+        );
+        assert!(
+            dest_chains_len == dest_chain_allowlist_enabled.length(),
+            error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
+        );
+        assert!(
+            dest_chains_len == dest_chain_router_state_addresses.length(),
+            error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
+        );
+
+        for (i in 0..dest_chains_len) {
+            let dest_chain_selector = dest_chain_selectors[i];
+            assert!(
+                dest_chain_selector != 0,
+                error::invalid_argument(E_INVALID_DEST_CHAIN_SELECTOR)
+            );
+
+            if (!dest_chain_configs_v2.dest_chain_configs.contains(dest_chain_selector)) {
+                dest_chain_configs_v2.dest_chain_configs.add(
+                    dest_chain_selector,
+                    DestChainConfigV2 {
+                        sequence_number: 0,
+                        router: @0x0,
+                        router_state_address: @0x0,
+                        allowlist_enabled: false,
+                        allowed_senders: vector[]
+                    }
+                );
+            };
+
+            let dest_chain_config =
+                dest_chain_configs_v2.dest_chain_configs.borrow_mut(dest_chain_selector);
+
+            dest_chain_config.router = dest_chain_routers[i];
+            dest_chain_config.router_state_address = dest_chain_router_state_addresses[i];
+            dest_chain_config.allowlist_enabled = dest_chain_allowlist_enabled[i];
+
+            event::emit_event(
+                &mut state.dest_chain_config_set_events,
+                DestChainConfigSet {
+                    dest_chain_selector,
+                    sequence_number: dest_chain_config.sequence_number,
+                    allowlist_enabled: dest_chain_config.allowlist_enabled,
+                    router: dest_chain_config.router
+                }
+            );
+
+            event::emit_event(
+                &mut dest_chain_configs_v2.dest_chain_config_v2_set_events,
+                DestChainConfigSetV2 {
+                    dest_chain_selector,
+                    sequence_number: dest_chain_config.sequence_number,
+                    router: dest_chain_config.router,
+                    router_state_address: dest_chain_config.router_state_address,
+                    allowlist_enabled: dest_chain_config.allowlist_enabled
+                }
+            );
+        };
     }
 
     inline fun apply_dest_chain_config_updates_internal(
@@ -996,6 +1320,22 @@ module ccip_onramp::onramp {
         borrow_global_mut<OnRampState>(get_state_address_internal())
     }
 
+    inline fun borrow_dest_chain_configs_v2(): &DestChainConfigsV2 {
+        assert!(
+            exists<DestChainConfigsV2>(get_state_address_internal()),
+            error::invalid_state(E_DEST_CHAIN_CONFIGS_V2_NOT_INITIALIZED)
+        );
+        borrow_global<DestChainConfigsV2>(get_state_address_internal())
+    }
+
+    inline fun borrow_dest_chain_configs_v2_mut(): &mut DestChainConfigsV2 {
+        assert!(
+            exists<DestChainConfigsV2>(get_state_address_internal()),
+            error::invalid_state(E_DEST_CHAIN_CONFIGS_V2_NOT_INITIALIZED)
+        );
+        borrow_global_mut<DestChainConfigsV2>(get_state_address_internal())
+    }
+
     //
     // ccip::ownable functions
     //
@@ -1050,7 +1390,7 @@ module ccip_onramp::onramp {
 
     public fun mcms_entrypoint<T: key>(
         _metadata: Object<T>
-    ): option::Option<u128> acquires OnRampDeployment, OnRampState {
+    ): option::Option<u128> acquires OnRampDeployment, OnRampState, DestChainConfigsV2 {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip_onramp, McmsCallback {});
 
@@ -1091,6 +1431,35 @@ module ccip_onramp::onramp {
             let allowlist_admin = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
             set_dynamic_config(&caller, fee_aggregator, allowlist_admin);
+        } else if (function_bytes == b"apply_dest_chain_config_updates_v2") {
+            let dest_chain_selectors =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let dest_chain_routers =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_address(stream)
+                );
+            let dest_chain_router_state_addresses =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_address(stream)
+                );
+            let dest_chain_allowlist_enabled =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_bool(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            apply_dest_chain_config_updates_v2(
+                &caller,
+                dest_chain_selectors,
+                dest_chain_routers,
+                dest_chain_router_state_addresses,
+                dest_chain_allowlist_enabled
+            );
         } else if (function_bytes == b"apply_dest_chain_config_updates") {
             let dest_chain_selectors =
                 bcs_stream::deserialize_vector(
@@ -1160,6 +1529,21 @@ module ccip_onramp::onramp {
             let to = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
             execute_ownership_transfer(&caller, to)
+        } else if (function_bytes == b"migrate_dest_chain_configs_to_v2") {
+            let dest_chain_selectors =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_u64(stream)
+                );
+            let router_module_addresses =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_address(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            migrate_dest_chain_configs_to_v2(
+                &caller, dest_chain_selectors, router_module_addresses
+            )
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };
@@ -1185,6 +1569,102 @@ module ccip_onramp::onramp {
         config.chain_selector
     }
 
+    // ========================= MIGRATION ==========================
+
+    public entry fun migrate_dest_chain_configs_to_v2(
+        caller: &signer,
+        dest_chain_selectors: vector<u64>,
+        router_module_addresses: vector<address>
+    ) acquires OnRampState, DestChainConfigsV2 {
+        let state = borrow_state_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
+
+        let state_address = get_state_address_internal();
+
+        let state_signer =
+            &account::create_signer_with_capability(&state.state_signer_cap);
+
+        if (!exists<DestChainConfigsV2>(state_address)) {
+            let dest_chain_configs_v2 = DestChainConfigsV2 {
+                dest_chain_configs: smart_table::new(),
+                dest_chain_config_v2_set_events: account::new_event_handle(state_signer)
+            };
+            move_to(state_signer, dest_chain_configs_v2);
+        };
+
+        migrate_dest_chain_configs_v2_internal(
+            state,
+            borrow_dest_chain_configs_v2_mut(),
+            dest_chain_selectors,
+            router_module_addresses
+        );
+    }
+
+    inline fun migrate_dest_chain_configs_v2_internal(
+        state: &mut OnRampState,
+        dest_chain_configs_v2: &mut DestChainConfigsV2,
+        dest_chain_selectors: vector<u64>,
+        router_module_addresses: vector<address>
+    ) {
+        assert!(
+            dest_chain_selectors.length() == router_module_addresses.length(),
+            error::invalid_argument(E_DEST_CHAIN_ARGUMENT_MISMATCH)
+        );
+
+        // Migrate V1 configs to V2 for provided parameters
+        for (i in 0..dest_chain_selectors.length()) {
+            let dest_chain_selector = dest_chain_selectors[i];
+            let router_module_address = router_module_addresses[i];
+
+            assert!(
+                state.dest_chain_configs.contains(dest_chain_selector),
+                error::invalid_argument(E_UNKNOWN_DEST_CHAIN_SELECTOR)
+            );
+
+            let DestChainConfig {
+                sequence_number,
+                allowlist_enabled,
+                router: router_state_address,
+                allowed_senders
+            } = state.dest_chain_configs.remove(dest_chain_selector);
+
+            let dest_chain_config_v2 = DestChainConfigV2 {
+                sequence_number,
+                allowlist_enabled,
+                router: router_module_address,
+                router_state_address,
+                allowed_senders
+            };
+
+            // Only add if it doesn't exist in V2
+            if (!dest_chain_configs_v2.dest_chain_configs.contains(dest_chain_selector)) {
+                dest_chain_configs_v2.dest_chain_configs.add(
+                    dest_chain_selector, dest_chain_config_v2
+                );
+
+                event::emit_event(
+                    &mut state.dest_chain_config_set_events,
+                    DestChainConfigSet {
+                        dest_chain_selector,
+                        sequence_number,
+                        allowlist_enabled,
+                        router: router_module_address
+                    }
+                );
+                event::emit_event(
+                    &mut dest_chain_configs_v2.dest_chain_config_v2_set_events,
+                    DestChainConfigSetV2 {
+                        dest_chain_selector,
+                        sequence_number,
+                        router: router_module_address,
+                        router_state_address,
+                        allowlist_enabled
+                    }
+                );
+            }
+        };
+    }
+
     // ========================== TEST ONLY ==========================
 
     #[test_only]
@@ -1195,5 +1675,71 @@ module ccip_onramp::onramp {
     #[test_only]
     public fun test_register_mcms_entrypoint(publisher: &signer) {
         register_mcms_entrypoint(publisher);
+    }
+
+    #[test_only]
+    public fun get_dest_chain_config_set_events(): vector<DestChainConfigSet> acquires OnRampState {
+        event::emitted_events_by_handle<DestChainConfigSet>(
+            &borrow_state().dest_chain_config_set_events
+        )
+    }
+
+    #[test_only]
+    public fun get_dest_chain_config_v2_set_events(): vector<DestChainConfigSetV2> acquires DestChainConfigsV2 {
+        event::emitted_events_by_handle<DestChainConfigSetV2>(
+            &borrow_dest_chain_configs_v2().dest_chain_config_v2_set_events
+        )
+    }
+
+    #[test_only]
+    public entry fun initialize_v1(
+        caller: &signer,
+        chain_selector: u64,
+        fee_aggregator: address,
+        allowlist_admin: address,
+        dest_chain_selectors: vector<u64>,
+        dest_chain_routers: vector<address>,
+        dest_chain_allowlist_enabled: vector<bool>
+    ) acquires OnRampDeployment {
+        assert!(chain_selector != 0, E_ZERO_CHAIN_SELECTOR);
+        assert!(
+            exists<OnRampDeployment>(@ccip_onramp),
+            error::invalid_state(E_ALREADY_INITIALIZED)
+        );
+
+        let OnRampDeployment { state_signer_cap } =
+            move_from<OnRampDeployment>(@ccip_onramp);
+
+        let state_signer = &account::create_signer_with_capability(&state_signer_cap);
+
+        let ownable_state = ownable::new(state_signer, @ccip_onramp);
+
+        ownable::assert_only_owner(signer::address_of(caller), &ownable_state);
+
+        let state = OnRampState {
+            state_signer_cap,
+            ownable_state,
+            chain_selector,
+            fee_aggregator: @0x0,
+            allowlist_admin: @0x0,
+            dest_chain_configs: smart_table::new(),
+            config_set_events: account::new_event_handle(state_signer),
+            dest_chain_config_set_events: account::new_event_handle(state_signer),
+            ccip_message_sent_events: account::new_event_handle(state_signer),
+            allowlist_senders_added_events: account::new_event_handle(state_signer),
+            allowlist_senders_removed_events: account::new_event_handle(state_signer),
+            fee_token_withdrawn_events: account::new_event_handle(state_signer)
+        };
+
+        set_dynamic_config_internal(&mut state, fee_aggregator, allowlist_admin);
+
+        apply_dest_chain_config_updates_internal(
+            &mut state,
+            dest_chain_selectors,
+            dest_chain_routers,
+            dest_chain_allowlist_enabled
+        );
+
+        move_to(state_signer, state);
     }
 }
