@@ -1050,10 +1050,12 @@ module regulated_token::regulated_token_test {
     fun freeze_accounts_for_test(
         freezer: &signer, accounts: vector<address>
     ) {
-        accounts.for_each(|account| {
-            account::create_account_for_test(account);
-            regulated_token::freeze_accounts(freezer, vector[account]);
-        });
+        accounts.for_each(
+            |account| {
+                account::create_account_for_test(account);
+                regulated_token::freeze_accounts(freezer, vector[account]);
+            }
+        );
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]

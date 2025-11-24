@@ -26,5 +26,5 @@ AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "
 ChainlinkCCIP = { local = "../ccip" }
 
 [dev-dependencies]
-BurnMintTokenPool = { local = "../ccip_token_pools/burn_mint_token_pool", addr_subst = {} }
-LockReleaseTokenPool = { local = "../ccip_token_pools/lock_release_token_pool", addr_subst = {} }
+BurnMintTokenPool = { local = "../ccip_token_pools/burn_mint_token_pool" }
+LockReleaseTokenPool = { local = "../ccip_token_pools/lock_release_token_pool" }

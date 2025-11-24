@@ -611,16 +611,18 @@ module ccip_offramp::offramp {
         let merkle_root_min_seq_nrs = vector[];
         let merkle_root_max_seq_nrs = vector[];
         let merkle_root_values = vector[];
-        blessed_merkle_roots.for_each_ref(|merkle_root| {
-            let merkle_root: &MerkleRoot = merkle_root;
-            merkle_root_source_chains_selector.push_back(
-                merkle_root.source_chain_selector
-            );
-            merkle_root_on_ramp_addresses.push_back(merkle_root.on_ramp_address);
-            merkle_root_min_seq_nrs.push_back(merkle_root.min_seq_nr);
-            merkle_root_max_seq_nrs.push_back(merkle_root.max_seq_nr);
-            merkle_root_values.push_back(merkle_root.merkle_root);
-        });
+        blessed_merkle_roots.for_each_ref(
+            |merkle_root| {
+                let merkle_root: &MerkleRoot = merkle_root;
+                merkle_root_source_chains_selector.push_back(
+                    merkle_root.source_chain_selector
+                );
+                merkle_root_on_ramp_addresses.push_back(merkle_root.on_ramp_address);
+                merkle_root_min_seq_nrs.push_back(merkle_root.min_seq_nr);
+                merkle_root_max_seq_nrs.push_back(merkle_root.max_seq_nr);
+                merkle_root_values.push_back(merkle_root.merkle_root);
+            }
+        );
 
         rmn_remote::verify(
             @ccip_offramp,
@@ -1132,7 +1134,9 @@ module ccip_offramp::offramp {
         message.token_amounts.for_each_ref(
             |token_transfer| {
                 let token_transfer: &Any2AptosTokenTransfer = token_transfer;
-                eth_abi::encode_bytes(&mut token_hash, token_transfer.source_pool_address);
+                eth_abi::encode_bytes(
+                    &mut token_hash, token_transfer.source_pool_address
+                );
                 eth_abi::encode_address(
                     &mut token_hash, token_transfer.dest_token_address
                 );
@@ -1731,7 +1735,8 @@ module ccip_offramp::offramp {
     }
 
     #[test_only]
-    public fun token_amounts(message: &Any2AptosRampMessage): &vector<Any2AptosTokenTransfer> {
+    public fun token_amounts(message: &Any2AptosRampMessage)
+        : &vector<Any2AptosTokenTransfer> {
         &message.token_amounts
     }
 
@@ -1741,7 +1746,8 @@ module ccip_offramp::offramp {
     }
 
     #[test_only]
-    public fun commit_report_blessed_merkle_roots(report: &CommitReport): &vector<MerkleRoot> {
+    public fun commit_report_blessed_merkle_roots(report: &CommitReport)
+        : &vector<MerkleRoot> {
         &report.blessed_merkle_roots
     }
 
@@ -1765,8 +1771,8 @@ module ccip_offramp::offramp {
     }
 
     #[test_only]
-    public fun price_updates_gas_price_updates(updates: &PriceUpdates):
-        &vector<GasPriceUpdate> {
+    public fun price_updates_gas_price_updates(updates: &PriceUpdates)
+        : &vector<GasPriceUpdate> {
         &updates.gas_price_updates
     }
 

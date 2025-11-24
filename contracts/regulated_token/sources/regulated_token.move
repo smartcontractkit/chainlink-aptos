@@ -955,9 +955,8 @@ module regulated_token::regulated_token {
         assert_not_frozen(to, token_state);
     }
 
-    inline fun validate_recovery_procedure(caller: &signer, to: address): (
-        &TransferRef, &TokenState
-    ) {
+    inline fun validate_recovery_procedure(caller: &signer, to: address)
+        : (&TransferRef, &TokenState) {
         let state_obj = token_state_object_internal();
         let token_state = &TokenState[object::object_address(&state_obj)];
 
