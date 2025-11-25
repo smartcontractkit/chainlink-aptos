@@ -86,16 +86,20 @@ module ccip::token_admin_registry {
     struct ReleaseOrMintOutputV1 has store, drop {
         destination_amount: u64
     }
+
     public fun new_lock_or_burn_output_v1(
-        dest_token_address: vector<u8>,
-        dest_pool_data: vector<u8>
+        dest_token_address: vector<u8>, dest_pool_data: vector<u8>
     ): LockOrBurnOutputV1 {
         LockOrBurnOutputV1 { dest_token_address, dest_pool_data }
     }
 
     struct TokenPoolCallbacks has drop, copy, store {
-        lock_or_burn: |fungible_asset::FungibleAsset, LockOrBurnInputV1| LockOrBurnOutputV1 has drop + copy + store,
-        release_or_mint: |ReleaseOrMintInputV1| (fungible_asset::FungibleAsset, u64) has drop + copy + store,
+        lock_or_burn: |
+            fungible_asset::FungibleAsset,
+            LockOrBurnInputV1
+        | LockOrBurnOutputV1 has drop + copy + store,
+        release_or_mint: |ReleaseOrMintInputV1| (fungible_asset::FungibleAsset, u64) has drop
+            + copy + store
     }
 
     struct TokenPoolConfig has key {
@@ -240,8 +244,16 @@ module ccip::token_admin_registry {
 
     #[view]
     /// Returns the local token address for the token pool.
-    public fun get_pool_local_token_v2(token_pool_address: address): address acquires TokenPoolConfig {
+    public fun get_pool_local_token_v2(
+        token_pool_address: address
+    ): address acquires TokenPoolConfig {
         TokenPoolConfig[token_pool_address].local_token
+    }
+
+    #[view]
+    /// Returns true if token pool has TokenPoolConfig resource
+    public fun has_token_pool_config(token_pool_address: address): bool {
+        exists<TokenPoolConfig>(token_pool_address)
     }
 
     #[view]
@@ -420,8 +432,12 @@ module ccip::token_admin_registry {
         token_pool_account: &signer,
         token_pool_module_name: vector<u8>,
         local_token: address,
-        lock_or_burn: |fungible_asset::FungibleAsset, LockOrBurnInputV1| LockOrBurnOutputV1 has drop + copy + store,
-        release_or_mint: |ReleaseOrMintInputV1| (fungible_asset::FungibleAsset, u64) has drop + copy + store,
+        lock_or_burn: |
+            fungible_asset::FungibleAsset,
+            LockOrBurnInputV1
+        | LockOrBurnOutputV1 has drop + copy + store,
+        release_or_mint: |ReleaseOrMintInputV1| (fungible_asset::FungibleAsset, u64) has drop
+        + copy + store,
         _proof: ProofType
     ) {
         let token_pool_address = signer::address_of(token_pool_account);
@@ -507,13 +523,14 @@ module ccip::token_admin_registry {
 
         let caller_addr = signer::address_of(caller);
 
-        let pool_local_token = if (exists<TokenPoolConfig>(token_pool_address)) {
-            get_pool_local_token_v2(token_pool_address)
-        } else if (exists<TokenPoolRegistration>(token_pool_address)) {
-            get_registration(token_pool_address).local_token
-        } else {
-            abort error::invalid_argument(E_POOL_NOT_REGISTERED)
-        };
+        let pool_local_token =
+            if (exists<TokenPoolConfig>(token_pool_address)) {
+                get_pool_local_token_v2(token_pool_address)
+            } else if (exists<TokenPoolRegistration>(token_pool_address)) {
+                get_registration(token_pool_address).local_token
+            } else {
+                abort error::invalid_argument(E_POOL_NOT_REGISTERED)
+            };
 
         assert!(
             pool_local_token == local_token,
@@ -1071,13 +1088,10 @@ module ccip::token_admin_registry {
         auth::assert_is_allowed_onramp(signer::address_of(caller));
 
         let pool_config = &TokenPoolConfig[token_pool_address];
-        let input = LockOrBurnInputV1 {
-            sender,
-            remote_chain_selector,
-            receiver
-        };
+        let input = LockOrBurnInputV1 { sender, remote_chain_selector, receiver };
 
-        let output = (pool_config.callbacks.lock_or_burn)(fa, input);
+        let output = (pool_config.callbacks.lock_or_burn)
+        (fa, input);
         (output.dest_token_address, output.dest_pool_data)
     }
 
@@ -1107,7 +1121,8 @@ module ccip::token_admin_registry {
             offchain_token_data
         };
 
-        (pool_config.callbacks.release_or_mint)(input)
+        (pool_config.callbacks.release_or_mint)
+        (input)
     }
 
     inline fun borrow_state(): &TokenAdminRegistryState {

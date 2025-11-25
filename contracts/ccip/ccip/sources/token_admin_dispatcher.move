@@ -16,17 +16,29 @@ module ccip::token_admin_dispatcher {
     ): (vector<u8>, vector<u8>) {
         auth::assert_is_allowed_onramp(signer::address_of(caller));
 
-        let dispatch_fungible_store =
-            token_admin_registry::start_lock_or_burn(
+        // Check for V2 first (preferred - uses closures)
+        if (token_admin_registry::has_token_pool_config(token_pool_address)) {
+            token_admin_registry::lock_or_burn_v2(
+                caller,
                 token_pool_address,
+                fa,
                 sender,
                 remote_chain_selector,
                 receiver
-            );
+            )
+        } else {
+            let dispatch_fungible_store =
+                token_admin_registry::start_lock_or_burn(
+                    token_pool_address,
+                    sender,
+                    remote_chain_selector,
+                    receiver
+                );
 
-        dispatchable_fungible_asset::deposit(dispatch_fungible_store, fa);
+            dispatchable_fungible_asset::deposit(dispatch_fungible_store, fa);
 
-        token_admin_registry::finish_lock_or_burn(token_pool_address)
+            token_admin_registry::finish_lock_or_burn(token_pool_address)
+        }
     }
 
     public fun dispatch_release_or_mint(
@@ -43,8 +55,9 @@ module ccip::token_admin_dispatcher {
     ): (FungibleAsset, u64) {
         auth::assert_is_allowed_offramp(signer::address_of(caller));
 
-        let (dispatch_owner, dispatch_fungible_store) =
-            token_admin_registry::start_release_or_mint(
+        if (token_admin_registry::has_token_pool_config(token_pool_address)) {
+            token_admin_registry::release_or_mint_v2(
+                caller,
                 token_pool_address,
                 sender,
                 receiver,
@@ -54,17 +67,31 @@ module ccip::token_admin_dispatcher {
                 source_pool_address,
                 source_pool_data,
                 offchain_token_data
-            );
+            )
+        } else {
+            let (dispatch_owner, dispatch_fungible_store) =
+                token_admin_registry::start_release_or_mint(
+                    token_pool_address,
+                    sender,
+                    receiver,
+                    source_amount,
+                    local_token,
+                    remote_chain_selector,
+                    source_pool_address,
+                    source_pool_data,
+                    offchain_token_data
+                );
 
-        let fa =
-            dispatchable_fungible_asset::withdraw(
-                &dispatch_owner, dispatch_fungible_store, 0
-            );
+            let fa =
+                dispatchable_fungible_asset::withdraw(
+                    &dispatch_owner, dispatch_fungible_store, 0
+                );
 
-        let destination_amount =
-            token_admin_registry::finish_release_or_mint(token_pool_address);
+            let destination_amount =
+                token_admin_registry::finish_release_or_mint(token_pool_address);
 
-        (fa, destination_amount)
+            (fa, destination_amount)
+        }
     }
 
     // ============================================
