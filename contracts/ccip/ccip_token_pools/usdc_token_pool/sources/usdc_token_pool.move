@@ -1045,4 +1045,10 @@ module usdc_token_pool::usdc_token_pool {
     public fun test_init_module(publisher: &signer) {
         init_module(publisher);
     }
+
+    #[test_only]
+    /// Used for registering the pool with V2 closure-based callbacks.
+    public fun create_callback_proof(): CallbackProof {
+        CallbackProof {}
+    }
 }

@@ -707,4 +707,59 @@ module regulated_token_pool::regulated_token_pool {
     public entry fun test_init_module(owner: &signer) {
         init_module(owner);
     }
+
+    #[test_only]
+    /// Used for registering the pool with V2 closure-based callbacks.
+    public fun create_callback_proof(): CallbackProof {
+        CallbackProof {}
+    }
+
+    #[test_only]
+    public fun test_init_v1(publisher: &signer) {
+        // register the pool on deployment, because in the case of object code deployment,
+        // this is the only time we have a signer ref to @regulated_token_pool.
+
+        // create an Account on the object for event handles.
+        account::create_account_if_does_not_exist(@regulated_token_pool);
+
+        // the name of this module. if incorrect, callbacks will fail to be registered and
+        // register_pool will revert.
+        let token_pool_module_name = b"regulated_token_pool";
+
+        // Register the entrypoint with mcms
+        if (@mcms_register_entrypoints == @0x1) {
+            register_mcms_entrypoint(publisher, token_pool_module_name);
+        };
+
+        let regulated_token_address = regulated_token::token_address();
+        token_admin_registry::register_pool(
+            publisher,
+            token_pool_module_name,
+            regulated_token_address,
+            CallbackProof {}
+        );
+
+        // create a resource account to be the owner of the primary FungibleStore we will use.
+        let (store_signer, store_signer_cap) =
+            account::create_resource_account(publisher, STORE_OBJECT_SEED);
+
+        let metadata = object::address_to_object<Metadata>(regulated_token_address);
+
+        // make sure this is a valid fungible asset that is primary fungible store enabled,
+        // ie. created with primary_fungible_store::create_primary_store_enabled_fungible_asset
+        primary_fungible_store::ensure_primary_store_exists(
+            signer::address_of(&store_signer), metadata
+        );
+
+        let pool = RegulatedTokenPoolState {
+            ownable_state: ownable::new(&store_signer, @regulated_token_pool),
+            store_signer_address: signer::address_of(&store_signer),
+            store_signer_cap,
+            token_pool_state: token_pool::initialize(
+                &store_signer, regulated_token_address, vector[]
+            )
+        };
+
+        move_to(&store_signer, pool);
+    }
 }

@@ -4,9 +4,10 @@
 module ccip_offramp::mock_ccip_receiver {
     use std::account;
     use std::event;
-    use std::object::{Self};
+    use std::object::{Self, Object};
     use std::string::{Self, String};
-    use std::fungible_asset::{Metadata};
+    use std::fungible_asset::{Self, Metadata};
+    use std::option::{Self, Option};
     use std::primary_fungible_store;
     use std::from_bcs;
     use std::signer;
@@ -71,10 +72,30 @@ module ccip_offramp::mock_ccip_receiver {
             }
         );
 
+        // Default to V2 registration
         receiver_registry::register_receiver_v2(
             publisher,
             MODULE_NAME,
-            |message| ccip_receive(message),
+            |message| ccip_receive_v2(message),
+            CCIPReceiverProof {}
+        );
+    }
+
+    /// Register this receiver as V1 (dispatchable fungible asset mode)
+    /// This is used for testing V1 compatibility
+    public fun register_as_v1(publisher: &signer) {
+        receiver_registry::register_receiver(publisher, MODULE_NAME, CCIPReceiverProof {});
+    }
+
+    /// Migrate from V1 to V2 registration
+    /// This demonstrates the upgrade path from dispatchable FA to closures
+    public fun migrate_to_v2(publisher: &signer) {
+        // V2 registration will coexist with V1
+        // The dispatcher will prefer V2 when both exist
+        receiver_registry::register_receiver_v2(
+            publisher,
+            MODULE_NAME,
+            |message| ccip_receive_v2(message),
             CCIPReceiverProof {}
         );
     }
@@ -88,7 +109,83 @@ module ccip_offramp::mock_ccip_receiver {
 
     struct CCIPReceiverProof has drop {}
 
-    public fun ccip_receive(message: client::Any2AptosMessage) acquires CCIPReceiverState {
+    /// This function should only be used with non-dispatchable tokens,
+    /// as it is currently incompatible with dispatchable tokens.
+    public fun ccip_receive<T: key>(_metadata: Object<T>): Option<u128> acquires CCIPReceiverState {
+        /* load state and rebuild a signer for the resource account */
+        let state = borrow_global_mut<CCIPReceiverState>(@ccip_offramp);
+        let state_signer = account::create_signer_with_capability(&state.signer_cap);
+
+        let message =
+            receiver_registry::get_receiver_input(@ccip_offramp, CCIPReceiverProof {});
+
+        let data = client::get_data(&message);
+
+        let dest_token_amounts = client::get_dest_token_amounts(&message);
+
+        if (dest_token_amounts.length() != 0 && data.length() != 0) {
+            let final_recipient = from_bcs::to_address(data);
+
+            for (i in 0..dest_token_amounts.length()) {
+                let token_amount_ref = &dest_token_amounts[i];
+                let token_addr = client::get_token(token_amount_ref);
+                let amount = client::get_amount(token_amount_ref);
+
+                // Implement the token transfer logic here
+
+                let fa_token = object::address_to_object<Metadata>(token_addr);
+                let fa_store_sender =
+                    primary_fungible_store::ensure_primary_store_exists(
+                        @ccip_offramp, fa_token
+                    );
+                let fa_store_receiver =
+                    primary_fungible_store::ensure_primary_store_exists(
+                        final_recipient, fa_token
+                    );
+
+                fungible_asset::transfer(
+                    &state_signer,
+                    fa_store_sender,
+                    fa_store_receiver,
+                    amount
+                );
+            };
+
+            event::emit(ForwardedTokens { final_recipient });
+            event::emit_event(
+                &mut state.forwarded_tokens_handle, ForwardedTokens { final_recipient }
+            );
+
+        } else if (data.length() != 0) {
+
+            // Convert the vector<u8> to a string
+            let message = string::utf8(data);
+
+            event::emit(ReceivedMessage { message });
+            event::emit_event(
+                &mut state.received_message_handle, ReceivedMessage { message }
+            );
+
+        } else if (dest_token_amounts.length() != 0) {
+            // Tokens only (no forwarding data) - keep them at receiver
+            // Emit event to prove receiver was called
+            let token_count = dest_token_amounts.length();
+            event::emit(ReceivedTokensOnly { token_count });
+            event::emit_event(
+                &mut state.received_tokens_only_handle,
+                ReceivedTokensOnly { token_count }
+            );
+        };
+
+        // Simple abort condition for testing
+        if (data == b"abort") {
+            abort 1
+        };
+
+        option::none()
+    }
+
+    public fun ccip_receive_v2(message: client::Any2AptosMessage) acquires CCIPReceiverState {
         /* load state and rebuild a signer for the resource account */
         let state = borrow_global_mut<CCIPReceiverState>(@ccip_offramp);
         let state_signer = account::create_signer_with_capability(&state.signer_cap);
@@ -169,6 +266,31 @@ module ccip_offramp::mock_ccip_receiver {
 
     public fun test_init_module(publisher: &signer) {
         init_module(publisher);
+    }
+
+    /// Initialize without auto-registering (for testing V1/V2 manually)
+    public fun test_init_state_only(publisher: &signer) {
+        // Create a signer capability for the receiver account
+        let signer_cap = account::create_test_signer_cap(signer::address_of(publisher));
+
+        // Create a unique handle for each event type
+        let received_message_handle =
+            account::new_event_handle<ReceivedMessage>(publisher);
+        let forwarded_tokens_handle =
+            account::new_event_handle<ForwardedTokens>(publisher);
+        let received_tokens_only_handle =
+            account::new_event_handle<ReceivedTokensOnly>(publisher);
+
+        // Move all state into the single resource struct
+        move_to(
+            publisher,
+            CCIPReceiverState {
+                signer_cap,
+                received_message_handle,
+                forwarded_tokens_handle,
+                received_tokens_only_handle
+            }
+        );
     }
 
     public fun get_received_message_events(): vector<ReceivedMessage> acquires CCIPReceiverState {

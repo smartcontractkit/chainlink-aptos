@@ -34,7 +34,7 @@ module ccip::receiver_registry {
 
     struct CCIPReceiverRegistrationV2 has key {
         callback: |client::Any2AptosMessage| has drop + copy + store,
-        proof_typeinfo: TypeInfo,
+        proof_typeinfo: TypeInfo
     }
 
     #[event]
@@ -167,7 +167,7 @@ module ccip::receiver_registry {
         );
 
         move_to(
-            receiver_account, 
+            receiver_account,
             CCIPReceiverRegistrationV2 { callback, proof_typeinfo }
         );
 
@@ -181,6 +181,7 @@ module ccip::receiver_registry {
     #[view]
     public fun is_registered_receiver(receiver_address: address): bool {
         exists<CCIPReceiverRegistration>(receiver_address)
+            || exists<CCIPReceiverRegistrationV2>(receiver_address)
     }
 
     #[view]
@@ -221,9 +222,7 @@ module ccip::receiver_registry {
         registration.dispatch_metadata
     }
 
-    public(friend) fun finish_receive(
-        receiver_address: address
-    ) acquires CCIPReceiverRegistration {
+    public(friend) fun finish_receive(receiver_address: address) acquires CCIPReceiverRegistration {
         let registration = get_registration_mut(receiver_address);
 
         assert!(
@@ -233,8 +232,7 @@ module ccip::receiver_registry {
     }
 
     public(friend) fun invoke_ccip_receive_v2(
-        receiver_address: address,
-        message: client::Any2AptosMessage
+        receiver_address: address, message: client::Any2AptosMessage
     ) acquires CCIPReceiverRegistrationV2 {
         assert!(
             exists<CCIPReceiverRegistrationV2>(receiver_address),
@@ -242,8 +240,7 @@ module ccip::receiver_registry {
         );
 
         let registration = borrow_global<CCIPReceiverRegistrationV2>(receiver_address);
-
-        (registration.callback)(message);
+        (registration.callback) (message);
     }
 
     inline fun borrow_state(): &ReceiverRegistryState {

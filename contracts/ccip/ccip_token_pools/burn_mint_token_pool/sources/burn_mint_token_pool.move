@@ -85,6 +85,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
         let lock_or_burn_closure = |fa, input| lock_or_burn_v2(fa, input);
         let release_or_mint_closure = |input| release_or_mint_v2(input);
 
+        // If the contract has already been deployed with V1 and needs to be upgraded to V2,
+        // create a new module
         token_admin_registry::register_pool_v2(
             publisher,
             token_pool_module_name,
@@ -809,5 +811,62 @@ module burn_mint_token_pool::burn_mint_token_pool {
         token_pool::get_released_or_minted_events(
             &borrow_global<BurnMintTokenPoolState>(state).token_pool_state
         )
+    }
+
+    #[test_only]
+    /// Used for registering the pool with V2 closure-based callbacks.
+    public fun create_callback_proof(): CallbackProof {
+        CallbackProof {}
+    }
+
+    #[test_only]
+    public fun test_init_v1(publisher: &signer) {
+        // register the pool on deployment, because in the case of object code deployment,
+        // this is the only time we have a signer ref to @ccip_burn_mint_pool.
+        assert!(
+            object::object_exists<Metadata>(@burn_mint_local_token),
+            error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
+        );
+        let metadata = object::address_to_object<Metadata>(@burn_mint_local_token);
+
+        // create an Account on the object for event handles.
+        account::create_account_if_does_not_exist(@burn_mint_token_pool);
+
+        // the name of this module. if incorrect, callbacks will fail to be registered and
+        // register_pool will revert.
+        let token_pool_module_name = b"burn_mint_token_pool";
+
+        // Register the entrypoint with mcms
+        if (@mcms_register_entrypoints == @0x1) {
+            register_mcms_entrypoint(publisher, token_pool_module_name);
+        };
+
+        token_admin_registry::register_pool(
+            publisher,
+            token_pool_module_name,
+            @burn_mint_local_token,
+            CallbackProof {}
+        );
+
+        // create a resource account to be the owner of the primary FungibleStore we will use.
+        let (store_signer, store_signer_cap) =
+            account::create_resource_account(publisher, STORE_OBJECT_SEED);
+
+        // make sure this is a valid fungible asset that is primary fungible store enabled,
+        // ie. created with primary_fungible_store::create_primary_store_enabled_fungible_asset
+        primary_fungible_store::ensure_primary_store_exists(
+            signer::address_of(&store_signer), metadata
+        );
+
+        move_to(
+            publisher,
+            BurnMintTokenPoolDeployment {
+                store_signer_cap,
+                ownable_state: ownable::new(&store_signer, @burn_mint_token_pool),
+                token_pool_state: token_pool::initialize(
+                    &store_signer, @burn_mint_local_token, vector[]
+                )
+            }
+        );
     }
 }
