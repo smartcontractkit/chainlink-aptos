@@ -447,7 +447,7 @@ module lock_release_token_pool::lock_release_token_pool {
 
     public fun lock_or_burn_v2(
         fa: FungibleAsset, input: token_admin_registry::LockOrBurnInputV1
-    ): token_admin_registry::LockOrBurnOutputV1 acquires LockReleaseTokenPoolState {
+    ): (vector<u8>, vector<u8>) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
         let fa_amount = fungible_asset::amount(&fa);
 
@@ -469,10 +469,7 @@ module lock_release_token_pool::lock_release_token_pool {
             &mut pool.token_pool_state, fa_amount, remote_chain_selector
         );
 
-        token_admin_registry::new_lock_or_burn_output_v1(
-            dest_token_address,
-            token_pool::encode_local_decimals(&pool.token_pool_state)
-        )
+        (dest_token_address, token_pool::encode_local_decimals(&pool.token_pool_state))
     }
 
     public fun release_or_mint_v2(
@@ -1043,3 +1040,4 @@ module lock_release_token_pool::lock_release_token_pool {
         )
     }
 }
+

@@ -10,12 +10,7 @@ module managed_token_pool::managed_token_pool {
 
     use managed_token::managed_token;
 
-    use ccip::token_admin_registry::{
-        Self,
-        LockOrBurnInputV1,
-        LockOrBurnOutputV1,
-        ReleaseOrMintInputV1
-    };
+    use ccip::token_admin_registry::{Self, LockOrBurnInputV1, ReleaseOrMintInputV1};
     use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
@@ -349,7 +344,7 @@ module managed_token_pool::managed_token_pool {
 
     public fun lock_or_burn_v2(
         fa: FungibleAsset, input: LockOrBurnInputV1
-    ): LockOrBurnOutputV1 {
+    ): (vector<u8>, vector<u8>) {
         let pool = borrow_pool_mut();
         let fa_amount = fungible_asset::amount(&fa);
 
@@ -362,9 +357,6 @@ module managed_token_pool::managed_token_pool {
                 &input,
                 fa_amount
             );
-
-        // Construct lock_or_burn output before we lose access to fa
-        let dest_pool_data = token_pool::encode_local_decimals(&pool.token_pool_state);
 
         // Burn the funds
         let store =
@@ -382,10 +374,7 @@ module managed_token_pool::managed_token_pool {
             &mut pool.token_pool_state, fa_amount, remote_chain_selector
         );
 
-        token_admin_registry::new_lock_or_burn_output_v1(
-            dest_token_address,
-            token_pool::encode_local_decimals(&pool.token_pool_state)
-        )
+        (dest_token_address, token_pool::encode_local_decimals(&pool.token_pool_state))
     }
 
     public fun release_or_mint_v2(input: ReleaseOrMintInputV1): (FungibleAsset, u64) {
@@ -407,6 +396,7 @@ module managed_token_pool::managed_token_pool {
         let signer = &account::create_signer_with_capability(&pool.store_signer_cap);
         managed_token::mint(signer, pool.store_signer_address, local_amount);
 
+        // Calling into `fungible_asset::withdraw` works as managed token is not dispatchable
         let fa = fungible_asset::withdraw(signer, store, local_amount);
         let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
         let remote_chain_selector =
@@ -743,56 +733,5 @@ module managed_token_pool::managed_token_pool {
     public fun create_callback_proof(): CallbackProof {
         CallbackProof {}
     }
-
-    #[test_only]
-
-    public fun test_init_v1(publisher: &signer) {
-        // register the pool on deployment, because in the case of object code deployment,
-        // this is the only time we have a signer ref to @ccip_managed_pool.
-
-        // create an Account on the object for event handles.
-        account::create_account_if_does_not_exist(@managed_token_pool);
-
-        // the name of this module. if incorrect, callbacks will fail to be registered and
-        // register_pool will revert.
-        let token_pool_module_name = b"managed_token_pool";
-
-        // Register the entrypoint with mcms
-        if (@mcms_register_entrypoints == @0x1) {
-            register_mcms_entrypoint(publisher, token_pool_module_name);
-        };
-
-        let managed_token_address = managed_token::token_metadata();
-        token_admin_registry::register_pool(
-            publisher,
-            token_pool_module_name,
-            managed_token_address,
-            CallbackProof {}
-        );
-
-        // create a resource account to be the owner of the primary FungibleStore we will use.
-        let (store_signer, store_signer_cap) =
-            account::create_resource_account(publisher, STORE_OBJECT_SEED);
-
-        let metadata = object::address_to_object<Metadata>(managed_token_address);
-
-        // make sure this is a valid fungible asset that is primary fungible store enabled,
-        // ie. created with primary_fungible_store::create_primary_store_enabled_fungible_asset
-        primary_fungible_store::ensure_primary_store_exists(
-            signer::address_of(&store_signer), metadata
-        );
-
-        let store_signer = account::create_signer_with_capability(&store_signer_cap);
-
-        let pool = ManagedTokenPoolState {
-            ownable_state: ownable::new(&store_signer, @managed_token_pool),
-            store_signer_address: signer::address_of(&store_signer),
-            store_signer_cap,
-            token_pool_state: token_pool::initialize(
-                &store_signer, managed_token_address, vector[]
-            )
-        };
-
-        move_to(&store_signer, pool);
-    }
 }
+

@@ -7,9 +7,9 @@ module burn_mint_token_pool::burn_mint_token_pool {
     use std::option::{Self, Option};
     use std::signer;
     use std::string::{Self, String};
-    use aptos_framework::fungible_asset::{BurnRef, MintRef};
+    use std::fungible_asset::{BurnRef, MintRef};
 
-    use ccip::token_admin_registry::{Self, ReleaseOrMintInputV1};
+    use ccip::token_admin_registry::{Self, ReleaseOrMintInputV1, LockOrBurnInputV1};
     use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
@@ -86,7 +86,7 @@ module burn_mint_token_pool::burn_mint_token_pool {
         let release_or_mint_closure = |input| release_or_mint_v2(input);
 
         // If the contract has already been deployed with V1 and needs to be upgraded to V2,
-        // create a new module
+        // create a new module and pass in `publisher` from `fun init_module(publisher: &signer)`
         token_admin_registry::register_pool_v2(
             publisher,
             token_pool_module_name,
@@ -380,12 +380,11 @@ module burn_mint_token_pool::burn_mint_token_pool {
     }
 
     public fun lock_or_burn_v2(
-        fa: FungibleAsset, input: token_admin_registry::LockOrBurnInputV1
-    ): token_admin_registry::LockOrBurnOutputV1 acquires BurnMintTokenPoolState {
+        fa: FungibleAsset, input: LockOrBurnInputV1
+    ): (vector<u8>, vector<u8>) acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();
         let fa_amount = fungible_asset::amount(&fa);
 
-        // Validate the operation (same as V1)
         let dest_token_address =
             token_pool::validate_lock_or_burn(
                 &mut pool.token_pool_state,
@@ -406,14 +405,9 @@ module burn_mint_token_pool::burn_mint_token_pool {
             &mut pool.token_pool_state, fa_amount, remote_chain_selector
         );
 
-        // Return output directly (no need to set in registry!)
-        token_admin_registry::new_lock_or_burn_output_v1(
-            dest_token_address,
-            b"" // empty dest_pool_data for burn/mint pools
-        )
+        (dest_token_address, token_pool::encode_local_decimals(&pool.token_pool_state))
     }
 
-    /// V2 release_or_mint callback - receives input directly as parameter
     public fun release_or_mint_v2(
         input: ReleaseOrMintInputV1
     ): (FungibleAsset, u64) acquires BurnMintTokenPoolState {
@@ -870,3 +864,4 @@ module burn_mint_token_pool::burn_mint_token_pool {
         );
     }
 }
+
