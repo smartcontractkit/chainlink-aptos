@@ -144,7 +144,8 @@ module ccip_offramp::offramp_lock_release_receiver_test {
                 regulated_token,
                 LOCK_RELEASE_TOKEN_POOL,
                 LOCK_RELEASE_TOKEN_SEED,
-                false
+                false, // is_dispatchable
+                false // use_v1_init
             );
         let token_addr = object::object_address(&token_obj);
 
@@ -220,7 +221,8 @@ module ccip_offramp::offramp_lock_release_receiver_test {
                 regulated_token,
                 LOCK_RELEASE_TOKEN_POOL,
                 LOCK_RELEASE_TOKEN_SEED,
-                false // token is non-dispatchable
+                false, // token is non-dispatchable
+                false // use_v1_init
             );
 
         setup_mock_ccip_receiver(owner, ccip_offramp);
@@ -287,7 +289,8 @@ module ccip_offramp::offramp_lock_release_receiver_test {
                 regulated_token,
                 LOCK_RELEASE_TOKEN_POOL,
                 LOCK_RELEASE_TOKEN_SEED,
-                false
+                false, // is_dispatchable
+                false // use_v1_init
             );
         let token_addr = object::object_address(&token_obj);
 
@@ -374,7 +377,8 @@ module ccip_offramp::offramp_lock_release_receiver_test {
                 regulated_token,
                 LOCK_RELEASE_TOKEN_POOL,
                 LOCK_RELEASE_TOKEN_SEED,
-                true
+                true, // is_dispatchable
+                false // use_v1_init
             );
         let token_addr = object::object_address(&token_obj);
 
@@ -450,7 +454,8 @@ module ccip_offramp::offramp_lock_release_receiver_test {
                 regulated_token,
                 LOCK_RELEASE_TOKEN_POOL,
                 LOCK_RELEASE_TOKEN_SEED,
-                true
+                true, // is_dispatchable
+                false // use_v1_init
             );
 
         setup_mock_ccip_receiver(owner, ccip_offramp);
@@ -517,7 +522,8 @@ module ccip_offramp::offramp_lock_release_receiver_test {
                 regulated_token,
                 LOCK_RELEASE_TOKEN_POOL,
                 LOCK_RELEASE_TOKEN_SEED,
-                true // token is dispatchable
+                true, // token is dispatchable
+                false // use_v1_init
             );
         let token_addr = object::object_address(&token_obj);
 

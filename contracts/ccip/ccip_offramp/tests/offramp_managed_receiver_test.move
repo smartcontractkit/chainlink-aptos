@@ -149,7 +149,8 @@ module ccip_offramp::offramp_managed_receiver_test {
                 regulated_token,
                 MANAGED_TOKEN_POOL,
                 MANAGED_TOKEN_SEED,
-                false
+                false, // is_dispatchable
+                false // use_v1_init
             );
         let token_addr = object::object_address(&token_obj);
 
@@ -242,7 +243,8 @@ module ccip_offramp::offramp_managed_receiver_test {
                 regulated_token,
                 MANAGED_TOKEN_POOL,
                 MANAGED_TOKEN_SEED,
-                false
+                false, // is_dispatchable
+                false // use_v1_init
             );
 
         setup_mock_ccip_receiver(owner, ccip_offramp);
@@ -318,7 +320,8 @@ module ccip_offramp::offramp_managed_receiver_test {
                 regulated_token,
                 MANAGED_TOKEN_POOL,
                 MANAGED_TOKEN_SEED,
-                false
+                false, // is_dispatchable
+                false // use_v1_init
             );
         let token_addr = object::object_address(&token_obj);
 
@@ -414,7 +417,8 @@ module ccip_offramp::offramp_managed_receiver_test {
                 regulated_token,
                 MANAGED_TOKEN_POOL,
                 MANAGED_TOKEN_SEED,
-                true
+                true, // is_dispatchable
+                false // use_v1_init
             );
         let token_addr = object::object_address(&token_obj);
 
@@ -508,7 +512,8 @@ module ccip_offramp::offramp_managed_receiver_test {
                 regulated_token,
                 MANAGED_TOKEN_POOL,
                 MANAGED_TOKEN_SEED,
-                true
+                true, // is_dispatchable
+                false // use_v1_init
             );
 
         setup_mock_ccip_receiver(owner, ccip_offramp);
@@ -575,7 +580,8 @@ module ccip_offramp::offramp_managed_receiver_test {
                 regulated_token,
                 MANAGED_TOKEN_POOL,
                 MANAGED_TOKEN_SEED,
-                true
+                true, // is_dispatchable
+                false // use_v1_init
             );
         let token_addr = object::object_address(&token_obj);
 

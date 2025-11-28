@@ -150,7 +150,8 @@ module ccip_offramp::offramp_regulated_receiver_test {
                 regulated_token,
                 REGULATED_TOKEN_POOL,
                 REGULATED_TOKEN_SEED,
-                true
+                true, // is_dispatchable
+                false // use_v1_init
             );
         let token_addr = object::object_address(&token_obj);
 
@@ -234,7 +235,8 @@ module ccip_offramp::offramp_regulated_receiver_test {
                 regulated_token,
                 REGULATED_TOKEN_POOL,
                 REGULATED_TOKEN_SEED,
-                true
+                true, // is_dispatchable
+                false // use_v1_init
             );
 
         setup_mock_ccip_receiver(owner, ccip_offramp);
@@ -301,7 +303,8 @@ module ccip_offramp::offramp_regulated_receiver_test {
                 regulated_token,
                 REGULATED_TOKEN_POOL,
                 REGULATED_TOKEN_SEED,
-                true
+                true, // is_dispatchable
+                false // use_v1_init
             );
         let token_addr = object::object_address(&token_obj);
 
