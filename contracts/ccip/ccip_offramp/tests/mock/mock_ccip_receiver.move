@@ -109,8 +109,69 @@ module ccip_offramp::mock_ccip_receiver {
 
     struct CCIPReceiverProof has drop {}
 
-    /// This function should only be used with non-dispatchable tokens,
-    /// as it is currently incompatible with dispatchable tokens.
+    public fun ccip_receive_v2(message: client::Any2AptosMessage) acquires CCIPReceiverState {
+        /* load state and rebuild a signer for the resource account */
+        let state = borrow_global_mut<CCIPReceiverState>(@ccip_offramp);
+        let state_signer = account::create_signer_with_capability(&state.signer_cap);
+
+        let data = client::get_data(&message);
+
+        let dest_token_amounts = client::get_dest_token_amounts(&message);
+
+        if (dest_token_amounts.length() != 0 && data.length() != 0) {
+            let final_recipient = from_bcs::to_address(data);
+
+            for (i in 0..dest_token_amounts.length()) {
+                let token_amount_ref = &dest_token_amounts[i];
+                let token_addr = client::get_token(token_amount_ref);
+                let amount = client::get_amount(token_amount_ref);
+
+                // Implement the token transfer logic here
+
+                let fa_token = object::address_to_object<Metadata>(token_addr);
+
+                // Must use primary_fungible_store::transfer as token may be dispatchable
+                primary_fungible_store::transfer(
+                    &state_signer,
+                    fa_token,
+                    final_recipient,
+                    amount
+                );
+            };
+
+            event::emit(ForwardedTokens { final_recipient });
+            event::emit_event(
+                &mut state.forwarded_tokens_handle, ForwardedTokens { final_recipient }
+            );
+        } else if (data.length() != 0) {
+            // Convert the vector<u8> to a string
+            let message = string::utf8(data);
+
+            event::emit(ReceivedMessage { message });
+            event::emit_event(
+                &mut state.received_message_handle, ReceivedMessage { message }
+            );
+
+        } else if (dest_token_amounts.length() != 0) {
+            // Tokens only (no forwarding data) - keep them at receiver
+            // Emit event to prove receiver was called
+            let token_count = dest_token_amounts.length();
+            event::emit(ReceivedTokensOnly { token_count });
+            event::emit_event(
+                &mut state.received_tokens_only_handle,
+                ReceivedTokensOnly { token_count }
+            );
+        };
+
+        // Simple abort condition for testing
+        if (data == b"abort") {
+            abort 1
+        };
+    }
+
+    #[deprecated]
+    /// Legacy V1 receive function, use ccip_receive_v2 as this supports dispatchable tokens
+    /// Only switch to v2 once TokenPools are migrated to V2
     public fun ccip_receive<T: key>(_metadata: Object<T>): Option<u128> acquires CCIPReceiverState {
         /* load state and rebuild a signer for the resource account */
         let state = borrow_global_mut<CCIPReceiverState>(@ccip_offramp);
@@ -185,66 +246,6 @@ module ccip_offramp::mock_ccip_receiver {
         option::none()
     }
 
-    public fun ccip_receive_v2(message: client::Any2AptosMessage) acquires CCIPReceiverState {
-        /* load state and rebuild a signer for the resource account */
-        let state = borrow_global_mut<CCIPReceiverState>(@ccip_offramp);
-        let state_signer = account::create_signer_with_capability(&state.signer_cap);
-
-        let data = client::get_data(&message);
-
-        let dest_token_amounts = client::get_dest_token_amounts(&message);
-
-        if (dest_token_amounts.length() != 0 && data.length() != 0) {
-            let final_recipient = from_bcs::to_address(data);
-
-            for (i in 0..dest_token_amounts.length()) {
-                let token_amount_ref = &dest_token_amounts[i];
-                let token_addr = client::get_token(token_amount_ref);
-                let amount = client::get_amount(token_amount_ref);
-
-                // Implement the token transfer logic here
-
-                let fa_token = object::address_to_object<Metadata>(token_addr);
-
-                // Must use primary_fungible_store::transfer as token may be dispatchable
-                primary_fungible_store::transfer(
-                    &state_signer,
-                    fa_token,
-                    final_recipient,
-                    amount
-                );
-            };
-
-            event::emit(ForwardedTokens { final_recipient });
-            event::emit_event(
-                &mut state.forwarded_tokens_handle, ForwardedTokens { final_recipient }
-            );
-        } else if (data.length() != 0) {
-            // Convert the vector<u8> to a string
-            let message = string::utf8(data);
-
-            event::emit(ReceivedMessage { message });
-            event::emit_event(
-                &mut state.received_message_handle, ReceivedMessage { message }
-            );
-
-        } else if (dest_token_amounts.length() != 0) {
-            // Tokens only (no forwarding data) - keep them at receiver
-            // Emit event to prove receiver was called
-            let token_count = dest_token_amounts.length();
-            event::emit(ReceivedTokensOnly { token_count });
-            event::emit_event(
-                &mut state.received_tokens_only_handle,
-                ReceivedTokensOnly { token_count }
-            );
-        };
-
-        // Simple abort condition for testing
-        if (data == b"abort") {
-            abort 1
-        };
-    }
-
     public entry fun withdraw_token(
         sender: &signer, recipient: address, token_address: address
     ) acquires CCIPReceiverState {
@@ -314,3 +315,4 @@ module ccip_offramp::mock_ccip_receiver {
         event.message
     }
 }
+

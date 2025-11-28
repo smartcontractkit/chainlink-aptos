@@ -4,7 +4,7 @@ module ccip::token_admin_registry {
     use std::error;
     use std::event::{Self, EventHandle};
     use std::function_info::{Self, FunctionInfo};
-    use std::fungible_asset::{Self, Metadata, FungibleStore};
+    use std::fungible_asset::{Self, Metadata, FungibleStore, FungibleAsset};
     use std::object::{Self, Object, ExtendRef, TransferRef};
     use std::option::{Self, Option};
     use std::signer;
@@ -87,19 +87,10 @@ module ccip::token_admin_registry {
         destination_amount: u64
     }
 
-    public fun new_lock_or_burn_output_v1(
-        dest_token_address: vector<u8>, dest_pool_data: vector<u8>
-    ): LockOrBurnOutputV1 {
-        LockOrBurnOutputV1 { dest_token_address, dest_pool_data }
-    }
-
     struct TokenPoolCallbacks has drop, copy, store {
-        lock_or_burn: |
-            fungible_asset::FungibleAsset,
-            LockOrBurnInputV1
-        | LockOrBurnOutputV1 has drop + copy + store,
-        release_or_mint: |ReleaseOrMintInputV1| (fungible_asset::FungibleAsset, u64) has drop
-            + copy + store
+        lock_or_burn: |FungibleAsset, LockOrBurnInputV1| (vector<u8>, vector<u8>) has drop
+            + copy + store,
+        release_or_mint: |ReleaseOrMintInputV1| (FungibleAsset, u64) has drop + copy + store
     }
 
     struct TokenPoolConfig has key {
@@ -432,12 +423,9 @@ module ccip::token_admin_registry {
         token_pool_account: &signer,
         token_pool_module_name: vector<u8>,
         local_token: address,
-        lock_or_burn: |
-            fungible_asset::FungibleAsset,
-            LockOrBurnInputV1
-        | LockOrBurnOutputV1 has drop + copy + store,
-        release_or_mint: |ReleaseOrMintInputV1| (fungible_asset::FungibleAsset, u64) has drop
+        lock_or_burn: |FungibleAsset, LockOrBurnInputV1| (vector<u8>, vector<u8>) has drop
         + copy + store,
+        release_or_mint: |ReleaseOrMintInputV1| (FungibleAsset, u64) has drop + copy + store,
         _proof: ProofType
     ) {
         let token_pool_address = signer::address_of(token_pool_account);
@@ -1090,9 +1078,8 @@ module ccip::token_admin_registry {
         let pool_config = &TokenPoolConfig[token_pool_address];
         let input = LockOrBurnInputV1 { sender, remote_chain_selector, receiver };
 
-        let output = (pool_config.callbacks.lock_or_burn)
-        (fa, input);
-        (output.dest_token_address, output.dest_pool_data)
+        (pool_config.callbacks.lock_or_burn)
+        (fa, input)
     }
 
     public(friend) fun release_or_mint_v2(
@@ -1106,7 +1093,7 @@ module ccip::token_admin_registry {
         source_pool_address: vector<u8>,
         source_pool_data: vector<u8>,
         offchain_token_data: vector<u8>
-    ): (fungible_asset::FungibleAsset, u64) acquires TokenPoolConfig {
+    ): (FungibleAsset, u64) acquires TokenPoolConfig {
         auth::assert_is_allowed_offramp(signer::address_of(caller));
 
         let pool_config = &TokenPoolConfig[token_pool_address];
@@ -1351,3 +1338,4 @@ module ccip::token_admin_registry {
         assert!(has_more);
     }
 }
+

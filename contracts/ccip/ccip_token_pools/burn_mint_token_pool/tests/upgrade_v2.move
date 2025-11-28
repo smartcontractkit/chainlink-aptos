@@ -32,7 +32,7 @@ module burn_mint_token_pool::upgrade_v2 {
             |input| burn_mint_token_pool::release_or_mint_v2(input);
 
         // If the contract has already been deployed with V1 and needs to be upgraded to V2,
-        // create a new module
+        // create a new module and pass in `publisher` from `fun init_module(publisher: &signer)`
         token_admin_registry::register_pool_v2(
             publisher,
             token_pool_module_name,
@@ -48,3 +48,4 @@ module burn_mint_token_pool::upgrade_v2 {
         init_module(publisher);
     }
 }
+

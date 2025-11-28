@@ -13,12 +13,7 @@ module usdc_token_pool::usdc_token_pool {
 
     use ccip::address;
     use ccip::eth_abi;
-    use ccip::token_admin_registry::{
-        Self,
-        LockOrBurnInputV1,
-        ReleaseOrMintInputV1,
-        LockOrBurnOutputV1
-    };
+    use ccip::token_admin_registry::{Self, LockOrBurnInputV1, ReleaseOrMintInputV1};
     use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
@@ -516,7 +511,7 @@ module usdc_token_pool::usdc_token_pool {
 
     public fun lock_or_burn_v2(
         fa: FungibleAsset, input: LockOrBurnInputV1
-    ): LockOrBurnOutputV1 acquires USDCTokenPoolState {
+    ): (vector<u8>, vector<u8>) acquires USDCTokenPoolState {
         let pool = borrow_pool_mut();
         let fa_amount = fungible_asset::amount(&fa);
 
@@ -562,9 +557,7 @@ module usdc_token_pool::usdc_token_pool {
             &mut pool.token_pool_state, fa_amount, remote_chain_selector
         );
 
-        token_admin_registry::new_lock_or_burn_output_v1(
-            dest_token_address, dest_pool_data
-        )
+        (dest_token_address, dest_pool_data)
     }
 
     public fun release_or_mint_v2(
@@ -1052,3 +1045,4 @@ module usdc_token_pool::usdc_token_pool {
         CallbackProof {}
     }
 }
+

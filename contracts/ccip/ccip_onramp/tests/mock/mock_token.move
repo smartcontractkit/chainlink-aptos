@@ -1,10 +1,9 @@
 #[test_only]
 module ccip_onramp::mock_token {
     use std::fungible_asset::{Self, FungibleAsset, TransferRef};
-    use std::object::{Self, Object, ConstructorRef};
+    use std::object::{Object, ConstructorRef};
     use std::string::{Self};
     use std::option::{Self};
-    use std::primary_fungible_store;
 
     public fun add_dynamic_dispatch_function(
         ccip_onramp_signer: &signer, constructor_ref: &ConstructorRef
@@ -30,16 +29,15 @@ module ccip_onramp::mock_token {
     }
 
     public fun lock_or_burn<T: key>(
-        store: Object<T>, fa: FungibleAsset, _transfer_ref: &TransferRef
+        store: Object<T>, fa: FungibleAsset, transfer_ref: &TransferRef
     ) {
-        fungible_asset::deposit(store, fa);
+        fungible_asset::deposit_with_ref(transfer_ref, store, fa);
     }
 
     public fun release_or_mint<T: key>(
         store: Object<T>, amount: u64, transfer_ref: &TransferRef
     ): FungibleAsset {
-        primary_fungible_store::withdraw_with_ref(
-            transfer_ref, object::owner(store), amount
-        )
+        fungible_asset::withdraw_with_ref(transfer_ref, store, amount)
     }
 }
+

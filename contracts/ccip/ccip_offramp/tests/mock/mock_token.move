@@ -33,17 +33,12 @@ module ccip_offramp::mock_token {
     public fun deposit<T: key>(
         store: Object<T>, fa: FungibleAsset, transfer_ref: &TransferRef
     ) {
-        std::debug::print(&std::string::utf8(b"custom lock_or_burn called"));
         fungible_asset::deposit_with_ref(transfer_ref, store, fa);
-        std::debug::print(&std::string::utf8(b"custom lock_or_burn done"));
     }
 
     public fun withdraw<T: key>(
         store: Object<T>, amount: u64, transfer_ref: &TransferRef
     ): FungibleAsset {
-        std::debug::print(&std::string::utf8(b"custom release_or_mint called"));
-        let fa = fungible_asset::withdraw_with_ref(transfer_ref, store, amount);
-        std::debug::print(&std::string::utf8(b"custom release_or_mint done"));
-        fa
+        fungible_asset::withdraw_with_ref(transfer_ref, store, amount)
     }
 }
