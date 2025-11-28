@@ -16,10 +16,13 @@ module ccip_offramp::offramp_v1_v2_compatibility_test {
     use burn_mint_token_pool::upgrade_v2;
 
     const BURN_MINT_TOKEN_POOL: u8 = 0;
+    const LOCK_RELEASE_TOKEN_POOL: u8 = 1;
     const BURN_MINT_TOKEN_SEED: vector<u8> = b"TestToken";
+    const LOCK_RELEASE_TOKEN_SEED: vector<u8> = b"LockReleaseToken";
     const EVM_SOURCE_CHAIN_SELECTOR: u64 = 909606746561742123;
     const DEST_CHAIN_SELECTOR: u64 = 743186221051783445;
     const MOCK_EVM_ADDRESS_VECTOR: vector<u8> = x"4838B106FCe9647Bdf1E7877BF73cE8B0BAD5f97";
+    const MOCK_EVM_ADDRESS_VECTOR_2: vector<u8> = x"1234567890abcdef1234567890abcdef12345678";
     const ONRAMP_ADDRESS: vector<u8> = x"47a1f0a819457f01153f35c6b6b0d42e2e16e91e";
 
     // ============================================
@@ -58,6 +61,15 @@ module ccip_offramp::offramp_v1_v2_compatibility_test {
                 nonce
             );
 
+        // Create offchain_token_data: one empty vector per token transfer
+        let num_tokens = token_transfers.length();
+        let offchain_token_data: vector<vector<u8>> = vector[];
+        let i = 0;
+        while (i < num_tokens) {
+            offchain_token_data.push_back(vector[]);
+            i = i + 1;
+        };
+
         let message =
             offramp::test_create_any2aptos_ramp_message(
                 header,
@@ -80,8 +92,6 @@ module ccip_offramp::offramp_v1_v2_compatibility_test {
         // Commit root (with timestamp in the past to allow execution)
         offramp::test_add_root(root, timestamp::now_seconds() - 3700);
 
-        // Create execution report
-        let offchain_token_data: vector<vector<u8>> = vector[vector[]];
         let execution_report =
             offramp::test_create_execution_report(
                 EVM_SOURCE_CHAIN_SELECTOR,
@@ -558,5 +568,121 @@ module ccip_offramp::offramp_v1_v2_compatibility_test {
         // Both callbacks should have been invoked
         let events = mock_ccip_receiver::get_received_tokens_only_events();
         assert!(events.length() == 2);
+    }
+
+    // ============================================
+    // Test 5: Multi-Transfer Message with V2 Receiver
+    // Tests V2 receiver handling multiple token transfers in a single message
+    // ============================================
+
+    #[
+        test(
+            aptos_framework = @aptos_framework,
+            ccip = @ccip,
+            ccip_offramp = @ccip_offramp,
+            owner = @0x100,
+            burn_mint_token_pool = @burn_mint_token_pool,
+            lock_release_token_pool = @lock_release_token_pool,
+            managed_token_pool = @managed_token_pool,
+            managed_token = @managed_token,
+            regulated_token_pool = @regulated_token_pool,
+            regulated_token = @regulated_token
+        )
+    ]
+    fun test_multi_token_v2_receiver(
+        aptos_framework: &signer,
+        ccip: &signer,
+        ccip_offramp: &signer,
+        owner: &signer,
+        burn_mint_token_pool: &signer,
+        lock_release_token_pool: &signer,
+        managed_token_pool: &signer,
+        managed_token: &signer,
+        regulated_token_pool: &signer,
+        regulated_token: &signer
+    ) {
+        // Setup first pool: burn_mint with V2
+        let (_owner_addr, token_obj_1) =
+            offramp_test::setup(
+                aptos_framework,
+                ccip,
+                ccip_offramp,
+                owner,
+                burn_mint_token_pool,
+                lock_release_token_pool,
+                managed_token_pool,
+                managed_token,
+                regulated_token_pool,
+                regulated_token,
+                BURN_MINT_TOKEN_POOL,
+                BURN_MINT_TOKEN_SEED,
+                false, // is_dispatchable
+                false // use_v1_init = false (V2 from start)
+            );
+
+        let token_addr_1 = object::object_address(&token_obj_1);
+
+        receiver_registry::init_module_for_testing(owner);
+        mock_ccip_receiver::test_init_module(ccip_offramp);
+
+        assert!(
+            receiver_registry::is_registered_receiver_v2(signer::address_of(ccip_offramp))
+        );
+
+        // Verify pool has V2 config
+        assert!(
+            token_admin_registry::has_token_pool_config(
+                signer::address_of(burn_mint_token_pool)
+            )
+        );
+
+        // Create 2 token transfers of the same token
+        // This tests that V2 receiver can handle multiple transfers in one message
+        // and that pool closures can be invoked multiple times sequentially
+        let token_amount_1 = 1000;
+        let token_amount_2 = 2000;
+
+        let token_transfer_1 =
+            offramp::test_create_any2aptos_token_transfer(
+                MOCK_EVM_ADDRESS_VECTOR, // source_pool_address
+                token_addr_1, // dest_token_address
+                1000000, // dest_gas_amount
+                vector[], // extra_data
+                (token_amount_1 as u256) // amount
+            );
+
+        let token_transfer_2 =
+            offramp::test_create_any2aptos_token_transfer(
+                MOCK_EVM_ADDRESS_VECTOR, // same source_pool_address
+                token_addr_1, // dest_token_address (same token)
+                1000000, // dest_gas_amount
+                vector[], // extra_data
+                (token_amount_2 as u256) // amount
+            );
+
+        // Execute message with 2 transfers
+        create_and_execute_message(
+            x"0007", // unique message_id
+            0, // sequence_number
+            signer::address_of(ccip_offramp), // receiver
+            vector[], // no data, just tokens
+            vector[token_transfer_1, token_transfer_2], // 2 token transfers
+            owner
+        );
+
+        // Verify BOTH 2 transfers were received (total amount = amount_1 + amount_2)
+        let total_balance =
+            primary_fungible_store::balance(
+                signer::address_of(ccip_offramp), token_obj_1
+            );
+        assert!(
+            total_balance == token_amount_1 + token_amount_2
+        );
+
+        // Verify V2 receiver callback was invoked once with multiple tokens
+        // The mock receiver's ccip_receive_v2 handles multiple tokens in a loop
+        // and emits a single ReceivedTokensOnly event
+        let events = mock_ccip_receiver::get_received_tokens_only_events();
+        assert!(events.length() == 1);
     }
 }
