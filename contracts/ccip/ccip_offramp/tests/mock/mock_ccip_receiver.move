@@ -315,4 +315,3 @@ module ccip_offramp::mock_ccip_receiver {
         event.message
     }
 }
-

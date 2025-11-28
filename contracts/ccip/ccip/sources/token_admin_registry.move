@@ -1338,4 +1338,3 @@ module ccip::token_admin_registry {
         assert!(has_more);
     }
 }
-

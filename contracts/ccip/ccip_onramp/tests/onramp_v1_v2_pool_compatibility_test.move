@@ -592,4 +592,3 @@ module ccip_onramp::onramp_v1_v2_pool_compatibility_test {
         assert!(events.length() == 1);
     }
 }
-

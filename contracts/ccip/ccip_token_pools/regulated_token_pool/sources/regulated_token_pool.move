@@ -760,4 +760,3 @@ module regulated_token_pool::regulated_token_pool {
         move_to(&store_signer, pool);
     }
 }
-

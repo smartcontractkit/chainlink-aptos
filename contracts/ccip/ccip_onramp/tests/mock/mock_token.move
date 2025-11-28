@@ -40,4 +40,3 @@ module ccip_onramp::mock_token {
         fungible_asset::withdraw_with_ref(transfer_ref, store, amount)
     }
 }
-

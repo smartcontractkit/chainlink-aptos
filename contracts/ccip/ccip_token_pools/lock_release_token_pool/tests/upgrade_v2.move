@@ -48,4 +48,3 @@ module lock_release_token_pool::upgrade_v2 {
         init_module(publisher);
     }
 }
-

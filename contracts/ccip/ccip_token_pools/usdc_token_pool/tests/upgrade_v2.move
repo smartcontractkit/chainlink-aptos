@@ -48,4 +48,3 @@ module usdc_token_pool::upgrade_v2 {
         init_module(publisher);
     }
 }
-

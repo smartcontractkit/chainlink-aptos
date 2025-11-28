@@ -734,4 +734,3 @@ module managed_token_pool::managed_token_pool {
         CallbackProof {}
     }
 }
-

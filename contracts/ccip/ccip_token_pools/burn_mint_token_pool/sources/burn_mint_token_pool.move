@@ -864,4 +864,3 @@ module burn_mint_token_pool::burn_mint_token_pool {
         );
     }
 }
-

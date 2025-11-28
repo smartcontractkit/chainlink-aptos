@@ -1045,4 +1045,3 @@ module usdc_token_pool::usdc_token_pool {
         CallbackProof {}
     }
 }
-
