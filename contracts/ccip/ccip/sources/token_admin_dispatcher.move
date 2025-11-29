@@ -18,7 +18,6 @@ module ccip::token_admin_dispatcher {
 
         if (token_admin_registry::has_token_pool_config(token_pool_address)) {
             token_admin_registry::lock_or_burn_v2(
-                caller,
                 token_pool_address,
                 fa,
                 sender,
@@ -52,11 +51,8 @@ module ccip::token_admin_dispatcher {
         source_pool_data: vector<u8>,
         offchain_token_data: vector<u8>
     ): (FungibleAsset, u64) {
-        auth::assert_is_allowed_offramp(signer::address_of(caller));
-
         if (token_admin_registry::has_token_pool_config(token_pool_address)) {
             token_admin_registry::release_or_mint_v2(
-                caller,
                 token_pool_address,
                 sender,
                 receiver,

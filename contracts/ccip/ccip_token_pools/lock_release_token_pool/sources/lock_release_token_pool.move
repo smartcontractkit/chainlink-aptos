@@ -44,7 +44,6 @@ module lock_release_token_pool::lock_release_token_pool {
     const E_UNAUTHORIZED: u64 = 8;
     const E_INSUFFICIENT_LIQUIDITY: u64 = 9;
     const E_TRANSFER_REF_NOT_SET: u64 = 10;
-    const E_NOT_EXECUTING_RECEIVER: u64 = 11;
 
     // ================================================================
     // |                             Init                             |

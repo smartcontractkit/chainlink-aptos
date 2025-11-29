@@ -1066,15 +1066,12 @@ module ccip::token_admin_registry {
     }
 
     public(friend) fun lock_or_burn_v2(
-        caller: &signer,
         token_pool_address: address,
         fa: fungible_asset::FungibleAsset,
         sender: address,
         remote_chain_selector: u64,
         receiver: vector<u8>
     ): (vector<u8>, vector<u8>) acquires TokenPoolConfig {
-        auth::assert_is_allowed_onramp(signer::address_of(caller));
-
         let pool_config = &TokenPoolConfig[token_pool_address];
         let input = LockOrBurnInputV1 { sender, remote_chain_selector, receiver };
 
@@ -1083,7 +1080,6 @@ module ccip::token_admin_registry {
     }
 
     public(friend) fun release_or_mint_v2(
-        caller: &signer,
         token_pool_address: address,
         sender: vector<u8>,
         receiver: address,
@@ -1094,19 +1090,18 @@ module ccip::token_admin_registry {
         source_pool_data: vector<u8>,
         offchain_token_data: vector<u8>
     ): (FungibleAsset, u64) acquires TokenPoolConfig {
-        auth::assert_is_allowed_offramp(signer::address_of(caller));
-
         let pool_config = &TokenPoolConfig[token_pool_address];
-        let input = ReleaseOrMintInputV1 {
-            sender,
-            receiver,
-            source_amount,
-            local_token,
-            remote_chain_selector,
-            source_pool_address,
-            source_pool_data,
-            offchain_token_data
-        };
+        let input =
+            ReleaseOrMintInputV1 {
+                sender,
+                receiver,
+                source_amount,
+                local_token,
+                remote_chain_selector,
+                source_pool_address,
+                source_pool_data,
+                offchain_token_data
+            };
 
         (pool_config.callbacks.release_or_mint)
         (input)

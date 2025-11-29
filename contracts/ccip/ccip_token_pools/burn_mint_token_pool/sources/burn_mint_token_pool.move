@@ -42,7 +42,6 @@ module burn_mint_token_pool::burn_mint_token_pool {
     const E_UNKNOWN_FUNCTION: u64 = 6;
     const E_MINT_REF_NOT_SET: u64 = 7;
     const E_BURN_REF_NOT_SET: u64 = 8;
-    const E_NOT_EXECUTING_RECEIVER: u64 = 9;
 
     // ================================================================
     // |                             Init                             |
@@ -415,7 +414,6 @@ module burn_mint_token_pool::burn_mint_token_pool {
         let local_amount =
             token_pool::calculate_release_or_mint_amount(&pool.token_pool_state, &input);
 
-        // Validate the operation (same as V1)
         token_pool::validate_release_or_mint(
             &mut pool.token_pool_state, &input, local_amount
         );

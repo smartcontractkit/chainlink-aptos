@@ -33,7 +33,6 @@ module managed_token_pool::managed_token_pool {
     const E_LOCAL_TOKEN_MISMATCH: u64 = 4;
     const E_INVALID_ARGUMENTS: u64 = 5;
     const E_UNKNOWN_FUNCTION: u64 = 6;
-    const E_NOT_EXECUTING_RECEIVER: u64 = 9;
 
     // ================================================================
     // |                             Init                             |

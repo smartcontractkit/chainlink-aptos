@@ -112,7 +112,6 @@ const (
 	E_INVALID_ARGUMENTS       uint64 = 5
 	E_UNKNOWN_FUNCTION        uint64 = 6
 	E_NOT_REGISTERED_RECEIVER uint64 = 7
-	E_NOT_EXECUTING_RECEIVER  uint64 = 9
 )
 
 // Structs

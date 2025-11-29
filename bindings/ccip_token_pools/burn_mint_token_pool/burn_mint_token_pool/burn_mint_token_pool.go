@@ -114,7 +114,6 @@ const (
 	E_UNKNOWN_FUNCTION       uint64 = 6
 	E_MINT_REF_NOT_SET       uint64 = 7
 	E_BURN_REF_NOT_SET       uint64 = 8
-	E_NOT_EXECUTING_RECEIVER uint64 = 9
 )
 
 // Structs

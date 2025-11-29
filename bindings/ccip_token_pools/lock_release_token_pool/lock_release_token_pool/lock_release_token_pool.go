@@ -130,7 +130,6 @@ const (
 	E_UNAUTHORIZED                            uint64 = 8
 	E_INSUFFICIENT_LIQUIDITY                  uint64 = 9
 	E_TRANSFER_REF_NOT_SET                    uint64 = 10
-	E_NOT_EXECUTING_RECEIVER                  uint64 = 11
 )
 
 // Structs
