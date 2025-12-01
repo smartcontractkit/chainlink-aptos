@@ -313,6 +313,9 @@ func DeployCCIP(ctx context.Context, lggr logger.Logger, deployer *aptos.Account
 	if err := addToProposal(onrampContract.Onramp().Encoder().Initialize(uint64(aptosChainSelector), deployer.AccountAddress(), deployer.AccountAddress(), []uint64{destChainSelector}, []aptos.AccountAddress{routerStateAddress}, []bool{false})); err != nil {
 		return CCIPDeployment{}, err
 	}
+	if err := addToProposal(onrampContract.Onramp().Encoder().ApplyDestChainConfigUpdatesV2([]uint64{destChainSelector}, []aptos.AccountAddress{ccipObjectAddress}, []aptos.AccountAddress{routerStateAddress}, []bool{false})); err != nil {
+		return CCIPDeployment{}, err
+	}
 	if err := addToProposal(routerContract.Router().Encoder().SetOnRampVersions([]uint64{destChainSelector}, [][]byte{{1, 6, 0}})); err != nil {
 		return CCIPDeployment{}, err
 	}

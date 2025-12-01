@@ -161,8 +161,8 @@ module ccip::fee_quoter_setup {
         (owner_addr, token_obj)
     }
 
-    public fun create_test_token(owner: &signer, seed: vector<u8>):
-        (Object<Metadata>, address) {
+    public fun create_test_token(owner: &signer, seed: vector<u8>)
+        : (Object<Metadata>, address) {
         let constructor_ref = object::create_named_object(owner, seed);
 
         primary_fungible_store::create_primary_store_enabled_fungible_asset(

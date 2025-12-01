@@ -137,8 +137,8 @@ module managed_token::allowlist {
     }
 
     #[test_only]
-    public fun get_allowlist_remove_events(state: &AllowlistState):
-        &EventHandle<AllowlistRemove> {
+    public fun get_allowlist_remove_events(state: &AllowlistState)
+        : &EventHandle<AllowlistRemove> {
         &state.allowlist_remove_events
     }
 }
@@ -257,7 +257,9 @@ module managed_token::allowlist_test {
         added_addresses: vector<address>, state: &allowlist::AllowlistState
     ) {
         let expected =
-            added_addresses.map::<address, AllowlistAdd> (|add| allowlist::new_add_event(add));
+            added_addresses.map::<address, AllowlistAdd> (
+                |add| allowlist::new_add_event(add)
+            );
         let got =
             event::emitted_events_by_handle<AllowlistAdd>(
                 allowlist::get_allowlist_add_events(state)
@@ -277,9 +279,9 @@ module managed_token::allowlist_test {
         added_addresses: vector<address>, state: &allowlist::AllowlistState
     ) {
         let expected =
-            added_addresses.map::<address, AllowlistRemove> (|add| allowlist::new_remove_event(
-                add
-            ));
+            added_addresses.map::<address, AllowlistRemove> (
+                |add| allowlist::new_remove_event(add)
+            );
         let got =
             event::emitted_events_by_handle<AllowlistRemove>(
                 allowlist::get_allowlist_remove_events(state)
@@ -295,8 +297,8 @@ module managed_token::allowlist_test {
         }
     }
 
-    inline fun set_up_test(owner: &signer, allowlist: vector<address>):
-        allowlist::AllowlistState {
+    inline fun set_up_test(owner: &signer, allowlist: vector<address>)
+        : allowlist::AllowlistState {
         account::create_account_for_test(signer::address_of(owner));
 
         allowlist::new(owner, allowlist)

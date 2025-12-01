@@ -280,8 +280,8 @@ module regulated_token::access_control {
         &mut AccessControlState<Role>[obj_addr]
     }
 
-    inline fun borrow<T: key, Role: copy + drop + store>(state_obj: Object<T>):
-        &AccessControlState<Role> {
+    inline fun borrow<T: key, Role: copy + drop + store>(state_obj: Object<T>)
+        : &AccessControlState<Role> {
         let obj_addr = assert_exists<T, Role>(state_obj);
         &AccessControlState<Role>[obj_addr]
     }

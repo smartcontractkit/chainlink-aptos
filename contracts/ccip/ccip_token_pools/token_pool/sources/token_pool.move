@@ -187,18 +187,21 @@ module ccip_token_pool::token_pool {
         remote_pool_addresses_to_add: vector<vector<vector<u8>>>,
         remote_token_addresses_to_add: vector<vector<u8>>
     ) {
-        remote_chain_selectors_to_remove.for_each_ref(|remote_chain_selector| {
-            let remote_chain_selector: u64 = *remote_chain_selector;
-            assert!(
-                state.remote_chain_configs.contains(remote_chain_selector),
-                error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
-            );
-            state.remote_chain_configs.remove(remote_chain_selector);
+        remote_chain_selectors_to_remove.for_each_ref(
+            |remote_chain_selector| {
+                let remote_chain_selector: u64 = *remote_chain_selector;
+                assert!(
+                    state.remote_chain_configs.contains(remote_chain_selector),
+                    error::invalid_argument(E_UNKNOWN_REMOTE_CHAIN_SELECTOR)
+                );
+                state.remote_chain_configs.remove(remote_chain_selector);
 
-            event::emit_event(
-                &mut state.chain_removed_events, ChainRemoved { remote_chain_selector }
-            );
-        });
+                event::emit_event(
+                    &mut state.chain_removed_events,
+                    ChainRemoved { remote_chain_selector }
+                );
+            }
+        );
 
         let add_len = remote_chain_selectors_to_add.length();
         assert!(
@@ -232,7 +235,9 @@ module ccip_token_pool::token_pool {
 
                     let (found, _) =
                         remote_chain_config.remote_pools.index_of(&remote_pool_address);
-                    assert!(!found, error::invalid_argument(E_REMOTE_POOL_ALREADY_ADDED));
+                    assert!(
+                        !found, error::invalid_argument(E_REMOTE_POOL_ALREADY_ADDED)
+                    );
 
                     remote_chain_config.remote_pools.push_back(remote_pool_address);
 
@@ -689,7 +694,8 @@ module ccip_token_pool::token_pool {
     }
 
     #[test_only]
-    public fun get_released_or_minted_events(state: &TokenPoolState): vector<ReleasedOrMinted> {
+    public fun get_released_or_minted_events(state: &TokenPoolState)
+        : vector<ReleasedOrMinted> {
         event::emitted_events_by_handle<ReleasedOrMinted>(&state.released_events)
     }
 }

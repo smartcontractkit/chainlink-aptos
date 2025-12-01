@@ -734,7 +734,8 @@ module mcms::mcms_registry {
         borrow_global<OwnerRegistration>(account_address)
     }
 
-    inline fun borrow_owner_registration_mut(account_address: address): &mut OwnerRegistration {
+    inline fun borrow_owner_registration_mut(account_address: address)
+        : &mut OwnerRegistration {
         assert!(
             exists<OwnerRegistration>(account_address),
             error::invalid_argument(E_ADDRESS_NOT_REGISTERED)
