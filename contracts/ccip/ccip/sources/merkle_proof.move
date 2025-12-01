@@ -12,9 +12,7 @@ module ccip::merkle_proof {
     }
 
     public fun merkle_root(leaf: vector<u8>, proofs: vector<vector<u8>>): vector<u8> {
-        proofs.fold(
-            leaf, |acc, proof| hash_pair(acc, proof)
-        )
+        proofs.fold(leaf, |acc, proof| hash_pair(acc, proof))
     }
 
     public fun vector_u8_gt(a: &vector<u8>, b: &vector<u8>): bool {

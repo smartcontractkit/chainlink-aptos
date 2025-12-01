@@ -71,8 +71,9 @@ module ccip_onramp::onramp_test {
         timestamp::update_global_time_for_test_secs(timestamp_seconds);
     }
 
-    fun setup(
+    public fun setup(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -150,7 +151,7 @@ module ccip_onramp::onramp_test {
             vector[token_addr]
         );
 
-        initialize_onramp(owner);
+        initialize_onramp(owner, router);
         assert!(onramp::owner() == owner_addr);
 
         fee_quoter::apply_fee_token_updates(owner, vector[], vector[token_addr]);
@@ -211,7 +212,7 @@ module ccip_onramp::onramp_test {
         (owner_addr, token_obj)
     }
 
-    fun create_test_token_and_pool(
+    public fun create_test_token_and_pool(
         owner: &signer,
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer,
@@ -332,7 +333,7 @@ module ccip_onramp::onramp_test {
         (metadata, token_addr)
     }
 
-    fun initialize_onramp(owner: &signer): address {
+    fun initialize_onramp(owner: &signer, router: &signer): address {
         onramp::initialize(
             owner,
             SOURCE_CHAIN_SELECTOR,
@@ -343,12 +344,23 @@ module ccip_onramp::onramp_test {
             vector[false] // dest_chain_allowlist_enabled
         );
 
+        // apply_dest_chain_config_updates_v2 with router state addresses
+        let router_state_address = signer::address_of(router);
+        onramp::apply_dest_chain_config_updates_v2(
+            owner,
+            vector[DEST_CHAIN_SELECTOR],
+            vector[ROUTER],
+            vector[router_state_address],
+            vector[false]
+        );
+
         onramp::get_state_address()
     }
 
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -358,6 +370,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_initialize(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -366,6 +379,7 @@ module ccip_onramp::onramp_test {
     ) {
         setup(
             aptos_framework,
+            router,
             ccip,
             ccip_onramp,
             owner,
@@ -402,6 +416,7 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -411,6 +426,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_set_dynamic_config(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -419,6 +435,7 @@ module ccip_onramp::onramp_test {
     ) {
         setup(
             aptos_framework,
+            router,
             ccip,
             ccip_onramp,
             owner,
@@ -450,6 +467,7 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -462,6 +480,7 @@ module ccip_onramp::onramp_test {
     // ownable error code for unauthorized
     fun test_set_dynamic_config_unauthorized(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -471,6 +490,7 @@ module ccip_onramp::onramp_test {
     ) {
         setup(
             aptos_framework,
+            router,
             ccip,
             ccip_onramp,
             owner,
@@ -488,6 +508,7 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -497,6 +518,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_apply_dest_chain_config_updates(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -505,6 +527,7 @@ module ccip_onramp::onramp_test {
     ) {
         setup(
             aptos_framework,
+            router,
             ccip,
             ccip_onramp,
             owner,
@@ -565,6 +588,7 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -574,6 +598,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_apply_allowlist_updates(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -582,6 +607,7 @@ module ccip_onramp::onramp_test {
     ) {
         setup(
             aptos_framework,
+            router,
             ccip,
             ccip_onramp,
             owner,
@@ -647,28 +673,29 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
             sender = @0x500,
-            router = @0x200,
             burn_mint_token_pool = @burn_mint_token_pool,
             lock_release_token_pool = @lock_release_token_pool
         )
     ]
     fun test_ccip_send_burn_mint_token_pool(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
         sender: &signer,
-        router: &signer,
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer
     ) acquires TestToken {
         let (_owner_addr, token_obj) =
             setup(
                 aptos_framework,
+                router,
                 ccip,
                 ccip_onramp,
                 owner,
@@ -766,28 +793,29 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
             sender = @0x500,
-            router = @0x200,
             burn_mint_token_pool = @burn_mint_token_pool,
             lock_release_token_pool = @lock_release_token_pool
         )
     ]
     fun test_ccip_send_lock_release_token_pool(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
         sender: &signer,
-        router: &signer,
         burn_mint_token_pool: &signer,
         lock_release_token_pool: &signer
     ) acquires TestToken {
         let (_owner_addr, token_obj) =
             setup(
                 aptos_framework,
+                router,
                 ccip,
                 ccip_onramp,
                 owner,
@@ -891,6 +919,7 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -901,6 +930,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_initialize_twice_fails(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -909,6 +939,7 @@ module ccip_onramp::onramp_test {
     ) {
         setup(
             aptos_framework,
+            router,
             ccip,
             ccip_onramp,
             owner,
@@ -918,12 +949,13 @@ module ccip_onramp::onramp_test {
             b"TestToken",
             false
         );
-        initialize_onramp(owner);
+        initialize_onramp(owner, router);
     }
 
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -937,6 +969,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_set_dynamic_config_failure_when_fee_aggregator_is_zero_address(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -946,6 +979,7 @@ module ccip_onramp::onramp_test {
         let (_, _) =
             setup(
                 aptos_framework,
+                router,
                 ccip,
                 ccip_onramp,
                 owner,
@@ -963,6 +997,7 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -972,6 +1007,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_is_chain_supported(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -980,6 +1016,7 @@ module ccip_onramp::onramp_test {
     ) {
         setup(
             aptos_framework,
+            router,
             ccip,
             ccip_onramp,
             owner,
@@ -999,6 +1036,7 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -1008,6 +1046,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_get_expected_next_sequence_number(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -1016,6 +1055,7 @@ module ccip_onramp::onramp_test {
     ) {
         setup(
             aptos_framework,
+            router,
             ccip,
             ccip_onramp,
             owner,
@@ -1054,6 +1094,7 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -1064,6 +1105,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_ownership_transfer(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -1073,6 +1115,7 @@ module ccip_onramp::onramp_test {
     ) {
         setup(
             aptos_framework,
+            router,
             ccip,
             ccip_onramp,
             owner,
@@ -1100,6 +1143,7 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -1110,6 +1154,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_get_outbound_nonce(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -1119,6 +1164,7 @@ module ccip_onramp::onramp_test {
     ) {
         setup(
             aptos_framework,
+            router,
             ccip,
             ccip_onramp,
             owner,
@@ -1137,6 +1183,7 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -1146,6 +1193,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_withdraw_fee_tokens_success_burn_mint_token_pool(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -1155,6 +1203,7 @@ module ccip_onramp::onramp_test {
         let (_, token_obj) =
             setup(
                 aptos_framework,
+                router,
                 ccip,
                 ccip_onramp,
                 owner,
@@ -1200,6 +1249,7 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -1210,6 +1260,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_apply_allowlist_updates_error_add_sender_when_disabled(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -1218,6 +1269,7 @@ module ccip_onramp::onramp_test {
     ) {
         setup(
             aptos_framework,
+            router,
             ccip,
             ccip_onramp,
             owner,
@@ -1252,6 +1304,7 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -1263,6 +1316,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_apply_allowlist_updates_unauthorized(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -1272,6 +1326,7 @@ module ccip_onramp::onramp_test {
     ) {
         setup(
             aptos_framework,
+            router,
             ccip,
             ccip_onramp,
             owner,
@@ -1302,6 +1357,7 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -1311,6 +1367,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_all_getter_functions(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -1320,6 +1377,7 @@ module ccip_onramp::onramp_test {
         let (_owner_addr, _token_obj) =
             setup(
                 aptos_framework,
+                router,
                 ccip,
                 ccip_onramp,
                 owner,
@@ -1376,6 +1434,7 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -1386,6 +1445,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_mcms_entrypoint_dispatch_functionality(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -1396,6 +1456,7 @@ module ccip_onramp::onramp_test {
         let (_owner, _token_obj) =
             setup(
                 aptos_framework,
+                router,
                 ccip,
                 ccip_onramp,
                 owner,
@@ -1440,6 +1501,7 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -1450,6 +1512,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_mcms_entrypoint_apply_dest_chain_config(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -1460,6 +1523,7 @@ module ccip_onramp::onramp_test {
         let (_owner, _token_obj) =
             setup(
                 aptos_framework,
+                router,
                 ccip,
                 ccip_onramp,
                 owner,
@@ -1512,6 +1576,7 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -1522,6 +1587,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_mcms_entrypoint_apply_allowlist_updates(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -1532,6 +1598,7 @@ module ccip_onramp::onramp_test {
         let (_owner, _token_obj) =
             setup(
                 aptos_framework,
+                router,
                 ccip,
                 ccip_onramp,
                 owner,
@@ -1591,6 +1658,7 @@ module ccip_onramp::onramp_test {
     #[
         test(
             aptos_framework = @aptos_framework,
+            router = @0x200,
             ccip = @ccip,
             ccip_onramp = @ccip_onramp,
             owner = @0x100,
@@ -1602,6 +1670,7 @@ module ccip_onramp::onramp_test {
     ]
     fun test_mcms_entrypoint_unknown_function(
         aptos_framework: &signer,
+        router: &signer,
         ccip: &signer,
         ccip_onramp: &signer,
         owner: &signer,
@@ -1612,6 +1681,7 @@ module ccip_onramp::onramp_test {
         let (_, token_obj) =
             setup(
                 aptos_framework,
+                router,
                 ccip,
                 ccip_onramp,
                 owner,

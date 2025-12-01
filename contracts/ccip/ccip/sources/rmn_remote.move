@@ -158,7 +158,9 @@ module ccip::rmn_remote {
                 eth_abi::encode_bytes(&mut digest, merkle_root.on_ramp_address);
                 eth_abi::encode_u64(&mut digest, merkle_root.min_seq_nr);
                 eth_abi::encode_u64(&mut digest, merkle_root.max_seq_nr);
-                eth_abi::encode_right_padded_bytes32(&mut digest, merkle_root.merkle_root);
+                eth_abi::encode_right_padded_bytes32(
+                    &mut digest, merkle_root.merkle_root
+                );
             }
         );
         aptos_hash::keccak256(digest)
@@ -401,14 +403,16 @@ module ccip::rmn_remote {
 
         let state = borrow_state_mut();
 
-        subjects.for_each_ref(|subject| {
-            let subject: vector<u8> = *subject;
-            assert!(
-                state.cursed_subjects.contains(subject),
-                error::invalid_argument(E_NOT_CURSED)
-            );
-            state.cursed_subjects.remove(subject);
-        });
+        subjects.for_each_ref(
+            |subject| {
+                let subject: vector<u8> = *subject;
+                assert!(
+                    state.cursed_subjects.contains(subject),
+                    error::invalid_argument(E_NOT_CURSED)
+                );
+                state.cursed_subjects.remove(subject);
+            }
+        );
         event::emit_event(&mut state.uncursed_events, Uncursed { subjects });
     }
 

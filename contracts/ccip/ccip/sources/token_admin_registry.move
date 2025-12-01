@@ -1004,7 +1004,8 @@ module ccip::token_admin_registry {
         freeze(get_registration_mut(token_pool_address))
     }
 
-    inline fun get_registration_mut(token_pool_address: address): &mut TokenPoolRegistration {
+    inline fun get_registration_mut(token_pool_address: address)
+        : &mut TokenPoolRegistration {
         assert!(
             exists<TokenPoolRegistration>(token_pool_address),
             error::invalid_argument(E_INVALID_TOKEN_POOL)

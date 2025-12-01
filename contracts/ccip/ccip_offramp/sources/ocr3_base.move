@@ -206,22 +206,28 @@ module ccip_offramp::ocr3_base {
         ocr_plugin_type: u8,
         signers: &vector<vector<u8>>
     ) {
-        signers.for_each_ref(|signer_key| {
-            address::assert_non_zero_address_vector(signer_key);
-        });
+        signers.for_each_ref(
+            |signer_key| {
+                address::assert_non_zero_address_vector(signer_key);
+            }
+        );
 
         assert!(!has_duplicates(signers), error::invalid_argument(E_REPEATED_SIGNERS));
 
         let validated_signers =
-            signers.map_ref(|signer| {
-                let maybe_validated_public_key =
-                    ed25519::new_validated_public_key_from_bytes(*signer);
-                assert!(
-                    maybe_validated_public_key.is_some(),
-                    error::invalid_argument(E_COULD_NOT_VALIDATE_SIGNER_KEY)
-                );
-                ed25519::public_key_into_unvalidated(maybe_validated_public_key.extract())
-            });
+            signers.map_ref(
+                |signer| {
+                    let maybe_validated_public_key =
+                        ed25519::new_validated_public_key_from_bytes(*signer);
+                    assert!(
+                        maybe_validated_public_key.is_some(),
+                        error::invalid_argument(E_COULD_NOT_VALIDATE_SIGNER_KEY)
+                    );
+                    ed25519::public_key_into_unvalidated(
+                        maybe_validated_public_key.extract()
+                    )
+                }
+            );
 
         signer_oracles.upsert(ocr_plugin_type, validated_signers);
     }
@@ -231,9 +237,11 @@ module ccip_offramp::ocr3_base {
         ocr_plugin_type: u8,
         transmitters: &vector<address>
     ) {
-        transmitters.for_each_ref(|transmitter_addr| {
-            address::assert_non_zero_address(*transmitter_addr);
-        });
+        transmitters.for_each_ref(
+            |transmitter_addr| {
+                address::assert_non_zero_address(*transmitter_addr);
+            }
+        );
 
         assert!(
             !has_duplicates(transmitters),

@@ -29,6 +29,16 @@ func DecodeAptosJsonArray(from []any, to ...any) error {
 }
 
 func DecodeAptosJsonValue(from any, to any) error {
+	// If `to` is a pointer to `any`, directly assign the value
+	toValue := reflect.ValueOf(to)
+	if toValue.Kind() == reflect.Ptr && !toValue.IsNil() {
+		toElem := toValue.Elem()
+		if toElem.Kind() == reflect.Interface && toElem.Type() == reflect.TypeOf((*any)(nil)).Elem() {
+			toElem.Set(reflect.ValueOf(from))
+			return nil
+		}
+	}
+
 	config := &mapstructure.DecoderConfig{
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
 			hexStringHook,

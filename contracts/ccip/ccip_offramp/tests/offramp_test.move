@@ -515,8 +515,8 @@ module ccip_offramp::offramp_test {
             ) == expected_dest_chain_selector
         );
         assert!(
-            offramp::sequence_number(offramp::header(offramp::message(&execution_report))) ==
-            expected_sequence_number
+            offramp::sequence_number(offramp::header(offramp::message(&execution_report)))
+            == expected_sequence_number
         );
         assert!(
             offramp::nonce(offramp::header(offramp::message(&execution_report)))

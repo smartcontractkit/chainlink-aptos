@@ -4,14 +4,15 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"integration-tests/deploy"
-	"integration-tests/scripts"
 	"log"
 	"os"
 	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/smartcontractkit/chainlink-aptos/integration-tests/deploy"
+	"github.com/smartcontractkit/chainlink-aptos/integration-tests/scripts"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
