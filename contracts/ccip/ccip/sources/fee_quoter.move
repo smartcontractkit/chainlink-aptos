@@ -247,6 +247,7 @@ module ccip::fee_quoter {
     const E_INVALID_DEST_BYTES_OVERHEAD: u64 = 35;
     const E_INVALID_SVM_RECEIVER_LENGTH: u64 = 36;
     const E_TOKEN_AMOUNT_MISMATCH: u64 = 37;
+    const E_INVALID_SVM_ACCOUNT_LENGTH: u64 = 38;
 
     #[view]
     public fun type_and_version(): String {
@@ -389,28 +390,33 @@ module ccip::fee_quoter {
         let state = borrow_state_mut();
 
         // Remove tokens
-        fee_tokens_to_remove.for_each_ref(|fee_token| {
-            let fee_token = *fee_token;
-            let (found, index) = state.fee_tokens.index_of(&fee_token);
-            if (found) {
-                state.fee_tokens.remove(index);
-                event::emit_event(
-                    &mut state.fee_token_removed_events, FeeTokenRemoved { fee_token }
-                );
-            };
-        });
+        fee_tokens_to_remove.for_each_ref(
+            |fee_token| {
+                let fee_token = *fee_token;
+                let (found, index) = state.fee_tokens.index_of(&fee_token);
+                if (found) {
+                    state.fee_tokens.remove(index);
+                    event::emit_event(
+                        &mut state.fee_token_removed_events,
+                        FeeTokenRemoved { fee_token }
+                    );
+                };
+            }
+        );
 
         // Add new tokens
-        fee_tokens_to_add.for_each_ref(|fee_token| {
-            let fee_token = *fee_token;
-            let (found, _) = state.fee_tokens.index_of(&fee_token);
-            if (!found) {
-                state.fee_tokens.push_back(fee_token);
-                event::emit_event(
-                    &mut state.fee_token_added_events, FeeTokenAdded { fee_token }
-                );
-            };
-        });
+        fee_tokens_to_add.for_each_ref(
+            |fee_token| {
+                let fee_token = *fee_token;
+                let (found, _) = state.fee_tokens.index_of(&fee_token);
+                if (!found) {
+                    state.fee_tokens.push_back(fee_token);
+                    event::emit_event(
+                        &mut state.fee_token_added_events, FeeTokenAdded { fee_token }
+                    );
+                };
+            }
+        );
     }
 
     #[view]
@@ -425,15 +431,14 @@ module ccip::fee_quoter {
     inline fun get_token_transfer_fee_config_internal(
         state: &FeeQuoterState, dest_chain_selector: u64, token: address
     ): &TokenTransferFeeConfig {
-        let empty_fee_config =
-            TokenTransferFeeConfig {
-                min_fee_usd_cents: 0,
-                max_fee_usd_cents: 0,
-                deci_bps: 0,
-                dest_gas_overhead: 0,
-                dest_bytes_overhead: 0,
-                is_enabled: false
-            };
+        let empty_fee_config = TokenTransferFeeConfig {
+            min_fee_usd_cents: 0,
+            max_fee_usd_cents: 0,
+            deci_bps: 0,
+            dest_gas_overhead: 0,
+            dest_bytes_overhead: 0,
+            is_enabled: false
+        };
 
         if (!state.token_transfer_fee_configs.contains(dest_chain_selector)) {
             &empty_fee_config
@@ -464,7 +469,9 @@ module ccip::fee_quoter {
         let state = borrow_state_mut();
 
         if (!state.token_transfer_fee_configs.contains(dest_chain_selector)) {
-            state.token_transfer_fee_configs.add(dest_chain_selector, smart_table::new());
+            state.token_transfer_fee_configs.add(
+                dest_chain_selector, smart_table::new()
+            );
         };
         let token_transfer_fee_configs =
             state.token_transfer_fee_configs.borrow_mut(dest_chain_selector);
@@ -534,17 +541,19 @@ module ccip::fee_quoter {
             );
         };
 
-        remove_tokens.for_each_ref(|token| {
-            let token: address = *token;
-            if (token_transfer_fee_configs.contains(token)) {
-                token_transfer_fee_configs.remove(token);
+        remove_tokens.for_each_ref(
+            |token| {
+                let token: address = *token;
+                if (token_transfer_fee_configs.contains(token)) {
+                    token_transfer_fee_configs.remove(token);
 
-                event::emit_event(
-                    &mut state.token_transfer_fee_config_removed_events,
-                    TokenTransferFeeConfigRemoved { dest_chain_selector, token }
-                );
+                    event::emit_event(
+                        &mut state.token_transfer_fee_config_removed_events,
+                        TokenTransferFeeConfigRemoved { dest_chain_selector, token }
+                    );
+                }
             }
-        });
+        );
     }
 
     public fun update_prices(
@@ -862,6 +871,13 @@ module ccip::fee_quoter {
             svm_expanded_data_length +=((
                 accounts_length + SVM_MESSAGING_ACCOUNTS_OVERHEAD
             ) * SVM_ACCOUNT_BYTE_SIZE);
+        };
+
+        for (i in 0..accounts_length) {
+            assert!(
+                accounts[i].length() == 32,
+                error::invalid_argument(E_INVALID_SVM_ACCOUNT_LENGTH)
+            );
         };
 
         if (tokens_len > 0) {

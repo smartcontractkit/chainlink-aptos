@@ -5,8 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"integration-tests/common"
-	"integration-tests/scripts"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/smartcontractkit/chainlink-aptos/integration-tests/common"
+	"github.com/smartcontractkit/chainlink-aptos/integration-tests/scripts"
 
 	"github.com/BurntSushi/toml"
 	"github.com/docker/go-connections/nat"

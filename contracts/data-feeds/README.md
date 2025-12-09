@@ -38,3 +38,23 @@ There is also a vanilla, initial (non-upgrade) deploy script as well.
 cd contracts/data-feeds/scripts
 ./test_registry_deploy_e2e.sh
 ```
+
+## Aptos CLI
+
+Install via `brew install aptos` (other options here: https://aptos.dev/build/cli). 
+
+
+## Testing
+
+Run tests under the `contracts/data-feeds` directory:
+
+```bash
+aptos move test --dev
+```
+
+
+### Run a specific test
+
+```bash
+aptos move test --dev --filter <test_name>
+```
