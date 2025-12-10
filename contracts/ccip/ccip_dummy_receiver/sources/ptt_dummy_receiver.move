@@ -71,8 +71,7 @@ module ccip_dummy_receiver::ptt_dummy_receiver {
         receiver_registry::register_receiver_v2(
             publisher,
             MODULE_NAME,
-            |message| ccip_receive_v2(message),
-            CCIPReceiverProof {}
+            |message| ccip_receive_v2(message)
         );
     }
 
@@ -82,8 +81,6 @@ module ccip_dummy_receiver::ptt_dummy_receiver {
         let state_signer = account::create_signer_with_capability(&state.signer_cap);
         signer::address_of(&state_signer)
     }
-
-    struct CCIPReceiverProof has drop {}
 
     public fun ccip_receive_v2(message: client::Any2AptosMessage) acquires CCIPReceiverState {
         /* load state and rebuild a signer for the resource account */

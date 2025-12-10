@@ -33,8 +33,7 @@ module ccip::receiver_registry {
     }
 
     struct CCIPReceiverRegistrationV2 has key {
-        callback: |client::Any2AptosMessage| has drop + copy + store,
-        proof_typeinfo: TypeInfo
+        callback: |client::Any2AptosMessage| has drop + copy + store
     }
 
     #[event]
@@ -144,11 +143,10 @@ module ccip::receiver_registry {
         );
     }
 
-    public fun register_receiver_v2<ProofType: drop>(
+    public fun register_receiver_v2(
         receiver_account: &signer,
         receiver_module_name: vector<u8>,
-        callback: |client::Any2AptosMessage| has drop + copy + store,
-        _proof: ProofType
+        callback: |client::Any2AptosMessage| has drop + copy + store
     ) acquires ReceiverRegistryState {
         let receiver_address = signer::address_of(receiver_account);
         assert!(
@@ -156,19 +154,9 @@ module ccip::receiver_registry {
             error::invalid_argument(E_ALREADY_REGISTERED)
         );
 
-        let proof_typeinfo = type_info::type_of<ProofType>();
-        assert!(
-            proof_typeinfo.account_address() == receiver_address,
-            E_PROOF_TYPE_ACCOUNT_MISMATCH
-        );
-        assert!(
-            proof_typeinfo.module_name() == receiver_module_name,
-            E_PROOF_TYPE_MODULE_MISMATCH
-        );
-
         move_to(
             receiver_account,
-            CCIPReceiverRegistrationV2 { callback, proof_typeinfo }
+            CCIPReceiverRegistrationV2 { callback }
         );
 
         let state = borrow_state_mut();

@@ -72,9 +72,6 @@ type ReceivedTokensOnly struct {
 type CCIPReceiverState struct {
 }
 
-type CCIPReceiverProof struct {
-}
-
 type PttDummyReceiverContract struct {
 	*bind.BoundContract
 	pttDummyReceiverEncoder

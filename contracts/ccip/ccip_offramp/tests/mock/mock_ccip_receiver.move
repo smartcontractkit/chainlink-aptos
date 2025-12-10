@@ -76,8 +76,7 @@ module ccip_offramp::mock_ccip_receiver {
         receiver_registry::register_receiver_v2(
             publisher,
             MODULE_NAME,
-            |message| ccip_receive_v2(message),
-            CCIPReceiverProof {}
+            |message| ccip_receive_v2(message)
         );
     }
 
@@ -95,8 +94,7 @@ module ccip_offramp::mock_ccip_receiver {
         receiver_registry::register_receiver_v2(
             publisher,
             MODULE_NAME,
-            |message| ccip_receive_v2(message),
-            CCIPReceiverProof {}
+            |message| ccip_receive_v2(message)
         );
     }
 
