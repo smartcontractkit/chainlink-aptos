@@ -61,17 +61,10 @@ module managed_token_pool::managed_token_pool {
 
         let managed_token_address = managed_token::token_metadata();
 
-        // Register V1 pool (for backward compatibility)
-        token_admin_registry::register_pool(
-            publisher,
-            token_pool_module_name,
-            managed_token_address,
-            CallbackProof {}
-        );
-
         let lock_or_burn_closure = |fa, input| lock_or_burn_v2(fa, input);
         let release_or_mint_closure = |input| release_or_mint_v2(input);
 
+        // Register V2 pool with closure-based callbacks
         token_admin_registry::register_pool_v2(
             publisher,
             token_pool_module_name,

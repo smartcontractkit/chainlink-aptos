@@ -9,7 +9,7 @@ module lock_release_token_pool::lock_release_token_pool {
     use std::signer;
     use std::string::{Self, String};
 
-    use ccip::token_admin_registry;
+    use ccip::token_admin_registry::{Self, LockOrBurnInputV1, ReleaseOrMintInputV1};
     use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
@@ -75,17 +75,10 @@ module lock_release_token_pool::lock_release_token_pool {
             register_mcms_entrypoint(publisher, token_pool_module_name);
         };
 
-        // Register V1 pool (for backward compatibility)
-        token_admin_registry::register_pool(
-            publisher,
-            token_pool_module_name,
-            @lock_release_local_token,
-            CallbackProof {}
-        );
-
         let lock_or_burn_closure = |fa, input| lock_or_burn_v2(fa, input);
         let release_or_mint_closure = |input| release_or_mint_v2(input);
 
+        // Register V2 pool with closure-based callbacks
         token_admin_registry::register_pool_v2(
             publisher,
             token_pool_module_name,
@@ -445,7 +438,7 @@ module lock_release_token_pool::lock_release_token_pool {
     }
 
     public fun lock_or_burn_v2(
-        fa: FungibleAsset, input: token_admin_registry::LockOrBurnInputV1
+        fa: FungibleAsset, input: LockOrBurnInputV1
     ): (vector<u8>, vector<u8>) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
         let fa_amount = fungible_asset::amount(&fa);
@@ -472,7 +465,7 @@ module lock_release_token_pool::lock_release_token_pool {
     }
 
     public fun release_or_mint_v2(
-        input: token_admin_registry::ReleaseOrMintInputV1
+        input: ReleaseOrMintInputV1
     ): (FungibleAsset, u64) acquires LockReleaseTokenPoolState {
         let pool = borrow_pool_mut();
         let local_amount =

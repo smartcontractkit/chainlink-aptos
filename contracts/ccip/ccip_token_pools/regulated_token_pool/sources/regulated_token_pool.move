@@ -33,7 +33,6 @@ module regulated_token_pool::regulated_token_pool {
     const E_LOCAL_TOKEN_MISMATCH: u64 = 4;
     const E_INVALID_ARGUMENTS: u64 = 5;
     const E_UNKNOWN_FUNCTION: u64 = 6;
-    const E_NOT_REGISTERED_RECEIVER: u64 = 7;
 
     // ================================================================
     // |                             Init                             |
@@ -62,17 +61,10 @@ module regulated_token_pool::regulated_token_pool {
 
         let regulated_token_address = regulated_token::token_address();
 
-        // Register V1 pool (for backward compatibility)
-        token_admin_registry::register_pool(
-            publisher,
-            token_pool_module_name,
-            regulated_token_address,
-            CallbackProof {}
-        );
-
         let lock_or_burn_closure = |fa, input| lock_or_burn_v2(fa, input);
         let release_or_mint_closure = |input| release_or_mint_v2(input);
 
+        // Register V2 pool with closure-based callbacks
         token_admin_registry::register_pool_v2(
             publisher,
             token_pool_module_name,

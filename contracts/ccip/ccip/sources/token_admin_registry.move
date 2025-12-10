@@ -88,9 +88,8 @@ module ccip::token_admin_registry {
     }
 
     struct TokenPoolCallbacks has drop, copy, store {
-        lock_or_burn: |FungibleAsset, LockOrBurnInputV1| (vector<u8>, vector<u8>) has drop
-            + copy + store,
-        release_or_mint: |ReleaseOrMintInputV1| (FungibleAsset, u64) has drop + copy + store
+        lock_or_burn: |FungibleAsset, LockOrBurnInputV1| (vector<u8>, vector<u8>),
+        release_or_mint: |ReleaseOrMintInputV1| (FungibleAsset, u64)
     }
 
     struct TokenPoolConfig has key {
@@ -318,6 +317,9 @@ module ccip::token_admin_registry {
     // |                       Register Pool                          |
     // ================================================================
 
+    #[deprecated]
+    /// @deprecated: Use `register_pool_v2()` instead.
+    ///
     /// Registers pool with `TokenPoolRegistration` and sets up dynamic dispatch for a token pool
     /// Registry token config mapping must be done separately via `set_pool()`
     /// by token owner or ccip owner.
@@ -459,7 +461,7 @@ module ccip::token_admin_registry {
 
     public entry fun unregister_pool(
         caller: &signer, local_token: address
-    ) acquires TokenAdminRegistryState, TokenPoolRegistration {
+    ) acquires TokenAdminRegistryState, TokenPoolRegistration, TokenPoolConfig {
         let state = borrow_state_mut();
         assert!(
             state.token_configs.contains(&local_token),
@@ -490,6 +492,11 @@ module ccip::token_admin_registry {
                 executing_release_or_mint_output_v1: _,
                 local_token: _
             } = move_from<TokenPoolRegistration>(previous_pool_address);
+        };
+
+        if (exists<TokenPoolConfig>(previous_pool_address)) {
+            let TokenPoolConfig { callbacks: _, local_token: _ } =
+                move_from<TokenPoolConfig>(previous_pool_address);
         };
 
         event::emit_event(

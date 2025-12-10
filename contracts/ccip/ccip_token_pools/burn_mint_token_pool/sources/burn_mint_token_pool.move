@@ -73,19 +73,10 @@ module burn_mint_token_pool::burn_mint_token_pool {
             register_mcms_entrypoint(publisher, token_pool_module_name);
         };
 
-        // Register V1 pool (for backward compatibility)
-        token_admin_registry::register_pool(
-            publisher,
-            token_pool_module_name,
-            @burn_mint_local_token,
-            CallbackProof {}
-        );
-
         let lock_or_burn_closure = |fa, input| lock_or_burn_v2(fa, input);
         let release_or_mint_closure = |input| release_or_mint_v2(input);
 
-        // If the contract has already been deployed with V1 and needs to be upgraded to V2,
-        // create a new module and pass in `publisher` from `fun init_module(publisher: &signer)`
+        // Register V2 pool with closure-based callbacks
         token_admin_registry::register_pool_v2(
             publisher,
             token_pool_module_name,

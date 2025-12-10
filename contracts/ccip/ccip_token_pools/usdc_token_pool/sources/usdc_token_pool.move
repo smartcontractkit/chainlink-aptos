@@ -113,16 +113,10 @@ module usdc_token_pool::usdc_token_pool {
             register_mcms_entrypoint(publisher, token_pool_module_name);
         };
 
-        token_admin_registry::register_pool(
-            publisher,
-            token_pool_module_name,
-            @local_token,
-            CallbackProof {}
-        );
-
         let lock_or_burn_closure = |fa, input| lock_or_burn_v2(fa, input);
         let release_or_mint_closure = |input| release_or_mint_v2(input);
 
+        // Register V2 pool with closure-based callbacks
         token_admin_registry::register_pool_v2(
             publisher,
             token_pool_module_name,
@@ -376,9 +370,6 @@ module usdc_token_pool::usdc_token_pool {
             dest_token_address,
             dest_pool_data
         );
-
-        let remote_chain_selector =
-            token_admin_registry::get_lock_or_burn_remote_chain_selector(&input);
 
         token_pool::emit_locked_or_burned(
             &mut pool.token_pool_state, fa_amount, remote_chain_selector
