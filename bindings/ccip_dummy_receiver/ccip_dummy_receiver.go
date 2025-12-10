@@ -69,6 +69,9 @@ const (
 
 // DeployToObject deploys the dummmy receiver contract to a new named object.
 // The resulting address will be calculated using the deployer's account address and the next sequence number
+//
+// NOTE: This deployment method will NOT work with ptt_dummy_receiver module as it requires resource account.
+// Use DeployToResourceAccount if you need PTT functionality.
 func DeployToObject(
 	auth aptos.TransactionSigner,
 	client aptos.AptosRpcClient,
@@ -79,6 +82,7 @@ func DeployToObject(
 		"ccip":                      ccipAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
+		"deployer":                  auth.AccountAddress(), // Required for compilation, but ptt_dummy_receiver won't work with object deployment
 	}
 	address, tx, err := bind.DeployPackageToObject(auth, client, contracts.CCIPDummyReceiver, namedAddresses)
 	if err != nil {
