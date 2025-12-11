@@ -14,7 +14,7 @@ module ccip_dummy_receiver::ptt_dummy_receiver {
 
     #[event]
     struct ReceivedMessage has store, drop {
-        message: String
+        data: vector<u8>
     }
 
     #[event]
@@ -117,12 +117,9 @@ module ccip_dummy_receiver::ptt_dummy_receiver {
                 &mut state.forwarded_tokens_handle, ForwardedTokens { final_recipient }
             );
         } else if (data.length() != 0) {
-            // Convert the vector<u8> to a string
-            let message = string::utf8(data);
-
-            event::emit(ReceivedMessage { message });
+            event::emit(ReceivedMessage { data });
             event::emit_event(
-                &mut state.received_message_handle, ReceivedMessage { message }
+                &mut state.received_message_handle, ReceivedMessage { data }
             );
 
         } else if (dest_token_amounts.length() != 0) {

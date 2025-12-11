@@ -58,7 +58,7 @@ const (
 // Structs
 
 type ReceivedMessage struct {
-	Message string `move:"0x1::string::String"`
+	Data []byte `move:"vector<u8>"`
 }
 
 type ForwardedTokens struct {

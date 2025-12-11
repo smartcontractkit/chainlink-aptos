@@ -44,12 +44,13 @@ var FunctionInfo = bind.MustParseFunctionInfo(
 	module_ptt_dummy_receiver.FunctionInfo,
 )
 
-func Compile(address aptos.AccountAddress, ccipAddress aptos.AccountAddress, mcmsAddress aptos.AccountAddress) (compile.CompiledPackage, error) {
+func Compile(address aptos.AccountAddress, ccipAddress aptos.AccountAddress, mcmsAddress aptos.AccountAddress, deployer aptos.AccountAddress) (compile.CompiledPackage, error) {
 	namedAddresses := map[string]aptos.AccountAddress{
 		"ccip_dummy_receiver":       address,
 		"ccip":                      ccipAddress,
 		"mcms":                      mcmsAddress,
 		"mcms_register_entrypoints": aptos.AccountZero,
+		"deployer":                  deployer,
 	}
 	// Compile using CLI
 	return compile.CompilePackage(contracts.CCIPDummyReceiver, namedAddresses)
