@@ -23,6 +23,10 @@ module ccip::receiver_registry {
         receiver_registered_events: EventHandle<ReceiverRegistered>
     }
 
+    struct ReceiverRegistryEventsV2 has key {
+        receiver_registered: EventHandle<ReceiverRegisteredV2>
+    }
+
     struct CCIPReceiverRegistration has key {
         ccip_receive_function: FunctionInfo,
         proof_typeinfo: TypeInfo,
@@ -33,13 +37,19 @@ module ccip::receiver_registry {
     }
 
     struct CCIPReceiverRegistrationV2 has key {
-        callback: |client::Any2AptosMessage| has drop + copy + store
+        callback: |client::Any2AptosMessage| has copy + drop + store
     }
 
     #[event]
     struct ReceiverRegistered has store, drop {
         receiver_address: address,
         receiver_module_name: vector<u8>
+    }
+
+    #[event]
+    struct ReceiverRegisteredV2 has drop, store {
+        receiver_address: address,
+        callback: |client::Any2AptosMessage| has copy + drop + store
     }
 
     const E_ALREADY_REGISTERED: u64 = 1;
@@ -145,9 +155,8 @@ module ccip::receiver_registry {
 
     public fun register_receiver_v2(
         receiver_account: &signer,
-        receiver_module_name: vector<u8>,
-        callback: |client::Any2AptosMessage| has drop + copy + store
-    ) acquires ReceiverRegistryState {
+        callback: |client::Any2AptosMessage| has copy + drop + store
+    ) {
         let receiver_address = signer::address_of(receiver_account);
         assert!(
             !exists<CCIPReceiverRegistrationV2>(receiver_address),
@@ -159,10 +168,9 @@ module ccip::receiver_registry {
             CCIPReceiverRegistrationV2 { callback }
         );
 
-        let state = borrow_state_mut();
         event::emit_event(
-            &mut state.receiver_registered_events,
-            ReceiverRegistered { receiver_address, receiver_module_name }
+            &mut borrow_events_v2_mut().receiver_registered,
+            ReceiverRegisteredV2 { receiver_address, callback }
         );
     }
 
@@ -246,6 +254,22 @@ module ccip::receiver_registry {
             error::invalid_argument(E_UNKNOWN_RECEIVER)
         );
         borrow_global_mut<CCIPReceiverRegistration>(receiver_address)
+    }
+
+    inline fun borrow_events_v2_mut(): &mut ReceiverRegistryEventsV2 {
+        let state_signer = &state_object::object_signer();
+        let state_address = state_object::object_address();
+
+        if (!exists<ReceiverRegistryEventsV2>(state_address)) {
+            move_to(
+                state_signer,
+                ReceiverRegistryEventsV2 {
+                    receiver_registered: account::new_event_handle(state_signer)
+                }
+            );
+        };
+
+        borrow_global_mut<ReceiverRegistryEventsV2>(state_address)
     }
 
     #[test_only]

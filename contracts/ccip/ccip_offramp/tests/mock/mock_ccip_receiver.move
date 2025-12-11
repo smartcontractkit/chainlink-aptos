@@ -74,9 +74,7 @@ module ccip_offramp::mock_ccip_receiver {
 
         // Default to V2 registration
         receiver_registry::register_receiver_v2(
-            publisher,
-            MODULE_NAME,
-            |message| ccip_receive_v2(message)
+            publisher, |message| ccip_receive_v2(message)
         );
     }
 
@@ -92,9 +90,7 @@ module ccip_offramp::mock_ccip_receiver {
         // V2 registration will coexist with V1
         // The dispatcher will prefer V2 when both exist
         receiver_registry::register_receiver_v2(
-            publisher,
-            MODULE_NAME,
-            |message| ccip_receive_v2(message)
+            publisher, |message| ccip_receive_v2(message)
         );
     }
 

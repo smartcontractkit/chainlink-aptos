@@ -14,10 +14,6 @@ module managed_token_pool::upgrade_v2 {
         // create an Account on the object for event handles.
         account::create_account_if_does_not_exist(@managed_token_pool);
 
-        // the name of this module. if incorrect, callbacks will fail to be registered and
-        // register_pool will revert.
-        let token_pool_module_name = b"managed_token_pool";
-
         let managed_token_address = managed_token::token_metadata();
 
         let lock_or_burn_closure =
@@ -29,11 +25,9 @@ module managed_token_pool::upgrade_v2 {
         // create a new module and pass in `publisher` from `fun init_module(publisher: &signer)`
         token_admin_registry::register_pool_v2(
             publisher,
-            token_pool_module_name,
             managed_token_address,
             lock_or_burn_closure,
-            release_or_mint_closure,
-            managed_token_pool::create_callback_proof()
+            release_or_mint_closure
         );
     }
 

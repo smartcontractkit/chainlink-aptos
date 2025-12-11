@@ -79,11 +79,9 @@ module burn_mint_token_pool::burn_mint_token_pool {
         // Register V2 pool with closure-based callbacks
         token_admin_registry::register_pool_v2(
             publisher,
-            token_pool_module_name,
             @burn_mint_local_token,
             lock_or_burn_closure,
-            release_or_mint_closure,
-            CallbackProof {}
+            release_or_mint_closure
         );
 
         // create a resource account to be the owner of the primary FungibleStore we will use.

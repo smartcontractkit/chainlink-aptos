@@ -87,7 +87,7 @@ module ccip::token_admin_registry {
         destination_amount: u64
     }
 
-    struct TokenPoolCallbacks has drop, copy, store {
+    struct TokenPoolCallbacks has copy, drop, store {
         lock_or_burn: |FungibleAsset, LockOrBurnInputV1| (vector<u8>, vector<u8>),
         release_or_mint: |ReleaseOrMintInputV1| (FungibleAsset, u64)
     }
@@ -421,14 +421,12 @@ module ccip::token_admin_registry {
         );
     }
 
-    public fun register_pool_v2<ProofType: drop>(
+    public fun register_pool_v2(
         token_pool_account: &signer,
-        token_pool_module_name: vector<u8>,
         local_token: address,
-        lock_or_burn: |FungibleAsset, LockOrBurnInputV1| (vector<u8>, vector<u8>) has drop
-        + copy + store,
-        release_or_mint: |ReleaseOrMintInputV1| (FungibleAsset, u64) has drop + copy + store,
-        _proof: ProofType
+        lock_or_burn: |FungibleAsset, LockOrBurnInputV1| (vector<u8>, vector<u8>) has copy
+        + drop + store,
+        release_or_mint: |ReleaseOrMintInputV1| (FungibleAsset, u64) has copy + drop + store
     ) {
         let token_pool_address = signer::address_of(token_pool_account);
         assert!(
@@ -438,16 +436,6 @@ module ccip::token_admin_registry {
         assert!(
             object::object_exists<Metadata>(local_token),
             error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
-        );
-
-        let proof_typeinfo = type_info::type_of<ProofType>();
-        assert!(
-            proof_typeinfo.account_address() == token_pool_address,
-            error::invalid_argument(E_PROOF_NOT_AT_TOKEN_POOL_ADDRESS)
-        );
-        assert!(
-            proof_typeinfo.module_name() == token_pool_module_name,
-            error::invalid_argument(E_PROOF_NOT_IN_TOKEN_POOL_MODULE)
         );
 
         move_to(

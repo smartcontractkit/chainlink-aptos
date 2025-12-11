@@ -44,8 +44,6 @@ module ccip_dummy_receiver::ptt_dummy_receiver {
         string::utf8(b"PTTDummyReceiver 1.6.0")
     }
 
-    const MODULE_NAME: vector<u8> = b"ptt_dummy_receiver";
-
     fun init_module(publisher: &signer) {
         let signer_cap =
             resource_account::retrieve_resource_account_cap(publisher, @deployer);
@@ -69,9 +67,7 @@ module ccip_dummy_receiver::ptt_dummy_receiver {
 
         // Default to V2 registration
         receiver_registry::register_receiver_v2(
-            publisher,
-            MODULE_NAME,
-            |message| ccip_receive_v2(message)
+            publisher, |message| ccip_receive_v2(message)
         );
     }
 

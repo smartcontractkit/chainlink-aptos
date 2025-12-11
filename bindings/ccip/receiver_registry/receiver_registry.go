@@ -64,6 +64,9 @@ const (
 type ReceiverRegistryState struct {
 }
 
+type ReceiverRegistryEventsV2 struct {
+}
+
 type CCIPReceiverRegistration struct {
 	DispatchMetadata bind.StdObject `move:"aptos_framework::object::Object"`
 }
@@ -74,6 +77,10 @@ type CCIPReceiverRegistrationV2 struct {
 type ReceiverRegistered struct {
 	ReceiverAddress    aptos.AccountAddress `move:"address"`
 	ReceiverModuleName []byte               `move:"vector<u8>"`
+}
+
+type ReceiverRegisteredV2 struct {
+	ReceiverAddress aptos.AccountAddress `move:"address"`
 }
 
 type ReceiverRegistryContract struct {
