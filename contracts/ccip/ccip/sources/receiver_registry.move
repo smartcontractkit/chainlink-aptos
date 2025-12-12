@@ -24,7 +24,7 @@ module ccip::receiver_registry {
     }
 
     struct ReceiverRegistryEventsV2 has key {
-        receiver_registered: EventHandle<ReceiverRegisteredV2>
+        receiver_registered_v2_events: EventHandle<ReceiverRegisteredV2>
     }
 
     struct CCIPReceiverRegistration has key {
@@ -169,7 +169,7 @@ module ccip::receiver_registry {
         );
 
         event::emit_event(
-            &mut borrow_events_v2_mut().receiver_registered,
+            &mut borrow_events_v2_mut().receiver_registered_v2_events,
             ReceiverRegisteredV2 { receiver_address, callback }
         );
     }
@@ -264,7 +264,7 @@ module ccip::receiver_registry {
             move_to(
                 state_signer,
                 ReceiverRegistryEventsV2 {
-                    receiver_registered: account::new_event_handle(state_signer)
+                    receiver_registered_v2_events: account::new_event_handle(state_signer)
                 }
             );
         };
