@@ -11,7 +11,7 @@ jobs:
         with:
           CLI_VERSION: 7.11.1
       - name: Update movefmt
-        run: aptos update movefmt --target-version 1.3.7 # Fix version to prevent accidentally breaking the CI
+        run: aptos update movefmt --target-version 1.3.8 # Fix version to prevent accidentally breaking the CI
       - name: Run movefmt
         run: make fmt
       - name: Check if any files have been changed

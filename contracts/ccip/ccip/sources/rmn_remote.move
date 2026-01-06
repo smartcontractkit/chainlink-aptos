@@ -11,6 +11,7 @@ module ccip::rmn_remote {
     use std::signer;
     use std::string::{Self, String};
     use std::smart_table::{Self, SmartTable};
+    use std::ordered_map::{Self, OrderedMap};
 
     use ccip::auth;
     use ccip::eth_abi;
@@ -77,6 +78,26 @@ module ccip::rmn_remote {
         subjects: vector<vector<u8>>
     }
 
+    // ================================================================
+    // |                  AllowedCursersV2 (Fast Cursing)              |
+    // ================================================================
+
+    struct AllowedCursersV2 has key {
+        allowed_cursers: OrderedMap<address, bool>,
+        allowed_cursers_added_events: EventHandle<AllowedCursersAdded>,
+        allowed_cursers_removed_events: EventHandle<AllowedCursersRemoved>
+    }
+
+    #[event]
+    struct AllowedCursersAdded has store, drop {
+        cursers: vector<address>
+    }
+
+    #[event]
+    struct AllowedCursersRemoved has store, drop {
+        cursers: vector<address>
+    }
+
     const E_ALREADY_INITIALIZED: u64 = 1;
     const E_ALREADY_CURSED: u64 = 2;
     const E_CONFIG_NOT_SET: u64 = 3;
@@ -95,6 +116,11 @@ module ccip::rmn_remote {
     const E_INVALID_SUBJECT_LENGTH: u64 = 16;
     const E_INVALID_PUBLIC_KEY_LENGTH: u64 = 17;
     const E_UNKNOWN_FUNCTION: u64 = 18;
+    const E_NOT_OWNER_OR_ALLOWED_CURSER: u64 = 19;
+    const E_ALLOWED_CURSERS_V2_ALREADY_INITIALIZED: u64 = 20;
+    const E_ALLOWED_CURSERS_V2_NOT_INITIALIZED: u64 = 21;
+    const E_CURSER_ALREADY_ALLOWED: u64 = 22;
+    const E_CURSER_NOT_ALLOWED: u64 = 23;
 
     #[view]
     public fun type_and_version(): String {
@@ -109,6 +135,57 @@ module ccip::rmn_remote {
     }
 
     public entry fun initialize(
+        caller: &signer, local_chain_selector: u64
+    ) {
+        auth::assert_only_owner(signer::address_of(caller));
+
+        assert!(
+            local_chain_selector != 0,
+            error::invalid_argument(E_ZERO_VALUE_NOT_ALLOWED)
+        );
+        assert!(
+            !exists<RMNRemoteState>(state_object::object_address()),
+            error::invalid_argument(E_ALREADY_INITIALIZED)
+        );
+
+        let state_object_signer = state_object::object_signer();
+
+        // Create V1 state (RMNRemoteState)
+        let state = RMNRemoteState {
+            local_chain_selector,
+            config: Config {
+                rmn_home_contract_config_digest: vector[],
+                signers: vector[],
+                f_sign: 0
+            },
+            config_count: 0,
+            signers: smart_table::new(),
+            cursed_subjects: smart_table::new(),
+            config_set_events: account::new_event_handle(&state_object_signer),
+            cursed_events: account::new_event_handle(&state_object_signer),
+            uncursed_events: account::new_event_handle(&state_object_signer)
+        };
+        move_to(&state_object_signer, state);
+
+        // Create V2 state (AllowedCursersV2) - new deployments get both
+        move_to(
+            &state_object_signer,
+            AllowedCursersV2 {
+                allowed_cursers: ordered_map::new(),
+                allowed_cursers_added_events: account::new_event_handle(
+                    &state_object_signer
+                ),
+                allowed_cursers_removed_events: account::new_event_handle(
+                    &state_object_signer
+                )
+            }
+        );
+    }
+
+    #[test_only]
+    /// Legacy initialization that only creates RMNRemoteState (V1).
+    /// Used for testing migration scenarios from V1 to V2.
+    public entry fun initialize_v1(
         caller: &signer, local_chain_selector: u64
     ) {
         auth::assert_only_owner(signer::address_of(caller));
@@ -364,14 +441,16 @@ module ccip::rmn_remote {
         aptos_hash::keccak256(b"RMN_V1_6_ANY2APTOS_REPORT")
     }
 
-    public entry fun curse(caller: &signer, subject: vector<u8>) acquires RMNRemoteState {
+    public entry fun curse(
+        caller: &signer, subject: vector<u8>
+    ) acquires RMNRemoteState, AllowedCursersV2 {
         curse_multiple(caller, vector[subject]);
     }
 
     public entry fun curse_multiple(
         caller: &signer, subjects: vector<vector<u8>>
-    ) acquires RMNRemoteState {
-        auth::assert_only_owner(signer::address_of(caller));
+    ) acquires RMNRemoteState, AllowedCursersV2 {
+        assert_owner_or_allowed_curser(signer::address_of(caller));
 
         let state = borrow_state_mut();
 
@@ -392,14 +471,16 @@ module ccip::rmn_remote {
         event::emit_event(&mut state.cursed_events, Cursed { subjects });
     }
 
-    public entry fun uncurse(caller: &signer, subject: vector<u8>) acquires RMNRemoteState {
+    public entry fun uncurse(
+        caller: &signer, subject: vector<u8>
+    ) acquires RMNRemoteState, AllowedCursersV2 {
         uncurse_multiple(caller, vector[subject]);
     }
 
     public entry fun uncurse_multiple(
         caller: &signer, subjects: vector<vector<u8>>
-    ) acquires RMNRemoteState {
-        auth::assert_only_owner(signer::address_of(caller));
+    ) acquires RMNRemoteState, AllowedCursersV2 {
+        assert_owner_or_allowed_curser(signer::address_of(caller));
 
         let state = borrow_state_mut();
 
@@ -447,6 +528,149 @@ module ccip::rmn_remote {
     }
 
     // ================================================================
+    // |              AllowedCursersV2 Helper Functions                |
+    // ================================================================
+
+    inline fun borrow_allowed_cursers_v2(): &AllowedCursersV2 {
+        borrow_global<AllowedCursersV2>(state_object::object_address())
+    }
+
+    inline fun borrow_allowed_cursers_v2_mut(): &mut AllowedCursersV2 {
+        borrow_global_mut<AllowedCursersV2>(state_object::object_address())
+    }
+
+    #[view]
+    /// Check if an address is an allowed curser.
+    /// Returns false if AllowedCursersV2 is not initialized (V1 behavior: only owner can curse).
+    public fun is_allowed_curser(curser: address): bool acquires AllowedCursersV2 {
+        if (!exists<AllowedCursersV2>(state_object::object_address())) { false }
+        else {
+            borrow_allowed_cursers_v2().allowed_cursers.contains(&curser)
+        }
+    }
+
+    #[view]
+    /// Get the list of allowed cursers.
+    /// Returns empty vector if AllowedCursersV2 is not initialized.
+    public fun get_allowed_cursers(): vector<address> acquires AllowedCursersV2 {
+        if (!exists<AllowedCursersV2>(state_object::object_address())) {
+            vector[]
+        } else {
+            borrow_allowed_cursers_v2().allowed_cursers.keys()
+        }
+    }
+
+    inline fun assert_owner_or_allowed_curser(caller: address) {
+        assert!(
+            caller == auth::owner() || is_allowed_curser(caller),
+            error::permission_denied(E_NOT_OWNER_OR_ALLOWED_CURSER)
+        );
+    }
+
+    // ================================================================
+    // |           AllowedCursersV2 Admin Functions (Owner Only)       |
+    // ================================================================
+
+    /// Initialize the AllowedCursersV2 resource. Owner only.
+    /// This must be called before adding allowed cursers.
+    public entry fun initialize_allowed_cursers_v2(
+        caller: &signer, initial_cursers: vector<address>
+    ) {
+        auth::assert_only_owner(signer::address_of(caller));
+
+        assert!(
+            !exists<AllowedCursersV2>(state_object::object_address()),
+            error::already_exists(E_ALLOWED_CURSERS_V2_ALREADY_INITIALIZED)
+        );
+
+        let state_object_signer = state_object::object_signer();
+        let allowed_cursers = ordered_map::new();
+
+        initial_cursers.for_each_ref(
+            |curser| {
+                allowed_cursers.add(*curser, true);
+            }
+        );
+
+        move_to(
+            &state_object_signer,
+            AllowedCursersV2 {
+                allowed_cursers,
+                allowed_cursers_added_events: account::new_event_handle(
+                    &state_object_signer
+                ),
+                allowed_cursers_removed_events: account::new_event_handle(
+                    &state_object_signer
+                )
+            }
+        );
+
+        if (!initial_cursers.is_empty()) {
+            event::emit(AllowedCursersAdded { cursers: initial_cursers });
+        };
+    }
+
+    /// Add allowed cursers. Owner only.
+    /// AllowedCursersV2 must be initialized first.
+    public entry fun add_allowed_cursers(
+        caller: &signer, cursers_to_add: vector<address>
+    ) acquires AllowedCursersV2 {
+        auth::assert_only_owner(signer::address_of(caller));
+
+        assert!(
+            exists<AllowedCursersV2>(state_object::object_address()),
+            error::invalid_state(E_ALLOWED_CURSERS_V2_NOT_INITIALIZED)
+        );
+
+        let state = borrow_allowed_cursers_v2_mut();
+
+        cursers_to_add.for_each_ref(
+            |curser| {
+                assert!(
+                    !state.allowed_cursers.contains(curser),
+                    error::already_exists(E_CURSER_ALREADY_ALLOWED)
+                );
+                state.allowed_cursers.add(*curser, true);
+            }
+        );
+
+        event::emit_event(
+            &mut state.allowed_cursers_added_events,
+            AllowedCursersAdded { cursers: cursers_to_add }
+        );
+    }
+
+    /// Remove allowed cursers. Owner only.
+    /// AllowedCursersV2 must be initialized first.
+    public entry fun remove_allowed_cursers(
+        caller: &signer, cursers_to_remove: vector<address>
+    ) acquires AllowedCursersV2 {
+        auth::assert_only_owner(signer::address_of(caller));
+
+        assert!(
+            exists<AllowedCursersV2>(state_object::object_address()),
+            error::invalid_state(E_ALLOWED_CURSERS_V2_NOT_INITIALIZED)
+        );
+
+        let state = borrow_allowed_cursers_v2_mut();
+
+        cursers_to_remove.for_each_ref(
+            |curser| {
+                assert!(
+                    state.allowed_cursers.contains(curser),
+                    error::not_found(E_CURSER_NOT_ALLOWED)
+                );
+                state.allowed_cursers.remove(curser);
+            }
+        );
+
+        event::emit_event(
+            &mut state.allowed_cursers_removed_events,
+            AllowedCursersRemoved { cursers: cursers_to_remove }
+        );
+    }
+
+    // ================================================================
     // |                      MCMS Entrypoint                         |
     // ================================================================
 
@@ -454,7 +678,7 @@ module ccip::rmn_remote {
 
     public fun mcms_entrypoint<T: key>(
         _metadata: object::Object<T>
-    ): option::Option<u128> acquires RMNRemoteState {
+    ): option::Option<u128> acquires RMNRemoteState, AllowedCursersV2 {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip, McmsCallback {});
 
@@ -511,6 +735,30 @@ module ccip::rmn_remote {
                 );
             bcs_stream::assert_is_consumed(&stream);
             uncurse_multiple(&caller, subjects)
+        } else if (function_bytes == b"initialize_allowed_cursers_v2") {
+            let initial_cursers =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_address(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            initialize_allowed_cursers_v2(&caller, initial_cursers)
+        } else if (function_bytes == b"add_allowed_cursers") {
+            let cursers_to_add =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_address(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            add_allowed_cursers(&caller, cursers_to_add)
+        } else if (function_bytes == b"remove_allowed_cursers") {
+            let cursers_to_remove =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| bcs_stream::deserialize_address(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+            remove_allowed_cursers(&caller, cursers_to_remove)
         } else {
             abort error::invalid_argument(E_UNKNOWN_FUNCTION)
         };
