@@ -113,8 +113,9 @@ module ccip_onramp::onramp_migration_test {
         assert!(onramp::is_chain_supported(CHAIN_SELECTOR_3));
 
         // Test V2 function for migrated chains
-        let (seq1_v2, enabled1_v2, router1_v2, router_state1_v2) =
-            onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
+        let (
+            seq1_v2, enabled1_v2, router1_v2, router_state1_v2
+        ) = onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
         assert!(seq1_v2 == 0);
         assert!(enabled1_v2 == true);
         assert!(router1_v2 == router_address);
@@ -173,8 +174,9 @@ module ccip_onramp::onramp_migration_test {
         );
 
         // Verify data is now in V2 storage
-        let (seq1_v2, enabled1_v2, router1_v2, router_state1_v2) =
-            onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
+        let (
+            seq1_v2, enabled1_v2, router1_v2, router_state1_v2
+        ) = onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
         assert!(seq1_v2 == seq1);
         assert!(enabled1_v2 == enabled1);
         assert!(router1_v2 == router1);
@@ -246,9 +248,7 @@ module ccip_onramp::onramp_migration_test {
 
         // Second migration call should succeed (no longer blocks multiple calls)
         onramp::migrate_dest_chain_configs_to_v2(
-            owner,
-            vector[CHAIN_SELECTOR_3],
-            vector[router_address_3]
+            owner, vector[CHAIN_SELECTOR_3], vector[router_address_3]
         );
 
         // Verify all chains are still supported after second migration
@@ -302,15 +302,17 @@ module ccip_onramp::onramp_migration_test {
         );
 
         // Verify V2 configs work
-        let (seq1, enabled1, router1, router_state1) =
-            onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
+        let (
+            seq1, enabled1, router1, router_state1
+        ) = onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
         assert!(seq1 == 0);
         assert!(enabled1 == true);
         assert!(router1 == router_address);
         assert!(router_state1 == router_address);
 
-        let (seq2, enabled2, router2, router_state2) =
-            onramp::get_dest_chain_config_v2(CHAIN_SELECTOR_2);
+        let (
+            seq2, enabled2, router2, router_state2
+        ) = onramp::get_dest_chain_config_v2(CHAIN_SELECTOR_2);
         assert!(seq2 == 0);
         assert!(enabled2 == true);
         assert!(router2 == router_address_2);
@@ -424,7 +426,9 @@ module ccip_onramp::onramp_migration_test {
         // Non-owner should not be able to migrate
         let router_address = @0xabc;
         onramp::migrate_dest_chain_configs_to_v2(
-            aptos_framework, vector[DEST_CHAIN_SELECTOR], vector[router_address]
+            aptos_framework,
+            vector[DEST_CHAIN_SELECTOR],
+            vector[router_address]
         );
     }
 
@@ -540,22 +544,25 @@ module ccip_onramp::onramp_migration_test {
         assert!(onramp::is_chain_supported(CHAIN_SELECTOR_3));
 
         // Verify all V2 configs have correct data
-        let (seq1, enabled1, router1, router_state1) =
-            onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
+        let (
+            seq1, enabled1, router1, router_state1
+        ) = onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
         assert!(seq1 == 0);
         assert!(enabled1 == true);
         assert!(router1 == router_address);
         assert!(router_state1 == router_address);
 
-        let (seq2, enabled2, router2, router_state2) =
-            onramp::get_dest_chain_config_v2(CHAIN_SELECTOR_2);
+        let (
+            seq2, enabled2, router2, router_state2
+        ) = onramp::get_dest_chain_config_v2(CHAIN_SELECTOR_2);
         assert!(seq2 == 0);
         assert!(enabled2 == false); // Different from chain 1
         assert!(router2 == router_address_2); // Different router
         assert!(router_state2 == router_address_2);
 
-        let (seq3, enabled3, router3, router_state3) =
-            onramp::get_dest_chain_config_v2(CHAIN_SELECTOR_3);
+        let (
+            seq3, enabled3, router3, router_state3
+        ) = onramp::get_dest_chain_config_v2(CHAIN_SELECTOR_3);
         assert!(seq3 == 0);
         assert!(enabled3 == true);
         assert!(router3 == router_address_3); // Different router
@@ -693,8 +700,9 @@ module ccip_onramp::onramp_migration_test {
         assert!(router2_after == router2_v1);
 
         // Verify V2 function returns additional field
-        let (seq1_v2, enabled1_v2, router1_v2, router_state1_v2) =
-            onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
+        let (
+            seq1_v2, enabled1_v2, router1_v2, router_state1_v2
+        ) = onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
 
         // V2 should have same V1-compatible fields plus router_state_address
         assert!(seq1_v2 == seq1_after);
@@ -749,8 +757,9 @@ module ccip_onramp::onramp_migration_test {
         assert!(onramp::is_chain_supported(DEST_CHAIN_SELECTOR));
 
         // Verify the V2 config has the migrated data
-        let (seq, enabled, _router, router_state) =
-            onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
+        let (
+            seq, enabled, _router, router_state
+        ) = onramp::get_dest_chain_config_v2(DEST_CHAIN_SELECTOR);
         assert!(seq == 0);
         assert!(enabled == false); // From the setup default
         assert!(router_state == @0x200); // ROUTER from setup
@@ -768,8 +777,9 @@ module ccip_onramp::onramp_migration_test {
         assert!(onramp::is_chain_supported(DEST_CHAIN_SELECTOR));
         assert!(onramp::is_chain_supported(CHAIN_SELECTOR_2));
 
-        let (seq2, enabled2, router2, router_state2) =
-            onramp::get_dest_chain_config_v2(CHAIN_SELECTOR_2);
+        let (
+            seq2, enabled2, router2, router_state2
+        ) = onramp::get_dest_chain_config_v2(CHAIN_SELECTOR_2);
         assert!(seq2 == 0);
         assert!(enabled2 == true);
         assert!(router2 == @0xabc);

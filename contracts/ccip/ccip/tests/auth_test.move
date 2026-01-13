@@ -34,7 +34,6 @@ module ccip::auth_test {
     // ================================================================
     // |                    Initialization Tests                      |
     // ================================================================
-
     #[test(ccip = @ccip, owner = @mcms)]
     fun test_initialization(ccip: &signer, owner: &signer) {
         let _new_owner_account = setup(ccip, owner);
@@ -56,7 +55,6 @@ module ccip::auth_test {
     // ================================================================
     // |                   Onramp Allowlist Tests                     |
     // ================================================================
-
     #[test(ccip = @ccip, owner = @mcms)]
     fun test_apply_allowed_onramp_updates_add(
         ccip: &signer, owner: &signer
@@ -97,8 +95,7 @@ module ccip::auth_test {
         assert!(auth::is_onramp_allowed(ONRAMP_2), 1);
 
         auth::apply_allowed_onramp_updates(
-            ccip,
-            vector[ONRAMP_1], // remove
+            ccip, vector[ONRAMP_1], // remove
             vector[] // add
         );
 
@@ -123,8 +120,7 @@ module ccip::auth_test {
 
         // E_NOT_OWNER_OR_CCIP - unauthorized user cannot update onramps
         auth::apply_allowed_onramp_updates(
-            &unauthorized,
-            vector[], // remove
+            &unauthorized, vector[], // remove
             vector[ONRAMP_1] // add
         );
     }
@@ -137,8 +133,7 @@ module ccip::auth_test {
 
         // Add onramp
         auth::apply_allowed_onramp_updates(
-            ccip,
-            vector[], // remove
+            ccip, vector[], // remove
             vector[ONRAMP_1] // add
         );
 
@@ -160,7 +155,6 @@ module ccip::auth_test {
     // ================================================================
     // |                   Offramp Allowlist Tests                    |
     // ================================================================
-
     #[test(ccip = @ccip, owner = @mcms)]
     fun test_apply_allowed_offramp_updates_add(
         ccip: &signer, owner: &signer
@@ -203,8 +197,7 @@ module ccip::auth_test {
 
         // Remove one offramp
         auth::apply_allowed_offramp_updates(
-            ccip,
-            vector[OFFRAMP_1], // remove
+            ccip, vector[OFFRAMP_1], // remove
             vector[] // add
         );
 
@@ -230,8 +223,7 @@ module ccip::auth_test {
 
         // E_NOT_OWNER_OR_CCIP - unauthorized user cannot update offramps
         auth::apply_allowed_offramp_updates(
-            &unauthorized,
-            vector[], // remove
+            &unauthorized, vector[], // remove
             vector[OFFRAMP_1] // add
         );
     }
@@ -244,8 +236,7 @@ module ccip::auth_test {
 
         // Add offramp
         auth::apply_allowed_offramp_updates(
-            ccip,
-            vector[], // remove
+            ccip, vector[], // remove
             vector[OFFRAMP_1] // add
         );
 
@@ -267,7 +258,6 @@ module ccip::auth_test {
     // ================================================================
     // |                    Ownership Tests                           |
     // ================================================================
-
     #[test(ccip = @ccip, owner = @mcms)]
     fun test_transfer_ownership_request(ccip: &signer, owner: &signer) {
         let _new_owner_account = setup(ccip, owner);
@@ -326,9 +316,7 @@ module ccip::auth_test {
 
     #[test(ccip = @ccip, owner = @mcms)]
     #[expected_failure(abort_code = 327683, location = ccip::ownable)]
-    fun test_transfer_ownership_only_owner(
-        ccip: &signer, owner: &signer
-    ) {
+    fun test_transfer_ownership_only_owner(ccip: &signer, owner: &signer) {
         let new_owner_account = setup(ccip, owner);
 
         // E_ONLY_CALLABLE_BY_OWNER - non-owner cannot transfer ownership
@@ -373,7 +361,6 @@ module ccip::auth_test {
     // ================================================================
     // |                   Owner or CCIP Access Tests                 |
     // ================================================================
-
     #[test(ccip = @ccip, owner = @mcms)]
     fun test_owner_can_update_allowlists_after_transfer(
         ccip: &signer, owner: &signer
@@ -387,14 +374,12 @@ module ccip::auth_test {
 
         // New owner should be able to update allowlists
         auth::apply_allowed_onramp_updates(
-            &new_owner_account,
-            vector[], // remove
+            &new_owner_account, vector[], // remove
             vector[ONRAMP_1] // add
         );
 
         auth::apply_allowed_offramp_updates(
-            &new_owner_account,
-            vector[], // remove
+            &new_owner_account, vector[], // remove
             vector[OFFRAMP_1] // add
         );
 
@@ -416,14 +401,12 @@ module ccip::auth_test {
 
         // @ccip should still be able to update allowlists
         auth::apply_allowed_onramp_updates(
-            ccip,
-            vector[], // remove
+            ccip, vector[], // remove
             vector[ONRAMP_1] // add
         );
 
         auth::apply_allowed_offramp_updates(
-            ccip,
-            vector[], // remove
+            ccip, vector[], // remove
             vector[OFFRAMP_1] // add
         );
 
@@ -433,9 +416,7 @@ module ccip::auth_test {
     }
 
     #[test(ccip = @ccip, owner = @mcms)]
-    fun test_multiple_allowlist_operations(
-        ccip: &signer, owner: &signer
-    ) {
+    fun test_multiple_allowlist_operations(ccip: &signer, owner: &signer) {
         let _new_owner_account = setup(ccip, owner);
 
         // Add multiple onramps and offramps
@@ -479,14 +460,12 @@ module ccip::auth_test {
 
         // Empty operations should work
         auth::apply_allowed_onramp_updates(
-            ccip,
-            vector[], // remove nothing
+            ccip, vector[], // remove nothing
             vector[] // add nothing
         );
 
         auth::apply_allowed_offramp_updates(
-            ccip,
-            vector[], // remove nothing
+            ccip, vector[], // remove nothing
             vector[] // add nothing
         );
 

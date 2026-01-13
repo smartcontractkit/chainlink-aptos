@@ -169,7 +169,6 @@ module ccip_token_pool::token_pool {
     // ================================================================
     // |                        Remote Chains                         |
     // ================================================================
-
     public fun get_supported_chains(state: &TokenPoolState): vector<u64> {
         state.remote_chain_configs.keys()
     }
@@ -260,7 +259,6 @@ module ccip_token_pool::token_pool {
     // ================================================================
     // |                        Remote Pools                          |
     // ================================================================
-
     public fun get_remote_pools(
         state: &TokenPoolState, remote_chain_selector: u64
     ): vector<vector<u8>> {
@@ -383,7 +381,9 @@ module ccip_token_pool::token_pool {
         };
 
         token_pool_rate_limiter::consume_outbound(
-            &mut state.rate_limiter_config, remote_chain_selector, local_amount
+            &mut state.rate_limiter_config,
+            remote_chain_selector,
+            local_amount
         );
 
         get_remote_token(state, remote_chain_selector)
@@ -422,14 +422,15 @@ module ccip_token_pool::token_pool {
         );
 
         token_pool_rate_limiter::consume_inbound(
-            &mut state.rate_limiter_config, remote_chain_selector, local_amount
+            &mut state.rate_limiter_config,
+            remote_chain_selector,
+            local_amount
         );
     }
 
     // ================================================================
     // |                           Events                             |
     // ================================================================
-
     public fun emit_released_or_minted(
         state: &mut TokenPoolState,
         recipient: address,
@@ -440,7 +441,12 @@ module ccip_token_pool::token_pool {
 
         event::emit_event(
             &mut state.released_events,
-            ReleasedOrMinted { remote_chain_selector, local_token, recipient, amount }
+            ReleasedOrMinted {
+                remote_chain_selector,
+                local_token,
+                recipient,
+                amount
+            }
         );
     }
 
@@ -489,7 +495,6 @@ module ccip_token_pool::token_pool {
     // ================================================================
     // |                          Decimals                            |
     // ================================================================
-
     public fun encode_local_decimals(state: &TokenPoolState): vector<u8> {
         let fa_decimals = fungible_asset::decimals(state.fa_metadata);
         let ret = vector[];
@@ -526,10 +531,7 @@ module ccip_token_pool::token_pool {
             calculate_local_amount_internal(
                 remote_amount, remote_decimals, local_decimals
             );
-        assert!(
-            local_amount <= MAX_U64,
-            error::invalid_state(E_INVALID_ENCODED_AMOUNT)
-        );
+        assert!(local_amount <= MAX_U64, error::invalid_state(E_INVALID_ENCODED_AMOUNT));
         local_amount as u64
     }
 
@@ -551,10 +553,7 @@ module ccip_token_pool::token_pool {
             // This is a safety check to prevent overflow in the next calculation.
             // More than 77 would never fit in a uint256 and would cause an overflow. We also check if the resulting amount
             // would overflow.
-            assert!(
-                decimals_diff <= 77,
-                error::invalid_state(E_DECIMAL_OVERFLOW)
-            );
+            assert!(decimals_diff <= 77, error::invalid_state(E_DECIMAL_OVERFLOW));
 
             let multiplier: u256 = 1;
             let base: u256 = 10;
@@ -588,7 +587,6 @@ module ccip_token_pool::token_pool {
     // ================================================================
     // |                    Rate limit config                         |
     // ================================================================
-
     public fun set_chain_rate_limiter_config(
         state: &mut TokenPoolState,
         remote_chain_selector: u64,
@@ -630,7 +628,6 @@ module ccip_token_pool::token_pool {
     // ================================================================
     // |                          Allowlist                           |
     // ================================================================
-
     public fun get_allowlist_enabled(state: &TokenPoolState): bool {
         allowlist::get_allowlist_enabled(&state.allowlist_state)
     }
@@ -654,7 +651,6 @@ module ccip_token_pool::token_pool {
     // ================================================================
     // |                          Test functions                       |
     // ================================================================
-
     #[test_only]
     public fun destroy_token_pool(state: TokenPoolState) {
         let TokenPoolState {

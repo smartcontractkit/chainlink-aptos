@@ -152,9 +152,7 @@ module data_feeds::registry {
         // register to receive platform::forwarder reports
         let cb =
             aptos_framework::function_info::new_function_info(
-                publisher,
-                string::utf8(b"registry"),
-                string::utf8(b"on_report")
+                publisher, string::utf8(b"registry"), string::utf8(b"on_report")
             );
         platform::storage::register(publisher, cb, new_proof());
 
@@ -228,7 +226,11 @@ module data_feeds::registry {
                 simple_map::add(&mut registry.feeds, *feed_id, feed);
 
                 event::emit(
-                    FeedSet { feed_id: *feed_id, description: *description, config_id }
+                    FeedSet {
+                        feed_id: *feed_id,
+                        description: *description,
+                        config_id
+                    }
                 );
             }
         );
@@ -383,8 +385,7 @@ module data_feeds::registry {
             &feeds,
             |feed_id, feed| {
                 vector::push_back(
-                    &mut feed_configs,
-                    FeedConfig { feed_id: *feed_id, feed: *feed }
+                    &mut feed_configs, FeedConfig { feed_id: *feed_id, feed: *feed }
                 );
             }
         );
@@ -484,7 +485,6 @@ module data_feeds::registry {
     }
 
     // Getters
-
     public fun get_benchmarks(
         authority: &signer, feed_ids: vector<vector<u8>>
     ): vector<Benchmark> acquires Registry {
@@ -570,13 +570,15 @@ module data_feeds::registry {
 
                 let feed = simple_map::borrow(&registry.feeds, &feed_id);
 
-                FeedMetadata { description: feed.description, config_id: feed.config_id }
+                FeedMetadata {
+                    description: feed.description,
+                    config_id: feed.config_id
+                }
             }
         )
     }
 
     // Ownership functions
-
     #[view]
     public fun get_owner(): address acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());
@@ -608,12 +610,14 @@ module data_feeds::registry {
         registry.pending_owner_address = @0x0;
 
         event::emit(
-            OwnershipTransferred { from: old_owner_address, to: registry.owner_address }
+            OwnershipTransferred {
+                from: old_owner_address,
+                to: registry.owner_address
+            }
         );
     }
 
     // Struct accessors
-
     public fun get_benchmark_value(result: &Benchmark): u256 {
         result.benchmark
     }
@@ -780,19 +784,14 @@ module data_feeds::registry {
         assert!(benchmark.observation_timestamp == expected_timestamp, 1);
     }
 
-    #[
-        test(
-            owner = @owner,
-            publisher = @data_feeds,
-            platform = @platform,
-            new_owner = @0xbeef
-        )
-    ]
+    #[test(
+        owner = @owner,
+        publisher = @data_feeds,
+        platform = @platform,
+        new_owner = @0xbeef
+    )]
     fun test_transfer_ownership_success(
-        owner: &signer,
-        publisher: &signer,
-        platform: &signer,
-        new_owner: &signer
+        owner: &signer, publisher: &signer, platform: &signer, new_owner: &signer
     ) acquires Registry {
         set_up_test(publisher, platform);
 
@@ -828,20 +827,15 @@ module data_feeds::registry {
         transfer_ownership(owner, signer::address_of(owner));
     }
 
-    #[
-        test(
-            owner = @owner,
-            publisher = @data_feeds,
-            platform = @platform,
-            new_owner = @0xbeef
-        )
-    ]
+    #[test(
+        owner = @owner,
+        publisher = @data_feeds,
+        platform = @platform,
+        new_owner = @0xbeef
+    )]
     #[expected_failure(abort_code = 327691, location = data_feeds::registry)]
     fun test_transfer_ownership_failure_not_proposed_owner(
-        owner: &signer,
-        publisher: &signer,
-        platform: &signer,
-        new_owner: &signer
+        owner: &signer, publisher: &signer, platform: &signer, new_owner: &signer
     ) acquires Registry {
         set_up_test(publisher, platform);
 

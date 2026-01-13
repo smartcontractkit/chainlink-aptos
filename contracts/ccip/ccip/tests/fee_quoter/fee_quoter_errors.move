@@ -349,8 +349,9 @@ module ccip::fee_quoter_errors {
 
         // Get the max gas limit from the config
         let config = fee_quoter::get_dest_chain_config(dest_chain_selector);
-        let (_, _, _, max_gas_limit, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =
-            fee_quoter::dest_chain_config_values(config);
+        let (
+            _, _, _, max_gas_limit, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _
+        ) = fee_quoter::dest_chain_config_values(config);
 
         // Try with a gas limit that's too high (max + 1)
         let _ =
@@ -462,8 +463,9 @@ module ccip::fee_quoter_errors {
 
         // Get the destination chain config to check max compute units
         let config = fee_quoter::get_dest_chain_config(dest_chain_selector);
-        let (_, _, _, max_gas_limit, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) =
-            fee_quoter::dest_chain_config_values(config);
+        let (
+            _, _, _, max_gas_limit, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _
+        ) = fee_quoter::dest_chain_config_values(config);
 
         // Create SVM extra args with compute units exceeding the max
         let extra_args =

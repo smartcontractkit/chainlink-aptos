@@ -43,7 +43,6 @@ module regulated_token::access_control_test {
     // ================================================================
     // |                    Basic Functionality Tests                |
     // ================================================================
-
     #[test(creator = @0x999)]
     fun test_initialization(creator: &signer) {
         account::create_account_for_test(signer::address_of(creator));
@@ -207,7 +206,6 @@ module regulated_token::access_control_test {
     // ================================================================
     // |                    Admin Transfer Tests                      |
     // ================================================================
-
     #[test(creator = @0x999)]
     fun test_admin_transfer_flow(creator: &signer) {
         account::create_account_for_test(signer::address_of(creator));
@@ -240,7 +238,6 @@ module regulated_token::access_control_test {
     // ================================================================
     // |                    Authorization Tests                       |
     // ================================================================
-
     #[test(creator = @0x999)]
     fun test_assert_role_success(creator: &signer) {
         account::create_account_for_test(signer::address_of(creator));
@@ -260,7 +257,6 @@ module regulated_token::access_control_test {
     // ================================================================
     // |                    Error Condition Tests                     |
     // ================================================================
-
     #[test(creator = @0x999, user = @0x500)]
     #[
         expected_failure(
@@ -314,9 +310,7 @@ module regulated_token::access_control_test {
             location = regulated_token::access_control
         )
     ]
-    fun test_unauthorized_transfer_admin(
-        creator: &signer, user: &signer
-    ) {
+    fun test_unauthorized_transfer_admin(creator: &signer, user: &signer) {
         account::create_account_for_test(signer::address_of(creator));
         account::create_account_for_test(ADMIN);
         account::create_account_for_test(signer::address_of(user));
@@ -410,7 +404,6 @@ module regulated_token::access_control_test {
     // ================================================================
     // |                    Edge Case Tests                          |
     // ================================================================
-
     #[test(creator = @0x999)]
     fun test_duplicate_role_grant(creator: &signer) {
         account::create_account_for_test(signer::address_of(creator));
@@ -471,7 +464,6 @@ module regulated_token::access_control_test {
     // ================================================================
     // |                        Error Code Tests                      |
     // ================================================================
-
     #[test(creator = @0x999)]
     #[
         expected_failure(
@@ -502,7 +494,6 @@ module regulated_token::access_control_test {
     // ================================================================
     // |                    Renounce Role Edge Cases                 |
     // ================================================================
-
     #[test(creator = @0x999)]
     fun test_renounce_non_existent_role_noop(creator: &signer) {
         account::create_account_for_test(signer::address_of(creator));
@@ -551,7 +542,6 @@ module regulated_token::access_control_test {
     // ================================================================
     // |                    Admin Transfer Edge Cases                |
     // ================================================================
-
     #[test(creator = @0x999)]
     fun test_transfer_admin_to_zero_address(creator: &signer) {
         account::create_account_for_test(signer::address_of(creator));
@@ -751,7 +741,6 @@ module regulated_token::access_control_test {
     // ================================================================
     // |                    Performance/Scale Tests                  |
     // ================================================================
-
     #[test(creator = @0x999)]
     fun test_large_role_membership_operations(creator: &signer) {
         account::create_account_for_test(signer::address_of(creator));
@@ -932,7 +921,6 @@ module regulated_token::access_control_test {
     // ================================================================
     // |                    State Consistency Integration Test       |
     // ================================================================
-
     #[test(creator = @0x999)]
     fun test_comprehensive_state_consistency_integration(
         creator: &signer
@@ -1046,7 +1034,8 @@ module regulated_token::access_control_test {
         // Verify pending state
         assert!(access_control::admin<Metadata, TestRole>(access_obj) == ADMIN, 17); // Still old admin
         assert!(
-            access_control::pending_admin<Metadata, TestRole>(access_obj) == USER1, 18
+            access_control::pending_admin<Metadata, TestRole>(access_obj) == USER1,
+            18
         );
 
         // Original admin should still be able to operate
@@ -1116,8 +1105,7 @@ module regulated_token::access_control_test {
             access_control::get_role_members(access_obj, TestRole::MANAGER_ROLE);
 
         assert!(
-            user_role_members.length() == 1 && user_role_members[0] == USER2,
-            28
+            user_role_members.length() == 1 && user_role_members[0] == USER2, 28
         );
         assert!(
             manager_role_members.length() == 1 && manager_role_members[0] == USER1,

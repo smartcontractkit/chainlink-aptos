@@ -237,7 +237,6 @@ module ccip_router::router {
     // ================================================================
     // |                       OnRamp Routing                         |
     // ================================================================
-
     #[view]
     /// Returns the onRamp versions for the given destination chains.
     /// For chain selectors that do not exist, an empty vector is returned.
@@ -245,9 +244,13 @@ module ccip_router::router {
         dest_chain_selectors: vector<u64>
     ): vector<vector<u8>> acquires RouterState {
         let state = borrow_state();
-        dest_chain_selectors.map((|dest_chain_selector| {
-            *state.on_ramp_versions.borrow_with_default(dest_chain_selector, &vector[])
-        }))
+        dest_chain_selectors.map((
+            |dest_chain_selector| {
+                *state.on_ramp_versions.borrow_with_default(
+                    dest_chain_selector, &vector[]
+                )
+            }
+        ))
     }
 
     #[view]
@@ -313,7 +316,6 @@ module ccip_router::router {
     // ================================================================
     // |                          Ownable                             |
     // ================================================================
-
     #[view]
     public fun owner(): address acquires RouterState {
         ownable::owner(&borrow_state().ownable_state)
@@ -359,7 +361,6 @@ module ccip_router::router {
     // ================================================================
     // |                      MCMS entrypoint                         |
     // ================================================================
-
     struct McmsCallback has drop {}
 
     public fun mcms_entrypoint<T: key>(
@@ -403,7 +404,6 @@ module ccip_router::router {
     // ================================================================
     // |                          Tests                               |
     // ================================================================
-
     #[test_only]
     public fun test_init_module(publisher: &signer) {
         init_module(publisher);
