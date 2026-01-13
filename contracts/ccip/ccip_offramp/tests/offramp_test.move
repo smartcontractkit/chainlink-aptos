@@ -98,8 +98,7 @@ module ccip_offramp::offramp_test {
         // Create token pool object
         let constructor_ref =
             object::create_named_object(
-                burn_mint_token_pool_obj_signer,
-                b"ccip_token_pool"
+                burn_mint_token_pool_obj_signer, b"ccip_token_pool"
             );
         let ccip_token_pool_obj =
             object::object_from_constructor_ref<ObjectCore>(&constructor_ref);
@@ -206,16 +205,12 @@ module ccip_offramp::offramp_test {
             );
             token_admin_registry::accept_admin_role(owner, token_addr);
             token_admin_registry::set_pool(
-                owner,
-                token_addr,
-                signer::address_of(burn_mint_token_pool)
+                owner, token_addr, signer::address_of(burn_mint_token_pool)
             );
         } else {
             lock_release_token_pool::test_init_module(lock_release_token_pool);
             lock_release_token_pool::initialize(
-                owner,
-                option::some(transfer_ref),
-                signer::address_of(owner)
+                owner, option::some(transfer_ref), signer::address_of(owner)
             );
             lock_release_token_pool::apply_chain_updates(
                 owner,
@@ -240,9 +235,7 @@ module ccip_offramp::offramp_test {
             );
             token_admin_registry::accept_admin_role(owner, token_addr);
             token_admin_registry::set_pool(
-                owner,
-                token_addr,
-                signer::address_of(lock_release_token_pool)
+                owner, token_addr, signer::address_of(lock_release_token_pool)
             );
         };
 
@@ -252,14 +245,18 @@ module ccip_offramp::offramp_test {
 
         // Fund lock/release token pool
         primary_fungible_store::mint(
-            &mint_ref,
-            lock_release_token_pool::get_store_address(),
-            1000
+            &mint_ref, lock_release_token_pool::get_store_address(), 1000
         );
 
         move_to(
             &obj_signer,
-            TestToken { metadata, extend_ref, mint_ref, burn_ref, transfer_ref }
+            TestToken {
+                metadata,
+                extend_ref,
+                mint_ref,
+                burn_ref,
+                transfer_ref
+            }
         );
 
         (metadata, token_addr)
@@ -1126,9 +1123,7 @@ module ccip_offramp::offramp_test {
             );
         let metadata_hash =
             offramp::test_calculate_metadata_hash(
-                EVM_SOURCE_CHAIN_SELECTOR,
-                dest_chain_selector,
-                onramp_address
+                EVM_SOURCE_CHAIN_SELECTOR, dest_chain_selector, onramp_address
             );
         let hashed_leaf = offramp::test_calculate_message_hash(&message, metadata_hash);
 
@@ -1239,7 +1234,6 @@ module ccip_offramp::offramp_test {
     }
 
     // =============== Error handling tests ===============
-
     #[
         test(
             aptos_framework = @aptos_framework,

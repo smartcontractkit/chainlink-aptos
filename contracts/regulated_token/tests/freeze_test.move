@@ -123,9 +123,7 @@ module regulated_token::freeze_test {
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
-    fun test_selective_unfreeze(
-        admin: &signer, regulated_token: &signer
-    ) {
+    fun test_selective_unfreeze(admin: &signer, regulated_token: &signer) {
         setup(admin, regulated_token);
 
         account::create_account_for_test(USER1);
@@ -324,9 +322,7 @@ module regulated_token::freeze_test {
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
-    fun test_is_frozen_function(
-        admin: &signer, regulated_token: &signer
-    ) {
+    fun test_is_frozen_function(admin: &signer, regulated_token: &signer) {
         setup(admin, regulated_token);
 
         account::create_account_for_test(USER1);

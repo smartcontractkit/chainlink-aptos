@@ -172,9 +172,7 @@ module data_feeds::registry {
         // callback for on_report function
         let cb =
             aptos_framework::function_info::new_function_info(
-                publisher,
-                string::utf8(b"registry"),
-                string::utf8(b"on_report")
+                publisher, string::utf8(b"registry"), string::utf8(b"on_report")
             );
         // register to receive platform::forwarder reports
         platform::storage::register(publisher, cb, new_proof());
@@ -204,10 +202,7 @@ module data_feeds::registry {
             }
         );
 
-        move_to(
-            &object_signer,
-            RegistryMigrationStatus { callback_registered: true }
-        );
+        move_to(&object_signer, RegistryMigrationStatus { callback_registered: true });
     }
 
     inline fun get_state_addr(): address {
@@ -238,10 +233,7 @@ module data_feeds::registry {
             publisher, cb_secondary, new_proof_secondary()
         );
 
-        move_to(
-            &object_signer,
-            RegistryMigrationStatus { callback_registered: true }
-        );
+        move_to(&object_signer, RegistryMigrationStatus { callback_registered: true });
     }
 
     public entry fun set_feeds(
@@ -296,7 +288,11 @@ module data_feeds::registry {
                 simple_map::add(&mut registry.feeds, *feed_id, feed);
 
                 event::emit(
-                    FeedSet { feed_id: *feed_id, description: *description, config_id }
+                    FeedSet {
+                        feed_id: *feed_id,
+                        description: *description,
+                        config_id
+                    }
                 );
             }
         );
@@ -512,8 +508,7 @@ module data_feeds::registry {
             &feeds,
             |feed_id, feed| {
                 vector::push_back(
-                    &mut feed_configs,
-                    FeedConfig { feed_id: *feed_id, feed: *feed }
+                    &mut feed_configs, FeedConfig { feed_id: *feed_id, feed: *feed }
                 );
             }
         );
@@ -525,10 +520,7 @@ module data_feeds::registry {
         let data_len: u64 = vector::length(data);
         let offset: u64 = 0;
 
-        assert!(
-            data_len > 64,
-            error::invalid_argument(EINVALID_RAW_REPORT)
-        );
+        assert!(data_len > 64, error::invalid_argument(EINVALID_RAW_REPORT));
 
         assert!(
             to_u256be(vector::slice(data, offset, offset + 32)) == 32,
@@ -674,7 +666,6 @@ module data_feeds::registry {
     }
 
     // Getters
-
     public fun get_benchmarks(
         authority: &signer, feed_ids: vector<vector<u8>>
     ): vector<Benchmark> acquires Registry {
@@ -760,13 +751,15 @@ module data_feeds::registry {
 
                 let feed = simple_map::borrow(&registry.feeds, &feed_id);
 
-                FeedMetadata { description: feed.description, config_id: feed.config_id }
+                FeedMetadata {
+                    description: feed.description,
+                    config_id: feed.config_id
+                }
             }
         )
     }
 
     // Ownership functions
-
     #[view]
     public fun get_owner(): address acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());
@@ -798,12 +791,14 @@ module data_feeds::registry {
         registry.pending_owner_address = @0x0;
 
         event::emit(
-            OwnershipTransferred { from: old_owner_address, to: registry.owner_address }
+            OwnershipTransferred {
+                from: old_owner_address,
+                to: registry.owner_address
+            }
         );
     }
 
     // Struct accessors
-
     public fun get_benchmark_value(result: &Benchmark): u256 {
         result.benchmark
     }
@@ -1324,13 +1319,8 @@ module data_feeds::registry {
         accept_ownership(new_owner);
     }
 
-    #[
-        test(
-            publisher = @data_feeds,
-            platform = @platform,
-            platform_secondary = @platform_secondary
-        )
-    ]
+    #[test(publisher = @data_feeds, platform = @platform, platform_secondary =
+    @platform_secondary)]
     fun test_retrieve_benchmark(
         publisher: &signer, platform: &signer, platform_secondary: &signer
     ) acquires Registry {

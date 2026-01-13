@@ -397,8 +397,7 @@ module ccip::fee_quoter {
                 if (found) {
                     state.fee_tokens.remove(index);
                     event::emit_event(
-                        &mut state.fee_token_removed_events,
-                        FeeTokenRemoved { fee_token }
+                        &mut state.fee_token_removed_events, FeeTokenRemoved { fee_token }
                     );
                 };
             }
@@ -580,10 +579,7 @@ module ccip::fee_quoter {
         source_tokens.zip_ref(
             &source_usd_per_token,
             |token, usd_per_token| {
-                let timestamped_price = TimestampedPrice {
-                    value: *usd_per_token,
-                    timestamp
-                };
+                let timestamped_price = TimestampedPrice { value: *usd_per_token, timestamp };
                 state.usd_per_token.upsert(*token, timestamped_price);
                 event::emit_event(
                     &mut state.usd_per_token_updated_events,
@@ -673,10 +669,7 @@ module ccip::fee_quoter {
         validate_dest_family_address(chain_family_selector, receiver, gas_limit);
 
         let fee_token_price = get_token_price_internal(state, fee_token);
-        assert!(
-            fee_token_price.value > 0,
-            error::invalid_state(E_ZERO_TOKEN_PRICE)
-        );
+        assert!(fee_token_price.value > 0, error::invalid_state(E_ZERO_TOKEN_PRICE));
 
         let packed_gas_price =
             get_validated_gas_price_internal(
@@ -727,9 +720,7 @@ module ccip::fee_quoter {
                     * (dest_chain_config.dest_gas_per_payload_byte_threshold as u256)
                     + (
                         call_data_length
-                            - (
-                                dest_chain_config.dest_gas_per_payload_byte_threshold as u256
-                            )
+                            - (dest_chain_config.dest_gas_per_payload_byte_threshold as u256)
                     ) * (dest_chain_config.dest_gas_per_payload_byte_high as u256);
         };
 
@@ -749,15 +740,14 @@ module ccip::fee_quoter {
 
         // we need to convert back to a u64 which is what the fungible asset module uses for amounts.
         assert!(
-            fee_token_cost <= MAX_U64, error::invalid_state(E_FEE_TOKEN_COST_TOO_HIGH)
+            fee_token_cost <= MAX_U64,
+            error::invalid_state(E_FEE_TOKEN_COST_TOO_HIGH)
         );
         fee_token_cost as u64
     }
 
     public entry fun apply_premium_multiplier_wei_per_eth_updates(
-        caller: &signer,
-        tokens: vector<address>,
-        premium_multiplier_wei_per_eth: vector<u64>
+        caller: &signer, tokens: vector<address>, premium_multiplier_wei_per_eth: vector<u64>
     ) acquires FeeQuoterState {
         auth::assert_only_owner(signer::address_of(caller));
 
@@ -868,9 +858,8 @@ module ccip::fee_quoter {
             // The messaging accounts needed for CCIP receiver on SVM are:
             // message receiver, offramp PDA signer,
             // plus remaining accounts specified in SVM extraArgs. Each account is 32 bytes.
-            svm_expanded_data_length +=((
-                accounts_length + SVM_MESSAGING_ACCOUNTS_OVERHEAD
-            ) * SVM_ACCOUNT_BYTE_SIZE);
+            svm_expanded_data_length +=((accounts_length
+                + SVM_MESSAGING_ACCOUNTS_OVERHEAD) * SVM_ACCOUNT_BYTE_SIZE);
         };
 
         for (i in 0..accounts_length) {
@@ -956,12 +945,11 @@ module ccip::fee_quoter {
 
     inline fun decode_svm_extra_args(
         extra_args: vector<u8>
-    ): (u32, u64, bool, vector<u8>, vector<vector<u8>>) {
+    ): (
+        u32, u64, bool, vector<u8>, vector<vector<u8>>
+    ) {
         let extra_args_len = extra_args.length();
-        assert!(
-            extra_args_len >= 4,
-            error::invalid_argument(E_INVALID_EXTRA_ARGS_DATA)
-        );
+        assert!(extra_args_len >= 4, error::invalid_argument(E_INVALID_EXTRA_ARGS_DATA));
 
         let args_tag = extra_args.slice(0, 4);
         assert!(
@@ -974,7 +962,9 @@ module ccip::fee_quoter {
 
     inline fun decode_svm_extra_args_v1(
         extra_args: vector<u8>
-    ): (u32, u64, bool, vector<u8>, vector<vector<u8>>) {
+    ): (
+        u32, u64, bool, vector<u8>, vector<vector<u8>>
+    ) {
         let stream = bcs_stream::new(extra_args);
         let compute_units = bcs_stream::deserialize_u32(&mut stream);
         let account_is_writable_bitmap = bcs_stream::deserialize_u64(&mut stream);
@@ -982,8 +972,7 @@ module ccip::fee_quoter {
         let token_receiver = bcs_stream::deserialize_vector_u8(&mut stream);
         let accounts =
             bcs_stream::deserialize_vector(
-                &mut stream,
-                |stream| bcs_stream::deserialize_vector_u8(stream)
+                &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
             );
         bcs_stream::assert_is_consumed(&stream);
         (
@@ -1130,7 +1119,9 @@ module ccip::fee_quoter {
         local_token_addresses: vector<address>,
         dest_token_addresses: vector<vector<u8>>,
         dest_pool_datas: vector<vector<u8>>
-    ): (u256, bool, vector<u8>, vector<vector<u8>>) acquires FeeQuoterState {
+    ): (
+        u256, bool, vector<u8>, vector<vector<u8>>
+    ) acquires FeeQuoterState {
         let state = borrow_state();
         // This is the fee in Aptos denomination. We convert it to juels (1e18 based) below.
         let msg_fee_link_local_denomination =
@@ -1163,9 +1154,7 @@ module ccip::fee_quoter {
 
         let (converted_extra_args, is_out_of_order_execution) =
             process_chain_family_selector(
-                dest_chain_config,
-                !dest_token_addresses.is_empty(),
-                extra_args
+                dest_chain_config, !dest_token_addresses.is_empty(), extra_args
             );
 
         let dest_exec_data_per_token =
@@ -1441,9 +1430,7 @@ module ccip::fee_quoter {
     }
 
     inline fun get_validated_gas_price_internal(
-        state: &FeeQuoterState,
-        dest_chain_config: &DestChainConfig,
-        dest_chain_selector: u64
+        state: &FeeQuoterState, dest_chain_config: &DestChainConfig, dest_chain_selector: u64
     ): u256 {
         let gas_price = get_dest_chain_gas_price_internal(state, dest_chain_selector);
         if (dest_chain_config.gas_price_staleness_threshold > 0) {
@@ -1542,7 +1529,6 @@ module ccip::fee_quoter {
     // ================================================================
     // |                      MCMS Entrypoint                         |
     // ================================================================
-
     struct McmsCallback has drop {}
 
     public fun mcms_entrypoint<T: key>(
@@ -1591,33 +1577,27 @@ module ccip::fee_quoter {
                 );
             let add_min_fee_usd_cents =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_u32(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_u32(stream)
                 );
             let add_max_fee_usd_cents =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_u32(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_u32(stream)
                 );
             let add_deci_bps =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_u16(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_u16(stream)
                 );
             let add_dest_gas_overhead =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_u32(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_u32(stream)
                 );
             let add_dest_bytes_overhead =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_u32(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_u32(stream)
                 );
             let add_is_enabled =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_bool(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_bool(stream)
                 );
             let remove_tokens =
                 bcs_stream::deserialize_vector(
@@ -1668,8 +1648,7 @@ module ccip::fee_quoter {
                 );
             let premium_multiplier_wei_per_eth =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_u64(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
             apply_premium_multiplier_wei_per_eth_updates(
@@ -1803,7 +1782,6 @@ module ccip::fee_quoter {
     }
 
     // ========================== TEST ONLY ==========================
-
     #[test_only]
     public fun test_register_mcms_entrypoint(publisher: &signer) {
         mcms_registry::register_entrypoint(
@@ -1814,7 +1792,9 @@ module ccip::fee_quoter {
     #[test_only]
     public fun test_decode_svm_extra_args(
         extra_args: vector<u8>
-    ): (u32, u64, bool, vector<u8>, vector<vector<u8>>) {
+    ): (
+        u32, u64, bool, vector<u8>, vector<vector<u8>>
+    ) {
         decode_svm_extra_args(extra_args)
     }
 
@@ -1833,7 +1813,9 @@ module ccip::fee_quoter {
     #[test_only]
     public fun test_decode_svm_extra_args_v1(
         extra_args: vector<u8>
-    ): (u32, u64, bool, vector<u8>, vector<vector<u8>>) {
+    ): (
+        u32, u64, bool, vector<u8>, vector<vector<u8>>
+    ) {
         decode_svm_extra_args_v1(extra_args)
     }
 

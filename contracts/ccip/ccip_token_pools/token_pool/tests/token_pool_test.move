@@ -122,7 +122,6 @@ module ccip_token_pool::token_pool_test {
     // ================================================================
     // |                           Setup                              |
     // ================================================================
-
     inline fun set_up_test(owner: &signer): token_pool::TokenPoolState {
         let signer_address = signer::address_of(owner);
         account::create_account_for_test(signer_address);

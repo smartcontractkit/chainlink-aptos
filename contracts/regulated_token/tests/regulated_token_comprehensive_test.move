@@ -123,7 +123,6 @@ module regulated_token::regulated_token_comprehensive_test {
     // ================================================================
     // |                    Phase 1: Core Function Error Testing     |
     // ================================================================
-
     #[test(admin = @admin, regulated_token = @regulated_token)]
     #[
         expected_failure(
@@ -219,7 +218,6 @@ module regulated_token::regulated_token_comprehensive_test {
     }
 
     // 1.2 Burn Function Edge Cases (9 tests)
-
     #[test(admin = @admin, regulated_token = @regulated_token)]
     #[
         expected_failure(
@@ -317,7 +315,6 @@ module regulated_token::regulated_token_comprehensive_test {
     }
 
     // 1.3 Burn Frozen Funds Function
-
     #[test(admin = @admin, regulated_token = @regulated_token)]
     #[
         expected_failure(
@@ -489,7 +486,6 @@ module regulated_token::regulated_token_comprehensive_test {
     // ================================================================
     // |                 Phase 2: Role Management Testing            |
     // ================================================================
-
     #[test(admin = @admin, regulated_token = @regulated_token)]
     #[
         expected_failure(
@@ -830,7 +826,6 @@ module regulated_token::regulated_token_comprehensive_test {
     // ================================================================
     // |            Phase 4: Initialization & State Error Tests      |
     // ================================================================
-
     #[test(_regulated_token = @regulated_token)]
     #[
         expected_failure(
@@ -838,7 +833,9 @@ module regulated_token::regulated_token_comprehensive_test {
             location = regulated_token::regulated_token
         )
     ]
-    fun test_token_metadata_before_init_fails(_regulated_token: &signer) {
+    fun test_token_metadata_before_init_fails(
+        _regulated_token: &signer
+    ) {
         // account::create_account_for_test(ADMIN);
         // Try to get token metadata before initialization
         regulated_token::token_metadata();
@@ -889,7 +886,6 @@ module regulated_token::regulated_token_comprehensive_test {
     // ================================================================
     // |         Phase 5: Authorization & Permission Error Tests     |
     // ================================================================
-
     #[test(admin = @admin, regulated_token = @regulated_token)]
     #[
         expected_failure(
@@ -1011,7 +1007,6 @@ module regulated_token::regulated_token_comprehensive_test {
     }
 
     // 5.4 Cross-Role Authorization Tests (2 tests)
-
     #[test(admin = @admin, regulated_token = @regulated_token)]
     #[
         expected_failure(
@@ -1195,7 +1190,6 @@ module regulated_token::regulated_token_comprehensive_test {
     // ================================================================
     // |                         Error Tests                          |
     // ================================================================
-
     #[test(admin = @admin, regulated_token = @regulated_token)]
     #[
         expected_failure(

@@ -5,14 +5,10 @@ module ccip::eth_abi {
     use std::from_bcs;
     use std::vector;
 
-    const ENCODED_BOOL_FALSE: vector<u8> = vector[
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0
-    ];
-    const ENCODED_BOOL_TRUE: vector<u8> = vector[
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 1
-    ];
+    const ENCODED_BOOL_FALSE: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const ENCODED_BOOL_TRUE: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
 
     const E_OUT_OF_BYTES: u64 = 1;
     const E_INVALID_ADDRESS: u64 = 2;
@@ -75,9 +71,7 @@ module ccip::eth_abi {
         };
     }
 
-    public inline fun encode_bytes(
-        out: &mut vector<u8>, value: vector<u8>
-    ) {
+    public inline fun encode_bytes(out: &mut vector<u8>, value: vector<u8>) {
         encode_u256(out, (value.length() as u256));
 
         out.append(value);
@@ -136,9 +130,7 @@ module ccip::eth_abi {
         out.append(value_bytes)
     }
 
-    public inline fun encode_packed_u256(
-        out: &mut vector<u8>, value: u256
-    ) {
+    public inline fun encode_packed_u256(out: &mut vector<u8>, value: u256) {
         let value_bytes = bcs::to_bytes(&value);
         // little endian to big endian
         value_bytes.reverse();
@@ -159,15 +151,13 @@ module ccip::eth_abi {
         let cur = stream.cur;
 
         assert!(
-            cur + 32 <= data.length(),
-            error::out_of_range(E_OUT_OF_BYTES)
+            cur + 32 <= data.length(), error::out_of_range(E_OUT_OF_BYTES)
         );
 
         // Verify first 12 bytes are zero
         for (i in 0..12) {
             assert!(
-                data[cur + i] == 0,
-                error::invalid_argument(E_INVALID_ADDRESS)
+                data[cur + i] == 0, error::invalid_argument(E_INVALID_ADDRESS)
             );
         };
 
@@ -183,8 +173,7 @@ module ccip::eth_abi {
         let cur = stream.cur;
 
         assert!(
-            cur + 32 <= data.length(),
-            error::out_of_range(E_OUT_OF_BYTES)
+            cur + 32 <= data.length(), error::out_of_range(E_OUT_OF_BYTES)
         );
 
         let value_bytes = data.slice(cur, cur + 32);
@@ -218,8 +207,7 @@ module ccip::eth_abi {
         let cur = stream.cur;
 
         assert!(
-            cur + 32 <= data.length(),
-            error::out_of_range(E_OUT_OF_BYTES)
+            cur + 32 <= data.length(), error::out_of_range(E_OUT_OF_BYTES)
         );
 
         let value = data.slice(cur, cur + 32);
@@ -237,8 +225,7 @@ module ccip::eth_abi {
         let cur = stream.cur;
 
         assert!(
-            cur + 32 <= data.length(),
-            error::out_of_range(E_OUT_OF_BYTES)
+            cur + 32 <= data.length(), error::out_of_range(E_OUT_OF_BYTES)
         );
 
         let bytes = data.slice(cur, cur + 32);

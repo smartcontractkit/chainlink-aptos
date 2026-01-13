@@ -43,7 +43,8 @@ module data_feeds::router {
 
     fun assert_is_owner(router: &Router, target_address: address) {
         assert!(
-            router.owner_address == target_address, error::invalid_argument(ENOT_OWNER)
+            router.owner_address == target_address,
+            error::invalid_argument(ENOT_OWNER)
         );
     }
 
@@ -99,7 +100,8 @@ module data_feeds::router {
 
         let results = registry::get_feed_metadata(feed_ids);
         vector::map(
-            results, |metadata| registry::get_feed_metadata_description(&metadata)
+            results,
+            |metadata| registry::get_feed_metadata_description(&metadata)
         )
     }
 
@@ -148,7 +150,10 @@ module data_feeds::router {
         router.pending_owner_address = @0x0;
 
         event::emit(
-            OwnershipTransferred { from: old_owner_address, to: router.owner_address }
+            OwnershipTransferred {
+                from: old_owner_address,
+                to: router.owner_address
+            }
         );
     }
 

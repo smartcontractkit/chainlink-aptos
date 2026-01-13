@@ -96,7 +96,6 @@ module ccip::client {
     }
 
     // Any2AptosMessage accessors
-
     public fun get_message_id(input: &Any2AptosMessage): vector<u8> {
         input.message_id
     }
@@ -119,7 +118,6 @@ module ccip::client {
     }
 
     // Any2AptosTokenAmount accessors
-
     public fun get_token(input: &Any2AptosTokenAmount): address {
         input.token
     }

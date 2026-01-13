@@ -18,7 +18,8 @@ module mcms::bcs_stream_test {
         vector::append(&mut data, bcs::to_bytes(&12345678901u64));
         vector::append(&mut data, bcs::to_bytes(&1234567890123456789u128));
         vector::append(
-            &mut data, bcs::to_bytes(&340282366920938463463374607431768211455u256)
+            &mut data,
+            bcs::to_bytes(&340282366920938463463374607431768211455u256)
         );
         vector::append(&mut data, bcs::to_bytes(&true));
 
@@ -63,8 +64,7 @@ module mcms::bcs_stream_test {
         // Deserialize vector of addresses
         let result_vec_addr =
             bcs_stream::deserialize_vector(
-                &mut stream,
-                |stream| bcs_stream::deserialize_address(stream)
+                &mut stream, |stream| bcs_stream::deserialize_address(stream)
             );
         assert!(result_vec_addr == vec_addr, 2);
 
@@ -108,8 +108,7 @@ module mcms::bcs_stream_test {
         // Deserialize Some
         let some_result =
             bcs_stream::deserialize_option(
-                &mut stream,
-                |stream| bcs_stream::deserialize_u64(stream)
+                &mut stream, |stream| bcs_stream::deserialize_u64(stream)
             );
         assert!(std::option::is_some(&some_result), 1);
         assert!(*std::option::borrow(&some_result) == 42u64, 2);
@@ -117,8 +116,7 @@ module mcms::bcs_stream_test {
         // Deserialize None
         let none_result =
             bcs_stream::deserialize_option(
-                &mut stream,
-                |stream| bcs_stream::deserialize_u64(stream)
+                &mut stream, |stream| bcs_stream::deserialize_u64(stream)
             );
         assert!(std::option::is_none(&none_result), 3);
 
@@ -156,29 +154,25 @@ module mcms::bcs_stream_test {
         // Deserialize and verify each component
         let result_targets =
             bcs_stream::deserialize_vector(
-                &mut stream,
-                |stream| bcs_stream::deserialize_address(stream)
+                &mut stream, |stream| bcs_stream::deserialize_address(stream)
             );
         assert!(result_targets == targets, 1);
 
         let result_module_names =
             bcs_stream::deserialize_vector(
-                &mut stream,
-                |stream| bcs_stream::deserialize_string(stream)
+                &mut stream, |stream| bcs_stream::deserialize_string(stream)
             );
         assert!(result_module_names == module_names, 2);
 
         let result_function_names =
             bcs_stream::deserialize_vector(
-                &mut stream,
-                |stream| bcs_stream::deserialize_string(stream)
+                &mut stream, |stream| bcs_stream::deserialize_string(stream)
             );
         assert!(result_function_names == function_names, 3);
 
         let result_datas =
             bcs_stream::deserialize_vector(
-                &mut stream,
-                |stream| bcs_stream::deserialize_vector_u8(stream)
+                &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
             );
         assert!(result_datas == datas, 4);
 
@@ -274,8 +268,7 @@ module mcms::bcs_stream_test {
 
         let result_signer_addresses =
             bcs_stream::deserialize_vector(
-                &mut stream,
-                |stream| bcs_stream::deserialize_vector_u8(stream)
+                &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
             );
         assert!(result_signer_addresses == signer_addresses, 2);
 
