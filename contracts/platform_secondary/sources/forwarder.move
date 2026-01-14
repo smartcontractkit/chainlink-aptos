@@ -141,7 +141,9 @@ module platform_secondary::forwarder {
                 f,
                 oracles: vector::map(
                     oracles,
-                    |oracle| { ed25519::new_unvalidated_public_key_from_bytes(oracle) }
+                    |oracle| {
+                        ed25519::new_unvalidated_public_key_from_bytes(oracle)
+                    }
                 )
             }
         );
@@ -161,7 +163,12 @@ module platform_secondary::forwarder {
         smart_table::remove(&mut state.configs, ConfigId { don_id, config_version });
 
         event::emit(
-            ConfigSet { don_id, config_version, f: 0, signers: vector::empty() }
+            ConfigSet {
+                don_id,
+                config_version,
+                f: 0,
+                signers: vector::empty()
+            }
         );
     }
 
@@ -194,9 +201,7 @@ module platform_secondary::forwarder {
     }
 
     /// The dispatch call knows both storage and indirectly the callback, thus the separate module.
-    fun dispatch(
-        receiver: address, metadata: vector<u8>, data: vector<u8>
-    ) {
+    fun dispatch(receiver: address, metadata: vector<u8>, data: vector<u8>) {
         let meta = platform_secondary::storage::insert(receiver, metadata, data);
         aptos_framework::dispatchable_fungible_asset::derived_supply(meta);
         let obj_address =
@@ -307,7 +312,9 @@ module platform_secondary::forwarder {
 
         // mark as delivered
         smart_table::add(
-            &mut state.reports, transmission_id, signer::address_of(transmitter)
+            &mut state.reports,
+            transmission_id,
+            signer::address_of(transmitter)
         );
 
         event::emit(ReportProcessed { receiver, workflow_execution_id, report_id });
@@ -339,7 +346,6 @@ module platform_secondary::forwarder {
     }
 
     // Ownership functions
-
     #[view]
     public fun get_owner(): address acquires State {
         let state = borrow_global<State>(get_state_addr());
@@ -522,13 +528,9 @@ module platform_secondary::forwarder {
         );
     }
 
-    #[
-        test(
-            owner_secondary = @owner_secondary,
-            publisher = @platform_secondary,
-            new_owner = @0xbeef
-        )
-    ]
+    #[test(
+        owner_secondary = @owner_secondary, publisher = @platform_secondary, new_owner = @0xbeef
+    )]
     fun test_transfer_ownership_success(
         owner_secondary: &signer, publisher: &signer, new_owner: &signer
     ) acquires State {
@@ -542,13 +544,11 @@ module platform_secondary::forwarder {
         assert!(get_owner() == signer::address_of(new_owner), 2);
     }
 
-    #[
-        test(
-            owner_secondary = @owner_secondary,
-            publisher = @platform_secondary,
-            unknown_user = @0xbeef
-        )
-    ]
+    #[test(
+        owner_secondary = @owner_secondary,
+        publisher = @platform_secondary,
+        unknown_user = @0xbeef
+    )]
     #[expected_failure(abort_code = 327687, location = platform_secondary::forwarder)]
     fun test_transfer_ownership_failure_not_owner(
         owner_secondary: &signer, publisher: &signer, unknown_user: &signer
@@ -572,13 +572,9 @@ module platform_secondary::forwarder {
         transfer_ownership(owner_secondary, signer::address_of(owner_secondary));
     }
 
-    #[
-        test(
-            owner_secondary = @owner_secondary,
-            publisher = @platform_secondary,
-            new_owner = @0xbeef
-        )
-    ]
+    #[test(
+        owner_secondary = @owner_secondary, publisher = @platform_secondary, new_owner = @0xbeef
+    )]
     #[expected_failure(abort_code = 327694, location = platform_secondary::forwarder)]
     fun test_transfer_ownership_failure_not_proposed_owner(
         owner_secondary: &signer, publisher: &signer, new_owner: &signer

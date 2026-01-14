@@ -2,7 +2,12 @@ module managed_token::managed_token {
     use std::account;
     use std::event::{Self, EventHandle};
     use std::fungible_asset::{Self, BurnRef, Metadata, MintRef, TransferRef};
-    use std::object::{Self, ExtendRef, Object, TransferRef as ObjectTransferRef};
+    use std::object::{
+        Self,
+        ExtendRef,
+        Object,
+        TransferRef as ObjectTransferRef
+    };
     use std::option::{Option};
     use std::primary_fungible_store;
     use std::signer;
@@ -265,9 +270,7 @@ module managed_token::managed_token {
     }
 
     public entry fun apply_allowed_minter_updates(
-        caller: &signer,
-        minters_to_remove: vector<address>,
-        minters_to_add: vector<address>
+        caller: &signer, minters_to_remove: vector<address>, minters_to_add: vector<address>
     ) acquires TokenState {
         let token_state = &mut TokenState[token_state_address_internal()];
         assert_only_owner(signer::address_of(caller), &token_state.ownable_state);
@@ -280,9 +283,7 @@ module managed_token::managed_token {
     }
 
     public entry fun apply_allowed_burner_updates(
-        caller: &signer,
-        burners_to_remove: vector<address>,
-        burners_to_add: vector<address>
+        caller: &signer, burners_to_remove: vector<address>, burners_to_add: vector<address>
     ) acquires TokenState {
         let token_state = &mut TokenState[token_state_address_internal()];
         assert_only_owner(signer::address_of(caller), &token_state.ownable_state);
@@ -297,7 +298,6 @@ module managed_token::managed_token {
     // ================================================================
     // |                      Mint/Burn Functions                      |
     // ================================================================
-
     public entry fun mint(
         minter: &signer, to: address, amount: u64
     ) acquires TokenMetadataRefs, TokenState {
@@ -363,7 +363,6 @@ module managed_token::managed_token {
     // ================================================================
     // |                      Ownable State                           |
     // ================================================================
-
     #[view]
     public fun owner(): address acquires TokenState {
         owner_internal(&TokenState[token_state_address_internal()])

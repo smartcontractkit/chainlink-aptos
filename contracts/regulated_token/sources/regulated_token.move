@@ -11,7 +11,12 @@ module regulated_token::regulated_token {
         RawSupplyRef,
         MutateMetadataRef
     };
-    use std::object::{Self, ExtendRef, Object, TransferRef as ObjectTransferRef};
+    use std::object::{
+        Self,
+        ExtendRef,
+        Object,
+        TransferRef as ObjectTransferRef
+    };
     use std::option::{Self, Option};
     use std::primary_fungible_store;
     use std::account;
@@ -213,10 +218,7 @@ module regulated_token::regulated_token {
 
     inline fun token_state_object_internal(): Object<TokenState> {
         let token_state_address = token_state_address_internal();
-        assert!(
-            exists<TokenState>(token_state_address),
-            E_TOKEN_NOT_INITIALIZED
-        );
+        assert!(exists<TokenState>(token_state_address), E_TOKEN_NOT_INITIALIZED);
         object::address_to_object(token_state_address)
     }
 
@@ -242,10 +244,7 @@ module regulated_token::regulated_token {
 
     inline fun token_metadata_internal(): Object<Metadata> {
         let state_address = token_state_address_internal();
-        assert!(
-            exists<TokenState>(state_address),
-            E_TOKEN_NOT_INITIALIZED
-        );
+        assert!(exists<TokenState>(state_address), E_TOKEN_NOT_INITIALIZED);
         TokenState[state_address].token
     }
 
@@ -829,7 +828,10 @@ module regulated_token::regulated_token {
 
         if (addresses_to_remove.length() > 0) {
             access_control::batch_revoke_role(
-                caller, state_obj, role, addresses_to_remove
+                caller,
+                state_obj,
+                role,
+                addresses_to_remove
             );
         };
 
@@ -863,7 +865,9 @@ module regulated_token::regulated_token {
     /// Validates and sets up burn frozen funds operation.
     inline fun validate_burn_frozen_funds(
         caller: &signer
-    ): (address, &BurnRef, Object<Metadata>, &TokenState, bool) {
+    ): (
+        address, &BurnRef, Object<Metadata>, &TokenState, bool
+    ) {
         let state_obj = token_state_object_internal();
         let token_state = &TokenState[object::object_address(&state_obj)];
         assert_not_paused(token_state);
@@ -873,14 +877,17 @@ module regulated_token::regulated_token {
         let token_metadata = token_metadata_from_state_obj(state_obj);
         let burn_ref = &borrow_token_metadata_refs().burn_ref;
 
-        (burner, burn_ref, token_metadata, token_state, is_bridge_burner)
+        (
+            burner, burn_ref, token_metadata, token_state, is_bridge_burner
+        )
     }
 
     public entry fun batch_burn_frozen_funds(
         caller: &signer, accounts: vector<address>
     ) acquires TokenMetadataRefs, TokenState {
-        let (burner, burn_ref, token_metadata, token_state, is_bridge_burner) =
-            validate_burn_frozen_funds(caller);
+        let (
+            burner, burn_ref, token_metadata, token_state, is_bridge_burner
+        ) = validate_burn_frozen_funds(caller);
 
         for (i in 0..accounts.length()) {
             burn_frozen_funds_internal(
@@ -897,8 +904,9 @@ module regulated_token::regulated_token {
     public entry fun burn_frozen_funds(
         caller: &signer, from: address
     ) acquires TokenMetadataRefs, TokenState {
-        let (burner, burn_ref, token_metadata, token_state, is_bridge_burner) =
-            validate_burn_frozen_funds(caller);
+        let (
+            burner, burn_ref, token_metadata, token_state, is_bridge_burner
+        ) = validate_burn_frozen_funds(caller);
 
         burn_frozen_funds_internal(
             burner,
@@ -955,9 +963,8 @@ module regulated_token::regulated_token {
         assert_not_frozen(to, token_state);
     }
 
-    inline fun validate_recovery_procedure(caller: &signer, to: address): (
-        &TransferRef, &TokenState
-    ) {
+    inline fun validate_recovery_procedure(caller: &signer, to: address)
+        : (&TransferRef, &TokenState) {
         let state_obj = token_state_object_internal();
         let token_state = &TokenState[object::object_address(&state_obj)];
 
@@ -970,9 +977,7 @@ module regulated_token::regulated_token {
 
     public entry fun transfer_admin(caller: &signer, new_admin: address) {
         access_control::transfer_admin<TokenState, Role>(
-            caller,
-            token_state_object_internal(),
-            new_admin
+            caller, token_state_object_internal(), new_admin
         );
     }
 
@@ -1038,9 +1043,7 @@ module regulated_token::regulated_token {
         caller: &signer, state_obj: Object<TokenState>
     ) {
         access_control::assert_role(
-            state_obj,
-            signer::address_of(caller),
-            pauser_role()
+            state_obj, signer::address_of(caller), pauser_role()
         );
     }
 
@@ -1048,9 +1051,7 @@ module regulated_token::regulated_token {
         caller: &signer, state_obj: Object<TokenState>
     ) {
         access_control::assert_role(
-            state_obj,
-            signer::address_of(caller),
-            unpauser_role()
+            state_obj, signer::address_of(caller), unpauser_role()
         );
     }
 
@@ -1058,9 +1059,7 @@ module regulated_token::regulated_token {
         caller: &signer, state_obj: Object<TokenState>
     ) {
         access_control::assert_role(
-            state_obj,
-            signer::address_of(caller),
-            freezer_role()
+            state_obj, signer::address_of(caller), freezer_role()
         );
     }
 
@@ -1068,9 +1067,7 @@ module regulated_token::regulated_token {
         caller: &signer, state_obj: Object<TokenState>
     ) {
         access_control::assert_role(
-            state_obj,
-            signer::address_of(caller),
-            unfreezer_role()
+            state_obj, signer::address_of(caller), unfreezer_role()
         );
     }
 
@@ -1086,7 +1083,9 @@ module regulated_token::regulated_token {
         caller: &signer, state_obj: Object<TokenState>
     ) {
         access_control::assert_role(
-            state_obj, signer::address_of(caller), bridge_minter_or_burner_role()
+            state_obj,
+            signer::address_of(caller),
+            bridge_minter_or_burner_role()
         );
     }
 
@@ -1103,10 +1102,7 @@ module regulated_token::regulated_token {
     }
 
     fun assert_not_frozen(account: address, token_state: &TokenState) {
-        assert!(
-            !token_state.frozen_accounts.contains(&account),
-            E_ACCOUNT_FROZEN
-        );
+        assert!(!token_state.frozen_accounts.contains(&account), E_ACCOUNT_FROZEN);
     }
 
     fun assert_correct_asset<T: key>(
@@ -1116,10 +1112,7 @@ module regulated_token::regulated_token {
             fungible_asset::transfer_ref_metadata(transfer_ref) == token_metadata,
             E_INVALID_ASSET
         );
-        assert!(
-            fungible_asset::store_metadata(store) == token_metadata,
-            E_INVALID_STORE
-        );
+        assert!(fungible_asset::store_metadata(store) == token_metadata, E_INVALID_STORE);
     }
 
     fun get_role(role_number: u8): Role {
@@ -1182,7 +1175,6 @@ module regulated_token::regulated_token {
     }
 
     // ====================== Ownable Functions ======================
-
     #[view]
     public fun owner(): address acquires TokenState {
         ownable::owner(&TokenState[token_state_address_internal()].ownable_state)

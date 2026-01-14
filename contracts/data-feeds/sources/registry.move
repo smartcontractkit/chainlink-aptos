@@ -172,9 +172,7 @@ module data_feeds::registry {
         // callback for on_report function
         let cb =
             aptos_framework::function_info::new_function_info(
-                publisher,
-                string::utf8(b"registry"),
-                string::utf8(b"on_report")
+                publisher, string::utf8(b"registry"), string::utf8(b"on_report")
             );
         // register to receive platform::forwarder reports
         platform::storage::register(publisher, cb, new_proof());
@@ -204,10 +202,7 @@ module data_feeds::registry {
             }
         );
 
-        move_to(
-            &object_signer,
-            RegistryMigrationStatus { callback_registered: true }
-        );
+        move_to(&object_signer, RegistryMigrationStatus { callback_registered: true });
     }
 
     inline fun get_state_addr(): address {
@@ -238,10 +233,7 @@ module data_feeds::registry {
             publisher, cb_secondary, new_proof_secondary()
         );
 
-        move_to(
-            &object_signer,
-            RegistryMigrationStatus { callback_registered: true }
-        );
+        move_to(&object_signer, RegistryMigrationStatus { callback_registered: true });
     }
 
     public entry fun set_feeds(
@@ -296,7 +288,11 @@ module data_feeds::registry {
                 simple_map::add(&mut registry.feeds, *feed_id, feed);
 
                 event::emit(
-                    FeedSet { feed_id: *feed_id, description: *description, config_id }
+                    FeedSet {
+                        feed_id: *feed_id,
+                        description: *description,
+                        config_id
+                    }
                 );
             }
         );
@@ -512,8 +508,7 @@ module data_feeds::registry {
             &feeds,
             |feed_id, feed| {
                 vector::push_back(
-                    &mut feed_configs,
-                    FeedConfig { feed_id: *feed_id, feed: *feed }
+                    &mut feed_configs, FeedConfig { feed_id: *feed_id, feed: *feed }
                 );
             }
         );
@@ -525,10 +520,7 @@ module data_feeds::registry {
         let data_len: u64 = vector::length(data);
         let offset: u64 = 0;
 
-        assert!(
-            data_len > 64,
-            error::invalid_argument(EINVALID_RAW_REPORT)
-        );
+        assert!(data_len > 64, error::invalid_argument(EINVALID_RAW_REPORT));
 
         assert!(
             to_u256be(vector::slice(data, offset, offset + 32)) == 32,
@@ -674,7 +666,6 @@ module data_feeds::registry {
     }
 
     // Getters
-
     public fun get_benchmarks(
         authority: &signer, feed_ids: vector<vector<u8>>
     ): vector<Benchmark> acquires Registry {
@@ -760,13 +751,15 @@ module data_feeds::registry {
 
                 let feed = simple_map::borrow(&registry.feeds, &feed_id);
 
-                FeedMetadata { description: feed.description, config_id: feed.config_id }
+                FeedMetadata {
+                    description: feed.description,
+                    config_id: feed.config_id
+                }
             }
         )
     }
 
     // Ownership functions
-
     #[view]
     public fun get_owner(): address acquires Registry {
         let registry = borrow_global<Registry>(get_state_addr());
@@ -798,12 +791,14 @@ module data_feeds::registry {
         registry.pending_owner_address = @0x0;
 
         event::emit(
-            OwnershipTransferred { from: old_owner_address, to: registry.owner_address }
+            OwnershipTransferred {
+                from: old_owner_address,
+                to: registry.owner_address
+            }
         );
     }
 
     // Struct accessors
-
     public fun get_benchmark_value(result: &Benchmark): u256 {
         result.benchmark
     }
@@ -1324,13 +1319,8 @@ module data_feeds::registry {
         accept_ownership(new_owner);
     }
 
-    #[
-        test(
-            publisher = @data_feeds,
-            platform = @platform,
-            platform_secondary = @platform_secondary
-        )
-    ]
+    #[test(publisher = @data_feeds, platform = @platform, platform_secondary =
+    @platform_secondary)]
     fun test_retrieve_benchmark(
         publisher: &signer, platform: &signer, platform_secondary: &signer
     ) acquires Registry {
@@ -1364,5 +1354,112 @@ module data_feeds::registry {
         let report = vector::borrow(&reports, 0);
         assert!(get_report_value(report) == report_data, 4);
         assert!(get_report_timestamp(report) == observation_timestamp, 5);
+    }
+
+    #[
+        test(
+            owner = @owner,
+            publisher = @data_feeds,
+            platform = @platform,
+            platform_secondary = @platform_secondary
+        )
+    ]
+    fun test_out_of_order_report_rejected(
+        owner: &signer,
+        publisher: &signer,
+        platform: &signer,
+        platform_secondary: &signer
+    ) acquires Registry {
+        set_up_test(publisher, platform, platform_secondary);
+
+        // Create a benchmark report with timestamp 1000
+        let newer_report_data =
+            x"00000000000000000000000000000000000000000000000000000000000003e80000000000000000000000000000000000000000000000000000000000002710";
+        let feed_id = x"0001111111111111111100000000000000000000000000000000000000000000";
+        let newer_timestamp = 0x3e8; // 1000 in decimal
+        let newer_benchmark = 0x2710; // 10000 in decimal
+
+        let config_id = vector[1];
+
+        // Set up the feed
+        set_feeds(
+            owner,
+            vector[feed_id],
+            vector[string::utf8(b"test feed")],
+            config_id
+        );
+
+        // First update with newer timestamp (1000)
+        let registry = borrow_global_mut<Registry>(get_state_addr());
+        perform_update(registry, feed_id, newer_report_data);
+
+        // Verify the first update worked
+        let benchmarks = get_benchmarks(owner, vector[feed_id]);
+        assert!(vector::length(&benchmarks) == 1, 1);
+        let benchmark = vector::borrow(&benchmarks, 0);
+        assert!(benchmark.benchmark == newer_benchmark, 2);
+        assert!(benchmark.observation_timestamp == newer_timestamp, 3);
+
+        // Verify that FeedUpdated event was emitted for the first update
+        assert!(
+            event::was_event_emitted(
+                &FeedUpdated {
+                    feed_id,
+                    timestamp: newer_timestamp,
+                    benchmark: newer_benchmark,
+                    report: vector::empty<u8>()
+                }
+            ),
+            4
+        );
+
+        // Create a report with an older timestamp (500)
+        let older_report_data =
+            x"00000000000000000000000000000000000000000000000000000000000001f40000000000000000000000000000000000000000000000000000000000001388";
+        let older_timestamp = 0x1f4; // 500 in decimal
+        let older_benchmark = 0x1388; // 5000 in decimal
+
+        let stale_report_event =
+            &StaleReport {
+                feed_id,
+                latest_timestamp: newer_timestamp,
+                report_timestamp: older_timestamp
+            };
+
+        // Verify that StaleReport event was NOT emitted after the first (successful) update
+        assert!(!event::was_event_emitted(stale_report_event), 5);
+
+        // Make sure no other events were emitted
+        assert!(
+            event::emitted_events<StaleReport>().length() == 0,
+            6
+        );
+
+        // Perform the update with the older report
+        let registry = borrow_global_mut<Registry>(get_state_addr());
+        perform_update(registry, feed_id, older_report_data);
+
+        // Verify that the value did NOT update (should still be the newer values)
+        benchmarks = get_benchmarks(owner, vector[feed_id]);
+        assert!(vector::length(&benchmarks) == 1, 7);
+        benchmark = vector::borrow(&benchmarks, 0);
+        assert!(benchmark.benchmark == newer_benchmark, 8); // Should still be newer value
+        assert!(benchmark.observation_timestamp == newer_timestamp, 9); // Should still be newer timestamp
+
+        // Verify that StaleReport event was emitted for the out-of-order update
+        assert!(event::was_event_emitted(stale_report_event), 10);
+
+        // Verify that FeedUpdated event was NOT emitted for the stale report
+        assert!(
+            !event::was_event_emitted(
+                &FeedUpdated {
+                    feed_id,
+                    timestamp: older_timestamp,
+                    benchmark: older_benchmark,
+                    report: vector::empty<u8>()
+                }
+            ),
+            11
+        );
     }
 }

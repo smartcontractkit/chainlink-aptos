@@ -40,7 +40,6 @@ module regulated_token::ownership_test {
     // ================================================================
     // |                    Basic Ownership Tests                    |
     // ================================================================
-
     #[test(owner = @admin, regulated_token = @regulated_token)]
     fun test_initial_ownership(owner: &signer, regulated_token: &signer) {
         setup(owner, regulated_token);
@@ -99,7 +98,6 @@ module regulated_token::ownership_test {
     // ================================================================
     // |                    Error Condition Tests                    |
     // ================================================================
-
     #[test(owner = @admin, regulated_token = @regulated_token)]
     #[expected_failure]
     // Will fail with appropriate ownable error
@@ -181,7 +179,6 @@ module regulated_token::ownership_test {
     // ================================================================
     // |                    Complex Scenario Tests                   |
     // ================================================================
-
     #[test(owner = @admin, regulated_token = @regulated_token)]
     fun test_transfer_ownership_overwrites_pending(
         owner: &signer, regulated_token: &signer

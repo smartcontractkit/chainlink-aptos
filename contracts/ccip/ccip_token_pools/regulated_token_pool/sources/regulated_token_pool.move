@@ -37,7 +37,6 @@ module regulated_token_pool::regulated_token_pool {
     // ================================================================
     // |                             Init                             |
     // ================================================================
-
     #[view]
     public fun type_and_version(): String {
         string::utf8(b"RegulatedTokenPool 1.6.0")
@@ -94,7 +93,6 @@ module regulated_token_pool::regulated_token_pool {
     // ================================================================
     // |                 Exposing token_pool functions                |
     // ================================================================
-
     #[view]
     public fun get_token(): address acquires RegulatedTokenPoolState {
         token_pool::get_token(&borrow_pool().token_pool_state)
@@ -145,7 +143,9 @@ module regulated_token_pool::regulated_token_pool {
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
         token_pool::add_remote_pool(
-            &mut pool.token_pool_state, remote_chain_selector, remote_pool_address
+            &mut pool.token_pool_state,
+            remote_chain_selector,
+            remote_pool_address
         );
     }
 
@@ -156,7 +156,9 @@ module regulated_token_pool::regulated_token_pool {
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
         token_pool::remove_remote_pool(
-            &mut pool.token_pool_state, remote_chain_selector, remote_pool_address
+            &mut pool.token_pool_state,
+            remote_chain_selector,
+            remote_pool_address
         );
     }
 
@@ -195,6 +197,14 @@ module regulated_token_pool::regulated_token_pool {
     public fun get_allowlist_enabled(): bool acquires RegulatedTokenPoolState {
         let pool = borrow_pool();
         token_pool::get_allowlist_enabled(&pool.token_pool_state)
+    }
+
+    public entry fun set_allowlist_enabled(
+        caller: &signer, enabled: bool
+    ) acquires RegulatedTokenPoolState {
+        let pool = borrow_pool_mut();
+        ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
+        token_pool::set_allowlist_enabled(&mut pool.token_pool_state, enabled);
     }
 
     #[view]
@@ -311,7 +321,6 @@ module regulated_token_pool::regulated_token_pool {
     // ================================================================
     // |                    Rate limit config                         |
     // ================================================================
-
     public entry fun set_chain_rate_limiter_configs(
         caller: &signer,
         remote_chain_selectors: vector<u64>,
@@ -397,7 +406,6 @@ module regulated_token_pool::regulated_token_pool {
     // ================================================================
     // |                      Storage helpers                         |
     // ================================================================
-
     #[view]
     public fun get_store_address(): address {
         store_address()
@@ -418,7 +426,6 @@ module regulated_token_pool::regulated_token_pool {
     // ================================================================
     // |                       Expose ownable                         |
     // ================================================================
-
     #[view]
     public fun owner(): address acquires RegulatedTokenPoolState {
         ownable::owner(&borrow_pool().ownable_state)
@@ -464,7 +471,6 @@ module regulated_token_pool::regulated_token_pool {
     // ================================================================
     // |                      MCMS entrypoint                         |
     // ================================================================
-
     struct McmsCallback has drop {}
 
     public fun mcms_entrypoint<T: key>(
@@ -514,6 +520,10 @@ module regulated_token_pool::regulated_token_pool {
                 remote_pool_addresses_to_add,
                 remote_token_addresses_to_add
             );
+        } else if (function_bytes == b"set_allowlist_enabled") {
+            let enabled = bcs_stream::deserialize_bool(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            set_allowlist_enabled(&caller, enabled);
         } else if (function_bytes == b"apply_allowlist_updates") {
             let removes =
                 bcs_stream::deserialize_vector(
@@ -614,7 +624,6 @@ module regulated_token_pool::regulated_token_pool {
     // ================================================================
     // |                      Test functions                          |
     // ================================================================
-
     #[test_only]
     public entry fun test_init_module(owner: &signer) {
         init_module(owner);

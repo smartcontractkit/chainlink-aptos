@@ -367,9 +367,7 @@ func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, nonce u
 					ctxLogger.Warnw("simulated gas used exceeds gas limit from metadata", "gasUsed", simulatedTx.GasUsed, "maxGasAmount", rawTx.MaxGasAmount)
 				}
 			} else {
-				// todo: configurable multiplier?
-				// fixed multiplier of 1.25 to account for potential discrepancies in gas estimation
-				rawTx.MaxGasAmount = uint64(float64(simulatedTx.GasUsed) * 1.25)
+				rawTx.MaxGasAmount = simulatedTx.GasUsed
 			}
 
 			rawTx.GasUnitPrice = simulatedTx.GasUnitPrice
@@ -399,6 +397,15 @@ func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, nonce u
 	if rawTx.MaxGasAmount == 0 {
 		rawTx.MaxGasAmount = a.config.DefaultMaxGasAmount
 		ctxLogger.Debugw("using default max gas amount", "maxGasAmount", a.config.DefaultMaxGasAmount)
+	}
+
+	if a.config.GasLimitOverhead > 0 {
+		originalGasLimit := rawTx.MaxGasAmount
+		rawTx.MaxGasAmount += a.config.GasLimitOverhead
+		ctxLogger.Debugw("added gas limit overhead",
+			"original", originalGasLimit,
+			"overhead", a.config.GasLimitOverhead,
+			"final", rawTx.MaxGasAmount)
 	}
 
 	return rawTx, nil

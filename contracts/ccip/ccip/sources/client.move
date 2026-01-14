@@ -44,9 +44,11 @@ module ccip::client {
         extra_args.append(bcs::to_bytes(&allow_out_of_order_execution));
 
         assert!(token_receiver.length() == 32, E_INVALID_SVM_TOKEN_RECEIVER_LENGTH);
-        accounts.for_each_ref(|account| {
-            assert!(account.length() == 32, E_INVALID_SVM_ACCOUNT_LENGTH);
-        });
+        accounts.for_each_ref(
+            |account| {
+                assert!(account.length() == 32, E_INVALID_SVM_ACCOUNT_LENGTH);
+            }
+        );
 
         extra_args.append(bcs::to_bytes(&token_receiver));
         extra_args.append(bcs::to_bytes(&accounts));
@@ -94,7 +96,6 @@ module ccip::client {
     }
 
     // Any2AptosMessage accessors
-
     public fun get_message_id(input: &Any2AptosMessage): vector<u8> {
         input.message_id
     }
@@ -111,12 +112,12 @@ module ccip::client {
         input.data
     }
 
-    public fun get_dest_token_amounts(input: &Any2AptosMessage): vector<Any2AptosTokenAmount> {
+    public fun get_dest_token_amounts(input: &Any2AptosMessage)
+        : vector<Any2AptosTokenAmount> {
         input.dest_token_amounts
     }
 
     // Any2AptosTokenAmount accessors
-
     public fun get_token(input: &Any2AptosTokenAmount): address {
         input.token
     }

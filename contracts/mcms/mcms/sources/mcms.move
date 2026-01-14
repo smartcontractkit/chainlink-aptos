@@ -28,10 +28,8 @@ module mcms::mcms {
     const MAX_NUM_SIGNERS: u64 = 200;
 
     // equivalent to initializing empty uint8[NUM_GROUPS] in Solidity
-    const VEC_NUM_GROUPS: vector<u8> = vector[
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0
-    ];
+    const VEC_NUM_GROUPS: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
     // keccak256("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA_APTOS")
     const MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_METADATA: vector<u8> = x"a71d47b6c00b64ee21af96a1d424cb2dcbbed12becdcd3b4e6c7fc4c2f80a697";
@@ -42,10 +40,8 @@ module mcms::mcms {
     /// Special timestamp value indicating an operation is done
     const DONE_TIMESTAMP: u64 = 1;
 
-    const ZERO_HASH: vector<u8> = vector[
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0
-    ];
+    const ZERO_HASH: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct MultisigState has key {
@@ -536,8 +532,7 @@ module mcms::mcms {
         role: u8, stream: &mut BCSStream
     ) {
         assert!(
-            role == PROPOSER_ROLE || role == TIMELOCK_ROLE,
-            E_NOT_AUTHORIZED_ROLE
+            role == PROPOSER_ROLE || role == TIMELOCK_ROLE, E_NOT_AUTHORIZED_ROLE
         );
 
         let targets =
@@ -576,8 +571,7 @@ module mcms::mcms {
         role: u8, stream: &mut BCSStream
     ) {
         assert!(
-            role == BYPASSER_ROLE || role == TIMELOCK_ROLE,
-            E_NOT_AUTHORIZED_ROLE
+            role == BYPASSER_ROLE || role == TIMELOCK_ROLE, E_NOT_AUTHORIZED_ROLE
         );
 
         let targets =
@@ -634,8 +628,7 @@ module mcms::mcms {
 
     inline fun dispatch_timelock_cancel(role: u8, stream: &mut BCSStream) {
         assert!(
-            role == CANCELLER_ROLE || role == TIMELOCK_ROLE,
-            E_NOT_AUTHORIZED_ROLE
+            role == CANCELLER_ROLE || role == TIMELOCK_ROLE, E_NOT_AUTHORIZED_ROLE
         );
 
         let id = bcs_stream::deserialize_vector_u8(stream);
@@ -710,12 +703,14 @@ module mcms::mcms {
         let group_children_counts = vector[];
         params::right_pad_vec(&mut group_children_counts, NUM_GROUPS);
         // first, we count the signers as children
-        signer_groups.for_each_ref(|group| {
-            let group: u64 = *group as u64;
-            assert!(group < NUM_GROUPS, E_OUT_OF_BOUNDS_GROUP);
-            let count = group_children_counts.borrow_mut(group);
-            *count += 1;
-        });
+        signer_groups.for_each_ref(
+            |group| {
+                let group: u64 = *group as u64;
+                assert!(group < NUM_GROUPS, E_OUT_OF_BOUNDS_GROUP);
+                let count = group_children_counts.borrow_mut(group);
+                *count += 1;
+            }
+        );
 
         // second, we iterate backwards so as to check each group and propagate counts from
         // child group to parent groups up the tree to the root
@@ -726,12 +721,10 @@ module mcms::mcms {
             // - all other groups should have a parent group with a lower index
             let group_parent = group_parents[i] as u64;
             assert!(
-                i == 0 || group_parent < i,
-                E_GROUP_TREE_NOT_WELL_FORMED
+                i == 0 || group_parent < i, E_GROUP_TREE_NOT_WELL_FORMED
             );
             assert!(
-                i != 0 || group_parent == 0,
-                E_GROUP_TREE_NOT_WELL_FORMED
+                i != 0 || group_parent == 0, E_GROUP_TREE_NOT_WELL_FORMED
             );
 
             let group_quorum = group_quorums[i];
@@ -804,15 +797,15 @@ module mcms::mcms {
             };
         };
 
-        event::emit(
-            ConfigSet { role, config: multisig.config, is_root_cleared: clear_root }
-        );
+        event::emit(ConfigSet {
+            role,
+            config: multisig.config,
+            is_root_cleared: clear_root
+        });
     }
 
     public fun verify_merkle_proof(
-        proof: vector<vector<u8>>,
-        root: vector<u8>,
-        leaf: vector<u8>
+        proof: vector<vector<u8>>, root: vector<u8>, leaf: vector<u8>
     ): bool {
         let computed_hash = leaf;
         proof.for_each_ref(
@@ -1043,7 +1036,6 @@ module mcms::mcms {
     // =======================================================================================
     // |                                 Timelock Implementation                              |
     // =======================================================================================
-
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct Timelock has key {
         min_delay: u64,
@@ -1214,7 +1206,14 @@ module mcms::mcms {
             timelock_dispatch(target, module_name, function_name, data);
 
             event::emit(
-                CallExecuted { id, index: i, target, module_name, function_name, data }
+                CallExecuted {
+                    id,
+                    index: i,
+                    target,
+                    module_name,
+                    function_name,
+                    data
+                }
             );
         };
 
@@ -1657,7 +1656,6 @@ module mcms::mcms {
     }
 
     // ======================= TEST ONLY FUNCTIONS ======================= //
-
     #[test_only]
     public fun init_module_for_testing(publisher: &signer) {
         init_module(publisher);

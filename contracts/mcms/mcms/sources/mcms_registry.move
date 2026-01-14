@@ -417,7 +417,8 @@ module mcms::mcms_registry {
             error::invalid_state(E_NEW_OWNER_MISMATCH)
         );
         assert!(
-            pending_transfer.accepted, error::invalid_state(E_TRANSFER_NOT_ACCEPTED)
+            pending_transfer.accepted,
+            error::invalid_state(E_TRANSFER_NOT_ACCEPTED)
         );
 
         let owner_registration = borrow_owner_registration(owner_address);
@@ -534,14 +535,8 @@ module mcms::mcms_registry {
 
         let module_name_bytes = *module_name.bytes();
         let module_name_len = module_name_bytes.length();
-        assert!(
-            module_name_len > 0,
-            error::invalid_argument(E_EMPTY_MODULE_NAME)
-        );
-        assert!(
-            module_name_len <= 64,
-            error::invalid_argument(E_MODULE_NAME_TOO_LONG)
-        );
+        assert!(module_name_len > 0, error::invalid_argument(E_EMPTY_MODULE_NAME));
+        assert!(module_name_len <= 64, error::invalid_argument(E_MODULE_NAME_TOO_LONG));
 
         let state = borrow_state_mut();
 
@@ -734,7 +729,8 @@ module mcms::mcms_registry {
         borrow_global<OwnerRegistration>(account_address)
     }
 
-    inline fun borrow_owner_registration_mut(account_address: address): &mut OwnerRegistration {
+    inline fun borrow_owner_registration_mut(account_address: address)
+        : &mut OwnerRegistration {
         assert!(
             exists<OwnerRegistration>(account_address),
             error::invalid_argument(E_ADDRESS_NOT_REGISTERED)

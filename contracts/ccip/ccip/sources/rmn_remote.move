@@ -108,9 +108,7 @@ module ccip::rmn_remote {
         };
     }
 
-    public entry fun initialize(
-        caller: &signer, local_chain_selector: u64
-    ) {
+    public entry fun initialize(caller: &signer, local_chain_selector: u64) {
         auth::assert_only_owner(signer::address_of(caller));
 
         assert!(
@@ -158,7 +156,9 @@ module ccip::rmn_remote {
                 eth_abi::encode_bytes(&mut digest, merkle_root.on_ramp_address);
                 eth_abi::encode_u64(&mut digest, merkle_root.min_seq_nr);
                 eth_abi::encode_u64(&mut digest, merkle_root.max_seq_nr);
-                eth_abi::encode_right_padded_bytes32(&mut digest, merkle_root.merkle_root);
+                eth_abi::encode_right_padded_bytes32(
+                    &mut digest, merkle_root.merkle_root
+                );
             }
         );
         aptos_hash::keccak256(digest)
@@ -330,11 +330,18 @@ module ccip::rmn_remote {
                         error::invalid_argument(E_DUPLICATE_SIGNER)
                     );
                     state.signers.add(signer_public_key_bytes, true);
-                    Signer { onchain_public_key: signer_public_key_bytes, node_index }
+                    Signer {
+                        onchain_public_key: signer_public_key_bytes,
+                        node_index
+                    }
                 }
             );
 
-        let new_config = Config { rmn_home_contract_config_digest, signers, f_sign };
+        let new_config = Config {
+            rmn_home_contract_config_digest,
+            signers,
+            f_sign
+        };
         state.config = new_config;
 
         let new_config_count = state.config_count + 1;
@@ -401,14 +408,16 @@ module ccip::rmn_remote {
 
         let state = borrow_state_mut();
 
-        subjects.for_each_ref(|subject| {
-            let subject: vector<u8> = *subject;
-            assert!(
-                state.cursed_subjects.contains(subject),
-                error::invalid_argument(E_NOT_CURSED)
-            );
-            state.cursed_subjects.remove(subject);
-        });
+        subjects.for_each_ref(
+            |subject| {
+                let subject: vector<u8> = *subject;
+                assert!(
+                    state.cursed_subjects.contains(subject),
+                    error::invalid_argument(E_NOT_CURSED)
+                );
+                state.cursed_subjects.remove(subject);
+            }
+        );
         event::emit_event(&mut state.uncursed_events, Uncursed { subjects });
     }
 
@@ -445,7 +454,6 @@ module ccip::rmn_remote {
     // ================================================================
     // |                      MCMS Entrypoint                         |
     // ================================================================
-
     struct McmsCallback has drop {}
 
     public fun mcms_entrypoint<T: key>(
@@ -466,13 +474,11 @@ module ccip::rmn_remote {
                 bcs_stream::deserialize_vector_u8(&mut stream);
             let signer_onchain_public_keys =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_vector_u8(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
                 );
             let node_indexes =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_u64(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
                 );
             let f_sign = bcs_stream::deserialize_u64(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
@@ -490,8 +496,7 @@ module ccip::rmn_remote {
         } else if (function_bytes == b"curse_multiple") {
             let subjects =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_vector_u8(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
             curse_multiple(&caller, subjects)
@@ -502,8 +507,7 @@ module ccip::rmn_remote {
         } else if (function_bytes == b"uncurse_multiple") {
             let subjects =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_vector_u8(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_vector_u8(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
             uncurse_multiple(&caller, subjects)

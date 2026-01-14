@@ -156,10 +156,7 @@ module ccip_offramp::ocr3_base {
             transmitters.length() <= MAX_NUM_ORACLES,
             error::invalid_argument(E_TOO_MANY_TRANSMITTERS)
         );
-        assert!(
-            transmitters.length() > 0,
-            error::invalid_argument(E_NO_TRANSMITTERS)
-        );
+        assert!(transmitters.length() > 0, error::invalid_argument(E_NO_TRANSMITTERS));
 
         if (is_signature_verification_enabled) {
             assert!(
@@ -189,7 +186,9 @@ module ccip_offramp::ocr3_base {
         ocr_config.transmitters = transmitters;
 
         assign_transmitter_oracles(
-            &mut ocr3_state.transmitter_oracles, ocr_plugin_type, &transmitters
+            &mut ocr3_state.transmitter_oracles,
+            ocr_plugin_type,
+            &transmitters
         );
 
         config_info.big_f = big_f;
@@ -197,7 +196,13 @@ module ccip_offramp::ocr3_base {
 
         event::emit_event(
             &mut ocr3_state.config_set_events,
-            ConfigSet { ocr_plugin_type, config_digest, signers, transmitters, big_f }
+            ConfigSet {
+                ocr_plugin_type,
+                config_digest,
+                signers,
+                transmitters,
+                big_f
+            }
         );
     }
 
@@ -206,22 +211,28 @@ module ccip_offramp::ocr3_base {
         ocr_plugin_type: u8,
         signers: &vector<vector<u8>>
     ) {
-        signers.for_each_ref(|signer_key| {
-            address::assert_non_zero_address_vector(signer_key);
-        });
+        signers.for_each_ref(
+            |signer_key| {
+                address::assert_non_zero_address_vector(signer_key);
+            }
+        );
 
         assert!(!has_duplicates(signers), error::invalid_argument(E_REPEATED_SIGNERS));
 
         let validated_signers =
-            signers.map_ref(|signer| {
-                let maybe_validated_public_key =
-                    ed25519::new_validated_public_key_from_bytes(*signer);
-                assert!(
-                    maybe_validated_public_key.is_some(),
-                    error::invalid_argument(E_COULD_NOT_VALIDATE_SIGNER_KEY)
-                );
-                ed25519::public_key_into_unvalidated(maybe_validated_public_key.extract())
-            });
+            signers.map_ref(
+                |signer| {
+                    let maybe_validated_public_key =
+                        ed25519::new_validated_public_key_from_bytes(*signer);
+                    assert!(
+                        maybe_validated_public_key.is_some(),
+                        error::invalid_argument(E_COULD_NOT_VALIDATE_SIGNER_KEY)
+                    );
+                    ed25519::public_key_into_unvalidated(
+                        maybe_validated_public_key.extract()
+                    )
+                }
+            );
 
         signer_oracles.upsert(ocr_plugin_type, validated_signers);
     }
@@ -231,9 +242,11 @@ module ccip_offramp::ocr3_base {
         ocr_plugin_type: u8,
         transmitters: &vector<address>
     ) {
-        transmitters.for_each_ref(|transmitter_addr| {
-            address::assert_non_zero_address(*transmitter_addr);
-        });
+        transmitters.for_each_ref(
+            |transmitter_addr| {
+                address::assert_non_zero_address(*transmitter_addr);
+            }
+        );
 
         assert!(
             !has_duplicates(transmitters),
@@ -406,7 +419,6 @@ module ccip_offramp::ocr3_base {
     }
 
     // ===================== Test functions =====================
-
     #[test_only]
     public fun destroy_ocr3_state(ocr3_state: OCR3BaseState) {
         let OCR3BaseState {

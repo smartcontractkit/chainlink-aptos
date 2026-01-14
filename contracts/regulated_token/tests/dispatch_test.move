@@ -61,9 +61,7 @@ module regulated_token::dispatch_test {
     }
 
     // Convenience function for single user setup
-    fun setup_user_with_tokens(
-        admin: &signer, user: address, amount: u64
-    ) {
+    fun setup_user_with_tokens(admin: &signer, user: address, amount: u64) {
         account::create_account_for_test(user);
         regulated_token::mint(admin, user, amount);
     }
@@ -80,7 +78,6 @@ module regulated_token::dispatch_test {
     // ================================================================
     // |                Dynamic Dispatch Trigger Tests               |
     // ================================================================
-
     #[test(admin = @admin, regulated_token = @regulated_token)]
     fun test_transfer_triggers_dispatch_hooks(
         admin: &signer, regulated_token: &signer
@@ -126,7 +123,6 @@ module regulated_token::dispatch_test {
     // ================================================================
     // |                 Pause Enforcement Tests                     |
     // ================================================================
-
     #[test(admin = @admin, regulated_token = @regulated_token)]
     #[
         expected_failure(
@@ -209,7 +205,6 @@ module regulated_token::dispatch_test {
     // ================================================================
     // |                 Freeze Enforcement Tests                    |
     // ================================================================
-
     #[test(admin = @admin, regulated_token = @regulated_token)]
     #[expected_failure(abort_code = 327683, location = std::fungible_asset)]
     fun test_transfer_from_frozen_account_blocked(
@@ -297,7 +292,6 @@ module regulated_token::dispatch_test {
     // ================================================================
     // |                    Hook Security Tests                      |
     // ================================================================
-
     #[test(admin = @admin, regulated_token = @regulated_token)]
     fun test_unfreeze_allows_transfers(
         admin: &signer, regulated_token: &signer
@@ -353,7 +347,6 @@ module regulated_token::dispatch_test {
     // ================================================================
     // |                 Combined Scenarios Tests                    |
     // ================================================================
-
     #[test(admin = @admin, regulated_token = @regulated_token)]
     #[
         expected_failure(

@@ -108,8 +108,9 @@ func CreateBcsValue(typeTag aptos.TypeTag, typeValue any) ([]byte, error) {
 		return nil, err
 	}
 
+	// this should never occur, as we should check for serialize errors after every invocation.
 	if err := serializer.Error(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unexpected unchecked serialize error: %w", err)
 	}
 
 	return serializer.ToBytes(), nil
@@ -127,20 +128,32 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 	case aptos.TypeTagBool:
 		if v, ok := argVal.(bool); ok {
 			serializer.Bool(v)
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(uint64); ok && (v == uint64(0) || v == uint64(1)) {
 			serializer.Bool(v == uint64(1))
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 
 		if v, ok := argVal.(string); ok {
 			if v == "1" || v == "true" {
 				serializer.Bool(true)
+				if err := serializer.Error(); err != nil {
+					return err
+				}
 				return nil
 			}
 			if v == "0" || v == "false" {
 				serializer.Bool(false)
+				if err := serializer.Error(); err != nil {
+					return err
+				}
 				return nil
 			}
 			return fmt.Errorf("invalid bool value: %s", v)
@@ -148,18 +161,30 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 	case aptos.TypeTagU8:
 		if v, ok := argVal.(uint8); ok {
 			serializer.U8(v)
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(uint64); ok && v == uint64(uint8(v)) {
 			serializer.U8(uint8(v))
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(int); ok && v == int(uint8(v)) {
 			serializer.U8(uint8(v))
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(float64); ok && v == float64(uint8(v)) {
 			serializer.U8(uint8(v))
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(string); ok {
@@ -168,23 +193,38 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 				return err
 			}
 			serializer.U8(uint8(u))
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 	case aptos.TypeTagU16:
 		if v, ok := argVal.(uint16); ok {
 			serializer.U16(v)
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(uint64); ok && v == uint64(uint16(v)) {
 			serializer.U16(uint16(v))
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(int); ok && v == int(uint16(v)) {
 			serializer.U16(uint16(v))
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(float64); ok && v == float64(uint16(v)) {
 			serializer.U16(uint16(v))
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(string); ok {
@@ -193,23 +233,38 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 				return err
 			}
 			serializer.U16(uint16(u))
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 	case aptos.TypeTagU32:
 		if v, ok := argVal.(uint32); ok {
 			serializer.U32(v)
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(uint64); ok && v == uint64(uint32(v)) {
 			serializer.U32(uint32(v))
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(int); ok && v == int(uint32(v)) {
 			serializer.U32(uint32(v))
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(float64); ok && v == float64(uint32(v)) {
 			serializer.U32(uint32(v))
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(string); ok {
@@ -218,19 +273,31 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 				return err
 			}
 			serializer.U32(uint32(u))
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 	case aptos.TypeTagU64:
 		if v, ok := argVal.(uint64); ok {
 			serializer.U64(v)
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(int); ok && v >= 0 && v == int(uint64(v)) {
 			serializer.U64(uint64(v))
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(float64); ok && v >= 0 && v == float64(uint64(v)) {
 			serializer.U64(uint64(v))
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(string); ok {
@@ -239,63 +306,99 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 				return err
 			}
 			serializer.U64(u)
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 	case aptos.TypeTagU128:
 		if v, ok := argVal.(*big.Int); ok {
 			serializer.U128(*v)
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(uint64); ok {
 			b := big.NewInt(0).SetUint64(v)
 			serializer.U128(*b)
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(int); ok && v >= 0 && v == int(int64(v)) {
 			b := big.NewInt(int64(v))
 			serializer.U128(*b)
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(float64); ok && v >= 0 && v == float64(int64(v)) {
 			b := big.NewInt(int64(v))
 			serializer.U128(*b)
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(string); ok {
 			if big, ok := big.NewInt(0).SetString(v, 10); ok {
 				serializer.U128(*big)
+				if err := serializer.Error(); err != nil {
+					return err
+				}
 				return nil
 			}
 		}
 	case aptos.TypeTagU256:
 		if v, ok := argVal.(*big.Int); ok {
 			serializer.U256(*v)
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(uint64); ok {
 			b := big.NewInt(0).SetUint64(v)
 			serializer.U256(*b)
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(int); ok && v >= 0 && v == int(int64(v)) {
 			b := big.NewInt(int64(v))
 			serializer.U256(*b)
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(float64); ok && v >= 0 && v == float64(int64(v)) {
 			b := big.NewInt(int64(v))
 			serializer.U256(*b)
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(string); ok {
 			if big, ok := big.NewInt(0).SetString(v, 10); ok {
 				serializer.U256(*big)
+				if err := serializer.Error(); err != nil {
+					return err
+				}
 				return nil
 			}
 		}
 	case aptos.TypeTagAddress:
 		if v, ok := argVal.(aptos.AccountAddress); ok {
 			v.MarshalBCS(serializer)
+			if err := serializer.Error(); err != nil {
+				return err
+			}
 			return nil
 		}
 		if v, ok := argVal.(string); ok {
@@ -304,6 +407,9 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 			if err == nil && len(decoded) == 32 {
 				address := aptos.AccountAddress(decoded)
 				address.MarshalBCS(serializer)
+				if err := serializer.Error(); err != nil {
+					return err
+				}
 				return nil
 			} else {
 				address := &aptos.AccountAddress{}
@@ -312,6 +418,9 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 					return err
 				}
 				address.MarshalBCS(serializer)
+				if err := serializer.Error(); err != nil {
+					return err
+				}
 				return nil
 			}
 		}
@@ -321,10 +430,16 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 		case aptos.TypeTagU8:
 			if v, ok := argVal.([]byte); ok {
 				serializer.WriteBytes(v)
+				if err := serializer.Error(); err != nil {
+					return err
+				}
 				return nil
 			}
 			if v, ok := argVal.(string); ok {
 				serializer.WriteString(v)
+				if err := serializer.Error(); err != nil {
+					return err
+				}
 				return nil
 			}
 		default:
@@ -347,7 +462,7 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 			}
 
 			if err := serializer.Error(); err != nil {
-				return err
+				return fmt.Errorf("unexpected unchecked serialize error while processing vector: %w", err)
 			}
 		}
 		return nil
@@ -359,6 +474,9 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 		case "0x1::string::String":
 			if v, ok := argVal.(string); ok {
 				serializer.WriteString(v)
+				if err := serializer.Error(); err != nil {
+					return err
+				}
 				return nil
 			}
 		case "0x1::option::Option":
@@ -372,12 +490,21 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 			if rv.IsNil() {
 				// If the option is unset/nil pointer is passed, serialize as an empty vector
 				serializer.Uleb128(0)
+				if err := serializer.Error(); err != nil {
+					return err
+				}
 				return nil
 			} else {
 				// If the option is set/a value is passed, serialize as a vector of length 1
 				serializer.Uleb128(1)
+				if err := serializer.Error(); err != nil {
+					return err
+				}
 				if err := serializeArg(rv.Elem().Interface(), tag.TypeParams[0], serializer); err != nil {
 					return err
+				}
+				if err := serializer.Error(); err != nil {
+					return fmt.Errorf("unexpected unchecked serialize error while processing option: %w", err)
 				}
 				return nil
 			}
@@ -400,8 +527,9 @@ func GetBcsValues(data []byte, typeTags ...aptos.TypeTag) ([]any, error) {
 			return nil, err
 		}
 
+		// this should never occur, as we should check for serialize errors after every invocation.
 		if err := deserializer.Error(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unexpected unchecked deserialize error: %w", err)
 		}
 	}
 	return returns, nil
@@ -410,24 +538,53 @@ func GetBcsValues(data []byte, typeTags ...aptos.TypeTag) ([]any, error) {
 func deserializeArg(argType aptos.TypeTag, deserializer *bcs.Deserializer) (any, error) {
 	switch argType.Value.GetType() {
 	case aptos.TypeTagBool:
-		return deserializer.Bool(), nil
+		result := deserializer.Bool()
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
+		return result, nil
 	case aptos.TypeTagU8:
-		return deserializer.U8(), nil
+		result := deserializer.U8()
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
+		return result, nil
 	case aptos.TypeTagU16:
-		return deserializer.U16(), nil
+		result := deserializer.U16()
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
+		return result, nil
 	case aptos.TypeTagU32:
-		return deserializer.U32(), nil
+		result := deserializer.U32()
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
+		return result, nil
 	case aptos.TypeTagU64:
-		return deserializer.U64(), nil
+		result := deserializer.U64()
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
+		return result, nil
 	case aptos.TypeTagU128:
 		b := deserializer.U128()
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
 		return &b, nil
 	case aptos.TypeTagU256:
 		b := deserializer.U256()
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
 		return &b, nil
 	case aptos.TypeTagAddress:
 		address := aptos.AccountAddress{}
 		deserializer.Struct(&address)
+		if err := deserializer.Error(); err != nil {
+			return nil, err
+		}
 		return address, nil
 	case aptos.TypeTagVector:
 		length := deserializer.Uleb128()
@@ -443,8 +600,9 @@ func deserializeArg(argType aptos.TypeTag, deserializer *bcs.Deserializer) (any,
 				return nil, err
 			}
 
+			// this should never occur, as we should check for deserialize errors after every invocation.
 			if err := deserializer.Error(); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("unexpected unchecked deserialize error while processing vector: %w", err)
 			}
 			returns = reflect.Append(returns, reflect.ValueOf(elem))
 		}
@@ -455,12 +613,19 @@ func deserializeArg(argType aptos.TypeTag, deserializer *bcs.Deserializer) (any,
 		tagName := fmt.Sprintf("%s::%s::%s", tag.Address.String(), tag.Module, tag.Name)
 		switch tagName {
 		case "0x1::string::String":
-			return deserializer.ReadString(), nil
+			result := deserializer.ReadString()
+			if err := deserializer.Error(); err != nil {
+				return nil, err
+			}
+			return result, nil
 		case "0x1::option::Option":
 			if len(tag.TypeParams) != 1 {
 				return nil, errors.New("invalid option::Option type parameters")
 			}
 			length := deserializer.Uleb128()
+			if err := deserializer.Error(); err != nil {
+				return nil, err
+			}
 			if length == 0 {
 				// Unset option - return a new nil pointer of the underlying type
 				vp := reflect.NewAt(getType(tag.TypeParams[0]), nil)
@@ -470,6 +635,9 @@ func deserializeArg(argType aptos.TypeTag, deserializer *bcs.Deserializer) (any,
 				elem, err := deserializeArg(tag.TypeParams[0], deserializer)
 				if err != nil {
 					return nil, err
+				}
+				if err := deserializer.Error(); err != nil {
+					return nil, fmt.Errorf("unexpected unchecked deserialize error while processing option: %w", err)
 				}
 				val := reflect.ValueOf(elem)
 				vp := reflect.New(val.Type())
