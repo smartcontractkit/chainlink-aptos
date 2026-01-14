@@ -3,7 +3,7 @@
 dir="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
 container_name="chainlink-aptos.devnet"
-container_image="aptoslabs/tools:aptos-node-v1.38.7"
+container_image="aptoslabs/tools:aptos-node-v1.39.2"
 
 if [ -n "${CUSTOM_IMAGE:-}" ]; then
   container_image="${CUSTOM_IMAGE}"
