@@ -396,8 +396,8 @@ require (
 	github.com/smartcontractkit/chainlink-testing-framework/lib v1.54.5 // indirect
 	github.com/smartcontractkit/chainlink-testing-framework/parrot v0.6.2 // indirect
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.2 // indirect
-	github.com/smartcontractkit/chainlink-ton v0.0.0-20250910183153-c26d4436b0db // indirect
-	github.com/smartcontractkit/chainlink-ton/deployment v0.0.0-20250910183153-c26d4436b0db // indirect
+	github.com/smartcontractkit/chainlink-ton v0.0.0-20250923170055-ba21c6ff1cc2 // indirect
+	github.com/smartcontractkit/chainlink-ton/deployment v0.0.0-20250923170055-ba21c6ff1cc2 // indirect
 	github.com/smartcontractkit/chainlink-tron/relayer v0.0.11-0.20250908203554-5bd9d2fe9513 // indirect
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20250912135826-3da7aa755652 // indirect
 	github.com/smartcontractkit/chainlink/v2 v2.27.3-0.20250912135826-3da7aa755652 // indirect
