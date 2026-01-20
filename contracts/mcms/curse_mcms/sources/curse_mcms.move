@@ -1171,7 +1171,7 @@ module curse_mcms::curse_mcms {
             let function_name = calls[i].function_name;
             let data = calls[i].data;
 
-            timelock_dispatch_to_rmn_remote(function_name, data);
+            timelock_dispatch(function_name, data);
 
             event::emit(
                 CallExecuted { id, index: i, subject, function_name, data }
@@ -1197,7 +1197,7 @@ module curse_mcms::curse_mcms {
             let function_name = function_names[i];
             let data = datas[i];
 
-            timelock_dispatch_to_rmn_remote(function_name, data);
+            timelock_dispatch(function_name, data);
 
             event::emit(
                 BypasserCallExecuted { index: i, subject, function_name, data }
@@ -1242,6 +1242,19 @@ module curse_mcms::curse_mcms {
             rmn_remote::uncurse_multiple(object_signer, subjects);
         } else {
             abort E_UNKNOWN_CURSE_MCMS_FUNCTION
+        }
+    }
+
+    /// Routes execution to either RMN Remote or self (timelock admin functions)
+    inline fun timelock_dispatch(function_name: String, data: vector<u8>) {
+        let fn_bytes = *function_name.bytes();
+        let timelock_prefix = b"timelock";
+
+        if (fn_bytes.length() >= timelock_prefix.length()
+            && fn_bytes.slice(0, timelock_prefix.length()) == timelock_prefix) {
+            dispatch_to_timelock(TIMELOCK_ROLE, function_name, data);
+        } else {
+            timelock_dispatch_to_rmn_remote(function_name, data);
         }
     }
 
@@ -1572,5 +1585,12 @@ module curse_mcms::curse_mcms {
         function_name: String, data: vector<u8>
     ) {
         timelock_dispatch_to_rmn_remote(function_name, data)
+    }
+
+    #[test_only]
+    public fun test_timelock_dispatch_to_self(
+        function_name: String, data: vector<u8>
+    ) acquires Timelock {
+        dispatch_to_timelock(TIMELOCK_ROLE, function_name, data)
     }
 }

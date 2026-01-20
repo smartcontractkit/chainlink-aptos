@@ -1220,4 +1220,232 @@ module curse_mcms::curse_mcms_integration_test {
         // Verify op_count incremented
         assert!(curse_mcms::get_op_count(BYPASSER_ROLE) == 1, 3);
     }
+
+    // ================================================================
+    // |              Self-Dispatch Integration Tests                  |
+    // ================================================================
+    // These tests verify the timelock self-dispatch mechanism that allows
+    // timelock admin functions to be called via bypasser_execute_batch
+    // and schedule/execute flows.
+
+    #[
+        test(
+            framework = @aptos_framework,
+            ccip = @ccip,
+            ccip_owner = @mcms,
+            curse_mcms_deployer = @curse_mcms,
+            curse_mcms_owner = @curse_mcms_owner
+        )
+    ]
+    fun test_bypasser_execute_batch_timelock_update_min_delay(
+        framework: &signer,
+        ccip: &signer,
+        ccip_owner: &signer,
+        curse_mcms_deployer: &signer,
+        curse_mcms_owner: &signer
+    ) {
+        setup_integration(
+            framework,
+            ccip,
+            ccip_owner,
+            curse_mcms_deployer,
+            curse_mcms_owner
+        );
+
+        // Verify min_delay is initially 0
+        assert!(curse_mcms::timelock_min_delay() == 0);
+
+        // Execute bypasser execute batch with timelock_update_min_delay
+        // This tests the self-dispatch path: bypasser_execute_batch -> timelock_dispatch -> dispatch_to_timelock
+        let subjects = vector[x"00"]; // dummy subject for self-dispatch
+        let function_names = vector[string::utf8(b"timelock_update_min_delay")];
+        let new_delay: u64 = 3600; // 1 hour
+        let datas = vector[bcs::to_bytes(&new_delay)];
+
+        curse_mcms::test_timelock_bypasser_execute_batch(subjects, function_names, datas);
+
+        assert!(curse_mcms::timelock_min_delay() == 3600);
+    }
+
+    #[
+        test(
+            framework = @aptos_framework,
+            ccip = @ccip,
+            ccip_owner = @mcms,
+            curse_mcms_deployer = @curse_mcms,
+            curse_mcms_owner = @curse_mcms_owner
+        )
+    ]
+    fun test_bypasser_execute_batch_timelock_block_function(
+        framework: &signer,
+        ccip: &signer,
+        ccip_owner: &signer,
+        curse_mcms_deployer: &signer,
+        curse_mcms_owner: &signer
+    ) {
+        setup_integration(
+            framework,
+            ccip,
+            ccip_owner,
+            curse_mcms_deployer,
+            curse_mcms_owner
+        );
+
+        // Verify no functions are blocked initially
+        assert!(curse_mcms::timelock_get_blocked_functions_count() == 0);
+
+        // Execute bypasser execute batch with timelock_block_function
+        let subjects = vector[x"00"]; // dummy subject for self-dispatch
+        let function_names = vector[string::utf8(b"timelock_block_function")];
+        let function_to_block = string::utf8(b"curse");
+        let datas = vector[bcs::to_bytes(&function_to_block)];
+
+        curse_mcms::test_timelock_bypasser_execute_batch(subjects, function_names, datas);
+
+        assert!(curse_mcms::timelock_get_blocked_functions_count() == 1);
+    }
+
+    #[
+        test(
+            framework = @aptos_framework,
+            ccip = @ccip,
+            ccip_owner = @mcms,
+            curse_mcms_deployer = @curse_mcms,
+            curse_mcms_owner = @curse_mcms_owner
+        )
+    ]
+    fun test_bypasser_execute_batch_timelock_unblock_function(
+        framework: &signer,
+        ccip: &signer,
+        ccip_owner: &signer,
+        curse_mcms_deployer: &signer,
+        curse_mcms_owner: &signer
+    ) {
+        setup_integration(
+            framework,
+            ccip,
+            ccip_owner,
+            curse_mcms_deployer,
+            curse_mcms_owner
+        );
+
+        // First block a function directly
+        curse_mcms::test_timelock_block_function(string::utf8(b"curse"));
+        assert!(curse_mcms::timelock_get_blocked_functions_count() == 1);
+
+        // Execute bypasser execute batch with timelock_unblock_function
+        let subjects = vector[x"00"]; // dummy subject for self-dispatch
+        let function_names = vector[string::utf8(b"timelock_unblock_function")];
+        let function_to_unblock = string::utf8(b"curse");
+        let datas = vector[bcs::to_bytes(&function_to_unblock)];
+
+        curse_mcms::test_timelock_bypasser_execute_batch(subjects, function_names, datas);
+
+        assert!(curse_mcms::timelock_get_blocked_functions_count() == 0);
+    }
+
+    #[
+        test(
+            framework = @aptos_framework,
+            ccip = @ccip,
+            ccip_owner = @mcms,
+            curse_mcms_deployer = @curse_mcms,
+            curse_mcms_owner = @curse_mcms_owner
+        )
+    ]
+    fun test_schedule_and_execute_batch_timelock_update_min_delay(
+        framework: &signer,
+        ccip: &signer,
+        ccip_owner: &signer,
+        curse_mcms_deployer: &signer,
+        curse_mcms_owner: &signer
+    ) {
+        setup_integration(
+            framework,
+            ccip,
+            ccip_owner,
+            curse_mcms_deployer,
+            curse_mcms_owner
+        );
+
+        // Verify min_delay is initially 0
+        assert!(curse_mcms::timelock_min_delay() == 0);
+
+        // Schedule a batch with timelock_update_min_delay
+        let subjects = vector[x"00"]; // dummy subject for self-dispatch
+        let function_names = vector[string::utf8(b"timelock_update_min_delay")];
+        let new_delay: u64 = 7200; // 2 hours
+        let datas = vector[bcs::to_bytes(&new_delay)];
+        let predecessor = curse_mcms::zero_hash();
+        let salt = x"0000000000000000000000000000000000000000000000000000000000000002";
+
+        curse_mcms::test_timelock_schedule_batch(
+            subjects,
+            function_names,
+            datas,
+            predecessor,
+            salt,
+            0 // delay (min_delay is 0)
+        );
+
+        // Get the operation ID
+        let calls = curse_mcms::create_calls(subjects, function_names, datas);
+        let id = curse_mcms::hash_operation_batch(calls, predecessor, salt);
+
+        // Verify operation is ready
+        assert!(curse_mcms::timelock_is_operation_ready(id));
+
+        // Execute the batch
+        curse_mcms::timelock_execute_batch(
+            subjects,
+            function_names,
+            datas,
+            predecessor,
+            salt
+        );
+
+        // Verify min_delay was updated
+        assert!(curse_mcms::timelock_min_delay() == 7200);
+
+        // Verify operation is done
+        assert!(curse_mcms::timelock_is_operation_done(id));
+    }
+
+    #[
+        test(
+            framework = @aptos_framework,
+            ccip = @ccip,
+            ccip_owner = @mcms,
+            curse_mcms_deployer = @curse_mcms,
+            curse_mcms_owner = @curse_mcms_owner
+        )
+    ]
+    fun test_dispatch_to_self_directly(
+        framework: &signer,
+        ccip: &signer,
+        ccip_owner: &signer,
+        curse_mcms_deployer: &signer,
+        curse_mcms_owner: &signer
+    ) {
+        setup_integration(
+            framework,
+            ccip,
+            ccip_owner,
+            curse_mcms_deployer,
+            curse_mcms_owner
+        );
+
+        // Verify min_delay is initially 0
+        assert!(curse_mcms::timelock_min_delay() == 0);
+
+        // Call test_timelock_dispatch_to_self directly
+        let new_delay: u64 = 1800; // 30 minutes
+        curse_mcms::test_timelock_dispatch_to_self(
+            string::utf8(b"timelock_update_min_delay"),
+            bcs::to_bytes(&new_delay)
+        );
+
+        // Verify min_delay was updated
+        assert!(curse_mcms::timelock_min_delay() == 1800);
+    }
 }
