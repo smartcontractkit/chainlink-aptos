@@ -101,15 +101,15 @@ func GenerateCurseMCMSMerkleTree(ops []CurseMCMSOp, metadata CurseMCMSRootMetada
 	return NewMerkleTree(leaves)
 }
 
-// SerializeCurseSubject serializes a single curse subject (vector<u8>)
-func SerializeCurseSubject(subject []byte) ([]byte, error) {
+// SerializeCurseData serializes a single curse subject for the data field (vector<u8>)
+func SerializeCurseData(subject []byte) ([]byte, error) {
 	return bcs.SerializeSingle(func(ser *bcs.Serializer) {
 		ser.WriteBytes(subject)
 	})
 }
 
-// SerializeCurseMultipleSubjects serializes multiple curse subjects (vector<vector<u8>>)
-func SerializeCurseMultipleSubjects(subjects [][]byte) ([]byte, error) {
+// SerializeCurseMultipleData serializes multiple curse subjects for the data field (vector<vector<u8>>)
+func SerializeCurseMultipleData(subjects [][]byte) ([]byte, error) {
 	return bcs.SerializeSingle(func(ser *bcs.Serializer) {
 		ser.Uleb128(uint32(len(subjects)))
 		for _, subject := range subjects {
@@ -119,14 +119,9 @@ func SerializeCurseMultipleSubjects(subjects [][]byte) ([]byte, error) {
 }
 
 // SerializeBypasserExecuteBatch serializes the data for timelock_bypasser_execute_batch
-// Parameters: subjects: vector<vector<u8>>, function_names: vector<String>, datas: vector<vector<u8>>
-func SerializeBypasserExecuteBatch(subjects [][]byte, functionNames []string, datas [][]byte) ([]byte, error) {
+// Parameters: function_names: vector<String>, datas: vector<vector<u8>>
+func SerializeBypasserExecuteBatch(functionNames []string, datas [][]byte) ([]byte, error) {
 	return bcs.SerializeSingle(func(ser *bcs.Serializer) {
-		// subjects: vector<vector<u8>>
-		ser.Uleb128(uint32(len(subjects)))
-		for _, subject := range subjects {
-			ser.WriteBytes(subject)
-		}
 		// function_names: vector<String>
 		ser.Uleb128(uint32(len(functionNames)))
 		for _, fn := range functionNames {
@@ -193,39 +188,35 @@ func TestGenerateCurseMCMSTestData(t *testing.T) {
 	subject2 := []byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02}
 
 	// Create curse operation data (for rmn_remote::curse)
-	curseData, err := SerializeCurseSubject(globalCurseSubject)
+	curseData, err := SerializeCurseData(globalCurseSubject)
 	require.NoError(t, err)
 
 	// Create uncurse operation data (for rmn_remote::uncurse)
-	uncurseData, err := SerializeCurseSubject(globalCurseSubject)
+	uncurseData, err := SerializeCurseData(globalCurseSubject)
 	require.NoError(t, err)
 
 	// Create curse_multiple operation data (for rmn_remote::curse_multiple)
-	curseMultipleData, err := SerializeCurseMultipleSubjects([][]byte{globalCurseSubject, subject2})
+	curseMultipleData, err := SerializeCurseMultipleData([][]byte{globalCurseSubject, subject2})
 	require.NoError(t, err)
 
 	// Operation 1: timelock_bypasser_execute_batch with a single curse call
 	op1Data, err := SerializeBypasserExecuteBatch(
-		[][]byte{globalCurseSubject}, // subjects (used as identifiers)
-		[]string{"curse"},            // function_names
-		[][]byte{curseData},          // datas
+		[]string{"curse"},   // function_names
+		[][]byte{curseData}, // datas
 	)
 	require.NoError(t, err)
 
 	// Operation 2: timelock_bypasser_execute_batch with a single uncurse call
 	op2Data, err := SerializeBypasserExecuteBatch(
-		[][]byte{globalCurseSubject}, // subjects
-		[]string{"uncurse"},          // function_names
-		[][]byte{uncurseData},        // datas
+		[]string{"uncurse"},   // function_names
+		[][]byte{uncurseData}, // datas
 	)
 	require.NoError(t, err)
 
 	// Operation 3: timelock_bypasser_execute_batch with curse_multiple call
-	// Note: all three vectors must have the same length
 	op3Data, err := SerializeBypasserExecuteBatch(
-		[][]byte{globalCurseSubject}, // subjects (one identifier)
-		[]string{"curse_multiple"},   // function_names
-		[][]byte{curseMultipleData},  // datas (contains both subjects)
+		[]string{"curse_multiple"},  // function_names
+		[][]byte{curseMultipleData}, // datas (contains both subjects)
 	)
 	require.NoError(t, err)
 

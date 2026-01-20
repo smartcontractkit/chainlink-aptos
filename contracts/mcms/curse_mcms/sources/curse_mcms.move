@@ -535,10 +535,6 @@ module curse_mcms::curse_mcms {
             E_NOT_AUTHORIZED_ROLE
         );
 
-        let subjects =
-            bcs_stream::deserialize_vector(
-                stream, |stream| bcs_stream::deserialize_vector_u8(stream)
-            );
         let function_names =
             bcs_stream::deserialize_vector(
                 stream, |stream| bcs_stream::deserialize_string(stream)
@@ -552,14 +548,7 @@ module curse_mcms::curse_mcms {
         let delay = bcs_stream::deserialize_u64(stream);
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_schedule_batch(
-            subjects,
-            function_names,
-            datas,
-            predecessor,
-            salt,
-            delay
-        )
+        timelock_schedule_batch(function_names, datas, predecessor, salt, delay)
     }
 
     inline fun dispatch_timelock_bypasser_execute_batch(
@@ -570,10 +559,6 @@ module curse_mcms::curse_mcms {
             E_NOT_AUTHORIZED_ROLE
         );
 
-        let subjects =
-            bcs_stream::deserialize_vector(
-                stream, |stream| bcs_stream::deserialize_vector_u8(stream)
-            );
         let function_names =
             bcs_stream::deserialize_vector(
                 stream, |stream| bcs_stream::deserialize_string(stream)
@@ -584,14 +569,10 @@ module curse_mcms::curse_mcms {
             );
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_bypasser_execute_batch(subjects, function_names, datas)
+        timelock_bypasser_execute_batch(function_names, datas)
     }
 
     inline fun dispatch_timelock_execute_batch(stream: &mut BCSStream) {
-        let subjects =
-            bcs_stream::deserialize_vector(
-                stream, |stream| bcs_stream::deserialize_vector_u8(stream)
-            );
         let function_names =
             bcs_stream::deserialize_vector(
                 stream, |stream| bcs_stream::deserialize_string(stream)
@@ -604,13 +585,7 @@ module curse_mcms::curse_mcms {
         let salt = bcs_stream::deserialize_vector_u8(stream);
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_execute_batch(
-            subjects,
-            function_names,
-            datas,
-            predecessor,
-            salt
-        )
+        timelock_execute_batch(function_names, datas, predecessor, salt)
     }
 
     inline fun dispatch_timelock_cancel(role: u8, stream: &mut BCSStream) {
@@ -1031,7 +1006,6 @@ module curse_mcms::curse_mcms {
     }
 
     struct Call has copy, drop, store {
-        subject: vector<u8>,
         function_name: String,
         data: vector<u8>
     }
@@ -1044,7 +1018,6 @@ module curse_mcms::curse_mcms {
     #[event]
     struct BypasserCallExecuted has drop, store {
         index: u64,
-        subject: vector<u8>,
         function_name: String,
         data: vector<u8>
     }
@@ -1058,7 +1031,6 @@ module curse_mcms::curse_mcms {
     struct CallScheduled has drop, store {
         id: vector<u8>,
         index: u64,
-        subject: vector<u8>,
         function_name: String,
         data: vector<u8>,
         predecessor: vector<u8>,
@@ -1070,7 +1042,6 @@ module curse_mcms::curse_mcms {
     struct CallExecuted has drop, store {
         id: vector<u8>,
         index: u64,
-        subject: vector<u8>,
         function_name: String,
         data: vector<u8>
     }
@@ -1094,14 +1065,13 @@ module curse_mcms::curse_mcms {
     /// Schedule a batch of curse/uncurse calls to be executed after a delay.
     /// This function can only be called by PROPOSER or CURSER role.
     inline fun timelock_schedule_batch(
-        subjects: vector<vector<u8>>,
         function_names: vector<String>,
         datas: vector<vector<u8>>,
         predecessor: vector<u8>,
         salt: vector<u8>,
         delay: u64
     ) {
-        let calls = create_calls(subjects, function_names, datas);
+        let calls = create_calls(function_names, datas);
         let id = hash_operation_batch(calls, predecessor, salt);
         let timelock = borrow_mut_timelock();
 
@@ -1113,7 +1083,6 @@ module curse_mcms::curse_mcms {
                 CallScheduled {
                     id,
                     index: i,
-                    subject: calls[i].subject,
                     function_name: calls[i].function_name,
                     data: calls[i].data,
                     predecessor,
@@ -1155,53 +1124,41 @@ module curse_mcms::curse_mcms {
 
     /// Anyone can call this as it checks if the operation was scheduled by a bypasser or proposer.
     public entry fun timelock_execute_batch(
-        subjects: vector<vector<u8>>,
         function_names: vector<String>,
         datas: vector<vector<u8>>,
         predecessor: vector<u8>,
         salt: vector<u8>
     ) acquires Timelock {
-        let calls = create_calls(subjects, function_names, datas);
+        let calls = create_calls(function_names, datas);
         let id = hash_operation_batch(calls, predecessor, salt);
 
         timelock_before_call(id, predecessor);
 
         for (i in 0..calls.length()) {
-            let subject = calls[i].subject;
             let function_name = calls[i].function_name;
             let data = calls[i].data;
 
             timelock_dispatch(function_name, data);
 
-            event::emit(
-                CallExecuted { id, index: i, subject, function_name, data }
-            );
+            event::emit(CallExecuted { id, index: i, function_name, data });
         };
 
         timelock_after_call(id);
     }
 
     fun timelock_bypasser_execute_batch(
-        subjects: vector<vector<u8>>,
-        function_names: vector<String>,
-        datas: vector<vector<u8>>
+        function_names: vector<String>, datas: vector<vector<u8>>
     ) {
-        let len = subjects.length();
-        assert!(
-            len == function_names.length() && len == datas.length(),
-            E_INVALID_PARAMETERS
-        );
+        let len = function_names.length();
+        assert!(len == datas.length(), E_INVALID_PARAMETERS);
 
         for (i in 0..len) {
-            let subject = subjects[i];
             let function_name = function_names[i];
             let data = datas[i];
 
             timelock_dispatch(function_name, data);
 
-            event::emit(
-                BypasserCallExecuted { index: i, subject, function_name, data }
-            );
+            event::emit(BypasserCallExecuted { index: i, function_name, data });
         };
     }
 
@@ -1387,22 +1344,16 @@ module curse_mcms::curse_mcms {
     }
 
     public fun create_calls(
-        subjects: vector<vector<u8>>,
-        function_names: vector<String>,
-        datas: vector<vector<u8>>
+        function_names: vector<String>, datas: vector<vector<u8>>
     ): vector<Call> {
-        let len = subjects.length();
-        assert!(
-            len == function_names.length() && len == datas.length(),
-            E_INVALID_PARAMETERS
-        );
+        let len = function_names.length();
+        assert!(len == datas.length(), E_INVALID_PARAMETERS);
 
         let calls = vector[];
         for (i in 0..len) {
-            let subject = subjects[i];
             let function_name = function_names[i];
             let data = datas[i];
-            let call = Call { subject, function_name, data };
+            let call = Call { function_name, data };
             calls.push_back(call);
         };
 
@@ -1433,10 +1384,6 @@ module curse_mcms::curse_mcms {
 
     public fun function_name(call: Call): String {
         call.function_name
-    }
-
-    public fun subject(call: Call): vector<u8> {
-        call.subject
     }
 
     public fun data(call: Call): vector<u8> {
@@ -1511,21 +1458,13 @@ module curse_mcms::curse_mcms {
 
     #[test_only]
     public fun test_timelock_schedule_batch(
-        subjects: vector<vector<u8>>,
         function_names: vector<String>,
         datas: vector<vector<u8>>,
         predecessor: vector<u8>,
         salt: vector<u8>,
         delay: u64
     ) acquires Timelock {
-        timelock_schedule_batch(
-            subjects,
-            function_names,
-            datas,
-            predecessor,
-            salt,
-            delay
-        );
+        timelock_schedule_batch(function_names, datas, predecessor, salt, delay);
     }
 
     #[test_only]
@@ -1540,11 +1479,9 @@ module curse_mcms::curse_mcms {
 
     #[test_only]
     public fun test_timelock_bypasser_execute_batch(
-        subjects: vector<vector<u8>>,
-        function_names: vector<String>,
-        datas: vector<vector<u8>>
+        function_names: vector<String>, datas: vector<vector<u8>>
     ) {
-        timelock_bypasser_execute_batch(subjects, function_names, datas);
+        timelock_bypasser_execute_batch(function_names, datas);
     }
 
     #[test_only]

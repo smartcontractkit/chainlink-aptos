@@ -37,18 +37,18 @@ module curse_mcms::curse_mcms_integration_test {
     const SIGNER_3: vector<u8> = x"7e5f4552091a69125d5dfcb7b8c2659029395bdf";
 
     // Root and Metadata
-    const ROOT: vector<u8> = x"19a38b2f7483d700db8246c27f18542903c4f7c2b426ac5f62b4d383eb3b7921";
+    const ROOT: vector<u8> = x"91e39289fb68135fe0ee7a025c71d797eeef33d1307f890206d3f5c2a2c2798d";
 
     // Metadata Proof
     const METADATA_PROOF: vector<vector<u8>> = vector[
-        x"e719621565299a5d8fe2056fd22746f39d86237201c706d93354fd0e8006efed",
-        x"c9b8b33f4fd9af038ad2ce7ea84c243040b98b598d39a42dac2d7cbe3577a5ab"
+        x"b601df77a0aa05a8ad4f3c496b8d3f4593c1d8f47e5baa24a8dc10be261df507",
+        x"9728e3b5da38101cd3e02a3700446f5fdeb2f2c6bc5bd6661b0cd162c0f650de"
     ];
 
     // Signatures (2-of-3 quorum)
     const SIGNATURES: vector<vector<u8>> = vector[
-        x"66749b3f53fd217171d4bdfcefe1b1e56118eaa0e2695a41c87f539591d7564647795449f6ada94eebebe77e4fe3123a0a9d86f5628b9e6d83bcd532a7ad07051c",
-        x"283e661f346ad7e4499438dae1d9fc8679277176cf520a61774cbea03474336c2f4cdb942ed4fad554e2a960972895863e3277038971c86b1d219ebda871edcc1c"
+        x"ed15fc303a2289ccace46c4f80651fcb1f3f44cb652b724f55b2cff0a83b6e682e0a354d1d7acb7f48f4cefc64a9f884359b49d31c889cf41e04afc34c0669991b",
+        x"1f5ff7e1b971b4ce598c0c7e8d5ee23a5d1fdc56131bea022570b4386d53443559f7c5332f0fc1a9d9d43dd3fe1871cf6982891653838ede542c052e92225b4e1c"
     ];
 
     // All operations target curse_mcms module and timelock_bypasser_execute_batch function
@@ -57,26 +57,26 @@ module curse_mcms::curse_mcms_integration_test {
 
     // Operation 1: curse via timelock_bypasser_execute_batch
     const OP1_NONCE: u64 = 0;
-    const OP1_DATA: vector<u8> = x"0110010000000000000000000000000000010105637572736501111001000000000000000000000000000001";
+    const OP1_DATA: vector<u8> = x"0105637572736501111001000000000000000000000000000001";
     const OP1_PROOF: vector<vector<u8>> = vector[
         x"64bfab85ea2fb1f2f913a90b121fb9e4e15b5d48339e71df28e9a1017efca1ab",
-        x"c9b8b33f4fd9af038ad2ce7ea84c243040b98b598d39a42dac2d7cbe3577a5ab"
+        x"9728e3b5da38101cd3e02a3700446f5fdeb2f2c6bc5bd6661b0cd162c0f650de"
     ];
 
     // Operation 2: uncurse via timelock_bypasser_execute_batch
     const OP2_NONCE: u64 = 1;
-    const OP2_DATA: vector<u8> = x"0110010000000000000000000000000000010107756e637572736501111001000000000000000000000000000001";
+    const OP2_DATA: vector<u8> = x"0107756e637572736501111001000000000000000000000000000001";
     const OP2_PROOF: vector<vector<u8>> = vector[
-        x"a7fc3240e76b26da0d6b30bc5f4e469c4fc254efc47ed41dc012d9aa8c71308d",
-        x"737d88b76c53ad293e80839343ac7d0ac10dc9b418b6789c88602e5405a4876b"
+        x"466946f73e363fe77f2840299c00c89f281de8109d93128a4558c816d6f7ce05",
+        x"fc80ab5c22cab199f2cfc060e970fc03dccc638bf6c25526d6bad304f4409460"
     ];
 
     // Operation 3: curse_multiple via timelock_bypasser_execute_batch
     const OP3_NONCE: u64 = 2;
-    const OP3_DATA: vector<u8> = x"011001000000000000000000000000000001010e63757273655f6d756c7469706c6501230210010000000000000000000000000000011001000000000000000000000000000002";
+    const OP3_DATA: vector<u8> = x"010e63757273655f6d756c7469706c6501230210010000000000000000000000000000011001000000000000000000000000000002";
     const OP3_PROOF: vector<vector<u8>> = vector[
-        x"11223fb4c818254222998ea8b00480666d63c5e92708c6d002f5d037522a3d32",
-        x"737d88b76c53ad293e80839343ac7d0ac10dc9b418b6789c88602e5405a4876b"
+        x"51431d86e33984f08341a39f8869aea7d01b208408c0e693f483d95a512c01fc",
+        x"fc80ab5c22cab199f2cfc060e970fc03dccc638bf6c25526d6bad304f4409460"
     ];
 
     // Curse Subjects
@@ -476,11 +476,10 @@ module curse_mcms::curse_mcms_integration_test {
         assert!(!rmn_remote::is_cursed(GLOBAL_CURSE_SUBJECT), 0);
 
         // Execute bypasser execute batch with curse
-        let subjects = vector[GLOBAL_CURSE_SUBJECT];
         let function_names = vector[string::utf8(b"curse")];
         let datas = vector[bcs::to_bytes(&GLOBAL_CURSE_SUBJECT)];
 
-        curse_mcms::test_timelock_bypasser_execute_batch(subjects, function_names, datas);
+        curse_mcms::test_timelock_bypasser_execute_batch(function_names, datas);
 
         // Verify subject is now cursed
         assert!(rmn_remote::is_cursed(GLOBAL_CURSE_SUBJECT), 1);
@@ -516,11 +515,10 @@ module curse_mcms::curse_mcms_integration_test {
         assert!(!rmn_remote::is_cursed(SUBJECT_2), 1);
 
         // Execute bypasser execute batch with two curse operations
-        let subjects = vector[GLOBAL_CURSE_SUBJECT, SUBJECT_2];
         let function_names = vector[string::utf8(b"curse"), string::utf8(b"curse")];
         let datas = vector[bcs::to_bytes(&GLOBAL_CURSE_SUBJECT), bcs::to_bytes(&SUBJECT_2)];
 
-        curse_mcms::test_timelock_bypasser_execute_batch(subjects, function_names, datas);
+        curse_mcms::test_timelock_bypasser_execute_batch(function_names, datas);
 
         // Verify both subjects are now cursed
         assert!(rmn_remote::is_cursed(GLOBAL_CURSE_SUBJECT), 2);
@@ -560,14 +558,12 @@ module curse_mcms::curse_mcms_integration_test {
         assert!(!rmn_remote::is_cursed(GLOBAL_CURSE_SUBJECT), 0);
 
         // Schedule a batch with delay 0 (since min_delay is 0)
-        let subjects = vector[GLOBAL_CURSE_SUBJECT];
         let function_names = vector[string::utf8(b"curse")];
         let datas = vector[bcs::to_bytes(&GLOBAL_CURSE_SUBJECT)];
         let predecessor = curse_mcms::zero_hash();
         let salt = x"0000000000000000000000000000000000000000000000000000000000000001";
 
         curse_mcms::test_timelock_schedule_batch(
-            subjects,
             function_names,
             datas,
             predecessor,
@@ -576,20 +572,14 @@ module curse_mcms::curse_mcms_integration_test {
         );
 
         // Get the operation ID
-        let calls = curse_mcms::create_calls(subjects, function_names, datas);
+        let calls = curse_mcms::create_calls(function_names, datas);
         let id = curse_mcms::hash_operation_batch(calls, predecessor, salt);
 
         // Verify operation is ready (delay is 0)
         assert!(curse_mcms::timelock_is_operation_ready(id), 1);
 
         // Execute the batch
-        curse_mcms::timelock_execute_batch(
-            subjects,
-            function_names,
-            datas,
-            predecessor,
-            salt
-        );
+        curse_mcms::timelock_execute_batch(function_names, datas, predecessor, salt);
 
         // Verify subject is now cursed
         assert!(rmn_remote::is_cursed(GLOBAL_CURSE_SUBJECT), 2);
@@ -1257,12 +1247,11 @@ module curse_mcms::curse_mcms_integration_test {
 
         // Execute bypasser execute batch with timelock_update_min_delay
         // This tests the self-dispatch path: bypasser_execute_batch -> timelock_dispatch -> dispatch_to_timelock
-        let subjects = vector[x"00"]; // dummy subject for self-dispatch
         let function_names = vector[string::utf8(b"timelock_update_min_delay")];
         let new_delay: u64 = 3600; // 1 hour
         let datas = vector[bcs::to_bytes(&new_delay)];
 
-        curse_mcms::test_timelock_bypasser_execute_batch(subjects, function_names, datas);
+        curse_mcms::test_timelock_bypasser_execute_batch(function_names, datas);
 
         assert!(curse_mcms::timelock_min_delay() == 3600);
     }
@@ -1295,12 +1284,11 @@ module curse_mcms::curse_mcms_integration_test {
         assert!(curse_mcms::timelock_get_blocked_functions_count() == 0);
 
         // Execute bypasser execute batch with timelock_block_function
-        let subjects = vector[x"00"]; // dummy subject for self-dispatch
         let function_names = vector[string::utf8(b"timelock_block_function")];
         let function_to_block = string::utf8(b"curse");
         let datas = vector[bcs::to_bytes(&function_to_block)];
 
-        curse_mcms::test_timelock_bypasser_execute_batch(subjects, function_names, datas);
+        curse_mcms::test_timelock_bypasser_execute_batch(function_names, datas);
 
         assert!(curse_mcms::timelock_get_blocked_functions_count() == 1);
     }
@@ -1334,12 +1322,11 @@ module curse_mcms::curse_mcms_integration_test {
         assert!(curse_mcms::timelock_get_blocked_functions_count() == 1);
 
         // Execute bypasser execute batch with timelock_unblock_function
-        let subjects = vector[x"00"]; // dummy subject for self-dispatch
         let function_names = vector[string::utf8(b"timelock_unblock_function")];
         let function_to_unblock = string::utf8(b"curse");
         let datas = vector[bcs::to_bytes(&function_to_unblock)];
 
-        curse_mcms::test_timelock_bypasser_execute_batch(subjects, function_names, datas);
+        curse_mcms::test_timelock_bypasser_execute_batch(function_names, datas);
 
         assert!(curse_mcms::timelock_get_blocked_functions_count() == 0);
     }
@@ -1372,7 +1359,6 @@ module curse_mcms::curse_mcms_integration_test {
         assert!(curse_mcms::timelock_min_delay() == 0);
 
         // Schedule a batch with timelock_update_min_delay
-        let subjects = vector[x"00"]; // dummy subject for self-dispatch
         let function_names = vector[string::utf8(b"timelock_update_min_delay")];
         let new_delay: u64 = 7200; // 2 hours
         let datas = vector[bcs::to_bytes(&new_delay)];
@@ -1380,7 +1366,6 @@ module curse_mcms::curse_mcms_integration_test {
         let salt = x"0000000000000000000000000000000000000000000000000000000000000002";
 
         curse_mcms::test_timelock_schedule_batch(
-            subjects,
             function_names,
             datas,
             predecessor,
@@ -1389,20 +1374,14 @@ module curse_mcms::curse_mcms_integration_test {
         );
 
         // Get the operation ID
-        let calls = curse_mcms::create_calls(subjects, function_names, datas);
+        let calls = curse_mcms::create_calls(function_names, datas);
         let id = curse_mcms::hash_operation_batch(calls, predecessor, salt);
 
         // Verify operation is ready
         assert!(curse_mcms::timelock_is_operation_ready(id));
 
         // Execute the batch
-        curse_mcms::timelock_execute_batch(
-            subjects,
-            function_names,
-            datas,
-            predecessor,
-            salt
-        );
+        curse_mcms::timelock_execute_batch(function_names, datas, predecessor, salt);
 
         // Verify min_delay was updated
         assert!(curse_mcms::timelock_min_delay() == 7200);
