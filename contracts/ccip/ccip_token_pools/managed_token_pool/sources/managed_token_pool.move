@@ -59,23 +59,14 @@ module managed_token_pool::managed_token_pool {
             register_mcms_entrypoint(publisher, token_pool_module_name);
         };
 
-        let managed_token_address = managed_token::token_metadata();
-
-        let lock_or_burn_closure = |fa, input| lock_or_burn_v2(fa, input);
-        let release_or_mint_closure = |input| release_or_mint_v2(input);
-
         // Register V2 pool with closure-based callbacks
-        token_admin_registry::register_pool_v2(
-            publisher,
-            managed_token_address,
-            lock_or_burn_closure,
-            release_or_mint_closure
-        );
+        register_v2_callbacks(publisher);
 
         // create a resource account to be the owner of the primary FungibleStore we will use.
         let (store_signer, store_signer_cap) =
             account::create_resource_account(publisher, STORE_OBJECT_SEED);
 
+        let managed_token_address = managed_token::token_metadata();
         let metadata = object::address_to_object<Metadata>(managed_token_address);
 
         // make sure this is a valid fungible asset that is primary fungible store enabled,
@@ -96,6 +87,20 @@ module managed_token_pool::managed_token_pool {
         };
 
         move_to(&store_signer, pool);
+    }
+
+    public fun register_v2_callbacks(publisher: &signer) {
+        let managed_token_address = managed_token::token_metadata();
+
+        let lock_or_burn_closure = |fa, input| lock_or_burn_v2(fa, input);
+        let release_or_mint_closure = |input| release_or_mint_v2(input);
+
+        token_admin_registry::register_pool_v2(
+            publisher,
+            managed_token_address,
+            lock_or_burn_closure,
+            release_or_mint_closure
+        );
     }
 
     // ================================================================
@@ -332,9 +337,9 @@ module managed_token_pool::managed_token_pool {
         fa
     }
 
-    public fun lock_or_burn_v2(
-        fa: FungibleAsset, input: LockOrBurnInputV1
-    ): (vector<u8>, vector<u8>) {
+    #[persistent]
+    fun lock_or_burn_v2(fa: FungibleAsset, input: LockOrBurnInputV1)
+        : (vector<u8>, vector<u8>) {
         let pool = borrow_pool_mut();
         let fa_amount = fungible_asset::amount(&fa);
 
@@ -367,7 +372,8 @@ module managed_token_pool::managed_token_pool {
         (dest_token_address, token_pool::encode_local_decimals(&pool.token_pool_state))
     }
 
-    public fun release_or_mint_v2(input: ReleaseOrMintInputV1): (FungibleAsset, u64) {
+    #[persistent]
+    fun release_or_mint_v2(input: ReleaseOrMintInputV1): (FungibleAsset, u64) {
         let pool = borrow_pool_mut();
         let local_amount =
             token_pool::calculate_release_or_mint_amount(&pool.token_pool_state, &input);

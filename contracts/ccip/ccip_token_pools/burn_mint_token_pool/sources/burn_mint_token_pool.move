@@ -73,16 +73,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
             register_mcms_entrypoint(publisher, token_pool_module_name);
         };
 
-        let lock_or_burn_closure = |fa, input| lock_or_burn_v2(fa, input);
-        let release_or_mint_closure = |input| release_or_mint_v2(input);
-
         // Register V2 pool with closure-based callbacks
-        token_admin_registry::register_pool_v2(
-            publisher,
-            @burn_mint_local_token,
-            lock_or_burn_closure,
-            release_or_mint_closure
-        );
+        register_v2_callbacks(publisher);
 
         // create a resource account to be the owner of the primary FungibleStore we will use.
         let (store_signer, store_signer_cap) =
@@ -143,6 +135,18 @@ module burn_mint_token_pool::burn_mint_token_pool {
         };
 
         move_to(&store_signer, pool);
+    }
+
+    public fun register_v2_callbacks(publisher: &signer) {
+        let lock_or_burn_closure = |fa, input| lock_or_burn_v2(fa, input);
+        let release_or_mint_closure = |input| release_or_mint_v2(input);
+
+        token_admin_registry::register_pool_v2(
+            publisher,
+            @burn_mint_local_token,
+            lock_or_burn_closure,
+            release_or_mint_closure
+        );
     }
 
     // ================================================================
@@ -367,7 +371,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
         fa
     }
 
-    public fun lock_or_burn_v2(
+    #[persistent]
+    fun lock_or_burn_v2(
         fa: FungibleAsset, input: LockOrBurnInputV1
     ): (vector<u8>, vector<u8>) acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();
@@ -396,7 +401,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
         (dest_token_address, token_pool::encode_local_decimals(&pool.token_pool_state))
     }
 
-    public fun release_or_mint_v2(
+    #[persistent]
+    fun release_or_mint_v2(
         input: ReleaseOrMintInputV1
     ): (FungibleAsset, u64) acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();

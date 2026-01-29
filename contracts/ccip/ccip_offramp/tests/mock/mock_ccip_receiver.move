@@ -103,7 +103,8 @@ module ccip_offramp::mock_ccip_receiver {
 
     struct CCIPReceiverProof has drop {}
 
-    public fun ccip_receive_v2(message: client::Any2AptosMessage) acquires CCIPReceiverState {
+    #[persistent]
+    fun ccip_receive_v2(message: client::Any2AptosMessage) acquires CCIPReceiverState {
         /* load state and rebuild a signer for the resource account */
         let state = borrow_global_mut<CCIPReceiverState>(@ccip_offramp);
         let state_signer = account::create_signer_with_capability(&state.signer_cap);

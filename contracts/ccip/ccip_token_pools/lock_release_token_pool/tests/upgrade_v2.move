@@ -7,8 +7,6 @@ module lock_release_token_pool::upgrade_v2 {
 
     use lock_release_token_pool::lock_release_token_pool;
 
-    use ccip::token_admin_registry::{Self};
-
     const E_INVALID_FUNGIBLE_ASSET: u64 = 1;
 
     fun init_module(publisher: &signer) {
@@ -22,19 +20,9 @@ module lock_release_token_pool::upgrade_v2 {
         // create an Account on the object for event handles.
         account::create_account_if_does_not_exist(@lock_release_token_pool);
 
-        let lock_or_burn_closure =
-            |fa, input| lock_release_token_pool::lock_or_burn_v2(fa, input);
-        let release_or_mint_closure =
-            |input| lock_release_token_pool::release_or_mint_v2(input);
-
         // If the contract has already been deployed with V1 and needs to be upgraded to V2,
         // create a new module and pass in `publisher` from `fun init_module(publisher: &signer)`
-        token_admin_registry::register_pool_v2(
-            publisher,
-            @lock_release_local_token,
-            lock_or_burn_closure,
-            release_or_mint_closure
-        );
+        lock_release_token_pool::register_v2_callbacks(publisher);
     }
 
     #[test_only]
