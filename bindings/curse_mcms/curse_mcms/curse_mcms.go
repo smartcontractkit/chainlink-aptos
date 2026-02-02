@@ -39,20 +39,20 @@ type CurseMCMSInterface interface {
 	TimelockRole(opts *bind.CallOpts) (byte, error)
 	IsValidRole(opts *bind.CallOpts, role byte) (bool, error)
 	ZeroHash(opts *bind.CallOpts) ([]byte, error)
-	TimelockGetBlockedFunction(opts *bind.CallOpts, index uint64) (string, error)
+	TimelockGetBlockedFunction(opts *bind.CallOpts, index uint64) (Function, error)
 	TimelockIsOperation(opts *bind.CallOpts, id []byte) (bool, error)
 	TimelockIsOperationPending(opts *bind.CallOpts, id []byte) (bool, error)
 	TimelockIsOperationReady(opts *bind.CallOpts, id []byte) (bool, error)
 	TimelockIsOperationDone(opts *bind.CallOpts, id []byte) (bool, error)
 	TimelockGetTimestamp(opts *bind.CallOpts, id []byte) (uint64, error)
 	TimelockMinDelay(opts *bind.CallOpts) (uint64, error)
-	TimelockGetBlockedFunctions(opts *bind.CallOpts) ([]string, error)
+	TimelockGetBlockedFunctions(opts *bind.CallOpts) ([]Function, error)
 	TimelockGetBlockedFunctionsCount(opts *bind.CallOpts) (uint64, error)
 
 	SetRoot(opts *bind.TransactOpts, role byte, root []byte, validUntil uint64, chainId *big.Int, multisigAddr aptos.AccountAddress, preOpCount uint64, postOpCount uint64, overridePreviousRoot bool, metadataProof [][]byte, signatures [][]byte) (*api.PendingTransaction, error)
 	Execute(opts *bind.TransactOpts, role byte, chainId *big.Int, multisigAddr aptos.AccountAddress, nonce uint64, to aptos.AccountAddress, moduleName string, functionName string, data []byte, proof [][]byte) (*api.PendingTransaction, error)
 	SetConfig(opts *bind.TransactOpts, role byte, signerAddresses [][]byte, signerGroups []byte, groupQuorums []byte, groupParents []byte, clearRoot bool) (*api.PendingTransaction, error)
-	TimelockExecuteBatch(opts *bind.TransactOpts, functionNames []string, datas [][]byte, predecessor []byte, salt []byte) (*api.PendingTransaction, error)
+	TimelockExecuteBatch(opts *bind.TransactOpts, targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte, predecessor []byte, salt []byte) (*api.PendingTransaction, error)
 
 	// Encoder returns the encoder implementation of this module.
 	Encoder() CurseMCMSEncoder
@@ -88,7 +88,7 @@ type CurseMCMSEncoder interface {
 	SetRoot(role byte, root []byte, validUntil uint64, chainId *big.Int, multisigAddr aptos.AccountAddress, preOpCount uint64, postOpCount uint64, overridePreviousRoot bool, metadataProof [][]byte, signatures [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Execute(role byte, chainId *big.Int, multisigAddr aptos.AccountAddress, nonce uint64, to aptos.AccountAddress, moduleName string, functionName string, data []byte, proof [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	SetConfig(role byte, signerAddresses [][]byte, signerGroups []byte, groupQuorums []byte, groupParents []byte, clearRoot bool) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	TimelockExecuteBatch(functionNames []string, datas [][]byte, predecessor []byte, salt []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockExecuteBatch(targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte, predecessor []byte, salt []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	CreateMultisig(role byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	EcdsaRecoverEvmAddr(ethSignedMessageHash []byte, signature []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	DispatchToTimelock(role byte, functionName string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -102,23 +102,22 @@ type CurseMCMSEncoder interface {
 	PreOpCount(rootMetadata RootMetadata) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	PostOpCount(rootMetadata RootMetadata) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	OverridePreviousRoot(rootMetadata RootMetadata) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	TimelockScheduleBatch(functionNames []string, datas [][]byte, predecessor []byte, salt []byte, delay uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockScheduleBatch(targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte, predecessor []byte, salt []byte, delay uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TimelockBeforeCall(id []byte, predecessor []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TimelockAfterCall(id []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	TimelockBypasserExecuteBatch(functionNames []string, datas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockBypasserExecuteBatch(targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TimelockDispatchToRMNRemote(functionName string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	TimelockDispatch(functionName string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockDispatch(target aptos.AccountAddress, moduleName string, functionName string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockDispatchToSelf(functionName string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TimelockCancel(id []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	TimelockUpdateMinDelay(newMinDelay uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	TimelockBlockFunction(functionName string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	TimelockUnblockFunction(functionName string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	CreateCalls(functionNames []string, datas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockBlockFunction(target aptos.AccountAddress, moduleName string, functionName string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	TimelockUnblockFunction(target aptos.AccountAddress, moduleName string, functionName string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	CreateCalls(targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	HashOperationBatch(calls []Call, predecessor []byte, salt []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	FunctionName(call Call) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
-	Data(call Call) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"curse_mcms","module":"curse_mcms","name":"chain_id","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"curse_mcms","module":"curse_mcms","name":"compute_eth_message_hash","parameters":[{"name":"root","type":"vector\u003cu8\u003e"},{"name":"valid_until","type":"u64"}]},{"package":"curse_mcms","module":"curse_mcms","name":"create_calls","parameters":[{"name":"function_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"datas","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"create_multisig","parameters":[{"name":"role","type":"u8"}]},{"package":"curse_mcms","module":"curse_mcms","name":"data","parameters":[{"name":"call","type":"Call"}]},{"package":"curse_mcms","module":"curse_mcms","name":"dispatch_to_timelock","parameters":[{"name":"role","type":"u8"},{"name":"function_name","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"ecdsa_recover_evm_addr","parameters":[{"name":"eth_signed_message_hash","type":"vector\u003cu8\u003e"},{"name":"signature","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"execute","parameters":[{"name":"role","type":"u8"},{"name":"chain_id","type":"u256"},{"name":"multisig_addr","type":"address"},{"name":"nonce","type":"u64"},{"name":"to","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function_name","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"proof","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"function_name","parameters":[{"name":"call","type":"Call"}]},{"package":"curse_mcms","module":"curse_mcms","name":"hash_metadata_leaf","parameters":[{"name":"metadata","type":"RootMetadata"}]},{"package":"curse_mcms","module":"curse_mcms","name":"hash_op_leaf","parameters":[{"name":"domain_separator","type":"vector\u003cu8\u003e"},{"name":"op","type":"Op"}]},{"package":"curse_mcms","module":"curse_mcms","name":"hash_operation_batch","parameters":[{"name":"calls","type":"vector\u003cCall\u003e"},{"name":"predecessor","type":"vector\u003cu8\u003e"},{"name":"salt","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"override_previous_root","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"curse_mcms","module":"curse_mcms","name":"post_op_count","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"curse_mcms","module":"curse_mcms","name":"pre_op_count","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"curse_mcms","module":"curse_mcms","name":"role","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"curse_mcms","module":"curse_mcms","name":"root_metadata_multisig","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"curse_mcms","module":"curse_mcms","name":"set_config","parameters":[{"name":"role","type":"u8"},{"name":"signer_addresses","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"signer_groups","type":"vector\u003cu8\u003e"},{"name":"group_quorums","type":"vector\u003cu8\u003e"},{"name":"group_parents","type":"vector\u003cu8\u003e"},{"name":"clear_root","type":"bool"}]},{"package":"curse_mcms","module":"curse_mcms","name":"set_root","parameters":[{"name":"role","type":"u8"},{"name":"root","type":"vector\u003cu8\u003e"},{"name":"valid_until","type":"u64"},{"name":"chain_id","type":"u256"},{"name":"multisig_addr","type":"address"},{"name":"pre_op_count","type":"u64"},{"name":"post_op_count","type":"u64"},{"name":"override_previous_root","type":"bool"},{"name":"metadata_proof","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"signatures","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_after_call","parameters":[{"name":"id","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_before_call","parameters":[{"name":"id","type":"vector\u003cu8\u003e"},{"name":"predecessor","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_block_function","parameters":[{"name":"function_name","type":"0x1::string::String"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_bypasser_execute_batch","parameters":[{"name":"function_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"datas","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_cancel","parameters":[{"name":"id","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_dispatch","parameters":[{"name":"function_name","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_dispatch_to_rmn_remote","parameters":[{"name":"function_name","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_execute_batch","parameters":[{"name":"function_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"datas","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"predecessor","type":"vector\u003cu8\u003e"},{"name":"salt","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_schedule_batch","parameters":[{"name":"function_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"datas","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"predecessor","type":"vector\u003cu8\u003e"},{"name":"salt","type":"vector\u003cu8\u003e"},{"name":"delay","type":"u64"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_unblock_function","parameters":[{"name":"function_name","type":"0x1::string::String"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_update_min_delay","parameters":[{"name":"new_min_delay","type":"u64"}]},{"package":"curse_mcms","module":"curse_mcms","name":"verify_merkle_proof","parameters":[{"name":"proof","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"root","type":"vector\u003cu8\u003e"},{"name":"leaf","type":"vector\u003cu8\u003e"}]}]`
+const FunctionInfo = `[{"package":"curse_mcms","module":"curse_mcms","name":"chain_id","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"curse_mcms","module":"curse_mcms","name":"compute_eth_message_hash","parameters":[{"name":"root","type":"vector\u003cu8\u003e"},{"name":"valid_until","type":"u64"}]},{"package":"curse_mcms","module":"curse_mcms","name":"create_calls","parameters":[{"name":"targets","type":"vector\u003caddress\u003e"},{"name":"module_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"function_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"datas","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"create_multisig","parameters":[{"name":"role","type":"u8"}]},{"package":"curse_mcms","module":"curse_mcms","name":"dispatch_to_timelock","parameters":[{"name":"role","type":"u8"},{"name":"function_name","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"ecdsa_recover_evm_addr","parameters":[{"name":"eth_signed_message_hash","type":"vector\u003cu8\u003e"},{"name":"signature","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"execute","parameters":[{"name":"role","type":"u8"},{"name":"chain_id","type":"u256"},{"name":"multisig_addr","type":"address"},{"name":"nonce","type":"u64"},{"name":"to","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function_name","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"},{"name":"proof","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"hash_metadata_leaf","parameters":[{"name":"metadata","type":"RootMetadata"}]},{"package":"curse_mcms","module":"curse_mcms","name":"hash_op_leaf","parameters":[{"name":"domain_separator","type":"vector\u003cu8\u003e"},{"name":"op","type":"Op"}]},{"package":"curse_mcms","module":"curse_mcms","name":"hash_operation_batch","parameters":[{"name":"calls","type":"vector\u003cCall\u003e"},{"name":"predecessor","type":"vector\u003cu8\u003e"},{"name":"salt","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"override_previous_root","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"curse_mcms","module":"curse_mcms","name":"post_op_count","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"curse_mcms","module":"curse_mcms","name":"pre_op_count","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"curse_mcms","module":"curse_mcms","name":"role","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"curse_mcms","module":"curse_mcms","name":"root_metadata_multisig","parameters":[{"name":"root_metadata","type":"RootMetadata"}]},{"package":"curse_mcms","module":"curse_mcms","name":"set_config","parameters":[{"name":"role","type":"u8"},{"name":"signer_addresses","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"signer_groups","type":"vector\u003cu8\u003e"},{"name":"group_quorums","type":"vector\u003cu8\u003e"},{"name":"group_parents","type":"vector\u003cu8\u003e"},{"name":"clear_root","type":"bool"}]},{"package":"curse_mcms","module":"curse_mcms","name":"set_root","parameters":[{"name":"role","type":"u8"},{"name":"root","type":"vector\u003cu8\u003e"},{"name":"valid_until","type":"u64"},{"name":"chain_id","type":"u256"},{"name":"multisig_addr","type":"address"},{"name":"pre_op_count","type":"u64"},{"name":"post_op_count","type":"u64"},{"name":"override_previous_root","type":"bool"},{"name":"metadata_proof","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"signatures","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_after_call","parameters":[{"name":"id","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_before_call","parameters":[{"name":"id","type":"vector\u003cu8\u003e"},{"name":"predecessor","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_block_function","parameters":[{"name":"target","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function_name","type":"0x1::string::String"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_bypasser_execute_batch","parameters":[{"name":"targets","type":"vector\u003caddress\u003e"},{"name":"module_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"function_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"datas","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_cancel","parameters":[{"name":"id","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_dispatch","parameters":[{"name":"target","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function_name","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_dispatch_to_rmn_remote","parameters":[{"name":"function_name","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_dispatch_to_self","parameters":[{"name":"function_name","type":"0x1::string::String"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_execute_batch","parameters":[{"name":"targets","type":"vector\u003caddress\u003e"},{"name":"module_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"function_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"datas","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"predecessor","type":"vector\u003cu8\u003e"},{"name":"salt","type":"vector\u003cu8\u003e"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_schedule_batch","parameters":[{"name":"targets","type":"vector\u003caddress\u003e"},{"name":"module_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"function_names","type":"vector\u003c0x1::string::String\u003e"},{"name":"datas","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"predecessor","type":"vector\u003cu8\u003e"},{"name":"salt","type":"vector\u003cu8\u003e"},{"name":"delay","type":"u64"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_unblock_function","parameters":[{"name":"target","type":"address"},{"name":"module_name","type":"0x1::string::String"},{"name":"function_name","type":"0x1::string::String"}]},{"package":"curse_mcms","module":"curse_mcms","name":"timelock_update_min_delay","parameters":[{"name":"new_min_delay","type":"u64"}]},{"package":"curse_mcms","module":"curse_mcms","name":"verify_merkle_proof","parameters":[{"name":"proof","type":"vector\u003cvector\u003cu8\u003e\u003e"},{"name":"root","type":"vector\u003cu8\u003e"},{"name":"leaf","type":"vector\u003cu8\u003e"}]}]`
 
 func NewCurseMCMS(address aptos.AccountAddress, client aptos.AptosRpcClient) CurseMCMSInterface {
 	contract := bind.NewBoundContract(address, "curse_mcms", "curse_mcms", client)
@@ -183,6 +182,10 @@ const (
 	E_INVALID_ROOT_LEN                     uint64 = 49
 	E_NOT_CANCELLER_ROLE                   uint64 = 50
 	E_NOT_TIMELOCK_ROLE                    uint64 = 51
+	E_UNKNOWN_CURSE_MCMS_MODULE            uint64 = 52
+	E_UNKNOWN_CCIP_MODULE                  uint64 = 53
+	E_UNKNOWN_TARGET                       uint64 = 54
+	E_UNKNOWN_CURSE_MCMS_MODULE_FUNCTION   uint64 = 55
 )
 
 // Structs
@@ -272,8 +275,14 @@ type Timelock struct {
 }
 
 type Call struct {
-	FunctionName string `move:"0x1::string::String"`
-	Data         []byte `move:"vector<u8>"`
+	Function Function `move:"Function"`
+	Data     []byte   `move:"vector<u8>"`
+}
+
+type Function struct {
+	Target       aptos.AccountAddress `move:"address"`
+	ModuleName   string               `move:"0x1::string::String"`
+	FunctionName string               `move:"0x1::string::String"`
 }
 
 type TimelockInitialized struct {
@@ -281,9 +290,11 @@ type TimelockInitialized struct {
 }
 
 type BypasserCallExecuted struct {
-	Index        uint64 `move:"u64"`
-	FunctionName string `move:"0x1::string::String"`
-	Data         []byte `move:"vector<u8>"`
+	Index        uint64               `move:"u64"`
+	Target       aptos.AccountAddress `move:"address"`
+	ModuleName   string               `move:"0x1::string::String"`
+	FunctionName string               `move:"0x1::string::String"`
+	Data         []byte               `move:"vector<u8>"`
 }
 
 type Cancelled struct {
@@ -291,20 +302,24 @@ type Cancelled struct {
 }
 
 type CallScheduled struct {
-	Id           []byte `move:"vector<u8>"`
-	Index        uint64 `move:"u64"`
-	FunctionName string `move:"0x1::string::String"`
-	Data         []byte `move:"vector<u8>"`
-	Predecessor  []byte `move:"vector<u8>"`
-	Salt         []byte `move:"vector<u8>"`
-	Delay        uint64 `move:"u64"`
+	Id           []byte               `move:"vector<u8>"`
+	Index        uint64               `move:"u64"`
+	Target       aptos.AccountAddress `move:"address"`
+	ModuleName   string               `move:"0x1::string::String"`
+	FunctionName string               `move:"0x1::string::String"`
+	Data         []byte               `move:"vector<u8>"`
+	Predecessor  []byte               `move:"vector<u8>"`
+	Salt         []byte               `move:"vector<u8>"`
+	Delay        uint64               `move:"u64"`
 }
 
 type CallExecuted struct {
-	Id           []byte `move:"vector<u8>"`
-	Index        uint64 `move:"u64"`
-	FunctionName string `move:"0x1::string::String"`
-	Data         []byte `move:"vector<u8>"`
+	Id           []byte               `move:"vector<u8>"`
+	Index        uint64               `move:"u64"`
+	Target       aptos.AccountAddress `move:"address"`
+	ModuleName   string               `move:"0x1::string::String"`
+	FunctionName string               `move:"0x1::string::String"`
+	Data         []byte               `move:"vector<u8>"`
 }
 
 type UpdateMinDelay struct {
@@ -313,11 +328,15 @@ type UpdateMinDelay struct {
 }
 
 type FunctionBlocked struct {
-	FunctionName string `move:"0x1::string::String"`
+	Target       aptos.AccountAddress `move:"address"`
+	ModuleName   string               `move:"0x1::string::String"`
+	FunctionName string               `move:"0x1::string::String"`
 }
 
 type FunctionUnblocked struct {
-	FunctionName string `move:"0x1::string::String"`
+	Target       aptos.AccountAddress `move:"address"`
+	ModuleName   string               `move:"0x1::string::String"`
+	FunctionName string               `move:"0x1::string::String"`
 }
 
 type CurseMCMSContract struct {
@@ -693,23 +712,23 @@ func (c CurseMCMSContract) ZeroHash(opts *bind.CallOpts) ([]byte, error) {
 	return r0, nil
 }
 
-func (c CurseMCMSContract) TimelockGetBlockedFunction(opts *bind.CallOpts, index uint64) (string, error) {
+func (c CurseMCMSContract) TimelockGetBlockedFunction(opts *bind.CallOpts, index uint64) (Function, error) {
 	module, function, typeTags, args, err := c.curseMCMSEncoder.TimelockGetBlockedFunction(index)
 	if err != nil {
-		return *new(string), err
+		return *new(Function), err
 	}
 
 	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return *new(string), err
+		return *new(Function), err
 	}
 
 	var (
-		r0 string
+		r0 Function
 	)
 
 	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
-		return *new(string), err
+		return *new(Function), err
 	}
 	return r0, nil
 }
@@ -840,23 +859,23 @@ func (c CurseMCMSContract) TimelockMinDelay(opts *bind.CallOpts) (uint64, error)
 	return r0, nil
 }
 
-func (c CurseMCMSContract) TimelockGetBlockedFunctions(opts *bind.CallOpts) ([]string, error) {
+func (c CurseMCMSContract) TimelockGetBlockedFunctions(opts *bind.CallOpts) ([]Function, error) {
 	module, function, typeTags, args, err := c.curseMCMSEncoder.TimelockGetBlockedFunctions()
 	if err != nil {
-		return *new([]string), err
+		return *new([]Function), err
 	}
 
 	callData, err := c.Call(opts, module, function, typeTags, args)
 	if err != nil {
-		return *new([]string), err
+		return *new([]Function), err
 	}
 
 	var (
-		r0 []string
+		r0 []Function
 	)
 
 	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
-		return *new([]string), err
+		return *new([]Function), err
 	}
 	return r0, nil
 }
@@ -911,8 +930,8 @@ func (c CurseMCMSContract) SetConfig(opts *bind.TransactOpts, role byte, signerA
 	return c.BoundContract.Transact(opts, module, function, typeTags, args)
 }
 
-func (c CurseMCMSContract) TimelockExecuteBatch(opts *bind.TransactOpts, functionNames []string, datas [][]byte, predecessor []byte, salt []byte) (*api.PendingTransaction, error) {
-	module, function, typeTags, args, err := c.curseMCMSEncoder.TimelockExecuteBatch(functionNames, datas, predecessor, salt)
+func (c CurseMCMSContract) TimelockExecuteBatch(opts *bind.TransactOpts, targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte, predecessor []byte, salt []byte) (*api.PendingTransaction, error) {
+	module, function, typeTags, args, err := c.curseMCMSEncoder.TimelockExecuteBatch(targets, moduleNames, functionNames, datas, predecessor, salt)
 	if err != nil {
 		return nil, err
 	}
@@ -1161,13 +1180,17 @@ func (c curseMCMSEncoder) SetConfig(role byte, signerAddresses [][]byte, signerG
 	})
 }
 
-func (c curseMCMSEncoder) TimelockExecuteBatch(functionNames []string, datas [][]byte, predecessor []byte, salt []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c curseMCMSEncoder) TimelockExecuteBatch(targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte, predecessor []byte, salt []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("timelock_execute_batch", nil, []string{
+		"vector<address>",
+		"vector<0x1::string::String>",
 		"vector<0x1::string::String>",
 		"vector<vector<u8>>",
 		"vector<u8>",
 		"vector<u8>",
 	}, []any{
+		targets,
+		moduleNames,
 		functionNames,
 		datas,
 		predecessor,
@@ -1293,14 +1316,18 @@ func (c curseMCMSEncoder) OverridePreviousRoot(rootMetadata RootMetadata) (bind.
 	})
 }
 
-func (c curseMCMSEncoder) TimelockScheduleBatch(functionNames []string, datas [][]byte, predecessor []byte, salt []byte, delay uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c curseMCMSEncoder) TimelockScheduleBatch(targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte, predecessor []byte, salt []byte, delay uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("timelock_schedule_batch", nil, []string{
+		"vector<address>",
+		"vector<0x1::string::String>",
 		"vector<0x1::string::String>",
 		"vector<vector<u8>>",
 		"vector<u8>",
 		"vector<u8>",
 		"u64",
 	}, []any{
+		targets,
+		moduleNames,
 		functionNames,
 		datas,
 		predecessor,
@@ -1327,11 +1354,15 @@ func (c curseMCMSEncoder) TimelockAfterCall(id []byte) (bind.ModuleInformation, 
 	})
 }
 
-func (c curseMCMSEncoder) TimelockBypasserExecuteBatch(functionNames []string, datas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c curseMCMSEncoder) TimelockBypasserExecuteBatch(targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("timelock_bypasser_execute_batch", nil, []string{
+		"vector<address>",
+		"vector<0x1::string::String>",
 		"vector<0x1::string::String>",
 		"vector<vector<u8>>",
 	}, []any{
+		targets,
+		moduleNames,
 		functionNames,
 		datas,
 	})
@@ -1347,8 +1378,22 @@ func (c curseMCMSEncoder) TimelockDispatchToRMNRemote(functionName string, data 
 	})
 }
 
-func (c curseMCMSEncoder) TimelockDispatch(functionName string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c curseMCMSEncoder) TimelockDispatch(target aptos.AccountAddress, moduleName string, functionName string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("timelock_dispatch", nil, []string{
+		"address",
+		"0x1::string::String",
+		"0x1::string::String",
+		"vector<u8>",
+	}, []any{
+		target,
+		moduleName,
+		functionName,
+		data,
+	})
+}
+
+func (c curseMCMSEncoder) TimelockDispatchToSelf(functionName string, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("timelock_dispatch_to_self", nil, []string{
 		"0x1::string::String",
 		"vector<u8>",
 	}, []any{
@@ -1373,27 +1418,39 @@ func (c curseMCMSEncoder) TimelockUpdateMinDelay(newMinDelay uint64) (bind.Modul
 	})
 }
 
-func (c curseMCMSEncoder) TimelockBlockFunction(functionName string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c curseMCMSEncoder) TimelockBlockFunction(target aptos.AccountAddress, moduleName string, functionName string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("timelock_block_function", nil, []string{
+		"address",
+		"0x1::string::String",
 		"0x1::string::String",
 	}, []any{
+		target,
+		moduleName,
 		functionName,
 	})
 }
 
-func (c curseMCMSEncoder) TimelockUnblockFunction(functionName string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c curseMCMSEncoder) TimelockUnblockFunction(target aptos.AccountAddress, moduleName string, functionName string) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("timelock_unblock_function", nil, []string{
+		"address",
+		"0x1::string::String",
 		"0x1::string::String",
 	}, []any{
+		target,
+		moduleName,
 		functionName,
 	})
 }
 
-func (c curseMCMSEncoder) CreateCalls(functionNames []string, datas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+func (c curseMCMSEncoder) CreateCalls(targets []aptos.AccountAddress, moduleNames []string, functionNames []string, datas [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("create_calls", nil, []string{
+		"vector<address>",
+		"vector<0x1::string::String>",
 		"vector<0x1::string::String>",
 		"vector<vector<u8>>",
 	}, []any{
+		targets,
+		moduleNames,
 		functionNames,
 		datas,
 	})
@@ -1408,21 +1465,5 @@ func (c curseMCMSEncoder) HashOperationBatch(calls []Call, predecessor []byte, s
 		calls,
 		predecessor,
 		salt,
-	})
-}
-
-func (c curseMCMSEncoder) FunctionName(call Call) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("function_name", nil, []string{
-		"Call",
-	}, []any{
-		call,
-	})
-}
-
-func (c curseMCMSEncoder) Data(call Call) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
-	return c.BoundContract.Encode("data", nil, []string{
-		"Call",
-	}, []any{
-		call,
 	})
 }

@@ -118,19 +118,40 @@ func SerializeCurseMultipleData(subjects [][]byte) ([]byte, error) {
 	})
 }
 
-// SerializeBypasserExecuteBatch serializes the data for timelock_bypasser_execute_batch
-// Parameters: function_names: vector<String>, datas: vector<vector<u8>>
-func SerializeBypasserExecuteBatch(functionNames []string, datas [][]byte) ([]byte, error) {
+// CurseMCMSTimelockOperation represents a single operation in timelock_bypasser_execute_batch
+type CurseMCMSTimelockOperation struct {
+	Target       aptos.AccountAddress
+	ModuleName   string
+	FunctionName string
+	Data         []byte
+}
+
+// SerializeBypasserExecuteBatch serializes the data for timelock_bypasher_execute_batch
+// Follows the MCMS pattern: targets, module_names, function_names, datas as separate vectors
+func SerializeBypasserExecuteBatch(ops []CurseMCMSTimelockOperation) ([]byte, error) {
 	return bcs.SerializeSingle(func(ser *bcs.Serializer) {
-		// function_names: vector<String>
-		ser.Uleb128(uint32(len(functionNames)))
-		for _, fn := range functionNames {
-			ser.WriteString(fn)
+		// targets: vector<address>
+		ser.Uleb128(uint32(len(ops)))
+		for _, op := range ops {
+			WriteAddress(ser, op.Target)
 		}
+
+		// module_names: vector<String>
+		ser.Uleb128(uint32(len(ops)))
+		for _, op := range ops {
+			ser.WriteString(op.ModuleName)
+		}
+
+		// function_names: vector<String>
+		ser.Uleb128(uint32(len(ops)))
+		for _, op := range ops {
+			ser.WriteString(op.FunctionName)
+		}
+
 		// datas: vector<vector<u8>>
-		ser.Uleb128(uint32(len(datas)))
-		for _, data := range datas {
-			ser.WriteBytes(data)
+		ser.Uleb128(uint32(len(ops)))
+		for _, op := range ops {
+			ser.WriteBytes(op.Data)
 		}
 	})
 }
@@ -180,6 +201,12 @@ func TestGenerateCurseMCMSTestData(t *testing.T) {
 	err := curseMCMSAddr.ParseStringRelaxed("0x0000000000000000000000000000000000000000000000000000000000000CCC")
 	require.NoError(t, err)
 
+	// CCIP address for rmn_remote operations
+	// This should match the dev-address in curse_mcms/Move.toml for ccip
+	ccipAddr := aptos.AccountAddress{}
+	err = ccipAddr.ParseStringRelaxed("0x30b33dec3fcac5ef3ea775128d88722b64ba59a4598277e537f284917403df29")
+	require.NoError(t, err)
+
 	// Use deterministic signers for reproducible test data
 	signers := GenerateDeterministicSigners(t)
 
@@ -199,25 +226,37 @@ func TestGenerateCurseMCMSTestData(t *testing.T) {
 	curseMultipleData, err := SerializeCurseMultipleData([][]byte{globalCurseSubject, subject2})
 	require.NoError(t, err)
 
-	// Operation 1: timelock_bypasser_execute_batch with a single curse call
-	op1Data, err := SerializeBypasserExecuteBatch(
-		[]string{"curse"},   // function_names
-		[][]byte{curseData}, // datas
-	)
+	// Operation 1: timelock_bypasser_execute_batch with a single curse call (targets rmn_remote)
+	op1Data, err := SerializeBypasserExecuteBatch([]CurseMCMSTimelockOperation{
+		{
+			Target:       ccipAddr,
+			ModuleName:   "rmn_remote",
+			FunctionName: "curse",
+			Data:         curseData,
+		},
+	})
 	require.NoError(t, err)
 
-	// Operation 2: timelock_bypasser_execute_batch with a single uncurse call
-	op2Data, err := SerializeBypasserExecuteBatch(
-		[]string{"uncurse"},   // function_names
-		[][]byte{uncurseData}, // datas
-	)
+	// Operation 2: timelock_bypasser_execute_batch with a single uncurse call (targets rmn_remote)
+	op2Data, err := SerializeBypasserExecuteBatch([]CurseMCMSTimelockOperation{
+		{
+			Target:       ccipAddr,
+			ModuleName:   "rmn_remote",
+			FunctionName: "uncurse",
+			Data:         uncurseData,
+		},
+	})
 	require.NoError(t, err)
 
-	// Operation 3: timelock_bypasser_execute_batch with curse_multiple call
-	op3Data, err := SerializeBypasserExecuteBatch(
-		[]string{"curse_multiple"},  // function_names
-		[][]byte{curseMultipleData}, // datas (contains both subjects)
-	)
+	// Operation 3: timelock_bypasser_execute_batch with curse_multiple call (targets rmn_remote)
+	op3Data, err := SerializeBypasserExecuteBatch([]CurseMCMSTimelockOperation{
+		{
+			Target:       ccipAddr,
+			ModuleName:   "rmn_remote",
+			FunctionName: "curse_multiple",
+			Data:         curseMultipleData,
+		},
+	})
 	require.NoError(t, err)
 
 	// Create operations - all target curse_mcms module (timelock dispatch)
@@ -306,6 +345,7 @@ func TestGenerateCurseMCMSTestData(t *testing.T) {
 
 	fmt.Println("// Contract Addresses")
 	fmt.Printf("// CURSE_MCMS_ADDR: @0x%s\n", hex.EncodeToString(curseMCMSAddr[:]))
+	fmt.Printf("// CCIP_ADDR: @0x%s\n", hex.EncodeToString(ccipAddr[:]))
 	fmt.Println()
 
 	fmt.Println("// Signer Addresses (sorted, 20 bytes each)")

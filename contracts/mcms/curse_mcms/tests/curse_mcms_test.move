@@ -9,9 +9,10 @@ module curse_mcms::curse_mcms_test {
     use curse_mcms::curse_mcms;
     use curse_mcms::curse_mcms_account;
 
-    const SIGNER_1: vector<u8> = x"0000000000000000000000000000000000000001";
-    const SIGNER_2: vector<u8> = x"0000000000000000000000000000000000000002";
-    const SIGNER_3: vector<u8> = x"0000000000000000000000000000000000000003";
+    // Signer addresses (sorted, 20 bytes each) - from Go test
+    const SIGNER_1: vector<u8> = x"2b5ad5c4795c026514f8317c7a215e218dccd6cf";
+    const SIGNER_2: vector<u8> = x"6813eb9362372eef6200f3b1dbc3f819671cba69";
+    const SIGNER_3: vector<u8> = x"7e5f4552091a69125d5dfcb7b8c2659029395bdf";
 
     fun setup_test(
         framework: &signer, deployer: &signer, owner: &signer

@@ -198,6 +198,10 @@ module curse_mcms::curse_mcms {
     const E_INVALID_ROOT_LEN: u64 = 49;
     const E_NOT_CANCELLER_ROLE: u64 = 50;
     const E_NOT_TIMELOCK_ROLE: u64 = 51;
+    const E_UNKNOWN_CURSE_MCMS_MODULE: u64 = 52;
+    const E_UNKNOWN_CCIP_MODULE: u64 = 53;
+    const E_UNKNOWN_TARGET: u64 = 54;
+    const E_UNKNOWN_CURSE_MCMS_MODULE_FUNCTION: u64 = 55;
 
     fun init_module(publisher: &signer) {
         let bypasser = create_multisig(publisher, BYPASSER_ROLE);
@@ -535,6 +539,14 @@ module curse_mcms::curse_mcms {
             E_NOT_AUTHORIZED_ROLE
         );
 
+        let targets =
+            bcs_stream::deserialize_vector(
+                stream, |stream| bcs_stream::deserialize_address(stream)
+            );
+        let module_names =
+            bcs_stream::deserialize_vector(
+                stream, |stream| bcs_stream::deserialize_string(stream)
+            );
         let function_names =
             bcs_stream::deserialize_vector(
                 stream, |stream| bcs_stream::deserialize_string(stream)
@@ -548,7 +560,15 @@ module curse_mcms::curse_mcms {
         let delay = bcs_stream::deserialize_u64(stream);
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_schedule_batch(function_names, datas, predecessor, salt, delay)
+        timelock_schedule_batch(
+            targets,
+            module_names,
+            function_names,
+            datas,
+            predecessor,
+            salt,
+            delay
+        )
     }
 
     inline fun dispatch_timelock_bypasser_execute_batch(
@@ -559,6 +579,14 @@ module curse_mcms::curse_mcms {
             E_NOT_AUTHORIZED_ROLE
         );
 
+        let targets =
+            bcs_stream::deserialize_vector(
+                stream, |stream| bcs_stream::deserialize_address(stream)
+            );
+        let module_names =
+            bcs_stream::deserialize_vector(
+                stream, |stream| bcs_stream::deserialize_string(stream)
+            );
         let function_names =
             bcs_stream::deserialize_vector(
                 stream, |stream| bcs_stream::deserialize_string(stream)
@@ -569,10 +597,18 @@ module curse_mcms::curse_mcms {
             );
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_bypasser_execute_batch(function_names, datas)
+        timelock_bypasser_execute_batch(targets, module_names, function_names, datas)
     }
 
     inline fun dispatch_timelock_execute_batch(stream: &mut BCSStream) {
+        let targets =
+            bcs_stream::deserialize_vector(
+                stream, |stream| bcs_stream::deserialize_address(stream)
+            );
+        let module_names =
+            bcs_stream::deserialize_vector(
+                stream, |stream| bcs_stream::deserialize_string(stream)
+            );
         let function_names =
             bcs_stream::deserialize_vector(
                 stream, |stream| bcs_stream::deserialize_string(stream)
@@ -585,7 +621,14 @@ module curse_mcms::curse_mcms {
         let salt = bcs_stream::deserialize_vector_u8(stream);
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_execute_batch(function_names, datas, predecessor, salt)
+        timelock_execute_batch(
+            targets,
+            module_names,
+            function_names,
+            datas,
+            predecessor,
+            salt
+        )
     }
 
     inline fun dispatch_timelock_cancel(role: u8, stream: &mut BCSStream) {
@@ -616,10 +659,12 @@ module curse_mcms::curse_mcms {
     ) {
         assert!(role == TIMELOCK_ROLE, E_NOT_TIMELOCK_ROLE);
 
+        let target = bcs_stream::deserialize_address(stream);
+        let module_name = bcs_stream::deserialize_string(stream);
         let function_name = bcs_stream::deserialize_string(stream);
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_block_function(function_name)
+        timelock_block_function(target, module_name, function_name)
     }
 
     inline fun dispatch_timelock_unblock_function(
@@ -627,10 +672,12 @@ module curse_mcms::curse_mcms {
     ) {
         assert!(role == TIMELOCK_ROLE, E_NOT_TIMELOCK_ROLE);
 
+        let target = bcs_stream::deserialize_address(stream);
+        let module_name = bcs_stream::deserialize_string(stream);
         let function_name = bcs_stream::deserialize_string(stream);
         bcs_stream::assert_is_consumed(stream);
 
-        timelock_unblock_function(function_name)
+        timelock_unblock_function(target, module_name, function_name)
     }
 
     /// Updates the multisig configuration, including signer addresses and group settings.
@@ -1001,13 +1048,19 @@ module curse_mcms::curse_mcms {
         min_delay: u64,
         /// hashed batch of hashed calls -> timestamp
         timestamps: SmartTable<vector<u8>, u64>,
-        /// blocked functions (only curse/uncurse function names)
-        blocked_functions: SmartVector<String>
+        /// blocked functions
+        blocked_functions: SmartVector<Function>
     }
 
     struct Call has copy, drop, store {
-        function_name: String,
+        function: Function,
         data: vector<u8>
+    }
+
+    struct Function has copy, drop, store {
+        target: address,
+        module_name: String,
+        function_name: String
     }
 
     #[event]
@@ -1018,6 +1071,8 @@ module curse_mcms::curse_mcms {
     #[event]
     struct BypasserCallExecuted has drop, store {
         index: u64,
+        target: address,
+        module_name: String,
         function_name: String,
         data: vector<u8>
     }
@@ -1031,6 +1086,8 @@ module curse_mcms::curse_mcms {
     struct CallScheduled has drop, store {
         id: vector<u8>,
         index: u64,
+        target: address,
+        module_name: String,
         function_name: String,
         data: vector<u8>,
         predecessor: vector<u8>,
@@ -1042,6 +1099,8 @@ module curse_mcms::curse_mcms {
     struct CallExecuted has drop, store {
         id: vector<u8>,
         index: u64,
+        target: address,
+        module_name: String,
         function_name: String,
         data: vector<u8>
     }
@@ -1054,36 +1113,44 @@ module curse_mcms::curse_mcms {
 
     #[event]
     struct FunctionBlocked has drop, store {
+        target: address,
+        module_name: String,
         function_name: String
     }
 
     #[event]
     struct FunctionUnblocked has drop, store {
+        target: address,
+        module_name: String,
         function_name: String
     }
 
-    /// Schedule a batch of curse/uncurse calls to be executed after a delay.
-    /// This function can only be called by PROPOSER or CURSER role.
+    /// Schedule a batch of calls to be executed after a delay.
+    /// This function can only be called by PROPOSER or TIMELOCK role.
     inline fun timelock_schedule_batch(
+        targets: vector<address>,
+        module_names: vector<String>,
         function_names: vector<String>,
         datas: vector<vector<u8>>,
         predecessor: vector<u8>,
         salt: vector<u8>,
         delay: u64
     ) {
-        let calls = create_calls(function_names, datas);
+        let calls = create_calls(targets, module_names, function_names, datas);
         let id = hash_operation_batch(calls, predecessor, salt);
         let timelock = borrow_mut_timelock();
 
         timelock_schedule(timelock, id, delay);
 
         for (i in 0..calls.length()) {
-            assert_not_blocked(timelock, &calls[i].function_name);
+            assert_not_blocked(timelock, &calls[i].function);
             event::emit(
                 CallScheduled {
                     id,
                     index: i,
-                    function_name: calls[i].function_name,
+                    target: calls[i].function.target,
+                    module_name: calls[i].function.module_name,
+                    function_name: calls[i].function.function_name,
                     data: calls[i].data,
                     predecessor,
                     salt,
@@ -1124,41 +1191,60 @@ module curse_mcms::curse_mcms {
 
     /// Anyone can call this as it checks if the operation was scheduled by a bypasser or proposer.
     public entry fun timelock_execute_batch(
+        targets: vector<address>,
+        module_names: vector<String>,
         function_names: vector<String>,
         datas: vector<vector<u8>>,
         predecessor: vector<u8>,
         salt: vector<u8>
-    ) acquires Timelock {
-        let calls = create_calls(function_names, datas);
+    ) acquires Multisig, MultisigState, Timelock {
+        let calls = create_calls(targets, module_names, function_names, datas);
         let id = hash_operation_batch(calls, predecessor, salt);
 
         timelock_before_call(id, predecessor);
 
         for (i in 0..calls.length()) {
-            let function_name = calls[i].function_name;
+            let function = calls[i].function;
+            let target = function.target;
+            let module_name = function.module_name;
+            let function_name = function.function_name;
             let data = calls[i].data;
 
-            timelock_dispatch(function_name, data);
+            timelock_dispatch(target, module_name, function_name, data);
 
-            event::emit(CallExecuted { id, index: i, function_name, data });
+            event::emit(
+                CallExecuted { id, index: i, target, module_name, function_name, data }
+            );
         };
 
         timelock_after_call(id);
     }
 
     fun timelock_bypasser_execute_batch(
-        function_names: vector<String>, datas: vector<vector<u8>>
-    ) {
-        let len = function_names.length();
-        assert!(len == datas.length(), E_INVALID_PARAMETERS);
+        targets: vector<address>,
+        module_names: vector<String>,
+        function_names: vector<String>,
+        datas: vector<vector<u8>>
+    ) acquires Multisig, MultisigState, Timelock {
+        let len = targets.length();
+        assert!(
+            len == module_names.length()
+                && len == function_names.length()
+                && len == datas.length(),
+            E_INVALID_PARAMETERS
+        );
 
         for (i in 0..len) {
+            let target = targets[i];
+            let module_name = module_names[i];
             let function_name = function_names[i];
             let data = datas[i];
 
-            timelock_dispatch(function_name, data);
+            timelock_dispatch(target, module_name, function_name, data);
 
-            event::emit(BypasserCallExecuted { index: i, function_name, data });
+            event::emit(
+                BypasserCallExecuted { index: i, target, module_name, function_name, data }
+            );
         };
     }
 
@@ -1202,16 +1288,68 @@ module curse_mcms::curse_mcms {
         }
     }
 
-    /// Routes execution to either RMN Remote or self (timelock admin functions)
-    inline fun timelock_dispatch(function_name: String, data: vector<u8>) {
-        let fn_bytes = *function_name.bytes();
-        let timelock_prefix = b"timelock";
+    /// Routes execution based on target address and module name, matching the MCMS pattern
+    inline fun timelock_dispatch(
+        target: address,
+        module_name: String,
+        function_name: String,
+        data: vector<u8>
+    ) {
+        let module_name_bytes = *module_name.bytes();
 
-        if (fn_bytes.length() >= timelock_prefix.length()
-            && fn_bytes.slice(0, timelock_prefix.length()) == timelock_prefix) {
-            dispatch_to_timelock(TIMELOCK_ROLE, function_name, data);
+        if (target == @curse_mcms) {
+            if (module_name_bytes == b"curse_mcms") {
+                timelock_dispatch_to_self(function_name, data);
+            } else {
+                abort E_UNKNOWN_CURSE_MCMS_MODULE
+            }
+        } else if (target == @ccip) {
+            if (module_name_bytes == b"rmn_remote") {
+                timelock_dispatch_to_rmn_remote(function_name, data);
+            } else {
+                abort E_UNKNOWN_CCIP_MODULE
+            }
         } else {
-            timelock_dispatch_to_rmn_remote(function_name, data);
+            abort E_UNKNOWN_TARGET
+        }
+    }
+
+    /// Dispatch to self - handles timelock admin functions and set_config
+    inline fun timelock_dispatch_to_self(
+        function_name: String, data: vector<u8>
+    ) {
+        let fn_bytes = *function_name.bytes();
+        let prefix = b"timelock";
+
+        if (fn_bytes.length() >= prefix.length()
+            && fn_bytes.slice(0, prefix.length()) == prefix) {
+            // Pass `TIMELOCK_ROLE` as the function call has already been validated
+            dispatch_to_timelock(TIMELOCK_ROLE, function_name, data);
+        } else if (fn_bytes == b"set_config") {
+            let stream = bcs_stream::new(data);
+            let role_param = bcs_stream::deserialize_u8(&mut stream);
+            let signer_addresses =
+                bcs_stream::deserialize_vector(
+                    &mut stream,
+                    |stream| { bcs_stream::deserialize_vector_u8(stream) }
+                );
+            let signer_groups = bcs_stream::deserialize_vector_u8(&mut stream);
+            let group_quorums = bcs_stream::deserialize_vector_u8(&mut stream);
+            let group_parents = bcs_stream::deserialize_vector_u8(&mut stream);
+            let clear_root = bcs_stream::deserialize_bool(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+
+            set_config(
+                &curse_mcms_account::get_signer(),
+                role_param,
+                signer_addresses,
+                signer_groups,
+                group_quorums,
+                group_parents,
+                clear_root
+            );
+        } else {
+            abort E_UNKNOWN_CURSE_MCMS_MODULE_FUNCTION
         }
     }
 
@@ -1230,50 +1368,56 @@ module curse_mcms::curse_mcms {
         event::emit(UpdateMinDelay { old_min_delay, new_min_delay });
     }
 
-    inline fun timelock_block_function(function_name: String) {
+    inline fun timelock_block_function(
+        target: address, module_name: String, function_name: String
+    ) {
         let already_blocked = false;
+        let new_function = Function { target, module_name, function_name };
         let timelock = borrow_mut_timelock();
 
         for (i in 0..timelock.blocked_functions.length()) {
             let blocked_function = timelock.blocked_functions.borrow(i);
-            if (*blocked_function.bytes() == *function_name.bytes()) {
+            if (equals(&new_function, blocked_function)) {
                 already_blocked = true;
                 break
             };
         };
 
         if (!already_blocked) {
-            timelock.blocked_functions.push_back(function_name);
-            event::emit(FunctionBlocked { function_name });
+            timelock.blocked_functions.push_back(new_function);
+            event::emit(FunctionBlocked { target, module_name, function_name });
         };
     }
 
-    inline fun timelock_unblock_function(function_name: String) {
+    inline fun timelock_unblock_function(
+        target: address, module_name: String, function_name: String
+    ) {
+        let function_to_unblock = Function { target, module_name, function_name };
         let timelock = borrow_mut_timelock();
 
         for (i in 0..timelock.blocked_functions.length()) {
             let blocked_function = timelock.blocked_functions.borrow(i);
-            if (*blocked_function.bytes() == *function_name.bytes()) {
+            if (equals(&function_to_unblock, blocked_function)) {
                 timelock.blocked_functions.swap_remove(i);
-                event::emit(FunctionUnblocked { function_name });
+                event::emit(FunctionUnblocked { target, module_name, function_name });
                 break
             };
         };
     }
 
     inline fun assert_not_blocked(
-        timelock: &Timelock, function_name: &String
+        timelock: &Timelock, function: &Function
     ) {
         for (i in 0..timelock.blocked_functions.length()) {
             let blocked_function = timelock.blocked_functions.borrow(i);
-            if (*blocked_function.bytes() == *function_name.bytes()) {
+            if (equals(function, blocked_function)) {
                 abort E_FUNCTION_BLOCKED;
             };
         };
     }
 
     #[view]
-    public fun timelock_get_blocked_function(index: u64): String acquires Timelock {
+    public fun timelock_get_blocked_function(index: u64): Function acquires Timelock {
         let timelock = borrow_timelock();
         assert!(index < timelock.blocked_functions.length(), E_INVALID_INDEX);
         *timelock.blocked_functions.borrow(index)
@@ -1329,7 +1473,7 @@ module curse_mcms::curse_mcms {
     }
 
     #[view]
-    public fun timelock_get_blocked_functions(): vector<String> acquires Timelock {
+    public fun timelock_get_blocked_functions(): vector<Function> acquires Timelock {
         let timelock = borrow_timelock();
         let blocked_functions = vector[];
         for (i in 0..timelock.blocked_functions.length()) {
@@ -1344,16 +1488,27 @@ module curse_mcms::curse_mcms {
     }
 
     public fun create_calls(
-        function_names: vector<String>, datas: vector<vector<u8>>
+        targets: vector<address>,
+        module_names: vector<String>,
+        function_names: vector<String>,
+        datas: vector<vector<u8>>
     ): vector<Call> {
-        let len = function_names.length();
-        assert!(len == datas.length(), E_INVALID_PARAMETERS);
+        let len = targets.length();
+        assert!(
+            len == module_names.length()
+                && len == function_names.length()
+                && len == datas.length(),
+            E_INVALID_PARAMETERS
+        );
 
         let calls = vector[];
         for (i in 0..len) {
+            let target = targets[i];
+            let module_name = module_names[i];
             let function_name = function_names[i];
             let data = datas[i];
-            let call = Call { function_name, data };
+            let function = Function { target, module_name, function_name };
+            let call = Call { function, data };
             calls.push_back(call);
         };
 
@@ -1370,6 +1525,12 @@ module curse_mcms::curse_mcms {
         keccak256(packed)
     }
 
+    fun equals(fn1: &Function, fn2: &Function): bool {
+        fn1.target == fn2.target
+            && fn1.module_name.bytes() == fn2.module_name.bytes()
+            && fn1.function_name.bytes() == fn2.function_name.bytes()
+    }
+
     inline fun borrow_timelock(): &Timelock {
         borrow_global<Timelock>(@curse_mcms)
     }
@@ -1382,12 +1543,24 @@ module curse_mcms::curse_mcms {
         (signer_.addr, signer_.index, signer_.group)
     }
 
-    public fun function_name(call: Call): String {
-        call.function_name
+    public fun call_function(call: &Call): &Function {
+        &call.function
     }
 
-    public fun data(call: Call): vector<u8> {
-        call.data
+    public fun call_data(call: &Call): &vector<u8> {
+        &call.data
+    }
+
+    public fun function_target(function: &Function): address {
+        function.target
+    }
+
+    public fun function_module_name(function: &Function): String {
+        function.module_name
+    }
+
+    public fun function_name(function: &Function): String {
+        function.function_name
     }
 
     // ======================= TEST ONLY FUNCTIONS ======================= //
@@ -1458,13 +1631,23 @@ module curse_mcms::curse_mcms {
 
     #[test_only]
     public fun test_timelock_schedule_batch(
+        targets: vector<address>,
+        module_names: vector<String>,
         function_names: vector<String>,
         datas: vector<vector<u8>>,
         predecessor: vector<u8>,
         salt: vector<u8>,
         delay: u64
     ) acquires Timelock {
-        timelock_schedule_batch(function_names, datas, predecessor, salt, delay);
+        timelock_schedule_batch(
+            targets,
+            module_names,
+            function_names,
+            datas,
+            predecessor,
+            salt,
+            delay
+        );
     }
 
     #[test_only]
@@ -1479,19 +1662,26 @@ module curse_mcms::curse_mcms {
 
     #[test_only]
     public fun test_timelock_bypasser_execute_batch(
-        function_names: vector<String>, datas: vector<vector<u8>>
+        targets: vector<address>,
+        module_names: vector<String>,
+        function_names: vector<String>,
+        datas: vector<vector<u8>>
     ) {
-        timelock_bypasser_execute_batch(function_names, datas);
+        timelock_bypasser_execute_batch(targets, module_names, function_names, datas);
     }
 
     #[test_only]
-    public fun test_timelock_block_function(function_name: String) acquires Timelock {
-        timelock_block_function(function_name);
+    public fun test_timelock_block_function(
+        target: address, module_name: String, function_name: String
+    ) acquires Timelock {
+        timelock_block_function(target, module_name, function_name);
     }
 
     #[test_only]
-    public fun test_timelock_unblock_function(function_name: String) acquires Timelock {
-        timelock_unblock_function(function_name);
+    public fun test_timelock_unblock_function(
+        target: address, module_name: String, function_name: String
+    ) acquires Timelock {
+        timelock_unblock_function(target, module_name, function_name);
     }
 
     #[test_only]
@@ -1527,7 +1717,7 @@ module curse_mcms::curse_mcms {
     #[test_only]
     public fun test_timelock_dispatch_to_self(
         function_name: String, data: vector<u8>
-    ) acquires Timelock {
-        dispatch_to_timelock(TIMELOCK_ROLE, function_name, data)
+    ) acquires Timelock, MultisigState, Multisig {
+        timelock_dispatch_to_self(function_name, data)
     }
 }
