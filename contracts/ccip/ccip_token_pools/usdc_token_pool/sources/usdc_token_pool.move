@@ -521,10 +521,7 @@ module usdc_token_pool::usdc_token_pool {
 
         let remote_domain_info = pool.chain_to_domain.borrow(remote_chain_selector);
 
-        assert!(
-            remote_domain_info.enabled,
-            error::invalid_argument(E_DOMAIN_DISABLED)
-        );
+        assert!(remote_domain_info.enabled, error::invalid_argument(E_DOMAIN_DISABLED));
 
         let mint_recipient_bytes =
             token_admin_registry::get_lock_or_burn_receiver(&input);

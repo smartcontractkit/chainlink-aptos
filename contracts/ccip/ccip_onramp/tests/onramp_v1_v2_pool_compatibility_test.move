@@ -46,9 +46,7 @@ module ccip_onramp::onramp_v1_v2_pool_compatibility_test {
     }
 
     /// Helper to calculate fee and mint enough tokens for sender
-    fun mint_tokens_for_transfer(
-        token_addr: address, num_transfers: u64
-    ) {
+    fun mint_tokens_for_transfer(token_addr: address, num_transfers: u64) {
         let receiver = encode_receiver();
         let extra_args = create_extra_args_v2();
 
@@ -74,7 +72,6 @@ module ccip_onramp::onramp_v1_v2_pool_compatibility_test {
     // ============================================
     // Test 1: V1 Burn/Mint Pool Baseline
     // ============================================
-
     #[
         test(
             aptos_framework = @aptos_framework,
@@ -158,7 +155,6 @@ module ccip_onramp::onramp_v1_v2_pool_compatibility_test {
     // ============================================
     // Test 2: V1 → V2 Burn/Mint Migration
     // ============================================
-
     #[
         test(
             aptos_framework = @aptos_framework,
@@ -259,7 +255,6 @@ module ccip_onramp::onramp_v1_v2_pool_compatibility_test {
     // ============================================
     // Test 3: V2 Burn/Mint Direct (no migration)
     // ============================================
-
     #[
         test(
             aptos_framework = @aptos_framework,
@@ -335,7 +330,6 @@ module ccip_onramp::onramp_v1_v2_pool_compatibility_test {
     // ============================================
     // Test 4: V1 Lock/Release Pool Baseline
     // ============================================
-
     #[
         test(
             aptos_framework = @aptos_framework,
@@ -419,7 +413,6 @@ module ccip_onramp::onramp_v1_v2_pool_compatibility_test {
     // ============================================
     // Test 5: V1 → V2 Lock/Release Migration
     // ============================================
-
     #[
         test(
             aptos_framework = @aptos_framework,
@@ -520,7 +513,6 @@ module ccip_onramp::onramp_v1_v2_pool_compatibility_test {
     // ============================================
     // Test 6: V2 Lock/Release Direct (no migration)
     // ============================================
-
     #[
         test(
             aptos_framework = @aptos_framework,

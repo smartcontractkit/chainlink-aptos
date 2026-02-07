@@ -71,9 +71,7 @@ module ccip_offramp::offramp_managed_receiver_test {
 
         let metadata_hash =
             offramp::test_calculate_metadata_hash(
-                EVM_SOURCE_CHAIN_SELECTOR,
-                dest_chain_selector,
-                on_ramp
+                EVM_SOURCE_CHAIN_SELECTOR, dest_chain_selector, on_ramp
             );
 
         let message_hash = offramp::test_calculate_message_hash(&message, metadata_hash);
@@ -108,7 +106,6 @@ module ccip_offramp::offramp_managed_receiver_test {
     }
 
     // ======================== NON DISPATCHABLE TESTS ========================
-
     #[
         test(
             aptos_framework = @aptos_framework,

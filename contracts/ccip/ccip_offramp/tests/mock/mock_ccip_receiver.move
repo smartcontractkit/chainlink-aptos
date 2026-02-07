@@ -141,7 +141,8 @@ module ccip_offramp::mock_ccip_receiver {
 
             event::emit(ForwardedTokens { final_recipient });
             event::emit_event(
-                &mut state.forwarded_tokens_handle, ForwardedTokens { final_recipient }
+                &mut state.forwarded_tokens_handle,
+                ForwardedTokens { final_recipient }
             );
         } else if (data.length() != 0) {
             // Convert the vector<u8> to a string
@@ -164,9 +165,7 @@ module ccip_offramp::mock_ccip_receiver {
         };
 
         // Simple abort condition for testing
-        if (data == b"abort") {
-            abort 1
-        };
+        if (data == b"abort") { abort 1 };
     }
 
     #[deprecated]
@@ -214,7 +213,8 @@ module ccip_offramp::mock_ccip_receiver {
 
             event::emit(ForwardedTokens { final_recipient });
             event::emit_event(
-                &mut state.forwarded_tokens_handle, ForwardedTokens { final_recipient }
+                &mut state.forwarded_tokens_handle,
+                ForwardedTokens { final_recipient }
             );
 
         } else if (data.length() != 0) {
@@ -239,9 +239,7 @@ module ccip_offramp::mock_ccip_receiver {
         };
 
         // Simple abort condition for testing
-        if (data == b"abort") {
-            abort 1
-        };
+        if (data == b"abort") { abort 1 };
 
         option::none()
     }
@@ -250,7 +248,8 @@ module ccip_offramp::mock_ccip_receiver {
         sender: &signer, recipient: address, token_address: address
     ) acquires CCIPReceiverState {
         assert!(
-            exists<CCIPReceiverState>(@ccip_offramp), E_RESOURCE_NOT_FOUND_ON_ACCOUNT
+            exists<CCIPReceiverState>(@ccip_offramp),
+            E_RESOURCE_NOT_FOUND_ON_ACCOUNT
         );
         assert!(signer::address_of(sender) == @ccip_offramp, E_UNAUTHORIZED);
 

@@ -249,7 +249,9 @@ module ccip::token_admin_registry {
 
     #[view]
     /// Returns true if token pool has TokenPoolRegistrationV2 resource
-    public fun has_token_pool_registration_v2(token_pool_address: address): bool {
+    public fun has_token_pool_registration_v2(
+        token_pool_address: address
+    ): bool {
         exists<TokenPoolRegistrationV2>(token_pool_address)
     }
 
@@ -323,7 +325,6 @@ module ccip::token_admin_registry {
     // ================================================================
     // |                       Register Pool                          |
     // ================================================================
-
     #[deprecated]
     /// @deprecated: Use `register_pool_v2()` instead.
     ///

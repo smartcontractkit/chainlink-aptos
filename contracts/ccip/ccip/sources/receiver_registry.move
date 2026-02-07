@@ -177,8 +177,7 @@ module ccip::receiver_registry {
     /// }
     /// ```
     public fun register_receiver_v2(
-        receiver_account: &signer,
-        callback: |client::Any2AptosMessage| has copy + drop + store
+        receiver_account: &signer, callback: |client::Any2AptosMessage| has copy + drop + store
     ) {
         let receiver_address = signer::address_of(receiver_account);
         assert!(
@@ -186,10 +185,7 @@ module ccip::receiver_registry {
             error::invalid_argument(E_ALREADY_REGISTERED)
         );
 
-        move_to(
-            receiver_account,
-            CCIPReceiverRegistrationV2 { callback }
-        );
+        move_to(receiver_account, CCIPReceiverRegistrationV2 { callback });
 
         event::emit_event(
             &mut borrow_events_v2_mut().receiver_registered_v2_events,

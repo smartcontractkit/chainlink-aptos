@@ -28,7 +28,6 @@ module ccip_offramp::offramp_v1_v2_compatibility_test {
     // ============================================
     // Test Helper Functions
     // ============================================
-
     fun create_and_execute_message(
         message_id: vector<u8>,
         sequence_number: u64,
@@ -111,7 +110,6 @@ module ccip_offramp::offramp_v1_v2_compatibility_test {
     // ============================================
     // Test 1: V1 Receiver Works (Baseline)
     // ============================================
-
     #[
         test(
             aptos_framework = @aptos_framework,
@@ -218,7 +216,6 @@ module ccip_offramp::offramp_v1_v2_compatibility_test {
     // ============================================
     // Test 2: V1 → V2 Migration Works
     // ============================================
-
     #[
         test(
             aptos_framework = @aptos_framework,
@@ -349,7 +346,6 @@ module ccip_offramp::offramp_v1_v2_compatibility_test {
     // ============================================
     // Test 3: Direct V2 Registration Works
     // ============================================
-
     #[
         test(
             aptos_framework = @aptos_framework,
@@ -450,7 +446,6 @@ module ccip_offramp::offramp_v1_v2_compatibility_test {
     // ============================================
     // Test 4: Dispatcher Routes Correctly
     // ============================================
-
     #[
         test(
             aptos_framework = @aptos_framework,
@@ -574,7 +569,6 @@ module ccip_offramp::offramp_v1_v2_compatibility_test {
     // Test 5: Multi-Transfer Message with V2 Receiver
     // Tests V2 receiver handling multiple token transfers in a single message
     // ============================================
-
     #[
         test(
             aptos_framework = @aptos_framework,

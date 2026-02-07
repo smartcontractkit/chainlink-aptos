@@ -116,13 +116,12 @@ module ccip_dummy_receiver::ptt_dummy_receiver {
 
             event::emit(ForwardedTokens { final_recipient });
             event::emit_event(
-                &mut state.forwarded_tokens_handle, ForwardedTokens { final_recipient }
+                &mut state.forwarded_tokens_handle,
+                ForwardedTokens { final_recipient }
             );
         } else if (data.length() != 0) {
             event::emit(ReceivedMessage { data });
-            event::emit_event(
-                &mut state.received_message_handle, ReceivedMessage { data }
-            );
+            event::emit_event(&mut state.received_message_handle, ReceivedMessage { data });
 
         } else if (dest_token_amounts.length() != 0) {
             // Tokens only (no forwarding data) - keep them at receiver
