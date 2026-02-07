@@ -43,7 +43,11 @@ module mcms::mcms_account {
     ) {
         move_to(
             publisher,
-            AccountState { signer_cap, owner: @mcms_owner, pending_owner: @0x0 }
+            AccountState {
+                signer_cap,
+                owner: @mcms_owner,
+                pending_owner: @0x0
+            }
         );
     }
 

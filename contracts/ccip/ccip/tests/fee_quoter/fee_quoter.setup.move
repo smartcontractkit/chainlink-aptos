@@ -189,7 +189,13 @@ module ccip::fee_quoter_setup {
         let transfer_ref = fungible_asset::generate_transfer_ref(&constructor_ref);
         move_to(
             &obj_signer,
-            TestToken { metadata, extend_ref, mint_ref, burn_ref, transfer_ref }
+            TestToken {
+                metadata,
+                extend_ref,
+                mint_ref,
+                burn_ref,
+                transfer_ref
+            }
         );
 
         (metadata, token_addr)
@@ -207,10 +213,7 @@ module ccip::fee_quoter_setup {
 
     // Helper to set up token and gas prices
     public fun setup_prices(
-        owner: &signer,
-        token_addr: address,
-        token_price: u256,
-        gas_price: u256
+        owner: &signer, token_addr: address, token_price: u256, gas_price: u256
     ) {
         fee_quoter::update_prices(
             owner,
@@ -320,7 +323,6 @@ module ccip::fee_quoter_setup {
     }
 
     // =========== Constant Getters ============
-
     public fun get_dest_chain_selector(): u64 {
         DEST_CHAIN_SELECTOR
     }

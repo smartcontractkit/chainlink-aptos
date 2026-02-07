@@ -26,7 +26,8 @@ module mcms::object_code_util {
         let sequence_number = account::get_sequence_number(publisher) + 1;
         let seeds = vector[];
         vector::append(
-            &mut seeds, bcs::to_bytes(&OBJECT_CODE_DEPLOYMENT_DOMAIN_SEPARATOR)
+            &mut seeds,
+            bcs::to_bytes(&OBJECT_CODE_DEPLOYMENT_DOMAIN_SEPARATOR)
         );
         vector::append(&mut seeds, bcs::to_bytes(&sequence_number));
         seeds

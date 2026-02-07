@@ -21,6 +21,7 @@ func buildCmd() *cobra.Command {
 	pCmd.AddCommand(BuildMGetFeedUpdatedEvents())
 	pCmd.AddCommand(BuildComputeDataFeedUpdatedEventsMetrics())
 	pCmd.AddCommand(BuildMGetAccountBalances())
+	pCmd.AddCommand(BuildFindFeedUpdateWorkflowReportId())
 
 	return pCmd
 }

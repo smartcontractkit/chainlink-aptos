@@ -8,6 +8,14 @@ This Go script retrieves data feed events emitted across all environments and tr
 go run . get-feed-updated-events -e mainnet -l
 ```
 
+### Get Data Feeds Feed Updated Transaction for Given Report ID 
+
+This Go script helps to locate a specific reportID in the FeedUpdated events of Aptos feeds. You can specify the environment (`staging`, `prod-testnet`, or `mainnet`), the report ID (-r) and use -l to include only the latest transactions. Every workflow has a unique reportID that can be found in the forwarder transaction events. This script will search through the feed updates to find which feed contains the specified reportID, hence verifying the workflow execution.
+
+```bash
+go run . find-workflow-report-id -e prod-testnet -l -r 18
+```
+
 ### Compute Data Feed Events Metrics from previous step
 
 This Go script computes metrics such as the average, minimum, maximum, p90, p95, p99, and SLA for the overall set of events, as well as split by feed. Additionally, it retrieves statistics on the gas used to process all feeds and identifies slow transactions. You can specify a timeframe with the -l parameter to include only the events that occurred in the last -t seconds.

@@ -190,7 +190,6 @@ module regulated_token::regulated_token_test {
     // ================================================================
     // |                      Pausable Tests                          |
     // ================================================================
-
     #[test(admin = @admin, regulated_token = @regulated_token)]
     fun test_pause_unpause_functionality(
         admin: &signer, regulated_token: &signer
@@ -293,7 +292,6 @@ module regulated_token::regulated_token_test {
     // ================================================================
     // |                      Role Management Tests                   |
     // ================================================================
-
     #[test(admin = @admin, minter = @0xface, regulated_token = @regulated_token)]
     fun test_role_management(
         admin: &signer, minter: &signer, regulated_token: &signer
@@ -435,19 +433,14 @@ module regulated_token::regulated_token_test {
         assert!(!regulated_token::has_role(user_addr, MINTER_ROLE));
     }
 
-    #[
-        test(
-            admin = @admin,
-            user = @0xface,
-            freezer = @0xcafe,
-            regulated_token = @regulated_token
-        )
-    ]
+    #[test(
+        admin = @admin,
+        user = @0xface,
+        freezer = @0xcafe,
+        regulated_token = @regulated_token
+    )]
     fun test_revoke_freezer_role_functionality(
-        admin: &signer,
-        user: &signer,
-        freezer: &signer,
-        regulated_token: &signer
+        admin: &signer, user: &signer, freezer: &signer, regulated_token: &signer
     ) {
         setup(admin, regulated_token);
         let admin_addr = signer::address_of(admin);
@@ -490,7 +483,6 @@ module regulated_token::regulated_token_test {
     // ================================================================
     // |                      Freeze Tests                           |
     // ================================================================
-
     #[test(admin = @admin, user = @0xface, regulated_token = @regulated_token)]
     fun test_freeze_functionality(
         admin: &signer, user: &signer, regulated_token: &signer
@@ -551,7 +543,6 @@ module regulated_token::regulated_token_test {
     // ================================================================
     // |                      Burn Frozen Funds Tests                   |
     // ================================================================
-
     #[test(admin = @admin, user = @0xface, regulated_token = @regulated_token)]
     fun test_burn_frozen_funds(
         admin: &signer, user: &signer, regulated_token: &signer
@@ -584,7 +575,6 @@ module regulated_token::regulated_token_test {
     // ================================================================
     // |                      View Function Tests                     |
     // ================================================================
-
     #[test(admin = @admin, regulated_token = @regulated_token)]
     fun test_view_functions(admin: &signer, regulated_token: &signer) {
         setup(admin, regulated_token);
@@ -613,7 +603,6 @@ module regulated_token::regulated_token_test {
     // ================================================================
     // |                      Token Recovery Tests                    |
     // ================================================================
-
     #[test(admin = @admin, regulated_token = @regulated_token)]
     fun test_recover_tokens_from_contract_address(
         admin: &signer, regulated_token: &signer
@@ -1046,7 +1035,6 @@ module regulated_token::regulated_token_test {
     // ================================================================
     // |              Get All Frozen Accounts Tests                  |
     // ================================================================
-
     fun freeze_accounts_for_test(
         freezer: &signer, accounts: vector<address>
     ) {

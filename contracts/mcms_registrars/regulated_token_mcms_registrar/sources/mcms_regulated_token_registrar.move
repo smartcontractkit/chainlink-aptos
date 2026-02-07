@@ -26,7 +26,6 @@ module regulated_token::mcms_regulated_token_registrar {
     // ================================================================
     // |                      MCMS Entrypoint                         |
     // ================================================================
-
     struct McmsCallback has drop {}
 
     public fun mcms_entrypoint<T: key>(_metadata: Object<T>): Option<u128> {

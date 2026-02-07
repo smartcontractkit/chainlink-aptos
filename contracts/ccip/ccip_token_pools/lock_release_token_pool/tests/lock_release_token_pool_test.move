@@ -83,7 +83,11 @@ module lock_release_token_pool::lock_release_token_pool_test {
         let transfer_ref = fungible_asset::generate_transfer_ref(&token_constructor_ref);
 
         move_to(
-            token_signer, TestRefs { mint_ref, transfer_ref: option::some(transfer_ref) }
+            token_signer,
+            TestRefs {
+                mint_ref,
+                transfer_ref: option::some(transfer_ref)
+            }
         );
 
         token_metadata
@@ -435,7 +439,6 @@ module lock_release_token_pool::lock_release_token_pool_test {
     }
 
     // ============ Migrate Transfer Ref Tests ============
-
     #[
         test(
             owner = @0x100,
@@ -456,9 +459,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
         let transfer_ref = extract_transfer_ref(token_metadata);
         // Initialize pool with the transfer ref
         lock_release_token_pool::initialize(
-            owner,
-            option::some(transfer_ref),
-            rebalancer_addr
+            owner, option::some(transfer_ref), rebalancer_addr
         );
 
         // Verify the pool was initialized with transfer ref
@@ -504,11 +505,9 @@ module lock_release_token_pool::lock_release_token_pool_test {
             rebalancer = @0x123
         )
     ]
-    #[
-        expected_failure(
-            abort_code = 10, location = lock_release_token_pool::lock_release_token_pool
-        )
-    ]
+    #[expected_failure(
+        abort_code = 10, location = lock_release_token_pool::lock_release_token_pool
+    )]
     fun test_migrate_transfer_ref_not_set(
         owner: &signer,
         ccip: &signer,
@@ -522,8 +521,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
 
         // Initialize pool without transfer ref
         lock_release_token_pool::initialize(
-            owner,
-            option::none(), // No transfer ref
+            owner, option::none(), // No transfer ref
             rebalancer_addr
         );
 
@@ -556,9 +554,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
 
         // Initialize pool with the transfer ref
         lock_release_token_pool::initialize(
-            owner,
-            option::some(transfer_ref),
-            rebalancer_addr
+            owner, option::some(transfer_ref), rebalancer_addr
         );
 
         // Try to migrate as non-owner (should fail with E_ONLY_CALLABLE_BY_OWNER)
@@ -587,9 +583,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
 
         // Initialize pool with the transfer ref
         lock_release_token_pool::initialize(
-            owner,
-            option::some(transfer_ref),
-            rebalancer_addr
+            owner, option::some(transfer_ref), rebalancer_addr
         );
 
         // Add some liquidity first
@@ -615,7 +609,6 @@ module lock_release_token_pool::lock_release_token_pool_test {
     // ================================================================
     // |                  Allowlist Tests                             |
     // ================================================================
-
     #[
         test(
             owner = @0x100,
@@ -638,9 +631,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
 
         // Initialize pool with no initial allowlist (disabled by default)
         lock_release_token_pool::initialize(
-            owner,
-            option::some(transfer_ref),
-            rebalancer_addr
+            owner, option::some(transfer_ref), rebalancer_addr
         );
 
         // Allowlist should be disabled initially
@@ -680,9 +671,7 @@ module lock_release_token_pool::lock_release_token_pool_test {
 
         // Initialize pool
         lock_release_token_pool::initialize(
-            owner,
-            option::some(transfer_ref),
-            rebalancer_addr
+            owner, option::some(transfer_ref), rebalancer_addr
         );
 
         // Try to enable allowlist as non-owner (should fail with E_ONLY_CALLABLE_BY_OWNER)

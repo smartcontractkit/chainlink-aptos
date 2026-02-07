@@ -667,7 +667,10 @@ module ccip::token_admin_registry {
 
         event::emit_event(
             &mut state.administrator_transferred_events,
-            AdministratorTransferred { local_token, new_admin: token_config.administrator }
+            AdministratorTransferred {
+                local_token,
+                new_admin: token_config.administrator
+            }
         );
     }
 
@@ -688,7 +691,6 @@ module ccip::token_admin_registry {
     // ================================================================
     // |                         Pool I/O V1                          |
     // ================================================================
-
     public fun get_lock_or_burn_input_v1<ProofType: drop>(
         token_pool_address: address, _proof: ProofType
     ): LockOrBurnInputV1 acquires TokenPoolRegistration {
@@ -852,7 +854,9 @@ module ccip::token_admin_registry {
         input.sender
     }
 
-    public fun get_release_or_mint_receiver(input: &ReleaseOrMintInputV1): address {
+    public fun get_release_or_mint_receiver(
+        input: &ReleaseOrMintInputV1
+    ): address {
         input.receiver
     }
 
@@ -895,7 +899,6 @@ module ccip::token_admin_registry {
     // ================================================================
     // |                        Lock or Burn                          |
     // ================================================================
-
     public(friend) fun start_lock_or_burn(
         token_pool_address: address,
         sender: address,
@@ -980,7 +983,6 @@ module ccip::token_admin_registry {
     // ================================================================
     // |                       Release or Mint                        |
     // ================================================================
-
     public(friend) fun start_release_or_mint(
         token_pool_address: address,
         sender: vector<u8>,
@@ -1146,7 +1148,6 @@ module ccip::token_admin_registry {
     // ================================================================
     // |                      MCMS Entrypoint                         |
     // ================================================================
-
     struct McmsCallback has drop {}
 
     public fun mcms_entrypoint<T: key>(

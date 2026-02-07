@@ -39,10 +39,8 @@ module ccip::eth_abi_test {
     public fun test_encode_bytes_exactly_32_bytes() {
         let out: vector<u8> = vector[];
 
-        let value: vector<u8> = vector[
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 1
-        ];
+        let value: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
 
         // Length 32 should be 64 bytes
         assert!(value.length() == 32);

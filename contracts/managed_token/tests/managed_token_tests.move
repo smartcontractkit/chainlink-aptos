@@ -185,14 +185,12 @@ module managed_token::managed_token_tests {
         managed_token::burn(user, signer::address_of(user), 1000000);
     }
 
-    #[
-        test(
-            owner = @0x999,
-            recipient1 = @0xface,
-            recipient2 = @0xbeef,
-            managed_token = @managed_token
-        )
-    ]
+    #[test(
+        owner = @0x999,
+        recipient1 = @0xface,
+        recipient2 = @0xbeef,
+        managed_token = @managed_token
+    )]
     public fun test_token_transfer(
         owner: &signer,
         recipient1: &signer,
@@ -325,14 +323,14 @@ module managed_token::managed_token_tests {
     }
 
     #[test(
-        owner = @0x999, user = @0xface, other = @0xbeef, managed_token = @managed_token
+        owner = @0x999,
+        user = @0xface,
+        other = @0xbeef,
+        managed_token = @managed_token
     )]
     #[expected_failure(abort_code = 327681, location = managed_token::ownable)]
     public fun test_wrong_account_accept_ownership(
-        owner: &signer,
-        user: &signer,
-        other: &signer,
-        managed_token: &signer
+        owner: &signer, user: &signer, other: &signer, managed_token: &signer
     ) {
         setup(owner, managed_token);
         initialize_managed_token(owner, option::some(MAX_SUPPLY));
@@ -373,14 +371,14 @@ module managed_token::managed_token_tests {
     }
 
     #[test(
-        owner = @0x999, user = @0xface, other = @0xbeef, managed_token = @managed_token
+        owner = @0x999,
+        user = @0xface,
+        other = @0xbeef,
+        managed_token = @managed_token
     )]
     #[expected_failure(abort_code = 327684, location = managed_token::ownable)]
     public fun test_execute_transfer_to_wrong_address(
-        owner: &signer,
-        user: &signer,
-        other: &signer,
-        managed_token: &signer
+        owner: &signer, user: &signer, other: &signer, managed_token: &signer
     ) {
         setup(owner, managed_token);
         initialize_managed_token(owner, option::some(MAX_SUPPLY));

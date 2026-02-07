@@ -55,10 +55,7 @@ module ccip_token_pool::rate_limiter {
 
     /// We allow 0 rate and/or 0 capacity rate limits to effectively disable value transfer.
     public fun set_token_bucket_config(
-        bucket: &mut TokenBucket,
-        is_enabled: bool,
-        capacity: u64,
-        rate: u64
+        bucket: &mut TokenBucket, is_enabled: bool, capacity: u64, rate: u64
     ) {
         update_bucket(bucket);
 
@@ -80,8 +77,7 @@ module ccip_token_pool::rate_limiter {
 
     inline fun calculate_refill(bucket: &TokenBucket, time_diff: u64): u64 {
         min(
-            bucket.capacity,
-            bucket.tokens + time_diff * bucket.rate
+            bucket.capacity, bucket.tokens + time_diff * bucket.rate
         )
     }
 

@@ -44,6 +44,8 @@ func (d *Deployer) DeployDevnet() error {
 			"run-local-testnet",
 			"--with-faucet",
 			"--force-restart",
+			"--test-dir",
+			"/testnet",
 			"--bind-to",
 			"0.0.0.0",
 		},
