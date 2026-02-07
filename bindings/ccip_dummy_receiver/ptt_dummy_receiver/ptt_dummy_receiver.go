@@ -51,8 +51,8 @@ func NewPttDummyReceiver(address aptos.AccountAddress, client aptos.AptosRpcClie
 const (
 	E_RESOURCE_NOT_FOUND_ON_ACCOUNT   uint64 = 1
 	E_UNAUTHORIZED                    uint64 = 2
-	E_INVALID_TOKEN_ADDRESS           uint64 = 3
-	E_NO_TOKENS_AVAILABLE_TO_WITHDRAW uint64 = 4
+	E_NO_TOKENS_AVAILABLE_TO_WITHDRAW uint64 = 3
+	E_TEST_ABORT                      uint64 = 4
 )
 
 // Structs

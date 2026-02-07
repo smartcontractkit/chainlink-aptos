@@ -177,7 +177,7 @@ module ccip_offramp::offramp_v1_v2_compatibility_test {
         // Pool is V1-only (test_init_v1 was called in setup)
         // No public function to verify V1 pool registration, but successful execution proves it works
         assert!(
-            !token_admin_registry::has_token_pool_config(
+            !token_admin_registry::has_token_pool_registration_v2(
                 signer::address_of(burn_mint_token_pool)
             )
         );
@@ -409,7 +409,7 @@ module ccip_offramp::offramp_v1_v2_compatibility_test {
 
         // Verify V2 pool registered
         assert!(
-            token_admin_registry::has_token_pool_config(
+            token_admin_registry::has_token_pool_registration_v2(
                 signer::address_of(burn_mint_token_pool)
             )
         );
@@ -631,7 +631,7 @@ module ccip_offramp::offramp_v1_v2_compatibility_test {
 
         // Verify pool has V2 config
         assert!(
-            token_admin_registry::has_token_pool_config(
+            token_admin_registry::has_token_pool_registration_v2(
                 signer::address_of(burn_mint_token_pool)
             )
         );

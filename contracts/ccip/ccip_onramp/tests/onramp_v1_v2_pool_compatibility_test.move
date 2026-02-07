@@ -119,7 +119,7 @@ module ccip_onramp::onramp_v1_v2_pool_compatibility_test {
 
         // Verify V1 pool registered (not V2)
         assert!(
-            !token_admin_registry::has_token_pool_config(
+            !token_admin_registry::has_token_pool_registration_v2(
                 signer::address_of(burn_mint_token_pool)
             )
         );
@@ -228,7 +228,7 @@ module ccip_onramp::onramp_v1_v2_pool_compatibility_test {
 
         // Verify V2 config now exists
         assert!(
-            token_admin_registry::has_token_pool_config(
+            token_admin_registry::has_token_pool_registration_v2(
                 signer::address_of(burn_mint_token_pool)
             )
         );
@@ -304,7 +304,7 @@ module ccip_onramp::onramp_v1_v2_pool_compatibility_test {
 
         // Verify V2 config registered (already done by setup)
         assert!(
-            token_admin_registry::has_token_pool_config(
+            token_admin_registry::has_token_pool_registration_v2(
                 signer::address_of(burn_mint_token_pool)
             )
         );
@@ -380,7 +380,7 @@ module ccip_onramp::onramp_v1_v2_pool_compatibility_test {
 
         // Verify V1 pool registered (not V2)
         assert!(
-            !token_admin_registry::has_token_pool_config(
+            !token_admin_registry::has_token_pool_registration_v2(
                 signer::address_of(lock_release_token_pool)
             )
         );
@@ -489,7 +489,7 @@ module ccip_onramp::onramp_v1_v2_pool_compatibility_test {
 
         // Verify V2 config now exists
         assert!(
-            token_admin_registry::has_token_pool_config(
+            token_admin_registry::has_token_pool_registration_v2(
                 signer::address_of(lock_release_token_pool)
             )
         );
@@ -564,7 +564,7 @@ module ccip_onramp::onramp_v1_v2_pool_compatibility_test {
         mint_tokens_for_transfer(token_addr, 1);
 
         assert!(
-            token_admin_registry::has_token_pool_config(
+            token_admin_registry::has_token_pool_registration_v2(
                 signer::address_of(lock_release_token_pool)
             )
         );

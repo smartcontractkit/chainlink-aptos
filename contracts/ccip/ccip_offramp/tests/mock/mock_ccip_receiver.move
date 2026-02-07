@@ -103,6 +103,11 @@ module ccip_offramp::mock_ccip_receiver {
 
     struct CCIPReceiverProof has drop {}
 
+    /// This function MUST remain private (not `public fun`). The `#[persistent]`
+    /// attribute allows it to be stored as a closure without exposing it to external callers.
+    /// Only the authorized offramp can invoke this via the closure registered with
+    /// `receiver_registry::register_receiver_v2()`. Making this public would allow anyone to
+    /// construct an `Any2AptosMessage` and execute arbitrary token transfers.
     #[persistent]
     fun ccip_receive_v2(message: client::Any2AptosMessage) acquires CCIPReceiverState {
         /* load state and rebuild a signer for the resource account */

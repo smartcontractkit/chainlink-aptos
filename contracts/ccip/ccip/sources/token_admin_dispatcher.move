@@ -16,7 +16,7 @@ module ccip::token_admin_dispatcher {
     ): (vector<u8>, vector<u8>) {
         auth::assert_is_allowed_onramp(signer::address_of(caller));
 
-        if (token_admin_registry::has_token_pool_config(token_pool_address)) {
+        if (token_admin_registry::has_token_pool_registration_v2(token_pool_address)) {
             token_admin_registry::lock_or_burn_v2(
                 token_pool_address,
                 fa,
@@ -53,7 +53,7 @@ module ccip::token_admin_dispatcher {
     ): (FungibleAsset, u64) {
         auth::assert_is_allowed_offramp(signer::address_of(caller));
 
-        if (token_admin_registry::has_token_pool_config(token_pool_address)) {
+        if (token_admin_registry::has_token_pool_registration_v2(token_pool_address)) {
             token_admin_registry::release_or_mint_v2(
                 token_pool_address,
                 sender,

@@ -36,8 +36,8 @@ module ccip_dummy_receiver::ptt_dummy_receiver {
 
     const E_RESOURCE_NOT_FOUND_ON_ACCOUNT: u64 = 1;
     const E_UNAUTHORIZED: u64 = 2;
-    const E_INVALID_TOKEN_ADDRESS: u64 = 3;
-    const E_NO_TOKENS_AVAILABLE_TO_WITHDRAW: u64 = 4;
+    const E_NO_TOKENS_AVAILABLE_TO_WITHDRAW: u64 = 3;
+    const E_TEST_ABORT: u64 = 4;
 
     #[view]
     public fun type_and_version(): String {
@@ -78,6 +78,11 @@ module ccip_dummy_receiver::ptt_dummy_receiver {
         signer::address_of(&state_signer)
     }
 
+    /// This function MUST remain private (not `public fun`). The `#[persistent]`
+    /// attribute allows it to be stored as a closure without exposing it to external callers.
+    /// Only the authorized offramp can invoke this via the closure registered with
+    /// `receiver_registry::register_receiver_v2()`. Making this public would allow anyone to
+    /// construct an `Any2AptosMessage` and execute arbitrary token transfers.
     #[persistent]
     fun ccip_receive_v2(message: client::Any2AptosMessage) acquires CCIPReceiverState {
         /* load state and rebuild a signer for the resource account */
@@ -132,7 +137,7 @@ module ccip_dummy_receiver::ptt_dummy_receiver {
 
         // Simple abort condition for testing
         if (data == b"abort") {
-            abort 1
+            abort E_TEST_ABORT
         };
     }
 

@@ -138,14 +138,11 @@ module burn_mint_token_pool::burn_mint_token_pool {
     }
 
     public fun register_v2_callbacks(publisher: &signer) {
-        let lock_or_burn_closure = |fa, input| lock_or_burn_v2(fa, input);
-        let release_or_mint_closure = |input| release_or_mint_v2(input);
-
         token_admin_registry::register_pool_v2(
             publisher,
             @burn_mint_local_token,
-            lock_or_burn_closure,
-            release_or_mint_closure
+            lock_or_burn_v2,
+            release_or_mint_v2
         );
     }
 

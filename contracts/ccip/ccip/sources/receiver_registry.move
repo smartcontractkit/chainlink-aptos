@@ -87,7 +87,8 @@ module ccip::receiver_registry {
     ) acquires ReceiverRegistryState {
         let receiver_address = signer::address_of(receiver_account);
         assert!(
-            !exists<CCIPReceiverRegistration>(receiver_address),
+            !exists<CCIPReceiverRegistration>(receiver_address)
+                && !exists<CCIPReceiverRegistrationV2>(receiver_address),
             error::invalid_argument(E_ALREADY_REGISTERED)
         );
 
@@ -153,6 +154,28 @@ module ccip::receiver_registry {
         );
     }
 
+    /// Registers a V2 CCIP receiver using a function-value callback (closure).
+    ///
+    /// Upgrade path: existing legacy receivers can upgrade to V2 by calling this function,
+    /// which supersedes the legacy registration without requiring unregistration.
+    /// New receivers should use V2 directly. Once V2 is registered, legacy registration
+    /// via `register_receiver()` is rejected.
+    ///
+    /// SECURITY: The callback MUST wrap a private `#[persistent]` function. Exposing the
+    /// receive function as `public fun` allows any caller to construct an `Any2AptosMessage`
+    /// and invoke the receiver directly,
+    ///
+    /// Correct pattern:
+    /// ```
+    /// #[persistent]
+    /// fun ccip_receive_v2(message: client::Any2AptosMessage) { ... }
+    ///
+    /// fun init_module(publisher: &signer) {
+    ///     receiver_registry::register_receiver_v2(
+    ///         publisher, |message| ccip_receive_v2(message)
+    ///     );
+    /// }
+    /// ```
     public fun register_receiver_v2(
         receiver_account: &signer,
         callback: |client::Any2AptosMessage| has copy + drop + store

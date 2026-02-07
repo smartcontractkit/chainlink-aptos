@@ -396,8 +396,9 @@ module ccip_offramp::offramp {
         );
         let source_chain_execution_states =
             state.execution_states.borrow(source_chain_selector);
-        let execution_state = source_chain_execution_states.borrow(sequence_number);
-        *execution_state
+        *source_chain_execution_states.borrow_with_default(
+            sequence_number, &EXECUTION_STATE_UNTOUCHED
+        )
     }
 
     fun execute_single_report(

@@ -27,12 +27,8 @@ module regulated_token_pool::regulated_token_pool {
         store_signer_address: address
     }
 
-    const E_NOT_PUBLISHER: u64 = 1;
-    const E_ALREADY_INITIALIZED: u64 = 2;
-    const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
-    const E_LOCAL_TOKEN_MISMATCH: u64 = 4;
-    const E_INVALID_ARGUMENTS: u64 = 5;
-    const E_UNKNOWN_FUNCTION: u64 = 6;
+    const E_INVALID_ARGUMENTS: u64 = 1;
+    const E_UNKNOWN_FUNCTION: u64 = 2;
 
     // ================================================================
     // |                             Init                             |
@@ -89,15 +85,11 @@ module regulated_token_pool::regulated_token_pool {
 
     public fun register_v2_callbacks(publisher: &signer) {
         let regulated_token_address = regulated_token::token_address();
-
-        let lock_or_burn_closure = |fa, input| lock_or_burn_v2(fa, input);
-        let release_or_mint_closure = |input| release_or_mint_v2(input);
-
         token_admin_registry::register_pool_v2(
             publisher,
             regulated_token_address,
-            lock_or_burn_closure,
-            release_or_mint_closure
+            lock_or_burn_v2,
+            release_or_mint_v2
         );
     }
 
