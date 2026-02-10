@@ -160,6 +160,10 @@ module lock_release_token_pool::lock_release_token_pool {
     }
 
     public fun register_v2_callbacks(publisher: &signer) {
+        assert!(
+            signer::address_of(publisher) == @lock_release_token_pool,
+            error::permission_denied(E_NOT_PUBLISHER)
+        );
         token_admin_registry::register_pool_v2(
             publisher,
             @lock_release_local_token,

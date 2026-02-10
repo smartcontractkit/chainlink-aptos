@@ -108,6 +108,7 @@ func NewRegulatedTokenPool(address aptos.AccountAddress, client aptos.AptosRpcCl
 const (
 	E_INVALID_ARGUMENTS uint64 = 1
 	E_UNKNOWN_FUNCTION  uint64 = 2
+	E_NOT_PUBLISHER     uint64 = 3
 )
 
 // Structs

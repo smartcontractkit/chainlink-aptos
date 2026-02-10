@@ -29,6 +29,7 @@ module regulated_token_pool::regulated_token_pool {
 
     const E_INVALID_ARGUMENTS: u64 = 1;
     const E_UNKNOWN_FUNCTION: u64 = 2;
+    const E_NOT_PUBLISHER: u64 = 3;
 
     // ================================================================
     // |                             Init                             |
@@ -83,6 +84,10 @@ module regulated_token_pool::regulated_token_pool {
     }
 
     public fun register_v2_callbacks(publisher: &signer) {
+        assert!(
+            signer::address_of(publisher) == @regulated_token_pool,
+            error::permission_denied(E_NOT_PUBLISHER)
+        );
         let regulated_token_address = regulated_token::token_address();
         token_admin_registry::register_pool_v2(
             publisher,
