@@ -6,6 +6,7 @@ import (
 
 	"github.com/hashicorp/go-plugin"
 
+	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
@@ -62,6 +63,24 @@ func (p *pluginRelayer) NewRelayer(ctx context.Context, rawConfig string, loopKs
 	if err != nil {
 		return nil, fmt.Errorf("failed to read configs: %w", err)
 	}
+
+	rawNodes := make([]map[string]string, 0, len(cfg.Nodes))
+	for _, n := range cfg.Nodes {
+		if n == nil || n.URL == nil {
+			continue
+		}
+		rawNodes = append(rawNodes, map[string]string{"URL": n.URL.String()})
+	}
+	emitter := loop.NewPluginRelayerConfigEmitter(
+		p.Logger,
+		beholder.GetClient().Config.AuthPublicKeyHex,
+		cfg.ChainID,
+		rawNodes,
+	)
+	if err := emitter.Start(ctx); err != nil {
+		return nil, fmt.Errorf("failed to start plugin relayer config emitter: %w", err)
+	}
+	p.SubService(emitter)
 	opts := chain.ChainOpts{
 		Logger:   p.Logger,
 		KeyStore: loopKs,
