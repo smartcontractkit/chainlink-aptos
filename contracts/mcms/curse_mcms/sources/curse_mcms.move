@@ -1,5 +1,5 @@
-/// This module is a scoped-down MCMS for fast curse/uncurse operations on RMN Remote.
-/// It mirrors the full MCMS architecture but only dispatches to curse/uncurse functions.
+/// Scoped-down MCMS for curse/uncurse operations on RMN Remote.
+/// Dispatches to: @curse_mcms (curse_mcms, curse_mcms_account) and @ccip (rmn_remote).
 module curse_mcms::curse_mcms {
     use std::aptos_hash::keccak256;
     use std::bcs;
@@ -202,6 +202,7 @@ module curse_mcms::curse_mcms {
     const E_UNKNOWN_CCIP_MODULE: u64 = 53;
     const E_UNKNOWN_TARGET: u64 = 54;
     const E_UNKNOWN_CURSE_MCMS_MODULE_FUNCTION: u64 = 55;
+    const E_UNKNOWN_CURSE_MCMS_ACCOUNT_FUNCTION: u64 = 56;
 
     fun init_module(publisher: &signer) {
         let bypasser = create_multisig(publisher, BYPASSER_ROLE);
@@ -1300,6 +1301,8 @@ module curse_mcms::curse_mcms {
         if (target == @curse_mcms) {
             if (module_name_bytes == b"curse_mcms") {
                 timelock_dispatch_to_self(function_name, data);
+            } else if (module_name_bytes == b"curse_mcms_account") {
+                timelock_dispatch_to_account(function_name, data);
             } else {
                 abort E_UNKNOWN_CURSE_MCMS_MODULE
             }
@@ -1350,6 +1353,25 @@ module curse_mcms::curse_mcms {
             );
         } else {
             abort E_UNKNOWN_CURSE_MCMS_MODULE_FUNCTION
+        }
+    }
+
+    inline fun timelock_dispatch_to_account(
+        function_name: String, data: vector<u8>
+    ) {
+        let function_name_bytes = *function_name.bytes();
+        let stream = bcs_stream::new(data);
+        let self_signer = &curse_mcms_account::get_signer();
+
+        if (function_name_bytes == b"transfer_ownership") {
+            let target = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+            curse_mcms_account::transfer_ownership(self_signer, target);
+        } else if (function_name_bytes == b"accept_ownership") {
+            bcs_stream::assert_is_consumed(&stream);
+            curse_mcms_account::accept_ownership(self_signer);
+        } else {
+            abort E_UNKNOWN_CURSE_MCMS_ACCOUNT_FUNCTION
         }
     }
 
@@ -1719,5 +1741,12 @@ module curse_mcms::curse_mcms {
         function_name: String, data: vector<u8>
     ) acquires Timelock, MultisigState, Multisig {
         timelock_dispatch_to_self(function_name, data)
+    }
+
+    #[test_only]
+    public fun test_timelock_dispatch_to_account(
+        function_name: String, data: vector<u8>
+    ) {
+        timelock_dispatch_to_account(function_name, data)
     }
 }
