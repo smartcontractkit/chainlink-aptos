@@ -265,6 +265,16 @@ func (c *chain) ID() string {
 	return c.id
 }
 
+func (c *chain) GetChainInfo(ctx context.Context) (types.ChainInfo, error) {
+	_ = ctx
+	return types.ChainInfo{
+		FamilyName:      config.ChainFamilyName,
+		ChainID:         c.id,
+		NetworkName:     c.cfg.NetworkName,
+		NetworkNameFull: c.cfg.NetworkNameFull,
+	}, nil
+}
+
 // LatestHead returns the latest head for the underlying chain.
 // TODO: should be replaced with a head tracker component
 func (c *chain) LatestHead(ctx context.Context) (types.Head, error) {
