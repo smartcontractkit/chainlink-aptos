@@ -41,6 +41,8 @@ module ccip_offramp::mock_ccip_receiver {
     const E_UNAUTHORIZED: u64 = 2;
     const E_INVALID_TOKEN_ADDRESS: u64 = 3;
     const E_NO_TOKENS_AVAILABLE_TO_WITHDRAW: u64 = 4;
+    /// Test-only abort triggered when message data equals "abort".
+    const E_TEST_ABORT: u64 = 5;
 
     #[view]
     public fun type_and_version(): String {
@@ -165,7 +167,9 @@ module ccip_offramp::mock_ccip_receiver {
         };
 
         // Simple abort condition for testing
-        if (data == b"abort") { abort 1 };
+        if (data == b"abort") {
+            abort E_TEST_ABORT
+        };
     }
 
     #[deprecated]
@@ -239,7 +243,9 @@ module ccip_offramp::mock_ccip_receiver {
         };
 
         // Simple abort condition for testing
-        if (data == b"abort") { abort 1 };
+        if (data == b"abort") {
+            abort E_TEST_ABORT
+        };
 
         option::none()
     }
