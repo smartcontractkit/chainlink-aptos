@@ -50,26 +50,25 @@ module test::echo {
     }
 
     public entry fun echo_with_events(
-        _account: &signer,
-        number: u64,
-        text: String,
-        bytes: vector<u8>
+        _account: &signer, number: u64, text: String, bytes: vector<u8>
     ) acquires EventStore {
         let store = borrow_global_mut<EventStore>(@test);
 
         event::emit_event(
             &mut store.single_value_events, SingleValueEvent { value: number }
         );
-        event::emit_event(
-            &mut store.double_value_events, DoubleValueEvent { number, text }
-        );
+        event::emit_event(&mut store.double_value_events, DoubleValueEvent { number, text });
 
         let values = vector::empty<vector<u8>>();
         vector::push_back(&mut values, bytes);
         event::emit_event(&mut store.vector_vector_events, VectorVectorEvent { values });
 
         let nested = Nested { id: number, description: text };
-        let cs = ComplexStruct { flag: true, nested, values: vector[number, number + 1] };
+        let cs = ComplexStruct {
+            flag: true,
+            nested,
+            values: vector[number, number + 1]
+        };
         event::emit_event(&mut store.complex_struct_events, cs);
     }
 

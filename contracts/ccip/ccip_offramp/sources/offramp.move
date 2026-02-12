@@ -40,10 +40,8 @@ module ccip_offramp::offramp {
     const EXECUTION_STATE_UNTOUCHED: u8 = 0;
     const EXECUTION_STATE_SUCCESS: u8 = 2;
 
-    const ZERO_MERKLE_ROOT: vector<u8> = vector[
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0
-    ];
+    const ZERO_MERKLE_ROOT: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
     struct OffRampDeployment has key, store {
         state_signer_cap: SignerCapability
@@ -252,10 +250,7 @@ module ccip_offramp::offramp {
         let (state_signer, state_signer_cap) =
             account::create_resource_account(publisher, STATE_SEED);
 
-        move_to(
-            publisher,
-            OffRampDeployment { state_signer_cap }
-        );
+        move_to(publisher, OffRampDeployment { state_signer_cap });
 
         if (@ccip_offramp == @ccip) {
             // if we're deployed on the same code object, self-register as an allowed offramp.
@@ -322,12 +317,12 @@ module ccip_offramp::offramp {
         let static_config = create_static_config(chain_selector);
 
         event::emit_event(
-            &mut state.static_config_set_events, StaticConfigSet { static_config }
+            &mut state.static_config_set_events,
+            StaticConfigSet { static_config }
         );
 
         set_dynamic_config_internal(
-            &mut state,
-            permissionless_execution_threshold_seconds
+            &mut state, permissionless_execution_threshold_seconds
         );
         apply_source_chain_config_updates_internal(
             &mut state,
@@ -359,7 +354,6 @@ module ccip_offramp::offramp {
     // ================================================================
     // |                          Execution                           |
     // ================================================================
-
     public entry fun execute(
         caller: &signer, report_context: vector<vector<u8>>, report: vector<u8>
     ) acquires OffRampState {
@@ -512,7 +506,6 @@ module ccip_offramp::offramp {
     // ================================================================
     // |                            Commit                            |
     // ================================================================
-
     public entry fun commit(
         caller: &signer,
         report_context: vector<vector<u8>>,
@@ -524,7 +517,8 @@ module ccip_offramp::offramp {
 
         if (commit_report.blessed_merkle_roots.length() > 0) {
             verify_blessed_roots(
-                &commit_report.blessed_merkle_roots, commit_report.rmn_signatures
+                &commit_report.blessed_merkle_roots,
+                commit_report.rmn_signatures
             );
         };
 
@@ -695,10 +689,7 @@ module ccip_offramp::offramp {
     #[view]
     public fun get_merkle_root(root: vector<u8>): u64 acquires OffRampState {
         let state = borrow_state();
-        assert!(
-            state.roots.contains(root),
-            error::invalid_argument(E_INVALID_ROOT)
-        );
+        assert!(state.roots.contains(root), error::invalid_argument(E_INVALID_ROOT));
 
         *state.roots.borrow(root)
     }
@@ -732,7 +723,6 @@ module ccip_offramp::offramp {
     // ================================================================
     // |                           Config                             |
     // ================================================================
-
     #[view]
     public fun get_static_config(): StaticConfig acquires OffRampState {
         let state = borrow_state();
@@ -751,10 +741,7 @@ module ccip_offramp::offramp {
         let state = borrow_state_mut();
         ownable::assert_only_owner(signer::address_of(caller), &state.ownable_state);
 
-        set_dynamic_config_internal(
-            state,
-            permissionless_execution_threshold_seconds
-        )
+        set_dynamic_config_internal(state, permissionless_execution_threshold_seconds)
     }
 
     public entry fun apply_source_chain_config_updates(
@@ -837,7 +824,6 @@ module ccip_offramp::offramp {
     // ================================================================
     // |                       Token Handling                         |
     // ================================================================
-
     inline fun release_or_mint_tokens(
         state: &mut OffRampState,
         token_amounts: &vector<Any2AptosTokenTransfer>,
@@ -880,10 +866,7 @@ module ccip_offramp::offramp {
     ): (address, u64) {
         let local_token = token_transfer.dest_token_address;
         let token_pool_address = token_admin_registry::get_pool(local_token);
-        assert!(
-            token_pool_address != @0x0,
-            error::invalid_state(E_UNSUPPORTED_TOKEN)
-        );
+        assert!(token_pool_address != @0x0, error::invalid_state(E_UNSUPPORTED_TOKEN));
 
         let source_amount = token_transfer.amount;
         let source_pool_data = token_transfer.extra_data;
@@ -1009,7 +992,10 @@ module ccip_offramp::offramp {
 
             event::emit_event(
                 &mut state.source_chain_config_set_events,
-                SourceChainConfigSet { source_chain_selector, source_chain_config: *config }
+                SourceChainConfigSet {
+                    source_chain_selector,
+                    source_chain_config: *config
+                }
             );
         }
     }
@@ -1017,7 +1003,6 @@ module ccip_offramp::offramp {
     // ================================================================
     // |                        Metadata hash                         |
     // ================================================================
-
     inline fun calculate_metadata_hash_inlined(
         source_chain_selector: u64, dest_chain_selector: u64, on_ramp: vector<u8>
     ): vector<u8> {
@@ -1155,7 +1140,6 @@ module ccip_offramp::offramp {
     // ================================================================
     // |                       Deserialization                        |
     // ================================================================
-
     inline fun deserialize_commit_report(report_bytes: vector<u8>): CommitReport {
         let stream = bcs_stream::new(report_bytes);
         let token_price_updates =
@@ -1185,7 +1169,9 @@ module ccip_offramp::offramp {
         let rmn_signatures =
             bcs_stream::deserialize_vector(
                 &mut stream,
-                |stream| { bcs_stream::deserialize_fixed_vector_u8(stream, 64) }
+                |stream| {
+                    bcs_stream::deserialize_fixed_vector_u8(stream, 64)
+                }
             );
 
         bcs_stream::assert_is_consumed(&stream);
@@ -1284,7 +1270,12 @@ module ccip_offramp::offramp {
 
         bcs_stream::assert_is_consumed(&stream);
 
-        ExecutionReport { source_chain_selector, message, offchain_token_data, proofs }
+        ExecutionReport {
+            source_chain_selector,
+            message,
+            offchain_token_data,
+            proofs
+        }
     }
 
     inline fun create_static_config(chain_selector: u64): StaticConfig {
@@ -1299,13 +1290,15 @@ module ccip_offramp::offramp {
     inline fun create_dynamic_config(
         permissionless_execution_threshold_seconds: u32
     ): DynamicConfig {
-        DynamicConfig { fee_quoter: @ccip, permissionless_execution_threshold_seconds }
+        DynamicConfig {
+            fee_quoter: @ccip,
+            permissionless_execution_threshold_seconds
+        }
     }
 
     // ================================================================
     // |                          Ownable                             |
     // ================================================================
-
     #[view]
     public fun owner(): address acquires OffRampState {
         ownable::owner(&borrow_state().ownable_state)
@@ -1351,7 +1344,6 @@ module ccip_offramp::offramp {
     // ================================================================
     // |                             OCR                              |
     // ================================================================
-
     public entry fun set_ocr3_config(
         caller: &signer,
         config_digest: vector<u8>,
@@ -1376,9 +1368,7 @@ module ccip_offramp::offramp {
     }
 
     inline fun after_ocr3_config_set(
-        state: &mut OffRampState,
-        ocr_plugin_type: u8,
-        is_signature_verification_enabled: bool
+        state: &mut OffRampState, ocr_plugin_type: u8, is_signature_verification_enabled: bool
     ) {
         if (ocr_plugin_type == ocr3_base::ocr_plugin_type_commit()) {
             assert!(
@@ -1409,7 +1399,6 @@ module ccip_offramp::offramp {
     // ================================================================
     // |                      MCMS Entrypoint                         |
     // ================================================================
-
     struct McmsCallback has drop {}
 
     public fun mcms_entrypoint<T: key>(
@@ -1480,10 +1469,7 @@ module ccip_offramp::offramp {
             let permissionless_execution_threshold_seconds =
                 bcs_stream::deserialize_u32(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
-            set_dynamic_config(
-                &caller,
-                permissionless_execution_threshold_seconds
-            )
+            set_dynamic_config(&caller, permissionless_execution_threshold_seconds)
         } else if (function_bytes == b"set_ocr3_config") {
             let config_digest = bcs_stream::deserialize_vector_u8(&mut stream);
             let ocr_plugin_type = bcs_stream::deserialize_u8(&mut stream);
@@ -1579,7 +1565,12 @@ module ccip_offramp::offramp {
         offchain_token_data: vector<vector<u8>>,
         proofs: vector<vector<u8>>
     ): ExecutionReport {
-        ExecutionReport { source_chain_selector, message, offchain_token_data, proofs }
+        ExecutionReport {
+            source_chain_selector,
+            message,
+            offchain_token_data,
+            proofs
+        }
     }
 
     #[test_only]
@@ -1625,7 +1616,14 @@ module ccip_offramp::offramp {
         gas_limit: u256,
         token_amounts: vector<Any2AptosTokenTransfer>
     ): Any2AptosRampMessage {
-        Any2AptosRampMessage { header, sender, data, receiver, gas_limit, token_amounts }
+        Any2AptosRampMessage {
+            header,
+            sender,
+            data,
+            receiver,
+            gas_limit,
+            token_amounts
+        }
     }
 
     #[test_only]
@@ -1777,7 +1775,9 @@ module ccip_offramp::offramp {
     }
 
     #[test_only]
-    public fun token_price_update_source_token(update: &TokenPriceUpdate): address {
+    public fun token_price_update_source_token(
+        update: &TokenPriceUpdate
+    ): address {
         update.source_token
     }
 

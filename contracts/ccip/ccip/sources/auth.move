@@ -34,9 +34,7 @@ module ccip::auth {
 
         let allowed_offramps =
             allowlist::new_with_name(
-                state_object_signer,
-                vector[],
-                string::utf8(b"offramps")
+                state_object_signer, vector[], string::utf8(b"offramps")
             );
         allowlist::set_allowlist_enabled(&mut allowed_offramps, true);
 
@@ -76,18 +74,14 @@ module ccip::auth {
     }
 
     public entry fun apply_allowed_onramp_updates(
-        caller: &signer,
-        onramps_to_remove: vector<address>,
-        onramps_to_add: vector<address>
+        caller: &signer, onramps_to_remove: vector<address>, onramps_to_add: vector<address>
     ) acquires AuthState {
         let state = borrow_state_mut();
 
         assert_is_owner_or_ccip(signer::address_of(caller), &state.ownable_state);
 
         allowlist::apply_allowlist_updates(
-            &mut state.allowed_onramps,
-            onramps_to_remove,
-            onramps_to_add
+            &mut state.allowed_onramps, onramps_to_remove, onramps_to_add
         );
     }
 
@@ -101,9 +95,7 @@ module ccip::auth {
         assert_is_owner_or_ccip(signer::address_of(caller), &state.ownable_state);
 
         allowlist::apply_allowlist_updates(
-            &mut state.allowed_offramps,
-            offramps_to_remove,
-            offramps_to_add
+            &mut state.allowed_offramps, offramps_to_remove, offramps_to_add
         );
     }
 
@@ -141,7 +133,6 @@ module ccip::auth {
     // ================================================================
     // |                          Ownable                             |
     // ================================================================
-
     #[view]
     public fun owner(): address acquires AuthState {
         ownable::owner(&borrow_state().ownable_state)
@@ -191,7 +182,6 @@ module ccip::auth {
     // ================================================================
     // |                      MCMS Entrypoint                         |
     // ================================================================
-
     struct McmsCallback has drop {}
 
     public fun mcms_entrypoint<T: key>(
@@ -206,26 +196,22 @@ module ccip::auth {
         if (function_bytes == b"apply_allowed_onramp_updates") {
             let onramps_to_remove =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_address(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
                 );
             let onramps_to_add =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_address(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
             apply_allowed_onramp_updates(&caller, onramps_to_remove, onramps_to_add)
         } else if (function_bytes == b"apply_allowed_offramp_updates") {
             let offramps_to_remove =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_address(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
                 );
             let offramps_to_add =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_address(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
             apply_allowed_offramp_updates(&caller, offramps_to_remove, offramps_to_add)
@@ -255,7 +241,6 @@ module ccip::auth {
     }
 
     // ========================== TEST ONLY ==========================
-
     #[test_only]
     public fun test_init_module(publisher: &signer) {
         init_module(publisher);

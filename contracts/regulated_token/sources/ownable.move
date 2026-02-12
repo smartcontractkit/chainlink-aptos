@@ -117,9 +117,7 @@ module regulated_token::ownable {
         );
     }
 
-    public fun accept_ownership(
-        caller: &signer, state: &mut OwnableState
-    ) {
+    public fun accept_ownership(caller: &signer, state: &mut OwnableState) {
         let caller_address = signer::address_of(caller);
         assert!(
             state.pending_transfer.is_some(),
@@ -172,7 +170,8 @@ module regulated_token::ownable {
             error::permission_denied(E_PROPOSED_OWNER_MISMATCH)
         );
         assert!(
-            pending_transfer.accepted, error::invalid_state(E_TRANSFER_NOT_ACCEPTED)
+            pending_transfer.accepted,
+            error::invalid_state(E_TRANSFER_NOT_ACCEPTED)
         );
 
         object::transfer(caller, state.target_object, pending_transfer.to);

@@ -123,12 +123,18 @@ module managed_token::allowlist {
 
     #[test_only]
     public fun new_add_event(add: address): AllowlistAdd {
-        AllowlistAdd { sender: add, allowlist_name: string::utf8(b"default") }
+        AllowlistAdd {
+            sender: add,
+            allowlist_name: string::utf8(b"default")
+        }
     }
 
     #[test_only]
     public fun new_remove_event(remove: address): AllowlistRemove {
-        AllowlistRemove { sender: remove, allowlist_name: string::utf8(b"default") }
+        AllowlistRemove {
+            sender: remove,
+            allowlist_name: string::utf8(b"default")
+        }
     }
 
     #[test_only]

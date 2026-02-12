@@ -33,14 +33,10 @@ module mcms::mcms_executor_test {
     const TEST_DATA_PART2: vector<u8> = x"fedcba9876543210fedcba9876543210";
 
     const SIGNER_GROUPS: vector<u8> = vector[0, 0, 0];
-    const GROUP_QUORUMS: vector<u8> = vector[
-        2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0
-    ];
-    const GROUP_PARENTS: vector<u8> = vector[
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0
-    ];
+    const GROUP_QUORUMS: vector<u8> = vector[2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const GROUP_PARENTS: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
     #[test_only]
     fun setup(deployer: &signer, framework: &signer): address {
@@ -105,24 +101,15 @@ module mcms::mcms_executor_test {
         mcms_executor::clear_staged_data(caller);
     }
 
-    #[
-        test(
-            deployer = @mcms,
-            owner = @mcms_owner,
-            framework = @aptos_framework,
-            caller = @0x123
-        )
-    ]
-    #[
-        expected_failure(
-            abort_code = mcms::mcms::E_POST_OP_COUNT_REACHED, location = mcms::mcms
-        )
-    ]
+    #[test(
+        deployer = @mcms,
+        owner = @mcms_owner,
+        framework = @aptos_framework,
+        caller = @0x123
+    )]
+    #[expected_failure(abort_code = mcms::mcms::E_POST_OP_COUNT_REACHED, location = mcms::mcms)]
     public fun test_stage_data_and_execute_with_invalid_op_count(
-        deployer: &signer,
-        owner: &signer,
-        framework: &signer,
-        caller: &signer
+        deployer: &signer, owner: &signer, framework: &signer, caller: &signer
     ) {
         setup(deployer, framework);
 

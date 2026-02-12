@@ -6,6 +6,7 @@ import (
 
 	"github.com/hashicorp/go-plugin"
 
+	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
@@ -52,16 +53,36 @@ type pluginRelayer struct {
 	ds sqlutil.DataSource
 }
 
-// NewRelayer implements the Loopp factory method used by the Loopp server to instantiate a aptos relayer
+// NewRelayer implements the Loopp factory method used by the Loopp server to instantiate an aptos relayer.
 // [github.com/smartcontractkit/chainlink-common/pkg/loop.PluginRelayer]
 // loopKs must be an implementation that can construct a aptos keystore adapter
 // [github.com/smartcontractkit/chainlink-aptos/relayer/txm.NewKeystoreAdapter]
-func (p *pluginRelayer) NewRelayer(ctx context.Context, rawConfig string, loopKs loop.Keystore, capRegistry core.CapabilitiesRegistry) (loop.Relayer, error) {
+func (p *pluginRelayer) NewRelayer(ctx context.Context, rawConfig string, loopKs core.Keystore, csaKs core.Keystore, capRegistry core.CapabilitiesRegistry) (loop.Relayer, error) {
+	_ = csaKs
+
 	// Initialize the chain service
 	cfg, err := config.NewDecodedTOMLConfig(rawConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read configs: %w", err)
 	}
+
+	rawNodes := make([]map[string]string, 0, len(cfg.Nodes))
+	for _, n := range cfg.Nodes {
+		if n == nil || n.URL == nil {
+			continue
+		}
+		rawNodes = append(rawNodes, map[string]string{"URL": n.URL.String()})
+	}
+	emitter := loop.NewPluginRelayerConfigEmitter(
+		p.Logger,
+		beholder.GetClient().Config.AuthPublicKeyHex,
+		cfg.ChainID,
+		rawNodes,
+	)
+	if err := emitter.Start(ctx); err != nil {
+		return nil, fmt.Errorf("failed to start plugin relayer config emitter: %w", err)
+	}
+	p.SubService(emitter)
 	opts := chain.ChainOpts{
 		Logger:   p.Logger,
 		KeyStore: loopKs,

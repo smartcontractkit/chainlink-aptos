@@ -38,8 +38,7 @@ module ccip::fee_quoter_initialize {
 
         // Remove all fee tokens
         fee_quoter::apply_fee_token_updates(
-            owner,
-            vector[token_addr], // Remove the token
+            owner, vector[token_addr], // Remove the token
             vector[] // No new tokens
         );
 

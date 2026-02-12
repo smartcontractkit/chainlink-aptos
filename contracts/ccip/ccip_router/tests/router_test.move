@@ -12,7 +12,6 @@ module ccip::router_tests {
 
     const VERSION_1_6_0: vector<u8> = vector[1, 6, 0];
     const INVALID_VERSION: vector<u8> = vector[1, 2]; // Invalid because it has 2 elements, not 3
-
     fun setup(ccip_router: &signer, owner: &signer) {
         account::create_account_for_test(signer::address_of(owner));
         account::create_account_for_test(signer::address_of(ccip_router));
@@ -98,9 +97,7 @@ module ccip::router_tests {
 
         // Add a supported chain
         router::set_on_ramp_versions(
-            owner,
-            vector[ETH_CHAIN_SELECTOR],
-            vector[VERSION_1_6_0]
+            owner, vector[ETH_CHAIN_SELECTOR], vector[VERSION_1_6_0]
         );
 
         // Test get_on_ramp returns the correct address for v1.6.0
@@ -119,24 +116,18 @@ module ccip::router_tests {
 
         // This should fail because only the owner can set on ramp versions
         router::set_on_ramp_versions(
-            non_owner,
-            vector[ETH_CHAIN_SELECTOR],
-            vector[VERSION_1_6_0]
+            non_owner, vector[ETH_CHAIN_SELECTOR], vector[VERSION_1_6_0]
         );
     }
 
     #[test(router = @ccip_router, owner = @0x123)]
     #[expected_failure(abort_code = 65540, location = ccip_router::router)]
-    fun test_set_invalid_on_ramp_version(
-        router: &signer, owner: &signer
-    ) {
+    fun test_set_invalid_on_ramp_version(router: &signer, owner: &signer) {
         setup(router, owner);
 
         // Fails with E_INVALID_ON_RAMP_VERSION: the version has 2 elements instead of 3
         router::set_on_ramp_versions(
-            owner,
-            vector[ETH_CHAIN_SELECTOR],
-            vector[INVALID_VERSION]
+            owner, vector[ETH_CHAIN_SELECTOR], vector[INVALID_VERSION]
         );
     }
 

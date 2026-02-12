@@ -46,9 +46,7 @@ module ccip_dummy_receiver::dummy_receiver {
                 @ccip_dummy_receiver, DummyReceiverProof {}
             );
         let data = client::get_data(&message);
-        if (data == b"abort") {
-            abort 1
-        };
+        if (data == b"abort") { abort 1 };
 
         let state = borrow_state_mut();
 

@@ -40,7 +40,6 @@ module regulated_token_pool::regulated_token_pool_ccip_test {
     // ================================================================
     // |                    Setup Functions                          |
     // ================================================================
-
     fun setup_ccip_dispatch_environment(
         aptos_framework: &signer,
         ccip: &signer,
@@ -155,9 +154,7 @@ module regulated_token_pool::regulated_token_pool_ccip_test {
 
         // Propose admin as the administrator for the regulated token
         token_admin_registry::propose_administrator(
-            admin,
-            regulated_token_address,
-            signer::address_of(admin)
+            admin, regulated_token_address, signer::address_of(admin)
         );
 
         // Accept the admin role
@@ -165,9 +162,7 @@ module regulated_token_pool::regulated_token_pool_ccip_test {
 
         // Set the pool for the token to complete registration
         token_admin_registry::set_pool(
-            admin,
-            regulated_token_address,
-            @regulated_token_pool
+            admin, regulated_token_address, @regulated_token_pool
         );
     }
 
@@ -205,7 +200,6 @@ module regulated_token_pool::regulated_token_pool_ccip_test {
     // ================================================================
     // |                  CCIP Dispatch Flow Tests                   |
     // ================================================================
-
     #[
         test(
             aptos_framework = @aptos_framework,

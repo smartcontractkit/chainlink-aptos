@@ -7,18 +7,13 @@ module test::counter {
         move_to(account, Counter { value: 0 });
     }
 
-    public entry fun increment(
-        _account: &signer, counter_address: address
-    ) acquires Counter {
+    public entry fun increment(_account: &signer, counter_address: address) acquires Counter {
         let counter = borrow_global_mut<Counter>(counter_address);
         counter.value = counter.value + 1;
     }
 
     public entry fun increment_mult(
-        _account: &signer,
-        counter_address: address,
-        a: u64,
-        b: u64
+        _account: &signer, counter_address: address, a: u64, b: u64
     ) acquires Counter {
         let counter = borrow_global_mut<Counter>(counter_address);
         counter.value = counter.value + (a * b);

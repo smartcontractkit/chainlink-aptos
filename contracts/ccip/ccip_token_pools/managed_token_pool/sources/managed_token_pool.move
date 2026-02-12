@@ -37,7 +37,6 @@ module managed_token_pool::managed_token_pool {
     // ================================================================
     // |                             Init                             |
     // ================================================================
-
     #[view]
     public fun type_and_version(): String {
         string::utf8(b"ManagedTokenPool 1.6.0")
@@ -96,7 +95,6 @@ module managed_token_pool::managed_token_pool {
     // ================================================================
     // |                 Exposing token_pool functions                |
     // ================================================================
-
     #[view]
     public fun get_token(): address acquires ManagedTokenPoolState {
         token_pool::get_token(&borrow_pool().token_pool_state)
@@ -147,7 +145,9 @@ module managed_token_pool::managed_token_pool {
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
         token_pool::add_remote_pool(
-            &mut pool.token_pool_state, remote_chain_selector, remote_pool_address
+            &mut pool.token_pool_state,
+            remote_chain_selector,
+            remote_pool_address
         );
     }
 
@@ -158,7 +158,9 @@ module managed_token_pool::managed_token_pool {
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
         token_pool::remove_remote_pool(
-            &mut pool.token_pool_state, remote_chain_selector, remote_pool_address
+            &mut pool.token_pool_state,
+            remote_chain_selector,
+            remote_pool_address
         );
     }
 
@@ -330,7 +332,6 @@ module managed_token_pool::managed_token_pool {
     // ================================================================
     // |                    Rate limit config                         |
     // ================================================================
-
     public entry fun set_chain_rate_limiter_configs(
         caller: &signer,
         remote_chain_selectors: vector<u64>,
@@ -416,7 +417,6 @@ module managed_token_pool::managed_token_pool {
     // ================================================================
     // |                      Storage helpers                         |
     // ================================================================
-
     #[view]
     public fun get_store_address(): address {
         store_address()
@@ -437,7 +437,6 @@ module managed_token_pool::managed_token_pool {
     // ================================================================
     // |                       Expose ownable                         |
     // ================================================================
-
     #[view]
     public fun owner(): address acquires ManagedTokenPoolState {
         ownable::owner(&borrow_pool().ownable_state)
@@ -483,7 +482,6 @@ module managed_token_pool::managed_token_pool {
     // ================================================================
     // |                      MCMS entrypoint                         |
     // ================================================================
-
     struct McmsCallback has drop {}
 
     public fun mcms_entrypoint<T: key>(
@@ -637,7 +635,6 @@ module managed_token_pool::managed_token_pool {
     // ================================================================
     // |                      Test functions                          |
     // ================================================================
-
     #[test_only]
     public entry fun test_init_module(owner: &signer) {
         init_module(owner);

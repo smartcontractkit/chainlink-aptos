@@ -86,7 +86,6 @@ module usdc_token_pool::usdc_token_pool {
     // ================================================================
     // |                             Init                             |
     // ================================================================
-
     #[view]
     public fun type_and_version(): String {
         string::utf8(b"USDCTokenPool 1.6.0")
@@ -176,7 +175,6 @@ module usdc_token_pool::usdc_token_pool {
     // ================================================================
     // |                 Exposing token_pool functions                |
     // ================================================================
-
     #[view]
     public fun get_token(): address acquires USDCTokenPoolState {
         token_pool::get_token(&borrow_pool().token_pool_state)
@@ -225,7 +223,9 @@ module usdc_token_pool::usdc_token_pool {
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
         token_pool::add_remote_pool(
-            &mut pool.token_pool_state, remote_chain_selector, remote_pool_address
+            &mut pool.token_pool_state,
+            remote_chain_selector,
+            remote_pool_address
         );
     }
 
@@ -236,7 +236,9 @@ module usdc_token_pool::usdc_token_pool {
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
         token_pool::remove_remote_pool(
-            &mut pool.token_pool_state, remote_chain_selector, remote_pool_address
+            &mut pool.token_pool_state,
+            remote_chain_selector,
+            remote_pool_address
         );
     }
 
@@ -338,10 +340,7 @@ module usdc_token_pool::usdc_token_pool {
 
         let remote_domain_info = pool.chain_to_domain.borrow(remote_chain_selector);
 
-        assert!(
-            remote_domain_info.enabled,
-            error::invalid_argument(E_DOMAIN_DISABLED)
-        );
+        assert!(remote_domain_info.enabled, error::invalid_argument(E_DOMAIN_DISABLED));
 
         let mint_recipient_bytes =
             token_admin_registry::get_lock_or_burn_receiver(&input);
@@ -486,10 +485,7 @@ module usdc_token_pool::usdc_token_pool {
             error::invalid_argument(E_DOMAIN_MISMATCH)
         );
 
-        assert!(
-            nonce == expected_nonce,
-            error::invalid_argument(E_NONCE_MISMATCH)
-        );
+        assert!(nonce == expected_nonce, error::invalid_argument(E_NONCE_MISMATCH));
 
         assert!(
             destination_domain == expected_local_domain,
@@ -500,7 +496,6 @@ module usdc_token_pool::usdc_token_pool {
     // ================================================================
     // |                      USDC Domains                            |
     // ================================================================
-
     #[view]
     public fun get_domain(chain_selector: u64): Domain acquires USDCTokenPoolState {
         let pool = borrow_pool();
@@ -559,7 +554,6 @@ module usdc_token_pool::usdc_token_pool {
     // ================================================================
     // |                    Rate limit config                         |
     // ================================================================
-
     public entry fun set_chain_rate_limiter_configs(
         caller: &signer,
         remote_chain_selectors: vector<u64>,
@@ -645,7 +639,6 @@ module usdc_token_pool::usdc_token_pool {
     // ================================================================
     // |                      Storage helpers                         |
     // ================================================================
-
     #[view]
     public fun get_store_address(): address {
         store_address()
@@ -679,7 +672,6 @@ module usdc_token_pool::usdc_token_pool {
     // ================================================================
     // |                       Expose ownable                         |
     // ================================================================
-
     #[view]
     public fun owner(): address acquires USDCTokenPoolState {
         ownable::owner(&borrow_pool().ownable_state)
@@ -737,7 +729,6 @@ module usdc_token_pool::usdc_token_pool {
     // ================================================================
     // |                      MCMS entrypoint                         |
     // ================================================================
-
     struct McmsCallback has drop {}
 
     public fun mcms_entrypoint<T: key>(
@@ -917,7 +908,6 @@ module usdc_token_pool::usdc_token_pool {
     }
 
     // ============== Test functions ==============
-
     #[test_only]
     public fun test_init_module(publisher: &signer) {
         init_module(publisher);

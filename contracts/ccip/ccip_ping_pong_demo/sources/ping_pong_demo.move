@@ -239,7 +239,6 @@ module ccip_ping_pong_demo::ping_pong_demo {
     // ================================================================
     // |                          Ownable                             |
     // ================================================================
-
     #[view]
     public fun owner(): address acquires PingPongDemo {
         let state = borrow_state();

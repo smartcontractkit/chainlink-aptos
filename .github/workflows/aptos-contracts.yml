@@ -18,7 +18,7 @@ jobs:
     - name: Install Aptos CLI
       uses: aptos-labs/actions/install-aptos-cli@ce57287eb852b9819c1d74fecc3be187677559fd # v0.1
       with:
-        CLI_VERSION: 7.11.1
+        CLI_VERSION: 7.14.0
 
     - name: Run tests
       run: make move-test

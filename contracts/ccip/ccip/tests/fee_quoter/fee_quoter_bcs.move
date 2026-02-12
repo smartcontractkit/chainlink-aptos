@@ -109,8 +109,13 @@ module ccip::fee_quoter_bcs {
                 large_accounts
             );
 
-        let (decoded_cu, decoded_bitmap, decoded_ooo, decoded_receiver, decoded_accounts) =
-            fee_quoter::test_decode_svm_extra_args(encoded_svm_max);
+        let (
+            decoded_cu,
+            decoded_bitmap,
+            decoded_ooo,
+            decoded_receiver,
+            decoded_accounts
+        ) = fee_quoter::test_decode_svm_extra_args(encoded_svm_max);
 
         assert!(decoded_cu == max_compute_units);
         assert!(decoded_bitmap == max_bitmap);
@@ -141,7 +146,11 @@ module ccip::fee_quoter_bcs {
         ];
         let svm_encoded =
             client::encode_svm_extra_args_v1(
-                100u32, 200u64, false, token_receiver, accounts
+                100u32,
+                200u64,
+                false,
+                token_receiver,
+                accounts
             );
 
         // Expected size breakdown:
