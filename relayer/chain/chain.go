@@ -119,16 +119,12 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 		ds:   ds,
 	}
 
-	getClient := func() (aptos.AptosRpcClient, error) {
-		return ch.GetClient()
-	}
-
-	ch.txm, err = txm.New(lggr, loopKs, *cfg.TransactionManager, getClient)
+	ch.txm, err = txm.New(lggr, loopKs, *cfg.TransactionManager, ch.GetClient)
 	if err != nil {
 		return nil, err
 	}
 
-	ch.logPoller, err = logpoller.NewLogPoller(lggr, ch.chainInfo(), getClient, ds, cfg.LogPoller)
+	ch.logPoller, err = logpoller.NewLogPoller(lggr, ch.chainInfo(), ch.GetClient, ds, cfg.LogPoller)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create log poller: %w", err)
 	}
@@ -140,7 +136,7 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 		Config:    *cfg.BalanceMonitor,
 		Logger:    lggr,
 		Keystore:  loopKs,
-		NewClient: getClient,
+		NewClient: ch.GetClient,
 	})
 	if err != nil {
 		return nil, err
