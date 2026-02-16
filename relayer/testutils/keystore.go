@@ -49,3 +49,7 @@ func (tk *TestKeystore) Accounts(ctx context.Context) ([]string, error) {
 	}
 	return accounts, nil
 }
+
+func (tk *TestKeystore) Decrypt(ctx context.Context, id string, encrypted []byte) ([]byte, error) {
+	return nil, nil
+}

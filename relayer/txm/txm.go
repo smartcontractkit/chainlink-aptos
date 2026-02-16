@@ -226,6 +226,97 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 	return nil
 }
 
+// EnqueueCRE is like Enqueue but accepts a deserialized EntryFunction directly,
+// skipping the string-based function parsing and BCS serialisation of parameters.
+// The EntryFunction already contains the module, function name, type tags, and
+// pre-encoded BCS args.
+func (a *AptosTxm) EnqueueCRE(transactionID string, txMetadata *commontypes.TxMeta, fromAddress, publicKey string, entryFunction *aptos.EntryFunction, simulateTx bool) error {
+	if entryFunction == nil {
+		return errors.New("entry function is required")
+	}
+
+	if transactionID == "" {
+		transactionID = uuid.New().String()
+	} else {
+		a.transactionsLock.Lock()
+		_, transactionExists := a.transactions[transactionID]
+		a.transactionsLock.Unlock()
+		if transactionExists {
+			return errors.New("transaction already exists")
+		}
+	}
+
+	ctxLogger := GetContexedTxLogger(a.baseLogger, transactionID, txMetadata)
+
+	ed25519PublicKey, err := utils.HexPublicKeyToEd25519PublicKey(publicKey)
+	if err != nil {
+		return fmt.Errorf("failed to convert public key: %+w", err)
+	}
+
+	if fromAddress == "" {
+		// If the address is not specified, we assume the public key is for its corresponding address
+		// and not for an address with a rotated authentication key.
+		acc := utils.Ed25519PublicKeyToAddress(ed25519PublicKey)
+		fromAddress = acc.String()
+	}
+
+	fromAccountAddress := &aptos.AccountAddress{}
+	err = fromAccountAddress.ParseStringRelaxed(fromAddress)
+	if err != nil {
+		return fmt.Errorf("failed to parse from address: %+w", err)
+	}
+
+	currentTimestamp := getTimestampSecs()
+	tx := &AptosTx{
+		ID:              transactionID,
+		Metadata:        txMetadata,
+		Timestamp:       currentTimestamp,
+		FromAddress:     *fromAccountAddress,
+		PublicKey:       ed25519PublicKey,
+		ContractAddress: entryFunction.Module.Address,
+		ModuleName:      entryFunction.Module.Name,
+		FunctionName:    entryFunction.Function,
+		TypeTags:        entryFunction.ArgTypes,
+		BcsValues:       entryFunction.Args,
+		Status:          commontypes.Pending,
+		Simulate:        simulateTx,
+	}
+
+	a.transactionsLock.Lock()
+	if (currentTimestamp - a.transactionsLastPruneTime) > a.config.PruneIntervalSecs {
+		for txID, tx := range a.transactions {
+			if tx.Status != commontypes.Finalized && tx.Status != commontypes.Failed && tx.Status != commontypes.Fatal {
+				continue
+			}
+			if (currentTimestamp - tx.Timestamp) < a.config.PruneTxExpirationSecs {
+				continue
+			}
+			ctxLogger.Debugw("Pruning transaction", "status", tx.Status)
+			delete(a.transactions, txID)
+		}
+		a.transactionsLastPruneTime = currentTimestamp
+	}
+	a.transactions[transactionID] = tx
+	a.transactionsLock.Unlock()
+
+	select {
+	case a.broadcastChan <- transactionID:
+		ctxLogger.Debugw("Tx enqueued", "fromAddr", fromAddress)
+	default:
+		// if the channel is full, we drop the transaction.
+		// we do this instead of setting the tx in `a.transactions` post-broadcast to avoid a race
+		// with the broadcastLoop, which expects to find the tx in `a.transactions` upon reception of
+		// the id.
+		a.transactionsLock.Lock()
+		delete(a.transactions, transactionID)
+		a.transactionsLock.Unlock()
+
+		return fmt.Errorf("failed to enqueue tx: %+v", tx)
+	}
+
+	return nil
+}
+
 func (a *AptosTxm) GetStatus(transactionID string) (commontypes.TransactionStatus, error) {
 	if transactionID == "" {
 		return commontypes.Unknown, errors.New("nil tx id")

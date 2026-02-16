@@ -21,6 +21,7 @@ import (
 )
 
 var _ types.Relayer = (*relayer)(nil) //nolint:staticcheck
+var _ types.AptosService = (*relayer)(nil)
 
 type relayer struct {
 	chain chain.Chain
@@ -28,11 +29,13 @@ type relayer struct {
 
 	starter utils.StartStopOnce
 	stopCh  services.StopChan
+	aptosService
 }
 
 func NewRelayer(lggr logger.Logger, chain chain.Chain, capRegistry core.CapabilitiesRegistry) (*relayer, error) {
 	ctx := context.TODO()
 
+	// CAN I REMOVE THIS ?
 	if chain.Config().Workflow != nil {
 		capability, err := write_target.NewAptosWriteTarget(ctx, chain, lggr)
 		if err != nil {
@@ -49,6 +52,10 @@ func NewRelayer(lggr logger.Logger, chain chain.Chain, capRegistry core.Capabili
 		chain:  chain,
 		lggr:   lggr,
 		stopCh: make(chan struct{}),
+		aptosService: aptosService{
+			chain:  chain,
+			logger: lggr,
+		},
 	}, nil
 }
 
@@ -162,8 +169,20 @@ func (r *relayer) NewCCIPExecProvider(ctx context.Context, rargs types.RelayArgs
 	return nil, errors.New("ccip.exec is not supported for aptos")
 }
 
+func (r *relayer) NewCCIPProvider(ctx context.Context, cargs types.CCIPProviderArgs) (types.CCIPProvider, error) {
+	return nil, errors.New("ccip provider is not supported for aptos")
+}
+
 func (r *relayer) EVM() (types.EVMService, error) {
 	return nil, errors.New("EVMService is not supported for aptos")
+}
+
+func (r *relayer) Solana() (types.SolanaService, error) {
+	return nil, errors.New("SolanaService is not supported for aptos")
+}
+
+func (r *relayer) TON() (types.TONService, error) {
+	return nil, errors.New("TONService is not supported for aptos")
 }
 
 func (r *relayer) Replay(ctx context.Context, fromBlock string, args map[string]any) error {
@@ -185,4 +204,12 @@ func (r *relayer) ListNodeStatuses(ctx context.Context, pageSize int32, pageToke
 
 func (r *relayer) Transact(ctx context.Context, from, to string, amount *big.Int, balanceCheck bool) error {
 	return r.chain.Transact(ctx, from, to, amount, balanceCheck)
+}
+
+func (r *relayer) Aptos() (types.AptosService, error) {
+	return r, nil
+}
+
+func (r *relayer) GetChainInfo(ctx context.Context) (types.ChainInfo, error) {
+	return r.chain.GetChainInfo(ctx)
 }
