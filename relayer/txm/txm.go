@@ -42,21 +42,16 @@ type AptosTxm struct {
 	done          sync.WaitGroup
 	stop          chan struct{}
 
-	client aptos.AptosRpcClient
+	getClient func() (aptos.AptosRpcClient, error)
 }
 
 // TODO: Config input is not validated for sanity
 func New(lgr logger.Logger, keystore loop.Keystore, config Config, getClient func() (aptos.AptosRpcClient, error)) (*AptosTxm, error) {
-	client, err := getClient()
-	if err != nil {
-		return nil, err
-	}
-
 	return &AptosTxm{
 		baseLogger: logger.Named(lgr, "AptosTxm"),
 		keystore:   keystore,
 		config:     config,
-		client:     client,
+		getClient:  getClient,
 
 		transactions:              map[string]*AptosTx{},
 		transactionsLastPruneTime: getTimestampSecs(),
@@ -469,8 +464,12 @@ func (a *AptosTxm) getTransactionAttempt(tx *AptosTx) uint64 {
 }
 
 func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
-	client := a.client
 	ctxLogger := GetContexedTxLogger(a.baseLogger, tx.ID, tx.Metadata)
+	client, err := a.getClient()
+	if err != nil {
+		ctxLogger.Errorw("Unable to sign and broadcast: failed to get client", "error", err)
+		return
+	}
 
 	txStore := a.accountStore.GetTxStore(tx.FromAddress.String())
 	if txStore == nil {
@@ -598,7 +597,11 @@ func (a *AptosTxm) confirmLoop() {
 }
 
 func (a *AptosTxm) checkUnconfirmed() {
-	client := a.client
+	client, err := a.getClient()
+	if err != nil {
+		a.baseLogger.Errorw("Unable to check unconfirmed: failed to get client", "error", err)
+		return
+	}
 	allUnconfirmedTxs := a.accountStore.GetAllUnconfirmed()
 
 	for accountAddress, unconfirmedTxs := range allUnconfirmedTxs {

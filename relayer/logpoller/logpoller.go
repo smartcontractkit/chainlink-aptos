@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	cache "github.com/patrickmn/go-cache"
+	"github.com/patrickmn/go-cache"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 
@@ -31,7 +31,7 @@ type AptosLogPoller struct {
 	lggr      logger.Logger
 	dbStore   *db.DBStore
 	config    *Config
-	client    aptos.AptosRpcClient
+	getClient func() (aptos.AptosRpcClient, error)
 	chainInfo types.ChainInfo
 
 	mu      sync.RWMutex
@@ -49,11 +49,6 @@ type AptosLogPoller struct {
 }
 
 func NewLogPoller(lggr logger.Logger, chainInfo types.ChainInfo, getClient func() (aptos.AptosRpcClient, error), ds sqlutil.DataSource, cfg *Config) (*AptosLogPoller, error) {
-	client, err := getClient()
-	if err != nil {
-		return nil, err
-	}
-
 	if cfg == nil {
 		cfg = &DefaultConfigSet
 	}
@@ -67,7 +62,7 @@ func NewLogPoller(lggr logger.Logger, chainInfo types.ChainInfo, getClient func(
 		lggr:      logger.Named(lggr, "AptosLogPoller"),
 		dbStore:   dbStore,
 		config:    cfg,
-		client:    client,
+		getClient: getClient,
 		chainInfo: chainInfo,
 
 		modules: make(map[string]*moduleInfo),
