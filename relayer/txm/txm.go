@@ -230,7 +230,7 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 // skipping the string-based function parsing and BCS serialisation of parameters.
 // The EntryFunction already contains the module, function name, type tags, and
 // pre-encoded BCS args.
-func (a *AptosTxm) EnqueueCRE(transactionID string, txMetadata *commontypes.TxMeta, fromAddress, publicKey string, entryFunction *aptos.EntryFunction, simulateTx bool) error {
+func (a *AptosTxm) EnqueueCRE(transactionID string, txMetadata *commontypes.TxMeta, publicKey string, entryFunction *aptos.EntryFunction, simulateTx bool) error {
 	if entryFunction == nil {
 		return errors.New("entry function is required")
 	}
@@ -253,12 +253,8 @@ func (a *AptosTxm) EnqueueCRE(transactionID string, txMetadata *commontypes.TxMe
 		return fmt.Errorf("failed to convert public key: %+w", err)
 	}
 
-	if fromAddress == "" {
-		// If the address is not specified, we assume the public key is for its corresponding address
-		// and not for an address with a rotated authentication key.
-		acc := utils.Ed25519PublicKeyToAddress(ed25519PublicKey)
-		fromAddress = acc.String()
-	}
+	acc := utils.Ed25519PublicKeyToAddress(ed25519PublicKey)
+	fromAddress := acc.String()
 
 	fromAccountAddress := &aptos.AccountAddress{}
 	err = fromAccountAddress.ParseStringRelaxed(fromAddress)

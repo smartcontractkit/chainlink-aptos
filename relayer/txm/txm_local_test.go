@@ -152,6 +152,67 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 	logger.Debugw("Counter value after test", "value", counterValue)
 
 	require.Equal(t, expectedValue, counterValue)
+
+	// submit all txs at once and wait for all afterwards
+	// helps testing reties and failure recoveries
+	var txIDsCRE []string
+
+	for i := 0; i < iterations; i++ {
+		incrementId := uuid.New().String()
+		err := txm.EnqueueCRE(
+			incrementId,
+			getSampleTxMetadata(),
+			publicKeyHex,
+			&aptos.EntryFunction{
+				Module: aptos.ModuleId{
+					Address: accountAddress,
+					Name:    "counter",
+				},
+				Function: "counter::increment",
+				ArgTypes: []aptos.TypeTag{},
+				Args: [][]byte{
+					[]byte(accountAddress.String()),
+				},
+			},
+			true,
+		)
+		require.NoError(t, err)
+		expectedValue += 1
+		txIDsCRE = append(txIDsCRE, incrementId)
+
+		incrementMultId := uuid.New().String()
+		err = txm.EnqueueCRE(
+			incrementMultId,
+			getSampleTxMetadata(),
+			publicKeyHex,
+			&aptos.EntryFunction{
+				Module: aptos.ModuleId{
+					Address: accountAddress,
+					Name:    "counter",
+				},
+				Function: "counter::increment_mult",
+				ArgTypes: []aptos.TypeTag{},
+				Args: [][]byte{
+					[]byte(accountAddress.String()),
+					[]byte(big.NewInt(3).Bytes()),
+					[]byte(big.NewInt(4).Bytes()),
+				},
+			},
+			true,
+		)
+		require.NoError(t, err)
+		expectedValue += 3 * 4
+		txIDsCRE = append(txIDsCRE, incrementMultId)
+	}
+
+	for _, txId := range txIDs {
+		waitForTxmId(t, txm, txId, time.Minute*2)
+	}
+
+	counterValueCRE := testutils.ReadCounterValue(t, client, accountAddress)
+	logger.Debugw("Counter value after test", "value", counterValueCRE)
+
+	require.Equal(t, expectedValue, counterValueCRE)
 }
 
 func deployTestModule(t *testing.T, txm *AptosTxm, fromAddress aptos.AccountAddress, publicKeyHex string) {

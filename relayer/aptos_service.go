@@ -10,6 +10,7 @@ import (
 
 	aptosgosdk "github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/bcs"
+	"github.com/google/uuid"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
@@ -115,8 +116,6 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 		return nil, fmt.Errorf("workflow config is required for SubmitTransaction")
 	}
 
-	txID := fmt.Sprintf("aptos-service-%d", time.Now().UnixNano())
-
 	gasLimit := big.NewInt(int64(req.GasConfig.MaxGasAmount))
 	accounts, err := s.chain.KeyStore().Accounts(ctx)
 	if err != nil {
@@ -132,12 +131,12 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 	if err != nil {
 		return nil, fmt.Errorf("failed to determine account for SubmitTransaction: %w", err)
 	}
+	txID := uuid.New().String()
 	err = s.chain.TxManager().EnqueueCRE(
-		"",
+		txID,
 		&commontypes.TxMeta{
 			GasLimit: gasLimit,
 		},
-		"", // fromAddress derived from publicKey
 		publicKey,
 		entryFn,
 		true, // simulateTx
