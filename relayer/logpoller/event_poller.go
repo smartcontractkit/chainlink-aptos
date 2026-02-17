@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	cache "github.com/patrickmn/go-cache"
+	"github.com/patrickmn/go-cache"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/api"
@@ -166,7 +166,12 @@ func (l *AptosLogPoller) syncEvent(ctx context.Context, boundAddress aptos.Accou
 	var resource map[string]any
 
 	if !found {
-		resource, err = l.client.AccountResource(eventAccountAddress, eventHandle)
+		var client aptos.AptosRpcClient
+		client, err = l.getClient()
+		if err != nil {
+			return fmt.Errorf("failed to get client: %w", err)
+		}
+		resource, err = client.AccountResource(eventAccountAddress, eventHandle)
 		if err != nil {
 			return fmt.Errorf("syncEvent: failed to fetch the resource: %w", err)
 		}
@@ -179,7 +184,12 @@ func (l *AptosLogPoller) syncEvent(ctx context.Context, boundAddress aptos.Accou
 		resource, ok = resourceAny.(map[string]any)
 		if !ok {
 			l.lggr.Errorw("Failed to cast cached resource to map[string]any", "key", cacheKey)
-			resource, err = l.client.AccountResource(eventAccountAddress, eventHandle)
+			var client aptos.AptosRpcClient
+			client, err = l.getClient()
+			if err != nil {
+				return fmt.Errorf("failed to get client: %w", err)
+			}
+			resource, err = client.AccountResource(eventAccountAddress, eventHandle)
 			if err != nil {
 				return fmt.Errorf("syncEvent: failed to fetch the resource after cache cast failure: %w", err)
 			}
@@ -195,13 +205,19 @@ func (l *AptosLogPoller) syncEvent(ctx context.Context, boundAddress aptos.Accou
 	batchSize := l.config.EventBatchSize
 	var totalProcessed int = 0
 
+	var client aptos.AptosRpcClient
+	client, err = l.getClient()
+	if err != nil {
+		return fmt.Errorf("failed to get client: %w", err)
+	}
+
 eventLoop:
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			events, err := l.client.EventsByCreationNumber(eventAccountAddress, creationNumber, &latestOffset, &batchSize)
+			events, err := client.EventsByCreationNumber(eventAccountAddress, creationNumber, &latestOffset, &batchSize)
 			if err != nil {
 				l.lggr.Errorw("syncEvent: failed to fetch new events", "error", err)
 				return fmt.Errorf("syncEvent: failed to fetch events: %w", err)
@@ -328,7 +344,11 @@ func (l *AptosLogPoller) computeEventAccountAddress(boundAddress aptos.AccountAd
 			Args:     [][]byte{},
 		}
 
-		data, err := l.client.View(viewPayload)
+		client, err := l.getClient()
+		if err != nil {
+			return eventAccountAddress, err
+		}
+		data, err := client.View(viewPayload)
 		if err != nil {
 			return eventAccountAddress, fmt.Errorf("failed to call view function: %+w", err)
 		}
@@ -354,7 +374,12 @@ func (l *AptosLogPoller) getBlockHead(version uint64) (types.Head, error) {
 		block, ok = cachedBlockAny.(*api.Block)
 		if !ok {
 			l.lggr.Errorw("Failed to cast cached block to *api.Block", "key", cacheKey)
-			block, err = l.client.BlockByVersion(version, false)
+			var client aptos.AptosRpcClient
+			client, err = l.getClient()
+			if err != nil {
+				return types.Head{}, fmt.Errorf("failed to get client: %w", err)
+			}
+			block, err = client.BlockByVersion(version, false)
 			if err != nil {
 				return types.Head{}, fmt.Errorf("failed to get block by version after cache cast failure: %w", err)
 			}
@@ -363,7 +388,12 @@ func (l *AptosLogPoller) getBlockHead(version uint64) (types.Head, error) {
 			l.lggr.Debugw("Using cached block", "version", version)
 		}
 	} else {
-		block, err = l.client.BlockByVersion(version, false)
+		var client aptos.AptosRpcClient
+		client, err = l.getClient()
+		if err != nil {
+			return types.Head{}, fmt.Errorf("failed to get client: %w", err)
+		}
+		block, err = client.BlockByVersion(version, false)
 		if err != nil {
 			return types.Head{}, fmt.Errorf("failed to get block by version: %w", err)
 		}
