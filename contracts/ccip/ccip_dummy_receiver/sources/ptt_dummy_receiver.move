@@ -41,7 +41,7 @@ module ccip_dummy_receiver::ptt_dummy_receiver {
 
     #[view]
     public fun type_and_version(): String {
-        string::utf8(b"PTTDummyReceiver 1.6.0")
+        string::utf8(b"PTTDummyReceiver 1.6.01")
     }
 
     fun init_module(publisher: &signer) {
