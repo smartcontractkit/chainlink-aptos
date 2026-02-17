@@ -168,7 +168,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 					Address: accountAddress,
 					Name:    "counter",
 				},
-				Function: "counter::increment",
+				Function: "increment",
 				ArgTypes: []aptos.TypeTag{},
 				Args: [][]byte{
 					[]byte(accountAddress.String()),
@@ -190,7 +190,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 					Address: accountAddress,
 					Name:    "counter",
 				},
-				Function: "counter::increment_mult",
+				Function: "increment_mult",
 				ArgTypes: []aptos.TypeTag{},
 				Args: [][]byte{
 					[]byte(accountAddress.String()),
