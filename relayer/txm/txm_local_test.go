@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
+	"github.com/aptos-labs/aptos-go-sdk/bcs"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/sha3"
@@ -157,6 +158,14 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 	// helps testing reties and failure recoveries
 	var txIDsCRE []string
 
+	accountBytes, err := bcs.Serialize(&accountAddress)
+	require.NoError(t, err)
+
+	threeBytes, err := bcs.SerializeU64(3)
+	require.NoError(t, err)
+	fourBytes, err := bcs.SerializeU64(4)
+	require.NoError(t, err)
+
 	for i := 0; i < iterations; i++ {
 		incrementId := uuid.New().String()
 		err := txm.EnqueueCRE(
@@ -171,7 +180,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 				Function: "increment",
 				ArgTypes: []aptos.TypeTag{},
 				Args: [][]byte{
-					[]byte(accountAddress.String()),
+					accountBytes,
 				},
 			},
 			true,
@@ -193,9 +202,9 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 				Function: "increment_mult",
 				ArgTypes: []aptos.TypeTag{},
 				Args: [][]byte{
-					[]byte(accountAddress.String()),
-					[]byte(big.NewInt(3).Bytes()),
-					[]byte(big.NewInt(4).Bytes()),
+					accountBytes,
+					threeBytes,
+					fourBytes,
 				},
 			},
 			true,
