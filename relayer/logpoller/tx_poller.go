@@ -188,7 +188,12 @@ func (l *AptosLogPoller) syncTransmitterTxs(ctx context.Context, transmitter apt
 	case <-ctx.Done():
 		return totalProcessed, ctx.Err()
 	default:
-		txns, err := l.client.AccountTransactions(transmitter, &sequenceNumber, &batchSize)
+		var client aptos.AptosRpcClient
+		client, err = l.getClient()
+		if err != nil {
+			return totalProcessed, fmt.Errorf("failed to get client: %w", err)
+		}
+		txns, err := client.AccountTransactions(transmitter, &sequenceNumber, &batchSize)
 		if err != nil {
 			return totalProcessed, fmt.Errorf("failed to fetch transactions: %w", err)
 		}
