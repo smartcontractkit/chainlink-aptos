@@ -205,7 +205,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 		txIDsCRE = append(txIDsCRE, incrementMultId)
 	}
 
-	for _, txId := range txIDs {
+	for _, txId := range txIDsCRE {
 		waitForTxmId(t, txm, txId, time.Minute*2)
 	}
 
