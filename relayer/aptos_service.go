@@ -110,12 +110,6 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 		return nil, fmt.Errorf("expected EntryFunction payload, got %T", txPayload.Payload)
 	}
 
-	// Get sender info from workflow config
-	wfCfg := s.chain.Config().Workflow
-	if wfCfg == nil {
-		return nil, fmt.Errorf("workflow config is required for SubmitTransaction")
-	}
-
 	gasLimit := big.NewInt(int64(req.GasConfig.MaxGasAmount))
 	accounts, err := s.chain.KeyStore().Accounts(ctx)
 	if err != nil {
