@@ -63,6 +63,10 @@ func (r *relayer) Name() string {
 	return r.lggr.Name()
 }
 
+func (r *relayer) Replay(ctx context.Context, fromBlock string, args map[string]any) error {
+	return errors.ErrUnsupported
+}
+
 // Start starts the relayer respecting the given context.
 func (r *relayer) Start(ctx context.Context) error {
 	return r.starter.StartOnce("AptosRelayer", func() error {

@@ -375,15 +375,6 @@ func nodeStatus(n *config.Node, id string) (types.NodeStatus, error) {
 	return s, nil
 }
 
-func (c *chain) GetChainInfo(_ context.Context) (types.ChainInfo, error) {
-	return types.ChainInfo{
-		FamilyName:      config.ChainFamilyName,
-		ChainID:         c.id,
-		NetworkName:     c.cfg.NetworkName,
-		NetworkNameFull: c.cfg.NetworkNameFull,
-	}, nil
-}
-
 func (c *chain) chainInfo() rtypes.ChainInfo {
 	return rtypes.ChainInfo{
 		ChainFamilyName: config.ChainFamilyName,
