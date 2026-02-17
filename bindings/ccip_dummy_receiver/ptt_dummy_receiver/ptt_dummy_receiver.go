@@ -61,14 +61,6 @@ type ReceivedMessage struct {
 	Data []byte `move:"vector<u8>"`
 }
 
-type ForwardedTokens struct {
-	FinalRecipient aptos.AccountAddress `move:"address"`
-}
-
-type ReceivedTokensOnly struct {
-	TokenCount uint64 `move:"u64"`
-}
-
 type CCIPReceiverState struct {
 }
 

@@ -17,21 +17,9 @@ module ccip_dummy_receiver::ptt_dummy_receiver {
         data: vector<u8>
     }
 
-    #[event]
-    struct ForwardedTokens has store, drop {
-        final_recipient: address
-    }
-
-    #[event]
-    struct ReceivedTokensOnly has store, drop {
-        token_count: u64
-    }
-
     struct CCIPReceiverState has key {
         signer_cap: account::SignerCapability,
-        received_message_handle: event::EventHandle<ReceivedMessage>,
-        forwarded_tokens_handle: event::EventHandle<ForwardedTokens>,
-        received_tokens_only_handle: event::EventHandle<ReceivedTokensOnly>
+        received_message_events: event::EventHandle<ReceivedMessage>
     }
 
     const E_RESOURCE_NOT_FOUND_ON_ACCOUNT: u64 = 1;
@@ -41,29 +29,17 @@ module ccip_dummy_receiver::ptt_dummy_receiver {
 
     #[view]
     public fun type_and_version(): String {
-        string::utf8(b"PTTDummyReceiver 1.6.01")
+        string::utf8(b"PTTDummyReceiver 1.6.0")
     }
 
     fun init_module(publisher: &signer) {
         let signer_cap =
             resource_account::retrieve_resource_account_cap(publisher, @deployer);
 
-        let received_message_handle =
+        let received_message_events =
             account::new_event_handle<ReceivedMessage>(publisher);
-        let forwarded_tokens_handle =
-            account::new_event_handle<ForwardedTokens>(publisher);
-        let received_tokens_only_handle =
-            account::new_event_handle<ReceivedTokensOnly>(publisher);
 
-        move_to(
-            publisher,
-            CCIPReceiverState {
-                signer_cap,
-                received_message_handle,
-                forwarded_tokens_handle,
-                received_tokens_only_handle
-            }
-        );
+        move_to(publisher, CCIPReceiverState { signer_cap, received_message_events });
 
         // Default to V2 registration
         receiver_registry::register_receiver_v2(
@@ -78,12 +54,12 @@ module ccip_dummy_receiver::ptt_dummy_receiver {
         signer::address_of(&state_signer)
     }
 
+    #[persistent]
     /// This function MUST remain private (not `public fun`). The `#[persistent]`
     /// attribute allows it to be stored as a closure without exposing it to external callers.
     /// Only the authorized offramp can invoke this via the closure registered with
     /// `receiver_registry::register_receiver_v2()`. Making this public would allow anyone to
     /// construct an `Any2AptosMessage` and execute arbitrary token transfers.
-    #[persistent]
     fun ccip_receive_v2(message: client::Any2AptosMessage) acquires CCIPReceiverState {
         /* load state and rebuild a signer for the resource account */
         let state = borrow_global_mut<CCIPReceiverState>(@ccip_dummy_receiver);
@@ -113,26 +89,10 @@ module ccip_dummy_receiver::ptt_dummy_receiver {
                     amount
                 );
             };
-
-            event::emit(ForwardedTokens { final_recipient });
-            event::emit_event(
-                &mut state.forwarded_tokens_handle,
-                ForwardedTokens { final_recipient }
-            );
-        } else if (data.length() != 0) {
-            event::emit(ReceivedMessage { data });
-            event::emit_event(&mut state.received_message_handle, ReceivedMessage { data });
-
-        } else if (dest_token_amounts.length() != 0) {
-            // Tokens only (no forwarding data) - keep them at receiver
-            // Emit event to prove receiver was called
-            let token_count = dest_token_amounts.length();
-            event::emit(ReceivedTokensOnly { token_count });
-            event::emit_event(
-                &mut state.received_tokens_only_handle,
-                ReceivedTokensOnly { token_count }
-            );
         };
+
+        event::emit(ReceivedMessage { data });
+        event::emit_event(&mut state.received_message_events, ReceivedMessage { data });
 
         // Simple abort condition for testing
         if (data == b"abort") {
