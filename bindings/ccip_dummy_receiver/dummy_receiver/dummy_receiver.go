@@ -43,6 +43,11 @@ func NewDummyReceiver(address aptos.AccountAddress, client aptos.AptosRpcClient)
 	}
 }
 
+// Constants
+const (
+	E_TEST_ABORT uint64 = 1
+)
+
 // Structs
 
 type ReceivedMessage struct {

@@ -23,6 +23,10 @@ module ccip::receiver_registry {
         receiver_registered_events: EventHandle<ReceiverRegistered>
     }
 
+    struct ReceiverRegistryEventsV2 has key {
+        receiver_registered_v2_events: EventHandle<ReceiverRegisteredV2>
+    }
+
     struct CCIPReceiverRegistration has key {
         ccip_receive_function: FunctionInfo,
         proof_typeinfo: TypeInfo,
@@ -32,10 +36,20 @@ module ccip::receiver_registry {
         executing_input: Option<client::Any2AptosMessage>
     }
 
+    struct CCIPReceiverRegistrationV2 has key {
+        callback: |client::Any2AptosMessage| has copy + drop + store
+    }
+
     #[event]
     struct ReceiverRegistered has store, drop {
         receiver_address: address,
         receiver_module_name: vector<u8>
+    }
+
+    #[event]
+    struct ReceiverRegisteredV2 has drop, store {
+        receiver_address: address,
+        callback: |client::Any2AptosMessage| has copy + drop + store
     }
 
     const E_ALREADY_REGISTERED: u64 = 1;
@@ -45,6 +59,7 @@ module ccip::receiver_registry {
     const E_NON_EMPTY_INPUT: u64 = 5;
     const E_PROOF_TYPE_ACCOUNT_MISMATCH: u64 = 6;
     const E_PROOF_TYPE_MODULE_MISMATCH: u64 = 7;
+    const E_UNAUTHORIZED: u64 = 8;
 
     #[view]
     public fun type_and_version(): String {
@@ -72,7 +87,8 @@ module ccip::receiver_registry {
     ) acquires ReceiverRegistryState {
         let receiver_address = signer::address_of(receiver_account);
         assert!(
-            !exists<CCIPReceiverRegistration>(receiver_address),
+            !exists<CCIPReceiverRegistration>(receiver_address)
+                && !exists<CCIPReceiverRegistrationV2>(receiver_address),
             error::invalid_argument(E_ALREADY_REGISTERED)
         );
 
@@ -138,9 +154,54 @@ module ccip::receiver_registry {
         );
     }
 
+    /// Registers a V2 CCIP receiver using a function-value callback (closure).
+    ///
+    /// Upgrade path: existing legacy receivers can upgrade to V2 by calling this function,
+    /// which supersedes the legacy registration without requiring unregistration.
+    /// New receivers should use V2 directly. Once V2 is registered, legacy registration
+    /// via `register_receiver()` is rejected.
+    ///
+    /// SECURITY: The callback MUST wrap a private `#[persistent]` function. Exposing the
+    /// receive function as `public fun` allows any caller to construct an `Any2AptosMessage`
+    /// and invoke the receiver directly,
+    ///
+    /// Correct pattern:
+    /// ```
+    /// #[persistent]
+    /// fun ccip_receive_v2(message: client::Any2AptosMessage) { ... }
+    ///
+    /// fun init_module(publisher: &signer) {
+    ///     receiver_registry::register_receiver_v2(
+    ///         publisher, |message| ccip_receive_v2(message)
+    ///     );
+    /// }
+    /// ```
+    public fun register_receiver_v2(
+        receiver_account: &signer, callback: |client::Any2AptosMessage| has copy + drop + store
+    ) {
+        let receiver_address = signer::address_of(receiver_account);
+        assert!(
+            !exists<CCIPReceiverRegistrationV2>(receiver_address),
+            error::invalid_argument(E_ALREADY_REGISTERED)
+        );
+
+        move_to(receiver_account, CCIPReceiverRegistrationV2 { callback });
+
+        event::emit_event(
+            &mut borrow_events_v2_mut().receiver_registered_v2_events,
+            ReceiverRegisteredV2 { receiver_address, callback }
+        );
+    }
+
     #[view]
     public fun is_registered_receiver(receiver_address: address): bool {
         exists<CCIPReceiverRegistration>(receiver_address)
+            || exists<CCIPReceiverRegistrationV2>(receiver_address)
+    }
+
+    #[view]
+    public fun is_registered_receiver_v2(receiver_address: address): bool {
+        exists<CCIPReceiverRegistrationV2>(receiver_address)
     }
 
     public fun get_receiver_input<ProofType: drop>(
@@ -185,6 +246,18 @@ module ccip::receiver_registry {
         );
     }
 
+    public(friend) fun invoke_ccip_receive_v2(
+        receiver_address: address, message: client::Any2AptosMessage
+    ) acquires CCIPReceiverRegistrationV2 {
+        assert!(
+            exists<CCIPReceiverRegistrationV2>(receiver_address),
+            error::invalid_argument(E_UNKNOWN_RECEIVER)
+        );
+
+        let registration = borrow_global<CCIPReceiverRegistrationV2>(receiver_address);
+        (registration.callback) (message);
+    }
+
     inline fun borrow_state(): &ReceiverRegistryState {
         borrow_global<ReceiverRegistryState>(state_object::object_address())
     }
@@ -200,6 +273,22 @@ module ccip::receiver_registry {
             error::invalid_argument(E_UNKNOWN_RECEIVER)
         );
         borrow_global_mut<CCIPReceiverRegistration>(receiver_address)
+    }
+
+    inline fun borrow_events_v2_mut(): &mut ReceiverRegistryEventsV2 {
+        let state_signer = &state_object::object_signer();
+        let state_address = state_object::object_address();
+
+        if (!exists<ReceiverRegistryEventsV2>(state_address)) {
+            move_to(
+                state_signer,
+                ReceiverRegistryEventsV2 {
+                    receiver_registered_v2_events: account::new_event_handle(state_signer)
+                }
+            );
+        };
+
+        borrow_global_mut<ReceiverRegistryEventsV2>(state_address)
     }
 
     #[test_only]

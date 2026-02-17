@@ -8,12 +8,14 @@ ccip = "_"
 ccip_dummy_receiver = "_"
 mcms = "_"
 mcms_register_entrypoints = "_"
+deployer = "_"
 
 [dev-addresses]
 ccip = "0x85d5520ea6a8b1501502651040c6f61238b281142ccbafdc205d40258f0bec10"
 ccip_dummy_receiver = "0x3010"
 mcms = "0x4000"
 mcms_register_entrypoints = "0x4001"
+deployer = "0x9910"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "16beac69835f3a71564c96164a606a23f259099a", subdir = "aptos-move/framework/aptos-framework" }

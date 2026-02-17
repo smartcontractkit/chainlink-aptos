@@ -1,27 +1,28 @@
 #[test_only]
-module ccip_onramp::mock_token {
+module ccip_offramp::mock_token {
     use std::fungible_asset::{Self, FungibleAsset, TransferRef};
-    use std::object::{Self, Object, ConstructorRef};
+    use std::object::{Object, ConstructorRef};
     use std::string::{Self};
     use std::option::{Self};
-    use std::primary_fungible_store;
+    use std::function_info;
+    use std::dispatchable_fungible_asset;
 
     public fun add_dynamic_dispatch_function(
         ccip_onramp_signer: &signer, constructor_ref: &ConstructorRef
     ) {
         let deposit =
-            std::function_info::new_function_info(
+            function_info::new_function_info(
                 ccip_onramp_signer,
                 string::utf8(b"mock_token"),
-                string::utf8(b"lock_or_burn")
+                string::utf8(b"deposit")
             );
         let withdraw =
-            std::function_info::new_function_info(
+            function_info::new_function_info(
                 ccip_onramp_signer,
                 string::utf8(b"mock_token"),
-                string::utf8(b"release_or_mint")
+                string::utf8(b"withdraw")
             );
-        std::dispatchable_fungible_asset::register_dispatch_functions(
+        dispatchable_fungible_asset::register_dispatch_functions(
             constructor_ref,
             option::some(withdraw),
             option::some(deposit),
@@ -29,17 +30,15 @@ module ccip_onramp::mock_token {
         );
     }
 
-    public fun lock_or_burn<T: key>(
-        store: Object<T>, fa: FungibleAsset, _transfer_ref: &TransferRef
+    public fun deposit<T: key>(
+        store: Object<T>, fa: FungibleAsset, transfer_ref: &TransferRef
     ) {
-        fungible_asset::deposit(store, fa);
+        fungible_asset::deposit_with_ref(transfer_ref, store, fa);
     }
 
-    public fun release_or_mint<T: key>(
+    public fun withdraw<T: key>(
         store: Object<T>, amount: u64, transfer_ref: &TransferRef
     ): FungibleAsset {
-        primary_fungible_store::withdraw_with_ref(
-            transfer_ref, object::owner(store), amount
-        )
+        fungible_asset::withdraw_with_ref(transfer_ref, store, amount)
     }
 }

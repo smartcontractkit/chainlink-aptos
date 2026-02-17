@@ -854,7 +854,8 @@ module ccip_onramp::onramp_migration_test {
                 lock_release_token_pool,
                 pool_type,
                 seed,
-                is_dispatchable
+                is_dispatchable,
+                false // use_v1_init
             );
 
         let one_e_18 = 1_000_000_000_000_000_000;
