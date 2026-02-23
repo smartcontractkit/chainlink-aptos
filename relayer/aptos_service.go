@@ -17,6 +17,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	commonaptos "github.com/smartcontractkit/chainlink-common/pkg/types/chains/aptos"
+	"github.com/smartcontractkit/chainlink-common/pkg/utils/retry"
 )
 
 type aptosService struct {
@@ -138,36 +139,71 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 	if err != nil {
 		return nil, fmt.Errorf("failed to enqueue transaction: %w", err)
 	}
+	// TODO: dont use txmgr config, create and use workflow/cre config
+	maximumWaitTime := time.Duration(s.chain.Config().TransactionManager.TxExpirationSecs) * time.Second
 
-	// Poll TxManager for status until terminal
-	var txStatus commontypes.TransactionStatus
-	for {
-		txStatus, err = s.chain.TxManager().GetStatus(txID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get transaction status: %w", err)
+	retryCtx, cancel := context.WithTimeout(ctx, maximumWaitTime)
+	defer cancel()
+	txStatus, err := retry.Do(retryCtx, s.logger, func(ctx context.Context) (commonaptos.TransactionStatus, error) {
+		txStatus, txStatusErr := s.chain.TxManager().GetStatus(txID)
+		if txStatusErr != nil {
+			return commonaptos.TxFatal, txStatusErr
 		}
-
 		switch txStatus {
-		case commontypes.Finalized:
-			return &commonaptos.SubmitTransactionReply{
-				PendingTransaction: &commonaptos.PendingTransaction{
-					Hash: txID,
-				},
-			}, nil
-		case commontypes.Failed, commontypes.Fatal:
-			return nil, fmt.Errorf("transaction failed with status: %v", txStatus)
-		case commontypes.Pending, commontypes.Unknown, commontypes.Unconfirmed:
-			// still in progress, wait and retry
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled while waiting for transaction: %w", ctx.Err())
-			case <-time.After(500 * time.Millisecond):
-				continue
-			}
+		case commontypes.Fatal, commontypes.Failed:
+			return commonaptos.TxFatal, nil
+		case commontypes.Unconfirmed, commontypes.Finalized:
+			return commonaptos.TxSuccess, nil
+		case commontypes.Pending, commontypes.Unknown:
+			return commonaptos.TxFatal, fmt.Errorf("tx still in state pending or unknown, tx status is %d for tx with ID %s", txStatus, txID)
 		default:
-			return nil, fmt.Errorf("unexpected transaction status: %v", txStatus)
+			return commonaptos.TxFatal, fmt.Errorf("unexpected transaction status %d for tx with ID %s", txStatus, txID)
 		}
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed getting transaction status: %w", err)
 	}
+
+	if txStatus == commonaptos.TxFatal {
+		return &commonaptos.SubmitTransactionReply{
+			TxStatus:         commonaptos.TxFatal,
+			TxIdempotencyKey: txID,
+		}, nil
+	} else {
+		return &commonaptos.SubmitTransactionReply{
+			TxStatus:         commonaptos.TxSuccess,
+			TxIdempotencyKey: txID,
+		}, nil
+	}
+	// TODO:
+	// get tx hash
+	// make write report get tx by hash and check for success or revert reason
+	// but then we also need to poll for transmission info because some other node might have done a success
+	// so we need to go through all possible cases and then figure out how to handle retries
+
+	/*
+			receipt, err := retry.Do(retryContext, e.logger, func(ctx context.Context) (*evmtxmgr.ChainReceipt, error) {
+			receipt, receiptErr := e.chain.TxManager().GetTransactionReceipt(ctx, txID)
+			if receiptErr != nil {
+				return nil, fmt.Errorf("failed to get TX receipt for tx with ID %s: %w", txID, receiptErr)
+			}
+			if receipt == nil {
+				return nil, fmt.Errorf("receipt was nil for TX with ID %s", txID)
+			}
+			return receipt, nil
+		})
+
+		if err != nil {
+			return nil, fmt.Errorf("failed getting transaction receipt. %w", err)
+		}
+
+		return &evm.TransactionResult{
+			TxStatus:         evm.TxSuccess,
+			TxHash:           (*receipt).GetTxHash(),
+			TxIdempotencyKey: txID,
+		}, nil
+	*/
 }
 
 // getAccountWithHighestBalance returns the public key of the account with the highest APT balance.
