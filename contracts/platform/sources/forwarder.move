@@ -57,7 +57,8 @@ module platform::forwarder {
     struct Transmission {
         address transmitter;
         // with an increased gas limit.
-        bool success;
+        bool success; // this can actually hold the transmission state (notAttempted, inProgress, successful, failed)
+        // or we can derive it in getTransmissionState(), do check chainlink-evm/contracts/cre/src/keystone/KeystoneForwarder.sol
         // The amount of gas allocated for the `IReceiver.onReport` call. uint80 allows storing gas for known EVM block
         // gas limits. Ensures that the minimum gas requested by the user is available during the transmission attempt.
         // If the transmission fails (indicated by a `false` success state), it can be retried with an increased gas limit.
@@ -229,8 +230,15 @@ module platform::forwarder {
     // report_validation() verifies config/payload/sigs and updates transmission info with transmitter address and state to InProgress
     // report_delivery() will revert if transmission not in progress
     // report_delivery() will revert (or return success) ? if transmission already successful
-    // report_delivery() updates transmisison info with transmitter address (because different nodes can be calling report_validation() and report_delivery()
-    
+    // report_delivery() updates transmisison info with transmitter address (because different nodes can be calling report_validation() and report_delivery())
+    // so we want to look at the AccountTransactions of the correct node
+    // evm also does the following and it would be nice if aptos had a similar mechanism, this can help send retry attempts with increased gas limit
+    /*
+        uint256 gasLimit = gasleft() - INTERNAL_GAS_REQUIREMENTS;
+        if (gasLimit < MINIMUM_GAS_LIMIT) revert InsufficientGasForRouting(transmissionId);
+        s_transmissions[transmissionId].gasLimit = uint80(gasLimit);
+     */
+
     entry fun report(
         transmitter: &signer,
         receiver: address,
