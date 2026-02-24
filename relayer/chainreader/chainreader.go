@@ -327,6 +327,26 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 	return codec.DecodeAptosJsonValue(transformedData, returnVal)
 }
 
+// GetLatestValueWithHeadData returns the latest value and the current chain head (block height, timestamp).
+// It calls GetLatestValue to fill returnVal, then fetches ledger info from the Aptos client to build the Head.
+func (a *aptosChainReader) GetLatestValueWithHeadData(ctx context.Context, readIdentifier string, confidenceLevel primitives.ConfidenceLevel, params, returnVal any) (*types.Head, error) {
+	if err := a.GetLatestValue(ctx, readIdentifier, confidenceLevel, params, returnVal); err != nil {
+		return nil, err
+	}
+	nodeInfo, err := a.client.Info()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ledger info for head data: %w", err)
+	}
+	// LedgerTimestamp is in microseconds; Head.Timestamp is Unix seconds.
+	timestampSecs := nodeInfo.LedgerTimestamp() / 1000000
+	head := &types.Head{
+		Height:    strconv.FormatUint(nodeInfo.BlockHeight(), 10),
+		Hash:      nil, // Aptos NodeInfo does not expose block hash; view reads are at latest state
+		Timestamp: timestampSecs,
+	}
+	return head, nil
+}
+
 func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request types.BatchGetLatestValuesRequest) (types.BatchGetLatestValuesResult, error) {
 	result := make(types.BatchGetLatestValuesResult)
 

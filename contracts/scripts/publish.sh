@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euxo pipefail
 
-PUBLISHER_PROFILE=default
+# Use PUBLISHER_PROFILE from env for devnet/mainnet (e.g. PUBLISHER_PROFILE=devnet); default is default (local).
+PUBLISHER_PROFILE=${PUBLISHER_PROFILE:-default}
 PUBLISHER_ADDR=0x$(aptos config show-profiles --profile=$PUBLISHER_PROFILE | grep 'account' | sed -n 's/.*"account": \"\(.*\)\".*/\1/p')
 
 # deploy platform forwarder
