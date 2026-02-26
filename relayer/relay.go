@@ -2,6 +2,7 @@ package relayer
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,17 +10,20 @@ import (
 
 	aptosdk "github.com/aptos-labs/aptos-go-sdk"
 	aptosapi "github.com/aptos-labs/aptos-go-sdk/api"
+	"github.com/aptos-labs/aptos-go-sdk/bcs"
+	aptoscrypto "github.com/aptos-labs/aptos-go-sdk/crypto"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 	typeaptos "github.com/smartcontractkit/chainlink-common/pkg/types/chains/aptos"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
-	"github.com/smartcontractkit/chainlink-common/pkg/utils"
+	commonutils "github.com/smartcontractkit/chainlink-common/pkg/utils"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
 	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainwriter"
+	rutils "github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 	write_target "github.com/smartcontractkit/chainlink-aptos/relayer/write_target/aptos"
 )
 
@@ -29,7 +33,7 @@ type relayer struct {
 	chain chain.Chain
 	lggr  logger.Logger
 
-	starter utils.StartStopOnce
+	starter commonutils.StartStopOnce
 	stopCh  services.StopChan
 }
 
@@ -320,7 +324,102 @@ func (r *relayer) TransactionByHash(ctx context.Context, req typeaptos.Transacti
 }
 
 func (r *relayer) SubmitTransaction(ctx context.Context, req typeaptos.SubmitTransactionRequest) (*typeaptos.SubmitTransactionReply, error) {
-	return nil, errors.New("submit transaction via AptosService is not supported by this relayer implementation")
+	cfg := r.chain.Config()
+	if cfg.Workflow == nil || cfg.Workflow.PublicKey == "" {
+		return nil, fmt.Errorf("workflow public key not configured")
+	}
+
+	client, err := r.chain.GetClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	var payload aptosdk.TransactionPayload
+	if err := bcs.Deserialize(&payload, req.EncodedPayload); err != nil {
+		return nil, fmt.Errorf("failed to decode transaction payload: %w", err)
+	}
+
+	publicKey, err := rutils.HexPublicKeyToEd25519PublicKey(cfg.Workflow.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("invalid workflow public key: %w", err)
+	}
+	fromAddress := rutils.Ed25519PublicKeyToAddress(publicKey)
+
+	accountInfo, err := client.Account(fromAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch account info: %w", err)
+	}
+	sequenceNumber, err := accountInfo.SequenceNumber()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse sequence number: %w", err)
+	}
+
+	chainID, err := client.GetChainId()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch chain id: %w", err)
+	}
+
+	info, err := client.Info()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch node info: %w", err)
+	}
+	ledgerTimestamp := info.LedgerTimestamp()
+	if ledgerTimestamp == 0 {
+		return nil, fmt.Errorf("ledger timestamp is zero")
+	}
+
+	txCfg := cfg.TransactionManager
+	expiration := (ledgerTimestamp / 1_000_000) + txCfg.TxExpirationSecs
+
+	var maxGasAmount uint64
+	var gasUnitPrice uint64
+	if req.GasConfig != nil {
+		maxGasAmount = req.GasConfig.MaxGasAmount
+		gasUnitPrice = req.GasConfig.GasUnitPrice
+	} else {
+		gasInfo, gasErr := client.EstimateGasPrice()
+		if gasErr != nil {
+			return nil, fmt.Errorf("failed to estimate gas price: %w", gasErr)
+		}
+		maxGasAmount = txCfg.DefaultMaxGasAmount + txCfg.GasLimitOverhead
+		gasUnitPrice = gasInfo.GasEstimate
+	}
+
+	rawTx := aptosdk.RawTransaction{
+		Sender:                     fromAddress,
+		SequenceNumber:             sequenceNumber,
+		Payload:                    payload,
+		MaxGasAmount:               maxGasAmount,
+		GasUnitPrice:               gasUnitPrice,
+		ExpirationTimestampSeconds: expiration,
+		ChainId:                    chainID,
+	}
+
+	signedTx, signature, err := signRawTransaction(ctx, r.chain.KeyStore(), cfg.Workflow.PublicKey, publicKey, &rawTx)
+	if err != nil {
+		return nil, err
+	}
+
+	submitResponse, err := client.SubmitTransaction(signedTx)
+	if err != nil {
+		return nil, err
+	}
+	if submitResponse == nil || submitResponse.Hash == "" {
+		return nil, fmt.Errorf("submit transaction returned empty hash")
+	}
+
+	return &typeaptos.SubmitTransactionReply{
+		PendingTransaction: &typeaptos.PendingTransaction{
+			Hash:                    submitResponse.Hash,
+			Sender:                  typeaptos.AccountAddress(fromAddress),
+			SequenceNumber:          sequenceNumber,
+			MaxGasAmount:            maxGasAmount,
+			GasUnitPrice:            gasUnitPrice,
+			ExpirationTimestampSecs: expiration,
+			Payload:                 req.EncodedPayload,
+			Signature:               signature,
+		},
+	}, nil
 }
 
 func (r *relayer) AccountTransactions(ctx context.Context, req typeaptos.AccountTransactionsRequest) (*typeaptos.AccountTransactionsReply, error) {
@@ -454,4 +553,42 @@ func toSDKTypeTag(tag typeaptos.TypeTag) (aptosdk.TypeTag, error) {
 	default:
 		return aptosdk.TypeTag{}, fmt.Errorf("unsupported aptos type tag: %T", tag.Value)
 	}
+}
+
+func signRawTransaction(
+	ctx context.Context,
+	ks core.Keystore,
+	publicKeyHex string,
+	publicKey ed25519.PublicKey,
+	rawTx *aptosdk.RawTransaction,
+) (*aptosdk.SignedTransaction, []byte, error) {
+	signingMessage, err := rawTx.SigningMessage()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create signing message: %w", err)
+	}
+
+	signature, err := ks.Sign(ctx, publicKeyHex, signingMessage)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to sign message: %w", err)
+	}
+
+	edSig := aptoscrypto.Ed25519Signature{}
+	if err := edSig.FromBytes(signature); err != nil {
+		return nil, nil, fmt.Errorf("failed to decode ed25519 signature: %w", err)
+	}
+
+	authenticator := &aptoscrypto.AccountAuthenticator{
+		Variant: aptoscrypto.AccountAuthenticatorEd25519,
+		Auth: &aptoscrypto.Ed25519Authenticator{
+			PubKey: &aptoscrypto.Ed25519PublicKey{Inner: publicKey},
+			Sig:    &edSig,
+		},
+	}
+
+	signedTx, err := rawTx.SignedTransactionWithAuthenticator(authenticator)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to build signed transaction: %w", err)
+	}
+
+	return signedTx, signature, nil
 }
