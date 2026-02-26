@@ -16,8 +16,8 @@ require (
 	github.com/prometheus/client_golang v1.23.0
 	github.com/shopspring/decimal v1.4.0
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
-	github.com/smartcontractkit/chainlink-common v0.10.1-0.20260225231552-fd6482e9b481
-	github.com/smartcontractkit/chainlink-common/pkg/values v0.0.0-20260225184310-053d0fd4e19a
+	github.com/smartcontractkit/chainlink-common v0.10.1-0.20260226191628-ecce52da56c9
+	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260217043601-5cc966896c4f
 	github.com/stretchr/testify v1.11.1
 	github.com/valyala/fastjson v1.6.4
 	go.opentelemetry.io/otel v1.39.0
@@ -101,7 +101,6 @@ require (
 	github.com/scylladb/go-reflectx v1.0.1 // indirect
 	github.com/smartcontractkit/chain-selectors v1.0.89 // indirect
 	github.com/smartcontractkit/chainlink-common/pkg/chipingress v0.0.10 // indirect
-	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260217043601-5cc966896c4f // indirect
 	github.com/smartcontractkit/chainlink-protos/linking-service/go v0.0.0-20251002192024-d2ad9222409b // indirect
 	github.com/smartcontractkit/chainlink-protos/node-platform v0.0.0-20260205130626-db2a2aab956b // indirect
 	github.com/smartcontractkit/freeport v0.1.3-0.20250716200817-cb5dfd0e369e // indirect
