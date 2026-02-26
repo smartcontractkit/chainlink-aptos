@@ -7,6 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
+	"sync"
+	"time"
 
 	aptosdk "github.com/aptos-labs/aptos-go-sdk"
 	aptosapi "github.com/aptos-labs/aptos-go-sdk/api"
@@ -35,6 +38,9 @@ type relayer struct {
 
 	starter commonutils.StartStopOnce
 	stopCh  services.StopChan
+
+	sequenceMu   sync.Mutex
+	nextSequence map[string]uint64
 }
 
 func NewRelayer(lggr logger.Logger, chain chain.Chain, capRegistry core.CapabilitiesRegistry) (*relayer, error) {
@@ -53,9 +59,10 @@ func NewRelayer(lggr logger.Logger, chain chain.Chain, capRegistry core.Capabili
 	}
 
 	return &relayer{
-		chain:  chain,
-		lggr:   lggr,
-		stopCh: make(chan struct{}),
+		chain:        chain,
+		lggr:         lggr,
+		stopCh:       make(chan struct{}),
+		nextSequence: make(map[string]uint64),
 	}, nil
 }
 
@@ -364,32 +371,6 @@ func (r *relayer) SubmitTransaction(ctx context.Context, req typeaptos.SubmitTra
 	}
 	fromAddress := rutils.Ed25519PublicKeyToAddress(publicKey)
 
-	accountInfo, err := client.Account(fromAddress)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch account info: %w", err)
-	}
-	sequenceNumber, err := accountInfo.SequenceNumber()
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse sequence number: %w", err)
-	}
-
-	chainID, err := client.GetChainId()
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch chain id: %w", err)
-	}
-
-	info, err := client.Info()
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch node info: %w", err)
-	}
-	ledgerTimestamp := info.LedgerTimestamp()
-	if ledgerTimestamp == 0 {
-		return nil, fmt.Errorf("ledger timestamp is zero")
-	}
-
-	txCfg := cfg.TransactionManager
-	expiration := (ledgerTimestamp / 1_000_000) + txCfg.TxExpirationSecs
-
 	var maxGasAmount uint64
 	var gasUnitPrice uint64
 	if req.GasConfig != nil {
@@ -400,26 +381,20 @@ func (r *relayer) SubmitTransaction(ctx context.Context, req typeaptos.SubmitTra
 		if gasErr != nil {
 			return nil, fmt.Errorf("failed to estimate gas price: %w", gasErr)
 		}
-		maxGasAmount = txCfg.DefaultMaxGasAmount + txCfg.GasLimitOverhead
+		maxGasAmount = cfg.TransactionManager.DefaultMaxGasAmount + cfg.TransactionManager.GasLimitOverhead
 		gasUnitPrice = gasInfo.GasEstimate
 	}
 
-	rawTx := aptosdk.RawTransaction{
-		Sender:                     fromAddress,
-		SequenceNumber:             sequenceNumber,
-		Payload:                    payload,
-		MaxGasAmount:               maxGasAmount,
-		GasUnitPrice:               gasUnitPrice,
-		ExpirationTimestampSeconds: expiration,
-		ChainId:                    chainID,
-	}
-
-	signedTx, signature, err := signRawTransaction(ctx, r.chain.KeyStore(), cfg.Workflow.PublicKey, publicKey, &rawTx)
-	if err != nil {
-		return nil, err
-	}
-
-	submitResponse, err := client.SubmitTransaction(signedTx)
+	submitResponse, sequenceNumber, expiration, signature, err := r.submitTransactionWithManagedSequence(
+		ctx,
+		client,
+		cfg.Workflow.PublicKey,
+		publicKey,
+		fromAddress,
+		payload,
+		maxGasAmount,
+		gasUnitPrice,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -439,6 +414,138 @@ func (r *relayer) SubmitTransaction(ctx context.Context, req typeaptos.SubmitTra
 			Signature:               signature,
 		},
 	}, nil
+}
+
+func (r *relayer) submitTransactionWithManagedSequence(
+	ctx context.Context,
+	client aptosdk.AptosRpcClient,
+	publicKeyHex string,
+	publicKey ed25519.PublicKey,
+	fromAddress aptosdk.AccountAddress,
+	payload aptosdk.TransactionPayload,
+	maxGasAmount uint64,
+	gasUnitPrice uint64,
+) (*aptosapi.SubmitTransactionResponse, uint64, uint64, []byte, error) {
+	r.sequenceMu.Lock()
+	defer r.sequenceMu.Unlock()
+
+	addressKey := fromAddress.String()
+	txCfg := r.chain.Config().TransactionManager
+	maxAttempts := int(txCfg.MaxSubmitRetryAttempts)
+	if maxAttempts < 1 {
+		maxAttempts = 1
+	}
+
+	lastErr := error(nil)
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		chainID, err := client.GetChainId()
+		if err != nil {
+			return nil, 0, 0, nil, fmt.Errorf("failed to fetch chain id: %w", err)
+		}
+
+		info, err := client.Info()
+		if err != nil {
+			return nil, 0, 0, nil, fmt.Errorf("failed to fetch node info: %w", err)
+		}
+		ledgerTimestamp := info.LedgerTimestamp()
+		if ledgerTimestamp == 0 {
+			return nil, 0, 0, nil, fmt.Errorf("ledger timestamp is zero")
+		}
+		expiration := (ledgerTimestamp / 1_000_000) + txCfg.TxExpirationSecs
+
+		onchainSequence, err := r.fetchSequenceNumber(client, fromAddress)
+		if err != nil {
+			return nil, 0, 0, nil, err
+		}
+		sequenceNumber := onchainSequence
+		if cached, ok := r.nextSequence[addressKey]; ok && cached > sequenceNumber {
+			sequenceNumber = cached
+		}
+
+		rawTx := aptosdk.RawTransaction{
+			Sender:                     fromAddress,
+			SequenceNumber:             sequenceNumber,
+			Payload:                    payload,
+			MaxGasAmount:               maxGasAmount,
+			GasUnitPrice:               gasUnitPrice,
+			ExpirationTimestampSeconds: expiration,
+			ChainId:                    chainID,
+		}
+
+		signedTx, signature, err := signRawTransaction(ctx, r.chain.KeyStore(), publicKeyHex, publicKey, &rawTx)
+		if err != nil {
+			return nil, 0, 0, nil, err
+		}
+
+		submitResponse, err := client.SubmitTransaction(signedTx)
+		if err == nil {
+			r.nextSequence[addressKey] = sequenceNumber + 1
+			return submitResponse, sequenceNumber, expiration, signature, nil
+		}
+
+		lastErr = err
+		kind := classifySequenceError(err)
+		if kind == sequenceErrorUnknown || attempt == maxAttempts {
+			delete(r.nextSequence, addressKey)
+			break
+		}
+
+		switch kind {
+		case sequenceErrorTooOld, sequenceErrorInvalidUpdate:
+			// Another transaction likely already consumed this sequence in the mempool.
+			r.nextSequence[addressKey] = sequenceNumber + 1
+		case sequenceErrorTooNew:
+			// Our local cursor got ahead of what the network can currently accept.
+			// Drop cache and rehydrate from onchain sequence on next attempt.
+			delete(r.nextSequence, addressKey)
+		}
+
+		if txCfg.SubmitDelayDuration > 0 {
+			time.Sleep(time.Duration(txCfg.SubmitDelayDuration) * time.Second)
+		}
+	}
+
+	return nil, 0, 0, nil, lastErr
+}
+
+func (r *relayer) fetchSequenceNumber(client aptosdk.AptosRpcClient, fromAddress aptosdk.AccountAddress) (uint64, error) {
+	accountInfo, err := client.Account(fromAddress)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch account info: %w", err)
+	}
+	sequenceNumber, err := accountInfo.SequenceNumber()
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse sequence number: %w", err)
+	}
+	return sequenceNumber, nil
+}
+
+type sequenceErrorKind int
+
+const (
+	sequenceErrorUnknown sequenceErrorKind = iota
+	sequenceErrorTooOld
+	sequenceErrorTooNew
+	sequenceErrorInvalidUpdate
+)
+
+func classifySequenceError(err error) sequenceErrorKind {
+	var httpErr *aptosdk.HttpError
+	if !errors.As(err, &httpErr) {
+		return sequenceErrorUnknown
+	}
+
+	body := strings.ToUpper(string(httpErr.Body))
+	if strings.Contains(body, "SEQUENCE_NUMBER_TOO_OLD") {
+		return sequenceErrorTooOld
+	}
+	if strings.Contains(body, "SEQUENCE_NUMBER_TOO_NEW") {
+		return sequenceErrorTooNew
+	}
+	if strings.Contains(body, "INVALID_TRANSACTION_UPDATE") || strings.Contains(body, "TRANSACTION ALREADY IN MEMPOOL WITH A DIFFERENT PAYLOAD") {
+		return sequenceErrorInvalidUpdate
+	}
+	return sequenceErrorUnknown
 }
 
 func (r *relayer) AccountTransactions(ctx context.Context, req typeaptos.AccountTransactionsRequest) (*typeaptos.AccountTransactionsReply, error) {
