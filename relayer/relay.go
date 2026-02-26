@@ -2,19 +2,15 @@ package relayer
 
 import (
 	"context"
-	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
-	"strings"
-	"sync"
-	"time"
 
 	aptosdk "github.com/aptos-labs/aptos-go-sdk"
 	aptosapi "github.com/aptos-labs/aptos-go-sdk/api"
 	"github.com/aptos-labs/aptos-go-sdk/bcs"
-	aptoscrypto "github.com/aptos-labs/aptos-go-sdk/crypto"
+	"github.com/google/uuid"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
@@ -38,9 +34,6 @@ type relayer struct {
 
 	starter commonutils.StartStopOnce
 	stopCh  services.StopChan
-
-	sequenceMu   sync.Mutex
-	nextSequence map[string]uint64
 }
 
 func NewRelayer(lggr logger.Logger, chain chain.Chain, capRegistry core.CapabilitiesRegistry) (*relayer, error) {
@@ -59,10 +52,9 @@ func NewRelayer(lggr logger.Logger, chain chain.Chain, capRegistry core.Capabili
 	}
 
 	return &relayer{
-		chain:        chain,
-		lggr:         lggr,
-		stopCh:       make(chan struct{}),
-		nextSequence: make(map[string]uint64),
+		chain:  chain,
+		lggr:   lggr,
+		stopCh: make(chan struct{}),
 	}, nil
 }
 
@@ -380,167 +372,41 @@ func (r *relayer) SubmitTransaction(ctx context.Context, req typeaptos.SubmitTra
 		gasUnitPrice = gasInfo.GasEstimate
 	}
 
-	submitResponse, sequenceNumber, expiration, signature, err := r.submitTransactionWithManagedSequence(
+	txID, err := uuid.NewUUID()
+	if err != nil {
+		return nil, err
+	}
+	submittedTx, err := r.chain.TxManager().SubmitPayload(
 		ctx,
-		client,
-		cfg.Workflow.PublicKey,
-		publicKey,
+		txID.String(),
+		nil,
 		fromAddress,
+		publicKey,
 		payload,
 		maxGasAmount,
 		gasUnitPrice,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to submit transaction via txm: %w", err)
 	}
-	if submitResponse == nil || submitResponse.Hash == "" {
+	if submittedTx == nil || submittedTx.Hash == "" {
 		return nil, fmt.Errorf("submit transaction returned empty hash")
 	}
 
+	sender := typeaptos.AccountAddress(submittedTx.Sender)
+
 	return &typeaptos.SubmitTransactionReply{
 		PendingTransaction: &typeaptos.PendingTransaction{
-			Hash:                    submitResponse.Hash,
-			Sender:                  typeaptos.AccountAddress(fromAddress),
-			SequenceNumber:          sequenceNumber,
-			MaxGasAmount:            maxGasAmount,
-			GasUnitPrice:            gasUnitPrice,
-			ExpirationTimestampSecs: expiration,
+			Hash:                    submittedTx.Hash,
+			Sender:                  sender,
+			SequenceNumber:          submittedTx.Nonce,
+			MaxGasAmount:            submittedTx.MaxGasAmount,
+			GasUnitPrice:            submittedTx.GasUnitPrice,
+			ExpirationTimestampSecs: submittedTx.ExpirationTimestampSecs,
 			Payload:                 req.EncodedPayload,
-			Signature:               signature,
+			Signature:               submittedTx.Signature,
 		},
 	}, nil
-}
-
-func (r *relayer) submitTransactionWithManagedSequence(
-	ctx context.Context,
-	client aptosdk.AptosRpcClient,
-	publicKeyHex string,
-	publicKey ed25519.PublicKey,
-	fromAddress aptosdk.AccountAddress,
-	payload aptosdk.TransactionPayload,
-	maxGasAmount uint64,
-	gasUnitPrice uint64,
-) (*aptosapi.SubmitTransactionResponse, uint64, uint64, []byte, error) {
-	r.sequenceMu.Lock()
-	defer r.sequenceMu.Unlock()
-
-	addressKey := fromAddress.String()
-	txCfg := r.chain.Config().TransactionManager
-	maxAttempts := int(txCfg.MaxSubmitRetryAttempts)
-	if maxAttempts < 1 {
-		maxAttempts = 1
-	}
-
-	lastErr := error(nil)
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		chainID, err := client.GetChainId()
-		if err != nil {
-			return nil, 0, 0, nil, fmt.Errorf("failed to fetch chain id: %w", err)
-		}
-
-		info, err := client.Info()
-		if err != nil {
-			return nil, 0, 0, nil, fmt.Errorf("failed to fetch node info: %w", err)
-		}
-		ledgerTimestamp := info.LedgerTimestamp()
-		if ledgerTimestamp == 0 {
-			return nil, 0, 0, nil, fmt.Errorf("ledger timestamp is zero")
-		}
-		expiration := (ledgerTimestamp / 1_000_000) + txCfg.TxExpirationSecs
-
-		onchainSequence, err := r.fetchSequenceNumber(client, fromAddress)
-		if err != nil {
-			return nil, 0, 0, nil, err
-		}
-		sequenceNumber := onchainSequence
-		if cached, ok := r.nextSequence[addressKey]; ok && cached > sequenceNumber {
-			sequenceNumber = cached
-		}
-
-		rawTx := aptosdk.RawTransaction{
-			Sender:                     fromAddress,
-			SequenceNumber:             sequenceNumber,
-			Payload:                    payload,
-			MaxGasAmount:               maxGasAmount,
-			GasUnitPrice:               gasUnitPrice,
-			ExpirationTimestampSeconds: expiration,
-			ChainId:                    chainID,
-		}
-
-		signedTx, signature, err := signRawTransaction(ctx, r.chain.KeyStore(), publicKeyHex, publicKey, &rawTx)
-		if err != nil {
-			return nil, 0, 0, nil, err
-		}
-
-		submitResponse, err := client.SubmitTransaction(signedTx)
-		if err == nil {
-			r.nextSequence[addressKey] = sequenceNumber + 1
-			return submitResponse, sequenceNumber, expiration, signature, nil
-		}
-
-		lastErr = err
-		kind := classifySequenceError(err)
-		if kind == sequenceErrorUnknown || attempt == maxAttempts {
-			delete(r.nextSequence, addressKey)
-			break
-		}
-
-		switch kind {
-		case sequenceErrorTooOld, sequenceErrorInvalidUpdate:
-			// Another transaction likely already consumed this sequence in the mempool.
-			r.nextSequence[addressKey] = sequenceNumber + 1
-		case sequenceErrorTooNew:
-			// Our local cursor got ahead of what the network can currently accept.
-			// Drop cache and rehydrate from onchain sequence on next attempt.
-			delete(r.nextSequence, addressKey)
-		}
-
-		if txCfg.SubmitDelayDuration > 0 {
-			time.Sleep(time.Duration(txCfg.SubmitDelayDuration) * time.Second)
-		}
-	}
-
-	return nil, 0, 0, nil, lastErr
-}
-
-func (r *relayer) fetchSequenceNumber(client aptosdk.AptosRpcClient, fromAddress aptosdk.AccountAddress) (uint64, error) {
-	accountInfo, err := client.Account(fromAddress)
-	if err != nil {
-		return 0, fmt.Errorf("failed to fetch account info: %w", err)
-	}
-	sequenceNumber, err := accountInfo.SequenceNumber()
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse sequence number: %w", err)
-	}
-	return sequenceNumber, nil
-}
-
-type sequenceErrorKind int
-
-const (
-	sequenceErrorUnknown sequenceErrorKind = iota
-	sequenceErrorTooOld
-	sequenceErrorTooNew
-	sequenceErrorInvalidUpdate
-)
-
-func classifySequenceError(err error) sequenceErrorKind {
-	var httpErr *aptosdk.HttpError
-	if !errors.As(err, &httpErr) {
-		return sequenceErrorUnknown
-	}
-
-	body := strings.ToUpper(string(httpErr.Body))
-	if strings.Contains(body, "SEQUENCE_NUMBER_TOO_OLD") {
-		return sequenceErrorTooOld
-	}
-	if strings.Contains(body, "SEQUENCE_NUMBER_TOO_NEW") {
-		return sequenceErrorTooNew
-	}
-	if strings.Contains(body, "INVALID_TRANSACTION_UPDATE") || strings.Contains(body, "TRANSACTION ALREADY IN MEMPOOL WITH A DIFFERENT PAYLOAD") {
-		return sequenceErrorInvalidUpdate
-	}
-	return sequenceErrorUnknown
 }
 
 func (r *relayer) AccountTransactions(ctx context.Context, req typeaptos.AccountTransactionsRequest) (*typeaptos.AccountTransactionsReply, error) {
@@ -674,42 +540,4 @@ func toSDKTypeTag(tag typeaptos.TypeTag) (aptosdk.TypeTag, error) {
 	default:
 		return aptosdk.TypeTag{}, fmt.Errorf("unsupported aptos type tag: %T", tag.Value)
 	}
-}
-
-func signRawTransaction(
-	ctx context.Context,
-	ks core.Keystore,
-	publicKeyHex string,
-	publicKey ed25519.PublicKey,
-	rawTx *aptosdk.RawTransaction,
-) (*aptosdk.SignedTransaction, []byte, error) {
-	signingMessage, err := rawTx.SigningMessage()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create signing message: %w", err)
-	}
-
-	signature, err := ks.Sign(ctx, publicKeyHex, signingMessage)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to sign message: %w", err)
-	}
-
-	edSig := aptoscrypto.Ed25519Signature{}
-	if err := edSig.FromBytes(signature); err != nil {
-		return nil, nil, fmt.Errorf("failed to decode ed25519 signature: %w", err)
-	}
-
-	authenticator := &aptoscrypto.AccountAuthenticator{
-		Variant: aptoscrypto.AccountAuthenticatorEd25519,
-		Auth: &aptoscrypto.Ed25519Authenticator{
-			PubKey: &aptoscrypto.Ed25519PublicKey{Inner: publicKey},
-			Sig:    &edSig,
-		},
-	}
-
-	signedTx, err := rawTx.SignedTransactionWithAuthenticator(authenticator)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to build signed transaction: %w", err)
-	}
-
-	return signedTx, signature, nil
 }
