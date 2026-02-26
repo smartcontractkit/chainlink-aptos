@@ -16,8 +16,8 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/shopspring/decimal v1.4.0
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
-	github.com/smartcontractkit/chainlink-common v0.10.1-0.20260217160002-b56cb5356cc7
-	github.com/smartcontractkit/chainlink-protos/cre/go v1.0.0-beta
+	github.com/smartcontractkit/chainlink-common v0.10.1-0.20260226191628-ecce52da56c9
+	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260217043601-5cc966896c4f
 	github.com/stretchr/testify v1.11.1
 	github.com/valyala/fastjson v1.6.10
 	go.opentelemetry.io/otel v1.40.0
