@@ -228,6 +228,20 @@ func (r *relayer) AccountAPTBalance(ctx context.Context, req typeaptos.AccountAP
 	return &typeaptos.AccountAPTBalanceReply{Value: balance}, nil
 }
 
+func (r *relayer) LedgerVersion(ctx context.Context) (uint64, error) {
+	client, err := r.chain.GetClient()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	info, err := client.Info()
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch node info: %w", err)
+	}
+
+	return info.LedgerVersion(), nil
+}
+
 func (r *relayer) View(ctx context.Context, req typeaptos.ViewRequest) (*typeaptos.ViewReply, error) {
 	client, err := r.chain.GetClient()
 	if err != nil {
