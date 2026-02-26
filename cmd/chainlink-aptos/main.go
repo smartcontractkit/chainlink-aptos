@@ -85,7 +85,7 @@ func (p *pluginRelayer) NewRelayer(ctx context.Context, rawConfig string, loopKs
 	p.SubService(emitter)
 	opts := chain.ChainOpts{
 		Logger:   p.Logger,
-		KeyStore: loopKs,
+		KeyStore: ks,
 		DS:       p.ds,
 	}
 	chain, err := chain.NewChain(cfg, opts)
