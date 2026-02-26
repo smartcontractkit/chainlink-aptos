@@ -7,9 +7,12 @@ import (
 	"fmt"
 	"math/big"
 
+	aptosdk "github.com/aptos-labs/aptos-go-sdk"
+	aptosapi "github.com/aptos-labs/aptos-go-sdk/api"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
+	typeaptos "github.com/smartcontractkit/chainlink-common/pkg/types/chains/aptos"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
@@ -179,7 +182,7 @@ func (r *relayer) Solana() (types.SolanaService, error) {
 }
 
 func (r *relayer) Aptos() (types.AptosService, error) {
-	return nil, errors.New("AptosService direct access is not supported for aptos relayer")
+	return r, nil
 }
 
 func (r *relayer) Replay(ctx context.Context, fromBlock string, args map[string]any) error {
@@ -205,4 +208,245 @@ func (r *relayer) ListNodeStatuses(ctx context.Context, pageSize int32, pageToke
 
 func (r *relayer) Transact(ctx context.Context, from, to string, amount *big.Int, balanceCheck bool) error {
 	return r.chain.Transact(ctx, from, to, amount, balanceCheck)
+}
+
+func (r *relayer) AccountAPTBalance(ctx context.Context, req typeaptos.AccountAPTBalanceRequest) (*typeaptos.AccountAPTBalanceReply, error) {
+	client, err := r.chain.GetClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	balance, err := client.AccountAPTBalance(aptosdk.AccountAddress(req.Address))
+	if err != nil {
+		return nil, err
+	}
+
+	return &typeaptos.AccountAPTBalanceReply{Value: balance}, nil
+}
+
+func (r *relayer) View(ctx context.Context, req typeaptos.ViewRequest) (*typeaptos.ViewReply, error) {
+	client, err := r.chain.GetClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	payload, err := toSDKViewPayload(req.Payload)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.View(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal view response: %w", err)
+	}
+
+	return &typeaptos.ViewReply{Data: data}, nil
+}
+
+func (r *relayer) EventsByHandle(ctx context.Context, req typeaptos.EventsByHandleRequest) (*typeaptos.EventsByHandleReply, error) {
+	client, err := r.chain.GetClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	events, err := client.EventsByHandle(aptosdk.AccountAddress(req.Account), req.EventHandle, req.FieldName, req.Start, req.Limit)
+	if err != nil {
+		return nil, err
+	}
+
+	out := &typeaptos.EventsByHandleReply{Events: make([]*typeaptos.Event, 0, len(events))}
+	for _, e := range events {
+		if e == nil {
+			continue
+		}
+
+		ev := &typeaptos.Event{
+			Version:        e.Version,
+			Type:           e.Type,
+			SequenceNumber: e.SequenceNumber,
+		}
+		if e.Guid != nil {
+			var addr typeaptos.AccountAddress
+			if e.Guid.AccountAddress != nil {
+				copy(addr[:], e.Guid.AccountAddress[:])
+			}
+			ev.Guid = &typeaptos.GUID{
+				CreationNumber: e.Guid.CreationNumber,
+				AccountAddress: addr,
+			}
+		}
+		if e.Data != nil {
+			data, marshalErr := json.Marshal(e.Data)
+			if marshalErr != nil {
+				return nil, fmt.Errorf("failed to marshal event data: %w", marshalErr)
+			}
+			ev.Data = data
+		}
+		out.Events = append(out.Events, ev)
+	}
+
+	return out, nil
+}
+
+func (r *relayer) TransactionByHash(ctx context.Context, req typeaptos.TransactionByHashRequest) (*typeaptos.TransactionByHashReply, error) {
+	client, err := r.chain.GetClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	tx, err := client.TransactionByHash(req.Hash)
+	if err != nil {
+		return nil, err
+	}
+	if tx == nil {
+		return &typeaptos.TransactionByHashReply{}, nil
+	}
+
+	converted, err := convertSDKTransaction(tx)
+	if err != nil {
+		return nil, err
+	}
+	return &typeaptos.TransactionByHashReply{Transaction: converted}, nil
+}
+
+func (r *relayer) SubmitTransaction(ctx context.Context, req typeaptos.SubmitTransactionRequest) (*typeaptos.SubmitTransactionReply, error) {
+	return nil, errors.New("submit transaction via AptosService is not supported by this relayer implementation")
+}
+
+func (r *relayer) AccountTransactions(ctx context.Context, req typeaptos.AccountTransactionsRequest) (*typeaptos.AccountTransactionsReply, error) {
+	client, err := r.chain.GetClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	txs, err := client.AccountTransactions(aptosdk.AccountAddress(req.Address), req.Start, req.Limit)
+	if err != nil {
+		return nil, err
+	}
+
+	out := &typeaptos.AccountTransactionsReply{Transactions: make([]*typeaptos.Transaction, 0, len(txs))}
+	for _, tx := range txs {
+		if tx == nil {
+			continue
+		}
+		asTxn := &aptosapi.Transaction{Type: tx.Type, Inner: tx.Inner}
+		converted, convErr := convertSDKTransaction(asTxn)
+		if convErr != nil {
+			return nil, convErr
+		}
+		out.Transactions = append(out.Transactions, converted)
+	}
+
+	return out, nil
+}
+
+func convertSDKTransaction(tx *aptosapi.Transaction) (*typeaptos.Transaction, error) {
+	if tx == nil {
+		return nil, nil
+	}
+
+	var version *uint64
+	if v := tx.Version(); v != nil {
+		vv := *v
+		version = &vv
+	}
+
+	var success *bool
+	if s := tx.Success(); s != nil {
+		ss := *s
+		success = &ss
+	}
+
+	data, err := json.Marshal(tx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal transaction: %w", err)
+	}
+
+	return &typeaptos.Transaction{
+		Type:    typeaptos.TransactionVariant(tx.Type),
+		Hash:    string(tx.Hash()),
+		Version: version,
+		Success: success,
+		Data:    data,
+	}, nil
+}
+
+func toSDKViewPayload(payload *typeaptos.ViewPayload) (*aptosdk.ViewPayload, error) {
+	if payload == nil {
+		return nil, fmt.Errorf("view payload is nil")
+	}
+
+	argTypes := make([]aptosdk.TypeTag, 0, len(payload.ArgTypes))
+	for _, t := range payload.ArgTypes {
+		converted, err := toSDKTypeTag(t)
+		if err != nil {
+			return nil, err
+		}
+		argTypes = append(argTypes, converted)
+	}
+
+	return &aptosdk.ViewPayload{
+		Module: aptosdk.ModuleId{
+			Address: aptosdk.AccountAddress(payload.Module.Address),
+			Name:    payload.Module.Name,
+		},
+		Function: payload.Function,
+		ArgTypes: argTypes,
+		Args:     payload.Args,
+	}, nil
+}
+
+func toSDKTypeTag(tag typeaptos.TypeTag) (aptosdk.TypeTag, error) {
+	switch v := tag.Value.(type) {
+	case typeaptos.BoolTag:
+		return aptosdk.TypeTag{Value: &aptosdk.BoolTag{}}, nil
+	case typeaptos.U8Tag:
+		return aptosdk.TypeTag{Value: &aptosdk.U8Tag{}}, nil
+	case typeaptos.U16Tag:
+		return aptosdk.TypeTag{Value: &aptosdk.U16Tag{}}, nil
+	case typeaptos.U32Tag:
+		return aptosdk.TypeTag{Value: &aptosdk.U32Tag{}}, nil
+	case typeaptos.U64Tag:
+		return aptosdk.TypeTag{Value: &aptosdk.U64Tag{}}, nil
+	case typeaptos.U128Tag:
+		return aptosdk.TypeTag{Value: &aptosdk.U128Tag{}}, nil
+	case typeaptos.U256Tag:
+		return aptosdk.TypeTag{Value: &aptosdk.U256Tag{}}, nil
+	case typeaptos.AddressTag:
+		return aptosdk.TypeTag{Value: &aptosdk.AddressTag{}}, nil
+	case typeaptos.SignerTag:
+		return aptosdk.TypeTag{Value: &aptosdk.SignerTag{}}, nil
+	case typeaptos.VectorTag:
+		inner, err := toSDKTypeTag(v.ElementType)
+		if err != nil {
+			return aptosdk.TypeTag{}, err
+		}
+		return aptosdk.TypeTag{Value: &aptosdk.VectorTag{TypeParam: inner}}, nil
+	case typeaptos.StructTag:
+		typeParams := make([]aptosdk.TypeTag, 0, len(v.TypeParams))
+		for _, p := range v.TypeParams {
+			inner, err := toSDKTypeTag(p)
+			if err != nil {
+				return aptosdk.TypeTag{}, err
+			}
+			typeParams = append(typeParams, inner)
+		}
+		return aptosdk.TypeTag{
+			Value: &aptosdk.StructTag{
+				Address:    aptosdk.AccountAddress(v.Address),
+				Module:     v.Module,
+				Name:       v.Name,
+				TypeParams: typeParams,
+			},
+		}, nil
+	case typeaptos.GenericTag:
+		return aptosdk.TypeTag{Value: &aptosdk.GenericTag{Num: uint64(v.Index)}}, nil
+	default:
+		return aptosdk.TypeTag{}, fmt.Errorf("unsupported aptos type tag: %T", tag.Value)
+	}
 }
