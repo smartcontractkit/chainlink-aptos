@@ -35,6 +35,7 @@ type Chain interface {
 	ID() string
 	Config() *config.TOMLConfig
 	DataSource() sqlutil.DataSource
+	KeyStore() loop.Keystore
 
 	TxManager() *txm.AptosTxm
 	LogPoller() *logpoller.AptosLogPoller
@@ -77,6 +78,7 @@ type chain struct {
 	cfg  *config.TOMLConfig
 	lggr logger.Logger
 	ds   sqlutil.DataSource
+	ks   loop.Keystore
 
 	// Sub-services
 	txm            *txm.AptosTxm
@@ -117,6 +119,7 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 		cfg:  cfg,
 		lggr: logger.Named(lggr, "Chain"),
 		ds:   ds,
+		ks:   loopKs,
 	}
 
 	ch.txm, err = txm.New(lggr, loopKs, *cfg.TransactionManager, ch.GetClient)
@@ -163,6 +166,10 @@ func (c *chain) LogPoller() *logpoller.AptosLogPoller {
 
 func (c *chain) DataSource() sqlutil.DataSource {
 	return c.ds
+}
+
+func (c *chain) KeyStore() loop.Keystore {
+	return c.ks
 }
 
 func (c *chain) ChainID() string {
