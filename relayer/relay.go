@@ -154,6 +154,10 @@ func (r *relayer) NewOCR3CapabilityProvider(ctx context.Context, rargs types.Rel
 	return nil, errors.New("ocr3 capability provider is not supported for aptos")
 }
 
+func (r *relayer) NewCCIPProvider(ctx context.Context, cargs types.CCIPProviderArgs) (types.CCIPProvider, error) {
+	return nil, errors.New("ccip provider is not supported for aptos")
+}
+
 func (r *relayer) NewCCIPCommitProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.CCIPCommitProvider, error) {
 	return nil, errors.New("ccip.commit is not supported for aptos")
 }
@@ -180,6 +184,9 @@ func (r *relayer) Solana() (types.SolanaService, error) {
 	return nil, errors.New("SolanaService is not supported for aptos")
 }
 
+func (r *relayer) Aptos() (types.AptosService, error) {
+	return nil, errors.New("AptosService direct access is not supported for aptos relayer")
+}
 func (r *relayer) Replay(ctx context.Context, fromBlock string, args map[string]any) error {
 	return errors.ErrUnsupported
 }
