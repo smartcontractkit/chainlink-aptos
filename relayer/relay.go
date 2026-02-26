@@ -154,6 +154,10 @@ func (r *relayer) NewOCR3CapabilityProvider(ctx context.Context, rargs types.Rel
 	return nil, errors.New("ocr3 capability provider is not supported for aptos")
 }
 
+func (r *relayer) NewCCIPProvider(ctx context.Context, cargs types.CCIPProviderArgs) (types.CCIPProvider, error) {
+	return nil, errors.New("ccip provider is not supported for aptos")
+}
+
 func (r *relayer) NewCCIPCommitProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.CCIPCommitProvider, error) {
 	return nil, errors.New("ccip.commit is not supported for aptos")
 }
@@ -164,6 +168,18 @@ func (r *relayer) NewCCIPExecProvider(ctx context.Context, rargs types.RelayArgs
 
 func (r *relayer) EVM() (types.EVMService, error) {
 	return nil, errors.New("EVMService is not supported for aptos")
+}
+
+func (r *relayer) TON() (types.TONService, error) {
+	return nil, errors.New("TONService is not supported for aptos")
+}
+
+func (r *relayer) Solana() (types.SolanaService, error) {
+	return nil, errors.New("SolanaService is not supported for aptos")
+}
+
+func (r *relayer) Aptos() (types.AptosService, error) {
+	return nil, errors.New("AptosService direct access is not supported for aptos relayer")
 }
 
 func (r *relayer) Replay(ctx context.Context, fromBlock string, args map[string]any) error {
@@ -177,6 +193,10 @@ func (r *relayer) GetChainStatus(ctx context.Context) (types.ChainStatus, error)
 
 func (r *relayer) LatestHead(ctx context.Context) (types.Head, error) {
 	return r.chain.LatestHead(ctx)
+}
+
+func (r *relayer) GetChainInfo(ctx context.Context) (types.ChainInfo, error) {
+	return r.chain.GetChainInfo(ctx)
 }
 
 func (r *relayer) ListNodeStatuses(ctx context.Context, pageSize int32, pageToken string) (stats []types.NodeStatus, nextPageToken string, total int, err error) {

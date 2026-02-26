@@ -300,6 +300,16 @@ func (c *chain) LatestHead(ctx context.Context) (types.Head, error) {
 	}, nil
 }
 
+func (c *chain) GetChainInfo(ctx context.Context) (types.ChainInfo, error) {
+	ci := c.chainInfo()
+	return types.ChainInfo{
+		FamilyName:      ci.ChainFamilyName,
+		ChainID:         ci.ChainID,
+		NetworkName:     ci.NetworkName,
+		NetworkNameFull: ci.NetworkNameFull,
+	}, nil
+}
+
 // ChainService interface
 func (c *chain) GetChainStatus(ctx context.Context) (types.ChainStatus, error) {
 	toml, err := c.cfg.TOMLString()

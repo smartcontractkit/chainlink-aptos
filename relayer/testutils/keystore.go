@@ -3,6 +3,7 @@ package testutils
 import (
 	"context"
 	"crypto/ed25519"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -48,4 +49,8 @@ func (tk *TestKeystore) Accounts(ctx context.Context) ([]string, error) {
 		accounts = append(accounts, id)
 	}
 	return accounts, nil
+}
+
+func (tk *TestKeystore) Decrypt(ctx context.Context, account string, encrypted []byte) ([]byte, error) {
+	return nil, errors.ErrUnsupported
 }
