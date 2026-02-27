@@ -172,12 +172,6 @@ func (r *relayer) NewCCIPExecProvider(ctx context.Context, rargs types.RelayArgs
 	return nil, errors.New("ccip.exec is not supported for aptos")
 }
 
-func (r *relayer) NewCCIPProvider(ctx context.Context, cargs types.CCIPProviderArgs) (types.CCIPProvider, error) {
-	_ = ctx
-	_ = cargs
-	return nil, errors.New("ccip provider is not supported for aptos")
-}
-
 func (r *relayer) EVM() (types.EVMService, error) {
 	return nil, errors.New("EVMService is not supported for aptos")
 }
