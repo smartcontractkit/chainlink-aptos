@@ -35,8 +35,9 @@ const (
 	Platform          = Package("platform")
 	PlatformSecondary = Package("platform_secondary")
 
-	MCMS     = Package("mcms")
-	MCMSTest = Package("mcms_test")
+	MCMS      = Package("mcms")
+	MCMSTest  = Package("mcms_test")
+	CurseMCMS = Package("curse_mcms")
 
 	LargePackages = Package("large_packages")
 
@@ -70,8 +71,9 @@ var Contracts map[Package]string = map[Package]string{
 	ManagedTokenMCMSRegistrar:   filepath.Join("mcms_registrars", "managed_token_mcms_registrar"),
 	RegulatedTokenMCMSRegistrar: filepath.Join("mcms_registrars", "regulated_token_mcms_registrar"),
 
-	MCMS:     filepath.Join("mcms", "mcms"),
-	MCMSTest: filepath.Join("mcms", "mcms_test"),
+	MCMS:      filepath.Join("mcms", "mcms"),
+	MCMSTest:  filepath.Join("mcms", "mcms_test"),
+	CurseMCMS: filepath.Join("mcms", "curse_mcms"),
 
 	LargePackages: "large_packages",
 

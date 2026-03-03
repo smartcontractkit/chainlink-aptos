@@ -1,0 +1,22 @@
+[package]
+name = "ChainlinkCurseMCMS"
+version = "1.0.0"
+authors = []
+
+[addresses]
+curse_mcms = "_"
+curse_mcms_owner = "_"
+ccip = "_"
+mcms = "_"
+mcms_owner = "0x0"
+mcms_register_entrypoints = "_"
+
+[dev-addresses]
+curse_mcms = "0xCCC"
+curse_mcms_owner = "0xCCD"
+ccip = "0x30b33dec3fcac5ef3ea775128d88722b64ba59a4598277e537f284917403df29"
+mcms = "0x4000"
+mcms_register_entrypoints = "0x4001"
+
+[dependencies]
+ChainlinkCCIP = { local = "../../ccip/ccip" }
