@@ -139,10 +139,7 @@ module regulated_token::access_control {
     }
 
     public entry fun grant_role<T: key, Role: copy + drop + store>(
-        caller: &signer,
-        state_obj: Object<T>,
-        role: Role,
-        account: address
+        caller: &signer, state_obj: Object<T>, role: Role, account: address
     ) acquires AccessControlState {
         let state = authorized_borrow_mut<T, Role>(caller, state_obj);
         let sender = signer::address_of(caller);
@@ -185,10 +182,7 @@ module regulated_token::access_control {
     }
 
     public entry fun revoke_role<T: key, Role: copy + drop + store>(
-        caller: &signer,
-        state_obj: Object<T>,
-        role: Role,
-        account: address
+        caller: &signer, state_obj: Object<T>, role: Role, account: address
     ) acquires AccessControlState {
         let state = authorized_borrow_mut<T, Role>(caller, state_obj);
         let sender = signer::address_of(caller);
@@ -223,9 +217,7 @@ module regulated_token::access_control {
             let (found, index) = addresses.index_of(&caller_addr);
             if (found) {
                 addresses.remove(index);
-                event::emit(
-                    RoleRevoked { role, account: caller_addr, sender: caller_addr }
-                );
+                event::emit(RoleRevoked { role, account: caller_addr, sender: caller_addr });
             };
         };
     }

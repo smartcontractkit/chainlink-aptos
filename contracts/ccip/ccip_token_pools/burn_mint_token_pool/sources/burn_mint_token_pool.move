@@ -7,9 +7,9 @@ module burn_mint_token_pool::burn_mint_token_pool {
     use std::option::{Self, Option};
     use std::signer;
     use std::string::{Self, String};
-    use aptos_framework::fungible_asset::{BurnRef, MintRef};
+    use std::fungible_asset::{BurnRef, MintRef};
 
-    use ccip::token_admin_registry;
+    use ccip::token_admin_registry::{Self, ReleaseOrMintInputV1, LockOrBurnInputV1};
     use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
@@ -46,7 +46,6 @@ module burn_mint_token_pool::burn_mint_token_pool {
     // ================================================================
     // |                             Init                             |
     // ================================================================
-
     #[view]
     public fun type_and_version(): String {
         string::utf8(b"BurnMintTokenPool 1.6.0")
@@ -73,12 +72,8 @@ module burn_mint_token_pool::burn_mint_token_pool {
             register_mcms_entrypoint(publisher, token_pool_module_name);
         };
 
-        token_admin_registry::register_pool(
-            publisher,
-            token_pool_module_name,
-            @burn_mint_local_token,
-            CallbackProof {}
-        );
+        // Register V2 pool with closure-based callbacks
+        register_v2_callbacks(publisher);
 
         // create a resource account to be the owner of the primary FungibleStore we will use.
         let (store_signer, store_signer_cap) =
@@ -141,10 +136,22 @@ module burn_mint_token_pool::burn_mint_token_pool {
         move_to(&store_signer, pool);
     }
 
+    public fun register_v2_callbacks(publisher: &signer) {
+        assert!(
+            signer::address_of(publisher) == @burn_mint_token_pool,
+            error::permission_denied(E_NOT_PUBLISHER)
+        );
+        token_admin_registry::register_pool_v2(
+            publisher,
+            @burn_mint_local_token,
+            lock_or_burn_v2,
+            release_or_mint_v2
+        );
+    }
+
     // ================================================================
     // |                 Exposing token_pool functions                |
     // ================================================================
-
     #[view]
     public fun get_token(): address acquires BurnMintTokenPoolState {
         token_pool::get_token(&borrow_pool().token_pool_state)
@@ -195,7 +202,9 @@ module burn_mint_token_pool::burn_mint_token_pool {
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
         token_pool::add_remote_pool(
-            &mut pool.token_pool_state, remote_chain_selector, remote_pool_address
+            &mut pool.token_pool_state,
+            remote_chain_selector,
+            remote_pool_address
         );
     }
 
@@ -206,7 +215,9 @@ module burn_mint_token_pool::burn_mint_token_pool {
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
 
         token_pool::remove_remote_pool(
-            &mut pool.token_pool_state, remote_chain_selector, remote_pool_address
+            &mut pool.token_pool_state,
+            remote_chain_selector,
+            remote_pool_address
         );
     }
 
@@ -363,10 +374,69 @@ module burn_mint_token_pool::burn_mint_token_pool {
         fa
     }
 
+    #[persistent]
+    fun lock_or_burn_v2(
+        fa: FungibleAsset, input: LockOrBurnInputV1
+    ): (vector<u8>, vector<u8>) acquires BurnMintTokenPoolState {
+        let pool = borrow_pool_mut();
+        let fa_amount = fungible_asset::amount(&fa);
+
+        let dest_token_address =
+            token_pool::validate_lock_or_burn(
+                &mut pool.token_pool_state,
+                &fa,
+                &input,
+                fa_amount
+            );
+
+        // Burn the token
+        assert!(pool.burn_ref.is_some(), E_BURN_REF_NOT_SET);
+        fungible_asset::burn(pool.burn_ref.borrow(), fa);
+
+        // Emit event
+        let remote_chain_selector =
+            token_admin_registry::get_lock_or_burn_remote_chain_selector(&input);
+
+        token_pool::emit_locked_or_burned(
+            &mut pool.token_pool_state, fa_amount, remote_chain_selector
+        );
+
+        (dest_token_address, token_pool::encode_local_decimals(&pool.token_pool_state))
+    }
+
+    #[persistent]
+    fun release_or_mint_v2(
+        input: ReleaseOrMintInputV1
+    ): (FungibleAsset, u64) acquires BurnMintTokenPoolState {
+        let pool = borrow_pool_mut();
+        let local_amount =
+            token_pool::calculate_release_or_mint_amount(&pool.token_pool_state, &input);
+
+        token_pool::validate_release_or_mint(
+            &mut pool.token_pool_state, &input, local_amount
+        );
+
+        // Mint the amount for release
+        assert!(pool.mint_ref.is_some(), E_MINT_REF_NOT_SET);
+        let fa = fungible_asset::mint(pool.mint_ref.borrow(), local_amount);
+
+        let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
+        let remote_chain_selector =
+            token_admin_registry::get_release_or_mint_remote_chain_selector(&input);
+
+        token_pool::emit_released_or_minted(
+            &mut pool.token_pool_state,
+            recipient,
+            local_amount,
+            remote_chain_selector
+        );
+
+        (fa, local_amount)
+    }
+
     // ================================================================
     // |                    Rate limit config                         |
     // ================================================================
-
     public entry fun set_chain_rate_limiter_configs(
         caller: &signer,
         remote_chain_selectors: vector<u64>,
@@ -452,7 +522,6 @@ module burn_mint_token_pool::burn_mint_token_pool {
     // ================================================================
     // |                      Storage helpers                         |
     // ================================================================
-
     #[view]
     public fun get_store_address(): address {
         store_address()
@@ -488,7 +557,6 @@ module burn_mint_token_pool::burn_mint_token_pool {
     // ================================================================
     // |                       Expose ownable                         |
     // ================================================================
-
     #[view]
     public fun owner(): address acquires BurnMintTokenPoolState {
         ownable::owner(&borrow_pool().ownable_state)
@@ -534,7 +602,6 @@ module burn_mint_token_pool::burn_mint_token_pool {
     // ================================================================
     // |                    Ref Migration                              |
     // ================================================================
-
     public fun migrate_mint_ref(caller: &signer): MintRef acquires BurnMintTokenPoolState {
         let pool = borrow_pool_mut();
         ownable::assert_only_owner(signer::address_of(caller), &pool.ownable_state);
@@ -554,7 +621,6 @@ module burn_mint_token_pool::burn_mint_token_pool {
     // ================================================================
     // |                      MCMS entrypoint                         |
     // ================================================================
-
     struct McmsCallback has drop {}
 
     public fun mcms_entrypoint<T: key>(
@@ -708,7 +774,6 @@ module burn_mint_token_pool::burn_mint_token_pool {
     // ================================================================
     // |                      Test functions                          |
     // ================================================================
-
     #[test_only]
     public entry fun test_init_module(owner: &signer) {
         init_module(owner);
@@ -730,5 +795,62 @@ module burn_mint_token_pool::burn_mint_token_pool {
         token_pool::get_released_or_minted_events(
             &borrow_global<BurnMintTokenPoolState>(state).token_pool_state
         )
+    }
+
+    #[test_only]
+    /// Used for registering the pool with V2 closure-based callbacks.
+    public fun create_callback_proof(): CallbackProof {
+        CallbackProof {}
+    }
+
+    #[test_only]
+    public fun test_init_v1(publisher: &signer) {
+        // register the pool on deployment, because in the case of object code deployment,
+        // this is the only time we have a signer ref to @ccip_burn_mint_pool.
+        assert!(
+            object::object_exists<Metadata>(@burn_mint_local_token),
+            error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
+        );
+        let metadata = object::address_to_object<Metadata>(@burn_mint_local_token);
+
+        // create an Account on the object for event handles.
+        account::create_account_if_does_not_exist(@burn_mint_token_pool);
+
+        // the name of this module. if incorrect, callbacks will fail to be registered and
+        // register_pool will revert.
+        let token_pool_module_name = b"burn_mint_token_pool";
+
+        // Register the entrypoint with mcms
+        if (@mcms_register_entrypoints == @0x1) {
+            register_mcms_entrypoint(publisher, token_pool_module_name);
+        };
+
+        token_admin_registry::register_pool(
+            publisher,
+            token_pool_module_name,
+            @burn_mint_local_token,
+            CallbackProof {}
+        );
+
+        // create a resource account to be the owner of the primary FungibleStore we will use.
+        let (store_signer, store_signer_cap) =
+            account::create_resource_account(publisher, STORE_OBJECT_SEED);
+
+        // make sure this is a valid fungible asset that is primary fungible store enabled,
+        // ie. created with primary_fungible_store::create_primary_store_enabled_fungible_asset
+        primary_fungible_store::ensure_primary_store_exists(
+            signer::address_of(&store_signer), metadata
+        );
+
+        move_to(
+            publisher,
+            BurnMintTokenPoolDeployment {
+                store_signer_cap,
+                ownable_state: ownable::new(&store_signer, @burn_mint_token_pool),
+                token_pool_state: token_pool::initialize(
+                    &store_signer, @burn_mint_local_token, vector[]
+                )
+            }
+        );
     }
 }

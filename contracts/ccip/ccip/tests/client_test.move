@@ -72,16 +72,13 @@ module ccip::client_test {
     #[test]
     #[
         expected_failure(
-            abort_code = client::E_INVALID_SVM_TOKEN_RECEIVER_LENGTH,
-            location = ccip::client
+            abort_code = client::E_INVALID_SVM_TOKEN_RECEIVER_LENGTH, location = ccip::client
         )
     ]
     fun test_svm_token_shorter_receiver() {
         let short_receiver = vector[1, 2, 3];
         let _encoded =
-            client::encode_svm_extra_args_v1(
-                100u32, 0u64, false, short_receiver, vector[]
-            );
+            client::encode_svm_extra_args_v1(100u32, 0u64, false, short_receiver, vector[]);
     }
 
     #[test]
@@ -165,8 +162,7 @@ module ccip::client_test {
     #[test]
     #[
         expected_failure(
-            abort_code = client::E_INVALID_SVM_TOKEN_RECEIVER_LENGTH,
-            location = ccip::client
+            abort_code = client::E_INVALID_SVM_TOKEN_RECEIVER_LENGTH, location = ccip::client
         )
     ]
     fun test_svm_args_rejects_long_token_receiver() {

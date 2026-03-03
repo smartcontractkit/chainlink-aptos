@@ -15,7 +15,7 @@ jobs:
       - name: Linting Go
         uses: smartcontractkit/.github/actions/ci-lint-go@ci-lint-go/1.0.0
         with:
-          golangci-lint-version: v1.64.8
+          golangci-lint-version: v2.4.0
           golangci-lint-args: --timeout 5m
   test:
     name: Tests
@@ -24,7 +24,7 @@ jobs:
       - name: Install Aptos CLI
         uses: aptos-labs/actions/install-aptos-cli@ce57287eb852b9819c1d74fecc3be187677559fd # v0.1
         with:
-          CLI_VERSION: 7.11.1
+          CLI_VERSION: 8.1.0
       - name: Build and test
         uses: smartcontractkit/.github/actions/ci-test-go@ci-test-go/1.0.0
         with:

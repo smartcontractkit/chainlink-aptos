@@ -26,6 +26,8 @@ type TokenAdminRegistryInterface interface {
 	GetPools(opts *bind.CallOpts, localTokens []aptos.AccountAddress) ([]aptos.AccountAddress, error)
 	GetPool(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, error)
 	GetPoolLocalToken(opts *bind.CallOpts, tokenPoolAddress aptos.AccountAddress) (aptos.AccountAddress, error)
+	GetPoolLocalTokenV2(opts *bind.CallOpts, tokenPoolAddress aptos.AccountAddress) (aptos.AccountAddress, error)
+	HasTokenPoolRegistrationV2(opts *bind.CallOpts, tokenPoolAddress aptos.AccountAddress) (bool, error)
 	GetTokenConfig(opts *bind.CallOpts, localToken aptos.AccountAddress) (aptos.AccountAddress, aptos.AccountAddress, aptos.AccountAddress, error)
 	GetAllConfiguredTokens(opts *bind.CallOpts, startKey aptos.AccountAddress, maxCount uint64) ([]aptos.AccountAddress, aptos.AccountAddress, bool, error)
 	IsAdministrator(opts *bind.CallOpts, localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bool, error)
@@ -45,6 +47,8 @@ type TokenAdminRegistryEncoder interface {
 	GetPools(localTokens []aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetPool(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetPoolLocalToken(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	GetPoolLocalTokenV2(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	HasTokenPoolRegistrationV2(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetTokenConfig(localToken aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	GetAllConfiguredTokens(startKey aptos.AccountAddress, maxCount uint64) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	IsAdministrator(localToken aptos.AccountAddress, administrator aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
@@ -101,6 +105,8 @@ const (
 	E_ADMIN_NOT_SET_FOR_TOKEN          uint64 = 27
 	E_ADMIN_ALREADY_SET_FOR_TOKEN      uint64 = 28
 	E_ZERO_ADDRESS                     uint64 = 29
+	E_POOL_NOT_REGISTERED              uint64 = 30
+	E_TOKEN_MISMATCH                   uint64 = 31
 )
 
 // Structs
@@ -148,6 +154,14 @@ type ReleaseOrMintInputV1 struct {
 
 type ReleaseOrMintOutputV1 struct {
 	DestinationAmount uint64 `move:"u64"`
+}
+
+type TokenPoolCallbacks struct {
+}
+
+type TokenPoolRegistrationV2 struct {
+	Callbacks  TokenPoolCallbacks   `move:"TokenPoolCallbacks"`
+	LocalToken aptos.AccountAddress `move:"address"`
 }
 
 type PoolSet struct {
@@ -268,6 +282,48 @@ func (c TokenAdminRegistryContract) GetPoolLocalToken(opts *bind.CallOpts, token
 
 	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
 		return *new(aptos.AccountAddress), err
+	}
+	return r0, nil
+}
+
+func (c TokenAdminRegistryContract) GetPoolLocalTokenV2(opts *bind.CallOpts, tokenPoolAddress aptos.AccountAddress) (aptos.AccountAddress, error) {
+	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.GetPoolLocalTokenV2(tokenPoolAddress)
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+
+	var (
+		r0 aptos.AccountAddress
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(aptos.AccountAddress), err
+	}
+	return r0, nil
+}
+
+func (c TokenAdminRegistryContract) HasTokenPoolRegistrationV2(opts *bind.CallOpts, tokenPoolAddress aptos.AccountAddress) (bool, error) {
+	module, function, typeTags, args, err := c.tokenAdminRegistryEncoder.HasTokenPoolRegistrationV2(tokenPoolAddress)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	var (
+		r0 bool
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(bool), err
 	}
 	return r0, nil
 }
@@ -413,6 +469,22 @@ func (c tokenAdminRegistryEncoder) GetPool(localToken aptos.AccountAddress) (bin
 
 func (c tokenAdminRegistryEncoder) GetPoolLocalToken(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("get_pool_local_token", nil, []string{
+		"address",
+	}, []any{
+		tokenPoolAddress,
+	})
+}
+
+func (c tokenAdminRegistryEncoder) GetPoolLocalTokenV2(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("get_pool_local_token_v2", nil, []string{
+		"address",
+	}, []any{
+		tokenPoolAddress,
+	})
+}
+
+func (c tokenAdminRegistryEncoder) HasTokenPoolRegistrationV2(tokenPoolAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("has_token_pool_registration_v2", nil, []string{
 		"address",
 	}, []any{
 		tokenPoolAddress,

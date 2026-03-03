@@ -149,11 +149,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
                 extra_args
             );
 
-        fungible_asset::mint_to(
-            &token.mint_ref,
-            sender_store,
-            fee_token_amount
-        );
+        fungible_asset::mint_to(&token.mint_ref, sender_store, fee_token_amount);
 
         let message_id =
             onramp::ccip_send(
@@ -233,7 +229,6 @@ module ccip_onramp::onramp_dispatchable_token_test {
     //   Tokens that have dynamic dispatch enabled NEED to provide a `TransferRef`
     //   Tokens that do not have dynamic dispatch enabled can provide `option::none()`
     // ============================================================================================
-
     #[
         test(
             aptos_framework = @aptos_framework,
@@ -688,16 +683,12 @@ module ccip_onramp::onramp_dispatchable_token_test {
             );
             token_admin_registry::accept_admin_role(owner, token_addr);
             token_admin_registry::set_pool(
-                owner,
-                token_addr,
-                signer::address_of(burn_mint_token_pool)
+                owner, token_addr, signer::address_of(burn_mint_token_pool)
             );
         } else {
             lock_release_token_pool::test_init_module(lock_release_token_pool);
             lock_release_token_pool::initialize(
-                owner,
-                transfer_ref,
-                signer::address_of(owner)
+                owner, transfer_ref, signer::address_of(owner)
             );
             lock_release_token_pool::apply_chain_updates(
                 owner,
@@ -722,9 +713,7 @@ module ccip_onramp::onramp_dispatchable_token_test {
             );
             token_admin_registry::accept_admin_role(owner, token_addr);
             token_admin_registry::set_pool(
-                owner,
-                token_addr,
-                signer::address_of(lock_release_token_pool)
+                owner, token_addr, signer::address_of(lock_release_token_pool)
             );
         };
 
@@ -738,7 +727,13 @@ module ccip_onramp::onramp_dispatchable_token_test {
         let transfer_ref = fungible_asset::generate_transfer_ref(&constructor_ref);
         move_to(
             &obj_signer,
-            TestToken { metadata, extend_ref, mint_ref, burn_ref, transfer_ref }
+            TestToken {
+                metadata,
+                extend_ref,
+                mint_ref,
+                burn_ref,
+                transfer_ref
+            }
         );
 
         (metadata, token_addr)

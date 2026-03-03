@@ -24,6 +24,7 @@ var (
 type ReceiverRegistryInterface interface {
 	TypeAndVersion(opts *bind.CallOpts) (string, error)
 	IsRegisteredReceiver(opts *bind.CallOpts, receiverAddress aptos.AccountAddress) (bool, error)
+	IsRegisteredReceiverV2(opts *bind.CallOpts, receiverAddress aptos.AccountAddress) (bool, error)
 
 	// Encoder returns the encoder implementation of this module.
 	Encoder() ReceiverRegistryEncoder
@@ -32,6 +33,7 @@ type ReceiverRegistryInterface interface {
 type ReceiverRegistryEncoder interface {
 	TypeAndVersion() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	IsRegisteredReceiver(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	IsRegisteredReceiverV2(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	FinishReceive(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
@@ -54,6 +56,7 @@ const (
 	E_NON_EMPTY_INPUT             uint64 = 5
 	E_PROOF_TYPE_ACCOUNT_MISMATCH uint64 = 6
 	E_PROOF_TYPE_MODULE_MISMATCH  uint64 = 7
+	E_UNAUTHORIZED                uint64 = 8
 )
 
 // Structs
@@ -61,13 +64,23 @@ const (
 type ReceiverRegistryState struct {
 }
 
+type ReceiverRegistryEventsV2 struct {
+}
+
 type CCIPReceiverRegistration struct {
 	DispatchMetadata bind.StdObject `move:"aptos_framework::object::Object"`
+}
+
+type CCIPReceiverRegistrationV2 struct {
 }
 
 type ReceiverRegistered struct {
 	ReceiverAddress    aptos.AccountAddress `move:"address"`
 	ReceiverModuleName []byte               `move:"vector<u8>"`
+}
+
+type ReceiverRegisteredV2 struct {
+	ReceiverAddress aptos.AccountAddress `move:"address"`
 }
 
 type ReceiverRegistryContract struct {
@@ -125,6 +138,27 @@ func (c ReceiverRegistryContract) IsRegisteredReceiver(opts *bind.CallOpts, rece
 	return r0, nil
 }
 
+func (c ReceiverRegistryContract) IsRegisteredReceiverV2(opts *bind.CallOpts, receiverAddress aptos.AccountAddress) (bool, error) {
+	module, function, typeTags, args, err := c.receiverRegistryEncoder.IsRegisteredReceiverV2(receiverAddress)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	callData, err := c.Call(opts, module, function, typeTags, args)
+	if err != nil {
+		return *new(bool), err
+	}
+
+	var (
+		r0 bool
+	)
+
+	if err := codec.DecodeAptosJsonArray(callData, &r0); err != nil {
+		return *new(bool), err
+	}
+	return r0, nil
+}
+
 // Entry Functions
 
 // Encoder
@@ -138,6 +172,14 @@ func (c receiverRegistryEncoder) TypeAndVersion() (bind.ModuleInformation, strin
 
 func (c receiverRegistryEncoder) IsRegisteredReceiver(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
 	return c.BoundContract.Encode("is_registered_receiver", nil, []string{
+		"address",
+	}, []any{
+		receiverAddress,
+	})
+}
+
+func (c receiverRegistryEncoder) IsRegisteredReceiverV2(receiverAddress aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("is_registered_receiver_v2", nil, []string{
 		"address",
 	}, []any{
 		receiverAddress,

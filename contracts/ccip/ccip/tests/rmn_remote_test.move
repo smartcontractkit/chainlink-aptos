@@ -58,7 +58,6 @@ module ccip::rmn_remote_test {
     // ================================================================
     // |                  V2 Initialize Pattern Tests                  |
     // ================================================================
-
     #[test(ccip = @ccip, owner = @mcms)]
     fun test_initialize_creates_v2_resource(
         ccip: &signer, owner: &signer
@@ -109,7 +108,6 @@ module ccip::rmn_remote_test {
     // ================================================================
     // |       AllowedCursersV2 Initialization Tests (Legacy V1)       |
     // ================================================================
-
     #[test(ccip = @ccip, owner = @mcms)]
     fun test_initialize_allowed_cursers_v2_empty(
         ccip: &signer, owner: &signer
@@ -180,7 +178,6 @@ module ccip::rmn_remote_test {
     // ================================================================
     // |                Add/Remove Allowed Cursers Tests               |
     // ================================================================
-
     #[test(ccip = @ccip, owner = @mcms)]
     fun test_add_allowed_cursers(ccip: &signer, owner: &signer) {
         setup(ccip, owner);
@@ -305,7 +302,6 @@ module ccip::rmn_remote_test {
     // ================================================================
     // |                   Curse/Uncurse Authorization Tests           |
     // ================================================================
-
     #[test(ccip = @ccip, owner = @mcms)]
     fun test_curse_by_owner(ccip: &signer, owner: &signer) {
         setup(ccip, owner);
@@ -520,7 +516,6 @@ module ccip::rmn_remote_test {
     // ================================================================
     // |                       View Functions Tests                    |
     // ================================================================
-
     #[test(ccip = @ccip, owner = @mcms)]
     fun test_is_allowed_curser_without_v2(ccip: &signer, owner: &signer) {
         setup(ccip, owner);
@@ -556,7 +551,6 @@ module ccip::rmn_remote_test {
     // ================================================================
     // |                   Curser Lifecycle Test                       |
     // ================================================================
-
     #[test(ccip = @ccip, owner = @mcms)]
     fun test_curser_lifecycle(ccip: &signer, owner: &signer) {
         setup(ccip, owner);

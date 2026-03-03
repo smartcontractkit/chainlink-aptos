@@ -4,7 +4,7 @@ module ccip::token_admin_registry {
     use std::error;
     use std::event::{Self, EventHandle};
     use std::function_info::{Self, FunctionInfo};
-    use std::fungible_asset::{Self, Metadata, FungibleStore};
+    use std::fungible_asset::{Self, Metadata, FungibleStore, FungibleAsset};
     use std::object::{Self, Object, ExtendRef, TransferRef};
     use std::option::{Self, Option};
     use std::signer;
@@ -87,6 +87,16 @@ module ccip::token_admin_registry {
         destination_amount: u64
     }
 
+    struct TokenPoolCallbacks has copy, drop, store {
+        lock_or_burn: |FungibleAsset, LockOrBurnInputV1| (vector<u8>, vector<u8>),
+        release_or_mint: |ReleaseOrMintInputV1| (FungibleAsset, u64)
+    }
+
+    struct TokenPoolRegistrationV2 has key {
+        callbacks: TokenPoolCallbacks,
+        local_token: address
+    }
+
     #[event]
     struct PoolSet has store, drop {
         local_token: address,
@@ -142,6 +152,8 @@ module ccip::token_admin_registry {
     const E_ADMIN_NOT_SET_FOR_TOKEN: u64 = 27;
     const E_ADMIN_ALREADY_SET_FOR_TOKEN: u64 = 28;
     const E_ZERO_ADDRESS: u64 = 29;
+    const E_POOL_NOT_REGISTERED: u64 = 30;
+    const E_TOKEN_MISMATCH: u64 = 31;
 
     #[view]
     public fun type_and_version(): String {
@@ -214,11 +226,33 @@ module ccip::token_admin_registry {
     }
 
     #[view]
-    /// Returns the local token address for the token pool.
+    /// Returns the local token address for the token pool (supports both V1 and V2).
     public fun get_pool_local_token(
         token_pool_address: address
-    ): address acquires TokenPoolRegistration {
-        get_registration(token_pool_address).local_token
+    ): address acquires TokenPoolRegistration, TokenPoolRegistrationV2 {
+        if (exists<TokenPoolRegistrationV2>(token_pool_address)) {
+            TokenPoolRegistrationV2[token_pool_address].local_token
+        } else if (exists<TokenPoolRegistration>(token_pool_address)) {
+            get_registration(token_pool_address).local_token
+        } else {
+            abort error::invalid_argument(E_POOL_NOT_REGISTERED)
+        }
+    }
+
+    #[view]
+    /// Returns the local token address for the token pool.
+    public fun get_pool_local_token_v2(
+        token_pool_address: address
+    ): address acquires TokenPoolRegistrationV2 {
+        TokenPoolRegistrationV2[token_pool_address].local_token
+    }
+
+    #[view]
+    /// Returns true if token pool has TokenPoolRegistrationV2 resource
+    public fun has_token_pool_registration_v2(
+        token_pool_address: address
+    ): bool {
+        exists<TokenPoolRegistrationV2>(token_pool_address)
     }
 
     #[view]
@@ -291,7 +325,9 @@ module ccip::token_admin_registry {
     // ================================================================
     // |                       Register Pool                          |
     // ================================================================
-
+    #[deprecated]
+    /// @deprecated: Use `register_pool_v2()` instead.
+    ///
     /// Registers pool with `TokenPoolRegistration` and sets up dynamic dispatch for a token pool
     /// Registry token config mapping must be done separately via `set_pool()`
     /// by token owner or ccip owner.
@@ -303,7 +339,8 @@ module ccip::token_admin_registry {
     ) acquires TokenAdminRegistryState {
         let token_pool_address = signer::address_of(token_pool_account);
         assert!(
-            !exists<TokenPoolRegistration>(token_pool_address),
+            !exists<TokenPoolRegistration>(token_pool_address)
+                && !exists<TokenPoolRegistrationV2>(token_pool_address),
             error::invalid_argument(E_ALREADY_REGISTERED)
         );
         assert!(
@@ -393,9 +430,47 @@ module ccip::token_admin_registry {
         );
     }
 
+    /// Registers a V2 token pool using function-value callbacks (closures).
+    ///
+    /// Upgrade path: existing legacy pools can upgrade to V2 by calling this function,
+    /// which supersedes the legacy registration without requiring `unregister_pool()`.
+    /// New pools should use V2 directly. Once V2 is registered, legacy registration
+    /// via `register_pool()` is rejected.
+    public fun register_pool_v2(
+        token_pool_account: &signer,
+        local_token: address,
+        lock_or_burn: |FungibleAsset, LockOrBurnInputV1| (vector<u8>, vector<u8>) has copy
+        + drop + store,
+        release_or_mint: |ReleaseOrMintInputV1| (FungibleAsset, u64) has copy + drop + store
+    ) {
+        let token_pool_address = signer::address_of(token_pool_account);
+        assert!(
+            !exists<TokenPoolRegistrationV2>(token_pool_address),
+            error::invalid_argument(E_ALREADY_REGISTERED)
+        );
+        assert!(
+            object::object_exists<Metadata>(local_token),
+            error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
+        );
+        if (exists<TokenPoolRegistration>(token_pool_address)) {
+            assert!(
+                get_registration(token_pool_address).local_token == local_token,
+                error::invalid_argument(E_TOKEN_MISMATCH)
+            );
+        };
+
+        move_to(
+            token_pool_account,
+            TokenPoolRegistrationV2 {
+                callbacks: TokenPoolCallbacks { lock_or_burn, release_or_mint },
+                local_token
+            }
+        );
+    }
+
     public entry fun unregister_pool(
         caller: &signer, local_token: address
-    ) acquires TokenAdminRegistryState, TokenPoolRegistration {
+    ) acquires TokenAdminRegistryState, TokenPoolRegistration, TokenPoolRegistrationV2 {
         let state = borrow_state_mut();
         assert!(
             state.token_configs.contains(&local_token),
@@ -428,6 +503,11 @@ module ccip::token_admin_registry {
             } = move_from<TokenPoolRegistration>(previous_pool_address);
         };
 
+        if (exists<TokenPoolRegistrationV2>(previous_pool_address)) {
+            let TokenPoolRegistrationV2 { callbacks: _, local_token: _ } =
+                move_from<TokenPoolRegistrationV2>(previous_pool_address);
+        };
+
         event::emit_event(
             &mut state.token_unregistered_events,
             TokenUnregistered {
@@ -439,7 +519,7 @@ module ccip::token_admin_registry {
 
     public entry fun set_pool(
         caller: &signer, local_token: address, token_pool_address: address
-    ) acquires TokenAdminRegistryState, TokenPoolRegistration {
+    ) acquires TokenAdminRegistryState, TokenPoolRegistration, TokenPoolRegistrationV2 {
         assert!(
             object::object_exists<Metadata>(local_token),
             error::invalid_argument(E_INVALID_FUNGIBLE_ASSET)
@@ -447,8 +527,17 @@ module ccip::token_admin_registry {
 
         let caller_addr = signer::address_of(caller);
 
+        let pool_local_token =
+            if (exists<TokenPoolRegistrationV2>(token_pool_address)) {
+                get_pool_local_token_v2(token_pool_address)
+            } else if (exists<TokenPoolRegistration>(token_pool_address)) {
+                get_registration(token_pool_address).local_token
+            } else {
+                abort error::invalid_argument(E_POOL_NOT_REGISTERED)
+            };
+
         assert!(
-            get_registration(token_pool_address).local_token == local_token,
+            pool_local_token == local_token,
             error::invalid_argument(E_INVALID_TOKEN_FOR_POOL)
         );
 
@@ -579,7 +668,10 @@ module ccip::token_admin_registry {
 
         event::emit_event(
             &mut state.administrator_transferred_events,
-            AdministratorTransferred { local_token, new_admin: token_config.administrator }
+            AdministratorTransferred {
+                local_token,
+                new_admin: token_config.administrator
+            }
         );
     }
 
@@ -600,7 +692,6 @@ module ccip::token_admin_registry {
     // ================================================================
     // |                         Pool I/O V1                          |
     // ================================================================
-
     public fun get_lock_or_burn_input_v1<ProofType: drop>(
         token_pool_address: address, _proof: ProofType
     ): LockOrBurnInputV1 acquires TokenPoolRegistration {
@@ -764,7 +855,9 @@ module ccip::token_admin_registry {
         input.sender
     }
 
-    public fun get_release_or_mint_receiver(input: &ReleaseOrMintInputV1): address {
+    public fun get_release_or_mint_receiver(
+        input: &ReleaseOrMintInputV1
+    ): address {
         input.receiver
     }
 
@@ -807,7 +900,6 @@ module ccip::token_admin_registry {
     // ================================================================
     // |                        Lock or Burn                          |
     // ================================================================
-
     public(friend) fun start_lock_or_burn(
         token_pool_address: address,
         sender: address,
@@ -892,7 +984,6 @@ module ccip::token_admin_registry {
     // ================================================================
     // |                       Release or Mint                        |
     // ================================================================
-
     public(friend) fun start_release_or_mint(
         token_pool_address: address,
         sender: vector<u8>,
@@ -992,6 +1083,48 @@ module ccip::token_admin_registry {
         output.destination_amount
     }
 
+    public(friend) fun lock_or_burn_v2(
+        token_pool_address: address,
+        fa: fungible_asset::FungibleAsset,
+        sender: address,
+        remote_chain_selector: u64,
+        receiver: vector<u8>
+    ): (vector<u8>, vector<u8>) acquires TokenPoolRegistrationV2 {
+        let pool_config = &TokenPoolRegistrationV2[token_pool_address];
+        let input = LockOrBurnInputV1 { sender, remote_chain_selector, receiver };
+
+        (pool_config.callbacks.lock_or_burn)
+        (fa, input)
+    }
+
+    public(friend) fun release_or_mint_v2(
+        token_pool_address: address,
+        sender: vector<u8>,
+        receiver: address,
+        source_amount: u256,
+        local_token: address,
+        remote_chain_selector: u64,
+        source_pool_address: vector<u8>,
+        source_pool_data: vector<u8>,
+        offchain_token_data: vector<u8>
+    ): (FungibleAsset, u64) acquires TokenPoolRegistrationV2 {
+        let pool_config = &TokenPoolRegistrationV2[token_pool_address];
+        let input =
+            ReleaseOrMintInputV1 {
+                sender,
+                receiver,
+                source_amount,
+                local_token,
+                remote_chain_selector,
+                source_pool_address,
+                source_pool_data,
+                offchain_token_data
+            };
+
+        (pool_config.callbacks.release_or_mint)
+        (input)
+    }
+
     inline fun borrow_state(): &TokenAdminRegistryState {
         borrow_global<TokenAdminRegistryState>(state_object::object_address())
     }
@@ -1016,12 +1149,11 @@ module ccip::token_admin_registry {
     // ================================================================
     // |                      MCMS Entrypoint                         |
     // ================================================================
-
     struct McmsCallback has drop {}
 
     public fun mcms_entrypoint<T: key>(
         _metadata: Object<T>
-    ): option::Option<u128> acquires TokenAdminRegistryState, TokenPoolRegistration {
+    ): option::Option<u128> acquires TokenAdminRegistryState, TokenPoolRegistration, TokenPoolRegistrationV2 {
         let (caller, function, data) =
             mcms_registry::get_callback_params(@ccip, McmsCallback {});
 

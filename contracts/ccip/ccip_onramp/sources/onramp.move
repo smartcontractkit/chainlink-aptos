@@ -197,10 +197,7 @@ module ccip_onramp::onramp {
         let (state_signer, state_signer_cap) =
             account::create_resource_account(publisher, STATE_SEED);
 
-        move_to(
-            publisher,
-            OnRampDeployment { state_signer_cap }
-        );
+        move_to(publisher, OnRampDeployment { state_signer_cap });
 
         if (@ccip_onramp == @ccip) {
             // if we're deployed on the same code object, self-register as an allowed onramp.
@@ -792,8 +789,10 @@ module ccip_onramp::onramp {
 
             let dest_chain_config_v2 =
                 dest_chain_configs_v2.dest_chain_configs.borrow(dest_chain_selector);
-            (dest_chain_config_v2.allowlist_enabled,
-            dest_chain_config_v2.allowed_senders)
+            (
+                dest_chain_config_v2.allowlist_enabled,
+                dest_chain_config_v2.allowed_senders
+            )
         }
     }
 
@@ -1359,7 +1358,6 @@ module ccip_onramp::onramp {
     //
     // ccip::ownable functions
     //
-
     #[view]
     public fun owner(): address acquires OnRampState {
         ownable::owner(&borrow_state().ownable_state)
@@ -1405,7 +1403,6 @@ module ccip_onramp::onramp {
     // ================================================================
     // |                      MCMS Entrypoint                         |
     // ================================================================
-
     struct McmsCallback has drop {}
 
     public fun mcms_entrypoint<T: key>(
@@ -1423,18 +1420,15 @@ module ccip_onramp::onramp {
             let allowlist_admin = bcs_stream::deserialize_address(&mut stream);
             let dest_chain_selectors =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_u64(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
                 );
             let dest_chain_routers =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_address(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
                 );
             let dest_chain_allowlist_enabled =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_bool(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_bool(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
             initialize(
@@ -1454,23 +1448,19 @@ module ccip_onramp::onramp {
         } else if (function_bytes == b"apply_dest_chain_config_updates_v2") {
             let dest_chain_selectors =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_u64(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
                 );
             let dest_chain_routers =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_address(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
                 );
             let dest_chain_router_state_addresses =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_address(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
                 );
             let dest_chain_allowlist_enabled =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_bool(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_bool(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
             apply_dest_chain_config_updates_v2(
@@ -1483,18 +1473,15 @@ module ccip_onramp::onramp {
         } else if (function_bytes == b"apply_dest_chain_config_updates") {
             let dest_chain_selectors =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_u64(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
                 );
             let dest_chain_routers =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_address(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
                 );
             let dest_chain_allowlist_enabled =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_bool(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_bool(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
             apply_dest_chain_config_updates(
@@ -1506,28 +1493,24 @@ module ccip_onramp::onramp {
         } else if (function_bytes == b"apply_allowlist_updates") {
             let dest_chain_selectors =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_u64(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
                 );
             let dest_chain_allowlist_enabled =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_bool(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_bool(stream)
                 );
             let dest_chain_add_allowed_senders =
                 bcs_stream::deserialize_vector(
                     &mut stream,
                     |stream| bcs_stream::deserialize_vector(
-                        stream,
-                        |stream| bcs_stream::deserialize_address(stream)
+                        stream, |stream| bcs_stream::deserialize_address(stream)
                     )
                 );
             let dest_chain_remove_allowed_senders =
                 bcs_stream::deserialize_vector(
                     &mut stream,
                     |stream| bcs_stream::deserialize_vector(
-                        stream,
-                        |stream| bcs_stream::deserialize_address(stream)
+                        stream, |stream| bcs_stream::deserialize_address(stream)
                     )
                 );
             bcs_stream::assert_is_consumed(&stream);
@@ -1552,13 +1535,11 @@ module ccip_onramp::onramp {
         } else if (function_bytes == b"migrate_dest_chain_configs_to_v2") {
             let dest_chain_selectors =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_u64(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_u64(stream)
                 );
             let router_module_addresses =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_address(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
             migrate_dest_chain_configs_to_v2(
@@ -1590,7 +1571,6 @@ module ccip_onramp::onramp {
     }
 
     // ========================= MIGRATION ==========================
-
     public entry fun migrate_dest_chain_configs_to_v2(
         caller: &signer,
         dest_chain_selectors: vector<u64>,
@@ -1686,7 +1666,6 @@ module ccip_onramp::onramp {
     }
 
     // ========================== TEST ONLY ==========================
-
     #[test_only]
     public fun test_init_module(publisher: &signer) {
         init_module(publisher);

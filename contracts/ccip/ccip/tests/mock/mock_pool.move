@@ -15,9 +15,7 @@ module 0x662d86e29929eb0637ba20d8926e91ffc74f59580cf18874b366b3150300561f::mock_
         register_pool(mock_obj_signer, local_token);
         set_admin(owner, local_token);
         token_admin_registry::set_pool(
-            owner,
-            local_token,
-            signer::address_of(mock_obj_signer)
+            owner, local_token, signer::address_of(mock_obj_signer)
         );
     }
 

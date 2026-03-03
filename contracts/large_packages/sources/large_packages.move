@@ -178,10 +178,7 @@ module large_packages::large_packages {
         let last_module_idx = staging_area.last_module_idx;
         let code = vector[];
         for (i in 0..(last_module_idx + 1)) {
-            vector::push_back(
-                &mut code,
-                *smart_table::borrow(&staging_area.code, i)
-            );
+            vector::push_back(&mut code, *smart_table::borrow(&staging_area.code, i));
         };
         code
     }

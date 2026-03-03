@@ -153,7 +153,8 @@ module platform_secondary::storage {
                 table::borrow(&dispatcher.dispatcher, typeinfo);
             let obj_signer = object::generate_signer_for_extending(extend_ref);
             move_to(
-                &obj_signer, Storage { data: callback_data, metadata: callback_metadata }
+                &obj_signer,
+                Storage { data: callback_data, metadata: callback_metadata }
             );
             return *asset_metadata
         };
@@ -212,7 +213,12 @@ module platform_secondary::storage {
         let workflow_owner = vector::slice(&metadata, 42, 62);
         let report_id = vector::slice(&metadata, 62, 64);
 
-        ReportMetadata { workflow_cid, workflow_name, workflow_owner, report_id }
+        ReportMetadata {
+            workflow_cid,
+            workflow_name,
+            workflow_owner,
+            report_id
+        }
     }
 
     /// Prepares the dispatch table.
@@ -255,7 +261,6 @@ module platform_secondary::storage {
     }
 
     // Struct accessors
-
     public fun get_report_metadata_workflow_cid(
         report_metadata: &ReportMetadata
     ): vector<u8> {

@@ -101,10 +101,7 @@ module mcms::mcms_registry_test {
     )]
     #[expected_failure(abort_code = 65541, location = mcms_registry)]
     public fun test_duplicate_dispatch_fails(
-        mcms: &signer,
-        test_account: &signer,
-        owner: &signer,
-        framework: &signer
+        mcms: &signer, test_account: &signer, owner: &signer, framework: &signer
     ) {
         setup(framework, test_account, owner);
         mcms_registry::init_module_for_testing(mcms);
@@ -126,10 +123,7 @@ module mcms::mcms_registry_test {
     )]
     #[expected_failure(abort_code = 65541, location = mcms_registry)]
     public fun test_wrong_proof_type_fails(
-        mcms: &signer,
-        test_account: &signer,
-        owner: &signer,
-        framework: &signer
+        mcms: &signer, test_account: &signer, owner: &signer, framework: &signer
     ) {
         // Setup
         setup(framework, test_account, owner);
@@ -156,8 +150,7 @@ module mcms::mcms_registry_test {
 
         // Try to get callback params with different proof type
         mcms_registry::get_callback_params<TestCallback>(
-            account_addr,
-            TestCallback { data: vector::empty() }
+            account_addr, TestCallback { data: vector::empty() }
         );
     }
 
@@ -166,10 +159,7 @@ module mcms::mcms_registry_test {
     )]
     #[expected_failure(abort_code = 65541, location = mcms_registry)]
     public fun test_missing_callback_params_fails(
-        mcms: &signer,
-        test_account: &signer,
-        owner: &signer,
-        framework: &signer
+        mcms: &signer, test_account: &signer, owner: &signer, framework: &signer
     ) {
         // Setup
         setup(framework, test_account, owner);
@@ -192,10 +182,7 @@ module mcms::mcms_registry_test {
     )]
     #[expected_failure(abort_code = 65541, location = mcms_registry)]
     public fun test_finish_dispatch_without_consuming_params_fails(
-        mcms: &signer,
-        test_account: &signer,
-        owner: &signer,
-        framework: &signer
+        mcms: &signer, test_account: &signer, owner: &signer, framework: &signer
     ) {
         setup(framework, test_account, owner);
         mcms_registry::init_module_for_testing(mcms);
@@ -227,10 +214,7 @@ module mcms::mcms_registry_test {
     )]
     #[expected_failure(abort_code = 65544, location = mcms_registry)]
     public fun test_register_with_empty_module_name_fails(
-        mcms: &signer,
-        test_account: &signer,
-        owner: &signer,
-        framework: &signer
+        mcms: &signer, test_account: &signer, owner: &signer, framework: &signer
     ) {
         setup(framework, test_account, owner);
         mcms_registry::init_module_for_testing(mcms);
@@ -247,10 +231,7 @@ module mcms::mcms_registry_test {
     )]
     #[expected_failure(abort_code = 65545, location = mcms_registry)]
     public fun test_register_with_too_long_module_name_fails(
-        mcms: &signer,
-        test_account: &signer,
-        owner: &signer,
-        framework: &signer
+        mcms: &signer, test_account: &signer, owner: &signer, framework: &signer
     ) {
         // Setup
         setup(framework, test_account, owner);
@@ -276,10 +257,7 @@ module mcms::mcms_registry_test {
     )]
     #[expected_failure(abort_code = 65541, location = mcms::mcms_registry)]
     public fun test_register_duplicate_module_fails_same_account(
-        mcms: &signer,
-        test_account: &signer,
-        owner: &signer,
-        framework: &signer
+        mcms: &signer, test_account: &signer, owner: &signer, framework: &signer
     ) {
         // Setup
         setup(framework, test_account, owner);
@@ -303,10 +281,7 @@ module mcms::mcms_registry_test {
     )]
     #[expected_failure(abort_code = 65547, location = mcms::mcms_registry)]
     public fun test_invalid_code_object_fails(
-        mcms: &signer,
-        test_account: &signer,
-        owner: &signer,
-        framework: &signer
+        mcms: &signer, test_account: &signer, owner: &signer, framework: &signer
     ) {
         setup(framework, test_account, owner);
         mcms_registry::init_module_for_testing(mcms);
@@ -321,10 +296,7 @@ module mcms::mcms_registry_test {
     )]
     #[expected_failure(abort_code = 65546, location = mcms::mcms_registry)]
     public fun test_get_registered_owner_address_not_registered(
-        mcms: &signer,
-        test_account: &signer,
-        owner: &signer,
-        framework: &signer
+        mcms: &signer, test_account: &signer, owner: &signer, framework: &signer
     ) {
         setup(framework, test_account, owner);
         mcms_registry::init_module_for_testing(mcms);
@@ -339,10 +311,7 @@ module mcms::mcms_registry_test {
     )]
     #[expected_failure(abort_code = 65547, location = mcms::mcms_registry)]
     public fun test_is_owned_code_object_invalid_object(
-        mcms: &signer,
-        test_account: &signer,
-        owner: &signer,
-        framework: &signer
+        mcms: &signer, test_account: &signer, owner: &signer, framework: &signer
     ) {
         setup(framework, test_account, owner);
         mcms_registry::init_module_for_testing(mcms);
