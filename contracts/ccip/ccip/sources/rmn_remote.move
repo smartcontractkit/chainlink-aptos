@@ -81,7 +81,6 @@ module ccip::rmn_remote {
     // ================================================================
     // |                  AllowedCursersV2 (Fast Cursing)              |
     // ================================================================
-
     struct AllowedCursersV2 has key {
         allowed_cursers: OrderedMap<address, bool>,
         allowed_cursers_added_events: EventHandle<AllowedCursersAdded>,
@@ -535,7 +534,6 @@ module ccip::rmn_remote {
     // ================================================================
     // |              AllowedCursersV2 Helper Functions                |
     // ================================================================
-
     inline fun borrow_allowed_cursers_v2(): &AllowedCursersV2 {
         borrow_global<AllowedCursersV2>(state_object::object_address())
     }
@@ -738,24 +736,21 @@ module ccip::rmn_remote {
         } else if (function_bytes == b"initialize_allowed_cursers_v2") {
             let initial_cursers =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_address(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
             initialize_allowed_cursers_v2(&caller, initial_cursers)
         } else if (function_bytes == b"add_allowed_cursers") {
             let cursers_to_add =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_address(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
             add_allowed_cursers(&caller, cursers_to_add)
         } else if (function_bytes == b"remove_allowed_cursers") {
             let cursers_to_remove =
                 bcs_stream::deserialize_vector(
-                    &mut stream,
-                    |stream| bcs_stream::deserialize_address(stream)
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
                 );
             bcs_stream::assert_is_consumed(&stream);
             remove_allowed_cursers(&caller, cursers_to_remove)
