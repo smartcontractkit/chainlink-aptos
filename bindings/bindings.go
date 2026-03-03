@@ -13,6 +13,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/regulated_token_pool"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/token_pool"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/usdc_token_pool"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/curse_mcms"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/data_feeds"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/managed_token"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/managed_token_faucet"
@@ -36,6 +37,7 @@ var GlobalFunctionInfo = bind.CombineFunctionInfos(
 	managed_token_pool.FunctionInfo,
 	token_pool.FunctionInfo,
 	usdc_token_pool.FunctionInfo,
+	curse_mcms.FunctionInfo,
 	data_feeds.FunctionInfo,
 	managed_token.FunctionInfo,
 	managed_token_faucet.FunctionInfo,
