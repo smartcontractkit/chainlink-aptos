@@ -589,7 +589,7 @@ module ccip_onramp::onramp {
 
         let (
             fee_value_juels,
-            is_out_of_order_execution,
+            _is_out_of_order_execution,
             converted_extra_args,
             dest_exec_data_per_token
         ) =
@@ -611,13 +611,8 @@ module ccip_onramp::onramp {
             }
         );
 
-        let nonce =
-            if (is_out_of_order_execution) { 0 }
-            else {
-                nonce_manager::get_incremented_outbound_nonce(
-                    &state_signer, dest_chain_selector, sender
-                )
-            };
+        // Aptos CCIP always uses out-of-order execution (nonce = 0).
+        let nonce = 0;
 
         let message = Aptos2AnyRampMessage {
             header: RampMessageHeader {

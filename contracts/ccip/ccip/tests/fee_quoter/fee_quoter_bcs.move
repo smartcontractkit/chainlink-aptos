@@ -185,13 +185,13 @@ module ccip::fee_quoter_bcs {
         let default_tx_gas_limit = 50000;
         let mock_config = create_test_dest_chain_config();
 
-        // Test empty extra args - should return default values
+        // Test empty extra args - should return default gas limit and OOO = true (always true)
         let empty_args = vector[];
         let (gas_limit, allow_ooo) =
             fee_quoter::test_decode_generic_extra_args(&mock_config, empty_args);
 
         assert!(gas_limit == (default_tx_gas_limit as u256));
-        assert!(allow_ooo == false);
+        assert!(allow_ooo == true);
     }
 
     #[test]
