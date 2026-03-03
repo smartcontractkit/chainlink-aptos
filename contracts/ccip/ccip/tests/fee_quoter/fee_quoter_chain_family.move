@@ -479,7 +479,12 @@ module ccip::fee_quoter_chain_family {
             );
 
         // Verify process_message_args returns is_out_of_order_execution == true regardless of user input
-        let (_msg_fee_juels, is_out_of_order_execution, _converted_extra_args, _dest_exec_data_per_token) =
+        let (
+            _msg_fee_juels,
+            is_out_of_order_execution,
+            _converted_extra_args,
+            _dest_exec_data_per_token
+        ) =
             fee_quoter::process_message_args(
                 fee_quoter_setup::get_dest_chain_selector(),
                 token_addr,

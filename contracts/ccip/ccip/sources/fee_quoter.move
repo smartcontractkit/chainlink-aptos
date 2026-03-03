@@ -911,7 +911,10 @@ module ccip::fee_quoter {
         let extra_args_len = extra_args.length();
         if (extra_args_len == 0) {
             // If extra args are empty, generate default values. Out-of-order is always true.
-            (dest_chain_config.default_tx_gas_limit as u256, ALLOW_OUT_OF_ORDER_EXECUTION)
+            (
+                dest_chain_config.default_tx_gas_limit as u256,
+                ALLOW_OUT_OF_ORDER_EXECUTION
+            )
         } else {
             assert!(
                 extra_args_len >= 4,
