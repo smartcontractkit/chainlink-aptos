@@ -66,7 +66,6 @@ module ccip::nonce_manager {
     }
 
     // ========================== TEST ONLY ==========================
-
     #[test_only]
     public fun test_init_module(publisher: &signer) {
         init_module(publisher);

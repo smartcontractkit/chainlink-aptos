@@ -124,7 +124,10 @@ module ccip::allowlist {
 
     #[test_only]
     public fun new_add_event(add: address): AllowlistAdd {
-        AllowlistAdd { added_address: add, allowlist_name: string::utf8(b"default") }
+        AllowlistAdd {
+            added_address: add,
+            allowlist_name: string::utf8(b"default")
+        }
     }
 
     #[test_only]

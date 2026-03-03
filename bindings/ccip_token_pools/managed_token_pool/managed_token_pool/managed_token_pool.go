@@ -88,12 +88,13 @@ type ManagedTokenPoolEncoder interface {
 	TransferOwnership(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	AcceptOwnership() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	ExecuteOwnershipTransfer(to aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	RegisterV2Callbacks() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	StoreAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	MCMSEntrypoint(Metadata aptos.AccountAddress) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	RegisterMCMSEntrypoint(moduleName []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"managed_token_pool","module":"managed_token_pool","name":"accept_ownership","parameters":null},{"package":"managed_token_pool","module":"managed_token_pool","name":"add_remote_pool","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"remote_pool_address","type":"vector\u003cu8\u003e"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"apply_allowlist_updates","parameters":[{"name":"removes","type":"vector\u003caddress\u003e"},{"name":"adds","type":"vector\u003caddress\u003e"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"apply_chain_updates","parameters":[{"name":"remote_chain_selectors_to_remove","type":"vector\u003cu64\u003e"},{"name":"remote_chain_selectors_to_add","type":"vector\u003cu64\u003e"},{"name":"remote_pool_addresses_to_add","type":"vector\u003cvector\u003cvector\u003cu8\u003e\u003e\u003e"},{"name":"remote_token_addresses_to_add","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"register_mcms_entrypoint","parameters":[{"name":"module_name","type":"vector\u003cu8\u003e"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"remove_remote_pool","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"remote_pool_address","type":"vector\u003cu8\u003e"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"set_allowlist_enabled","parameters":[{"name":"enabled","type":"bool"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"set_chain_rate_limiter_config","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"outbound_is_enabled","type":"bool"},{"name":"outbound_capacity","type":"u64"},{"name":"outbound_rate","type":"u64"},{"name":"inbound_is_enabled","type":"bool"},{"name":"inbound_capacity","type":"u64"},{"name":"inbound_rate","type":"u64"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"set_chain_rate_limiter_configs","parameters":[{"name":"remote_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"outbound_is_enableds","type":"vector\u003cbool\u003e"},{"name":"outbound_capacities","type":"vector\u003cu64\u003e"},{"name":"outbound_rates","type":"vector\u003cu64\u003e"},{"name":"inbound_is_enableds","type":"vector\u003cbool\u003e"},{"name":"inbound_capacities","type":"vector\u003cu64\u003e"},{"name":"inbound_rates","type":"vector\u003cu64\u003e"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"store_address","parameters":null},{"package":"managed_token_pool","module":"managed_token_pool","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
+const FunctionInfo = `[{"package":"managed_token_pool","module":"managed_token_pool","name":"accept_ownership","parameters":null},{"package":"managed_token_pool","module":"managed_token_pool","name":"add_remote_pool","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"remote_pool_address","type":"vector\u003cu8\u003e"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"apply_allowlist_updates","parameters":[{"name":"removes","type":"vector\u003caddress\u003e"},{"name":"adds","type":"vector\u003caddress\u003e"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"apply_chain_updates","parameters":[{"name":"remote_chain_selectors_to_remove","type":"vector\u003cu64\u003e"},{"name":"remote_chain_selectors_to_add","type":"vector\u003cu64\u003e"},{"name":"remote_pool_addresses_to_add","type":"vector\u003cvector\u003cvector\u003cu8\u003e\u003e\u003e"},{"name":"remote_token_addresses_to_add","type":"vector\u003cvector\u003cu8\u003e\u003e"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"execute_ownership_transfer","parameters":[{"name":"to","type":"address"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"mcms_entrypoint","parameters":[{"name":"_metadata","type":"address"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"register_mcms_entrypoint","parameters":[{"name":"module_name","type":"vector\u003cu8\u003e"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"register_v2_callbacks","parameters":null},{"package":"managed_token_pool","module":"managed_token_pool","name":"remove_remote_pool","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"remote_pool_address","type":"vector\u003cu8\u003e"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"set_allowlist_enabled","parameters":[{"name":"enabled","type":"bool"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"set_chain_rate_limiter_config","parameters":[{"name":"remote_chain_selector","type":"u64"},{"name":"outbound_is_enabled","type":"bool"},{"name":"outbound_capacity","type":"u64"},{"name":"outbound_rate","type":"u64"},{"name":"inbound_is_enabled","type":"bool"},{"name":"inbound_capacity","type":"u64"},{"name":"inbound_rate","type":"u64"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"set_chain_rate_limiter_configs","parameters":[{"name":"remote_chain_selectors","type":"vector\u003cu64\u003e"},{"name":"outbound_is_enableds","type":"vector\u003cbool\u003e"},{"name":"outbound_capacities","type":"vector\u003cu64\u003e"},{"name":"outbound_rates","type":"vector\u003cu64\u003e"},{"name":"inbound_is_enableds","type":"vector\u003cbool\u003e"},{"name":"inbound_capacities","type":"vector\u003cu64\u003e"},{"name":"inbound_rates","type":"vector\u003cu64\u003e"}]},{"package":"managed_token_pool","module":"managed_token_pool","name":"store_address","parameters":null},{"package":"managed_token_pool","module":"managed_token_pool","name":"transfer_ownership","parameters":[{"name":"to","type":"address"}]}]`
 
 func NewManagedTokenPool(address aptos.AccountAddress, client aptos.AptosRpcClient) ManagedTokenPoolInterface {
 	contract := bind.NewBoundContract(address, "managed_token_pool", "managed_token_pool", client)
@@ -105,12 +106,9 @@ func NewManagedTokenPool(address aptos.AccountAddress, client aptos.AptosRpcClie
 
 // Constants
 const (
-	E_NOT_PUBLISHER          uint64 = 1
-	E_ALREADY_INITIALIZED    uint64 = 2
-	E_INVALID_FUNGIBLE_ASSET uint64 = 3
-	E_LOCAL_TOKEN_MISMATCH   uint64 = 4
-	E_INVALID_ARGUMENTS      uint64 = 5
-	E_UNKNOWN_FUNCTION       uint64 = 6
+	E_INVALID_ARGUMENTS uint64 = 1
+	E_UNKNOWN_FUNCTION  uint64 = 2
+	E_NOT_PUBLISHER     uint64 = 3
 )
 
 // Structs
@@ -846,6 +844,10 @@ func (c managedTokenPoolEncoder) ExecuteOwnershipTransfer(to aptos.AccountAddres
 	}, []any{
 		to,
 	})
+}
+
+func (c managedTokenPoolEncoder) RegisterV2Callbacks() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("register_v2_callbacks", nil, []string{}, []any{})
 }
 
 func (c managedTokenPoolEncoder) StoreAddress() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {

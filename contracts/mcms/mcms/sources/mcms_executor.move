@@ -18,10 +18,7 @@ module mcms::mcms_executor {
         if (!exists<PendingExecute>(caller_address)) {
             move_to(
                 caller,
-                PendingExecute {
-                    data: vector[],
-                    proofs: vector[]
-                }
+                PendingExecute { data: vector[], proofs: vector[] }
             );
         };
         let pending_execute = borrow_global_mut<PendingExecute>(caller_address);
@@ -48,10 +45,7 @@ module mcms::mcms_executor {
         if (!exists<PendingExecute>(signer::address_of(caller))) {
             move_to(
                 caller,
-                PendingExecute {
-                    data: vector[],
-                    proofs: vector[]
-                }
+                PendingExecute { data: vector[], proofs: vector[] }
             );
         };
         let PendingExecute { data, proofs } =

@@ -78,7 +78,6 @@ module regulated_token_pool::regulated_token_pool_test {
     // ================================================================
     // |                    Basic Pool Tests                         |
     // ================================================================
-
     #[
         test(
             admin = @admin,
@@ -157,7 +156,6 @@ module regulated_token_pool::regulated_token_pool_test {
     // ================================================================
     // |                    Ownership Tests                          |
     // ================================================================
-
     #[
         test(
             admin = @admin,
@@ -294,7 +292,9 @@ module regulated_token_pool::regulated_token_pool_test {
 
         // This should fail because allowlist is disabled
         regulated_token_pool::apply_allowlist_updates(
-            admin, vector[], vector[USER1, ADMIN]
+            admin,
+            vector[],
+            vector[USER1, ADMIN]
         );
     }
 
@@ -398,7 +398,6 @@ module regulated_token_pool::regulated_token_pool_test {
     // ================================================================
     // |                 CCIP Dynamic Dispatch Tests                 |
     // ================================================================
-
     #[
         test(
             admin = @admin,
@@ -437,7 +436,6 @@ module regulated_token_pool::regulated_token_pool_test {
     // ================================================================
     // |                 Remote Pool Management Tests                |
     // ================================================================
-
     #[
         test(
             admin = @admin,
@@ -577,7 +575,6 @@ module regulated_token_pool::regulated_token_pool_test {
     // ================================================================
     // |                    Rate Limiting Tests                      |
     // ================================================================
-
     #[
         test(
             admin = @admin,

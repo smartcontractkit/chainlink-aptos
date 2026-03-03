@@ -217,7 +217,6 @@ module test_token::test_token {
     }
 
     // Hooks
-
     #[event]
     struct DepositHook has drop, store {
         account: address,
@@ -254,12 +253,11 @@ module test_token::test_token {
     // ================================================================
     // |                      Mint/Burn Functions                      |
     // ================================================================
-
     public entry fun mint(
         minter: &signer, to: address, amount: u64
     ) acquires TokenMetadataRefs, TokenState {
         if (amount == 0) { return };
-        
+
         let minter_addr = signer::address_of(minter);
         let state = &mut TokenState[token_state_address_internal()];
 
@@ -274,7 +272,7 @@ module test_token::test_token {
         burner: &signer, from: address, amount: u64
     ) acquires TokenMetadataRefs, TokenState {
         if (amount == 0) { return };
-        
+
         let burner_addr = signer::address_of(burner);
         let state = &mut TokenState[token_state_address_internal()];
 
@@ -337,4 +335,3 @@ module test_token::test_token {
         abort error::permission_denied(E_NOT_PUBLISHER)
     }
 }
-

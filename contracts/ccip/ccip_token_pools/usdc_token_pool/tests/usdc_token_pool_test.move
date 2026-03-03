@@ -385,8 +385,7 @@ module usdc_token_pool::usdc_token_pool_test {
         // and there's no way to enable it after initialization // E_ALLOWLIST_NOT_ENABLED
         let addresses_to_add = vector[@0x123, @0x456];
         usdc_token_pool::apply_allowlist_updates(
-            owner,
-            vector[], // no removes
+            owner, vector[], // no removes
             addresses_to_add
         );
     }
@@ -707,7 +706,6 @@ module usdc_token_pool::usdc_token_pool_test {
     // ================================================================
     // |                    Additional Tests                          |
     // ================================================================
-
     #[
         test(
             ccip = @ccip,

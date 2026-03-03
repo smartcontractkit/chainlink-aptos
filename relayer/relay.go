@@ -162,8 +162,22 @@ func (r *relayer) NewCCIPExecProvider(ctx context.Context, rargs types.RelayArgs
 	return nil, errors.New("ccip.exec is not supported for aptos")
 }
 
+func (r *relayer) NewCCIPProvider(ctx context.Context, cargs types.CCIPProviderArgs) (types.CCIPProvider, error) {
+	_ = ctx
+	_ = cargs
+	return nil, errors.New("ccip provider is not supported for aptos")
+}
+
 func (r *relayer) EVM() (types.EVMService, error) {
 	return nil, errors.New("EVMService is not supported for aptos")
+}
+
+func (r *relayer) TON() (types.TONService, error) {
+	return nil, errors.New("TONService is not supported for aptos")
+}
+
+func (r *relayer) Solana() (types.SolanaService, error) {
+	return nil, errors.New("SolanaService is not supported for aptos")
 }
 
 func (r *relayer) Replay(ctx context.Context, fromBlock string, args map[string]any) error {
@@ -177,6 +191,10 @@ func (r *relayer) GetChainStatus(ctx context.Context) (types.ChainStatus, error)
 
 func (r *relayer) LatestHead(ctx context.Context) (types.Head, error) {
 	return r.chain.LatestHead(ctx)
+}
+
+func (r *relayer) GetChainInfo(ctx context.Context) (types.ChainInfo, error) {
+	return r.chain.GetChainInfo(ctx)
 }
 
 func (r *relayer) ListNodeStatuses(ctx context.Context, pageSize int32, pageToken string) (stats []types.NodeStatus, nextPageToken string, total int, err error) {
