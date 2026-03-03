@@ -1,0 +1,56 @@
+name: Update Dependabot PRs
+on:
+  pull_request:
+    types:
+      - labeled
+      - synchronize
+
+permissions: {}
+jobs:
+  gomodstidy:
+    name: Tidy all Go modules
+    if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' && contains(github.event.pull_request.labels.*.name, 'dependencies-go') }}
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Run gomods tidy
+        run: make gomodtidy
+      - name: Create commit
+        id: commit
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            git config --global user.name "Login will be determined by the Github API based on the creator of the token"
+            git config --global user.email ""
+            git commit -am "[dependabot skip] Tidy all Go modules"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+      - name: Setup GitHub Token
+        if: steps.commit.outputs.has_changes == 'true'
+        id: setup-github-token
+        uses: smartcontractkit/.github/actions/setup-github-token@ef78fa97bf3c77de6563db1175422703e9e6674f # setup-github-token@0.2.1
+        with:
+          aws-role-arn: ${{ secrets.GATI_AWS_ROLE_APTOS_CICD }}
+          aws-lambda-url: ${{ secrets.GATI_AWS_LABDA_URL_INTEGRATIONS }}
+          aws-region: ${{ secrets.GATI_AWS_REGION }}
+      - name: Push signed commits
+        if: steps.commit.outputs.has_changes == 'true'
+        uses: asana/push-signed-commits@d615ca88d8e1a946734c24970d1e7a6c56f34897 # v1
+        with:
+          github-token: ${{ steps.setup-github-token.outputs.access-token }}
+          local_branch_name: ${{ github.head_ref }}
+          remote_name: "origin"
+          remote_branch_name: ${{ github.head_ref }}

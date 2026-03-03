@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
@@ -34,9 +35,10 @@ func NewLoopChainReader(logger logger.Logger, cr types.ContractReader) types.Con
 type loopChainReader struct {
 	services.Service
 	types.UnimplementedContractReader
-	logger          logger.Logger
-	cr              types.ContractReader
-	moduleAddresses map[string]string
+	logger            logger.Logger
+	cr                types.ContractReader
+	moduleAddressesMu sync.RWMutex
+	moduleAddresses   map[string]string
 }
 
 func (a *loopChainReader) Name() string {
@@ -67,7 +69,7 @@ func (a *loopChainReader) GetLatestValue(ctx context.Context, readIdentifier str
 
 	_, contractName, _ := readComponents[0], readComponents[1], readComponents[2]
 
-	_, ok := a.moduleAddresses[contractName]
+	ok := a.hasModuleAddress(contractName)
 	if !ok {
 		return fmt.Errorf("no such contract: %s", contractName)
 	}
@@ -103,7 +105,7 @@ func (a *loopChainReader) BatchGetLatestValues(ctx context.Context, request type
 	for contract, requestBatch := range request {
 		convertedBatch := []types.BatchRead{}
 		for _, read := range requestBatch {
-			_, ok := a.moduleAddresses[contract.Name]
+			ok := a.hasModuleAddress(contract.Name)
 			if !ok {
 				return nil, fmt.Errorf("no such contract: %s", contract.Name)
 			}
@@ -210,22 +212,27 @@ func (a *loopChainReader) QueryKey(ctx context.Context, contract types.BoundCont
 }
 
 func (a *loopChainReader) Bind(ctx context.Context, bindings []types.BoundContract) error {
+	a.moduleAddressesMu.Lock()
 	for _, binding := range bindings {
 		a.moduleAddresses[binding.Name] = binding.Address
 	}
+	a.moduleAddressesMu.Unlock()
 
 	return a.cr.Bind(ctx, bindings)
 }
 
 func (a *loopChainReader) Unbind(ctx context.Context, bindings []types.BoundContract) error {
+	a.moduleAddressesMu.Lock()
 	for _, binding := range bindings {
 		key := binding.Name
 		if _, ok := a.moduleAddresses[key]; ok {
 			delete(a.moduleAddresses, key)
 		} else {
+			a.moduleAddressesMu.Unlock()
 			return fmt.Errorf("no such binding: %s", key)
 		}
 	}
+	a.moduleAddressesMu.Unlock()
 
 	// we ignore unbind errors, because if the LOOP plugin restarted, the binding would not exist.
 	err := a.cr.Unbind(ctx, bindings)
@@ -237,6 +244,9 @@ func (a *loopChainReader) Unbind(ctx context.Context, bindings []types.BoundCont
 }
 
 func (a *loopChainReader) getBindings() []types.BoundContract {
+	a.moduleAddressesMu.RLock()
+	defer a.moduleAddressesMu.RUnlock()
+
 	bindings := make([]types.BoundContract, 0, len(a.moduleAddresses))
 
 	for name, address := range a.moduleAddresses {
@@ -247,6 +257,14 @@ func (a *loopChainReader) getBindings() []types.BoundContract {
 	}
 
 	return bindings
+}
+
+func (a *loopChainReader) hasModuleAddress(name string) bool {
+	a.moduleAddressesMu.RLock()
+	defer a.moduleAddressesMu.RUnlock()
+
+	_, ok := a.moduleAddresses[name]
+	return ok
 }
 
 func (a *loopChainReader) decodeGLVReturnValue(label string, jsonBytes []byte, returnVal any) error {
