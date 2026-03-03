@@ -42,6 +42,8 @@ module ccip::fee_quoter {
     /// https://move-book.com/appendix/reserved-addresses.html
     const MOVE_PRECOMPILE_SPACE: u256 = 0x0b;
 
+    const ALLOW_OUT_OF_ORDER_EXECUTION: bool = true;
+
     const GAS_PRICE_BITS: u8 = 112;
     const GAS_PRICE_MASK_112_BITS: u256 = 0xffffffffffffffffffffffffffff; // 28 f's
 
@@ -909,7 +911,7 @@ module ccip::fee_quoter {
         let extra_args_len = extra_args.length();
         if (extra_args_len == 0) {
             // If extra args are empty, generate default values. Out-of-order is always true.
-            (dest_chain_config.default_tx_gas_limit as u256, true)
+            (dest_chain_config.default_tx_gas_limit as u256, ALLOW_OUT_OF_ORDER_EXECUTION)
         } else {
             assert!(
                 extra_args_len >= 4,
@@ -1180,9 +1182,9 @@ module ccip::fee_quoter {
                 decode_generic_extra_args(dest_chain_config, extra_args);
             let extra_args_v2 =
                 client::encode_generic_extra_args_v2(
-                    gas_limit, true
+                    gas_limit, ALLOW_OUT_OF_ORDER_EXECUTION
                 );
-            (extra_args_v2, true)
+            (extra_args_v2, ALLOW_OUT_OF_ORDER_EXECUTION)
         } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
             let (
                 compute_units,
@@ -1208,7 +1210,7 @@ module ccip::fee_quoter {
                 error::invalid_argument(E_MESSAGE_COMPUTE_UNIT_LIMIT_TOO_HIGH)
             );
 
-            (extra_args, true)
+            (extra_args, ALLOW_OUT_OF_ORDER_EXECUTION)
         } else {
             abort error::invalid_argument(E_UNKNOWN_CHAIN_FAMILY_SELECTOR)
         }
