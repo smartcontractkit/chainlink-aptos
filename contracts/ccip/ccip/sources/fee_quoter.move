@@ -42,6 +42,8 @@ module ccip::fee_quoter {
     /// https://move-book.com/appendix/reserved-addresses.html
     const MOVE_PRECOMPILE_SPACE: u256 = 0x0b;
 
+    const ALLOW_OUT_OF_ORDER_EXECUTION: bool = true;
+
     const GAS_PRICE_BITS: u8 = 112;
     const GAS_PRICE_MASK_112_BITS: u256 = 0xffffffffffffffffffffffffffff; // 28 f's
 
@@ -791,15 +793,11 @@ module ccip::fee_quoter {
     inline fun resolve_generic_gas_limit(
         dest_chain_config: &DestChainConfig, extra_args: vector<u8>
     ): u256 {
-        let (gas_limit, allow_out_of_order_execution) =
+        let (gas_limit, _allow_out_of_order_execution) =
             decode_generic_extra_args(dest_chain_config, extra_args);
         assert!(
             gas_limit <= (dest_chain_config.max_per_msg_gas_limit as u256),
             error::invalid_argument(E_MESSAGE_GAS_LIMIT_TOO_HIGH)
-        );
-        assert!(
-            !dest_chain_config.enforce_out_of_order || allow_out_of_order_execution,
-            error::invalid_argument(E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE)
         );
         gas_limit
     }
@@ -820,17 +818,13 @@ module ccip::fee_quoter {
         let (
             compute_units,
             account_is_writable_bitmap,
-            allow_out_of_order_execution,
+            _allow_out_of_order_execution,
             token_receiver,
             accounts
         ) = decode_svm_extra_args(extra_args);
 
         let gas_limit = compute_units;
 
-        assert!(
-            !dest_chain_config.enforce_out_of_order || allow_out_of_order_execution,
-            error::invalid_argument(E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE)
-        );
         assert!(
             gas_limit <= dest_chain_config.max_per_msg_gas_limit,
             error::invalid_argument(E_MESSAGE_COMPUTE_UNIT_LIMIT_TOO_HIGH)
@@ -916,8 +910,11 @@ module ccip::fee_quoter {
     ): (u256, bool) {
         let extra_args_len = extra_args.length();
         if (extra_args_len == 0) {
-            // If extra args are empty, generate default values.
-            (dest_chain_config.default_tx_gas_limit as u256, false)
+            // If extra args are empty, generate default values. Out-of-order is always true.
+            (
+                dest_chain_config.default_tx_gas_limit as u256,
+                ALLOW_OUT_OF_ORDER_EXECUTION
+            )
         } else {
             assert!(
                 extra_args_len >= 4,
@@ -1184,18 +1181,18 @@ module ccip::fee_quoter {
         if (chain_family_selector == CHAIN_FAMILY_SELECTOR_EVM
             || chain_family_selector == CHAIN_FAMILY_SELECTOR_APTOS
             || chain_family_selector == CHAIN_FAMILY_SELECTOR_SUI) {
-            let (gas_limit, allow_out_of_order_execution) =
+            let (gas_limit, _allow_out_of_order_execution) =
                 decode_generic_extra_args(dest_chain_config, extra_args);
             let extra_args_v2 =
                 client::encode_generic_extra_args_v2(
-                    gas_limit, allow_out_of_order_execution
+                    gas_limit, ALLOW_OUT_OF_ORDER_EXECUTION
                 );
-            (extra_args_v2, allow_out_of_order_execution)
+            (extra_args_v2, ALLOW_OUT_OF_ORDER_EXECUTION)
         } else if (chain_family_selector == CHAIN_FAMILY_SELECTOR_SVM) {
             let (
                 compute_units,
                 _account_is_writable_bitmap,
-                allow_out_of_order_execution,
+                _allow_out_of_order_execution,
                 token_receiver,
                 _accounts
             ) = decode_svm_extra_args(extra_args);
@@ -1212,15 +1209,11 @@ module ccip::fee_quoter {
             };
 
             assert!(
-                !dest_chain_config.enforce_out_of_order || allow_out_of_order_execution,
-                error::invalid_argument(E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE)
-            );
-            assert!(
                 compute_units <= dest_chain_config.max_per_msg_gas_limit,
                 error::invalid_argument(E_MESSAGE_COMPUTE_UNIT_LIMIT_TOO_HIGH)
             );
 
-            (extra_args, allow_out_of_order_execution)
+            (extra_args, ALLOW_OUT_OF_ORDER_EXECUTION)
         } else {
             abort error::invalid_argument(E_UNKNOWN_CHAIN_FAMILY_SELECTOR)
         }

@@ -419,10 +419,7 @@ module ccip::fee_quoter_chain_family {
             );
     }
 
-    #[
-        test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms),
-        expected_failure(abort_code = 65555, location = ccip::fee_quoter) // E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE
-    ]
+    #[test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms)]
     fun test_out_of_order_execution_required(
         aptos_framework: &signer, ccip: &signer, owner: &signer
     ) {
@@ -430,7 +427,7 @@ module ccip::fee_quoter_chain_family {
             fee_quoter_setup::setup(aptos_framework, ccip, owner);
         let token_addr = object::object_address(&token_obj);
 
-        // Set up destination chain that enforces out-of-order execution
+        // Set up destination chain config
         fee_quoter::apply_dest_chain_config_updates(
             owner,
             fee_quoter_setup::get_dest_chain_selector(),
@@ -446,7 +443,7 @@ module ccip::fee_quoter_chain_family {
             60, // dest_gas_per_data_availability_byte
             1000, // dest_data_availability_multiplier_bps
             fee_quoter_setup::get_chain_family_selector_evm(), // chain_family_selector
-            true, // enforce_out_of_order - required to be true
+            true, // enforce_out_of_order (unused; OOO is always true)
             200, // default_token_fee_usd_cents
             30000, // default_token_dest_gas_overhead
             2000000, // default_tx_gas_limit
@@ -464,11 +461,11 @@ module ccip::fee_quoter_chain_family {
 
         let receiver = fee_quoter_setup::create_evm_receiver_address();
 
-        // Create extra args with allow_out_of_order_execution = false
+        // Extra args with allow_out_of_order_execution = false; contract ignores and overrides to true
         let extra_args = fee_quoter_setup::create_extra_args(500000, false);
 
-        // This should fail with E_EXTRA_ARG_OUT_OF_ORDER_EXECUTION_MUST_BE_TRUE
-        let _ =
+        // Should succeed: we no longer revert on user's OOO value; we ignore and always use true
+        let _fee =
             fee_quoter::get_validated_fee(
                 fee_quoter_setup::get_dest_chain_selector(),
                 receiver,
@@ -480,6 +477,24 @@ module ccip::fee_quoter_chain_family {
                 @0x0, // fee_token_store
                 extra_args
             );
+
+        // Verify process_message_args returns is_out_of_order_execution == true regardless of user input
+        let (
+            _msg_fee_juels,
+            is_out_of_order_execution,
+            _converted_extra_args,
+            _dest_exec_data_per_token
+        ) =
+            fee_quoter::process_message_args(
+                fee_quoter_setup::get_dest_chain_selector(),
+                token_addr,
+                1000, // fee_token_amount
+                extra_args,
+                vector[],
+                vector[],
+                vector[]
+            );
+        assert!(is_out_of_order_execution, 0);
     }
 
     #[
