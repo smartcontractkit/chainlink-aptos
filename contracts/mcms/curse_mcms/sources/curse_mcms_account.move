@@ -43,7 +43,11 @@ module curse_mcms::curse_mcms_account {
     ) {
         move_to(
             publisher,
-            AccountState { signer_cap, owner: @curse_mcms_owner, pending_owner: @0x0 }
+            AccountState {
+                signer_cap,
+                owner: @curse_mcms_owner,
+                pending_owner: @0x0
+            }
         );
     }
 

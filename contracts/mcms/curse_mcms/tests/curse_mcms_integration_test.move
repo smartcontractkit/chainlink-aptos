@@ -164,7 +164,6 @@ module curse_mcms::curse_mcms_integration_test {
     // ================================================================
     // |          Option A: Direct Dispatch Integration Tests          |
     // ================================================================
-
     #[
         test(
             framework = @aptos_framework,
@@ -195,8 +194,7 @@ module curse_mcms::curse_mcms_integration_test {
 
         // Execute curse via CurseMCMS timelock dispatch
         curse_mcms::test_timelock_dispatch_to_rmn_remote(
-            string::utf8(b"curse"),
-            bcs::to_bytes(&GLOBAL_CURSE_SUBJECT)
+            string::utf8(b"curse"), bcs::to_bytes(&GLOBAL_CURSE_SUBJECT)
         );
 
         // Verify subject is now cursed
@@ -234,8 +232,7 @@ module curse_mcms::curse_mcms_integration_test {
 
         // Execute uncurse via CurseMCMS timelock dispatch
         curse_mcms::test_timelock_dispatch_to_rmn_remote(
-            string::utf8(b"uncurse"),
-            bcs::to_bytes(&GLOBAL_CURSE_SUBJECT)
+            string::utf8(b"uncurse"), bcs::to_bytes(&GLOBAL_CURSE_SUBJECT)
         );
 
         // Verify subject is now uncursed
@@ -274,8 +271,7 @@ module curse_mcms::curse_mcms_integration_test {
         // Execute curse_multiple via CurseMCMS timelock dispatch
         let subjects = vector[GLOBAL_CURSE_SUBJECT, SUBJECT_2];
         curse_mcms::test_timelock_dispatch_to_rmn_remote(
-            string::utf8(b"curse_multiple"),
-            bcs::to_bytes(&subjects)
+            string::utf8(b"curse_multiple"), bcs::to_bytes(&subjects)
         );
 
         // Verify both subjects are now cursed
@@ -316,8 +312,7 @@ module curse_mcms::curse_mcms_integration_test {
         // Execute uncurse_multiple via CurseMCMS timelock dispatch
         let subjects = vector[GLOBAL_CURSE_SUBJECT, SUBJECT_2];
         curse_mcms::test_timelock_dispatch_to_rmn_remote(
-            string::utf8(b"uncurse_multiple"),
-            bcs::to_bytes(&subjects)
+            string::utf8(b"uncurse_multiple"), bcs::to_bytes(&subjects)
         );
 
         // Verify both subjects are now uncursed
@@ -395,15 +390,13 @@ module curse_mcms::curse_mcms_integration_test {
         // CurseMCMS tries to curse but is not authorized
         // Should fail with E_NOT_OWNER_OR_ALLOWED_CURSER (19)
         curse_mcms::test_timelock_dispatch_to_rmn_remote(
-            string::utf8(b"curse"),
-            bcs::to_bytes(&GLOBAL_CURSE_SUBJECT)
+            string::utf8(b"curse"), bcs::to_bytes(&GLOBAL_CURSE_SUBJECT)
         );
     }
 
     // ================================================================
     // |                   CurseMCMS Signer Verification               |
     // ================================================================
-
     #[
         test(
             framework = @aptos_framework,
@@ -446,7 +439,6 @@ module curse_mcms::curse_mcms_integration_test {
     // ================================================================
     // |          Bypasser Execute Batch Integration Tests             |
     // ================================================================
-
     #[
         test(
             framework = @aptos_framework,
@@ -482,7 +474,10 @@ module curse_mcms::curse_mcms_integration_test {
         let datas = vector[bcs::to_bytes(&GLOBAL_CURSE_SUBJECT)];
 
         curse_mcms::test_timelock_bypasser_execute_batch(
-            targets, module_names, function_names, datas
+            targets,
+            module_names,
+            function_names,
+            datas
         );
 
         // Verify subject is now cursed
@@ -525,7 +520,10 @@ module curse_mcms::curse_mcms_integration_test {
         let datas = vector[bcs::to_bytes(&GLOBAL_CURSE_SUBJECT), bcs::to_bytes(&SUBJECT_2)];
 
         curse_mcms::test_timelock_bypasser_execute_batch(
-            targets, module_names, function_names, datas
+            targets,
+            module_names,
+            function_names,
+            datas
         );
 
         // Verify both subjects are now cursed
@@ -536,7 +534,6 @@ module curse_mcms::curse_mcms_integration_test {
     // ================================================================
     // |              Timelock Schedule and Execute Tests              |
     // ================================================================
-
     #[
         test(
             framework = @aptos_framework,
@@ -610,7 +607,6 @@ module curse_mcms::curse_mcms_integration_test {
     // ================================================================
     // |                    Timelock Min Delay Tests                   |
     // ================================================================
-
     #[
         test(
             framework = @aptos_framework,
@@ -642,7 +638,6 @@ module curse_mcms::curse_mcms_integration_test {
     // ================================================================
     // |                     Function Blocking Tests                   |
     // ================================================================
-
     #[
         test(
             framework = @aptos_framework,
@@ -697,7 +692,6 @@ module curse_mcms::curse_mcms_integration_test {
     //
     // Note: set_root and execute are permissionless entry functions.
     // The signatures provide authorization, not the signer.
-
     #[
         test(
             framework = @aptos_framework,
@@ -1240,7 +1234,6 @@ module curse_mcms::curse_mcms_integration_test {
     // These tests verify the timelock self-dispatch mechanism that allows
     // timelock admin functions to be called via bypasser_execute_batch
     // and schedule/execute flows.
-
     #[
         test(
             framework = @aptos_framework,
@@ -1277,7 +1270,10 @@ module curse_mcms::curse_mcms_integration_test {
         let datas = vector[bcs::to_bytes(&new_delay)];
 
         curse_mcms::test_timelock_bypasser_execute_batch(
-            targets, module_names, function_names, datas
+            targets,
+            module_names,
+            function_names,
+            datas
         );
 
         assert!(curse_mcms::timelock_min_delay() == 3600);
@@ -1321,7 +1317,10 @@ module curse_mcms::curse_mcms_integration_test {
         let datas = vector[block_data];
 
         curse_mcms::test_timelock_bypasser_execute_batch(
-            targets, module_names, function_names, datas
+            targets,
+            module_names,
+            function_names,
+            datas
         );
 
         assert!(curse_mcms::timelock_get_blocked_functions_count() == 1);
@@ -1368,7 +1367,10 @@ module curse_mcms::curse_mcms_integration_test {
         let datas = vector[unblock_data];
 
         curse_mcms::test_timelock_bypasser_execute_batch(
-            targets, module_names, function_names, datas
+            targets,
+            module_names,
+            function_names,
+            datas
         );
 
         assert!(curse_mcms::timelock_get_blocked_functions_count() == 0);

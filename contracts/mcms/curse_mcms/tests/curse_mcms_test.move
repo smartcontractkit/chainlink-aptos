@@ -14,9 +14,7 @@ module curse_mcms::curse_mcms_test {
     const SIGNER_2: vector<u8> = x"6813eb9362372eef6200f3b1dbc3f819671cba69";
     const SIGNER_3: vector<u8> = x"7e5f4552091a69125d5dfcb7b8c2659029395bdf";
 
-    fun setup_test(
-        framework: &signer, deployer: &signer, owner: &signer
-    ) {
+    fun setup_test(framework: &signer, deployer: &signer, owner: &signer) {
         // Initialize timestamp for tests
         timestamp::set_time_has_started_for_testing(framework);
         timestamp::update_global_time_for_test_secs(1000);
@@ -38,10 +36,7 @@ module curse_mcms::curse_mcms_test {
     // ================================================================
     // |                      Initialization Tests                     |
     // ================================================================
-
-    #[test(
-        framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner
-    )]
+    #[test(framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner)]
     fun test_initialize_success(
         framework: &signer, deployer: &signer, owner: &signer
     ) {
@@ -51,9 +46,7 @@ module curse_mcms::curse_mcms_test {
         assert!(curse_mcms_account::owner() == signer::address_of(owner), 1);
     }
 
-    #[test(
-        framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner
-    )]
+    #[test(framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner)]
     #[expected_failure(major_status = 4004, location = curse_mcms::curse_mcms)]
     // RESOURCE_ALREADY_EXISTS
     fun test_initialize_already_initialized(
@@ -68,7 +61,6 @@ module curse_mcms::curse_mcms_test {
     // ================================================================
     // |                      Ownership Tests                          |
     // ================================================================
-
     #[
         test(
             framework = @aptos_framework,
@@ -78,10 +70,7 @@ module curse_mcms::curse_mcms_test {
         )
     ]
     fun test_transfer_ownership_success(
-        framework: &signer,
-        deployer: &signer,
-        owner: &signer,
-        new_owner: &signer
+        framework: &signer, deployer: &signer, owner: &signer, new_owner: &signer
     ) {
         setup_test(framework, deployer, owner);
         account::create_account_for_test(signer::address_of(new_owner));
@@ -110,10 +99,7 @@ module curse_mcms::curse_mcms_test {
     // error::permission_denied(E_UNAUTHORIZED) = (5 << 16) | 3 = 327683
     #[expected_failure(abort_code = 327683, location = curse_mcms::curse_mcms_account)]
     fun test_transfer_ownership_not_owner(
-        framework: &signer,
-        deployer: &signer,
-        owner: &signer,
-        not_owner: &signer
+        framework: &signer, deployer: &signer, owner: &signer, not_owner: &signer
     ) {
         setup_test(framework, deployer, owner);
         account::create_account_for_test(signer::address_of(not_owner));
@@ -151,10 +137,7 @@ module curse_mcms::curse_mcms_test {
     // ================================================================
     // |                      Set Config Tests                         |
     // ================================================================
-
-    #[test(
-        framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner
-    )]
+    #[test(framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner)]
     fun test_set_config_success(
         framework: &signer, deployer: &signer, owner: &signer
     ) {
@@ -204,10 +187,7 @@ module curse_mcms::curse_mcms_test {
     // error::permission_denied(E_UNAUTHORIZED) = (5 << 16) | 3 = 327683
     #[expected_failure(abort_code = 327683, location = curse_mcms::curse_mcms_account)]
     fun test_set_config_not_owner(
-        framework: &signer,
-        deployer: &signer,
-        owner: &signer,
-        not_owner: &signer
+        framework: &signer, deployer: &signer, owner: &signer, not_owner: &signer
     ) {
         setup_test(framework, deployer, owner);
         account::create_account_for_test(signer::address_of(not_owner));
@@ -237,9 +217,7 @@ module curse_mcms::curse_mcms_test {
         );
     }
 
-    #[test(
-        framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner
-    )]
+    #[test(framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner)]
     #[
         expected_failure(
             abort_code = curse_mcms::curse_mcms::E_INVALID_NUM_SIGNERS,
@@ -276,9 +254,7 @@ module curse_mcms::curse_mcms_test {
         );
     }
 
-    #[test(
-        framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner
-    )]
+    #[test(framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner)]
     #[
         expected_failure(
             abort_code = curse_mcms::curse_mcms::E_SIGNER_GROUPS_LEN_MISMATCH,
@@ -315,9 +291,7 @@ module curse_mcms::curse_mcms_test {
         );
     }
 
-    #[test(
-        framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner
-    )]
+    #[test(framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner)]
     #[
         expected_failure(
             abort_code = curse_mcms::curse_mcms::E_SIGNER_ADDR_MUST_BE_INCREASING,
@@ -354,9 +328,7 @@ module curse_mcms::curse_mcms_test {
         );
     }
 
-    #[test(
-        framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner
-    )]
+    #[test(framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner)]
     #[
         expected_failure(
             abort_code = curse_mcms::curse_mcms::E_INVALID_SIGNER_ADDR_LEN,
@@ -396,10 +368,7 @@ module curse_mcms::curse_mcms_test {
     // ================================================================
     // |                      View Function Tests                      |
     // ================================================================
-
-    #[test(
-        framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner
-    )]
+    #[test(framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner)]
     fun test_get_op_count(
         framework: &signer, deployer: &signer, owner: &signer
     ) {
@@ -411,9 +380,7 @@ module curse_mcms::curse_mcms_test {
         assert!(curse_mcms::get_op_count(role) == 0, 1);
     }
 
-    #[test(
-        framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner
-    )]
+    #[test(framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner)]
     fun test_get_root(
         framework: &signer, deployer: &signer, owner: &signer
     ) {
@@ -426,9 +393,7 @@ module curse_mcms::curse_mcms_test {
         assert!(valid_until == 0, 2);
     }
 
-    #[test(
-        framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner
-    )]
+    #[test(framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner)]
     fun test_role_constants(
         framework: &signer, deployer: &signer, owner: &signer
     ) {
@@ -440,9 +405,7 @@ module curse_mcms::curse_mcms_test {
         assert!(curse_mcms::timelock_role() == 3, 4);
     }
 
-    #[test(
-        framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner
-    )]
+    #[test(framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner)]
     fun test_is_valid_role(
         framework: &signer, deployer: &signer, owner: &signer
     ) {
@@ -459,7 +422,6 @@ module curse_mcms::curse_mcms_test {
     // ================================================================
     // |                      Merkle Proof Tests                       |
     // ================================================================
-
     #[test]
     fun test_verify_merkle_proof_single_leaf() {
         // For a single leaf tree, the root equals the leaf
@@ -485,10 +447,7 @@ module curse_mcms::curse_mcms_test {
     // ================================================================
     // |                      Hash Tests                               |
     // ================================================================
-
-    #[test(
-        framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner
-    )]
+    #[test(framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner)]
     fun test_hash_metadata_leaf(
         framework: &signer, deployer: &signer, owner: &signer
     ) {
@@ -513,10 +472,7 @@ module curse_mcms::curse_mcms_test {
     // ================================================================
     // |                      Set Config with Clear Root Tests         |
     // ================================================================
-
-    #[test(
-        framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner
-    )]
+    #[test(framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner)]
     fun test_set_config_with_clear_root(
         framework: &signer, deployer: &signer, owner: &signer
     ) {
@@ -559,10 +515,7 @@ module curse_mcms::curse_mcms_test {
     // ================================================================
     // |                      Hierarchical Group Tests                 |
     // ================================================================
-
-    #[test(
-        framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner
-    )]
+    #[test(framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner)]
     fun test_set_config_hierarchical_groups(
         framework: &signer, deployer: &signer, owner: &signer
     ) {
@@ -607,10 +560,7 @@ module curse_mcms::curse_mcms_test {
     // ================================================================
     // |                      Multiple Roles Tests                     |
     // ================================================================
-
-    #[test(
-        framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner
-    )]
+    #[test(framework = @aptos_framework, deployer = @curse_mcms, owner = @curse_mcms_owner)]
     fun test_set_config_multiple_roles(
         framework: &signer, deployer: &signer, owner: &signer
     ) {

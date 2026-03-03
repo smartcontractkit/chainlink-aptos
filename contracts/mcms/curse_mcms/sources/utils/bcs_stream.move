@@ -39,10 +39,7 @@ module curse_mcms::bcs_stream {
 
     /// Asserts that the stream has been fully consumed.
     public fun assert_is_consumed(stream: &BCSStream) {
-        assert!(
-            stream.cur == stream.data.length(),
-            error::invalid_state(E_NOT_CONSUMED)
-        );
+        assert!(stream.cur == stream.data.length(), error::invalid_state(E_NOT_CONSUMED));
     }
 
     /// Deserializes a ULEB128-encoded integer from the stream.
@@ -79,10 +76,7 @@ module curse_mcms::bcs_stream {
 
     /// Deserializes a `bool` value from the stream.
     public fun deserialize_bool(stream: &mut BCSStream): bool {
-        assert!(
-            stream.cur < stream.data.length(),
-            error::out_of_range(E_OUT_OF_BYTES)
-        );
+        assert!(stream.cur < stream.data.length(), error::out_of_range(E_OUT_OF_BYTES));
         let byte = stream.data[stream.cur];
         stream.cur += 1;
         if (byte == 0) { false }
@@ -101,8 +95,7 @@ module curse_mcms::bcs_stream {
         let cur = stream.cur;
 
         assert!(
-            cur + 32 <= data.length(),
-            error::out_of_range(E_OUT_OF_BYTES)
+            cur + 32 <= data.length(), error::out_of_range(E_OUT_OF_BYTES)
         );
         let res = from_bcs::to_address(data.slice(cur, cur + 32));
 
@@ -131,8 +124,7 @@ module curse_mcms::bcs_stream {
         let cur = stream.cur;
 
         assert!(
-            cur + 2 <= data.length(),
-            error::out_of_range(E_OUT_OF_BYTES)
+            cur + 2 <= data.length(), error::out_of_range(E_OUT_OF_BYTES)
         );
         let res = (data[cur] as u16) | ((data[cur + 1] as u16) << 8);
 
@@ -147,8 +139,7 @@ module curse_mcms::bcs_stream {
         let cur = stream.cur;
 
         assert!(
-            cur + 4 <= data.length(),
-            error::out_of_range(E_OUT_OF_BYTES)
+            cur + 4 <= data.length(), error::out_of_range(E_OUT_OF_BYTES)
         );
         let res =
             (data[cur] as u32) | ((data[cur + 1] as u32) << 8) | ((data[cur + 2] as u32)
@@ -165,8 +156,7 @@ module curse_mcms::bcs_stream {
         let cur = stream.cur;
 
         assert!(
-            cur + 8 <= data.length(),
-            error::out_of_range(E_OUT_OF_BYTES)
+            cur + 8 <= data.length(), error::out_of_range(E_OUT_OF_BYTES)
         );
         let res =
             (data[cur] as u64) | ((data[cur + 1] as u64) << 8) | ((data[cur + 2] as u64)
@@ -185,8 +175,7 @@ module curse_mcms::bcs_stream {
         let cur = stream.cur;
 
         assert!(
-            cur + 16 <= data.length(),
-            error::out_of_range(E_OUT_OF_BYTES)
+            cur + 16 <= data.length(), error::out_of_range(E_OUT_OF_BYTES)
         );
         let res =
             (data[cur] as u128) | ((data[cur + 1] as u128) << 8)
@@ -209,8 +198,7 @@ module curse_mcms::bcs_stream {
         let cur = stream.cur;
 
         assert!(
-            cur + 32 <= data.length(),
-            error::out_of_range(E_OUT_OF_BYTES)
+            cur + 32 <= data.length(), error::out_of_range(E_OUT_OF_BYTES)
         );
         let res =
             (data[cur] as u256) | ((data[cur + 1] as u256) << 8)
@@ -263,8 +251,7 @@ module curse_mcms::bcs_stream {
         let cur = stream.cur;
 
         assert!(
-            cur + len <= data.length(),
-            error::out_of_range(E_OUT_OF_BYTES)
+            cur + len <= data.length(), error::out_of_range(E_OUT_OF_BYTES)
         );
 
         // AIP-105 introduces vector::move_range to efficiently move a range of elements from one vector to another.
@@ -282,8 +269,7 @@ module curse_mcms::bcs_stream {
         let cur = stream.cur;
 
         assert!(
-            cur + len <= data.length(),
-            error::out_of_range(E_OUT_OF_BYTES)
+            cur + len <= data.length(), error::out_of_range(E_OUT_OF_BYTES)
         );
 
         // AIP-105 introduces vector::move_range to efficiently move a range of elements from one vector to another.
@@ -303,8 +289,7 @@ module curse_mcms::bcs_stream {
         let cur = stream.cur;
 
         assert!(
-            cur + len <= data.length(),
-            error::out_of_range(E_OUT_OF_BYTES)
+            cur + len <= data.length(), error::out_of_range(E_OUT_OF_BYTES)
         );
 
         // AIP-105 introduces vector::move_range to efficiently move a range of elements from one vector to another.
