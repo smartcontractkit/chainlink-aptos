@@ -415,17 +415,21 @@ module platform_secondary::forwarder {
 
     #[test_only]
     fun generate_oracle_set(): OracleSet {
-        let don_id = 0;
-        let f = 1;
+        generate_oracle_set_with_params(0, 1, 1, 31)
+    }
 
+    #[test_only]
+    fun generate_oracle_set_with_params(
+        don_id: u32, config_version: u32, f: u8, num_oracles: u64
+    ): OracleSet {
         let signers = vector[];
         let oracles = vector[];
-        for (i in 0..31) {
+        for (_i in 0..num_oracles) {
             let (sk, pk) = ed25519::generate_keys();
             vector::push_back(&mut signers, sk);
             vector::push_back(&mut oracles, ed25519::validated_public_key_to_bytes(&pk));
         };
-        OracleSet { don_id, config_version: 1, f, oracles, signers }
+        OracleSet { don_id, config_version, f, oracles, signers }
     }
 
     #[test_only]
@@ -585,5 +589,342 @@ module platform_secondary::forwarder {
 
         transfer_ownership(owner_secondary, @0xfeeb);
         accept_ownership(new_owner);
+    }
+
+    #[test(owner_secondary = @owner_secondary, publisher = @platform_secondary)]
+    fun test_set_config_success(
+        owner_secondary: &signer, publisher: &signer
+    ) acquires State {
+        set_up_test(owner_secondary, publisher);
+
+        let config = generate_oracle_set_with_params(1, 1, 1, 4);
+        set_config(
+            owner_secondary,
+            config.don_id,
+            config.config_version,
+            config.f,
+            config.oracles
+        );
+
+        let stored = get_config(1, 1);
+        assert!(stored.f == 1, 1);
+    }
+
+    #[test(owner_secondary = @owner_secondary, publisher = @platform_secondary)]
+    fun test_set_config_success_max_oracles(
+        owner_secondary: &signer, publisher: &signer
+    ) acquires State {
+        set_up_test(owner_secondary, publisher);
+
+        // MAX_ORACLES = 31, f=10 requires 3*10+1 = 31 oracles
+        let config = generate_oracle_set_with_params(1, 1, 10, 31);
+        set_config(
+            owner_secondary,
+            config.don_id,
+            config.config_version,
+            config.f,
+            config.oracles
+        );
+
+        let stored = get_config(1, 1);
+        assert!(stored.f == 10, 1);
+    }
+
+    #[test(owner_secondary = @owner_secondary, publisher = @platform_secondary)]
+    fun test_set_config_success_upsert(
+        owner_secondary: &signer, publisher: &signer
+    ) acquires State {
+        set_up_test(owner_secondary, publisher);
+
+        // Set initial config with f=1
+        let config1 = generate_oracle_set_with_params(1, 1, 1, 4);
+        set_config(
+            owner_secondary,
+            config1.don_id,
+            config1.config_version,
+            config1.f,
+            config1.oracles
+        );
+
+        let stored = get_config(1, 1);
+        assert!(stored.f == 1, 1);
+
+        // Overwrite same don_id/config_version with f=2
+        let config2 = generate_oracle_set_with_params(1, 1, 2, 7);
+        set_config(
+            owner_secondary,
+            config2.don_id,
+            config2.config_version,
+            config2.f,
+            config2.oracles
+        );
+
+        let stored = get_config(1, 1);
+        assert!(stored.f == 2, 2);
+    }
+
+    #[test(owner_secondary = @owner_secondary, publisher = @platform_secondary)]
+    fun test_set_config_success_multiple_dons(
+        owner_secondary: &signer, publisher: &signer
+    ) acquires State {
+        set_up_test(owner_secondary, publisher);
+
+        let config1 = generate_oracle_set_with_params(1, 1, 1, 4);
+        set_config(
+            owner_secondary,
+            config1.don_id,
+            config1.config_version,
+            config1.f,
+            config1.oracles
+        );
+
+        let config2 = generate_oracle_set_with_params(2, 1, 2, 7);
+        set_config(
+            owner_secondary,
+            config2.don_id,
+            config2.config_version,
+            config2.f,
+            config2.oracles
+        );
+
+        let stored1 = get_config(1, 1);
+        assert!(stored1.f == 1, 1);
+
+        let stored2 = get_config(2, 1);
+        assert!(stored2.f == 2, 2);
+    }
+
+    #[test(owner_secondary = @owner_secondary, publisher = @platform_secondary)]
+    fun test_set_config_success_multiple_versions(
+        owner_secondary: &signer, publisher: &signer
+    ) acquires State {
+        set_up_test(owner_secondary, publisher);
+
+        let config1 = generate_oracle_set_with_params(1, 1, 1, 4);
+        set_config(
+            owner_secondary,
+            config1.don_id,
+            config1.config_version,
+            config1.f,
+            config1.oracles
+        );
+
+        let config2 = generate_oracle_set_with_params(1, 2, 2, 7);
+        set_config(
+            owner_secondary,
+            config2.don_id,
+            config2.config_version,
+            config2.f,
+            config2.oracles
+        );
+
+        let stored1 = get_config(1, 1);
+        assert!(stored1.f == 1, 1);
+
+        let stored2 = get_config(1, 2);
+        assert!(stored2.f == 2, 2);
+    }
+
+    #[test(
+        owner_secondary = @owner_secondary,
+        publisher = @platform_secondary,
+        unknown_user = @0xbeef
+    )]
+    #[expected_failure(abort_code = 327687, location = platform_secondary::forwarder)]
+    fun test_set_config_failure_not_owner(
+        owner_secondary: &signer, publisher: &signer, unknown_user: &signer
+    ) acquires State {
+        set_up_test(owner_secondary, publisher);
+
+        let config = generate_oracle_set_with_params(1, 1, 1, 4);
+        set_config(
+            unknown_user,
+            config.don_id,
+            config.config_version,
+            config.f,
+            config.oracles
+        );
+    }
+
+    #[test(owner_secondary = @owner_secondary, publisher = @platform_secondary)]
+    #[expected_failure(abort_code = 65545, location = platform_secondary::forwarder)]
+    fun test_set_config_failure_f_is_zero(
+        owner_secondary: &signer, publisher: &signer
+    ) acquires State {
+        set_up_test(owner_secondary, publisher);
+
+        let config = generate_oracle_set_with_params(1, 1, 0, 4);
+        set_config(
+            owner_secondary,
+            config.don_id,
+            config.config_version,
+            0,
+            config.oracles
+        );
+    }
+
+    #[test(owner_secondary = @owner_secondary, publisher = @platform_secondary)]
+    #[expected_failure(abort_code = 65546, location = platform_secondary::forwarder)]
+    fun test_set_config_failure_too_many_oracles(
+        owner_secondary: &signer, publisher: &signer
+    ) acquires State {
+        set_up_test(owner_secondary, publisher);
+
+        // 32 oracles exceeds MAX_ORACLES (31)
+        let config = generate_oracle_set_with_params(1, 1, 1, 32);
+        set_config(
+            owner_secondary,
+            config.don_id,
+            config.config_version,
+            config.f,
+            config.oracles
+        );
+    }
+
+    #[test(owner_secondary = @owner_secondary, publisher = @platform_secondary)]
+    #[expected_failure(abort_code = 65547, location = platform_secondary::forwarder)]
+    fun test_set_config_failure_insufficient_oracles(
+        owner_secondary: &signer, publisher: &signer
+    ) acquires State {
+        set_up_test(owner_secondary, publisher);
+
+        // f=1 requires 3*1+1 = 4 oracles, but only 3 provided
+        let config = generate_oracle_set_with_params(1, 1, 1, 3);
+        set_config(
+            owner_secondary,
+            config.don_id,
+            config.config_version,
+            config.f,
+            config.oracles
+        );
+    }
+
+    #[test(owner_secondary = @owner_secondary, publisher = @platform_secondary)]
+    #[expected_failure(abort_code = 65547, location = platform_secondary::forwarder)]
+    fun test_set_config_failure_insufficient_oracles_higher_f(
+        owner_secondary: &signer, publisher: &signer
+    ) acquires State {
+        set_up_test(owner_secondary, publisher);
+
+        // f=5 requires 3*5+1 = 16 oracles, but only 15 provided
+        let config = generate_oracle_set_with_params(1, 1, 5, 15);
+        set_config(
+            owner_secondary,
+            config.don_id,
+            config.config_version,
+            config.f,
+            config.oracles
+        );
+    }
+
+    #[test(owner_secondary = @owner_secondary, publisher = @platform_secondary)]
+    fun test_clear_config_success(
+        owner_secondary: &signer, publisher: &signer
+    ) acquires State {
+        set_up_test(owner_secondary, publisher);
+
+        let config = generate_oracle_set_with_params(1, 1, 1, 4);
+        set_config(
+            owner_secondary,
+            config.don_id,
+            config.config_version,
+            config.f,
+            config.oracles
+        );
+
+        // Verify config exists
+        let stored = get_config(1, 1);
+        assert!(stored.f == 1, 1);
+
+        // Clear config
+        clear_config(owner_secondary, 1, 1);
+    }
+
+    #[test(owner_secondary = @owner_secondary, publisher = @platform_secondary)]
+    #[expected_failure]
+    fun test_clear_config_get_after_clear(
+        owner_secondary: &signer, publisher: &signer
+    ) acquires State {
+        set_up_test(owner_secondary, publisher);
+
+        let config = generate_oracle_set_with_params(1, 1, 1, 4);
+        set_config(
+            owner_secondary,
+            config.don_id,
+            config.config_version,
+            config.f,
+            config.oracles
+        );
+
+        clear_config(owner_secondary, 1, 1);
+
+        // Should abort: config no longer exists
+        get_config(1, 1);
+    }
+
+    #[test(owner_secondary = @owner_secondary, publisher = @platform_secondary)]
+    fun test_clear_config_does_not_affect_other_configs(
+        owner_secondary: &signer, publisher: &signer
+    ) acquires State {
+        set_up_test(owner_secondary, publisher);
+
+        let config1 = generate_oracle_set_with_params(1, 1, 1, 4);
+        set_config(
+            owner_secondary,
+            config1.don_id,
+            config1.config_version,
+            config1.f,
+            config1.oracles
+        );
+
+        let config2 = generate_oracle_set_with_params(2, 1, 2, 7);
+        set_config(
+            owner_secondary,
+            config2.don_id,
+            config2.config_version,
+            config2.f,
+            config2.oracles
+        );
+
+        // Clear only DON 1
+        clear_config(owner_secondary, 1, 1);
+
+        // DON 2 should still exist
+        let stored = get_config(2, 1);
+        assert!(stored.f == 2, 1);
+    }
+
+    #[test(
+        owner_secondary = @owner_secondary,
+        publisher = @platform_secondary,
+        unknown_user = @0xbeef
+    )]
+    #[expected_failure(abort_code = 327687, location = platform_secondary::forwarder)]
+    fun test_clear_config_failure_not_owner(
+        owner_secondary: &signer, publisher: &signer, unknown_user: &signer
+    ) acquires State {
+        set_up_test(owner_secondary, publisher);
+
+        let config = generate_oracle_set_with_params(1, 1, 1, 4);
+        set_config(
+            owner_secondary,
+            config.don_id,
+            config.config_version,
+            config.f,
+            config.oracles
+        );
+
+        clear_config(unknown_user, 1, 1);
+    }
+
+    #[test(owner_secondary = @owner_secondary, publisher = @platform_secondary)]
+    #[expected_failure]
+    fun test_clear_config_failure_nonexistent(
+        owner_secondary: &signer, publisher: &signer
+    ) acquires State {
+        set_up_test(owner_secondary, publisher);
+
+        // Clear config that was never set
+        clear_config(owner_secondary, 99, 99);
     }
 }
