@@ -24,3 +24,7 @@ move-test: ## Run the Move tests.
 .PHONY: move-clean
 move-clean: ## Cleans all Move build artifacts
 	contracts/scripts/clean.sh
+
+.PHONY: gomodtidy
+gomodtidy: ## Run go mod tidy on all modules.
+	go run github.com/jmank88/gomods@v0.1.7 tidy
