@@ -40,6 +40,7 @@ package aptos
 //go:generate go run ./cmd/bindgen --input ./contracts/mcms/mcms/sources/mcms_registry.move --output ./bindings/mcms/mcms_registry
 
 //go:generate go run ./cmd/bindgen --input ./contracts/mcms/curse_mcms/sources/curse_mcms.move --output ./bindings/curse_mcms/curse_mcms
+//go:generate go run ./cmd/bindgen --input ./contracts/mcms/curse_mcms/sources/curse_mcms_account.move --output ./bindings/curse_mcms/curse_mcms_account
 
 //go:generate go run ./cmd/bindgen --input ./contracts/mcms/mcms_test/sources/mcms_user.move --output ./bindings/mcms_test/mcms_user
 
