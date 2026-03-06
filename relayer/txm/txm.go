@@ -237,25 +237,6 @@ func (a *AptosTxm) GetStatus(transactionID string) (commontypes.TransactionStatu
 	return tx.Status, nil
 }
 
-func (a *AptosTxm) GetFailureReason(transactionID string) (string, error) {
-	if transactionID == "" {
-		return "", errors.New("nil tx id")
-	}
-
-	a.transactionsLock.RLock()
-	defer a.transactionsLock.RUnlock()
-	tx, ok := a.transactions[transactionID]
-	if !ok {
-		return "", errors.New("no such tx")
-	}
-
-	if tx.Status != commontypes.Failed && tx.Status != commontypes.Fatal {
-		return "", fmt.Errorf("transaction not failed, current status: %v", tx.Status)
-	}
-
-	return tx.FailureReason, nil
-}
-
 func (a *AptosTxm) GetTransactionFee(ctx context.Context, transactionID string) (*big.Int, error) {
 	if transactionID == "" {
 		return nil, errors.New("nil tx id")
@@ -467,15 +448,6 @@ func (a *AptosTxm) updateTransactionStatus(tx *AptosTx, status commontypes.Trans
 	defer a.transactionsLock.Unlock()
 
 	tx.Status = status
-	tx.FailureReason = ""
-}
-
-func (a *AptosTxm) updateTransactionStatusFailure(tx *AptosTx, status commontypes.TransactionStatus, failureReason string) {
-	a.transactionsLock.Lock()
-	defer a.transactionsLock.Unlock()
-
-	tx.Status = status
-	tx.FailureReason = failureReason
 }
 
 func (a *AptosTxm) updateTransactionFee(tx *AptosTx, fee *big.Int) {
@@ -509,13 +481,13 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		sequenceNumber, err := a.getSequenceNumber(client, tx.FromAddress)
 		if err != nil {
 			ctxLogger.Errorw("failed to get sequence number", "fromAddress", tx.FromAddress.String(), "error", err)
-			a.updateTransactionStatusFailure(tx, commontypes.Failed, err.Error())
+			a.updateTransactionStatus(tx, commontypes.Failed)
 			return
 		}
 		newTxStore, err := a.accountStore.CreateTxStore(tx.FromAddress.String(), sequenceNumber)
 		if err != nil {
 			ctxLogger.Errorw("failed to create tx store", "fromAddress", tx.FromAddress.String(), "error", err)
-			a.updateTransactionStatusFailure(tx, commontypes.Failed, err.Error())
+			a.updateTransactionStatus(tx, commontypes.Failed)
 			return
 		}
 		txStore = newTxStore
@@ -535,29 +507,29 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 
 		rawTx, err := a.createRawTx(client, tx, nonce)
 		if err != nil {
-			var expectedErr *expectedSimulationFailureError
-			if errors.As(err, &expectedErr) {
-				a.updateTransactionStatusFailure(tx, commontypes.Failed, expectedErr.reason)
+			a.updateTransactionStatus(tx, commontypes.Failed)
+
+			// If this is an expected simulation failure while creating, return early
+			if errors.As(err, new(*expectedSimulationFailureError)) {
 				return
 			}
+
 			ctxLogger.Errorw("failed to create raw tx", "error", err)
-			a.updateTransactionStatusFailure(tx, commontypes.Failed, err.Error())
 			return
 		}
 
 		signedTx, err := a.createSignedTx(client, rawTx, tx.PublicKey, tx.FromAddress)
 		if err != nil {
 			ctxLogger.Errorw("failed to create signed tx", "error", err)
-			a.updateTransactionStatusFailure(tx, commontypes.Failed, err.Error())
+			a.updateTransactionStatus(tx, commontypes.Failed)
 			return
 		}
 
 		submitResponse, err := client.SubmitTransaction(signedTx)
 		if err == nil {
 			if submitResponse == nil || submitResponse.Hash == "" {
-				errMsg := "did not receive hash after successful tx submission"
-				ctxLogger.Errorw(errMsg)
-				a.updateTransactionStatusFailure(tx, commontypes.Failed, errMsg)
+				ctxLogger.Errorw("did not receive hash after successful tx submission")
+				a.updateTransactionStatus(tx, commontypes.Failed)
 				return
 			}
 
@@ -569,7 +541,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			if err != nil {
 				// TODO: figure out what to do here, this should never occur.
 				ctxLogger.Errorw("failed to add unconfirmed tx", "txHash", submitResponse.Hash, "error", err)
-				a.updateTransactionStatusFailure(tx, commontypes.Failed, err.Error())
+				a.updateTransactionStatus(tx, commontypes.Failed)
 				return
 			}
 
@@ -583,7 +555,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			if !errors.As(err, &httpError) {
 				// Do not retry on unknown errors
 				ctxLogger.Errorw("failed to submit signed tx, discarding..", "error", err)
-				a.updateTransactionStatusFailure(tx, commontypes.Failed, err.Error())
+				a.updateTransactionStatus(tx, commontypes.Failed)
 				return
 			}
 
@@ -598,9 +570,8 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		}
 	}
 
-	errMsg := "reached max retries for submitting the tx"
-	ctxLogger.Errorw(errMsg)
-	a.updateTransactionStatusFailure(tx, commontypes.Failed, errMsg)
+	ctxLogger.Errorw("reached max retries for submitting the tx")
+	a.updateTransactionStatus(tx, commontypes.Failed)
 }
 
 func matchExpectedSimulationFailure(err error, expectedSimulationFailures []ExpectedSimulationFailureRule) bool {
@@ -694,7 +665,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 								// Example transaction: https://api.testnet.aptoslabs.com/v1/transactions/by_hash/0x7a106db811c8d5dfd71ac98f374ca36e4f630ce5412b99c8f0e871e7feda37ea
 								a.incrementTransactionAttempt(unconfirmedTx.Tx)
 								if !a.maybeRetry(unconfirmedTx, RetryReasonOutOfGas) {
-									a.updateTransactionStatusFailure(unconfirmedTx.Tx, commontypes.Failed, userTx.VmStatus)
+									a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Failed)
 								}
 								continue
 							}
@@ -726,13 +697,13 @@ func (a *AptosTxm) checkUnconfirmed() {
 				err = txStore.Confirm(unconfirmedTx.Nonce, hash, true)
 				if err != nil {
 					ctxLogger.Errorw("couldn't confirm expired tx", "error", err)
-					a.updateTransactionStatusFailure(unconfirmedTx.Tx, commontypes.Failed, err.Error())
+					a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Failed)
 					continue
 				}
 
 				a.incrementTransactionAttempt(unconfirmedTx.Tx)
 				if !a.maybeRetry(unconfirmedTx, RetryReasonExpired) {
-					a.updateTransactionStatusFailure(unconfirmedTx.Tx, commontypes.Failed, "transaction expired and reached max retries")
+					a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Failed)
 				}
 			}
 		}
@@ -768,11 +739,11 @@ func (a *AptosTxm) maybeRetry(unconfirmedTx *UnconfirmedTx, retryReason RetryRea
 	ctxLogger.Debugw("retrying tx", "attempt", currentAttempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
 	select {
 	case a.broadcastChan <- unconfirmedTx.Tx.ID:
+		return true
 	default:
 		ctxLogger.Errorw("failed to enqueue tx for rebroadcast", "attempt", currentAttempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
+		return false
 	}
-
-	return true
 }
 
 func (a *AptosTxm) InflightCount() (int, int) {

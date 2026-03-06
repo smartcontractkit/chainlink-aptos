@@ -34,7 +34,6 @@ type AptosTx struct {
 	BcsValues                      [][]byte
 	Attempt                        uint64
 	Status                         commontypes.TransactionStatus
-	FailureReason                  string
 	Simulate                       bool
 	ExpectedSimulationFailureRules []ExpectedSimulationFailureRule
 	Fee                            *big.Int // Transaction fee in octas (1e-8 APT)
