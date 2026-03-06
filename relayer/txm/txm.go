@@ -92,7 +92,7 @@ func (a *AptosTxm) Close() error {
 	})
 }
 
-func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta, fromAddress, publicKey, function string, typeArgs []string, paramTypes []string, paramValues []any, simulateTx bool) error {
+func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta, fromAddress, publicKey, function string, typeArgs []string, paramTypes []string, paramValues []any, simulateTx bool, expectedSimulationFailures ...ExpectedSimulationFailureRule) error {
 	if transactionID == "" {
 		transactionID = uuid.New().String()
 	} else {
@@ -172,18 +172,19 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 
 	currentTimestamp := getTimestampSecs()
 	tx := &AptosTx{
-		ID:              transactionID,
-		Metadata:        txMetadata,
-		Timestamp:       currentTimestamp,
-		FromAddress:     *fromAccountAddress,
-		PublicKey:       ed25519PublicKey,
-		ContractAddress: *contractAccountAddress,
-		ModuleName:      moduleName,
-		FunctionName:    functionName,
-		TypeTags:        typeTags,
-		BcsValues:       bcsValues,
-		Status:          commontypes.Pending,
-		Simulate:        simulateTx,
+		ID:                             transactionID,
+		Metadata:                       txMetadata,
+		Timestamp:                      currentTimestamp,
+		FromAddress:                    *fromAccountAddress,
+		PublicKey:                      ed25519PublicKey,
+		ContractAddress:                *contractAccountAddress,
+		ModuleName:                     moduleName,
+		FunctionName:                   functionName,
+		TypeTags:                       typeTags,
+		BcsValues:                      bcsValues,
+		Status:                         commontypes.Pending,
+		Simulate:                       simulateTx,
+		ExpectedSimulationFailureRules: append([]ExpectedSimulationFailureRule(nil), expectedSimulationFailures...),
 	}
 
 	a.transactionsLock.Lock()
@@ -234,6 +235,25 @@ func (a *AptosTxm) GetStatus(transactionID string) (commontypes.TransactionStatu
 	}
 
 	return tx.Status, nil
+}
+
+func (a *AptosTxm) GetFailureReason(transactionID string) (string, error) {
+	if transactionID == "" {
+		return "", errors.New("nil tx id")
+	}
+
+	a.transactionsLock.RLock()
+	defer a.transactionsLock.RUnlock()
+	tx, ok := a.transactions[transactionID]
+	if !ok {
+		return "", errors.New("no such tx")
+	}
+
+	if tx.Status != commontypes.Failed && tx.Status != commontypes.Fatal {
+		return "", fmt.Errorf("transaction not failed, current status: %v", tx.Status)
+	}
+
+	return tx.FailureReason, nil
 }
 
 func (a *AptosTxm) GetTransactionFee(ctx context.Context, transactionID string) (*big.Int, error) {
@@ -367,6 +387,9 @@ func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, nonce u
 
 			rawTx.GasUnitPrice = simulatedTx.GasUnitPrice
 		} else {
+			if matchExpectedSimulationFailure(err, tx.ExpectedSimulationFailureRules) {
+				return nil, &expectedSimulationFailureError{reason: err.Error()}
+			}
 			// do not error on failed estimate gas as it could fail due to conflicting in-flight txs
 			ctxLogger.Errorw("failed to simulate tx", "error", err)
 		}
@@ -442,7 +465,17 @@ func (a *AptosTxm) createSignedTx(client aptos.AptosRpcClient, rawTx *aptos.RawT
 func (a *AptosTxm) updateTransactionStatus(tx *AptosTx, status commontypes.TransactionStatus) {
 	a.transactionsLock.Lock()
 	defer a.transactionsLock.Unlock()
+
 	tx.Status = status
+	tx.FailureReason = ""
+}
+
+func (a *AptosTxm) updateTransactionStatusFailure(tx *AptosTx, status commontypes.TransactionStatus, failureReason string) {
+	a.transactionsLock.Lock()
+	defer a.transactionsLock.Unlock()
+
+	tx.Status = status
+	tx.FailureReason = failureReason
 }
 
 func (a *AptosTxm) updateTransactionFee(tx *AptosTx, fee *big.Int) {
@@ -476,13 +509,13 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		sequenceNumber, err := a.getSequenceNumber(client, tx.FromAddress)
 		if err != nil {
 			ctxLogger.Errorw("failed to get sequence number", "fromAddress", tx.FromAddress.String(), "error", err)
-			a.updateTransactionStatus(tx, commontypes.Failed)
+			a.updateTransactionStatusFailure(tx, commontypes.Failed, err.Error())
 			return
 		}
 		newTxStore, err := a.accountStore.CreateTxStore(tx.FromAddress.String(), sequenceNumber)
 		if err != nil {
 			ctxLogger.Errorw("failed to create tx store", "fromAddress", tx.FromAddress.String(), "error", err)
-			a.updateTransactionStatus(tx, commontypes.Failed)
+			a.updateTransactionStatusFailure(tx, commontypes.Failed, err.Error())
 			return
 		}
 		txStore = newTxStore
@@ -502,23 +535,29 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 
 		rawTx, err := a.createRawTx(client, tx, nonce)
 		if err != nil {
+			var expectedErr *expectedSimulationFailureError
+			if errors.As(err, &expectedErr) {
+				a.updateTransactionStatusFailure(tx, commontypes.Failed, expectedErr.reason)
+				return
+			}
 			ctxLogger.Errorw("failed to create raw tx", "error", err)
-			a.updateTransactionStatus(tx, commontypes.Failed)
+			a.updateTransactionStatusFailure(tx, commontypes.Failed, err.Error())
 			return
 		}
 
 		signedTx, err := a.createSignedTx(client, rawTx, tx.PublicKey, tx.FromAddress)
 		if err != nil {
 			ctxLogger.Errorw("failed to create signed tx", "error", err)
-			a.updateTransactionStatus(tx, commontypes.Failed)
+			a.updateTransactionStatusFailure(tx, commontypes.Failed, err.Error())
 			return
 		}
 
 		submitResponse, err := client.SubmitTransaction(signedTx)
 		if err == nil {
 			if submitResponse == nil || submitResponse.Hash == "" {
-				ctxLogger.Errorw("did not receive hash after successful tx submission")
-				a.updateTransactionStatus(tx, commontypes.Failed)
+				errMsg := "did not receive hash after successful tx submission"
+				ctxLogger.Errorw(errMsg)
+				a.updateTransactionStatusFailure(tx, commontypes.Failed, errMsg)
 				return
 			}
 
@@ -530,7 +569,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			if err != nil {
 				// TODO: figure out what to do here, this should never occur.
 				ctxLogger.Errorw("failed to add unconfirmed tx", "txHash", submitResponse.Hash, "error", err)
-				a.updateTransactionStatus(tx, commontypes.Failed)
+				a.updateTransactionStatusFailure(tx, commontypes.Failed, err.Error())
 				return
 			}
 
@@ -544,7 +583,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			if !errors.As(err, &httpError) {
 				// Do not retry on unknown errors
 				ctxLogger.Errorw("failed to submit signed tx, discarding..", "error", err)
-				a.updateTransactionStatus(tx, commontypes.Failed)
+				a.updateTransactionStatusFailure(tx, commontypes.Failed, err.Error())
 				return
 			}
 
@@ -559,8 +598,24 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		}
 	}
 
-	ctxLogger.Errorw("reached max retries for submitting the tx")
-	a.updateTransactionStatus(tx, commontypes.Failed)
+	errMsg := "reached max retries for submitting the tx"
+	ctxLogger.Errorw(errMsg)
+	a.updateTransactionStatusFailure(tx, commontypes.Failed, errMsg)
+}
+
+func matchExpectedSimulationFailure(err error, expectedSimulationFailures []ExpectedSimulationFailureRule) bool {
+	if err == nil {
+		return false
+	}
+
+	errMsg := err.Error()
+	for _, expectedSimulationFailure := range expectedSimulationFailures {
+		if strings.Contains(errMsg, expectedSimulationFailure.ErrorContains) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (a *AptosTxm) confirmLoop() {
@@ -639,7 +694,7 @@ func (a *AptosTxm) checkUnconfirmed() {
 								// Example transaction: https://api.testnet.aptoslabs.com/v1/transactions/by_hash/0x7a106db811c8d5dfd71ac98f374ca36e4f630ce5412b99c8f0e871e7feda37ea
 								a.incrementTransactionAttempt(unconfirmedTx.Tx)
 								if !a.maybeRetry(unconfirmedTx, RetryReasonOutOfGas) {
-									a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Failed)
+									a.updateTransactionStatusFailure(unconfirmedTx.Tx, commontypes.Failed, userTx.VmStatus)
 								}
 								continue
 							}
@@ -671,13 +726,13 @@ func (a *AptosTxm) checkUnconfirmed() {
 				err = txStore.Confirm(unconfirmedTx.Nonce, hash, true)
 				if err != nil {
 					ctxLogger.Errorw("couldn't confirm expired tx", "error", err)
-					a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Failed)
+					a.updateTransactionStatusFailure(unconfirmedTx.Tx, commontypes.Failed, err.Error())
 					continue
 				}
 
 				a.incrementTransactionAttempt(unconfirmedTx.Tx)
 				if !a.maybeRetry(unconfirmedTx, RetryReasonExpired) {
-					a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Failed)
+					a.updateTransactionStatusFailure(unconfirmedTx.Tx, commontypes.Failed, "transaction expired and reached max retries")
 				}
 			}
 		}
