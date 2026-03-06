@@ -8,7 +8,7 @@ import (
 	"math/big"
 	"time"
 
-	aptosgosdk "github.com/aptos-labs/aptos-go-sdk"
+	aptos_sdk "github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/bcs"
 	"github.com/google/uuid"
 
@@ -31,7 +31,7 @@ func (s *aptosService) AccountAPTBalance(ctx context.Context, req commonaptos.Ac
 	if err != nil {
 		return nil, fmt.Errorf("failed to get client: %w", err)
 	}
-	sdkAddr := aptosgosdk.AccountAddress(req.Address[:])
+	sdkAddr := aptos_sdk.AccountAddress(req.Address[:])
 	reply, err := client.AccountAPTBalance(sdkAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get account APT balance: %w", err)
@@ -40,18 +40,30 @@ func (s *aptosService) AccountAPTBalance(ctx context.Context, req commonaptos.Ac
 }
 
 func (s *aptosService) View(ctx context.Context, req commonaptos.ViewRequest) (*commonaptos.ViewReply, error) {
+	s.logger.Infow("TestingAptosWriteCap: View called",
+		"hasPayload", req.Payload != nil,
+	)
 	if req.Payload == nil {
+		s.logger.Errorw("TestingAptosWriteCap: View - payload is nil")
 		return nil, fmt.Errorf("view payload is required")
 	}
+	s.logger.Infow("TestingAptosWriteCap: View - request details",
+		"moduleAddress", fmt.Sprintf("%x", req.Payload.Module.Address),
+		"moduleName", req.Payload.Module.Name,
+		"function", req.Payload.Function,
+		"numArgTypes", len(req.Payload.ArgTypes),
+		"numArgs", len(req.Payload.Args),
+	)
 
 	client, err := s.chain.GetClient()
 	if err != nil {
+		s.logger.Errorw("TestingAptosWriteCap: View - failed to get client", "error", err)
 		return nil, fmt.Errorf("failed to get client: %w", err)
 	}
 
-	sdkPayload := &aptosgosdk.ViewPayload{
-		Module: aptosgosdk.ModuleId{
-			Address: aptosgosdk.AccountAddress(req.Payload.Module.Address),
+	sdkPayload := &aptos_sdk.ViewPayload{
+		Module: aptos_sdk.ModuleId{
+			Address: aptos_sdk.AccountAddress(req.Payload.Module.Address),
 			Name:    req.Payload.Module.Name,
 		},
 		Function: req.Payload.Function,
@@ -61,14 +73,17 @@ func (s *aptosService) View(ctx context.Context, req commonaptos.ViewRequest) (*
 
 	result, err := client.View(sdkPayload)
 	if err != nil {
+		s.logger.Errorw("TestingAptosWriteCap: View - view function call failed", "error", err)
 		return nil, fmt.Errorf("failed to call view function: %w", err)
 	}
 
 	data, err := json.Marshal(result)
 	if err != nil {
+		s.logger.Errorw("TestingAptosWriteCap: View - failed to marshal view result", "error", err)
 		return nil, fmt.Errorf("failed to marshal view result: %w", err)
 	}
 
+	s.logger.Infow("TestingAptosWriteCap: View - success", "responseLen", len(data))
 	return &commonaptos.ViewReply{Data: data}, nil
 }
 
@@ -100,34 +115,49 @@ func (s *aptosService) TransactionByHash(ctx context.Context, req commonaptos.Tr
 }
 
 func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.SubmitTransactionRequest) (*commonaptos.SubmitTransactionReply, error) {
+	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction called",
+		"encodedPayloadLen", len(req.EncodedPayload),
+		"hasGasConfig", req.GasConfig != nil,
+		"moduleAddress", fmt.Sprintf("%x", req.ReceiverModuleID.Address),
+		"moduleName", req.ReceiverModuleID.Name,
+	)
+
 	// Deserialize the BCS-encoded TransactionPayload (containing an EntryFunction)
-	var txPayload aptosgosdk.TransactionPayload
+	var txPayload aptos_sdk.TransactionPayload
 	if err := bcs.Deserialize(&txPayload, req.EncodedPayload); err != nil {
+		s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - failed to deserialize payload", "error", err)
 		return nil, fmt.Errorf("failed to deserialize transaction payload: %w", err)
 	}
 
-	entryFn, ok := txPayload.Payload.(*aptosgosdk.EntryFunction)
+	entryFn, ok := txPayload.Payload.(*aptos_sdk.EntryFunction)
 	if !ok {
+		s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - unexpected payload type", "type", fmt.Sprintf("%T", txPayload.Payload))
 		return nil, fmt.Errorf("expected EntryFunction payload, got %T", txPayload.Payload)
 	}
+	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - deserialized entry function",
+		"module", entryFn.Module.Address.String()+"::" +entryFn.Module.Name,
+		"function", entryFn.Function,
+	)
 
 	gasLimit := big.NewInt(int64(req.GasConfig.MaxGasAmount))
 	accounts, err := s.chain.KeyStore().Accounts(ctx)
 	if err != nil {
+		s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - failed to get accounts", "error", err)
 		return nil, fmt.Errorf("failed to get accounts: %w", err)
 	}
-
-	if len(accounts) == 0 {
-		return nil, errors.New("no enabled accounts available")
-	}
+	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - accounts retrieved", "numAccounts", len(accounts))
 
 	// Find account with highest balance
 	publicKey, err := s.getAccountWithHighestBalance(ctx, accounts)
 	if err != nil {
+		s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - failed to get account with highest balance", "error", err)
 		return nil, fmt.Errorf("failed to determine account for SubmitTransaction: %w", err)
 	}
+	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - selected account", "publicKey", publicKey, "gasLimit", gasLimit.String())
+
 	txID := uuid.New().String()
-	err = s.chain.TxManager().EnqueueCRE(
+	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - enqueueing to TxManager", "txID", txID)
+	enqueueErr := s.chain.TxManager().EnqueueCRE(
 		txID,
 		&commontypes.TxMeta{
 			GasLimit: gasLimit,
@@ -136,19 +166,25 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 		entryFn,
 		true, // simulateTx
 	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to enqueue transaction: %w", err)
+	if enqueueErr != nil {
+		s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - EnqueueCRE failed", "txID", txID, "error", enqueueErr)
+		return nil, fmt.Errorf("failed to enqueue transaction: %w", enqueueErr)
 	}
+	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - enqueued successfully", "txID", txID)
+
 	// TODO: dont use txmgr config, create and use workflow/cre config
 	maximumWaitTime := time.Duration(s.chain.Config().TransactionManager.TxExpirationSecs) * time.Second
+	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - polling for status", "txID", txID, "maximumWaitTime", maximumWaitTime)
 
 	retryCtx, cancel := context.WithTimeout(ctx, maximumWaitTime)
 	defer cancel()
 	txStatus, err := retry.Do(retryCtx, s.logger, func(ctx context.Context) (commonaptos.TransactionStatus, error) {
 		txStatus, txStatusErr := s.chain.TxManager().GetStatus(txID)
 		if txStatusErr != nil {
+			s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - GetStatus error", "txID", txID, "error", txStatusErr)
 			return commonaptos.TxFatal, txStatusErr
 		}
+		s.logger.Debugw("TestingAptosWriteCap: SubmitTransaction - GetStatus poll", "txID", txID, "status", txStatus)
 		switch txStatus {
 		case commontypes.Fatal, commontypes.Failed:
 			return commonaptos.TxFatal, nil
@@ -162,48 +198,24 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 	})
 
 	if err != nil {
+		s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - failed getting transaction status", "txID", txID, "error", err)
 		return nil, fmt.Errorf("failed getting transaction status: %w", err)
 	}
 
-	if txStatus == commonaptos.TxFatal {
-		return &commonaptos.SubmitTransactionReply{
-			TxStatus:         commonaptos.TxFatal,
-			TxIdempotencyKey: txID,
-		}, nil
-	} else {
-		return &commonaptos.SubmitTransactionReply{
-			TxStatus:         commonaptos.TxSuccess,
-			TxIdempotencyKey: txID,
-		}, nil
+	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - final status", "txID", txID, "txStatus", txStatus)
+
+	txResult, resultErr := s.chain.TxManager().GetTransactionResult(txID)
+	if resultErr != nil {
+		s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - failed to get transaction result", "txID", txID, "error", resultErr)
+		return nil, fmt.Errorf("failed getting transaction result: %w", resultErr)
 	}
-	// TODO:
-	// get tx hash
-	// make write report get tx by hash and check for success or revert reason
-	// but then we also need to poll for transmission info because some other node might have done a success
-	// so we need to go through all possible cases and then figure out how to handle retries
 
-	/*
-			receipt, err := retry.Do(retryContext, e.logger, func(ctx context.Context) (*evmtxmgr.ChainReceipt, error) {
-			receipt, receiptErr := e.chain.TxManager().GetTransactionReceipt(ctx, txID)
-			if receiptErr != nil {
-				return nil, fmt.Errorf("failed to get TX receipt for tx with ID %s: %w", txID, receiptErr)
-			}
-			if receipt == nil {
-				return nil, fmt.Errorf("receipt was nil for TX with ID %s", txID)
-			}
-			return receipt, nil
-		})
-
-		if err != nil {
-			return nil, fmt.Errorf("failed getting transaction receipt. %w", err)
-		}
-
-		return &evm.TransactionResult{
-			TxStatus:         evm.TxSuccess,
-			TxHash:           (*receipt).GetTxHash(),
-			TxIdempotencyKey: txID,
-		}, nil
-	*/
+	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - returning result", "txID", txID, "txStatus", txStatus, "txHash", txResult.TxHash, "vmStatus", txResult.VmStatus)
+	return &commonaptos.SubmitTransactionReply{
+		TxStatus:         txStatus,
+		TxHash:           txResult.TxHash,
+		TxIdempotencyKey: txID,
+	}, nil
 }
 
 // getAccountWithHighestBalance returns the public key of the account with the highest APT balance.
@@ -259,51 +271,51 @@ func (s *aptosService) getAccountWithHighestBalance(ctx context.Context, account
 }
 
 // convertTypeTagsToSDK converts common TypeTags to SDK TypeTags.
-func convertTypeTagsToSDK(tags []commonaptos.TypeTag) []aptosgosdk.TypeTag {
-	out := make([]aptosgosdk.TypeTag, len(tags))
+func convertTypeTagsToSDK(tags []commonaptos.TypeTag) []aptos_sdk.TypeTag {
+	out := make([]aptos_sdk.TypeTag, len(tags))
 	for i, tag := range tags {
-		out[i] = aptosgosdk.TypeTag{Value: convertTypeTagImplToSDK(tag.Value)}
+		out[i] = aptos_sdk.TypeTag{Value: convertTypeTagImplToSDK(tag.Value)}
 	}
 	return out
 }
 
-func convertTypeTagImplToSDK(impl commonaptos.TypeTagImpl) aptosgosdk.TypeTagImpl {
+func convertTypeTagImplToSDK(impl commonaptos.TypeTagImpl) aptos_sdk.TypeTagImpl {
 	switch v := impl.(type) {
 	case commonaptos.BoolTag:
-		return &aptosgosdk.BoolTag{}
+		return &aptos_sdk.BoolTag{}
 	case commonaptos.U8Tag:
-		return &aptosgosdk.U8Tag{}
+		return &aptos_sdk.U8Tag{}
 	case commonaptos.U16Tag:
-		return &aptosgosdk.U16Tag{}
+		return &aptos_sdk.U16Tag{}
 	case commonaptos.U32Tag:
-		return &aptosgosdk.U32Tag{}
+		return &aptos_sdk.U32Tag{}
 	case commonaptos.U64Tag:
-		return &aptosgosdk.U64Tag{}
+		return &aptos_sdk.U64Tag{}
 	case commonaptos.U128Tag:
-		return &aptosgosdk.U128Tag{}
+		return &aptos_sdk.U128Tag{}
 	case commonaptos.U256Tag:
-		return &aptosgosdk.U256Tag{}
+		return &aptos_sdk.U256Tag{}
 	case commonaptos.AddressTag:
-		return &aptosgosdk.AddressTag{}
+		return &aptos_sdk.AddressTag{}
 	case commonaptos.SignerTag:
-		return &aptosgosdk.SignerTag{}
+		return &aptos_sdk.SignerTag{}
 	case commonaptos.VectorTag:
-		return &aptosgosdk.VectorTag{
-			TypeParam: aptosgosdk.TypeTag{Value: convertTypeTagImplToSDK(v.ElementType.Value)},
+		return &aptos_sdk.VectorTag{
+			TypeParam: aptos_sdk.TypeTag{Value: convertTypeTagImplToSDK(v.ElementType.Value)},
 		}
 	case commonaptos.StructTag:
-		typeParams := make([]aptosgosdk.TypeTag, len(v.TypeParams))
+		typeParams := make([]aptos_sdk.TypeTag, len(v.TypeParams))
 		for i, tp := range v.TypeParams {
-			typeParams[i] = aptosgosdk.TypeTag{Value: convertTypeTagImplToSDK(tp.Value)}
+			typeParams[i] = aptos_sdk.TypeTag{Value: convertTypeTagImplToSDK(tp.Value)}
 		}
-		return &aptosgosdk.StructTag{
-			Address:    aptosgosdk.AccountAddress(v.Address),
+		return &aptos_sdk.StructTag{
+			Address:    aptos_sdk.AccountAddress(v.Address),
 			Module:     v.Module,
 			Name:       v.Name,
 			TypeParams: typeParams,
 		}
 	case commonaptos.GenericTag:
-		return &aptosgosdk.GenericTag{Num: uint64(v.Index)}
+		return &aptos_sdk.GenericTag{Num: uint64(v.Index)}
 	default:
 		return nil
 	}

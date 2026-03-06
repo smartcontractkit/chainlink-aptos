@@ -235,17 +235,35 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 // The EntryFunction already contains the module, function name, type tags, and
 // pre-encoded BCS args.
 func (a *AptosTxm) EnqueueCRE(transactionID string, txMetadata *commontypes.TxMeta, publicKey string, entryFunction *aptos.EntryFunction, simulateTx bool) error {
+	a.baseLogger.Infow("TestingAptosWriteCap: EnqueueCRE called",
+		"transactionID", transactionID,
+		"publicKey", publicKey,
+		"hasEntryFunction", entryFunction != nil,
+		"simulateTx", simulateTx,
+		"hasMetadata", txMetadata != nil,
+	)
+
 	if entryFunction == nil {
+		a.baseLogger.Errorw("TestingAptosWriteCap: EnqueueCRE - entry function is nil")
 		return errors.New("entry function is required")
 	}
 
+	a.baseLogger.Infow("TestingAptosWriteCap: EnqueueCRE - entry function details",
+		"module", entryFunction.Module.Address.String()+"::"+entryFunction.Module.Name,
+		"function", entryFunction.Function,
+		"numArgTypes", len(entryFunction.ArgTypes),
+		"numArgs", len(entryFunction.Args),
+	)
+
 	if transactionID == "" {
 		transactionID = uuid.New().String()
+		a.baseLogger.Infow("TestingAptosWriteCap: EnqueueCRE - generated txID", "transactionID", transactionID)
 	} else {
 		a.transactionsLock.Lock()
 		_, transactionExists := a.transactions[transactionID]
 		a.transactionsLock.Unlock()
 		if transactionExists {
+			a.baseLogger.Errorw("TestingAptosWriteCap: EnqueueCRE - transaction already exists", "transactionID", transactionID)
 			return errors.New("transaction already exists")
 		}
 	}
@@ -254,15 +272,18 @@ func (a *AptosTxm) EnqueueCRE(transactionID string, txMetadata *commontypes.TxMe
 
 	ed25519PublicKey, err := utils.HexPublicKeyToEd25519PublicKey(publicKey)
 	if err != nil {
+		a.baseLogger.Errorw("TestingAptosWriteCap: EnqueueCRE - failed to convert public key", "publicKey", publicKey, "error", err)
 		return fmt.Errorf("failed to convert public key: %+w", err)
 	}
 
 	acc := utils.Ed25519PublicKeyToAddress(ed25519PublicKey)
 	fromAddress := acc.String()
+	a.baseLogger.Infow("TestingAptosWriteCap: EnqueueCRE - resolved from address", "fromAddress", fromAddress)
 
 	fromAccountAddress := &aptos.AccountAddress{}
 	err = fromAccountAddress.ParseStringRelaxed(fromAddress)
 	if err != nil {
+		a.baseLogger.Errorw("TestingAptosWriteCap: EnqueueCRE - failed to parse from address", "fromAddress", fromAddress, "error", err)
 		return fmt.Errorf("failed to parse from address: %+w", err)
 	}
 
@@ -301,7 +322,7 @@ func (a *AptosTxm) EnqueueCRE(transactionID string, txMetadata *commontypes.TxMe
 
 	select {
 	case a.broadcastChan <- transactionID:
-		ctxLogger.Debugw("Tx enqueued", "fromAddr", fromAddress)
+		ctxLogger.Infow("TestingAptosWriteCap: EnqueueCRE - tx enqueued to broadcast channel", "fromAddr", fromAddress, "transactionID", transactionID)
 	default:
 		// if the channel is full, we drop the transaction.
 		// we do this instead of setting the tx in `a.transactions` post-broadcast to avoid a race
@@ -311,6 +332,7 @@ func (a *AptosTxm) EnqueueCRE(transactionID string, txMetadata *commontypes.TxMe
 		delete(a.transactions, transactionID)
 		a.transactionsLock.Unlock()
 
+		a.baseLogger.Errorw("TestingAptosWriteCap: EnqueueCRE - broadcast channel full, tx dropped", "transactionID", transactionID)
 		return fmt.Errorf("failed to enqueue tx: %+v", tx)
 	}
 
@@ -330,6 +352,33 @@ func (a *AptosTxm) GetStatus(transactionID string) (commontypes.TransactionStatu
 	}
 
 	return tx.Status, nil
+}
+
+type TransactionResult struct {
+	Status   commontypes.TransactionStatus
+	TxHash   string
+	VmStatus string
+}
+
+// NOTE: The txm never sets commontypes.Fatal — only Failed is used for error terminal states.
+// Callers checking for Fatal (like aptos_service.go) will never see it from this txm.
+func (a *AptosTxm) GetTransactionResult(transactionID string) (*TransactionResult, error) {
+	if transactionID == "" {
+		return nil, errors.New("nil tx id")
+	}
+
+	a.transactionsLock.RLock()
+	defer a.transactionsLock.RUnlock()
+	tx, ok := a.transactions[transactionID]
+	if !ok {
+		return nil, errors.New("no such tx")
+	}
+
+	return &TransactionResult{
+		Status:   tx.Status,
+		TxHash:   tx.TxHash,
+		VmStatus: tx.VmStatus,
+	}, nil
 }
 
 func (a *AptosTxm) GetTransactionFee(ctx context.Context, transactionID string) (*big.Int, error) {
@@ -547,6 +596,18 @@ func (a *AptosTxm) updateTransactionFee(tx *AptosTx, fee *big.Int) {
 	tx.Fee = fee
 }
 
+func (a *AptosTxm) updateTransactionHash(tx *AptosTx, hash string) {
+	a.transactionsLock.Lock()
+	defer a.transactionsLock.Unlock()
+	tx.TxHash = hash
+}
+
+func (a *AptosTxm) updateTransactionVmStatus(tx *AptosTx, vmStatus string) {
+	a.transactionsLock.Lock()
+	defer a.transactionsLock.Unlock()
+	tx.VmStatus = vmStatus
+}
+
 func (a *AptosTxm) incrementTransactionAttempt(tx *AptosTx) {
 	a.transactionsLock.Lock()
 	defer a.transactionsLock.Unlock()
@@ -627,6 +688,8 @@ func (a *AptosTxm) signAndBroadcast(ctx context.Context, tx *AptosTx) {
 			currentAttempt := a.getTransactionAttempt(tx)
 			ctxLogger.Debugw("submit tx successful", "attempt", currentAttempt, "submitResponse", submitResponse)
 
+			a.updateTransactionHash(tx, submitResponse.Hash)
+
 			err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, rawTx.ExpirationTimestampSeconds, tx)
 			if err != nil {
 				// TODO: figure out what to do here, this should never occur.
@@ -702,6 +765,10 @@ func (a *AptosTxm) confirmLoop() {
 	}
 }
 
+// checkUnconfirmed polls committed/pending txs and moves them to terminal states.
+// Possible terminal states from this method:
+//   - Finalized: tx committed on-chain (successful OR reverted with non-OOG VmStatus — see TODO below)
+//   - Failed: OOG revert after max retries, expired tx after max retries, or TxStore errors
 func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 	client, err := a.getClient()
 	if err != nil {
@@ -717,6 +784,8 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 		for _, unconfirmedTx := range unconfirmedTxs {
 			ctxLogger := GetContexedTxLogger(a.baseLogger, unconfirmedTx.Tx.ID, unconfirmedTx.Tx.Metadata)
 			hash := unconfirmedTx.Hash
+			// NOTE: TransactionByHash errors (network failure, RPC error, not just "not found")
+			// are all treated as "tx still unconfirmed" and fall through to the expiry check below.
 			chainTx, err := client.TransactionByHash(hash)
 
 			if err == nil && chainTx.Type != aptosapi.TransactionVariantPending {
@@ -728,6 +797,8 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 				if chainTx.Type == aptosapi.TransactionVariantUser {
 					userTx, ok := chainTx.Inner.(*aptosapi.UserTransaction)
 					if ok {
+						a.updateTransactionVmStatus(unconfirmedTx.Tx, userTx.VmStatus)
+
 						if userTx.Success {
 							ctxLogger.Infow("confirmed tx: successful", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
 							a.metrics.IncrementSuccessTxs(ctx)
@@ -740,25 +811,37 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 								a.updateTransactionFee(unconfirmedTx.Tx, fee)
 								ctxLogger.Debugw("stored transaction fee", "fee", fee.String(), "gasUsed", gasUsed, "gasUnitPrice", gasUnitPrice)
 							}
-						} else {
-							ctxLogger.Infow("confirmed tx: unsuccessful", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
-							a.metrics.IncrementRevertTxs(ctx)
-							a.metrics.IncrementErrorTxs(ctx)
-							if userTx.VmStatus == "Out of gas" {
-								// https://github.com/aptos-labs/aptos-core/blob/77ff4bf413f54c41206bd5573e1891fa3a0dccf6/api/types/src/convert.rs#L1062
-								// Example transaction: https://api.testnet.aptoslabs.com/v1/transactions/by_hash/0x7a106db811c8d5dfd71ac98f374ca36e4f630ce5412b99c8f0e871e7feda37ea
-								a.incrementTransactionAttempt(unconfirmedTx.Tx)
-								if !a.maybeRetry(ctx, unconfirmedTx, RetryReasonOutOfGas) {
-									a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Failed)
-								}
-								continue
-							}
-						}
 					} else {
-						ctxLogger.Errorw("failed to read confirmed user tx", "hash", hash, "chainTxInner", chainTx.Inner)
+						ctxLogger.Infow("confirmed tx: unsuccessful", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
+						a.metrics.IncrementRevertTxs(ctx)
+						a.metrics.IncrementErrorTxs(ctx)
+						if userTx.VmStatus == "Out of gas" {
+							// https://github.com/aptos-labs/aptos-core/blob/77ff4bf413f54c41206bd5573e1891fa3a0dccf6/api/types/src/convert.rs#L1062
+							// Example transaction: https://api.testnet.aptoslabs.com/v1/transactions/by_hash/0x7a106db811c8d5dfd71ac98f374ca36e4f630ce5412b99c8f0e871e7feda37ea
+							a.incrementTransactionAttempt(unconfirmedTx.Tx)
+							// NOTE: The continue here correctly skips the Finalized update below.
+							// If maybeRetry succeeds, status stays Unconfirmed and the tx re-enters the broadcast loop.
+							// If it fails (max attempts), status is set to Failed.
+							if !a.maybeRetry(ctx, unconfirmedTx, RetryReasonOutOfGas) {
+								a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Failed)
+							}
+							continue
+						}
+						// TODO: Non-OOG reverts (e.g. MOVE_ABORT, EXECUTION_FAILURE) fall through
+						// to the Finalized update below. The caller (aptos_service.go) treats
+						// Finalized as TxSuccess, which is incorrect for reverted txs. Should either:
+						//   - set status to Failed for non-OOG reverts, or
+						//   - introduce a distinct status (e.g. Reverted) that callers can distinguish
 					}
 				} else {
-					ctxLogger.Errorw("unexpected confirmed tx type", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
+					// NOTE: Type assertion failed — VmStatus is never set on the AptosTx.
+					// Falls through to Finalized below; callers won't know why.
+					ctxLogger.Errorw("failed to read confirmed user tx", "hash", hash, "chainTxInner", chainTx.Inner)
+				}
+			} else {
+				// NOTE: Committed tx is not TransactionVariantUser (e.g. some future variant).
+				// VmStatus won't be set. Still marked Finalized below.
+				ctxLogger.Errorw("unexpected confirmed tx type", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
 				}
 
 				a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Finalized)
@@ -779,7 +862,9 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 					continue
 				}
 
-				// Confirm the transaction, mark as failed to reuse the nonce.
+				// NOTE: Passing failed=true marks this nonce as reusable in the TxStore.
+				// If the subsequent maybeRetry succeeds, the tx will be re-broadcast
+				// with a potentially reused nonce.
 				err = txStore.Confirm(unconfirmedTx.Nonce, hash, true)
 				if err != nil {
 					ctxLogger.Errorw("couldn't confirm expired tx", "error", err)

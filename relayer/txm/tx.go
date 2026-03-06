@@ -5,7 +5,6 @@ import (
 	"math/big"
 
 	"github.com/aptos-labs/aptos-go-sdk"
-
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 )
 
@@ -24,4 +23,6 @@ type AptosTx struct {
 	Status          commontypes.TransactionStatus
 	Simulate        bool
 	Fee             *big.Int // Transaction fee in octas (1e-8 APT)
+	VmStatus        string
+	TxHash          string
 }
