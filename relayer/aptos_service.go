@@ -112,6 +112,50 @@ func (s *aptosService) TransactionByHash(ctx context.Context, req commonaptos.Tr
 	}, nil
 }
 
+func (s *aptosService) AccountTransactions(ctx context.Context, req commonaptos.AccountTransactionsRequest) (*commonaptos.AccountTransactionsReply, error) {
+	s.logger.Infow("TestingAptosWriteCap: AccountTransactions called",
+		"address", fmt.Sprintf("0x%x", req.Address),
+		"hasStart", req.Start != nil,
+		"hasLimit", req.Limit != nil,
+	)
+
+	client, err := s.chain.GetClient()
+	if err != nil {
+		s.logger.Errorw("TestingAptosWriteCap: AccountTransactions - failed to get client", "error", err)
+		return nil, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	sdkAddr := aptos_sdk.AccountAddress(req.Address[:])
+	txns, err := client.AccountTransactions(sdkAddr, req.Start, req.Limit)
+	if err != nil {
+		s.logger.Errorw("TestingAptosWriteCap: AccountTransactions - failed to get transactions", "address", sdkAddr.String(), "error", err)
+		return nil, fmt.Errorf("failed to get account transactions: %w", err)
+	}
+
+	s.logger.Infow("TestingAptosWriteCap: AccountTransactions - fetched", "address", sdkAddr.String(), "count", len(txns))
+
+	result := make([]*commonaptos.Transaction, 0, len(txns))
+	for _, tx := range txns {
+		data, err := json.Marshal(tx.Inner)
+		if err != nil {
+			s.logger.Errorw("TestingAptosWriteCap: AccountTransactions - failed to marshal tx", "hash", string(tx.Hash()), "error", err)
+			return nil, fmt.Errorf("failed to marshal transaction data: %w", err)
+		}
+		v := tx.Version()
+		s := tx.Success()
+		result = append(result, &commonaptos.Transaction{
+			Type:    commonaptos.TransactionVariant(tx.Type),
+			Hash:    string(tx.Hash()),
+			Version: &v,
+			Success: &s,
+			Data:    data,
+		})
+	}
+
+	s.logger.Infow("TestingAptosWriteCap: AccountTransactions - returning", "address", sdkAddr.String(), "txCount", len(result))
+	return &commonaptos.AccountTransactionsReply{Transactions: result}, nil
+}
+
 func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.SubmitTransactionRequest) (*commonaptos.SubmitTransactionReply, error) {
 	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction called",
 		"encodedPayloadLen", len(req.EncodedPayload),
