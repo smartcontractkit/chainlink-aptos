@@ -47,12 +47,17 @@ func (s *aptosService) View(ctx context.Context, req commonaptos.ViewRequest) (*
 		s.logger.Errorw("TestingAptosWriteCap: View - payload is nil")
 		return nil, fmt.Errorf("view payload is required")
 	}
+	argHexes := make([]string, len(req.Payload.Args))
+	for i, arg := range req.Payload.Args {
+		argHexes[i] = fmt.Sprintf("%x", arg)
+	}
 	s.logger.Infow("TestingAptosWriteCap: View - request details",
 		"moduleAddress", fmt.Sprintf("%x", req.Payload.Module.Address),
 		"moduleName", req.Payload.Module.Name,
 		"function", req.Payload.Function,
 		"numArgTypes", len(req.Payload.ArgTypes),
 		"numArgs", len(req.Payload.Args),
+		"argsHex", argHexes,
 	)
 
 	client, err := s.chain.GetClient()
@@ -83,7 +88,7 @@ func (s *aptosService) View(ctx context.Context, req commonaptos.ViewRequest) (*
 		return nil, fmt.Errorf("failed to marshal view result: %w", err)
 	}
 
-	s.logger.Infow("TestingAptosWriteCap: View - success", "responseLen", len(data))
+	s.logger.Infow("TestingAptosWriteCap: View - success", "responseLen", len(data), "responseData", string(data))
 	return &commonaptos.ViewReply{Data: data}, nil
 }
 
