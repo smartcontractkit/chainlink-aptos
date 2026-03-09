@@ -40,24 +40,17 @@ func (s *aptosService) AccountAPTBalance(ctx context.Context, req commonaptos.Ac
 }
 
 func (s *aptosService) View(ctx context.Context, req commonaptos.ViewRequest) (*commonaptos.ViewReply, error) {
-	s.logger.Infow("TestingAptosWriteCap: View called",
-		"hasPayload", req.Payload != nil,
-	)
 	if req.Payload == nil {
 		s.logger.Errorw("TestingAptosWriteCap: View - payload is nil")
 		return nil, fmt.Errorf("view payload is required")
 	}
-	argHexes := make([]string, len(req.Payload.Args))
-	for i, arg := range req.Payload.Args {
-		argHexes[i] = fmt.Sprintf("%x", arg)
-	}
 	s.logger.Infow("TestingAptosWriteCap: View - request details",
-		"moduleAddress", fmt.Sprintf("%x", req.Payload.Module.Address),
+		"moduleAddress", fmt.Sprintf("0x%x", req.Payload.Module.Address),
 		"moduleName", req.Payload.Module.Name,
 		"function", req.Payload.Function,
 		"numArgTypes", len(req.Payload.ArgTypes),
 		"numArgs", len(req.Payload.Args),
-		"argsHex", argHexes,
+		"args", req.Payload.Args,
 	)
 
 	client, err := s.chain.GetClient()
@@ -140,7 +133,7 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 		return nil, fmt.Errorf("expected EntryFunction payload, got %T", txPayload.Payload)
 	}
 	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - deserialized entry function",
-		"module", entryFn.Module.Address.String()+"::" +entryFn.Module.Name,
+		"module", entryFn.Module.Address.String()+"::"+entryFn.Module.Name,
 		"function", entryFn.Function,
 	)
 
@@ -192,12 +185,29 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 		s.logger.Debugw("TestingAptosWriteCap: SubmitTransaction - GetStatus poll", "txID", txID, "status", txStatus)
 		switch txStatus {
 		case commontypes.Fatal, commontypes.Failed:
+			s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - terminal failure from TxManager", "txID", txID, "status", txStatus)
 			return commonaptos.TxFatal, nil
-		case commontypes.Unconfirmed, commontypes.Finalized:
+		case commontypes.Finalized:
+			s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - finalized, checking result", "txID", txID)
+			txResult, resultErr := s.chain.TxManager().GetTransactionResult(txID)
+			if resultErr != nil {
+				s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - GetTransactionResult failed for finalized tx", "txID", txID, "error", resultErr)
+				return commonaptos.TxSuccess, nil
+			}
+			s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - finalized result", "txID", txID, "vmStatus", txResult.VmStatus, "txHash", txResult.TxHash)
+			if txResult.VmStatus != "" && txResult.VmStatus != "Executed successfully" {
+				s.logger.Warnw("TestingAptosWriteCap: SubmitTransaction - finalized but VM reverted", "txID", txID, "vmStatus", txResult.VmStatus)
+				return commonaptos.TxFatal, nil
+			}
 			return commonaptos.TxSuccess, nil
+		case commontypes.Unconfirmed:
+			s.logger.Debugw("TestingAptosWriteCap: SubmitTransaction - still unconfirmed (broadcast but not yet confirmed on-chain)", "txID", txID)
+			return commonaptos.TxFatal, fmt.Errorf("tx still unconfirmed (broadcast, awaiting on-chain confirmation) for tx with ID %s", txID)
 		case commontypes.Pending, commontypes.Unknown:
+			s.logger.Debugw("TestingAptosWriteCap: SubmitTransaction - still pending/unknown, will retry", "txID", txID, "status", txStatus)
 			return commonaptos.TxFatal, fmt.Errorf("tx still in state pending or unknown, tx status is %d for tx with ID %s", txStatus, txID)
 		default:
+			s.logger.Warnw("TestingAptosWriteCap: SubmitTransaction - unexpected status", "txID", txID, "status", txStatus)
 			return commonaptos.TxFatal, fmt.Errorf("unexpected transaction status %d for tx with ID %s", txStatus, txID)
 		}
 	})

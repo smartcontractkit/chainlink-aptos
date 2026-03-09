@@ -811,37 +811,37 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 								a.updateTransactionFee(unconfirmedTx.Tx, fee)
 								ctxLogger.Debugw("stored transaction fee", "fee", fee.String(), "gasUsed", gasUsed, "gasUnitPrice", gasUnitPrice)
 							}
-					} else {
-						ctxLogger.Infow("confirmed tx: unsuccessful", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
-						a.metrics.IncrementRevertTxs(ctx)
-						a.metrics.IncrementErrorTxs(ctx)
-						if userTx.VmStatus == "Out of gas" {
-							// https://github.com/aptos-labs/aptos-core/blob/77ff4bf413f54c41206bd5573e1891fa3a0dccf6/api/types/src/convert.rs#L1062
-							// Example transaction: https://api.testnet.aptoslabs.com/v1/transactions/by_hash/0x7a106db811c8d5dfd71ac98f374ca36e4f630ce5412b99c8f0e871e7feda37ea
-							a.incrementTransactionAttempt(unconfirmedTx.Tx)
-							// NOTE: The continue here correctly skips the Finalized update below.
-							// If maybeRetry succeeds, status stays Unconfirmed and the tx re-enters the broadcast loop.
-							// If it fails (max attempts), status is set to Failed.
-							if !a.maybeRetry(ctx, unconfirmedTx, RetryReasonOutOfGas) {
-								a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Failed)
+						} else {
+							ctxLogger.Infow("confirmed tx: unsuccessful", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
+							a.metrics.IncrementRevertTxs(ctx)
+							a.metrics.IncrementErrorTxs(ctx)
+							if userTx.VmStatus == "Out of gas" {
+								// https://github.com/aptos-labs/aptos-core/blob/77ff4bf413f54c41206bd5573e1891fa3a0dccf6/api/types/src/convert.rs#L1062
+								// Example transaction: https://api.testnet.aptoslabs.com/v1/transactions/by_hash/0x7a106db811c8d5dfd71ac98f374ca36e4f630ce5412b99c8f0e871e7feda37ea
+								a.incrementTransactionAttempt(unconfirmedTx.Tx)
+								// NOTE: The continue here correctly skips the Finalized update below.
+								// If maybeRetry succeeds, status stays Unconfirmed and the tx re-enters the broadcast loop.
+								// If it fails (max attempts), status is set to Failed.
+								if !a.maybeRetry(ctx, unconfirmedTx, RetryReasonOutOfGas) {
+									a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Failed)
+								}
+								continue
 							}
-							continue
+							// TODO: Non-OOG reverts (e.g. MOVE_ABORT, EXECUTION_FAILURE) fall through
+							// to the Finalized update below. The caller (aptos_service.go) treats
+							// Finalized as TxSuccess, which is incorrect for reverted txs. Should either:
+							//   - set status to Failed for non-OOG reverts, or
+							//   - introduce a distinct status (e.g. Reverted) that callers can distinguish
 						}
-						// TODO: Non-OOG reverts (e.g. MOVE_ABORT, EXECUTION_FAILURE) fall through
-						// to the Finalized update below. The caller (aptos_service.go) treats
-						// Finalized as TxSuccess, which is incorrect for reverted txs. Should either:
-						//   - set status to Failed for non-OOG reverts, or
-						//   - introduce a distinct status (e.g. Reverted) that callers can distinguish
+					} else {
+						// NOTE: Type assertion failed — VmStatus is never set on the AptosTx.
+						// Falls through to Finalized below; callers won't know why.
+						ctxLogger.Errorw("failed to read confirmed user tx", "hash", hash, "chainTxInner", chainTx.Inner)
 					}
 				} else {
-					// NOTE: Type assertion failed — VmStatus is never set on the AptosTx.
-					// Falls through to Finalized below; callers won't know why.
-					ctxLogger.Errorw("failed to read confirmed user tx", "hash", hash, "chainTxInner", chainTx.Inner)
-				}
-			} else {
-				// NOTE: Committed tx is not TransactionVariantUser (e.g. some future variant).
-				// VmStatus won't be set. Still marked Finalized below.
-				ctxLogger.Errorw("unexpected confirmed tx type", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
+					// NOTE: Committed tx is not TransactionVariantUser (e.g. some future variant).
+					// VmStatus won't be set. Still marked Finalized below.
+					ctxLogger.Errorw("unexpected confirmed tx type", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
 				}
 
 				a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Finalized)
