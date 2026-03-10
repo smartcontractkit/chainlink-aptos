@@ -160,16 +160,18 @@ func (r *relayer) NewOCR3CapabilityProvider(ctx context.Context, rargs types.Rel
 	return nil, errors.New("ocr3 capability provider is not supported for aptos")
 }
 
-func (r *relayer) NewCCIPProvider(ctx context.Context, cargs types.CCIPProviderArgs) (types.CCIPProvider, error) {
-	return nil, errors.New("ccip provider is not supported for aptos")
-}
-
 func (r *relayer) NewCCIPCommitProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.CCIPCommitProvider, error) {
 	return nil, errors.New("ccip.commit is not supported for aptos")
 }
 
 func (r *relayer) NewCCIPExecProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.CCIPExecProvider, error) {
 	return nil, errors.New("ccip.exec is not supported for aptos")
+}
+
+func (r *relayer) NewCCIPProvider(ctx context.Context, cargs types.CCIPProviderArgs) (types.CCIPProvider, error) {
+	_ = ctx
+	_ = cargs
+	return nil, errors.New("ccip provider is not supported for aptos")
 }
 
 func (r *relayer) EVM() (types.EVMService, error) {
