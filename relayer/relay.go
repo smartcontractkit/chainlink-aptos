@@ -347,19 +347,10 @@ func (r *relayer) SubmitTransaction(ctx context.Context, req typeaptos.SubmitTra
 		return nil, fmt.Errorf("submit transaction returned empty hash")
 	}
 
-	sender := typeaptos.AccountAddress(submittedTx.Sender)
-
 	return &typeaptos.SubmitTransactionReply{
-		PendingTransaction: &typeaptos.PendingTransaction{
-			Hash:                    submittedTx.Hash,
-			Sender:                  sender,
-			SequenceNumber:          submittedTx.Nonce,
-			MaxGasAmount:            submittedTx.MaxGasAmount,
-			GasUnitPrice:            submittedTx.GasUnitPrice,
-			ExpirationTimestampSecs: submittedTx.ExpirationTimestampSecs,
-			Payload:                 req.EncodedPayload,
-			Signature:               submittedTx.Signature,
-		},
+		TxStatus:         typeaptos.TxSuccess,
+		TxHash:           submittedTx.Hash,
+		TxIdempotencyKey: txID.String(),
 	}, nil
 }
 
