@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/aptos-labs/aptos-go-sdk"
+
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 )
 
