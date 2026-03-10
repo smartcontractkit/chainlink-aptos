@@ -24,4 +24,6 @@ type AptosTx struct {
 	Status          commontypes.TransactionStatus
 	Simulate        bool
 	Fee             *big.Int // Transaction fee in octas (1e-8 APT)
+	VmStatus        string
+	TxHash          string
 }

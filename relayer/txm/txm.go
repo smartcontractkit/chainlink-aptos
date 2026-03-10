@@ -259,6 +259,31 @@ func (a *AptosTxm) GetTransactionFee(ctx context.Context, transactionID string) 
 	return tx.Fee, nil
 }
 
+type TransactionResult struct {
+	Status   commontypes.TransactionStatus
+	TxHash   string
+	VmStatus string
+}
+
+func (a *AptosTxm) GetTransactionResult(transactionID string) (*TransactionResult, error) {
+	if transactionID == "" {
+		return nil, errors.New("nil tx id")
+	}
+
+	a.transactionsLock.RLock()
+	defer a.transactionsLock.RUnlock()
+	tx, ok := a.transactions[transactionID]
+	if !ok {
+		return nil, errors.New("no such tx")
+	}
+
+	return &TransactionResult{
+		Status:   tx.Status,
+		TxHash:   tx.TxHash,
+		VmStatus: tx.VmStatus,
+	}, nil
+}
+
 func (a *AptosTxm) broadcastLoop() {
 	defer a.done.Done()
 
@@ -451,6 +476,18 @@ func (a *AptosTxm) updateTransactionFee(tx *AptosTx, fee *big.Int) {
 	tx.Fee = fee
 }
 
+func (a *AptosTxm) updateTransactionHash(tx *AptosTx, hash string) {
+	a.transactionsLock.Lock()
+	defer a.transactionsLock.Unlock()
+	tx.TxHash = hash
+}
+
+func (a *AptosTxm) updateTransactionVmStatus(tx *AptosTx, vmStatus string) {
+	a.transactionsLock.Lock()
+	defer a.transactionsLock.Unlock()
+	tx.VmStatus = vmStatus
+}
+
 func (a *AptosTxm) incrementTransactionAttempt(tx *AptosTx) {
 	a.transactionsLock.Lock()
 	defer a.transactionsLock.Unlock()
@@ -525,6 +562,8 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			// tx included in the Mempool
 			currentAttempt := a.getTransactionAttempt(tx)
 			ctxLogger.Debugw("submit tx successful", "attempt", currentAttempt, "submitResponse", submitResponse)
+
+			a.updateTransactionHash(tx, submitResponse.Hash)
 
 			err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, rawTx.ExpirationTimestampSeconds, tx)
 			if err != nil {
@@ -621,6 +660,8 @@ func (a *AptosTxm) checkUnconfirmed() {
 				if chainTx.Type == aptosapi.TransactionVariantUser {
 					userTx, ok := chainTx.Inner.(*aptosapi.UserTransaction)
 					if ok {
+						a.updateTransactionVmStatus(unconfirmedTx.Tx, userTx.VmStatus)
+
 						if userTx.Success {
 							ctxLogger.Infow("confirmed tx: successful", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
 
