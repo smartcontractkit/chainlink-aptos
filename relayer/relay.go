@@ -253,7 +253,12 @@ func (r *relayer) View(ctx context.Context, req typeaptos.ViewRequest) (*typeapt
 		return nil, err
 	}
 
-	result, err := client.View(payload)
+	var result []any
+	if req.LedgerVersion != nil {
+		result, err = client.View(payload, *req.LedgerVersion)
+	} else {
+		result, err = client.View(payload)
+	}
 	if err != nil {
 		return nil, err
 	}
