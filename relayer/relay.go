@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
 
 	aptosdk "github.com/aptos-labs/aptos-go-sdk"
 	aptosapi "github.com/aptos-labs/aptos-go-sdk/api"
@@ -251,8 +252,8 @@ func (r *relayer) View(ctx context.Context, req typeaptos.ViewRequest) (*typeapt
 	}
 
 	var result []any
-	if req.LedgerVersion != nil {
-		result, err = client.View(payload, *req.LedgerVersion)
+	if ledgerVersion, ok := ledgerVersionFromViewRequest(req); ok {
+		result, err = client.View(payload, ledgerVersion)
 	} else {
 		result, err = client.View(payload)
 	}
@@ -266,6 +267,18 @@ func (r *relayer) View(ctx context.Context, req typeaptos.ViewRequest) (*typeapt
 	}
 
 	return &typeaptos.ViewReply{Data: data}, nil
+}
+
+func ledgerVersionFromViewRequest(req typeaptos.ViewRequest) (uint64, bool) {
+	field := reflect.ValueOf(req).FieldByName("LedgerVersion")
+	if !field.IsValid() || field.Kind() != reflect.Ptr || field.IsNil() {
+		return 0, false
+	}
+	elem := field.Elem()
+	if !elem.IsValid() || !elem.CanUint() {
+		return 0, false
+	}
+	return elem.Uint(), true
 }
 
 func (r *relayer) TransactionByHash(ctx context.Context, req typeaptos.TransactionByHashRequest) (*typeaptos.TransactionByHashReply, error) {
