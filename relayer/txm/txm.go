@@ -45,15 +45,6 @@ type AptosTxm struct {
 	getClient func() (aptos.AptosRpcClient, error)
 }
 
-type SubmittedTransaction struct {
-	Hash                    string
-	SequenceNumber          uint64
-	ExpirationTimestampSecs uint64
-	MaxGasAmount            uint64
-	GasUnitPrice            uint64
-	Sender                  aptos.AccountAddress
-}
-
 // TODO: Config input is not validated for sanity
 func New(lgr logger.Logger, keystore loop.Keystore, config Config, getClient func() (aptos.AptosRpcClient, error)) (*AptosTxm, error) {
 	return &AptosTxm{
@@ -230,85 +221,6 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 	return nil
 }
 
-// SubmitPayload submits a pre-encoded Aptos payload via TXM synchronously and
-// returns the first submitted tx details (hash/sequence number/gas) when
-// accepted into mempool.
-func (a *AptosTxm) SubmitPayload(
-	ctx context.Context,
-	transactionID string,
-	txMetadata *commontypes.TxMeta,
-	fromAddress aptos.AccountAddress,
-	publicKey ed25519.PublicKey,
-	payload aptos.TransactionPayload,
-	maxGasAmount uint64,
-	gasUnitPrice uint64,
-) (*SubmittedTransaction, error) {
-	if transactionID == "" {
-		transactionID = uuid.New().String()
-	}
-
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	currentTimestamp := getTimestampSecs()
-	tx := &AptosTx{
-		ID:          transactionID,
-		Metadata:    txMetadata,
-		Timestamp:   currentTimestamp,
-		FromAddress: fromAddress,
-		PublicKey:   publicKey,
-		Payload:     &payload,
-		Status:      commontypes.Pending,
-		Simulate:    false,
-	}
-	if maxGasAmount > 0 {
-		if tx.Metadata == nil {
-			tx.Metadata = &commontypes.TxMeta{}
-		}
-		tx.Metadata.GasLimit = new(big.Int).SetUint64(maxGasAmount)
-	}
-	if gasUnitPrice > 0 {
-		price := gasUnitPrice
-		tx.GasUnitPriceOverride = &price
-	}
-
-	a.transactionsLock.Lock()
-	_, transactionExists := a.transactions[transactionID]
-	if transactionExists {
-		a.transactionsLock.Unlock()
-		return nil, errors.New("transaction already exists")
-	}
-
-	if (currentTimestamp - a.transactionsLastPruneTime) > a.config.PruneIntervalSecs {
-		for txID, existingTx := range a.transactions {
-			if existingTx.Status != commontypes.Finalized && existingTx.Status != commontypes.Failed && existingTx.Status != commontypes.Fatal {
-				continue
-			}
-			if (currentTimestamp - existingTx.Timestamp) < a.config.PruneTxExpirationSecs {
-				continue
-			}
-			delete(a.transactions, txID)
-		}
-		a.transactionsLastPruneTime = currentTimestamp
-	}
-
-	a.transactions[transactionID] = tx
-	a.transactionsLock.Unlock()
-
-	a.signAndBroadcast(tx)
-
-	status, err := a.GetStatus(transactionID)
-	if err != nil {
-		return nil, err
-	}
-	if status != commontypes.Unconfirmed && status != commontypes.Finalized {
-		return nil, fmt.Errorf("transaction not accepted by txm, status=%d", status)
-	}
-
-	return a.GetSubmittedTransaction(transactionID)
-}
-
 func (a *AptosTxm) GetStatus(transactionID string) (commontypes.TransactionStatus, error) {
 	if transactionID == "" {
 		return commontypes.Unknown, errors.New("nil tx id")
@@ -345,32 +257,6 @@ func (a *AptosTxm) GetTransactionFee(ctx context.Context, transactionID string) 
 	}
 
 	return tx.Fee, nil
-}
-
-func (a *AptosTxm) GetSubmittedTransaction(transactionID string) (*SubmittedTransaction, error) {
-	if transactionID == "" {
-		return nil, errors.New("nil tx id")
-	}
-
-	a.transactionsLock.RLock()
-	defer a.transactionsLock.RUnlock()
-
-	tx, ok := a.transactions[transactionID]
-	if !ok {
-		return nil, errors.New("no such tx")
-	}
-	if tx.LastSubmittedHash == "" {
-		return nil, errors.New("transaction has not been submitted yet")
-	}
-
-	return &SubmittedTransaction{
-		Hash:                    tx.LastSubmittedHash,
-		SequenceNumber:          tx.LastSubmittedSequenceNumber,
-		ExpirationTimestampSecs: tx.LastSubmittedExpirationTimestampSecs,
-		MaxGasAmount:            tx.LastSubmittedMaxGasAmount,
-		GasUnitPrice:            tx.LastSubmittedGasUnitPrice,
-		Sender:                  tx.FromAddress,
-	}, nil
 }
 
 func (a *AptosTxm) broadcastLoop() {
@@ -422,7 +308,7 @@ func (a *AptosTxm) broadcastLoop() {
 	}
 }
 
-func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, sequenceNumber uint64) (*aptos.RawTransaction, error) {
+func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, nonce uint64) (*aptos.RawTransaction, error) {
 	// this is cached within NodeClient after the first successful invocation.
 	chainId, err := client.GetChainId()
 	if err != nil {
@@ -436,26 +322,21 @@ func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, sequenc
 
 	expirationTimestampSecs := ledgerTimestampSecs + a.config.TxExpirationSecs
 
-	payload := aptos.TransactionPayload{}
-	if tx.Payload != nil {
-		payload = *tx.Payload
-	} else {
-		payload = aptos.TransactionPayload{
-			Payload: &aptos.EntryFunction{
-				Module: aptos.ModuleId{
-					Address: tx.ContractAddress,
-					Name:    tx.ModuleName,
-				},
-				Function: tx.FunctionName,
-				ArgTypes: tx.TypeTags,
-				Args:     tx.BcsValues,
+	payload := aptos.TransactionPayload{
+		Payload: &aptos.EntryFunction{
+			Module: aptos.ModuleId{
+				Address: tx.ContractAddress,
+				Name:    tx.ModuleName,
 			},
-		}
+			Function: tx.FunctionName,
+			ArgTypes: tx.TypeTags,
+			Args:     tx.BcsValues,
+		},
 	}
 
 	rawTx := &aptos.RawTransaction{
 		Sender:                     tx.FromAddress,
-		SequenceNumber:             sequenceNumber,
+		SequenceNumber:             nonce,
 		Payload:                    payload,
 		MaxGasAmount:               0, // populated below
 		GasUnitPrice:               0, // populated below
@@ -489,10 +370,6 @@ func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, sequenc
 			// do not error on failed estimate gas as it could fail due to conflicting in-flight txs
 			ctxLogger.Errorw("failed to simulate tx", "error", err)
 		}
-	}
-
-	if tx.GasUnitPriceOverride != nil && *tx.GasUnitPriceOverride > 0 {
-		rawTx.GasUnitPrice = *tx.GasUnitPriceOverride
 	}
 
 	if rawTx.GasUnitPrice == 0 {
@@ -568,16 +445,6 @@ func (a *AptosTxm) updateTransactionStatus(tx *AptosTx, status commontypes.Trans
 	tx.Status = status
 }
 
-func (a *AptosTxm) updateTransactionSubmittedState(tx *AptosTx, hash string, sequenceNumber uint64, expirationTimestampSecs uint64, maxGasAmount uint64, gasUnitPrice uint64) {
-	a.transactionsLock.Lock()
-	defer a.transactionsLock.Unlock()
-	tx.LastSubmittedHash = hash
-	tx.LastSubmittedSequenceNumber = sequenceNumber
-	tx.LastSubmittedExpirationTimestampSecs = expirationTimestampSecs
-	tx.LastSubmittedMaxGasAmount = maxGasAmount
-	tx.LastSubmittedGasUnitPrice = gasUnitPrice
-}
-
 func (a *AptosTxm) updateTransactionFee(tx *AptosTx, fee *big.Int) {
 	a.transactionsLock.Lock()
 	defer a.transactionsLock.Unlock()
@@ -614,33 +481,26 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		}
 		newTxStore, err := a.accountStore.CreateTxStore(tx.FromAddress.String(), sequenceNumber)
 		if err != nil {
-			// Another concurrent submission may have created the store first.
-			txStore = a.accountStore.GetTxStore(tx.FromAddress.String())
-			if txStore == nil {
-				// Avoid logging potentially sensitive account-derived data here.
-				ctxLogger.Errorw("failed to create tx store and no existing store was found after concurrent-create check")
-				a.updateTransactionStatus(tx, commontypes.Failed)
-				return
-			}
-		} else {
-			txStore = newTxStore
+			ctxLogger.Errorw("failed to create tx store", "fromAddress", tx.FromAddress.String(), "error", err)
+			a.updateTransactionStatus(tx, commontypes.Failed)
+			return
 		}
+		txStore = newTxStore
 	}
 
 	currentAttempt := a.getTransactionAttempt(tx)
 	if currentAttempt > 0 {
-		// If we're retrying a failed transaction that we caught in the confirm loop, resync the
-		// sequence number again
+		// If we're retrying a failed transaction that we caught in the confirm loop, resync the nonce again
 		// first.
 		_ = a.resyncNonce(client, tx)
 	}
 
 	// broadcast with basic retry to try get the tx included in the mempool
 	for attempt := 1; attempt <= int(a.config.MaxSubmitRetryAttempts); attempt++ {
-		// build the tx with the sequence number and expiration timestamp
-		sequenceNumber := txStore.GetNextNonce()
+		// build the tx with the nonce and expiration timestamp
+		nonce := txStore.GetNextNonce()
 
-		rawTx, err := a.createRawTx(client, tx, sequenceNumber)
+		rawTx, err := a.createRawTx(client, tx, nonce)
 		if err != nil {
 			ctxLogger.Errorw("failed to create raw tx", "error", err)
 			a.updateTransactionStatus(tx, commontypes.Failed)
@@ -665,9 +525,8 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			// tx included in the Mempool
 			currentAttempt := a.getTransactionAttempt(tx)
 			ctxLogger.Debugw("submit tx successful", "attempt", currentAttempt, "submitResponse", submitResponse)
-			a.updateTransactionSubmittedState(tx, submitResponse.Hash, sequenceNumber, rawTx.ExpirationTimestampSeconds, rawTx.MaxGasAmount, rawTx.GasUnitPrice)
 
-			err = txStore.AddUnconfirmed(sequenceNumber, submitResponse.Hash, rawTx.ExpirationTimestampSeconds, tx)
+			err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, rawTx.ExpirationTimestampSeconds, tx)
 			if err != nil {
 				// TODO: figure out what to do here, this should never occur.
 				ctxLogger.Errorw("failed to add unconfirmed tx", "txHash", submitResponse.Hash, "error", err)
@@ -680,7 +539,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		} else {
 			// In case of http errors (>400) wait gracefully and retry
 			// It includes all network-related errors as well as
-			// the pre-execution validation in the Mempool (e.g. old/duplicated sequence number, transaction expired)
+			// the pre-execution validation in the Mempool (e.g. old/duplicated nonce, transaction expired)
 			var httpError *aptos.HttpError
 			if !errors.As(err, &httpError) {
 				// Do not retry on unknown errors
@@ -692,19 +551,10 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			ctxLogger.Errorw("failed to submit signed tx, retrying..", "error", httpError)
 			time.Sleep(time.Duration(a.config.SubmitDelayDuration) * time.Second)
 
-			httpErrorBody := strings.ToUpper(string(httpError.Body))
-			isTooOld := strings.Contains(httpErrorBody, "SEQUENCE_NUMBER_TOO_OLD")
-			isTooNew := strings.Contains(httpErrorBody, "SEQUENCE_NUMBER_TOO_NEW")
-			isInvalidUpdate := strings.Contains(httpErrorBody, "INVALID_TRANSACTION_UPDATE") || strings.Contains(httpErrorBody, "TRANSACTION ALREADY IN MEMPOOL WITH A DIFFERENT PAYLOAD")
-
-			if isTooOld || isTooNew {
-				// Try to resync the sequence number before the next attempt.
+			httpErrorBody := string(httpError.Body)
+			if strings.Contains(httpErrorBody, "SEQUENCE_NUMBER_TOO_OLD") || strings.Contains(httpErrorBody, "SEQUENCE_NUMBER_TOO_NEW") {
+				// Try to resync the nonce before the next attempt.
 				_ = a.resyncNonce(client, tx)
-			}
-			if isTooOld || isInvalidUpdate {
-				// Mempool accepted a tx with this sequence number, but onchain
-				// sequence may not be updated yet. Move local sequence cursor forward.
-				txStore.AdvanceNextNonce(sequenceNumber + 1)
 			}
 		}
 	}

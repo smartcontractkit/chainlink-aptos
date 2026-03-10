@@ -9,8 +9,6 @@ import (
 
 	aptosdk "github.com/aptos-labs/aptos-go-sdk"
 	aptosapi "github.com/aptos-labs/aptos-go-sdk/api"
-	"github.com/aptos-labs/aptos-go-sdk/bcs"
-	"github.com/google/uuid"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
@@ -22,7 +20,6 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
 	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainwriter"
-	rutils "github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 	write_target "github.com/smartcontractkit/chainlink-aptos/relayer/write_target/aptos"
 )
 
@@ -293,67 +290,9 @@ func (r *relayer) TransactionByHash(ctx context.Context, req typeaptos.Transacti
 }
 
 func (r *relayer) SubmitTransaction(ctx context.Context, req typeaptos.SubmitTransactionRequest) (*typeaptos.SubmitTransactionReply, error) {
-	cfg := r.chain.Config()
-	if cfg.Workflow == nil || cfg.Workflow.PublicKey == "" {
-		return nil, fmt.Errorf("workflow public key not configured")
-	}
-
-	client, err := r.chain.GetClient()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get client: %w", err)
-	}
-
-	var payload aptosdk.TransactionPayload
-	if err := bcs.Deserialize(&payload, req.EncodedPayload); err != nil {
-		return nil, fmt.Errorf("failed to decode transaction payload: %w", err)
-	}
-
-	publicKey, err := rutils.HexPublicKeyToEd25519PublicKey(cfg.Workflow.PublicKey)
-	if err != nil {
-		return nil, fmt.Errorf("invalid workflow public key: %w", err)
-	}
-	fromAddress := rutils.Ed25519PublicKeyToAddress(publicKey)
-
-	var maxGasAmount uint64
-	var gasUnitPrice uint64
-	if req.GasConfig != nil {
-		maxGasAmount = req.GasConfig.MaxGasAmount
-		gasUnitPrice = req.GasConfig.GasUnitPrice
-	} else {
-		gasInfo, gasErr := client.EstimateGasPrice()
-		if gasErr != nil {
-			return nil, fmt.Errorf("failed to estimate gas price: %w", gasErr)
-		}
-		maxGasAmount = cfg.TransactionManager.DefaultMaxGasAmount + cfg.TransactionManager.GasLimitOverhead
-		gasUnitPrice = gasInfo.GasEstimate
-	}
-
-	txID, err := uuid.NewUUID()
-	if err != nil {
-		return nil, err
-	}
-	submittedTx, err := r.chain.TxManager().SubmitPayload(
-		ctx,
-		txID.String(),
-		nil,
-		fromAddress,
-		publicKey,
-		payload,
-		maxGasAmount,
-		gasUnitPrice,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to submit transaction via txm: %w", err)
-	}
-	if submittedTx == nil || submittedTx.Hash == "" {
-		return nil, fmt.Errorf("submit transaction returned empty hash")
-	}
-
-	return &typeaptos.SubmitTransactionReply{
-		TxStatus:         typeaptos.TxSuccess,
-		TxHash:           submittedTx.Hash,
-		TxIdempotencyKey: txID.String(),
-	}, nil
+	_ = ctx
+	_ = req
+	return nil, errors.New("aptos submit transaction is not implemented in this PR (view-only scope)")
 }
 
 func (r *relayer) AccountTransactions(ctx context.Context, req typeaptos.AccountTransactionsRequest) (*typeaptos.AccountTransactionsReply, error) {

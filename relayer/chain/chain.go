@@ -35,7 +35,6 @@ type Chain interface {
 	ID() string
 	Config() *config.TOMLConfig
 	DataSource() sqlutil.DataSource
-	KeyStore() loop.Keystore
 
 	TxManager() *txm.AptosTxm
 	LogPoller() *logpoller.AptosLogPoller
@@ -78,7 +77,6 @@ type chain struct {
 	cfg  *config.TOMLConfig
 	lggr logger.Logger
 	ds   sqlutil.DataSource
-	ks   loop.Keystore
 
 	// Sub-services
 	txm            *txm.AptosTxm
@@ -119,7 +117,6 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 		cfg:  cfg,
 		lggr: logger.Named(lggr, "Chain"),
 		ds:   ds,
-		ks:   loopKs,
 	}
 
 	ch.txm, err = txm.New(lggr, loopKs, *cfg.TransactionManager, ch.GetClient)
@@ -166,10 +163,6 @@ func (c *chain) LogPoller() *logpoller.AptosLogPoller {
 
 func (c *chain) DataSource() sqlutil.DataSource {
 	return c.ds
-}
-
-func (c *chain) KeyStore() loop.Keystore {
-	return c.ks
 }
 
 func (c *chain) ChainID() string {
@@ -268,6 +261,16 @@ func (c *chain) ID() string {
 	return c.id
 }
 
+func (c *chain) GetChainInfo(ctx context.Context) (types.ChainInfo, error) {
+	_ = ctx
+	return types.ChainInfo{
+		FamilyName:      config.ChainFamilyName,
+		ChainID:         c.id,
+		NetworkName:     c.cfg.NetworkName,
+		NetworkNameFull: c.cfg.NetworkNameFull,
+	}, nil
+}
+
 // LatestHead returns the latest head for the underlying chain.
 // TODO: should be replaced with a head tracker component
 func (c *chain) LatestHead(ctx context.Context) (types.Head, error) {
@@ -300,16 +303,6 @@ func (c *chain) LatestHead(ctx context.Context) (types.Head, error) {
 		// block.BlockTimestamp is the Unix timestamp of the block, in microseconds, may not be set for block 0
 		// Divide by 1000000 to convert to seconds
 		Timestamp: block.BlockTimestamp / 1000000,
-	}, nil
-}
-
-func (c *chain) GetChainInfo(ctx context.Context) (types.ChainInfo, error) {
-	ci := c.chainInfo()
-	return types.ChainInfo{
-		FamilyName:      ci.ChainFamilyName,
-		ChainID:         ci.ChainID,
-		NetworkName:     ci.NetworkName,
-		NetworkNameFull: ci.NetworkNameFull,
 	}, nil
 }
 

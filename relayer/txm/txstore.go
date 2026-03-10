@@ -86,17 +86,6 @@ func (s *TxStore) GetNextNonce() uint64 {
 	return nextNonce
 }
 
-// AdvanceNextNonce moves the tx store cursor forward to at least minNextNonce.
-// This is used for mempool-only sequence collisions where onchain nonce has not
-// moved yet but the previous nonce is already occupied by another in-flight tx.
-func (s *TxStore) AdvanceNextNonce(minNextNonce uint64) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	if s.nextNonce < minNextNonce {
-		s.nextNonce = minNextNonce
-	}
-}
-
 func (s *TxStore) AddUnconfirmed(nonce uint64, hash string, expirationTimestampSecs uint64, tx *AptosTx) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
