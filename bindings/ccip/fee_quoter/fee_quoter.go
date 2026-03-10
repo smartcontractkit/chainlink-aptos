@@ -93,6 +93,7 @@ func NewFeeQuoter(address aptos.AccountAddress, client aptos.AptosRpcClient) Fee
 
 // Constants
 const (
+	ALLOW_OUT_OF_ORDER_EXECUTION                    bool   = true
 	GAS_PRICE_BITS                                  byte   = 112
 	MESSAGE_FIXED_BYTES                             uint64 = 32 * 15
 	MESSAGE_FIXED_BYTES_PER_TOKEN                   uint64 = 32 * (4 + (3 + 2))

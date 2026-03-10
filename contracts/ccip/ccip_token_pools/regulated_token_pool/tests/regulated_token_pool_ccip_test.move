@@ -393,9 +393,9 @@ module regulated_token_pool::regulated_token_pool_ccip_test {
         assert!(administrator != @0x0);
         assert!(pending_admin == @0x0);
 
-        // Verify pool local token matches
+        // Verify pool local token matches (using V2 since pools now only register with V2)
         let local_token =
-            token_admin_registry::get_pool_local_token(@regulated_token_pool);
+            token_admin_registry::get_pool_local_token_v2(@regulated_token_pool);
         assert!(local_token == regulated_token_address);
 
         // Test the basic registry functions work

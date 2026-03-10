@@ -10,7 +10,7 @@ module regulated_token_pool::regulated_token_pool {
 
     use regulated_token::regulated_token::{Self};
 
-    use ccip::token_admin_registry;
+    use ccip::token_admin_registry::{Self, LockOrBurnInputV1, ReleaseOrMintInputV1};
     use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
@@ -27,12 +27,9 @@ module regulated_token_pool::regulated_token_pool {
         store_signer_address: address
     }
 
-    const E_NOT_PUBLISHER: u64 = 1;
-    const E_ALREADY_INITIALIZED: u64 = 2;
-    const E_INVALID_FUNGIBLE_ASSET: u64 = 3;
-    const E_LOCAL_TOKEN_MISMATCH: u64 = 4;
-    const E_INVALID_ARGUMENTS: u64 = 5;
-    const E_UNKNOWN_FUNCTION: u64 = 6;
+    const E_INVALID_ARGUMENTS: u64 = 1;
+    const E_UNKNOWN_FUNCTION: u64 = 2;
+    const E_NOT_PUBLISHER: u64 = 3;
 
     // ================================================================
     // |                             Init                             |
@@ -58,18 +55,14 @@ module regulated_token_pool::regulated_token_pool {
             register_mcms_entrypoint(publisher, token_pool_module_name);
         };
 
-        let regulated_token_address = regulated_token::token_address();
-        token_admin_registry::register_pool(
-            publisher,
-            token_pool_module_name,
-            regulated_token_address,
-            CallbackProof {}
-        );
+        // Register V2 pool with closure-based callbacks
+        register_v2_callbacks(publisher);
 
         // create a resource account to be the owner of the primary FungibleStore we will use.
         let (store_signer, store_signer_cap) =
             account::create_resource_account(publisher, STORE_OBJECT_SEED);
 
+        let regulated_token_address = regulated_token::token_address();
         let metadata = object::address_to_object<Metadata>(regulated_token_address);
 
         // make sure this is a valid fungible asset that is primary fungible store enabled,
@@ -88,6 +81,20 @@ module regulated_token_pool::regulated_token_pool {
         };
 
         move_to(&store_signer, pool);
+    }
+
+    public fun register_v2_callbacks(publisher: &signer) {
+        assert!(
+            signer::address_of(publisher) == @regulated_token_pool,
+            error::permission_denied(E_NOT_PUBLISHER)
+        );
+        let regulated_token_address = regulated_token::token_address();
+        token_admin_registry::register_pool_v2(
+            publisher,
+            regulated_token_address,
+            lock_or_burn_v2,
+            release_or_mint_v2
+        );
     }
 
     // ================================================================
@@ -316,6 +323,65 @@ module regulated_token_pool::regulated_token_pool {
 
         // return the withdrawn fungible asset.
         fa
+    }
+
+    #[persistent]
+    fun lock_or_burn_v2(
+        fa: FungibleAsset, input: LockOrBurnInputV1
+    ): (vector<u8>, vector<u8>) acquires RegulatedTokenPoolState {
+        let pool = borrow_pool_mut();
+        let fa_amount = fungible_asset::amount(&fa);
+
+        let dest_token_address =
+            token_pool::validate_lock_or_burn(
+                &mut pool.token_pool_state,
+                &fa,
+                &input,
+                fa_amount
+            );
+
+        let pool_signer = &account::create_signer_with_capability(&pool.store_signer_cap);
+        let sender = token_admin_registry::get_lock_or_burn_sender(&input);
+        regulated_token::bridge_burn(pool_signer, sender, fa);
+
+        let remote_chain_selector =
+            token_admin_registry::get_lock_or_burn_remote_chain_selector(&input);
+
+        token_pool::emit_locked_or_burned(
+            &mut pool.token_pool_state, fa_amount, remote_chain_selector
+        );
+
+        (dest_token_address, token_pool::encode_local_decimals(&pool.token_pool_state))
+    }
+
+    #[persistent]
+    fun release_or_mint_v2(
+        input: ReleaseOrMintInputV1
+    ): (FungibleAsset, u64) acquires RegulatedTokenPoolState {
+        let pool = borrow_pool_mut();
+        let local_amount =
+            token_pool::calculate_release_or_mint_amount(&pool.token_pool_state, &input);
+
+        token_pool::validate_release_or_mint(
+            &mut pool.token_pool_state, &input, local_amount
+        );
+
+        // Mint the amount for release using regulated token's bridge mint function
+        let pool_signer = &account::create_signer_with_capability(&pool.store_signer_cap);
+        let receiver = token_admin_registry::get_release_or_mint_receiver(&input);
+        let fa = regulated_token::bridge_mint(pool_signer, receiver, local_amount);
+
+        let remote_chain_selector =
+            token_admin_registry::get_release_or_mint_remote_chain_selector(&input);
+
+        token_pool::emit_released_or_minted(
+            &mut pool.token_pool_state,
+            receiver,
+            local_amount,
+            remote_chain_selector
+        );
+
+        (fa, local_amount)
     }
 
     // ================================================================
@@ -627,5 +693,60 @@ module regulated_token_pool::regulated_token_pool {
     #[test_only]
     public entry fun test_init_module(owner: &signer) {
         init_module(owner);
+    }
+
+    #[test_only]
+    /// Used for registering the pool with V2 closure-based callbacks.
+    public fun create_callback_proof(): CallbackProof {
+        CallbackProof {}
+    }
+
+    #[test_only]
+    public fun test_init_v1(publisher: &signer) {
+        // register the pool on deployment, because in the case of object code deployment,
+        // this is the only time we have a signer ref to @regulated_token_pool.
+
+        // create an Account on the object for event handles.
+        account::create_account_if_does_not_exist(@regulated_token_pool);
+
+        // the name of this module. if incorrect, callbacks will fail to be registered and
+        // register_pool will revert.
+        let token_pool_module_name = b"regulated_token_pool";
+
+        // Register the entrypoint with mcms
+        if (@mcms_register_entrypoints == @0x1) {
+            register_mcms_entrypoint(publisher, token_pool_module_name);
+        };
+
+        let regulated_token_address = regulated_token::token_address();
+        token_admin_registry::register_pool(
+            publisher,
+            token_pool_module_name,
+            regulated_token_address,
+            CallbackProof {}
+        );
+
+        // create a resource account to be the owner of the primary FungibleStore we will use.
+        let (store_signer, store_signer_cap) =
+            account::create_resource_account(publisher, STORE_OBJECT_SEED);
+
+        let metadata = object::address_to_object<Metadata>(regulated_token_address);
+
+        // make sure this is a valid fungible asset that is primary fungible store enabled,
+        // ie. created with primary_fungible_store::create_primary_store_enabled_fungible_asset
+        primary_fungible_store::ensure_primary_store_exists(
+            signer::address_of(&store_signer), metadata
+        );
+
+        let pool = RegulatedTokenPoolState {
+            ownable_state: ownable::new(&store_signer, @regulated_token_pool),
+            store_signer_address: signer::address_of(&store_signer),
+            store_signer_cap,
+            token_pool_state: token_pool::initialize(
+                &store_signer, regulated_token_address, vector[]
+            )
+        };
+
+        move_to(&store_signer, pool);
     }
 }

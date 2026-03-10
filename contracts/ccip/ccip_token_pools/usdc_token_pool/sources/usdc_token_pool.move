@@ -13,7 +13,7 @@ module usdc_token_pool::usdc_token_pool {
 
     use ccip::address;
     use ccip::eth_abi;
-    use ccip::token_admin_registry;
+    use ccip::token_admin_registry::{Self, LockOrBurnInputV1, ReleaseOrMintInputV1};
     use ccip_token_pool::ownable;
     use ccip_token_pool::rate_limiter;
     use ccip_token_pool::token_pool;
@@ -112,12 +112,8 @@ module usdc_token_pool::usdc_token_pool {
             register_mcms_entrypoint(publisher, token_pool_module_name);
         };
 
-        token_admin_registry::register_pool(
-            publisher,
-            token_pool_module_name,
-            @local_token,
-            CallbackProof {}
-        );
+        // Register V2 pool with closure-based callbacks
+        register_v2_callbacks(publisher);
 
         // create a resource account to be the owner of the primary FungibleStore we will use.
         let (store_signer, store_signer_cap) =
@@ -139,6 +135,19 @@ module usdc_token_pool::usdc_token_pool {
                 ),
                 domain_set_events: account::new_event_handle(&store_signer)
             }
+        );
+    }
+
+    public fun register_v2_callbacks(publisher: &signer) {
+        assert!(
+            signer::address_of(publisher) == @usdc_token_pool,
+            error::permission_denied(E_NOT_PUBLISHER)
+        );
+        token_admin_registry::register_pool_v2(
+            publisher,
+            @local_token,
+            lock_or_burn_v2,
+            release_or_mint_v2
         );
     }
 
@@ -364,9 +373,6 @@ module usdc_token_pool::usdc_token_pool {
             dest_pool_data
         );
 
-        let remote_chain_selector =
-            token_admin_registry::get_lock_or_burn_remote_chain_selector(&input);
-
         token_pool::emit_locked_or_burned(
             &mut pool.token_pool_state, fa_amount, remote_chain_selector
         );
@@ -491,6 +497,109 @@ module usdc_token_pool::usdc_token_pool {
             destination_domain == expected_local_domain,
             error::invalid_argument(E_DESTINATION_MISMATCH)
         );
+    }
+
+    #[persistent]
+    fun lock_or_burn_v2(
+        fa: FungibleAsset, input: LockOrBurnInputV1
+    ): (vector<u8>, vector<u8>) acquires USDCTokenPoolState {
+        let pool = borrow_pool_mut();
+        let fa_amount = fungible_asset::amount(&fa);
+
+        let dest_token_address =
+            token_pool::validate_lock_or_burn(
+                &mut pool.token_pool_state,
+                &fa,
+                &input,
+                fa_amount
+            );
+
+        let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
+
+        let remote_chain_selector =
+            token_admin_registry::get_lock_or_burn_remote_chain_selector(&input);
+        assert!(
+            pool.chain_to_domain.contains(remote_chain_selector),
+            error::invalid_argument(E_DOMAIN_NOT_FOUND)
+        );
+
+        let remote_domain_info = pool.chain_to_domain.borrow(remote_chain_selector);
+
+        assert!(remote_domain_info.enabled, error::invalid_argument(E_DOMAIN_DISABLED));
+
+        let mint_recipient_bytes =
+            token_admin_registry::get_lock_or_burn_receiver(&input);
+        let mint_recipient = from_bcs::to_address(mint_recipient_bytes);
+        let nonce =
+            token_messenger::deposit_for_burn_with_caller(
+                &store_signer,
+                fa,
+                remote_domain_info.domain_identifier,
+                mint_recipient,
+                from_bcs::to_address(remote_domain_info.allowed_caller)
+            );
+
+        let dest_pool_data = encode_dest_pool_data(pool.local_domain_identifier, nonce);
+
+        token_pool::emit_locked_or_burned(
+            &mut pool.token_pool_state, fa_amount, remote_chain_selector
+        );
+
+        (dest_token_address, dest_pool_data)
+    }
+
+    #[persistent]
+    fun release_or_mint_v2(
+        input: ReleaseOrMintInputV1
+    ): (FungibleAsset, u64) acquires USDCTokenPoolState {
+        let pool = borrow_pool_mut();
+        let local_amount =
+            token_admin_registry::get_release_or_mint_source_amount(&input) as u64;
+
+        token_pool::validate_release_or_mint(
+            &mut pool.token_pool_state, &input, local_amount
+        );
+
+        let store_signer = account::create_signer_with_capability(&pool.store_signer_cap);
+
+        let (source_domain_identifier, nonce) =
+            decode_dest_pool_data(
+                token_admin_registry::get_release_or_mint_source_pool_data(&input)
+            );
+        let offchain_token_data =
+            token_admin_registry::get_release_or_mint_offchain_token_data(&input);
+
+        let (message_bytes, attestation) =
+            parse_message_and_attestation(offchain_token_data);
+
+        validate_message(
+            &message_bytes,
+            source_domain_identifier,
+            nonce,
+            pool.local_domain_identifier
+        );
+
+        let receipt =
+            message_transmitter::receive_message(
+                &store_signer, &message_bytes, &attestation
+            );
+
+        assert!(token_messenger::handle_receive_message(receipt));
+
+        let recipient = token_admin_registry::get_release_or_mint_receiver(&input);
+        let remote_chain_selector =
+            token_admin_registry::get_release_or_mint_remote_chain_selector(&input);
+
+        token_pool::emit_released_or_minted(
+            &mut pool.token_pool_state,
+            recipient,
+            local_amount,
+            remote_chain_selector
+        );
+
+        let fa_metadata = token_pool::get_fa_metadata(&pool.token_pool_state);
+
+        (fungible_asset::zero(fa_metadata), local_amount)
     }
 
     // ================================================================
@@ -911,5 +1020,11 @@ module usdc_token_pool::usdc_token_pool {
     #[test_only]
     public fun test_init_module(publisher: &signer) {
         init_module(publisher);
+    }
+
+    #[test_only]
+    /// Used for registering the pool with V2 closure-based callbacks.
+    public fun create_callback_proof(): CallbackProof {
+        CallbackProof {}
     }
 }

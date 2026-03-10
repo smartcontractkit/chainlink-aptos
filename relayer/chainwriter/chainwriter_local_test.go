@@ -75,7 +75,7 @@ func runChainWriterTest(t *testing.T, logger logger.Logger, rpcURL string, accou
 
 	txmConfig := txm.DefaultConfigSet
 
-	txmgr, err := txm.New(logger, keystore, txmConfig, getClient)
+	txmgr, err := txm.New(logger, keystore, txmConfig, getClient, chainInfo.ChainID)
 	require.NoError(t, err)
 	err = txmgr.Start(context.Background())
 	require.NoError(t, err)

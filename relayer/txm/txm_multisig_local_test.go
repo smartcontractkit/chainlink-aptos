@@ -156,7 +156,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 	chainIdBig = new(big.Int).SetUint64(uint64(chainId))
 
 	config := DefaultConfigSet
-	txm, err := New(logger, keystore, config, getClient)
+	txm, err := New(logger, keystore, config, getClient, chainInfo.ChainID)
 	require.NoError(t, err)
 	err = txm.Start(context.Background())
 	require.NoError(t, err)

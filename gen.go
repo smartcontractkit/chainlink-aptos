@@ -21,6 +21,7 @@ package aptos
 
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip_router/sources/router.move --output ./bindings/ccip_router/router
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip_dummy_receiver/sources/dummy_receiver.move --output ./bindings/ccip_dummy_receiver/dummy_receiver
+//go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip_dummy_receiver/sources/ptt_dummy_receiver.move --output ./bindings/ccip_dummy_receiver/ptt_dummy_receiver
 
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip_token_pools/burn_mint_token_pool/sources/burn_mint_token_pool.move --output ./bindings/ccip_token_pools/burn_mint_token_pool/burn_mint_token_pool --externalStructs ccip_token_pool::rate_limiter::TokenBucket=github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/token_pool/rate_limiter
 //go:generate go run ./cmd/bindgen --input ./contracts/ccip/ccip_token_pools/lock_release_token_pool/sources/lock_release_token_pool.move --output ./bindings/ccip_token_pools/lock_release_token_pool/lock_release_token_pool --externalStructs ccip_token_pool::rate_limiter::TokenBucket=github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/token_pool/rate_limiter
@@ -37,6 +38,9 @@ package aptos
 //go:generate go run ./cmd/bindgen --input ./contracts/mcms/mcms/sources/mcms_deployer.move --output ./bindings/mcms/mcms_deployer
 //go:generate go run ./cmd/bindgen --input ./contracts/mcms/mcms/sources/mcms_executor.move --output ./bindings/mcms/mcms_executor
 //go:generate go run ./cmd/bindgen --input ./contracts/mcms/mcms/sources/mcms_registry.move --output ./bindings/mcms/mcms_registry
+
+//go:generate go run ./cmd/bindgen --input ./contracts/mcms/curse_mcms/sources/curse_mcms.move --output ./bindings/curse_mcms/curse_mcms
+//go:generate go run ./cmd/bindgen --input ./contracts/mcms/curse_mcms/sources/curse_mcms_account.move --output ./bindings/curse_mcms/curse_mcms_account
 
 //go:generate go run ./cmd/bindgen --input ./contracts/mcms/mcms_test/sources/mcms_user.move --output ./bindings/mcms_test/mcms_user
 

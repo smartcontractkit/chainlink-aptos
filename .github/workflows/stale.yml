@@ -1,0 +1,27 @@
+##
+# Workflow is triggered daily midnight UTC
+# A PR with more than 60 days of inactivity will be marked as stale
+# A PR that's stale for more than 7 days will be automatically closed
+# Issues are exempt from auto marking as stale but issues with manually added 'stale' label are eligible for auto closure after 7 days.
+# PRs with `exempt-pr-labels` or assignees are exempt from auto stale marking, it's the responsibility of the assignee to get the PR progressed either with review/merge or closure.
+##
+name: Manage stale issues and PRs
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # Will be triggered every day at midnight UTC
+permissions: {}
+jobs:
+  stale-prs:
+    permissions:
+      actions: write
+      contents: write
+      issues: write
+      pull-requests: write
+    uses: smartcontractkit/.github/.github/workflows/reusable-stale-prs-issues.yml@217f5d6f10f04ebd56534dc2f2cd9b485fe45d88 # 2025-06-20
+    with:
+      days-before-pr-stale: 60 # days
+      days-before-pr-close: 7 # days
+      operations-per-run: 200 # max number of API calls to use.
+    secrets:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -9,6 +9,8 @@ module ccip_dummy_receiver::dummy_receiver {
     use ccip::client;
     use ccip::receiver_registry;
 
+    const E_TEST_ABORT: u64 = 1;
+
     #[event]
     struct ReceivedMessage has store, drop {
         data: vector<u8>
@@ -46,7 +48,9 @@ module ccip_dummy_receiver::dummy_receiver {
                 @ccip_dummy_receiver, DummyReceiverProof {}
             );
         let data = client::get_data(&message);
-        if (data == b"abort") { abort 1 };
+        if (data == b"abort") {
+            abort E_TEST_ABORT
+        };
 
         let state = borrow_state_mut();
 

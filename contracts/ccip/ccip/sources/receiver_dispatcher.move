@@ -11,9 +11,13 @@ module ccip::receiver_dispatcher {
     ) {
         auth::assert_is_allowed_offramp(signer::address_of(caller));
 
-        let dispatch_metadata =
-            receiver_registry::start_receive(receiver_address, message);
-        dispatchable_fungible_asset::derived_supply(dispatch_metadata);
-        receiver_registry::finish_receive(receiver_address);
+        if (receiver_registry::is_registered_receiver_v2(receiver_address)) {
+            receiver_registry::invoke_ccip_receive_v2(receiver_address, message);
+        } else {
+            let dispatch_metadata =
+                receiver_registry::start_receive(receiver_address, message);
+            dispatchable_fungible_asset::derived_supply(dispatch_metadata);
+            receiver_registry::finish_receive(receiver_address);
+        }
     }
 }

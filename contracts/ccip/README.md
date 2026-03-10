@@ -244,7 +244,7 @@ public entry fun ccip_send(
 - **Encoding**: BCS-encoded execution settings
 - **Components**:
   - **Gas Limit**: Maximum gas for execution on destination
-  - **Allow Out-of-Order**: **Must be set to `true`** - Aptos only supports out-of-order execution
+  - **Allow Out-of-Order**: Passed in extra_args but **ignored** by the contract; Aptos CCIP always uses out-of-order execution regardless of the value (no revert if you set `false`).
 - **Generation**:
 
   ```move
@@ -252,13 +252,13 @@ public entry fun ccip_send(
 
   // For EVM chains (generic extra args v2)
   let gas_limit = 200000u256;
-  let allow_out_of_order = true; // REQUIRED: Must be true for Aptos
+  let allow_out_of_order = true; // optional; contract ignores and always uses out-of-order
   let extra_args = client::encode_generic_extra_args_v2(gas_limit, allow_out_of_order);
 
   // For Solana chains (SVM extra args v1)
   let compute_units = 100000u32;
   let account_bitmap = 0u64;
-  let allow_out_of_order = true; // REQUIRED: Must be true for Aptos
+  let allow_out_of_order = true; // optional; contract ignores and always uses out-of-order
   let token_receiver = x"1234..."; // 32-byte Solana address
   let accounts = vector[x"5678..."]; // Additional accounts
   let extra_args = client::encode_svm_extra_args_v1(
@@ -282,19 +282,9 @@ public entry fun ccip_send(
   emit_message_sent_event(message_id, dest_chain_selector);
   ```
 
-### ⚠️ Important: Out-of-Order Execution Requirement
+### Out-of-Order Execution
 
-**Aptos CCIP only supports out-of-order execution.** This means:
-
-- **`allow_out_of_order` must ALWAYS be `true`** in extra_args
-
-```move
-// ✅ Correct - always use true
-let extra_args = client::encode_generic_extra_args_v2(gas_limit, true);
-
-// ❌ Will fail - Aptos doesn't support sequential execution
-let extra_args = client::encode_generic_extra_args_v2(gas_limit, false);
-```
+**Aptos CCIP always uses out-of-order execution.** The `allow_out_of_order` flag in extra_args is **ignored**: the contract parses it but always treats execution as out-of-order (nonce = 0). You are not reverted if you pass `false` or omit it; the contract overrides to true. You can pass `true` or `false` when building extra_args; behavior is the same.
 
 ## Message Sending Examples
 
@@ -699,15 +689,15 @@ module my_app::fee_calculator {
 
 4. **Invalid Extra Args**
 
-   - **Cause**: Incorrect encoding for destination chain type or wrong out-of-order setting
-   - **Solution**: Use appropriate encoding function with `allow_out_of_order = true` (required for Aptos)
+   - **Cause**: Incorrect encoding for destination chain type
+   - **Solution**: Use the appropriate encoding function for the destination (generic v2 for EVM/Aptos/Sui, SVM v1 for Solana). The out-of-order value is ignored; the contract always uses out-of-order execution.
    - **Example**:
 
      ```move
-     // For EVM chains - MUST set allow_out_of_order to true
+     // For EVM chains
      let extra_args = client::encode_generic_extra_args_v2(gas_limit, true);
 
-     // For Solana chains - MUST set allow_out_of_order to true
+     // For Solana chains
      let extra_args = client::encode_svm_extra_args_v1(
          compute_units, bitmap, true, token_receiver, accounts
      );
