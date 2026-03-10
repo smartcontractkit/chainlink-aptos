@@ -1,6 +1,7 @@
 package txm
 
 import (
+	"context"
 	"testing"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
@@ -21,5 +22,5 @@ func TestTxmMaybeRetryReturnsFalseWhenBroadcastChannelIsFull(t *testing.T) {
 		},
 	}
 
-	require.False(t, txm.maybeRetry(unconfirmedTx, RetryReasonExpired))
+	require.False(t, txm.maybeRetry(context.Background(), unconfirmedTx, RetryReasonExpired))
 }

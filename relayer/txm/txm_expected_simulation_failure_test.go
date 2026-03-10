@@ -1,6 +1,7 @@
 package txm
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -126,7 +127,7 @@ func TestTxmExpectedSignAndBroadcastMarksFailedWithoutInflightTx(t *testing.T) {
 	require.NoError(t, err)
 	<-txm.broadcastChan
 
-	txm.signAndBroadcast(txm.transactions["tx-id"])
+	txm.signAndBroadcast(context.Background(), txm.transactions["tx-id"])
 
 	status, getErr := txm.GetStatus("tx-id")
 	require.NoError(t, getErr)
