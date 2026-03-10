@@ -814,7 +814,6 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 						} else {
 							ctxLogger.Infow("confirmed tx: unsuccessful", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
 							a.metrics.IncrementRevertTxs(ctx)
-							a.metrics.IncrementErrorTxs(ctx)
 							if userTx.VmStatus == "Out of gas" {
 								// https://github.com/aptos-labs/aptos-core/blob/77ff4bf413f54c41206bd5573e1891fa3a0dccf6/api/types/src/convert.rs#L1062
 								// Example transaction: https://api.testnet.aptoslabs.com/v1/transactions/by_hash/0x7a106db811c8d5dfd71ac98f374ca36e4f630ce5412b99c8f0e871e7feda37ea
@@ -823,10 +822,12 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 								// If maybeRetry succeeds, status stays Unconfirmed and the tx re-enters the broadcast loop.
 								// If it fails (max attempts), status is set to Failed.
 								if !a.maybeRetry(ctx, unconfirmedTx, RetryReasonOutOfGas) {
+									a.metrics.IncrementErrorTxs(ctx)
 									a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Failed)
 								}
 								continue
 							}
+							a.metrics.IncrementErrorTxs(ctx)
 							// TODO: Non-OOG reverts (e.g. MOVE_ABORT, EXECUTION_FAILURE) fall through
 							// to the Finalized update below. The caller (aptos_service.go) treats
 							// Finalized as TxSuccess, which is incorrect for reverted txs. Should either:
@@ -873,10 +874,10 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 					continue
 				}
 
-				a.metrics.IncrementDropTxs(ctx)
-				a.metrics.IncrementErrorTxs(ctx)
 				a.incrementTransactionAttempt(unconfirmedTx.Tx)
 				if !a.maybeRetry(ctx, unconfirmedTx, RetryReasonExpired) {
+					a.metrics.IncrementDropTxs(ctx)
+					a.metrics.IncrementErrorTxs(ctx)
 					a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Failed)
 				}
 			}
