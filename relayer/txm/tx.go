@@ -37,4 +37,6 @@ type AptosTx struct {
 	Simulate                       bool
 	ExpectedSimulationFailureRules []ExpectedSimulationFailureRule
 	Fee                            *big.Int // Transaction fee in octas (1e-8 APT)
+	VmStatus                       string
+	TxHash                         string
 }
