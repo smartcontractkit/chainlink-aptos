@@ -269,51 +269,6 @@ func (r *relayer) View(ctx context.Context, req typeaptos.ViewRequest) (*typeapt
 	return &typeaptos.ViewReply{Data: data}, nil
 }
 
-func (r *relayer) EventsByHandle(ctx context.Context, req typeaptos.EventsByHandleRequest) (*typeaptos.EventsByHandleReply, error) {
-	client, err := r.chain.GetClient()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get client: %w", err)
-	}
-
-	events, err := client.EventsByHandle(aptosdk.AccountAddress(req.Account), req.EventHandle, req.FieldName, req.Start, req.Limit)
-	if err != nil {
-		return nil, err
-	}
-
-	out := &typeaptos.EventsByHandleReply{Events: make([]*typeaptos.Event, 0, len(events))}
-	for _, e := range events {
-		if e == nil {
-			continue
-		}
-
-		ev := &typeaptos.Event{
-			Version:        e.Version,
-			Type:           e.Type,
-			SequenceNumber: e.SequenceNumber,
-		}
-		if e.Guid != nil {
-			var addr typeaptos.AccountAddress
-			if e.Guid.AccountAddress != nil {
-				copy(addr[:], e.Guid.AccountAddress[:])
-			}
-			ev.Guid = &typeaptos.GUID{
-				CreationNumber: e.Guid.CreationNumber,
-				AccountAddress: addr,
-			}
-		}
-		if e.Data != nil {
-			data, marshalErr := json.Marshal(e.Data)
-			if marshalErr != nil {
-				return nil, fmt.Errorf("failed to marshal event data: %w", marshalErr)
-			}
-			ev.Data = data
-		}
-		out.Events = append(out.Events, ev)
-	}
-
-	return out, nil
-}
-
 func (r *relayer) TransactionByHash(ctx context.Context, req typeaptos.TransactionByHashRequest) (*typeaptos.TransactionByHashReply, error) {
 	client, err := r.chain.GetClient()
 	if err != nil {
