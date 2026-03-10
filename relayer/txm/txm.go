@@ -47,11 +47,10 @@ type AptosTxm struct {
 
 type SubmittedTransaction struct {
 	Hash                    string
-	Nonce                   uint64
+	SequenceNumber          uint64
 	ExpirationTimestampSecs uint64
 	MaxGasAmount            uint64
 	GasUnitPrice            uint64
-	Signature               []byte
 	Sender                  aptos.AccountAddress
 }
 
@@ -232,7 +231,7 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 }
 
 // SubmitPayload submits a pre-encoded Aptos payload via TXM synchronously and
-// returns the first submitted tx details (hash/nonce/gas/signature) when
+// returns the first submitted tx details (hash/sequence number/gas) when
 // accepted into mempool.
 func (a *AptosTxm) SubmitPayload(
 	ctx context.Context,
@@ -364,14 +363,12 @@ func (a *AptosTxm) GetSubmittedTransaction(transactionID string) (*SubmittedTran
 		return nil, errors.New("transaction has not been submitted yet")
 	}
 
-	sig := append([]byte(nil), tx.LastSubmittedSignature...)
 	return &SubmittedTransaction{
 		Hash:                    tx.LastSubmittedHash,
-		Nonce:                   tx.LastSubmittedNonce,
+		SequenceNumber:          tx.LastSubmittedSequenceNumber,
 		ExpirationTimestampSecs: tx.LastSubmittedExpirationTimestampSecs,
 		MaxGasAmount:            tx.LastSubmittedMaxGasAmount,
 		GasUnitPrice:            tx.LastSubmittedGasUnitPrice,
-		Signature:               sig,
 		Sender:                  tx.FromAddress,
 	}, nil
 }
@@ -425,7 +422,7 @@ func (a *AptosTxm) broadcastLoop() {
 	}
 }
 
-func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, nonce uint64) (*aptos.RawTransaction, error) {
+func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, sequenceNumber uint64) (*aptos.RawTransaction, error) {
 	// this is cached within NodeClient after the first successful invocation.
 	chainId, err := client.GetChainId()
 	if err != nil {
@@ -458,7 +455,7 @@ func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, nonce u
 
 	rawTx := &aptos.RawTransaction{
 		Sender:                     tx.FromAddress,
-		SequenceNumber:             nonce,
+		SequenceNumber:             sequenceNumber,
 		Payload:                    payload,
 		MaxGasAmount:               0, // populated below
 		GasUnitPrice:               0, // populated below
@@ -532,21 +529,21 @@ func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, nonce u
 	return rawTx, nil
 }
 
-func (a *AptosTxm) createSignedTx(client aptos.AptosRpcClient, rawTx *aptos.RawTransaction, publicKey ed25519.PublicKey, fromAddress aptos.AccountAddress) (*aptos.SignedTransaction, []byte, error) {
+func (a *AptosTxm) createSignedTx(client aptos.AptosRpcClient, rawTx *aptos.RawTransaction, publicKey ed25519.PublicKey, fromAddress aptos.AccountAddress) (*aptos.SignedTransaction, error) {
 	signingMessage, err := rawTx.SigningMessage()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create signing message: %w", err)
+		return nil, fmt.Errorf("failed to create signing message: %w", err)
 	}
 
 	signature, err := a.keystore.Sign(context.Background(), fmt.Sprintf("%064x", publicKey), signingMessage)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to sign message for address %s: %w", fromAddress, err)
+		return nil, fmt.Errorf("failed to sign message for address %s: %w", fromAddress, err)
 	}
 
 	sig := aptoscrypto.Ed25519Signature{}
 	err = sig.FromBytes(signature)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to deserialize signature: %w", err)
+		return nil, fmt.Errorf("failed to deserialize signature: %w", err)
 	}
 
 	authenticator := &aptoscrypto.Ed25519Authenticator{
@@ -559,10 +556,10 @@ func (a *AptosTxm) createSignedTx(client aptos.AptosRpcClient, rawTx *aptos.RawT
 		Auth:    authenticator,
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to sign tx: %w", err)
+		return nil, fmt.Errorf("failed to sign tx: %w", err)
 	}
 
-	return signedTx, signature, nil
+	return signedTx, nil
 }
 
 func (a *AptosTxm) updateTransactionStatus(tx *AptosTx, status commontypes.TransactionStatus) {
@@ -571,15 +568,14 @@ func (a *AptosTxm) updateTransactionStatus(tx *AptosTx, status commontypes.Trans
 	tx.Status = status
 }
 
-func (a *AptosTxm) updateTransactionSubmittedState(tx *AptosTx, hash string, nonce uint64, expirationTimestampSecs uint64, maxGasAmount uint64, gasUnitPrice uint64, signature []byte) {
+func (a *AptosTxm) updateTransactionSubmittedState(tx *AptosTx, hash string, sequenceNumber uint64, expirationTimestampSecs uint64, maxGasAmount uint64, gasUnitPrice uint64) {
 	a.transactionsLock.Lock()
 	defer a.transactionsLock.Unlock()
 	tx.LastSubmittedHash = hash
-	tx.LastSubmittedNonce = nonce
+	tx.LastSubmittedSequenceNumber = sequenceNumber
 	tx.LastSubmittedExpirationTimestampSecs = expirationTimestampSecs
 	tx.LastSubmittedMaxGasAmount = maxGasAmount
 	tx.LastSubmittedGasUnitPrice = gasUnitPrice
-	tx.LastSubmittedSignature = append([]byte(nil), signature...)
 }
 
 func (a *AptosTxm) updateTransactionFee(tx *AptosTx, fee *big.Int) {
@@ -621,7 +617,8 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			// Another concurrent submission may have created the store first.
 			txStore = a.accountStore.GetTxStore(tx.FromAddress.String())
 			if txStore == nil {
-				ctxLogger.Errorw("failed to create tx store", "fromAddress", tx.FromAddress.String(), "error", err)
+				// Avoid logging potentially sensitive account-derived data here.
+				ctxLogger.Errorw("failed to create tx store and no existing store was found after concurrent-create check")
 				a.updateTransactionStatus(tx, commontypes.Failed)
 				return
 			}
@@ -632,24 +629,25 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 
 	currentAttempt := a.getTransactionAttempt(tx)
 	if currentAttempt > 0 {
-		// If we're retrying a failed transaction that we caught in the confirm loop, resync the nonce again
+		// If we're retrying a failed transaction that we caught in the confirm loop, resync the
+		// sequence number again
 		// first.
 		_ = a.resyncNonce(client, tx)
 	}
 
 	// broadcast with basic retry to try get the tx included in the mempool
 	for attempt := 1; attempt <= int(a.config.MaxSubmitRetryAttempts); attempt++ {
-		// build the tx with the nonce and expiration timestamp
-		nonce := txStore.GetNextNonce()
+		// build the tx with the sequence number and expiration timestamp
+		sequenceNumber := txStore.GetNextNonce()
 
-		rawTx, err := a.createRawTx(client, tx, nonce)
+		rawTx, err := a.createRawTx(client, tx, sequenceNumber)
 		if err != nil {
 			ctxLogger.Errorw("failed to create raw tx", "error", err)
 			a.updateTransactionStatus(tx, commontypes.Failed)
 			return
 		}
 
-		signedTx, signature, err := a.createSignedTx(client, rawTx, tx.PublicKey, tx.FromAddress)
+		signedTx, err := a.createSignedTx(client, rawTx, tx.PublicKey, tx.FromAddress)
 		if err != nil {
 			ctxLogger.Errorw("failed to create signed tx", "error", err)
 			a.updateTransactionStatus(tx, commontypes.Failed)
@@ -667,9 +665,9 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			// tx included in the Mempool
 			currentAttempt := a.getTransactionAttempt(tx)
 			ctxLogger.Debugw("submit tx successful", "attempt", currentAttempt, "submitResponse", submitResponse)
-			a.updateTransactionSubmittedState(tx, submitResponse.Hash, nonce, rawTx.ExpirationTimestampSeconds, rawTx.MaxGasAmount, rawTx.GasUnitPrice, signature)
+			a.updateTransactionSubmittedState(tx, submitResponse.Hash, sequenceNumber, rawTx.ExpirationTimestampSeconds, rawTx.MaxGasAmount, rawTx.GasUnitPrice)
 
-			err = txStore.AddUnconfirmed(nonce, submitResponse.Hash, rawTx.ExpirationTimestampSeconds, tx)
+			err = txStore.AddUnconfirmed(sequenceNumber, submitResponse.Hash, rawTx.ExpirationTimestampSeconds, tx)
 			if err != nil {
 				// TODO: figure out what to do here, this should never occur.
 				ctxLogger.Errorw("failed to add unconfirmed tx", "txHash", submitResponse.Hash, "error", err)
@@ -682,7 +680,7 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		} else {
 			// In case of http errors (>400) wait gracefully and retry
 			// It includes all network-related errors as well as
-			// the pre-execution validation in the Mempool (e.g. old/duplicated nonce, transaction expired)
+			// the pre-execution validation in the Mempool (e.g. old/duplicated sequence number, transaction expired)
 			var httpError *aptos.HttpError
 			if !errors.As(err, &httpError) {
 				// Do not retry on unknown errors
@@ -700,13 +698,13 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 			isInvalidUpdate := strings.Contains(httpErrorBody, "INVALID_TRANSACTION_UPDATE") || strings.Contains(httpErrorBody, "TRANSACTION ALREADY IN MEMPOOL WITH A DIFFERENT PAYLOAD")
 
 			if isTooOld || isTooNew {
-				// Try to resync the nonce before the next attempt.
+				// Try to resync the sequence number before the next attempt.
 				_ = a.resyncNonce(client, tx)
 			}
 			if isTooOld || isInvalidUpdate {
-				// Mempool accepted a tx with this nonce, but onchain sequence may not
-				// be updated yet. Move local nonce cursor forward.
-				txStore.AdvanceNextNonce(nonce + 1)
+				// Mempool accepted a tx with this sequence number, but onchain
+				// sequence may not be updated yet. Move local sequence cursor forward.
+				txStore.AdvanceNextNonce(sequenceNumber + 1)
 			}
 		}
 	}

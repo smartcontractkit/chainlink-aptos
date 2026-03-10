@@ -29,9 +29,8 @@ type AptosTx struct {
 	Fee                  *big.Int // Transaction fee in octas (1e-8 APT)
 
 	LastSubmittedHash                    string
-	LastSubmittedNonce                   uint64
+	LastSubmittedSequenceNumber          uint64
 	LastSubmittedExpirationTimestampSecs uint64
 	LastSubmittedMaxGasAmount            uint64
 	LastSubmittedGasUnitPrice            uint64
-	LastSubmittedSignature               []byte
 }
