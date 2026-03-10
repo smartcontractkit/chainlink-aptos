@@ -16,7 +16,7 @@ require (
 	github.com/smartcontractkit/chainlink-aptos v0.0.0-20260304220149-1006d5f7bd76
 	github.com/smartcontractkit/chainlink-common v0.10.1-0.20260309192008-52eea801855c
 	github.com/smartcontractkit/chainlink-deployments-framework v0.83.0
-	github.com/smartcontractkit/chainlink-testing-framework/framework v0.15.3-0.20260305154509-2d7f59d1ea2a
+	github.com/smartcontractkit/chainlink-testing-framework/framework v0.14.7
 	github.com/smartcontractkit/chainlink/core/scripts v0.0.0-20260310110738-2e95f8ba1708
 	github.com/smartcontractkit/mcms v0.36.3
 	github.com/spf13/cobra v1.10.2
@@ -518,3 +518,5 @@ replace (
 replace github.com/smartcontractkit/chainlink-aptos => ../
 
 replace github.com/smartcontractkit/chainlink-protos/cre/go => github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260310142526-ecda729848f6
+
+exclude github.com/smartcontractkit/chainlink-testing-framework/framework v0.15.3-0.20260305154509-2d7f59d1ea2a
