@@ -354,33 +354,6 @@ func (a *AptosTxm) GetStatus(transactionID string) (commontypes.TransactionStatu
 	return tx.Status, nil
 }
 
-type TransactionResult struct {
-	Status   commontypes.TransactionStatus
-	TxHash   string
-	VmStatus string
-}
-
-// NOTE: The txm never sets commontypes.Fatal — only Failed is used for error terminal states.
-// Callers checking for Fatal (like aptos_service.go) will never see it from this txm.
-func (a *AptosTxm) GetTransactionResult(transactionID string) (*TransactionResult, error) {
-	if transactionID == "" {
-		return nil, errors.New("nil tx id")
-	}
-
-	a.transactionsLock.RLock()
-	defer a.transactionsLock.RUnlock()
-	tx, ok := a.transactions[transactionID]
-	if !ok {
-		return nil, errors.New("no such tx")
-	}
-
-	return &TransactionResult{
-		Status:   tx.Status,
-		TxHash:   tx.TxHash,
-		VmStatus: tx.VmStatus,
-	}, nil
-}
-
 func (a *AptosTxm) GetTransactionFee(ctx context.Context, transactionID string) (*big.Int, error) {
 	if transactionID == "" {
 		return nil, errors.New("nil tx id")
