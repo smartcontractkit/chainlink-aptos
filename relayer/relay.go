@@ -36,7 +36,7 @@ type relayer struct {
 func NewRelayer(lggr logger.Logger, chain chain.Chain, capRegistry core.CapabilitiesRegistry) (*relayer, error) {
 	ctx := context.TODO()
 
-	// CAN I REMOVE THIS ?
+	// TODO: Deprecate this after CRE migration is complete
 	if chain.Config().Workflow != nil {
 		capability, err := write_target.NewAptosWriteTarget(ctx, chain, lggr)
 		if err != nil {
@@ -164,6 +164,10 @@ func (r *relayer) Solana() (types.SolanaService, error) {
 	return nil, errors.New("SolanaService is not supported for aptos")
 }
 
+func (r *relayer) Aptos() (types.AptosService, error) {
+	return r, nil
+}
+
 // ChainService interface
 func (r *relayer) GetChainStatus(ctx context.Context) (types.ChainStatus, error) {
 	return r.chain.GetChainStatus(ctx)
@@ -183,8 +187,4 @@ func (r *relayer) ListNodeStatuses(ctx context.Context, pageSize int32, pageToke
 
 func (r *relayer) Transact(ctx context.Context, from, to string, amount *big.Int, balanceCheck bool) error {
 	return r.chain.Transact(ctx, from, to, amount, balanceCheck)
-}
-
-func (r *relayer) Aptos() (types.AptosService, error) {
-	return r, nil
 }
