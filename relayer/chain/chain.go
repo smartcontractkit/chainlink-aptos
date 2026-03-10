@@ -119,7 +119,7 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 		ds:   ds,
 	}
 
-	ch.txm, err = txm.New(lggr, loopKs, *cfg.TransactionManager, ch.GetClient)
+	ch.txm, err = txm.New(lggr, loopKs, *cfg.TransactionManager, ch.GetClient, cfg.ChainID)
 	if err != nil {
 		return nil, err
 	}
