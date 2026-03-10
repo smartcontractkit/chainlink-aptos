@@ -134,7 +134,7 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 	getClient := func() (aptos.AptosRpcClient, error) { return rateLimitedClient, nil }
 
 	txmConfig := txm.DefaultConfigSet
-	txmgr, err := txm.New(logger, keystore, txmConfig, getClient, chainInfo.ChainID)
+	txmgr, err := txm.New(logger, keystore, txmConfig, getClient)
 	require.NoError(t, err)
 
 	err = txmgr.Start(context.Background())
@@ -560,7 +560,7 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 	rateLimitedClient := ratelimit.NewRateLimitedClient(client, chainInfo, rpcUrl, 100, 30*time.Second)
 	getClient := func() (aptos.AptosRpcClient, error) { return rateLimitedClient, nil }
 
-	txmgr, err := txm.New(logger, keystore, txm.DefaultConfigSet, getClient, chainInfo.ChainID)
+	txmgr, err := txm.New(logger, keystore, txm.DefaultConfigSet, getClient)
 	require.NoError(t, err)
 	err = txmgr.Start(context.Background())
 	require.NoError(t, err)
@@ -890,7 +890,7 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 	keystore := testutils.NewTestKeystore(t)
 	keystore.AddKey(privKey)
 	getClient := func() (aptos.AptosRpcClient, error) { return rlClient, nil }
-	txmgr, err := txm.New(lg, keystore, txm.DefaultConfigSet, getClient, chainInfo.ChainID)
+	txmgr, err := txm.New(lg, keystore, txm.DefaultConfigSet, getClient)
 	require.NoError(t, err)
 	err = txmgr.Start(context.Background())
 	require.NoError(t, err)
