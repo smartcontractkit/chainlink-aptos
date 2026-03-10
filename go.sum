@@ -325,8 +325,6 @@ github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82 h1:6C8qej6f
 github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82/go.mod h1:xe4pgH49k4SsmkQq5OT8abwhWmnzkhpgnXeekbx2efw=
 github.com/smartcontractkit/chain-selectors v1.0.89 h1:L9oWZGqQXWyTPnC6ODXgu3b0DFyLmJ9eHv+uJrE9IZY=
 github.com/smartcontractkit/chain-selectors v1.0.89/go.mod h1:qy7whtgG5g+7z0jt0nRyii9bLND9m15NZTzuQPkMZ5w=
-github.com/smartcontractkit/chainlink-common v0.10.1-0.20260309192008-52eea801855c h1:atc8EEM0vmsYutiq4mU2Zcc0TpxoezTniPtsRs6YX14=
-github.com/smartcontractkit/chainlink-common v0.10.1-0.20260309192008-52eea801855c/go.mod h1:0ghbAr7tRO0tT5ZqBXhOyzgUO37tNNe33Yn0hskauVM=
 github.com/smartcontractkit/chainlink-common v0.10.1-0.20260310132059-c991b6f7bfab h1:wVCV2t2lNyngsSu54SgpMSbR7+pMhXxQ0oPCTX8odxo=
 github.com/smartcontractkit/chainlink-common v0.10.1-0.20260310132059-c991b6f7bfab/go.mod h1:0ghbAr7tRO0tT5ZqBXhOyzgUO37tNNe33Yn0hskauVM=
 github.com/smartcontractkit/chainlink-common/pkg/chipingress v0.0.10 h1:FJAFgXS9oqASnkS03RE1HQwYQQxrO4l46O5JSzxqLgg=
