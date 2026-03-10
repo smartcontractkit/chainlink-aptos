@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -184,7 +185,7 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 		BcsValues:                      bcsValues,
 		Status:                         commontypes.Pending,
 		Simulate:                       simulateTx,
-		ExpectedSimulationFailureRules: append([]ExpectedSimulationFailureRule(nil), expectedSimulationFailures...),
+		ExpectedSimulationFailureRules: slices.Clone(expectedSimulationFailures),
 	}
 
 	a.transactionsLock.Lock()
@@ -508,14 +509,10 @@ func (a *AptosTxm) signAndBroadcast(tx *AptosTx) {
 		rawTx, err := a.createRawTx(client, tx, nonce)
 		if err != nil {
 			a.updateTransactionStatus(tx, commontypes.Failed)
-
-			// If this is an expected simulation failure while creating, return early
-			if errors.As(err, new(*expectedSimulationFailureError)) {
-				return
-			}
-
-			ctxLogger.Errorw("failed to create raw tx", "error", err)
-			return
+		    if !errors.As(err, new(*expectedSimulationFailureError)) {
+		        ctxLogger.Errorw("failed to create raw tx", "error", err)
+		    }
+		    return
 		}
 
 		signedTx, err := a.createSignedTx(client, rawTx, tx.PublicKey, tx.FromAddress)
@@ -736,9 +733,9 @@ func (a *AptosTxm) maybeRetry(unconfirmedTx *UnconfirmedTx, retryReason RetryRea
 		return false
 	}
 
-	ctxLogger.Debugw("retrying tx", "attempt", currentAttempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
 	select {
 	case a.broadcastChan <- unconfirmedTx.Tx.ID:
+		ctxLogger.Debugw("retrying tx", "attempt", currentAttempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
 		return true
 	default:
 		ctxLogger.Errorw("failed to enqueue tx for rebroadcast", "attempt", currentAttempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
