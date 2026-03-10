@@ -53,19 +53,6 @@ module platform::forwarder {
         oracles: vector<ed25519::UnvalidatedPublicKey>
     }
 
-    /*
-    struct Transmission {
-        address transmitter;
-        // with an increased gas limit.
-        bool success; // this can actually hold the transmission state (notAttempted, inProgress, successful, failed)
-        // or we can derive it in getTransmissionState(), do check chainlink-evm/contracts/cre/src/keystone/KeystoneForwarder.sol
-        // The amount of gas allocated for the `IReceiver.onReport` call. uint80 allows storing gas for known EVM block
-        // gas limits. Ensures that the minimum gas requested by the user is available during the transmission attempt.
-        // If the transmission fails (indicated by a `false` success state), it can be retried with an increased gas limit.
-        uint80 gasLimit;
-    }
-     */
-
     #[event]
     struct ConfigSet has drop, store {
         don_id: u32,
@@ -225,20 +212,6 @@ module platform::forwarder {
         );
     }
 
-    // TODO: split this into report_validation() and report_delivery()
-    // both called with same params and payload
-    // report_validation() verifies config/payload/sigs and updates transmission info with transmitter address and state to InProgress
-    // report_delivery() will revert if transmission not in progress
-    // report_delivery() will revert (or return success) ? if transmission already successful
-    // report_delivery() updates transmisison info with transmitter address (because different nodes can be calling report_validation() and report_delivery())
-    // so we want to look at the AccountTransactions of the correct node
-    // evm also does the following and it would be nice if aptos had a similar mechanism, this can help send retry attempts with increased gas limit
-    /*
-        uint256 gasLimit = gasleft() - INTERNAL_GAS_REQUIREMENTS;
-        if (gasLimit < MINIMUM_GAS_LIMIT) revert InsufficientGasForRouting(transmissionId);
-        s_transmissions[transmissionId].gasLimit = uint80(gasLimit);
-     */
-
     entry fun report(
         transmitter: &signer,
         receiver: address,
@@ -348,34 +321,6 @@ module platform::forwarder {
 
         (metadata, data)
     }
-
-    /*
-      function getTransmissionInfo(
-        address receiver,
-        bytes32 workflowExecutionId,
-        bytes2 reportId
-        ) external view returns (TransmissionInfo memory) {
-        bytes32 transmissionId = getTransmissionId(receiver, workflowExecutionId, reportId);
-
-        Transmission memory transmission = s_transmissions[transmissionId];
-
-        TransmissionState state;
-
-        if (transmission.transmitter == address(0)) {
-        state = IRouter.TransmissionState.NOT_ATTEMPTED;
-        } else {
-        state = transmission.success ? IRouter.TransmissionState.SUCCEEDED : IRouter.TransmissionState.FAILED;
-        }
-
-        return TransmissionInfo({
-        gasLimit: transmission.gasLimit,
-        state: state,
-        success: transmission.success,
-        transmissionId: transmissionId,
-        transmitter: transmission.transmitter
-        });
-    }
-     */
 
     #[view]
     public fun get_transmission_state(
