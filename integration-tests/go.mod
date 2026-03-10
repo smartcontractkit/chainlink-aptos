@@ -516,3 +516,5 @@ replace (
 )
 
 replace github.com/smartcontractkit/chainlink-aptos => ../
+
+replace github.com/smartcontractkit/chainlink-common => github.com/smartcontractkit/chainlink-common v0.10.1-0.20260218143149-f4e93991b518
