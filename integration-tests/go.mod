@@ -521,6 +521,6 @@ replace github.com/smartcontractkit/chainlink-protos/cre/go => github.com/smartc
 
 exclude github.com/smartcontractkit/chainlink-testing-framework/framework v0.15.3-0.20260305154509-2d7f59d1ea2a
 
-replace github.com/smartcontractkit/chainlink/v2 => github.com/smartcontractkit/chainlink/v2 v2.0.0-20260217182614-af80ea0f7d31
+replace github.com/smartcontractkit/chainlink/v2 => github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260227165820-57dadb4c50e1
 
-replace github.com/smartcontractkit/chainlink-solana => github.com/smartcontractkit/chainlink-solana v1.1.2-0.20260211115641-f96bb4343198
+replace github.com/smartcontractkit/chainlink-solana => github.com/smartcontractkit/chainlink-solana v1.1.2-0.20260223222711-2fa6b0e07db0
