@@ -10,6 +10,7 @@ import (
 	aptosdk "github.com/aptos-labs/aptos-go-sdk"
 	aptosapi "github.com/aptos-labs/aptos-go-sdk/api"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
+	"github.com/smartcontractkit/chainlink-common/pkg/loop"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 	typeaptos "github.com/smartcontractkit/chainlink-common/pkg/types/chains/aptos"
@@ -23,7 +24,7 @@ import (
 	write_target "github.com/smartcontractkit/chainlink-aptos/relayer/write_target/aptos"
 )
 
-var _ types.Relayer = (*relayer)(nil) //nolint:staticcheck
+var _ loop.Relayer = (*relayer)(nil)
 
 type relayer struct {
 	chain chain.Chain
@@ -135,34 +136,6 @@ func (r *relayer) NewPluginProvider(ctx context.Context, rargs types.RelayArgs, 
 
 func (r *relayer) NewLLOProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.LLOProvider, error) {
 	return nil, errors.New("data streams is not supported for aptos")
-}
-
-func (r *relayer) NewMedianProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.MedianProvider, error) {
-	return nil, errors.New("ocr2 is not supported for aptos")
-}
-
-func (r *relayer) NewMercuryProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.MercuryProvider, error) {
-	return nil, errors.New("mercury is not supported for aptos")
-}
-
-func (r *relayer) NewFunctionsProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.FunctionsProvider, error) {
-	return nil, errors.New("functions are not supported for aptos")
-}
-
-func (r *relayer) NewAutomationProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.AutomationProvider, error) {
-	return nil, errors.New("automation is not supported for aptos")
-}
-
-func (r *relayer) NewOCR3CapabilityProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.OCR3CapabilityProvider, error) {
-	return nil, errors.New("ocr3 capability provider is not supported for aptos")
-}
-
-func (r *relayer) NewCCIPCommitProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.CCIPCommitProvider, error) {
-	return nil, errors.New("ccip.commit is not supported for aptos")
-}
-
-func (r *relayer) NewCCIPExecProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.CCIPExecProvider, error) {
-	return nil, errors.New("ccip.exec is not supported for aptos")
 }
 
 func (r *relayer) NewCCIPProvider(ctx context.Context, cargs types.CCIPProviderArgs) (types.CCIPProvider, error) {
