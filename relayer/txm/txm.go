@@ -114,8 +114,6 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 		}
 	}
 
-	ctxLogger := GetContexedTxLogger(a.baseLogger, transactionID, txMetadata)
-
 	ed25519PublicKey, err := utils.HexPublicKeyToEd25519PublicKey(publicKey)
 	if err != nil {
 		return fmt.Errorf("failed to convert public key: %+w", err)
@@ -180,11 +178,10 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 		return fmt.Errorf("failed to parse contract address: %+w", err)
 	}
 
-	currentTimestamp := getTimestampSecs()
 	tx := &AptosTx{
 		ID:                             transactionID,
 		Metadata:                       txMetadata,
-		Timestamp:                      currentTimestamp,
+		Timestamp:                      getTimestampSecs(),
 		FromAddress:                    *fromAccountAddress,
 		PublicKey:                      ed25519PublicKey,
 		ContractAddress:                *contractAccountAddress,
@@ -197,39 +194,7 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 		ExpectedSimulationFailureRules: slices.Clone(expectedSimulationFailures),
 	}
 
-	a.transactionsLock.Lock()
-	if (currentTimestamp - a.transactionsLastPruneTime) > a.config.PruneIntervalSecs {
-		for txID, tx := range a.transactions {
-			if tx.Status != commontypes.Finalized && tx.Status != commontypes.Failed && tx.Status != commontypes.Fatal {
-				continue
-			}
-			if (currentTimestamp - tx.Timestamp) < a.config.PruneTxExpirationSecs {
-				continue
-			}
-			ctxLogger.Debugw("Pruning transaction", "status", tx.Status)
-			delete(a.transactions, txID)
-		}
-		a.transactionsLastPruneTime = currentTimestamp
-	}
-	a.transactions[transactionID] = tx
-	a.transactionsLock.Unlock()
-
-	select {
-	case a.broadcastChan <- transactionID:
-		ctxLogger.Debugw("Tx enqueued", "fromAddr", fromAddress)
-	default:
-		// if the channel is full, we drop the transaction.
-		// we do this instead of setting the tx in `a.transactions` post-broadcast to avoid a race
-		// with the broadcastLoop, which expects to find the tx in `a.transactions` upon reception of
-		// the id.
-		a.transactionsLock.Lock()
-		delete(a.transactions, transactionID)
-		a.transactionsLock.Unlock()
-
-		return fmt.Errorf("failed to enqueue tx: %+v", tx)
-	}
-
-	return nil
+	return a.enqueueTransaction(tx)
 }
 
 // EnqueueFromAptosService is like Enqueue but accepts a deserialized EntryFunction directly,
@@ -252,28 +217,19 @@ func (a *AptosTxm) EnqueueFromAptosService(transactionID string, txMetadata *com
 		}
 	}
 
-	ctxLogger := GetContexedTxLogger(a.baseLogger, transactionID, txMetadata)
-
 	ed25519PublicKey, err := utils.HexPublicKeyToEd25519PublicKey(publicKey)
 	if err != nil {
 		return fmt.Errorf("failed to convert public key: %+w", err)
 	}
 
 	acc := utils.Ed25519PublicKeyToAddress(ed25519PublicKey)
-	fromAddress := acc.String()
+	fromAccountAddress := aptos.AccountAddress(acc)
 
-	fromAccountAddress := &aptos.AccountAddress{}
-	err = fromAccountAddress.ParseStringRelaxed(fromAddress)
-	if err != nil {
-		return fmt.Errorf("failed to parse from address: %+w", err)
-	}
-
-	currentTimestamp := getTimestampSecs()
 	tx := &AptosTx{
 		ID:              transactionID,
 		Metadata:        txMetadata,
-		Timestamp:       currentTimestamp,
-		FromAddress:     *fromAccountAddress,
+		Timestamp:       getTimestampSecs(),
+		FromAddress:     fromAccountAddress,
 		PublicKey:       ed25519PublicKey,
 		ContractAddress: entryFunction.Module.Address,
 		ModuleName:      entryFunction.Module.Name,
@@ -284,36 +240,45 @@ func (a *AptosTxm) EnqueueFromAptosService(transactionID string, txMetadata *com
 		Simulate:        simulateTx,
 	}
 
+	return a.enqueueTransaction(tx)
+}
+
+// enqueueTransaction is the common helper that handles pruning, storing, and broadcasting
+// a transaction. Both Enqueue and EnqueueFromAptosService use this after building the AptosTx.
+func (a *AptosTxm) enqueueTransaction(tx *AptosTx) error {
+	ctxLogger := GetContexedTxLogger(a.baseLogger, tx.ID, tx.Metadata)
+
 	a.transactionsLock.Lock()
+	currentTimestamp := tx.Timestamp
 	if (currentTimestamp - a.transactionsLastPruneTime) > a.config.PruneIntervalSecs {
-		for txID, tx := range a.transactions {
-			if tx.Status != commontypes.Finalized && tx.Status != commontypes.Failed && tx.Status != commontypes.Fatal {
+		for txID, existingTx := range a.transactions {
+			if existingTx.Status != commontypes.Finalized && existingTx.Status != commontypes.Failed && existingTx.Status != commontypes.Fatal {
 				continue
 			}
-			if (currentTimestamp - tx.Timestamp) < a.config.PruneTxExpirationSecs {
+			if (currentTimestamp - existingTx.Timestamp) < a.config.PruneTxExpirationSecs {
 				continue
 			}
-			ctxLogger.Debugw("Pruning transaction", "status", tx.Status)
+			ctxLogger.Debugw("Pruning transaction", "status", existingTx.Status)
 			delete(a.transactions, txID)
 		}
 		a.transactionsLastPruneTime = currentTimestamp
 	}
-	a.transactions[transactionID] = tx
+	a.transactions[tx.ID] = tx
 	a.transactionsLock.Unlock()
 
 	select {
-	case a.broadcastChan <- transactionID:
-		ctxLogger.Infow("tx enqueued to broadcast channel", "fromAddr", fromAddress, "transactionID", transactionID)
+	case a.broadcastChan <- tx.ID:
+		ctxLogger.Debugw("tx enqueued", "fromAddr", tx.FromAddress.String(), "transactionID", tx.ID)
 	default:
 		// if the channel is full, we drop the transaction.
 		// we do this instead of setting the tx in `a.transactions` post-broadcast to avoid a race
 		// with the broadcastLoop, which expects to find the tx in `a.transactions` upon reception of
 		// the id.
 		a.transactionsLock.Lock()
-		delete(a.transactions, transactionID)
+		delete(a.transactions, tx.ID)
 		a.transactionsLock.Unlock()
 
-		ctxLogger.Errorw("broadcast channel full, tx dropped", "transactionID", transactionID)
+		ctxLogger.Errorw("broadcast channel full, tx dropped", "transactionID", tx.ID)
 		return fmt.Errorf("failed to enqueue tx: %+v", tx)
 	}
 

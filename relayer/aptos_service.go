@@ -41,10 +41,10 @@ func (s *aptosService) AccountAPTBalance(ctx context.Context, req commonaptos.Ac
 
 func (s *aptosService) View(ctx context.Context, req commonaptos.ViewRequest) (*commonaptos.ViewReply, error) {
 	if req.Payload == nil {
-		s.logger.Errorw("TestingAptosWriteCap: View - payload is nil")
+		s.logger.Errorw("View: payload is nil")
 		return nil, fmt.Errorf("view payload is required")
 	}
-	s.logger.Infow("TestingAptosWriteCap: View - request details",
+	s.logger.Infow("View: request details",
 		"moduleAddress", fmt.Sprintf("0x%x", req.Payload.Module.Address),
 		"moduleName", req.Payload.Module.Name,
 		"function", req.Payload.Function,
@@ -55,7 +55,7 @@ func (s *aptosService) View(ctx context.Context, req commonaptos.ViewRequest) (*
 
 	client, err := s.chain.GetClient()
 	if err != nil {
-		s.logger.Errorw("TestingAptosWriteCap: View - failed to get client", "error", err)
+		s.logger.Errorw("View: failed to get client", "error", err)
 		return nil, fmt.Errorf("failed to get client: %w", err)
 	}
 
@@ -71,17 +71,17 @@ func (s *aptosService) View(ctx context.Context, req commonaptos.ViewRequest) (*
 
 	result, err := client.View(sdkPayload)
 	if err != nil {
-		s.logger.Errorw("TestingAptosWriteCap: View - view function call failed", "error", err)
+		s.logger.Errorw("View: view function call failed", "error", err)
 		return nil, fmt.Errorf("failed to call view function: %w", err)
 	}
 
 	data, err := json.Marshal(result)
 	if err != nil {
-		s.logger.Errorw("TestingAptosWriteCap: View - failed to marshal view result", "error", err)
+		s.logger.Errorw("View: failed to marshal view result", "error", err)
 		return nil, fmt.Errorf("failed to marshal view result: %w", err)
 	}
 
-	s.logger.Infow("TestingAptosWriteCap: View - success", "responseLen", len(data), "responseData", string(data))
+	s.logger.Infow("View: success", "responseLen", len(data), "responseData", string(data))
 	return &commonaptos.ViewReply{Data: data}, nil
 }
 
@@ -113,7 +113,7 @@ func (s *aptosService) TransactionByHash(ctx context.Context, req commonaptos.Tr
 }
 
 func (s *aptosService) AccountTransactions(ctx context.Context, req commonaptos.AccountTransactionsRequest) (*commonaptos.AccountTransactionsReply, error) {
-	s.logger.Infow("TestingAptosWriteCap: AccountTransactions called",
+	s.logger.Infow("AccountTransactions: called",
 		"address", fmt.Sprintf("0x%x", req.Address),
 		"hasStart", req.Start != nil,
 		"hasLimit", req.Limit != nil,
@@ -121,24 +121,24 @@ func (s *aptosService) AccountTransactions(ctx context.Context, req commonaptos.
 
 	client, err := s.chain.GetClient()
 	if err != nil {
-		s.logger.Errorw("TestingAptosWriteCap: AccountTransactions - failed to get client", "error", err)
+		s.logger.Errorw("AccountTransactions: failed to get client", "error", err)
 		return nil, fmt.Errorf("failed to get client: %w", err)
 	}
 
 	sdkAddr := aptos_sdk.AccountAddress(req.Address[:])
 	txns, err := client.AccountTransactions(sdkAddr, req.Start, req.Limit)
 	if err != nil {
-		s.logger.Errorw("TestingAptosWriteCap: AccountTransactions - failed to get transactions", "address", sdkAddr.String(), "error", err)
+		s.logger.Errorw("AccountTransactions: failed to get transactions", "address", sdkAddr.String(), "error", err)
 		return nil, fmt.Errorf("failed to get account transactions: %w", err)
 	}
 
-	s.logger.Infow("TestingAptosWriteCap: AccountTransactions - fetched", "address", sdkAddr.String(), "count", len(txns))
+	s.logger.Infow("AccountTransactions: fetched", "address", sdkAddr.String(), "count", len(txns))
 
 	result := make([]*commonaptos.Transaction, 0, len(txns))
 	for _, tx := range txns {
 		data, err := json.Marshal(tx.Inner)
 		if err != nil {
-			s.logger.Errorw("TestingAptosWriteCap: AccountTransactions - failed to marshal tx", "hash", string(tx.Hash()), "error", err)
+			s.logger.Errorw("AccountTransactions: failed to marshal tx", "hash", string(tx.Hash()), "error", err)
 			return nil, fmt.Errorf("failed to marshal transaction data: %w", err)
 		}
 		v := tx.Version()
@@ -152,12 +152,12 @@ func (s *aptosService) AccountTransactions(ctx context.Context, req commonaptos.
 		})
 	}
 
-	s.logger.Infow("TestingAptosWriteCap: AccountTransactions - returning", "address", sdkAddr.String(), "txCount", len(result))
+	s.logger.Infow("AccountTransactions: returning", "address", sdkAddr.String(), "txCount", len(result))
 	return &commonaptos.AccountTransactionsReply{Transactions: result}, nil
 }
 
 func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.SubmitTransactionRequest) (*commonaptos.SubmitTransactionReply, error) {
-	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction called",
+	s.logger.Infow("SubmitTransaction: called",
 		"encodedPayloadLen", len(req.EncodedPayload),
 		"hasGasConfig", req.GasConfig != nil,
 		"moduleAddress", fmt.Sprintf("%x", req.ReceiverModuleID.Address),
@@ -167,16 +167,16 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 	// Deserialize the BCS-encoded TransactionPayload (containing an EntryFunction)
 	var txPayload aptos_sdk.TransactionPayload
 	if err := bcs.Deserialize(&txPayload, req.EncodedPayload); err != nil {
-		s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - failed to deserialize payload", "error", err)
+		s.logger.Errorw("SubmitTransaction: failed to deserialize payload", "error", err)
 		return nil, fmt.Errorf("failed to deserialize transaction payload: %w", err)
 	}
 
 	entryFn, ok := txPayload.Payload.(*aptos_sdk.EntryFunction)
 	if !ok {
-		s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - unexpected payload type", "type", fmt.Sprintf("%T", txPayload.Payload))
+		s.logger.Errorw("SubmitTransaction: unexpected payload type", "type", fmt.Sprintf("%T", txPayload.Payload))
 		return nil, fmt.Errorf("expected EntryFunction payload, got %T", txPayload.Payload)
 	}
-	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - deserialized entry function",
+	s.logger.Infow("SubmitTransaction: deserialized entry function",
 		"module", entryFn.Module.Address.String()+"::"+entryFn.Module.Name,
 		"function", entryFn.Function,
 	)
@@ -184,21 +184,21 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 	gasLimit := big.NewInt(int64(req.GasConfig.MaxGasAmount))
 	accounts, err := s.chain.KeyStore().Accounts(ctx)
 	if err != nil {
-		s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - failed to get accounts", "error", err)
+		s.logger.Errorw("SubmitTransaction: failed to get accounts", "error", err)
 		return nil, fmt.Errorf("failed to get accounts: %w", err)
 	}
-	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - accounts retrieved", "numAccounts", len(accounts))
+	s.logger.Infow("SubmitTransaction: accounts retrieved", "numAccounts", len(accounts))
 
 	// Find account with highest balance
 	publicKey, err := s.getAccountWithHighestBalance(ctx, accounts)
 	if err != nil {
-		s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - failed to get account with highest balance", "error", err)
+		s.logger.Errorw("SubmitTransaction: failed to get account with highest balance", "error", err)
 		return nil, fmt.Errorf("failed to determine account for SubmitTransaction: %w", err)
 	}
-	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - selected account", "publicKey", publicKey, "gasLimit", gasLimit.String())
+	s.logger.Infow("SubmitTransaction: selected account", "publicKey", publicKey, "gasLimit", gasLimit.String())
 
 	txID := uuid.New().String()
-	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - enqueueing to TxManager", "txID", txID)
+	s.logger.Infow("SubmitTransaction: enqueueing to TxManager", "txID", txID)
 	enqueueErr := s.chain.TxManager().EnqueueFromAptosService(
 		txID,
 		&commontypes.TxMeta{
@@ -210,67 +210,67 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 		// TODO: add expected simulation failures to save gas on reported transmissions
 	)
 	if enqueueErr != nil {
-		s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - EnqueueCRE failed", "txID", txID, "error", enqueueErr)
+		s.logger.Errorw("SubmitTransaction: EnqueueFromAptosService failed", "txID", txID, "error", enqueueErr)
 		return nil, fmt.Errorf("failed to enqueue transaction: %w", enqueueErr)
 	}
-	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - enqueued successfully", "txID", txID)
+	s.logger.Infow("SubmitTransaction: enqueued successfully", "txID", txID)
 
-	// TODO: dont use txmgr config, create and use workflow/cre config
+	// TODO: dont use txmgr config, create and use workflow/cre config PLEX-2598
 	maximumWaitTime := time.Duration(s.chain.Config().TransactionManager.TxExpirationSecs) * time.Second
-	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - polling for status", "txID", txID, "maximumWaitTime", maximumWaitTime)
+	s.logger.Infow("SubmitTransaction: polling for status", "txID", txID, "maximumWaitTime", maximumWaitTime)
 
 	retryCtx, cancel := context.WithTimeout(ctx, maximumWaitTime)
 	defer cancel()
 	txStatus, err := retry.Do(retryCtx, s.logger, func(ctx context.Context) (commonaptos.TransactionStatus, error) {
 		txStatus, txStatusErr := s.chain.TxManager().GetStatus(txID)
 		if txStatusErr != nil {
-			s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - GetStatus error", "txID", txID, "error", txStatusErr)
+			s.logger.Errorw("SubmitTransaction: GetStatus error", "txID", txID, "error", txStatusErr)
 			return commonaptos.TxFatal, txStatusErr
 		}
-		s.logger.Debugw("TestingAptosWriteCap: SubmitTransaction - GetStatus poll", "txID", txID, "status", txStatus)
+		s.logger.Debugw("SubmitTransaction: GetStatus poll", "txID", txID, "status", txStatus)
 		switch txStatus {
 		case commontypes.Fatal, commontypes.Failed:
-			s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - terminal failure from TxManager", "txID", txID, "status", txStatus)
+			s.logger.Infow("SubmitTransaction: terminal failure from TxManager", "txID", txID, "status", txStatus)
 			return commonaptos.TxFatal, nil
 		case commontypes.Finalized:
-			s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - finalized, checking result", "txID", txID)
+			s.logger.Infow("SubmitTransaction: finalized, checking result", "txID", txID)
 			txResult, resultErr := s.chain.TxManager().GetTransactionResult(txID)
 			if resultErr != nil {
-				s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - GetTransactionResult failed for finalized tx", "txID", txID, "error", resultErr)
-				return commonaptos.TxSuccess, nil
+				s.logger.Errorw("SubmitTransaction: GetTransactionResult failed for finalized tx", "txID", txID, "error", resultErr)
+				return commonaptos.TxFatal, resultErr
 			}
-			s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - finalized result", "txID", txID, "vmStatus", txResult.VmStatus, "txHash", txResult.TxHash)
-			if txResult.VmStatus != "" && txResult.VmStatus != "Executed successfully" {
-				s.logger.Warnw("TestingAptosWriteCap: SubmitTransaction - finalized but VM reverted", "txID", txID, "vmStatus", txResult.VmStatus)
+			s.logger.Infow("SubmitTransaction: finalized result", "txID", txID, "vmStatus", txResult.VmStatus, "txHash", txResult.TxHash)
+			if txResult.VmStatus != "" {
+				s.logger.Warnw("SubmitTransaction: finalized but VM reverted", "txID", txID, "vmStatus", txResult.VmStatus)
 				return commonaptos.TxFatal, nil
 			}
 			return commonaptos.TxSuccess, nil
 		case commontypes.Unconfirmed:
-			s.logger.Debugw("TestingAptosWriteCap: SubmitTransaction - still unconfirmed (broadcast but not yet confirmed on-chain)", "txID", txID)
+			s.logger.Debugw("SubmitTransaction: still unconfirmed (broadcast but not yet confirmed on-chain)", "txID", txID)
 			return commonaptos.TxFatal, fmt.Errorf("tx still unconfirmed (broadcast, awaiting on-chain confirmation) for tx with ID %s", txID)
 		case commontypes.Pending, commontypes.Unknown:
-			s.logger.Debugw("TestingAptosWriteCap: SubmitTransaction - still pending/unknown, will retry", "txID", txID, "status", txStatus)
+			s.logger.Debugw("SubmitTransaction: still pending/unknown, will retry", "txID", txID, "status", txStatus)
 			return commonaptos.TxFatal, fmt.Errorf("tx still in state pending or unknown, tx status is %d for tx with ID %s", txStatus, txID)
 		default:
-			s.logger.Warnw("TestingAptosWriteCap: SubmitTransaction - unexpected status", "txID", txID, "status", txStatus)
+			s.logger.Warnw("SubmitTransaction: unexpected status", "txID", txID, "status", txStatus)
 			return commonaptos.TxFatal, fmt.Errorf("unexpected transaction status %d for tx with ID %s", txStatus, txID)
 		}
 	})
 
 	if err != nil {
-		s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - failed getting transaction status", "txID", txID, "error", err)
+		s.logger.Errorw("SubmitTransaction: failed getting transaction status", "txID", txID, "error", err)
 		return nil, fmt.Errorf("failed getting transaction status: %w", err)
 	}
 
-	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - final status", "txID", txID, "txStatus", txStatus)
+	s.logger.Infow("SubmitTransaction: final status", "txID", txID, "txStatus", txStatus)
 
 	txResult, resultErr := s.chain.TxManager().GetTransactionResult(txID)
 	if resultErr != nil {
-		s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - failed to get transaction result", "txID", txID, "error", resultErr)
+		s.logger.Errorw("SubmitTransaction: failed to get transaction result", "txID", txID, "error", resultErr)
 		return nil, fmt.Errorf("failed getting transaction result: %w", resultErr)
 	}
 
-	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - returning result", "txID", txID, "txStatus", txStatus, "txHash", txResult.TxHash, "vmStatus", txResult.VmStatus)
+	s.logger.Infow("SubmitTransaction: returning result", "txID", txID, "txStatus", txStatus, "txHash", txResult.TxHash, "vmStatus", txResult.VmStatus)
 	return &commonaptos.SubmitTransactionReply{
 		TxStatus:         txStatus,
 		TxHash:           txResult.TxHash,
@@ -284,7 +284,7 @@ func (s *aptosService) getAccountWithHighestBalance(ctx context.Context, account
 		return "", errors.New("no accounts provided")
 	}
 	if len(accounts) == 1 {
-		s.logger.Debugw("only one enabled account for chain", "account", accounts[0])
+		s.logger.Debugw("getAccountWithHighestBalance: only one enabled account for chain", "account", accounts[0])
 		return accounts[0], nil
 	}
 
@@ -300,13 +300,13 @@ func (s *aptosService) getAccountWithHighestBalance(ctx context.Context, account
 	for _, account := range accounts {
 		addr, err := utils.HexPublicKeyToAddress(account)
 		if err != nil {
-			s.logger.Warnw("failed to convert public key to address, skipping", "account", account, "error", err)
+			s.logger.Warnw("getAccountWithHighestBalance: failed to convert public key to address, skipping", "account", account, "error", err)
 			continue
 		}
 
 		balance, err := client.AccountAPTBalance(addr)
 		if err != nil {
-			s.logger.Warnw("failed to get balance for account, skipping", "account", account, "address", addr.String(), "error", err)
+			s.logger.Warnw("getAccountWithHighestBalance: failed to get balance for account, skipping", "account", account, "address", addr.String(), "error", err)
 			continue
 		}
 
@@ -322,7 +322,7 @@ func (s *aptosService) getAccountWithHighestBalance(ctx context.Context, account
 		return accounts[0], nil
 	}
 
-	s.logger.Debugw("selected account with highest balance for chain",
+	s.logger.Debugw("getAccountWithHighestBalance: selected account",
 		"account", selectedAccount,
 		"balance", highestBalance,
 		"totalAccounts", len(accounts))
