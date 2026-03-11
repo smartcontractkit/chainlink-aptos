@@ -610,11 +610,11 @@ func (a *AptosTxm) signAndBroadcast(ctx context.Context, tx *AptosTx) {
 		rawTx, err := a.createRawTx(client, tx, nonce)
 		if err != nil {
 			a.updateTransactionStatus(tx, commontypes.Failed)
-		    if !errors.As(err, new(*expectedSimulationFailureError)) {
-		        ctxLogger.Errorw("failed to create raw tx", "error", err)
+			if !errors.As(err, new(*expectedSimulationFailureError)) {
+				ctxLogger.Errorw("failed to create raw tx", "error", err)
 				a.metrics.IncrementErrorTxs(ctx)
-		    }
-		    return
+			}
+			return
 		}
 
 		signedTx, err := a.createSignedTx(client, rawTx, tx.PublicKey, tx.FromAddress)
@@ -730,7 +730,7 @@ func (a *AptosTxm) confirmLoop() {
 	}
 }
 
-// checkUnconfirmed polls committed/pending txs and moves them to terminal states.
+// checkUnconfirmed polls committed/pending txs and moves them to terminal states
 // Possible terminal states from this method:
 //   - Finalized: tx committed on-chain (successful OR reverted with non-OOG VmStatus — see TODO below)
 //   - Failed: OOG revert after max retries, expired tx after max retries, or TxStore errors
