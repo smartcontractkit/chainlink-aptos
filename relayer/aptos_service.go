@@ -309,7 +309,7 @@ func (s *aptosService) getAccountWithHighestBalance(ctx context.Context, account
 
 		balance, err := client.AccountAPTBalance(addr)
 		if err != nil {
-			s.logger.Warnw("getAccountWithHighestBalance: failed to get balance for account, skipping", "account", account, "address", addr.String(), "error", err)
+			s.logger.Warnw("getAccountWithHighestBalance: failed to get balance for account, skipping", "account", account, "error", err)
 			continue
 		}
 
