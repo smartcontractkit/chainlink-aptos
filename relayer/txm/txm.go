@@ -230,40 +230,22 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 	return nil
 }
 
-// EnqueueCRE is like Enqueue but accepts a deserialized EntryFunction directly,
+// EnqueueFromAptosService is like Enqueue but accepts a deserialized EntryFunction directly,
 // skipping the string-based function parsing and BCS serialisation of parameters.
 // The EntryFunction already contains the module, function name, type tags, and
 // pre-encoded BCS args.
 func (a *AptosTxm) EnqueueFromAptosService(transactionID string, txMetadata *commontypes.TxMeta, publicKey string, entryFunction *aptos.EntryFunction, simulateTx bool) error {
-	a.baseLogger.Infow("TestingAptosWriteCap: EnqueueCRE called",
-		"transactionID", transactionID,
-		"publicKey", publicKey,
-		"hasEntryFunction", entryFunction != nil,
-		"simulateTx", simulateTx,
-		"hasMetadata", txMetadata != nil,
-	)
-
 	if entryFunction == nil {
-		a.baseLogger.Errorw("TestingAptosWriteCap: EnqueueCRE - entry function is nil")
 		return errors.New("entry function is required")
 	}
 
-	a.baseLogger.Infow("TestingAptosWriteCap: EnqueueCRE - entry function details",
-		"module", entryFunction.Module.Address.String()+"::"+entryFunction.Module.Name,
-		"function", entryFunction.Function,
-		"numArgTypes", len(entryFunction.ArgTypes),
-		"numArgs", len(entryFunction.Args),
-	)
-
 	if transactionID == "" {
 		transactionID = uuid.New().String()
-		a.baseLogger.Infow("TestingAptosWriteCap: EnqueueCRE - generated txID", "transactionID", transactionID)
 	} else {
 		a.transactionsLock.Lock()
 		_, transactionExists := a.transactions[transactionID]
 		a.transactionsLock.Unlock()
 		if transactionExists {
-			a.baseLogger.Errorw("TestingAptosWriteCap: EnqueueCRE - transaction already exists", "transactionID", transactionID)
 			return errors.New("transaction already exists")
 		}
 	}
@@ -272,18 +254,15 @@ func (a *AptosTxm) EnqueueFromAptosService(transactionID string, txMetadata *com
 
 	ed25519PublicKey, err := utils.HexPublicKeyToEd25519PublicKey(publicKey)
 	if err != nil {
-		a.baseLogger.Errorw("TestingAptosWriteCap: EnqueueCRE - failed to convert public key", "publicKey", publicKey, "error", err)
 		return fmt.Errorf("failed to convert public key: %+w", err)
 	}
 
 	acc := utils.Ed25519PublicKeyToAddress(ed25519PublicKey)
 	fromAddress := acc.String()
-	a.baseLogger.Infow("TestingAptosWriteCap: EnqueueCRE - resolved from address", "fromAddress", fromAddress)
 
 	fromAccountAddress := &aptos.AccountAddress{}
 	err = fromAccountAddress.ParseStringRelaxed(fromAddress)
 	if err != nil {
-		a.baseLogger.Errorw("TestingAptosWriteCap: EnqueueCRE - failed to parse from address", "fromAddress", fromAddress, "error", err)
 		return fmt.Errorf("failed to parse from address: %+w", err)
 	}
 
@@ -322,7 +301,7 @@ func (a *AptosTxm) EnqueueFromAptosService(transactionID string, txMetadata *com
 
 	select {
 	case a.broadcastChan <- transactionID:
-		ctxLogger.Infow("TestingAptosWriteCap: EnqueueCRE - tx enqueued to broadcast channel", "fromAddr", fromAddress, "transactionID", transactionID)
+		ctxLogger.Infow("tx enqueued to broadcast channel", "fromAddr", fromAddress, "transactionID", transactionID)
 	default:
 		// if the channel is full, we drop the transaction.
 		// we do this instead of setting the tx in `a.transactions` post-broadcast to avoid a race
@@ -332,7 +311,7 @@ func (a *AptosTxm) EnqueueFromAptosService(transactionID string, txMetadata *com
 		delete(a.transactions, transactionID)
 		a.transactionsLock.Unlock()
 
-		a.baseLogger.Errorw("TestingAptosWriteCap: EnqueueCRE - broadcast channel full, tx dropped", "transactionID", transactionID)
+		ctxLogger.Errorw("broadcast channel full, tx dropped", "transactionID", transactionID)
 		return fmt.Errorf("failed to enqueue tx: %+v", tx)
 	}
 
