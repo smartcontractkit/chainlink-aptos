@@ -181,7 +181,10 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 		"function", entryFn.Function,
 	)
 
-	gasLimit := big.NewInt(int64(req.GasConfig.MaxGasAmount))
+	var gasLimit *big.Int
+	if req.GasConfig != nil {
+		gasLimit = big.NewInt(int64(req.GasConfig.MaxGasAmount))
+	}
 	accounts, err := s.chain.KeyStore().Accounts(ctx)
 	if err != nil {
 		s.logger.Errorw("SubmitTransaction: failed to get accounts", "error", err)
@@ -221,7 +224,7 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 
 	retryCtx, cancel := context.WithTimeout(ctx, maximumWaitTime)
 	defer cancel()
-	txStatus, err := retry.Do(retryCtx, s.logger, func(ctx context.Context) (commonaptos.TransactionStatus, error) {
+	txStatus, err := retry.Do(retryCtx, s.logger, func(_ context.Context) (commonaptos.TransactionStatus, error) {
 		txStatus, txStatusErr := s.chain.TxManager().GetStatus(txID)
 		if txStatusErr != nil {
 			s.logger.Errorw("SubmitTransaction: GetStatus error", "txID", txID, "error", txStatusErr)
