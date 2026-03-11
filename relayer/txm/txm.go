@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -101,7 +102,7 @@ func (a *AptosTxm) Close() error {
 	})
 }
 
-func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta, fromAddress, publicKey, function string, typeArgs []string, paramTypes []string, paramValues []any, simulateTx bool) error {
+func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta, fromAddress, publicKey, function string, typeArgs []string, paramTypes []string, paramValues []any, simulateTx bool, expectedSimulationFailures ...ExpectedSimulationFailureRule) error {
 	if transactionID == "" {
 		transactionID = uuid.New().String()
 	} else {
@@ -181,18 +182,19 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 
 	currentTimestamp := getTimestampSecs()
 	tx := &AptosTx{
-		ID:              transactionID,
-		Metadata:        txMetadata,
-		Timestamp:       currentTimestamp,
-		FromAddress:     *fromAccountAddress,
-		PublicKey:       ed25519PublicKey,
-		ContractAddress: *contractAccountAddress,
-		ModuleName:      moduleName,
-		FunctionName:    functionName,
-		TypeTags:        typeTags,
-		BcsValues:       bcsValues,
-		Status:          commontypes.Pending,
-		Simulate:        simulateTx,
+		ID:                             transactionID,
+		Metadata:                       txMetadata,
+		Timestamp:                      currentTimestamp,
+		FromAddress:                    *fromAccountAddress,
+		PublicKey:                      ed25519PublicKey,
+		ContractAddress:                *contractAccountAddress,
+		ModuleName:                     moduleName,
+		FunctionName:                   functionName,
+		TypeTags:                       typeTags,
+		BcsValues:                      bcsValues,
+		Status:                         commontypes.Pending,
+		Simulate:                       simulateTx,
+		ExpectedSimulationFailureRules: slices.Clone(expectedSimulationFailures),
 	}
 
 	a.transactionsLock.Lock()
@@ -401,6 +403,9 @@ func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, nonce u
 
 			rawTx.GasUnitPrice = simulatedTx.GasUnitPrice
 		} else {
+			if matchExpectedSimulationFailure(err, tx.ExpectedSimulationFailureRules) {
+				return nil, &expectedSimulationFailureError{reason: err.Error()}
+			}
 			// do not error on failed estimate gas as it could fail due to conflicting in-flight txs
 			ctxLogger.Errorw("failed to simulate tx", "error", err)
 		}
@@ -476,6 +481,7 @@ func (a *AptosTxm) createSignedTx(client aptos.AptosRpcClient, rawTx *aptos.RawT
 func (a *AptosTxm) updateTransactionStatus(tx *AptosTx, status commontypes.TransactionStatus) {
 	a.transactionsLock.Lock()
 	defer a.transactionsLock.Unlock()
+
 	tx.Status = status
 }
 
@@ -550,10 +556,12 @@ func (a *AptosTxm) signAndBroadcast(ctx context.Context, tx *AptosTx) {
 
 		rawTx, err := a.createRawTx(client, tx, nonce)
 		if err != nil {
-			ctxLogger.Errorw("failed to create raw tx", "error", err)
 			a.updateTransactionStatus(tx, commontypes.Failed)
-			a.metrics.IncrementErrorTxs(ctx)
-			return
+		    if !errors.As(err, new(*expectedSimulationFailureError)) {
+		        ctxLogger.Errorw("failed to create raw tx", "error", err)
+				a.metrics.IncrementErrorTxs(ctx)
+		    }
+		    return
 		}
 
 		signedTx, err := a.createSignedTx(client, rawTx, tx.PublicKey, tx.FromAddress)
@@ -619,6 +627,21 @@ func (a *AptosTxm) signAndBroadcast(ctx context.Context, tx *AptosTx) {
 	a.updateTransactionStatus(tx, commontypes.Failed)
 	a.metrics.IncrementRejectTxs(ctx)
 	a.metrics.IncrementErrorTxs(ctx)
+}
+
+func matchExpectedSimulationFailure(err error, expectedSimulationFailures []ExpectedSimulationFailureRule) bool {
+	if err == nil {
+		return false
+	}
+
+	errMsg := err.Error()
+	for _, expectedSimulationFailure := range expectedSimulationFailures {
+		if strings.Contains(errMsg, expectedSimulationFailure.ErrorContains) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (a *AptosTxm) confirmLoop() {
@@ -780,15 +803,15 @@ func (a *AptosTxm) maybeRetry(ctx context.Context, unconfirmedTx *UnconfirmedTx,
 		return false
 	}
 
-	ctxLogger.Debugw("retrying tx", "attempt", currentAttempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
 	select {
 	case a.broadcastChan <- unconfirmedTx.Tx.ID:
+		ctxLogger.Debugw("retrying tx", "attempt", currentAttempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
 		a.metrics.IncrementRetryTxs(ctx)
+		return true
 	default:
 		ctxLogger.Errorw("failed to enqueue tx for rebroadcast", "attempt", currentAttempt, "hash", unconfirmedTx.Hash, "retryReason", retryReason)
+		return false
 	}
-
-	return true
 }
 
 func (a *AptosTxm) InflightCount() (int, int) {
