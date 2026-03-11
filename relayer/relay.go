@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"reflect"
 
 	aptosdk "github.com/aptos-labs/aptos-go-sdk"
 	aptosapi "github.com/aptos-labs/aptos-go-sdk/api"
@@ -252,8 +251,8 @@ func (r *relayer) View(ctx context.Context, req typeaptos.ViewRequest) (*typeapt
 	}
 
 	var result []any
-	if ledgerVersion, ok := ledgerVersionFromViewRequest(req); ok {
-		result, err = client.View(payload, ledgerVersion)
+	if req.LedgerVersion != nil {
+		result, err = client.View(payload, *req.LedgerVersion)
 	} else {
 		result, err = client.View(payload)
 	}
@@ -269,18 +268,6 @@ func (r *relayer) View(ctx context.Context, req typeaptos.ViewRequest) (*typeapt
 	return &typeaptos.ViewReply{Data: data}, nil
 }
 
-func ledgerVersionFromViewRequest(req typeaptos.ViewRequest) (uint64, bool) {
-	field := reflect.ValueOf(req).FieldByName("LedgerVersion")
-	if !field.IsValid() || field.Kind() != reflect.Ptr || field.IsNil() {
-		return 0, false
-	}
-	elem := field.Elem()
-	if !elem.IsValid() || !elem.CanUint() {
-		return 0, false
-	}
-	return elem.Uint(), true
-}
-
 func (r *relayer) TransactionByHash(ctx context.Context, req typeaptos.TransactionByHashRequest) (*typeaptos.TransactionByHashReply, error) {
 	client, err := r.chain.GetClient()
 	if err != nil {
@@ -292,7 +279,7 @@ func (r *relayer) TransactionByHash(ctx context.Context, req typeaptos.Transacti
 		return nil, err
 	}
 	if tx == nil {
-		return &typeaptos.TransactionByHashReply{}, nil
+		return nil, fmt.Errorf("transaction not found for hash: %s", req.Hash)
 	}
 
 	converted, err := convertSDKTransaction(tx)
@@ -320,9 +307,9 @@ func (r *relayer) AccountTransactions(ctx context.Context, req typeaptos.Account
 	}
 
 	out := &typeaptos.AccountTransactionsReply{Transactions: make([]*typeaptos.Transaction, 0, len(txs))}
-	for _, tx := range txs {
+	for i, tx := range txs {
 		if tx == nil {
-			continue
+			return nil, fmt.Errorf("account transactions response contained nil transaction at index %d for account %x", i, req.Address)
 		}
 		asTxn := &aptosapi.Transaction{Type: tx.Type, Inner: tx.Inner}
 		converted, convErr := convertSDKTransaction(asTxn)

@@ -642,7 +642,7 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 					userTx, ok := chainTx.Inner.(*aptosapi.UserTransaction)
 					if ok {
 						if userTx.Success {
-							ctxLogger.Infow("confirmed tx: successful", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
+							ctxLogger.Infow("confirmed tx: successful", "hash", hash, "chainTxType", chainTx.Type)
 							a.metrics.IncrementSuccessTxs(ctx)
 
 							// Calculate and store the transaction fee
@@ -654,7 +654,7 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 								ctxLogger.Debugw("stored transaction fee", "fee", fee.String(), "gasUsed", gasUsed, "gasUnitPrice", gasUnitPrice)
 							}
 						} else {
-							ctxLogger.Infow("confirmed tx: unsuccessful", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
+							ctxLogger.Infow("confirmed tx: unsuccessful", "hash", hash, "chainTxType", chainTx.Type, "vmStatus", userTx.VmStatus)
 							a.metrics.IncrementRevertTxs(ctx)
 							a.metrics.IncrementErrorTxs(ctx)
 							if userTx.VmStatus == "Out of gas" {
@@ -668,16 +668,16 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 							}
 						}
 					} else {
-						ctxLogger.Errorw("failed to read confirmed user tx", "hash", hash, "chainTxInner", chainTx.Inner)
+						ctxLogger.Errorw("failed to read confirmed user tx", "hash", hash, "chainTxType", chainTx.Type)
 					}
 				} else {
-					ctxLogger.Errorw("unexpected confirmed tx type", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
+					ctxLogger.Errorw("unexpected confirmed tx type", "hash", hash, "chainTxType", chainTx.Type)
 				}
 
 				a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Finalized)
 				a.metrics.IncrementFinalizedTxs(ctx)
 			} else {
-				ctxLogger.Debugw("tx is still unconfirmed", "hash", hash, "chainTx", chainTx)
+				ctxLogger.Debugw("tx is still unconfirmed", "hash", hash, "hasChainTx", chainTx != nil)
 				totalPending++
 				// Check using the ledger timestamp whether the transaction has expired.
 				ledgerTimestampSecs, err := a.getLedgerTimestampSecs(client)
