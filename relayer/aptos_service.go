@@ -202,7 +202,7 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 
 	txID := uuid.New().String()
 	s.logger.Infow("SubmitTransaction: enqueueing to TxManager", "txID", txID)
-	enqueueErr := s.chain.TxManager().EnqueueFromAptosService(
+	enqueueErr := s.chain.TxManager().EnqueueWithEntryFunction(
 		txID,
 		&commontypes.TxMeta{
 			GasLimit: gasLimit,
@@ -213,7 +213,7 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 		// TODO: add expected simulation failures to save gas on reported transmissions
 	)
 	if enqueueErr != nil {
-		s.logger.Errorw("SubmitTransaction: EnqueueFromAptosService failed", "txID", txID, "error", enqueueErr)
+		s.logger.Errorw("SubmitTransaction: EnqueueWithEntryFunction failed", "txID", txID, "error", enqueueErr)
 		return nil, fmt.Errorf("failed to enqueue transaction: %w", enqueueErr)
 	}
 	s.logger.Infow("SubmitTransaction: enqueued successfully", "txID", txID)
@@ -245,7 +245,7 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 			s.logger.Infow("SubmitTransaction: finalized result", "txID", txID, "vmStatus", txResult.VmStatus, "txHash", txResult.TxHash)
 			if txResult.VmStatus != "" {
 				s.logger.Warnw("SubmitTransaction: finalized but VM reverted", "txID", txID, "vmStatus", txResult.VmStatus)
-				return commonaptos.TxFatal, nil
+				return commonaptos.TxReverted, nil
 			}
 			return commonaptos.TxSuccess, nil
 		case commontypes.Unconfirmed:
@@ -262,7 +262,10 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 
 	if err != nil {
 		s.logger.Errorw("SubmitTransaction: failed getting transaction status", "txID", txID, "error", err)
-		return nil, fmt.Errorf("failed getting transaction status: %w", err)
+		return &commonaptos.SubmitTransactionReply{
+			TxStatus:         commonaptos.TxFatal,
+			TxIdempotencyKey: txID,
+		}, fmt.Errorf("failed getting transaction status for txID %s: %w", txID, err)
 	}
 
 	s.logger.Infow("SubmitTransaction: final status", "txID", txID, "txStatus", txStatus)
@@ -270,7 +273,10 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 	txResult, resultErr := s.chain.TxManager().GetTransactionResult(txID)
 	if resultErr != nil {
 		s.logger.Errorw("SubmitTransaction: failed to get transaction result", "txID", txID, "error", resultErr)
-		return nil, fmt.Errorf("failed getting transaction result: %w", resultErr)
+		return &commonaptos.SubmitTransactionReply{
+			TxStatus:         commonaptos.TxFatal,
+			TxIdempotencyKey: txID,
+		}, fmt.Errorf("failed getting transaction result for txID %s: %w", txID, resultErr)
 	}
 
 	s.logger.Infow("SubmitTransaction: returning result", "txID", txID, "txStatus", txStatus, "txHash", txResult.TxHash, "vmStatus", txResult.VmStatus)

@@ -197,11 +197,11 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 	return a.enqueueTransaction(tx)
 }
 
-// EnqueueFromAptosService is like Enqueue but accepts a deserialized EntryFunction directly,
+// EnqueueWithEntryFunction is like Enqueue but accepts a deserialized EntryFunction directly,
 // skipping the string-based function parsing and BCS serialisation of parameters.
 // The EntryFunction already contains the module, function name, type tags, and
 // pre-encoded BCS args.
-func (a *AptosTxm) EnqueueFromAptosService(transactionID string, txMetadata *commontypes.TxMeta, publicKey string, entryFunction *aptos.EntryFunction, simulateTx bool) error {
+func (a *AptosTxm) EnqueueWithEntryFunction(transactionID string, txMetadata *commontypes.TxMeta, publicKey string, entryFunction *aptos.EntryFunction, simulateTx bool) error {
 	if entryFunction == nil {
 		return errors.New("entry function is required")
 	}
@@ -244,7 +244,7 @@ func (a *AptosTxm) EnqueueFromAptosService(transactionID string, txMetadata *com
 }
 
 // enqueueTransaction is the common helper that handles pruning, storing, and broadcasting
-// a transaction. Both Enqueue and EnqueueFromAptosService use this after building the AptosTx.
+// a transaction. Both Enqueue and EnqueueWithEntryFunction use this after building the AptosTx.
 func (a *AptosTxm) enqueueTransaction(tx *AptosTx) error {
 	ctxLogger := GetContexedTxLogger(a.baseLogger, tx.ID, tx.Metadata)
 

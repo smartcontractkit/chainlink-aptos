@@ -168,7 +168,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 
 	for i := 0; i < iterations; i++ {
 		incrementId := uuid.New().String()
-		err := txm.EnqueueFromAptosService(
+		err := txm.EnqueueWithEntryFunction(
 			incrementId,
 			getSampleTxMetadata(),
 			publicKeyHex,
@@ -190,7 +190,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 		txIDsCRE = append(txIDsCRE, incrementId)
 
 		incrementMultId := uuid.New().String()
-		err = txm.EnqueueFromAptosService(
+		err = txm.EnqueueWithEntryFunction(
 			incrementMultId,
 			getSampleTxMetadata(),
 			publicKeyHex,
