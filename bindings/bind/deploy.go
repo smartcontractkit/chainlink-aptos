@@ -17,7 +17,34 @@ const (
 	// will be done via mcms proposals
 	// https://github.com/aptos-labs/aptos-core/blob/e0002dd4ca29d1b65fe10c555ac730a773a54b2f/aptos-move/framework/src/chunked_publish.rs#L13-L13
 	ChunkSizeInBytes = 30_000
+
+	// DefaultDeployMaxGasAmount is the default max gas for package deployment transactions.
+	// The SDK default (100_000) is too low for deploying Move packages which involve
+	// resource account creation + code publishing. Unused gas is not charged on Aptos.
+	DefaultDeployMaxGasAmount = uint64(2_000_000)
 )
+
+// withDefaultDeployGas prepends DefaultDeployMaxGasAmount to options if no
+// MaxGasAmount is already present, so callers can override the default.
+func withDefaultDeployGas(options []any) []any {
+	for _, opt := range options {
+		if _, ok := opt.(aptos.MaxGasAmount); ok {
+			return options
+		}
+	}
+	return append([]any{aptos.MaxGasAmount(DefaultDeployMaxGasAmount)}, options...)
+}
+
+// extractMaxGasAmount finds a MaxGasAmount in options and returns it as *uint64.
+func extractMaxGasAmount(options []any) *uint64 {
+	for _, opt := range options {
+		if v, ok := opt.(aptos.MaxGasAmount); ok {
+			u := uint64(v)
+			return &u
+		}
+	}
+	return nil
+}
 
 // DeployPackageToObject deploys a package to a new named object address
 // The package will be compiled using the CLI and then deployed using 0x1::object_code_deployment::publish
@@ -31,6 +58,9 @@ func DeployPackageToObject(
 	packageName contracts.Package,
 	// Additional named addresses, doesn't have to include the objectAddress
 	namedAddresses map[string]aptos.AccountAddress,
+	// Optional Aptos SDK transaction options (e.g. aptos.MaxGasAmount).
+	// A DefaultDeployMaxGasAmount is applied when no MaxGasAmount is provided.
+	options ...any,
 ) (aptos.AccountAddress, *api.PendingTransaction, error) {
 	// Well start by assuming that the package is small enough to be deployed in one go
 
@@ -57,7 +87,7 @@ func DeployPackageToObject(
 
 	if len(chunks) == 1 {
 		// No need to chunk, deploy in one go and return
-		tx, err := objectCodeDeploymentPublish(auth, client, output)
+		tx, err := objectCodeDeploymentPublish(auth, client, output, options...)
 		if err != nil {
 			return aptos.AccountAddress{}, nil, err
 		}
@@ -78,7 +108,8 @@ func DeployPackageToObject(
 	}
 
 	transactOpts := &TransactOpts{
-		Signer: auth,
+		Signer:       auth,
+		MaxGasAmount: extractMaxGasAmount(withDefaultDeployGas(options)),
 	}
 
 	// Check if staging area is empty and clear if it isn't
@@ -135,6 +166,9 @@ func UpgradePackageToObject(
 	// Additional named addresses, doesn't have to include the objectAddress
 	namedAddresses map[string]aptos.AccountAddress,
 	objectAddress aptos.AccountAddress,
+	// Optional Aptos SDK transaction options (e.g. aptos.MaxGasAmount).
+	// A DefaultDeployMaxGasAmount is applied when no MaxGasAmount is provided.
+	options ...any,
 ) (*api.PendingTransaction, error) {
 	if namedAddresses == nil {
 		namedAddresses = make(map[string]aptos.AccountAddress)
@@ -154,7 +188,7 @@ func UpgradePackageToObject(
 
 	if len(chunks) == 1 {
 		// No need to chunk, deploy in one go and return
-		tx, err := objectCodeDeploymentUpgrade(auth, client, output, objectAddress)
+		tx, err := objectCodeDeploymentUpgrade(auth, client, output, objectAddress, options...)
 		if err != nil {
 			return nil, err
 		}
@@ -175,7 +209,8 @@ func UpgradePackageToObject(
 	}
 
 	transactOpts := &TransactOpts{
-		Signer: auth,
+		Signer:       auth,
+		MaxGasAmount: extractMaxGasAmount(withDefaultDeployGas(options)),
 	}
 
 	// Check if staging area is empty and clear if it isn't
@@ -217,6 +252,9 @@ func DeployPackageToResourceAccount(
 	seed string,
 	// Additional named addresses, doesn't have to include the address of the resource account
 	namedAddresses map[string]aptos.AccountAddress,
+	// Optional Aptos SDK transaction options (e.g. aptos.MaxGasAmount).
+	// A DefaultDeployMaxGasAmount is applied when no MaxGasAmount is provided.
+	options ...any,
 ) (aptos.AccountAddress, *api.PendingTransaction, error) {
 	// Calculate next ResourceAccount address for the deployer
 	deployerAddress := auth.AccountAddress()
@@ -232,7 +270,7 @@ func DeployPackageToResourceAccount(
 		return aptos.AccountAddress{}, nil, err
 	}
 
-	tx, err := createResourceAccountAndPublishPackage(auth, client, seed, output)
+	tx, err := createResourceAccountAndPublishPackage(auth, client, seed, output, options...)
 	if err != nil {
 		return aptos.AccountAddress{}, nil, err
 	}
@@ -265,7 +303,7 @@ func nextObjectCodeDeploymentAddressForAccount(client aptos.AptosRpcClient, acco
 
 // objectCodeDeploymentPublish calls 0x1::object_code_deployment::publish
 // https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/doc/object_code_deployment.md#function-publish
-func objectCodeDeploymentPublish(auth aptos.TransactionSigner, client aptos.AptosRpcClient, packageOutput compile.CompiledPackage) (*api.PendingTransaction, error) {
+func objectCodeDeploymentPublish(auth aptos.TransactionSigner, client aptos.AptosRpcClient, packageOutput compile.CompiledPackage, options ...any) (*api.PendingTransaction, error) {
 	typeArgs, args, err := serializeArgs(nil, []string{"vector<u8>", "vector<vector<u8>>"}, []any{packageOutput.Metadata, packageOutput.Bytecode})
 	if err != nil {
 		return nil, err
@@ -281,12 +319,12 @@ func objectCodeDeploymentPublish(auth aptos.TransactionSigner, client aptos.Apto
 		Args:     args,
 	}}
 
-	return client.BuildSignAndSubmitTransaction(auth, payload)
+	return client.BuildSignAndSubmitTransaction(auth, payload, withDefaultDeployGas(options)...)
 }
 
 // objectCodeDeploymentUpgrade calls 0x1::object_code_deployment::upgrade
 // https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/doc/object_code_deployment.md#function-upgrade
-func objectCodeDeploymentUpgrade(auth aptos.TransactionSigner, client aptos.AptosRpcClient, packageOutput compile.CompiledPackage, objectAddress aptos.AccountAddress) (*api.PendingTransaction, error) {
+func objectCodeDeploymentUpgrade(auth aptos.TransactionSigner, client aptos.AptosRpcClient, packageOutput compile.CompiledPackage, objectAddress aptos.AccountAddress, options ...any) (*api.PendingTransaction, error) {
 	typeArgs, args, err := serializeArgs(nil, []string{"vector<u8>", "vector<vector<u8>>", "address"}, []any{packageOutput.Metadata, packageOutput.Bytecode, objectAddress})
 	if err != nil {
 		return nil, err
@@ -302,12 +340,12 @@ func objectCodeDeploymentUpgrade(auth aptos.TransactionSigner, client aptos.Apto
 		Args:     args,
 	}}
 
-	return client.BuildSignAndSubmitTransaction(auth, payload)
+	return client.BuildSignAndSubmitTransaction(auth, payload, withDefaultDeployGas(options)...)
 }
 
 // createResourceAccountAndPublishPackage calls 0x1::resource_account::create_resource_account_and_publish_package
 // https://github.com/aptos-labs/aptos-core/blob/8d5d045ede6dae476482b2b9c3a80893c521eaa5/aptos-move/framework/aptos-framework/sources/resource_account.move#L124
-func createResourceAccountAndPublishPackage(auth aptos.TransactionSigner, client aptos.AptosRpcClient, seed string, packageOutput compile.CompiledPackage) (*api.PendingTransaction, error) {
+func createResourceAccountAndPublishPackage(auth aptos.TransactionSigner, client aptos.AptosRpcClient, seed string, packageOutput compile.CompiledPackage, options ...any) (*api.PendingTransaction, error) {
 	typeArgs, args, err := serializeArgs(nil, []string{"vector<u8>", "vector<u8>", "vector<vector<u8>>"}, []any{seed, packageOutput.Metadata, packageOutput.Bytecode})
 	if err != nil {
 		return nil, err
@@ -323,5 +361,5 @@ func createResourceAccountAndPublishPackage(auth aptos.TransactionSigner, client
 		Args:     args,
 	}}
 
-	return client.BuildSignAndSubmitTransaction(auth, payload)
+	return client.BuildSignAndSubmitTransaction(auth, payload, withDefaultDeployGas(options)...)
 }
