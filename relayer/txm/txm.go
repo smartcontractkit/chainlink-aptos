@@ -753,8 +753,9 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 			// are all treated as "tx still unconfirmed" and fall through to the expiry check below.
 			chainTx, err := client.TransactionByHash(hash)
 
-			if err == nil && chainTx.Type != aptosapi.TransactionVariantPending {
-				// tx has been committed
+			if err == nil && chainTx.Type != aptosapi.TransactionVariantPending { // tx has been committed
+
+				// confirm nonce
 				if err := txStore.Confirm(unconfirmedTx.Nonce, hash, false); err != nil {
 					ctxLogger.Errorw("failed to confirm tx in TxStore", "hash", hash, "accountAddress", accountAddress, "error", err)
 				}
@@ -784,36 +785,29 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 								// https://github.com/aptos-labs/aptos-core/blob/77ff4bf413f54c41206bd5573e1891fa3a0dccf6/api/types/src/convert.rs#L1062
 								// Example transaction: https://api.testnet.aptoslabs.com/v1/transactions/by_hash/0x7a106db811c8d5dfd71ac98f374ca36e4f630ce5412b99c8f0e871e7feda37ea
 								a.incrementTransactionAttempt(unconfirmedTx.Tx)
-								// NOTE: The continue here correctly skips the Finalized update below.
-								// If maybeRetry succeeds, status stays Unconfirmed and the tx re-enters the broadcast loop.
-								// If it fails (max attempts), status is set to Failed.
 								if !a.maybeRetry(ctx, unconfirmedTx, RetryReasonOutOfGas) {
 									a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Failed)
 								}
 								continue
 							}
-							// TODO: Non-OOG reverts (e.g. MOVE_ABORT, EXECUTION_FAILURE) fall through
-							// to the Finalized update below. The caller (aptos_service.go) treats
-							// Finalized as TxSuccess, which is incorrect for reverted txs. Should either:
-							//   - set status to Failed for non-OOG reverts, or
-							//   - introduce a distinct status (e.g. Reverted) that callers can distinguish
 						}
 					} else {
-						// NOTE: Type assertion failed — VmStatus is never set on the AptosTx.
-						// Falls through to Finalized below; callers won't know why.
+						// NOTE: Type assertion failed on UserTransaction.
 						ctxLogger.Errorw("failed to read confirmed user tx", "hash", hash, "chainTxInner", chainTx.Inner)
+						// Incrementing error as we dont know if it was a success.
+						a.metrics.IncrementErrorTxs(ctx)
 					}
 				} else {
 					// NOTE: Committed tx is not TransactionVariantUser (e.g. some future variant).
-					// VmStatus won't be set. Still marked Finalized below.
 					ctxLogger.Errorw("unexpected confirmed tx type", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
+					// Incrementing error as we dont know if it was a success.
+					a.metrics.IncrementErrorTxs(ctx)
 				}
 
 				a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Finalized)
 				a.metrics.IncrementFinalizedTxs(ctx)
 			} else {
 				ctxLogger.Debugw("tx is still unconfirmed", "hash", hash, "chainTx", chainTx)
-				totalPending++
 				// Check using the ledger timestamp whether the transaction has expired.
 				ledgerTimestampSecs, err := a.getLedgerTimestampSecs(client)
 				if err != nil {
@@ -823,13 +817,12 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 
 				if ledgerTimestampSecs <= unconfirmedTx.ExpirationTimestampSecs {
 					// tx was neither committed nor expired yet
+					totalPending++
 					ctxLogger.Debugw("tx not found or pending in the mempool", "hash", hash)
 					continue
 				}
 
-				// NOTE: Passing failed=true marks this nonce as reusable in the TxStore.
-				// If the subsequent maybeRetry succeeds, the tx will be re-broadcast
-				// with a potentially reused nonce.
+				// Confirm the transaction, mark as failed to reuse the nonce.
 				err = txStore.Confirm(unconfirmedTx.Nonce, hash, true)
 				if err != nil {
 					ctxLogger.Errorw("couldn't confirm expired tx", "error", err)
