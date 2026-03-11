@@ -234,7 +234,7 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 // skipping the string-based function parsing and BCS serialisation of parameters.
 // The EntryFunction already contains the module, function name, type tags, and
 // pre-encoded BCS args.
-func (a *AptosTxm) EnqueueCRE(transactionID string, txMetadata *commontypes.TxMeta, publicKey string, entryFunction *aptos.EntryFunction, simulateTx bool) error {
+func (a *AptosTxm) EnqueueFromAptosService(transactionID string, txMetadata *commontypes.TxMeta, publicKey string, entryFunction *aptos.EntryFunction, simulateTx bool) error {
 	a.baseLogger.Infow("TestingAptosWriteCap: EnqueueCRE called",
 		"transactionID", transactionID,
 		"publicKey", publicKey,

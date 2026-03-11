@@ -199,7 +199,7 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 
 	txID := uuid.New().String()
 	s.logger.Infow("TestingAptosWriteCap: SubmitTransaction - enqueueing to TxManager", "txID", txID)
-	enqueueErr := s.chain.TxManager().EnqueueCRE(
+	enqueueErr := s.chain.TxManager().EnqueueFromAptosService(
 		txID,
 		&commontypes.TxMeta{
 			GasLimit: gasLimit,
@@ -207,6 +207,7 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 		publicKey,
 		entryFn,
 		true, // simulateTx
+		// TODO: add expected simulation failures to save gas on reported transmissions
 	)
 	if enqueueErr != nil {
 		s.logger.Errorw("TestingAptosWriteCap: SubmitTransaction - EnqueueCRE failed", "txID", txID, "error", enqueueErr)
