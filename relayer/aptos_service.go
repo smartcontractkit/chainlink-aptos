@@ -202,7 +202,7 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 
 	txID := uuid.New().String()
 	s.logger.Infow("SubmitTransaction: enqueueing to TxManager", "txID", txID)
-	enqueueErr := s.chain.TxManager().EnqueueWithEntryFunction(
+	_, enqueueErr := s.chain.TxManager().EnqueueWithEntryFunction(
 		txID,
 		&commontypes.TxMeta{
 			GasLimit: gasLimit,

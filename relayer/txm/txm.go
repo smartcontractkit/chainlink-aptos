@@ -201,9 +201,9 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 // skipping the string-based function parsing and BCS serialisation of parameters.
 // The EntryFunction already contains the module, function name, type tags, and
 // pre-encoded BCS args.
-func (a *AptosTxm) EnqueueWithEntryFunction(transactionID string, txMetadata *commontypes.TxMeta, publicKey string, entryFunction *aptos.EntryFunction, simulateTx bool) error {
+func (a *AptosTxm) EnqueueWithEntryFunction(transactionID string, txMetadata *commontypes.TxMeta, publicKey string, entryFunction *aptos.EntryFunction, simulateTx bool) (string, error) {
 	if entryFunction == nil {
-		return errors.New("entry function is required")
+		return "", errors.New("entry function is required")
 	}
 
 	if transactionID == "" {
@@ -213,13 +213,13 @@ func (a *AptosTxm) EnqueueWithEntryFunction(transactionID string, txMetadata *co
 		_, transactionExists := a.transactions[transactionID]
 		a.transactionsLock.Unlock()
 		if transactionExists {
-			return errors.New("transaction already exists")
+			return "", errors.New("transaction already exists")
 		}
 	}
 
 	ed25519PublicKey, err := utils.HexPublicKeyToEd25519PublicKey(publicKey)
 	if err != nil {
-		return fmt.Errorf("failed to convert public key: %+w", err)
+		return "", fmt.Errorf("failed to convert public key: %+w", err)
 	}
 
 	acc := utils.Ed25519PublicKeyToAddress(ed25519PublicKey)
@@ -240,7 +240,12 @@ func (a *AptosTxm) EnqueueWithEntryFunction(transactionID string, txMetadata *co
 		Simulate:        simulateTx,
 	}
 
-	return a.enqueueTransaction(tx)
+	err = a.enqueueTransaction(tx)
+	if err != nil {
+		return "", fmt.Errorf("failed to enqueue transaction: %+w", err)
+	}
+
+	return tx.ID, nil
 }
 
 // enqueueTransaction is the common helper that handles pruning, storing, and broadcasting
