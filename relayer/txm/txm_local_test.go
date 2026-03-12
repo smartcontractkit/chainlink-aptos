@@ -75,7 +75,7 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 		return rlClient, nil
 	}
 
-	txm, err := New(logger, keystore, config, getClient)
+	txm, err := New(logger, keystore, config, getClient, chainInfo.ChainID)
 	require.NoError(t, err)
 	err = txm.Start(context.Background())
 	require.NoError(t, err)
