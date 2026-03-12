@@ -141,13 +141,13 @@ func (s *aptosService) AccountTransactions(ctx context.Context, req commonaptos.
 			s.logger.Errorw("AccountTransactions: failed to marshal tx", "hash", string(tx.Hash()), "error", err)
 			return nil, fmt.Errorf("failed to marshal transaction data: %w", err)
 		}
-		v := tx.Version()
-		s := tx.Success()
+		version := tx.Version()
+		success := tx.Success()
 		result = append(result, &commonaptos.Transaction{
 			Type:    commonaptos.TransactionVariant(tx.Type),
 			Hash:    string(tx.Hash()),
-			Version: &v,
-			Success: &s,
+			Version: &version,
+			Success: &success,
 			Data:    data,
 		})
 	}
@@ -198,7 +198,7 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 		s.logger.Errorw("SubmitTransaction: failed to get account with highest balance", "error", err)
 		return nil, fmt.Errorf("failed to determine account for SubmitTransaction: %w", err)
 	}
-	s.logger.Infow("SubmitTransaction: selected account", "publicKey", publicKey, "gasLimit", gasLimit.String())
+	s.logger.Infow("SubmitTransaction: selected account", "publicKey", publicKey)
 
 	txID := uuid.New().String()
 	s.logger.Infow("SubmitTransaction: enqueueing to TxManager", "txID", txID)
