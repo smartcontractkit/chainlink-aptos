@@ -3,6 +3,17 @@ mockname: "{{ .InterfaceName }}"
 outpkg: mocks
 filename: "{{ .InterfaceName | snakecase }}.go"
 packages:
+  github.com/aptos-labs/aptos-go-sdk:
+    interfaces:
+      AptosRpcClient:
+        config:
+          dir: relayer/monitor/mocks
+          resolve-type-alias: false
+  github.com/smartcontractkit/chainlink-common/pkg/types/core:
+    interfaces:
+      Keystore:
+        config:
+          dir: relayer/monitor/mocks
   github.com/smartcontractkit/chainlink-aptos/relayer/write_target:
     interfaces:
       chainService:
