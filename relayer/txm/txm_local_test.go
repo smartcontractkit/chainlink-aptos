@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
+	"github.com/aptos-labs/aptos-go-sdk/bcs"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/sha3"
@@ -152,6 +153,92 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 	logger.Debugw("Counter value after test", "value", counterValue)
 
 	require.Equal(t, expectedValue, counterValue)
+
+	// submit all txs at once and wait for all afterwards
+	// helps testing reties and failure recoveries
+	var txIDsCRE []string
+
+	accountBytes, err := bcs.Serialize(&accountAddress)
+	require.NoError(t, err)
+
+	threeBytes, err := bcs.SerializeU64(3)
+	require.NoError(t, err)
+	fourBytes, err := bcs.SerializeU64(4)
+	require.NoError(t, err)
+
+	for i := 0; i < iterations; i++ {
+		incrementId := uuid.New().String()
+		_, err := txm.EnqueueWithEntryFunction(
+			incrementId,
+			getSampleTxMetadata(),
+			publicKeyHex,
+			&aptos.EntryFunction{
+				Module: aptos.ModuleId{
+					Address: accountAddress,
+					Name:    "counter",
+				},
+				Function: "increment",
+				ArgTypes: []aptos.TypeTag{},
+				Args: [][]byte{
+					accountBytes,
+				},
+			},
+			true,
+		)
+		require.NoError(t, err)
+		expectedValue += 1
+		txIDsCRE = append(txIDsCRE, incrementId)
+
+		incrementMultId := uuid.New().String()
+		_, err = txm.EnqueueWithEntryFunction(
+			incrementMultId,
+			getSampleTxMetadata(),
+			publicKeyHex,
+			&aptos.EntryFunction{
+				Module: aptos.ModuleId{
+					Address: accountAddress,
+					Name:    "counter",
+				},
+				Function: "increment_mult",
+				ArgTypes: []aptos.TypeTag{},
+				Args: [][]byte{
+					accountBytes,
+					threeBytes,
+					fourBytes,
+				},
+			},
+			true,
+		)
+		require.NoError(t, err)
+		expectedValue += 3 * 4
+		txIDsCRE = append(txIDsCRE, incrementMultId)
+	}
+
+	for _, txId := range txIDsCRE {
+		waitForTxmId(t, txm, txId, time.Minute*2)
+	}
+
+	counterValueCRE := testutils.ReadCounterValue(t, client, accountAddress)
+	logger.Debugw("Counter value after test", "value", counterValueCRE)
+
+	require.Equal(t, expectedValue, counterValueCRE)
+
+	// Test GetTransactionResult for finalized transactions
+	for _, txId := range txIDsCRE {
+		result, err := txm.GetTransactionResult(txId)
+		require.NoError(t, err)
+		require.Equal(t, commontypes.Finalized, result.Status)
+		require.NotEmpty(t, result.TxHash, "TxHash should be set for finalized transaction")
+	}
+
+	// Test GetTransactionResult with invalid transaction ID
+	_, err = txm.GetTransactionResult("")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "nil tx id")
+
+	_, err = txm.GetTransactionResult("non-existent-tx-id")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no such tx")
 }
 
 func deployTestModule(t *testing.T, txm *AptosTxm, fromAddress aptos.AccountAddress, publicKeyHex string) {

@@ -114,8 +114,6 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 		}
 	}
 
-	ctxLogger := GetContexedTxLogger(a.baseLogger, transactionID, txMetadata)
-
 	ed25519PublicKey, err := utils.HexPublicKeyToEd25519PublicKey(publicKey)
 	if err != nil {
 		return fmt.Errorf("failed to convert public key: %+w", err)
@@ -180,11 +178,10 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 		return fmt.Errorf("failed to parse contract address: %+w", err)
 	}
 
-	currentTimestamp := getTimestampSecs()
 	tx := &AptosTx{
 		ID:                             transactionID,
 		Metadata:                       txMetadata,
-		Timestamp:                      currentTimestamp,
+		Timestamp:                      getTimestampSecs(),
 		FromAddress:                    *fromAccountAddress,
 		PublicKey:                      ed25519PublicKey,
 		ContractAddress:                *contractAccountAddress,
@@ -197,35 +194,96 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 		ExpectedSimulationFailureRules: slices.Clone(expectedSimulationFailures),
 	}
 
+	return a.enqueueTransaction(tx)
+}
+
+// EnqueueWithEntryFunction is like Enqueue but accepts a deserialized EntryFunction directly,
+// skipping the string-based function parsing and BCS serialisation of parameters.
+// The EntryFunction already contains the module, function name, type tags, and
+// pre-encoded BCS args.
+func (a *AptosTxm) EnqueueWithEntryFunction(transactionID string, txMetadata *commontypes.TxMeta, publicKey string, entryFunction *aptos.EntryFunction, simulateTx bool) (string, error) {
+	if entryFunction == nil {
+		return "", errors.New("entry function is required")
+	}
+
+	if transactionID == "" {
+		transactionID = uuid.New().String()
+	} else {
+		a.transactionsLock.Lock()
+		_, transactionExists := a.transactions[transactionID]
+		a.transactionsLock.Unlock()
+		if transactionExists {
+			return "", errors.New("transaction already exists")
+		}
+	}
+
+	ed25519PublicKey, err := utils.HexPublicKeyToEd25519PublicKey(publicKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert public key: %+w", err)
+	}
+
+	acc := utils.Ed25519PublicKeyToAddress(ed25519PublicKey)
+	fromAccountAddress := aptos.AccountAddress(acc)
+
+	tx := &AptosTx{
+		ID:              transactionID,
+		Metadata:        txMetadata,
+		Timestamp:       getTimestampSecs(),
+		FromAddress:     fromAccountAddress,
+		PublicKey:       ed25519PublicKey,
+		ContractAddress: entryFunction.Module.Address,
+		ModuleName:      entryFunction.Module.Name,
+		FunctionName:    entryFunction.Function,
+		TypeTags:        entryFunction.ArgTypes,
+		BcsValues:       entryFunction.Args,
+		Status:          commontypes.Pending,
+		Simulate:        simulateTx,
+	}
+
+	err = a.enqueueTransaction(tx)
+	if err != nil {
+		return "", fmt.Errorf("failed to enqueue transaction: %+w", err)
+	}
+
+	return tx.ID, nil
+}
+
+// enqueueTransaction is the common helper that handles pruning, storing, and broadcasting
+// a transaction. Both Enqueue and EnqueueWithEntryFunction use this after building the AptosTx.
+func (a *AptosTxm) enqueueTransaction(tx *AptosTx) error {
+	ctxLogger := GetContexedTxLogger(a.baseLogger, tx.ID, tx.Metadata)
+
 	a.transactionsLock.Lock()
+	currentTimestamp := tx.Timestamp
 	if (currentTimestamp - a.transactionsLastPruneTime) > a.config.PruneIntervalSecs {
-		for txID, tx := range a.transactions {
-			if tx.Status != commontypes.Finalized && tx.Status != commontypes.Failed && tx.Status != commontypes.Fatal {
+		for txID, existingTx := range a.transactions {
+			if existingTx.Status != commontypes.Finalized && existingTx.Status != commontypes.Failed && existingTx.Status != commontypes.Fatal {
 				continue
 			}
-			if (currentTimestamp - tx.Timestamp) < a.config.PruneTxExpirationSecs {
+			if (currentTimestamp - existingTx.Timestamp) < a.config.PruneTxExpirationSecs {
 				continue
 			}
-			ctxLogger.Debugw("Pruning transaction", "status", tx.Status)
+			ctxLogger.Debugw("Pruning transaction", "status", existingTx.Status)
 			delete(a.transactions, txID)
 		}
 		a.transactionsLastPruneTime = currentTimestamp
 	}
-	a.transactions[transactionID] = tx
+	a.transactions[tx.ID] = tx
 	a.transactionsLock.Unlock()
 
 	select {
-	case a.broadcastChan <- transactionID:
-		ctxLogger.Debugw("Tx enqueued", "fromAddr", fromAddress)
+	case a.broadcastChan <- tx.ID:
+		ctxLogger.Debugw("tx enqueued", "fromAddr", tx.FromAddress.String(), "transactionID", tx.ID)
 	default:
 		// if the channel is full, we drop the transaction.
 		// we do this instead of setting the tx in `a.transactions` post-broadcast to avoid a race
 		// with the broadcastLoop, which expects to find the tx in `a.transactions` upon reception of
 		// the id.
 		a.transactionsLock.Lock()
-		delete(a.transactions, transactionID)
+		delete(a.transactions, tx.ID)
 		a.transactionsLock.Unlock()
 
+		ctxLogger.Errorw("broadcast channel full, tx dropped", "transactionID", tx.ID)
 		return fmt.Errorf("failed to enqueue tx: %+v", tx)
 	}
 
@@ -557,11 +615,11 @@ func (a *AptosTxm) signAndBroadcast(ctx context.Context, tx *AptosTx) {
 		rawTx, err := a.createRawTx(client, tx, nonce)
 		if err != nil {
 			a.updateTransactionStatus(tx, commontypes.Failed)
-		    if !errors.As(err, new(*expectedSimulationFailureError)) {
-		        ctxLogger.Errorw("failed to create raw tx", "error", err)
+			if !errors.As(err, new(*expectedSimulationFailureError)) {
+				ctxLogger.Errorw("failed to create raw tx", "error", err)
 				a.metrics.IncrementErrorTxs(ctx)
-		    }
-		    return
+			}
+			return
 		}
 
 		signedTx, err := a.createSignedTx(client, rawTx, tx.PublicKey, tx.FromAddress)
@@ -677,6 +735,10 @@ func (a *AptosTxm) confirmLoop() {
 	}
 }
 
+// checkUnconfirmed polls committed/pending txs and moves them to terminal states
+// Possible terminal states from this method:
+//   - Finalized: tx committed on-chain (successful OR reverted with non-OOG VmStatus — see TODO below)
+//   - Failed: OOG revert after max retries, expired tx after max retries, or TxStore errors
 func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 	client, err := a.getClient()
 	if err != nil {
@@ -692,10 +754,13 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 		for _, unconfirmedTx := range unconfirmedTxs {
 			ctxLogger := GetContexedTxLogger(a.baseLogger, unconfirmedTx.Tx.ID, unconfirmedTx.Tx.Metadata)
 			hash := unconfirmedTx.Hash
+			// NOTE: TransactionByHash errors (network failure, RPC error, not just "not found")
+			// are all treated as "tx still unconfirmed" and fall through to the expiry check below.
 			chainTx, err := client.TransactionByHash(hash)
 
-			if err == nil && chainTx.Type != aptosapi.TransactionVariantPending {
-				// tx has been committed
+			if err == nil && chainTx.Type != aptosapi.TransactionVariantPending { // tx has been committed
+
+				// confirm nonce
 				if err := txStore.Confirm(unconfirmedTx.Nonce, hash, false); err != nil {
 					ctxLogger.Errorw("failed to confirm tx in TxStore", "hash", hash, "accountAddress", accountAddress, "error", err)
 				}
@@ -732,17 +797,22 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 							}
 						}
 					} else {
+						// NOTE: Type assertion failed on UserTransaction.
 						ctxLogger.Errorw("failed to read confirmed user tx", "hash", hash, "chainTxInner", chainTx.Inner)
+						// Incrementing error as we dont know if it was a success.
+						a.metrics.IncrementErrorTxs(ctx)
 					}
 				} else {
+					// NOTE: Committed tx is not TransactionVariantUser (e.g. some future variant).
 					ctxLogger.Errorw("unexpected confirmed tx type", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
+					// Incrementing error as we dont know if it was a success.
+					a.metrics.IncrementErrorTxs(ctx)
 				}
 
 				a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Finalized)
 				a.metrics.IncrementFinalizedTxs(ctx)
 			} else {
 				ctxLogger.Debugw("tx is still unconfirmed", "hash", hash, "chainTx", chainTx)
-				totalPending++
 				// Check using the ledger timestamp whether the transaction has expired.
 				ledgerTimestampSecs, err := a.getLedgerTimestampSecs(client)
 				if err != nil {
@@ -752,6 +822,7 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 
 				if ledgerTimestampSecs <= unconfirmedTx.ExpirationTimestampSecs {
 					// tx was neither committed nor expired yet
+					totalPending++
 					ctxLogger.Debugw("tx not found or pending in the mempool", "hash", hash)
 					continue
 				}

@@ -39,6 +39,7 @@ type Chain interface {
 	TxManager() *txm.AptosTxm
 	LogPoller() *logpoller.AptosLogPoller
 	GetClient() (aptos.AptosRpcClient, error)
+	KeyStore() loop.Keystore
 }
 
 type ChainOpts struct {
@@ -73,10 +74,11 @@ var _ Chain = (*chain)(nil)
 type chain struct {
 	starter commonutils.StartStopOnce
 
-	id   string
-	cfg  *config.TOMLConfig
-	lggr logger.Logger
-	ds   sqlutil.DataSource
+	id       string
+	cfg      *config.TOMLConfig
+	lggr     logger.Logger
+	ds       sqlutil.DataSource
+	keyStore loop.Keystore
 
 	// Sub-services
 	txm            *txm.AptosTxm
@@ -113,10 +115,11 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 	}
 
 	ch := &chain{
-		id:   cfg.ChainID,
-		cfg:  cfg,
-		lggr: logger.Named(lggr, "Chain"),
-		ds:   ds,
+		id:       cfg.ChainID,
+		cfg:      cfg,
+		lggr:     logger.Named(lggr, "Chain"),
+		ds:       ds,
+		keyStore: loopKs,
 	}
 
 	ch.txm, err = txm.New(lggr, loopKs, *cfg.TransactionManager, ch.GetClient, cfg.ChainID)
@@ -167,6 +170,10 @@ func (c *chain) DataSource() sqlutil.DataSource {
 
 func (c *chain) ChainID() string {
 	return c.id
+}
+
+func (c *chain) KeyStore() loop.Keystore {
+	return c.keyStore
 }
 
 // GetClient returns a client, randomly selecting one from available and valid nodes
