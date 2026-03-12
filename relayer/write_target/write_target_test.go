@@ -160,8 +160,8 @@ func newMockedWriteTarget(t *testing.T, lggr logger.Logger) mockedWriteTarget {
 	wt := newWriteTarget(WriteTargetOpts{
 		ID: "write_aptos-1@1.0.0",
 		Config: Config{
-			ConfirmerPollPeriod: *config.MustNewDuration(100 * time.Millisecond),
-			ConfirmerTimeout:    *config.MustNewDuration(300 * time.Millisecond),
+			ConfirmerPollPeriod: config.MustNewDuration(100 * time.Millisecond),
+			ConfirmerTimeout:    config.MustNewDuration(300 * time.Millisecond),
 		},
 		ChainInfo:        rtypes.ChainInfo{},
 		Logger:           lggr,

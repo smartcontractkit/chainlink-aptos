@@ -9,9 +9,12 @@ import (
 )
 
 func TestTxmMaybeRetryReturnsFalseWhenBroadcastChannelIsFull(t *testing.T) {
+	cfg := DefaultConfigSet
+	cfg.Resolve()
 	txm := &AptosTxm{
 		baseLogger:    logger.Test(t),
 		broadcastChan: make(chan string, 1),
+		config:        cfg,
 	}
 	txm.broadcastChan <- "existing"
 

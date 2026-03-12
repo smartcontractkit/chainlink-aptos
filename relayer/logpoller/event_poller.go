@@ -202,7 +202,7 @@ func (l *AptosLogPoller) syncEvent(ctx context.Context, boundAddress aptos.Accou
 		return fmt.Errorf("syncEvent: failed to extract creation_num for %s: %w", eventFieldName, err)
 	}
 
-	batchSize := l.config.EventBatchSize
+	batchSize := *l.config.EventBatchSize
 	var totalProcessed int = 0
 
 	var client aptos.AptosRpcClient

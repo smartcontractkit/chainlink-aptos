@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/pelletier/go-toml/v2"
@@ -23,10 +22,8 @@ const ChainFamilyName = "aptos"
 var DefaultConfigSet = ConfigSet{
 	TransactionManager: txm.DefaultConfigSet,
 	LogPoller:          logpoller.DefaultConfigSet,
-	BalanceMonitor: monitor.GenericBalanceConfig{
-		BalancePollPeriod: *config.MustNewDuration(10 * time.Second),
-	},
-	WriteTargetCap: write_target.DefaultConfigSet,
+	BalanceMonitor:     monitor.DefaultBalanceConfig,
+	WriteTargetCap:     write_target.DefaultConfigSet,
 }
 
 type ConfigSet struct { //nolint:revive
@@ -43,11 +40,11 @@ type WorkflowConfig struct {
 }
 
 type Chain struct {
-	TransactionManager *txm.Config
-	LogPoller          *logpoller.Config
-	BalanceMonitor     *monitor.GenericBalanceConfig
-	WriteTargetCap     *write_target.Config
-	Workflow           *WorkflowConfig
+	TransactionManager *txm.Config                  `toml:"TransactionManager"`
+	LogPoller          *logpoller.Config             `toml:"LogPoller"`
+	BalanceMonitor     *monitor.GenericBalanceConfig `toml:"BalanceMonitor"`
+	WriteTargetCap     *write_target.Config          `toml:"WriteTargetCap"`
+	Workflow           *WorkflowConfig               `toml:"Workflow"`
 }
 
 type Node struct {
@@ -84,7 +81,48 @@ type TOMLConfig struct {
 	Nodes Nodes
 }
 
-// decodeConfig decodes the rawConfig as (Aptos) TOML and sets default values
+// applyDefaults ensures all component configs are non-nil and fully populated.
+// For absent TOML sections (nil pointers), creates empty configs.
+// Calls Resolve() on each to fill nil fields from per-package defaults.
+func (cfg *TOMLConfig) applyDefaults() {
+	if cfg.TransactionManager == nil {
+		cfg.TransactionManager = &txm.Config{}
+	}
+	cfg.TransactionManager.Resolve()
+
+	if cfg.LogPoller == nil {
+		cfg.LogPoller = &logpoller.Config{}
+	}
+	cfg.LogPoller.Resolve()
+
+	if cfg.BalanceMonitor == nil {
+		cfg.BalanceMonitor = &monitor.GenericBalanceConfig{}
+	}
+	cfg.BalanceMonitor.Resolve()
+
+	if cfg.WriteTargetCap == nil {
+		cfg.WriteTargetCap = &write_target.Config{}
+	}
+	cfg.WriteTargetCap.Resolve()
+
+	// Set network name defaults
+	if cfg.NetworkName == "" {
+		network, err := GetNetworkConfig(cfg.ChainID)
+		if err == nil {
+			cfg.NetworkName = network.Name
+		} else {
+			cfg.NetworkName = "unknown"
+		}
+	}
+
+	if cfg.NetworkNameFull == "" {
+		cfg.NetworkNameFull = fmt.Sprintf("%s-%s", ChainFamilyName, cfg.NetworkName)
+	}
+}
+
+// NewDecodedTOMLConfig decodes the rawConfig as (Aptos) TOML, merges with
+// defaults, and validates. Fields absent from the TOML get default values;
+// fields explicitly set (including to zero) are preserved as-is.
 func NewDecodedTOMLConfig(rawConfig string) (*TOMLConfig, error) {
 	d := toml.NewDecoder(strings.NewReader(rawConfig))
 	d.DisallowUnknownFields()
@@ -94,6 +132,8 @@ func NewDecodedTOMLConfig(rawConfig string) (*TOMLConfig, error) {
 		return &TOMLConfig{}, fmt.Errorf("failed to decode config toml: %w:\n\t%s", err, rawConfig)
 	}
 
+	cfg.applyDefaults()
+
 	if err := cfg.ValidateConfig(); err != nil {
 		return &TOMLConfig{}, fmt.Errorf("invalid aptos config: %w", err)
 	}
@@ -102,43 +142,11 @@ func NewDecodedTOMLConfig(rawConfig string) (*TOMLConfig, error) {
 		return &TOMLConfig{}, fmt.Errorf("cannot create new chain with ID %s: config is disabled", cfg.ChainID)
 	}
 
-	cfg.SetDefaults()
 	return &cfg, nil
 }
 
 func (c *TOMLConfig) IsEnabled() bool {
 	return c.Enabled == nil || *c.Enabled
-}
-
-func (c *TOMLConfig) SetDefaults() {
-	if c.TransactionManager == nil {
-		c.TransactionManager = &DefaultConfigSet.TransactionManager
-	}
-	if c.LogPoller == nil {
-		c.LogPoller = &DefaultConfigSet.LogPoller
-	}
-	if c.BalanceMonitor == nil {
-		c.BalanceMonitor = &DefaultConfigSet.BalanceMonitor
-	}
-	if c.WriteTargetCap == nil {
-		c.WriteTargetCap = &DefaultConfigSet.WriteTargetCap
-	}
-
-	// Set network name defaults
-	if c.NetworkName == "" {
-		// Check if known network by chain ID
-		network, err := GetNetworkConfig(c.ChainID)
-		if err == nil {
-			c.NetworkName = network.Name
-		} else {
-			c.NetworkName = "unknown"
-		}
-	}
-
-	// Set network name full defaults
-	if c.NetworkNameFull == "" {
-		c.NetworkNameFull = fmt.Sprintf("%s-%s", ChainFamilyName, c.NetworkName)
-	}
 }
 
 func (c *TOMLConfig) ValidateConfig() (err error) {
