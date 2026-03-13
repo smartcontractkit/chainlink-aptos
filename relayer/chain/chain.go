@@ -112,6 +112,13 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 
 	if cfg.Chain.Workflow != nil {
 		cfg.Chain.Workflow.PublicKey = accounts[0]
+		if cfg.Chain.Workflow.FromAddress == "" {
+			addr, err := utils.HexPublicKeyToAddressString(accounts[0])
+			if err != nil {
+				return nil, fmt.Errorf("failed to derive account address from public key: %w", err)
+			}
+			cfg.Chain.Workflow.FromAddress = addr
+		}
 	}
 
 	ch := &chain{
