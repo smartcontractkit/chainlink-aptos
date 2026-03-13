@@ -21,6 +21,7 @@ import (
 	write_target "github.com/smartcontractkit/chainlink-aptos/relayer/write_target/aptos"
 )
 
+var _ types.AptosService = (*relayer)(nil)
 var _ loop.Relayer = (*relayer)(nil)
 
 type relayer struct {
@@ -29,11 +30,13 @@ type relayer struct {
 
 	starter utils.StartStopOnce
 	stopCh  services.StopChan
+	aptosService
 }
 
 func NewRelayer(lggr logger.Logger, chain chain.Chain, capRegistry core.CapabilitiesRegistry) (*relayer, error) {
 	ctx := context.TODO()
 
+	// TODO: Deprecate this after CRE migration is complete
 	if chain.Config().Workflow != nil {
 		capability, err := write_target.NewAptosWriteTarget(ctx, chain, lggr)
 		if err != nil {
@@ -50,11 +53,19 @@ func NewRelayer(lggr logger.Logger, chain chain.Chain, capRegistry core.Capabili
 		chain:  chain,
 		lggr:   lggr,
 		stopCh: make(chan struct{}),
+		aptosService: aptosService{
+			chain:  chain,
+			logger: lggr,
+		},
 	}, nil
 }
 
 func (r *relayer) Name() string {
 	return r.lggr.Name()
+}
+
+func (r *relayer) Replay(ctx context.Context, fromBlock string, args map[string]any) error {
+	return errors.ErrUnsupported
 }
 
 // Start starts the relayer respecting the given context.
@@ -153,8 +164,8 @@ func (r *relayer) Solana() (types.SolanaService, error) {
 	return nil, errors.New("SolanaService is not supported for aptos")
 }
 
-func (r *relayer) Replay(ctx context.Context, fromBlock string, args map[string]any) error {
-	return errors.ErrUnsupported
+func (r *relayer) Aptos() (types.AptosService, error) {
+	return r, nil
 }
 
 // ChainService interface
