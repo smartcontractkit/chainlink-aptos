@@ -37,7 +37,7 @@ func testOpts(t *testing.T) GenericBalanceMonitorOpts {
 	return GenericBalanceMonitorOpts{
 		ChainInfo:           types.ChainInfo{ChainFamilyName: "aptos", ChainID: "testnet", NetworkName: "testnet", NetworkNameFull: "aptos-testnet"},
 		ChainNativeCurrency: "APT",
-		Config:              GenericBalanceConfig{BalancePollPeriod: *config.MustNewDuration(100 * time.Millisecond)},
+		Config:              GenericBalanceConfig{BalancePollPeriod: config.MustNewDuration(100 * time.Millisecond)},
 		Logger:              logger.Test(t),
 		Keystore:            ks,
 		NewGenericBalanceClient: func() (GenericBalanceClient, error) {
