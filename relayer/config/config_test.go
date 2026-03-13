@@ -6,10 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target"
 )
 
 const baseTOML = `
@@ -145,25 +141,6 @@ BalancePollPeriod = "30s"
 	})
 }
 
-// Absent sections -- nil pointers produce complete defaults
-func TestSetDefaults_AbsentSections(t *testing.T) {
-	t.Parallel()
-
-	cfg, err := NewDecodedTOMLConfig(baseTOML)
-	require.NoError(t, err)
-
-	require.NotNil(t, cfg.TransactionManager)
-	require.NotNil(t, cfg.LogPoller)
-	require.NotNil(t, cfg.BalanceMonitor)
-	require.NotNil(t, cfg.WriteTargetCap)
-
-	// Spot-check one field per section (exhaustive Resolve tests live in sub-packages)
-	assert.Equal(t, txm.DefaultConfigSet.BroadcastChanSize, cfg.TransactionManager.BroadcastChanSize)
-	assert.Equal(t, logpoller.DefaultConfigSet.EventPollingInterval.Duration(), cfg.LogPoller.EventPollingInterval.Duration())
-	assert.Equal(t, DefaultConfigSet.BalanceMonitor.BalancePollPeriod.Duration(), cfg.BalanceMonitor.BalancePollPeriod.Duration())
-	assert.Equal(t, write_target.DefaultConfigSet.Tag, cfg.WriteTargetCap.Tag)
-}
-
 // Regression guard: global DefaultConfigSet must never be mutated by config resolution
 func TestNoGlobalMutation(t *testing.T) {
 	t.Parallel()
@@ -188,60 +165,3 @@ BroadcastChanSize = 999
 	assert.Equal(t, originalWT, DefaultConfigSet.WriteTargetCap, "WriteTargetCap defaults must not be mutated")
 }
 
-// Explicit zero overrides are preserved (not replaced by defaults).
-func TestExplicitZeroOverride(t *testing.T) {
-	t.Parallel()
-
-	t.Run("TransactionManager explicit zero overrides default", func(t *testing.T) {
-		t.Parallel()
-
-		raw := baseTOML + `
-[TransactionManager]
-DefaultMaxGasAmount = 0
-MaxSimulateAttempts = 0
-`
-		cfg, err := NewDecodedTOMLConfig(raw)
-		require.NoError(t, err)
-		assert.Equal(t, uint64(0), *cfg.TransactionManager.DefaultMaxGasAmount,
-			"explicit 0 must override default of 200000")
-		assert.Equal(t, uint(0), *cfg.TransactionManager.MaxSimulateAttempts,
-			"explicit 0 must override default of 5")
-		// Non-specified fields still get defaults
-		assert.Equal(t, txm.DefaultConfigSet.BroadcastChanSize, cfg.TransactionManager.BroadcastChanSize)
-	})
-
-	t.Run("LogPoller explicit false overrides default", func(t *testing.T) {
-		t.Parallel()
-
-		raw := baseTOML + `
-[LogPoller]
-EventBatchSize = 0
-TXPollerDisabled = false
-`
-		cfg, err := NewDecodedTOMLConfig(raw)
-		require.NoError(t, err)
-		assert.Equal(t, uint64(0), *cfg.LogPoller.EventBatchSize,
-			"explicit 0 must override default of 100")
-		assert.Equal(t, false, *cfg.LogPoller.TXPollerDisabled,
-			"explicit false must be preserved")
-		// Non-specified fields still get defaults
-		assert.Equal(t, logpoller.DefaultConfigSet.EventPollingInterval.Duration(),
-			cfg.LogPoller.EventPollingInterval.Duration())
-	})
-
-	t.Run("WriteTargetCap explicit empty string", func(t *testing.T) {
-		t.Parallel()
-
-		raw := baseTOML + `
-[WriteTargetCap]
-Tag = ""
-`
-		cfg, err := NewDecodedTOMLConfig(raw)
-		require.NoError(t, err)
-		assert.Equal(t, "", *cfg.WriteTargetCap.Tag,
-			"explicit empty string must be preserved")
-		// Non-specified fields still get defaults
-		assert.Equal(t, write_target.DefaultConfigSet.ConfirmerPollPeriod.Duration(),
-			cfg.WriteTargetCap.ConfirmerPollPeriod.Duration())
-	})
-}

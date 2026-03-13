@@ -20,4 +20,31 @@ func TestResolve_AllDefaults(t *testing.T) {
 	assert.Equal(t, DefaultConfigSet.TXPollerDisabled, cfg.TXPollerDisabled)
 }
 
+func TestResolve_PartialOverride(t *testing.T) {
+	t.Parallel()
 
+	cfg := Config{
+		EventBatchSize: ptr(uint64(50)),
+	}
+	cfg.Resolve()
+
+	assert.Equal(t, uint64(50), *cfg.EventBatchSize)
+	assert.Equal(t, DefaultConfigSet.EventPollingInterval.Duration(), cfg.EventPollingInterval.Duration())
+	assert.Equal(t, DefaultConfigSet.TXPollerDisabled, cfg.TXPollerDisabled)
+}
+
+func TestResolve_ExplicitZero(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		EventBatchSize:   ptr(uint64(0)),
+		TXPollerDisabled: ptr(false),
+	}
+	cfg.Resolve()
+
+	assert.Equal(t, uint64(0), *cfg.EventBatchSize,
+		"explicit 0 must not be overwritten by default of 100")
+	assert.Equal(t, false, *cfg.TXPollerDisabled,
+		"explicit false must be preserved")
+	assert.Equal(t, DefaultConfigSet.EventPollingInterval.Duration(), cfg.EventPollingInterval.Duration())
+}
