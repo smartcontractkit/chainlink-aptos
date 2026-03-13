@@ -38,8 +38,8 @@ type ConfigSet struct { //nolint:revive
 
 type WorkflowConfig struct {
 	ForwarderAddress string
-	// FromAddress      string
-	PublicKey string
+	FromAddress      string // explicit account address (optional, derived from PublicKey if empty)
+	PublicKey        string
 }
 
 type Chain struct {

@@ -128,7 +128,8 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 			"forwarder": {
 				Functions: map[string]*chainwriter.ChainWriterFunction{
 					"report": {
-						PublicKey: config.Workflow.PublicKey,
+						PublicKey:   config.Workflow.PublicKey,
+						FromAddress: config.Workflow.FromAddress,
 						Params: []crconfig.AptosFunctionParam{
 							{
 								Name:     "Receiver",
