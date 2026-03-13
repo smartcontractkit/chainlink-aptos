@@ -16,7 +16,6 @@ import (
 	aptosconfig "github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
@@ -128,7 +127,8 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 			"forwarder": {
 				Functions: map[string]*chainwriter.ChainWriterFunction{
 					"report": {
-						PublicKey: config.Workflow.PublicKey,
+						PublicKey:   config.Workflow.PublicKey,
+						FromAddress: config.Workflow.FromAddress,
 						Params: []crconfig.AptosFunctionParam{
 							{
 								Name:     "Receiver",
@@ -202,7 +202,6 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 
 // getTransmitter sources the transmitter address from the CW config
 func getTransmitter(cwConfig chainwriter.ChainWriterConfig) (string, error) {
-	// Try to source the transmitter (e.g., c.cw.config.Functions["forwarder"].FromAddress)
 	moduleConfig, ok := cwConfig.Modules[write_target.ContractName]
 	if !ok {
 		return "", fmt.Errorf("no such contract: %s", write_target.ContractName)
@@ -213,17 +212,9 @@ func getTransmitter(cwConfig chainwriter.ChainWriterConfig) (string, error) {
 		return "", fmt.Errorf("no such method: %s", write_target.ContractMethodName_report)
 	}
 
-	// Notice: reusing logic from the TXM which sources the transmitter this way
-	transmitter := functionConfig.FromAddress
-	if transmitter == "" {
-		// If the address is not specified, we assume the public key is for its corresponding address
-		// and not for an address with a rotated authentication key.
-		ed25519PublicKey, err := utils.HexPublicKeyToEd25519PublicKey(functionConfig.PublicKey)
-		if err != nil {
-			return "", fmt.Errorf("failed to convert public key: %+w", err)
-		}
-		acc := utils.Ed25519PublicKeyToAddress(ed25519PublicKey)
-		transmitter = acc.String()
+	if functionConfig.FromAddress == "" {
+		return "", fmt.Errorf("FromAddress is not configured for %s.%s",
+			write_target.ContractName, write_target.ContractMethodName_report)
 	}
-	return transmitter, nil
+	return functionConfig.FromAddress, nil
 }

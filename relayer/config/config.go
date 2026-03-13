@@ -38,8 +38,8 @@ type ConfigSet struct { //nolint:revive
 
 type WorkflowConfig struct {
 	ForwarderAddress string
-	// FromAddress      string
-	PublicKey string
+	FromAddress      string
+	PublicKey        string
 }
 
 type Chain struct {
@@ -153,6 +153,13 @@ func (c *TOMLConfig) ValidateConfig() (err error) {
 		if err == nil && c.NetworkName != network.Name {
 			err = errors.Join(err, config.ErrInvalid{Name: "NetworkName", Value: c.NetworkName, Msg: fmt.Sprintf("does not match known network (%s) for chain ID", network.Name)})
 		}
+	}
+
+	if c.Workflow != nil && c.Workflow.FromAddress == "" {
+		err = errors.Join(err, config.ErrEmpty{
+			Name: "Workflow.FromAddress",
+			Msg:  "required - set it to your Aptos on-chain account address",
+		})
 	}
 
 	if len(c.Nodes) == 0 {

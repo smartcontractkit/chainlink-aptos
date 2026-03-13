@@ -146,3 +146,47 @@ MaxTxRetryAttempts = 8
 	assert.Equal(t, uint64(20), cfg.TransactionManager.TxExpirationSecs)
 	assert.Equal(t, uint64(8), cfg.TransactionManager.MaxTxRetryAttempts)
 }
+
+func TestWorkflowFromAddress_Required(t *testing.T) {
+	t.Parallel()
+
+	baseTOML := `
+ChainID = "2"
+[[Nodes]]
+Name = "node-1"
+URL = "http://node-1"
+`
+
+	t.Run("Workflow without FromAddress fails validation", func(t *testing.T) {
+		t.Parallel()
+
+		raw := baseTOML + `
+[Workflow]
+ForwarderAddress = "0x1234"
+`
+		_, err := NewDecodedTOMLConfig(raw)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Workflow.FromAddress")
+	})
+
+	t.Run("Workflow with FromAddress passes validation", func(t *testing.T) {
+		t.Parallel()
+
+		raw := baseTOML + `
+[Workflow]
+ForwarderAddress = "0x1234"
+FromAddress = "0xabc123"
+`
+		cfg, err := NewDecodedTOMLConfig(raw)
+		require.NoError(t, err)
+		assert.Equal(t, "0xabc123", cfg.Workflow.FromAddress)
+		assert.Equal(t, "0x1234", cfg.Workflow.ForwarderAddress)
+	})
+
+	t.Run("No Workflow section passes validation", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := NewDecodedTOMLConfig(baseTOML)
+		require.NoError(t, err)
+	})
+}

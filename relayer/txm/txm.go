@@ -120,8 +120,9 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 	}
 
 	if fromAddress == "" {
-		// If the address is not specified, we assume the public key is for its corresponding address
-		// and not for an address with a rotated authentication key.
+		ctxLogger := GetContexedTxLogger(a.baseLogger, transactionID, txMetadata)
+		ctxLogger.Debugw("FromAddress not specified, deriving from public key",
+			"publicKey", publicKey)
 		acc := utils.Ed25519PublicKeyToAddress(ed25519PublicKey)
 		fromAddress = acc.String()
 	}
