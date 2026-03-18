@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
@@ -79,6 +81,12 @@ type chain struct {
 	ds       sqlutil.DataSource
 	keyStore loop.Keystore
 
+	// clientCache caches a rate-limited Aptos client per node URL to avoid creating
+	// a new NodeClient on every GetClient() call (port exhaustion with aptos-go-sdk v1.12+).
+	// The write lock is held throughout creation so a burst of requests doesn't race to create.
+	clientCacheMu sync.RWMutex
+	clientCache   map[string]aptos.AptosRpcClient
+
 	// Sub-services
 	txm            *txm.AptosTxm
 	logPoller      *logpoller.AptosLogPoller
@@ -114,11 +122,12 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 	}
 
 	ch := &chain{
-		id:       cfg.ChainID,
-		cfg:      cfg,
-		lggr:     logger.Named(lggr, "Chain"),
-		ds:       ds,
-		keyStore: loopKs,
+		id:         cfg.ChainID,
+		cfg:        cfg,
+		lggr:       logger.Named(lggr, "Chain"),
+		ds:         ds,
+		keyStore:   loopKs,
+		clientCache: make(map[string]aptos.AptosRpcClient),
 	}
 
 	ch.txm, err = txm.New(lggr, loopKs, *cfg.TransactionManager, ch.GetClient, cfg.ChainID)
@@ -175,57 +184,81 @@ func (c *chain) ChainID() string {
 	return c.id
 }
 
-// GetClient returns a client, randomly selecting one from available and valid nodes
+// GetClient returns a client, randomly selecting one from available and valid nodes.
+// Clients are cached per node URL. Uses http.DefaultClient so all NodeClients share
+// the process-wide default transport (avoids port exhaustion with aptos-go-sdk v1.12+).
+// The write lock is held throughout creation so a burst of requests cannot race to
+// create multiple clients for the same URL (last writer wins / leaked clients).
 func (c *chain) GetClient() (aptos.AptosRpcClient, error) {
-	var node *config.Node
-	var err error
-	var client *aptos.NodeClient
 	nodes := c.cfg.Nodes
 	if len(nodes) == 0 {
 		return nil, errors.New("no nodes available")
 	}
+
 	// #nosec
-	index := rand.Perm(len(nodes)) // list of node indexes to try
+	index := rand.Perm(len(nodes))
+
+	// Fast path: try cached client (read lock only).
 	for _, i := range index {
-		node = nodes[i]
-		// create client and check. provide a chainId of 0 so that it's fetched when
-		// GetChainId is invoked.
-		client, err = aptos.NewNodeClient(node.URL.String(), 0)
-		// if error, try another node
+		node := nodes[i]
+		urlStr := node.URL.String()
+		c.clientCacheMu.RLock()
+		cached := c.clientCache[urlStr]
+		c.clientCacheMu.RUnlock()
+		if cached != nil {
+			chainId, err := cached.GetChainId()
+			if err != nil {
+				c.clientCacheMu.Lock()
+				delete(c.clientCache, urlStr)
+				c.clientCacheMu.Unlock()
+				continue
+			}
+			chainInfo := c.chainInfo()
+			if strconv.FormatUint(uint64(chainId), 10) == chainInfo.ChainID {
+				return cached, nil
+			}
+			c.clientCacheMu.Lock()
+			delete(c.clientCache, urlStr)
+			c.clientCacheMu.Unlock()
+		}
+	}
+
+	// Slow path: create and cache. Hold lock for entire creation so only one goroutine
+	// creates per URL (avoids race where burst of requests all create, last writer wins).
+	c.clientCacheMu.Lock()
+	defer c.clientCacheMu.Unlock()
+	for _, i := range index {
+		node := nodes[i]
+		urlStr := node.URL.String()
+		if c.clientCache[urlStr] != nil {
+			return c.clientCache[urlStr], nil
+		}
+		client, err := aptos.NewNodeClientWithHttpClient(urlStr, 0, http.DefaultClient)
 		if err != nil {
 			c.lggr.Warnw("failed to create node", "name", node.Name, "aptos-url", node.URL, "err", err)
 			continue
 		}
-
 		chainId, err := client.GetChainId()
 		if err != nil {
 			c.lggr.Errorw("failed to fetch chain id", "name", node.Name, "err", err)
 			continue
 		}
-
 		chainInfo := c.chainInfo()
 		if strconv.FormatUint(uint64(chainId), 10) != chainInfo.ChainID {
 			c.lggr.Errorw("unexpected chain id", "name", node.Name, "localChainId", chainInfo.ChainID, "remoteChainId", chainId)
 			continue
 		}
-		// if all checks passed, mark found and break loop
-		break
+		rateLimitedClient := ratelimit.NewRateLimitedClient(client,
+			chainInfo,
+			urlStr,
+			500,            // max requests in-flight
+			30*time.Second, // timeout
+		)
+		c.clientCache[urlStr] = rateLimitedClient
+		c.lggr.Debugw("Created and cached client", "name", node.Name, "url", node.URL)
+		return rateLimitedClient, nil
 	}
-	// if no valid node found, exit with error
-	if client == nil {
-		return nil, errors.New("no node valid nodes available")
-	}
-
-	c.lggr.Debugw("Created client", "name", node.Name, "url", node.URL)
-
-	rateLimitedClient := ratelimit.NewRateLimitedClient(client,
-		c.chainInfo(),
-		node.URL.String(),
-		500,            // max requests in-flight
-		30*time.Second, // timeout
-	)
-
-	return rateLimitedClient, nil
+	return nil, errors.New("no valid nodes available")
 }
 
 func (c *chain) Start(ctx context.Context) error {
