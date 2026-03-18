@@ -2,10 +2,13 @@ package chain
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
+	"net/http"
+	"net/http/cookiejar"
 	"strconv"
 	"sync"
 	"time"
@@ -86,6 +89,11 @@ type chain struct {
 	// every GetClient() call, which leads to port exhaustion under load.
 	clientCacheMu sync.RWMutex
 	clientCache   map[string]aptos.AptosRpcClient
+
+	// sharedTransport is used by all NodeClients so connections are pooled (one Transport
+	// per chain). TLS 1.2 and MaxIdleConnsPerHost avoid port exhaustion with SDK v1.12+.
+	sharedTransport     *http.Transport
+	sharedTransportOnce sync.Once
 
 	// Sub-services
 	txm            *txm.AptosTxm
@@ -184,6 +192,38 @@ func (c *chain) KeyStore() loop.Keystore {
 	return c.keyStore
 }
 
+// sharedHTTPTransport returns a Transport with TLS 1.2 and connection pool settings
+// so that all NodeClients for this chain share the same connection pool (avoids
+// port exhaustion with aptos-go-sdk v1.12+).
+func (c *chain) sharedHTTPTransport() *http.Transport {
+	c.sharedTransportOnce.Do(func() {
+		c.sharedTransport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				MinVersion: tls.VersionTLS12,
+			},
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+		}
+	})
+	return c.sharedTransport
+}
+
+// newHTTPClientForNode returns an http.Client suitable for use with
+// aptos.NewNodeClientWithHttpClient. Uses the chain's shared Transport and a
+// per-node cookie jar (for stickiness). Caller does not need to close the client.
+func (c *chain) newHTTPClientForNode() (*http.Client, error) {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, err
+	}
+	return &http.Client{
+		Transport: c.sharedHTTPTransport(),
+		Jar:       jar,
+		Timeout:   60 * time.Second,
+	}, nil
+}
+
 // GetClient returns a client, randomly selecting one from available and valid nodes.
 // Clients are cached per node URL to avoid creating a new NodeClient (and http.Transport)
 // on every call, which with aptos-go-sdk v1.12+ causes port exhaustion under load.
@@ -221,14 +261,20 @@ func (c *chain) GetClient() (aptos.AptosRpcClient, error) {
 		}
 	}
 
-	// No valid cached client; create and cache one
+	// No valid cached client; create and cache one using our own http.Client
+	// (shared Transport + TLS 1.2 + connection pool) to avoid port exhaustion.
 	var node *config.Node
 	var client *aptos.NodeClient
 	var err error
 	for _, i := range index {
 		node = nodes[i]
 		urlStr := node.URL.String()
-		client, err = aptos.NewNodeClient(urlStr, 0)
+		httpClient, httpErr := c.newHTTPClientForNode()
+		if httpErr != nil {
+			c.lggr.Warnw("failed to create http client for node", "name", node.Name, "err", httpErr)
+			continue
+		}
+		client, err = aptos.NewNodeClientWithHttpClient(urlStr, 0, httpClient)
 		if err != nil {
 			c.lggr.Warnw("failed to create node", "name", node.Name, "aptos-url", node.URL, "err", err)
 			continue
@@ -277,6 +323,10 @@ func (c *chain) Close() error {
 		c.lggr.Debug("Stopping logPoller")
 		c.lggr.Debug("Stopping balance monitor")
 
+		c.sharedTransportOnce.Do(func() {}) // ensure transport was created if we're about to close it
+		if c.sharedTransport != nil {
+			c.sharedTransport.CloseIdleConnections()
+		}
 		return services.CloseAll(c.txm, c.logPoller, c.balanceMonitor)
 	})
 }
