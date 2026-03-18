@@ -14,7 +14,7 @@ require (
 	github.com/moby/term v0.5.2
 	github.com/rs/zerolog v1.34.0
 	github.com/smartcontractkit/chain-selectors v1.0.97
-	github.com/smartcontractkit/chainlink-aptos v0.0.0-20260318060556-4ea6cdaca545
+	github.com/smartcontractkit/chainlink-aptos v0.0.0-20260318100050-761828ae715f
 	github.com/smartcontractkit/chainlink-common v0.10.1-0.20260318094926-58cb813cb349
 	github.com/smartcontractkit/chainlink-deployments-framework v0.86.3
 	github.com/smartcontractkit/chainlink-testing-framework/framework v0.15.7-0.20260317142433-8903d89a1af4
@@ -531,8 +531,10 @@ replace (
 
 replace github.com/smartcontractkit/chainlink-aptos => ../
 
-replace github.com/smartcontractkit/chainlink/v2 => github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260318095615-f372e4d451c8
+replace github.com/smartcontractkit/chainlink/v2 => github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260318102021-584a67beab12
 
-replace github.com/smartcontractkit/chainlink/core/scripts => github.com/smartcontractkit/chainlink/core/scripts v0.0.0-20260318095615-f372e4d451c8
+replace github.com/smartcontractkit/chainlink/core/scripts => github.com/smartcontractkit/chainlink/core/scripts v0.0.0-20260318102021-584a67beab12
 
-replace github.com/smartcontractkit/chainlink/deployment => github.com/smartcontractkit/chainlink/deployment v0.0.0-20260318095615-f372e4d451c8
+replace github.com/smartcontractkit/chainlink/deployment => github.com/smartcontractkit/chainlink/deployment v0.0.0-20260318102021-584a67beab12
+
+replace github.com/smartcontractkit/chainlink-solana => github.com/smartcontractkit/chainlink-solana v1.1.2-0.20260223222711-2fa6b0e07db0
