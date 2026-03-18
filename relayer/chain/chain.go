@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"math/rand"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
@@ -80,6 +81,12 @@ type chain struct {
 	ds       sqlutil.DataSource
 	keyStore loop.Keystore
 
+	// clientCache caches a rate-limited Aptos client per node URL to avoid creating
+	// a new NodeClient (and thus a new http.Transport with aptos-go-sdk v1.12+) on
+	// every GetClient() call, which leads to port exhaustion under load.
+	clientCacheMu sync.RWMutex
+	clientCache   map[string]aptos.AptosRpcClient
+
 	// Sub-services
 	txm            *txm.AptosTxm
 	logPoller      *logpoller.AptosLogPoller
@@ -115,11 +122,12 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 	}
 
 	ch := &chain{
-		id:       cfg.ChainID,
-		cfg:      cfg,
-		lggr:     logger.Named(lggr, "Chain"),
-		ds:       ds,
-		keyStore: loopKs,
+		id:         cfg.ChainID,
+		cfg:        cfg,
+		lggr:       logger.Named(lggr, "Chain"),
+		ds:         ds,
+		keyStore:   loopKs,
+		clientCache: make(map[string]aptos.AptosRpcClient),
 	}
 
 	ch.txm, err = txm.New(lggr, loopKs, *cfg.TransactionManager, ch.GetClient, cfg.ChainID)
@@ -176,57 +184,78 @@ func (c *chain) KeyStore() loop.Keystore {
 	return c.keyStore
 }
 
-// GetClient returns a client, randomly selecting one from available and valid nodes
+// GetClient returns a client, randomly selecting one from available and valid nodes.
+// Clients are cached per node URL to avoid creating a new NodeClient (and http.Transport)
+// on every call, which with aptos-go-sdk v1.12+ causes port exhaustion under load.
 func (c *chain) GetClient() (aptos.AptosRpcClient, error) {
-	var node *config.Node
-	var err error
-	var client *aptos.NodeClient
 	nodes := c.cfg.Nodes
 	if len(nodes) == 0 {
 		return nil, errors.New("no nodes available")
 	}
+
+	// Try cached client first (random order)
 	// #nosec
-	index := rand.Perm(len(nodes)) // list of node indexes to try
+	index := rand.Perm(len(nodes))
+	for _, i := range index {
+		node := nodes[i]
+		urlStr := node.URL.String()
+		c.clientCacheMu.RLock()
+		cached := c.clientCache[urlStr]
+		c.clientCacheMu.RUnlock()
+		if cached != nil {
+			// Verify chain ID still matches (node could have been reconfigured)
+			chainId, err := cached.GetChainId()
+			if err != nil {
+				c.clientCacheMu.Lock()
+				delete(c.clientCache, urlStr)
+				c.clientCacheMu.Unlock()
+				continue
+			}
+			chainInfo := c.chainInfo()
+			if strconv.FormatUint(uint64(chainId), 10) == chainInfo.ChainID {
+				return cached, nil
+			}
+			c.clientCacheMu.Lock()
+			delete(c.clientCache, urlStr)
+			c.clientCacheMu.Unlock()
+		}
+	}
+
+	// No valid cached client; create and cache one
+	var node *config.Node
+	var client *aptos.NodeClient
+	var err error
 	for _, i := range index {
 		node = nodes[i]
-		// create client and check. provide a chainId of 0 so that it's fetched when
-		// GetChainId is invoked.
-		client, err = aptos.NewNodeClient(node.URL.String(), 0)
-		// if error, try another node
+		urlStr := node.URL.String()
+		client, err = aptos.NewNodeClient(urlStr, 0)
 		if err != nil {
 			c.lggr.Warnw("failed to create node", "name", node.Name, "aptos-url", node.URL, "err", err)
 			continue
 		}
-
 		chainId, err := client.GetChainId()
 		if err != nil {
 			c.lggr.Errorw("failed to fetch chain id", "name", node.Name, "err", err)
 			continue
 		}
-
 		chainInfo := c.chainInfo()
 		if strconv.FormatUint(uint64(chainId), 10) != chainInfo.ChainID {
 			c.lggr.Errorw("unexpected chain id", "name", node.Name, "localChainId", chainInfo.ChainID, "remoteChainId", chainId)
 			continue
 		}
-		// if all checks passed, mark found and break loop
-		break
+		rateLimitedClient := ratelimit.NewRateLimitedClient(client,
+			chainInfo,
+			urlStr,
+			500,            // max requests in-flight
+			30*time.Second, // timeout
+		)
+		c.clientCacheMu.Lock()
+		c.clientCache[urlStr] = rateLimitedClient
+		c.clientCacheMu.Unlock()
+		c.lggr.Debugw("Created and cached client", "name", node.Name, "url", node.URL)
+		return rateLimitedClient, nil
 	}
-	// if no valid node found, exit with error
-	if client == nil {
-		return nil, errors.New("no node valid nodes available")
-	}
-
-	c.lggr.Debugw("Created client", "name", node.Name, "url", node.URL)
-
-	rateLimitedClient := ratelimit.NewRateLimitedClient(client,
-		c.chainInfo(),
-		node.URL.String(),
-		500,            // max requests in-flight
-		30*time.Second, // timeout
-	)
-
-	return rateLimitedClient, nil
+	return nil, errors.New("no valid nodes available")
 }
 
 func (c *chain) Start(ctx context.Context) error {
