@@ -3,7 +3,7 @@ module github.com/smartcontractkit/chainlink-aptos
 go 1.25.5
 
 require (
-	github.com/aptos-labs/aptos-go-sdk v1.12.0
+	github.com/aptos-labs/aptos-go-sdk v1.12.1-0.20260318141106-21b6ef4ed363
 	github.com/aptos-labs/tree-sitter-move-on-aptos v0.0.0-20250321090037-c820eb4716e1
 	github.com/ethereum/go-ethereum v1.17.1
 	github.com/go-viper/mapstructure/v2 v2.5.0
