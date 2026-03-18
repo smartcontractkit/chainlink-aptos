@@ -21,7 +21,6 @@ import (
 	write_target "github.com/smartcontractkit/chainlink-aptos/relayer/write_target/aptos"
 )
 
-var _ types.AptosService = (*relayer)(nil)
 var _ loop.Relayer = (*relayer)(nil)
 
 type relayer struct {
@@ -36,7 +35,6 @@ type relayer struct {
 func NewRelayer(lggr logger.Logger, chain chain.Chain, capRegistry core.CapabilitiesRegistry) (*relayer, error) {
 	ctx := context.TODO()
 
-	// TODO: Deprecate this after CRE migration is complete
 	if chain.Config().Workflow != nil {
 		capability, err := write_target.NewAptosWriteTarget(ctx, chain, lggr)
 		if err != nil {
@@ -68,7 +66,6 @@ func (r *relayer) Replay(ctx context.Context, fromBlock string, args map[string]
 	return errors.ErrUnsupported
 }
 
-// Start starts the relayer respecting the given context.
 func (r *relayer) Start(ctx context.Context) error {
 	return r.starter.StartOnce("AptosRelayer", func() error {
 		r.lggr.Debug("Starting")
@@ -83,7 +80,6 @@ func (r *relayer) Start(ctx context.Context) error {
 	})
 }
 
-// Close will close all open subservices
 func (r *relayer) Close() error {
 	return r.starter.StopOnce("AptosRelayer", func() error {
 		r.lggr.Debug("Stopping")
@@ -146,10 +142,38 @@ func (r *relayer) NewLLOProvider(ctx context.Context, rargs types.RelayArgs, par
 	return nil, errors.New("data streams is not supported for aptos")
 }
 
+func (r *relayer) NewMedianProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.MedianProvider, error) {
+	return nil, errors.New("ocr2 is not supported for aptos")
+}
+
+func (r *relayer) NewMercuryProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.MercuryProvider, error) {
+	return nil, errors.New("mercury is not supported for aptos")
+}
+
+func (r *relayer) NewFunctionsProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.FunctionsProvider, error) {
+	return nil, errors.New("functions are not supported for aptos")
+}
+
+func (r *relayer) NewAutomationProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.AutomationProvider, error) {
+	return nil, errors.New("automation is not supported for aptos")
+}
+
+func (r *relayer) NewOCR3CapabilityProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.OCR3CapabilityProvider, error) {
+	return nil, errors.New("ocr3 capability provider is not supported for aptos")
+}
+
 func (r *relayer) NewCCIPProvider(ctx context.Context, cargs types.CCIPProviderArgs) (types.CCIPProvider, error) {
 	_ = ctx
 	_ = cargs
 	return nil, errors.New("ccip provider is not supported for aptos")
+}
+
+func (r *relayer) NewCCIPCommitProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.CCIPCommitProvider, error) {
+	return nil, errors.New("ccip.commit is not supported for aptos")
+}
+
+func (r *relayer) NewCCIPExecProvider(ctx context.Context, rargs types.RelayArgs, pargs types.PluginArgs) (types.CCIPExecProvider, error) {
+	return nil, errors.New("ccip.exec is not supported for aptos")
 }
 
 func (r *relayer) EVM() (types.EVMService, error) {
@@ -168,13 +192,16 @@ func (r *relayer) Aptos() (types.AptosService, error) {
 	return r, nil
 }
 
-// ChainService interface
 func (r *relayer) GetChainStatus(ctx context.Context) (types.ChainStatus, error) {
 	return r.chain.GetChainStatus(ctx)
 }
 
 func (r *relayer) LatestHead(ctx context.Context) (types.Head, error) {
 	return r.chain.LatestHead(ctx)
+}
+
+func (r *relayer) FinalizedHead(ctx context.Context) (types.Head, error) {
+	return r.chain.FinalizedHead(ctx)
 }
 
 func (r *relayer) GetChainInfo(ctx context.Context) (types.ChainInfo, error) {

@@ -10,6 +10,8 @@ import (
 
 	mock "github.com/stretchr/testify/mock"
 
+	txm "github.com/smartcontractkit/chainlink-aptos/relayer/txm"
+
 	types "github.com/smartcontractkit/chainlink-common/pkg/types"
 )
 
@@ -244,6 +246,65 @@ func (_c *ContractWriter_GetTransactionFee_Call) Return(_a0 decimal.Decimal, _a1
 }
 
 func (_c *ContractWriter_GetTransactionFee_Call) RunAndReturn(run func(context.Context, string) (decimal.Decimal, error)) *ContractWriter_GetTransactionFee_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetTransactionResult provides a mock function with given fields: ctx, transactionID
+func (_m *ContractWriter) GetTransactionResult(ctx context.Context, transactionID string) (*txm.TransactionResult, error) {
+	ret := _m.Called(ctx, transactionID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetTransactionResult")
+	}
+
+	var r0 *txm.TransactionResult
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (*txm.TransactionResult, error)); ok {
+		return rf(ctx, transactionID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) *txm.TransactionResult); ok {
+		r0 = rf(ctx, transactionID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*txm.TransactionResult)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, transactionID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// ContractWriter_GetTransactionResult_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetTransactionResult'
+type ContractWriter_GetTransactionResult_Call struct {
+	*mock.Call
+}
+
+// GetTransactionResult is a helper method to define mock.On call
+//   - ctx context.Context
+//   - transactionID string
+func (_e *ContractWriter_Expecter) GetTransactionResult(ctx interface{}, transactionID interface{}) *ContractWriter_GetTransactionResult_Call {
+	return &ContractWriter_GetTransactionResult_Call{Call: _e.mock.On("GetTransactionResult", ctx, transactionID)}
+}
+
+func (_c *ContractWriter_GetTransactionResult_Call) Run(run func(ctx context.Context, transactionID string)) *ContractWriter_GetTransactionResult_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *ContractWriter_GetTransactionResult_Call) Return(_a0 *txm.TransactionResult, _a1 error) *ContractWriter_GetTransactionResult_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *ContractWriter_GetTransactionResult_Call) RunAndReturn(run func(context.Context, string) (*txm.TransactionResult, error)) *ContractWriter_GetTransactionResult_Call {
 	_c.Call.Return(run)
 	return _c
 }

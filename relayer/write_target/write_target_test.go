@@ -24,6 +24,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/report/platform"
 	rtypes "github.com/smartcontractkit/chainlink-aptos/relayer/types"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target/mocks"
 )
 
@@ -247,6 +248,7 @@ func TestWriteTarget_Execute(t *testing.T) {
 			mockedWT.cw.EXPECT().SubmitTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 			// Returns terminal transaction status
 			mockedWT.cw.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(tc.TransactionStatus, nil).Once()
+			mockedWT.cw.EXPECT().GetTransactionResult(mock.Anything, mock.Anything).Return(&txm.TransactionResult{Status: tc.TransactionStatus}, nil).Once()
 
 			request := createValidRequest(t)
 			_, err := mockedWT.wt.Execute(t.Context(), request)
@@ -298,6 +300,7 @@ func TestWriteTarget_Execute(t *testing.T) {
 			mockedWT.cw.EXPECT().SubmitTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 			// signal that transaction is in terminal state and it's time to poll for transmission status
 			mockedWT.cw.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(tc.TransactionStatus, nil)
+			mockedWT.cw.EXPECT().GetTransactionResult(mock.Anything, mock.Anything).Return(&txm.TransactionResult{Status: tc.TransactionStatus}, nil)
 			// Get transaction fee (always called for terminal statuses)
 			mockedWT.cw.EXPECT().GetTransactionFee(mock.Anything, mock.Anything).Return(decimal.NewFromInt(100), nil).Once()
 			request := createValidRequest(t)
@@ -314,5 +317,61 @@ func TestWriteTarget_Execute(t *testing.T) {
 			require.Equal(t, expected, result)
 			tests.RequireLogMessage(t, observed, tc.ExpectedLogMsg)
 		}
+	})
+	t.Run("Returns terminal error immediately for receiver abort", func(t *testing.T) {
+		mockedWT := newMockedWriteTarget(t, logger.Test(t))
+		mockedWT.cs.EXPECT().LatestHead(mock.Anything).Return(commontypes.Head{}, nil).Once()
+		mockedWT.cr.EXPECT().GetLatestValue(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+		mockedWT.cw.EXPECT().SubmitTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+		mockedWT.cw.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(commontypes.Fatal, nil).Once()
+		mockedWT.cw.EXPECT().GetTransactionResult(mock.Anything, mock.Anything).Return(&txm.TransactionResult{
+			Status:   commontypes.Fatal,
+			VmStatus: "Move abort in 0xbeef::receiver: E_USER_ABORT",
+		}, nil).Once()
+
+		request := createValidRequest(t)
+		_, err := mockedWT.wt.Execute(t.Context(), request)
+		require.EqualError(t, err, "platform.write_target.WriteError [ERR-0] - write confirmation - terminal failure: receiver execution failed: Move abort in 0xbeef::receiver: E_USER_ABORT")
+	})
+	t.Run("Already processed keeps waiting for on-chain confirmation", func(t *testing.T) {
+		lggr, observed := logger.TestObserved(t, zapcore.InfoLevel)
+		mockedWT := newMockedWriteTarget(t, lggr)
+		mockedWT.cs.EXPECT().LatestHead(mock.Anything).Return(commontypes.Head{Height: "12"}, nil)
+		secondCall := false
+		mockedWT.cr.EXPECT().GetLatestValue(mock.Anything, "-forwarder-getTransmissionState", mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
+			func(ctx context.Context, s string, level primitives.ConfidenceLevel, inputs interface{}, rawTransmitted interface{}) error {
+				transmitted := rawTransmitted.(*bool)
+				*transmitted = secondCall
+				secondCall = true
+				return nil
+			}).Twice()
+		mockedWT.cr.EXPECT().GetLatestValue(mock.Anything, "-forwarder-getTransmitter", mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
+			func(ctx context.Context, s string, level primitives.ConfidenceLevel, inputs interface{}, rawTransmitterAddr interface{}) error {
+				transmitterAddr := rawTransmitterAddr.(*struct {
+					Vec []string
+				})
+				transmitterAddr.Vec = []string{"0x0abc"}
+				return nil
+			}).Once()
+		mockedWT.cw.EXPECT().SubmitTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+		mockedWT.cw.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(commontypes.Fatal, nil)
+		mockedWT.cw.EXPECT().GetTransactionResult(mock.Anything, mock.Anything).Return(&txm.TransactionResult{
+			Status:   commontypes.Fatal,
+			VmStatus: "Move abort in 0xaa::platform::forwarder: E_ALREADY_PROCESSED",
+		}, nil)
+		mockedWT.cw.EXPECT().GetTransactionFee(mock.Anything, mock.Anything).Return(decimal.NewFromInt(100), nil).Once()
+
+		request := createValidRequest(t)
+		result, err := mockedWT.wt.Execute(t.Context(), request)
+		require.NoError(t, err)
+		require.Equal(t, capabilities.CapabilityResponse{
+			Metadata: capabilities.ResponseMetadata{
+				Metering: []capabilities.MeteringNodeDetail{{
+					SpendUnit:  "GAS.",
+					SpendValue: "100",
+				}},
+			},
+		}, result)
+		tests.RequireLogMessage(t, observed, "confirmed - transmission state visible but submitted by another node. This node's tx failed")
 	})
 }

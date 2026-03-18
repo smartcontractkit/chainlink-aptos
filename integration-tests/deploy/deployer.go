@@ -296,10 +296,11 @@ func (d *Deployer) DeployCore() error {
 
 			Name: containerName,
 			Env: map[string]string{
-				"CL_CONFIG":            tomlString,
-				"CL_DATABASE_URL":      fmt.Sprintf("%s?sslmode=disable", dbUrl),
-				"CL_PASSWORD_KEYSTORE": "notastrongpassword",
-				"CL_EVM_CMD":           "", // Disable LOOPP mode for EVM to enable ReplayFromBlock
+				"CL_CONFIG":                      tomlString,
+				"CL_DATABASE_URL":                fmt.Sprintf("%s?sslmode=disable", dbUrl),
+				"CL_PASSWORD_KEYSTORE":           "notastrongpassword",
+				"CL_EVM_CMD":                     "", // Disable LOOPP mode for EVM to enable ReplayFromBlock
+				"CL_ENABLE_FAKE_STREAMS_TRIGGER": "true",
 			},
 			Entrypoint: []string{"bash", "-c", fmt.Sprintf("echo -e \"%s\\n%s\" > /tmp/api_credentials && chainlink node start --api /tmp/api_credentials", coreConfig.Email, coreConfig.Password)},
 		}

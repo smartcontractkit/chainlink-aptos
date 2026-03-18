@@ -8,6 +8,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 
 	wt "github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/platform/write-target"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 	rtypes "github.com/smartcontractkit/chainlink-aptos/relayer/types"
 )
 
@@ -188,6 +189,69 @@ func (m *messageBuilder) buildWriteSent(i *requestInfo, head types.Head, txID st
 		MetaCapabilityId:             m.CapInfo.ID,
 		MetaCapabilityTimestampStart: uint64(i.tsStart),
 		MetaCapabilityTimestampEmit:  uint64(time.Now().UnixMilli()),
+	}
+}
+
+func (m *messageBuilder) buildWriteAccepted(i *requestInfo, head types.Head, txID string, result *txm.TransactionResult) *wt.WriteAccepted {
+	msg := &wt.WriteAccepted{
+		Node:      i.node,
+		Forwarder: i.forwarder,
+		Receiver:  i.receiver,
+		ReportId:  uint32(i.reportInfo.reportID),
+
+		TxId: txID,
+
+		BlockHash:      hex.EncodeToString(head.Hash),
+		BlockHeight:    head.Height,
+		BlockTimestamp: head.Timestamp * 1000, // Convert to milliseconds
+
+		// Execution Context - Source
+		MetaSourceId: i.node,
+
+		// Execution Context - Chain
+		MetaChainFamilyName: m.ChainInfo.ChainFamilyName,
+		MetaChainId:         m.ChainInfo.ChainID,
+		MetaNetworkName:     m.ChainInfo.NetworkName,
+		MetaNetworkNameFull: m.ChainInfo.NetworkNameFull,
+
+		// Execution Context - Workflow (capabilities.RequestMetadata)
+		MetaWorkflowId:               i.request.Metadata.WorkflowID,
+		MetaWorkflowOwner:            i.request.Metadata.WorkflowOwner,
+		MetaWorkflowExecutionId:      i.request.Metadata.WorkflowExecutionID,
+		MetaWorkflowName:             i.request.Metadata.WorkflowName,
+		MetaWorkflowDonId:            i.request.Metadata.WorkflowDonID,
+		MetaWorkflowDonConfigVersion: i.request.Metadata.WorkflowDonConfigVersion,
+		MetaReferenceId:              i.request.Metadata.ReferenceID,
+
+		// Execution Context - Capability
+		MetaCapabilityType:           string(m.CapInfo.CapabilityType),
+		MetaCapabilityId:             m.CapInfo.ID,
+		MetaCapabilityTimestampStart: uint64(i.tsStart),
+		MetaCapabilityTimestampEmit:  uint64(time.Now().UnixMilli()),
+	}
+
+	if result != nil {
+		msg.TxHash = result.TxHash
+		msg.TxStatus = txStatusString(result.Status)
+	}
+
+	return msg
+}
+
+func txStatusString(status types.TransactionStatus) string {
+	switch status {
+	case types.Pending:
+		return "pending"
+	case types.Unconfirmed:
+		return "unconfirmed"
+	case types.Finalized:
+		return "finalized"
+	case types.Failed:
+		return "failed"
+	case types.Fatal:
+		return "fatal"
+	default:
+		return "unknown"
 	}
 }
 

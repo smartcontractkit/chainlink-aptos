@@ -14,7 +14,7 @@ workflow = """
 name: "0000FOOBAR"
 owner: "%s"
 triggers:
- - id: "mock-streams-trigger@1.0.0"
+ - id: "streams-trigger@1.0.0"
    config:
      maxFrequencyMs: 5000
      feedIds:

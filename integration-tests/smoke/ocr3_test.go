@@ -2,6 +2,7 @@ package smoke_test
 
 import (
 	"fmt"
+	"math/big"
 	"os"
 	"slices"
 	"strconv"
@@ -129,16 +130,33 @@ loop:
 			wg.Wait()
 
 			if len(allHashes) > 0 {
+				transactions := make([]deploy.TransactionByHash, 0, len(allHashes))
 				for _, hash := range allHashes {
 					transaction, err := deployer.GetTransactionDetailsByHash(hash)
 					require.NoError(t, err, "Could not get transaction")
+					transactions = append(transactions, transaction)
+				}
+
+				slices.SortFunc(transactions, func(a, b deploy.TransactionByHash) int {
+					left := new(big.Int)
+					if _, ok := left.SetString(a.Version, 10); !ok {
+						left.SetInt64(0)
+					}
+					right := new(big.Int)
+					if _, ok := right.SetString(b.Version, 10); !ok {
+						right.SetInt64(0)
+					}
+					return left.Cmp(right)
+				})
+
+				for _, transaction := range transactions {
 					if transaction.Success {
 						if !slices.Contains(successfulTransactions, transaction.Hash) {
 							var currBenchmark int
 							lggr.Info().Msgf("Found unique successful transaction: %s", transaction.Hash)
 							for _, event := range transaction.Events {
 								if strings.Contains(event.Type, "FeedUpdated") {
-									// Regardless of feed count the mock trigger increases per round and not per feed so we track one value
+									// Track one benchmark value per round rather than per feed
 									currBenchmark, err = strconv.Atoi(event.Data.Benchmark)
 									require.NoError(t, err, fmt.Sprintf("Could not parse benchmark answer, got: %s", event.Data.Benchmark))
 									lggr.Info().Msgf("Found FeedUpdated event with feedId: %s and value: %d", event.Data.FeedId, currBenchmark)

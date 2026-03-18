@@ -22,8 +22,10 @@ import (
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/failures"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/report/platform"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 
 	wt "github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/pb/platform/write-target"
@@ -59,6 +61,7 @@ type contractReader interface {
 type contractWriter interface {
 	commontypes.ContractWriter
 	GetTransactionFee(ctx context.Context, transactionID string) (decimal.Decimal, error)
+	GetTransactionResult(ctx context.Context, transactionID string) (*txm.TransactionResult, error)
 }
 
 type writeTarget struct {
@@ -503,7 +506,7 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 	capInfo, _ := c.Info(ctx)
 	builder := NewMessageBuilder(c.chainInfo, capInfo)
 
-	txFinalized, err := c.waitTxReachesTerminalStatus(ctx, lggr, txID)
+	txResult, err := c.waitTxReachesTerminalStatus(ctx, lggr, txID)
 	if err != nil {
 		// We (eventually) failed to confirm the report was transmitted
 		msg := builder.buildWriteError(&info, 0, "failed to wait until tx gets finalized", err.Error())
@@ -513,6 +516,22 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 	}
 
 	checkConfirmedStatus := query
+	txFinalized := txResult.Status == commontypes.Finalized
+	if txFinalized {
+		head, headErr := c.cs.LatestHead(ctx)
+		if headErr != nil {
+			lggr.Warnw("failed to fetch latest head for accepted event", "txID", txID, "error", headErr)
+		} else {
+			_ = c.beholder.ProtoEmitter.EmitWithLog(ctx, builder.buildWriteAccepted(&info, head, txID.String(), txResult))
+		}
+	}
+	classification := failures.ClassifyWriteVmStatus(txResult.VmStatus)
+	if txResult.VmStatus != "" && classification.Decision == failures.WriteFailureDecisionTerminal {
+		msg := builder.buildWriteError(&info, 0, "write confirmation - terminal failure", classification.Message)
+		lggr.Errorw("write confirmation saw terminal vm failure", "txID", txID, "vmStatus", txResult.VmStatus, "reason", classification.Reason)
+		_ = c.beholder.ProtoEmitter.EmitWithLog(ctx, msg)
+		return msg.AsError()
+	}
 
 	for {
 		select {
@@ -564,7 +583,7 @@ func (c *writeTarget) acceptAndConfirmWrite(ctx context.Context, info requestInf
 }
 
 // Polls transaction status until it reaches one of terminal states [Finalized, Failed, Fatal]
-func (c *writeTarget) waitTxReachesTerminalStatus(ctx context.Context, lggr logger.Logger, txID uuid.UUID) (finalized bool, err error) {
+func (c *writeTarget) waitTxReachesTerminalStatus(ctx context.Context, lggr logger.Logger, txID uuid.UUID) (*txm.TransactionResult, error) {
 	// Retry interval for the confirmation process
 	interval := c.config.ConfirmerPollPeriod.Duration()
 	ticker := time.NewTicker(interval)
@@ -573,7 +592,7 @@ func (c *writeTarget) waitTxReachesTerminalStatus(ctx context.Context, lggr logg
 	for {
 		select {
 		case <-ctx.Done():
-			return false, ctx.Err()
+			return nil, ctx.Err()
 		case <-ticker.C:
 			// Check TXM for status
 			status, err := c.cw.GetTransactionStatus(ctx, txID.String())
@@ -586,14 +605,19 @@ func (c *writeTarget) waitTxReachesTerminalStatus(ctx context.Context, lggr logg
 
 			switch status {
 			case commontypes.Finalized:
-				// Notice: report write confirmation is only possible after a tx is accepted without an error
-				// TODO: [Beholder] Emit 'platform.write-target.WriteAccepted' (useful to source tx hash, block number, and tx status/error)
-				lggr.Infow("accepted", "txID", txID, "status", status)
-				return true, nil
+				result, resultErr := c.cw.GetTransactionResult(ctx, txID.String())
+				if resultErr != nil {
+					return nil, fmt.Errorf("failed to fetch transaction result for finalized tx %s: %w", txID, resultErr)
+				}
+				lggr.Infow("accepted", "txID", txID, "status", status, "vmStatus", result.VmStatus)
+				return result, nil
 			case commontypes.Failed, commontypes.Fatal:
-				// TODO: [Beholder] Emit 'platform.write-target.WriteError' if accepted with an error (surface specific on-chain error)
-				lggr.Infow("transaction failed", "txID", txID, "status", status)
-				return false, nil
+				result, resultErr := c.cw.GetTransactionResult(ctx, txID.String())
+				if resultErr != nil {
+					return nil, fmt.Errorf("failed to fetch transaction result for failed tx %s: %w", txID, resultErr)
+				}
+				lggr.Infow("transaction failed", "txID", txID, "status", status, "vmStatus", result.VmStatus)
+				return result, nil
 			default:
 				lggr.Infow("not accepted yet", "txID", txID, "status", status)
 				continue

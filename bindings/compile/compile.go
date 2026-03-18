@@ -22,6 +22,12 @@ type CompiledPackage struct {
 	Bytecode [][]byte
 }
 
+const (
+	dockerAptosCLIImageEnvVar  = "APTOS_CLI_IMAGE"
+	defaultDockerAptosCLIImage = "aptoslabs/tools:aptos-node-v1.41.5"
+	dockerContractsRoot        = "/contracts"
+)
+
 // CompilePackage compiles a package with the given name and named addresses.
 // It uses the Aptos CLI for compilation, passing the named addresses as arguments.
 // The packageName must be one of the packages in the contracts directory that are embedded in the binary.
@@ -70,8 +76,7 @@ func CompilePackage(packageName contracts.Package, namedAddresses map[string]apt
 		args = append(args, "--named-addresses", strings.Join(namedAddr, ","))
 	}
 
-	cmd := exec.Command("aptos", args...)
-	cmd.Dir = packageRoot // Command is run in the temporary destination directory
+	cmd := compileCommand(args, dstRoot, packageDir)
 	// Buffer stdErr and stdOut
 	stdOut := &bytes.Buffer{}
 	stdErr := &bytes.Buffer{}
@@ -116,6 +121,64 @@ func CompilePackage(packageName contracts.Package, namedAddresses map[string]apt
 	}
 
 	return output, nil
+}
+
+func compileCommand(args []string, dstRoot, packageDir string) *exec.Cmd {
+	if _, err := exec.LookPath("aptos"); err == nil {
+		cmd := exec.Command("aptos", args...)
+		cmd.Dir = filepath.Join(dstRoot, packageDir)
+		return cmd
+	}
+
+	image := strings.TrimSpace(os.Getenv(dockerAptosCLIImageEnvVar))
+	if image == "" {
+		image = detectDockerAptosCLIImage()
+	}
+
+	dockerArgs := []string{
+		"run", "--rm",
+		"-v", fmt.Sprintf("%s:%s", dstRoot, dockerContractsRoot),
+		"-w", filepath.ToSlash(filepath.Join(dockerContractsRoot, packageDir)),
+		"--entrypoint", "aptos",
+		image,
+	}
+	dockerArgs = append(dockerArgs, args...)
+	return exec.Command("docker", dockerArgs...)
+}
+
+func detectDockerAptosCLIImage() string {
+	if image := firstAptosImageFromDocker("ps", "{{.Image}}"); image != "" {
+		return image
+	}
+	if image := firstAptosImageFromDocker("images", "{{.Repository}}:{{.Tag}}"); image != "" {
+		return image
+	}
+	return defaultDockerAptosCLIImage
+}
+
+func firstAptosImageFromDocker(subcommand, format string) string {
+	out, err := exec.Command("docker", subcommand, "--format", format).Output()
+	if err != nil {
+		return ""
+	}
+	return firstAptosImageFromOutput(string(out))
+}
+
+func firstAptosImageFromOutput(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		image := strings.TrimSpace(line)
+		if image == "" {
+			continue
+		}
+
+		lower := strings.ToLower(image)
+		if strings.Contains(lower, "aptoslabs/tools") ||
+			strings.Contains(lower, "aptos-tools") ||
+			strings.Contains(lower, "aptos-node-v") {
+			return image
+		}
+	}
+	return ""
 }
 
 func writeEFS(efs embed.FS, srcDir, dstDir string) error {

@@ -35,7 +35,6 @@ type Chain interface {
 	ID() string
 	Config() *config.TOMLConfig
 	DataSource() sqlutil.DataSource
-
 	TxManager() *txm.AptosTxm
 	LogPoller() *logpoller.AptosLogPoller
 	GetClient() (aptos.AptosRpcClient, error)
@@ -168,12 +167,12 @@ func (c *chain) DataSource() sqlutil.DataSource {
 	return c.ds
 }
 
-func (c *chain) ChainID() string {
-	return c.id
-}
-
 func (c *chain) KeyStore() loop.Keystore {
 	return c.keyStore
+}
+
+func (c *chain) ChainID() string {
+	return c.id
 }
 
 // GetClient returns a client, randomly selecting one from available and valid nodes
@@ -268,16 +267,6 @@ func (c *chain) ID() string {
 	return c.id
 }
 
-func (c *chain) GetChainInfo(ctx context.Context) (types.ChainInfo, error) {
-	_ = ctx
-	return types.ChainInfo{
-		FamilyName:      config.ChainFamilyName,
-		ChainID:         c.id,
-		NetworkName:     c.cfg.NetworkName,
-		NetworkNameFull: c.cfg.NetworkNameFull,
-	}, nil
-}
-
 // LatestHead returns the latest head for the underlying chain.
 // TODO: should be replaced with a head tracker component
 func (c *chain) LatestHead(ctx context.Context) (types.Head, error) {
@@ -310,6 +299,22 @@ func (c *chain) LatestHead(ctx context.Context) (types.Head, error) {
 		// block.BlockTimestamp is the Unix timestamp of the block, in microseconds, may not be set for block 0
 		// Divide by 1000000 to convert to seconds
 		Timestamp: block.BlockTimestamp / 1000000,
+	}, nil
+}
+
+func (c *chain) FinalizedHead(ctx context.Context) (types.Head, error) {
+	// Aptos currently exposes only the latest block through this relayer path.
+	// Fall back to the same head until finalized-head tracking is added.
+	return c.LatestHead(ctx)
+}
+
+func (c *chain) GetChainInfo(ctx context.Context) (types.ChainInfo, error) {
+	ci := c.chainInfo()
+	return types.ChainInfo{
+		FamilyName:      ci.ChainFamilyName,
+		ChainID:         ci.ChainID,
+		NetworkName:     ci.NetworkName,
+		NetworkNameFull: ci.NetworkNameFull,
 	}, nil
 }
 

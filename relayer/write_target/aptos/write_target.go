@@ -37,6 +37,10 @@ func (w *contractWriterWrapper) GetTransactionFee(ctx context.Context, transacti
 	return decimal.NewFromBigInt(fee, -8), nil // Convert from octas (1e-8 APT) to APT
 }
 
+func (w *contractWriterWrapper) GetTransactionResult(ctx context.Context, transactionID string) (*txm.TransactionResult, error) {
+	return w.txm.GetTransactionResult(transactionID)
+}
+
 const version = "1.0.0"
 
 func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Logger) (capabilities.TargetCapability, error) {

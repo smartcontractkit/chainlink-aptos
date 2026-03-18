@@ -327,6 +327,24 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 	return codec.DecodeAptosJsonValue(transformedData, returnVal)
 }
 
+// GetLatestValueWithHeadData returns both the decoded value and the latest Aptos chain head metadata.
+func (a *aptosChainReader) GetLatestValueWithHeadData(ctx context.Context, readIdentifier string, confidenceLevel primitives.ConfidenceLevel, params, returnVal any) (*types.Head, error) {
+	if err := a.GetLatestValue(ctx, readIdentifier, confidenceLevel, params, returnVal); err != nil {
+		return nil, err
+	}
+
+	nodeInfo, err := a.client.Info()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ledger info for head data: %w", err)
+	}
+
+	return &types.Head{
+		Height:    strconv.FormatUint(nodeInfo.BlockHeight(), 10),
+		Hash:      nil,                                    // Aptos node info does not expose block hash in this call.
+		Timestamp: nodeInfo.LedgerTimestamp() / 1_000_000, // microseconds -> seconds
+	}, nil
+}
+
 func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request types.BatchGetLatestValuesRequest) (types.BatchGetLatestValuesResult, error) {
 	result := make(types.BatchGetLatestValuesResult)
 

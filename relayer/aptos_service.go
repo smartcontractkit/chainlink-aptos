@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
@@ -37,6 +38,20 @@ func (s *aptosService) AccountAPTBalance(ctx context.Context, req commonaptos.Ac
 		return nil, fmt.Errorf("failed to get account APT balance: %w", err)
 	}
 	return &commonaptos.AccountAPTBalanceReply{Value: reply}, nil
+}
+
+func (s *aptosService) LedgerVersion(ctx context.Context) (uint64, error) {
+	client, err := s.chain.GetClient()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	info, err := client.Info()
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch node info: %w", err)
+	}
+
+	return info.LedgerVersion(), nil
 }
 
 func (s *aptosService) View(ctx context.Context, req commonaptos.ViewRequest) (*commonaptos.ViewReply, error) {
@@ -69,7 +84,12 @@ func (s *aptosService) View(ctx context.Context, req commonaptos.ViewRequest) (*
 		Args:     req.Payload.Args,
 	}
 
-	result, err := client.View(sdkPayload)
+	var result []any
+	if req.LedgerVersion != nil {
+		result, err = client.View(sdkPayload, *req.LedgerVersion)
+	} else {
+		result, err = client.View(sdkPayload)
+	}
 	if err != nil {
 		s.logger.Errorw("View: view function call failed", "error", err)
 		return nil, fmt.Errorf("failed to call view function: %w", err)
@@ -210,7 +230,7 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 		publicKey,
 		entryFn,
 		true, // simulateTx
-		// TODO: add expected simulation failures to save gas on reported transmissions
+		txm.ExpectedSimulationFailureRule{Kind: txm.ExpectedSimulationFailureRuleKindAptosWriteTerminal},
 	)
 	if enqueueErr != nil {
 		s.logger.Errorw("SubmitTransaction: EnqueueWithEntryFunction failed", "txID", txID, "error", enqueueErr)

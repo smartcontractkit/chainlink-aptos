@@ -137,7 +137,7 @@ func runErrorsTest(t *testing.T, logger logger.Logger, config Config, rpcURL str
 	require.NoError(t, err)
 
 	rawTx.SequenceNumber = sequenceNumber - 1
-	signedTx, err := txm.createSignedTx(rlClient, rawTx, selectedTx.PublicKey, selectedTx.FromAddress)
+	signedTx, _, err := txm.createSignedTx(rlClient, rawTx, selectedTx.PublicKey, selectedTx.FromAddress)
 	require.NoError(t, err)
 
 	_, err = client.SubmitTransaction(signedTx)
@@ -147,7 +147,7 @@ func runErrorsTest(t *testing.T, logger logger.Logger, config Config, rpcURL str
 	// Test with expired transaction
 	rawTx.SequenceNumber = sequenceNumber
 	rawTx.ExpirationTimestampSeconds = rawTx.ExpirationTimestampSeconds - txm.config.TxExpirationSecs - 3600 // 1 hour ago
-	signedTx, err = txm.createSignedTx(rlClient, rawTx, selectedTx.PublicKey, selectedTx.FromAddress)
+	signedTx, _, err = txm.createSignedTx(rlClient, rawTx, selectedTx.PublicKey, selectedTx.FromAddress)
 	require.NoError(t, err)
 
 	_, err = client.SubmitTransaction(signedTx)
