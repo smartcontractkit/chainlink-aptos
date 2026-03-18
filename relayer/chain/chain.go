@@ -2,13 +2,11 @@ package chain
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
 	"net/http"
-	"net/http/cookiejar"
 	"strconv"
 	"sync"
 	"time"
@@ -85,15 +83,10 @@ type chain struct {
 	keyStore loop.Keystore
 
 	// clientCache caches a rate-limited Aptos client per node URL to avoid creating
-	// a new NodeClient (and thus a new http.Transport with aptos-go-sdk v1.12+) on
-	// every GetClient() call, which leads to port exhaustion under load.
+	// a new NodeClient on every GetClient() call (port exhaustion with aptos-go-sdk v1.12+).
+	// The write lock is held throughout creation so a burst of requests doesn't race to create.
 	clientCacheMu sync.RWMutex
 	clientCache   map[string]aptos.AptosRpcClient
-
-	// sharedTransport is used by all NodeClients so connections are pooled (one Transport
-	// per chain). TLS 1.2 and MaxIdleConnsPerHost avoid port exhaustion with SDK v1.12+.
-	sharedTransport     *http.Transport
-	sharedTransportOnce sync.Once
 
 	// Sub-services
 	txm            *txm.AptosTxm
@@ -192,50 +185,21 @@ func (c *chain) KeyStore() loop.Keystore {
 	return c.keyStore
 }
 
-// sharedHTTPTransport returns a Transport with TLS 1.2 and connection pool settings
-// so that all NodeClients for this chain share the same connection pool (avoids
-// port exhaustion with aptos-go-sdk v1.12+).
-func (c *chain) sharedHTTPTransport() *http.Transport {
-	c.sharedTransportOnce.Do(func() {
-		c.sharedTransport = &http.Transport{
-			TLSClientConfig: &tls.Config{
-				MinVersion: tls.VersionTLS12,
-			},
-			MaxIdleConns:        100,
-			MaxIdleConnsPerHost: 10,
-			IdleConnTimeout:     90 * time.Second,
-		}
-	})
-	return c.sharedTransport
-}
-
-// newHTTPClientForNode returns an http.Client suitable for use with
-// aptos.NewNodeClientWithHttpClient. Uses the chain's shared Transport and a
-// per-node cookie jar (for stickiness). Caller does not need to close the client.
-func (c *chain) newHTTPClientForNode() (*http.Client, error) {
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return nil, err
-	}
-	return &http.Client{
-		Transport: c.sharedHTTPTransport(),
-		Jar:       jar,
-		Timeout:   60 * time.Second,
-	}, nil
-}
-
 // GetClient returns a client, randomly selecting one from available and valid nodes.
-// Clients are cached per node URL to avoid creating a new NodeClient (and http.Transport)
-// on every call, which with aptos-go-sdk v1.12+ causes port exhaustion under load.
+// Clients are cached per node URL. Uses http.DefaultClient so all NodeClients share
+// the process-wide default transport (avoids port exhaustion with aptos-go-sdk v1.12+).
+// The write lock is held throughout creation so a burst of requests cannot race to
+// create multiple clients for the same URL (last writer wins / leaked clients).
 func (c *chain) GetClient() (aptos.AptosRpcClient, error) {
 	nodes := c.cfg.Nodes
 	if len(nodes) == 0 {
 		return nil, errors.New("no nodes available")
 	}
 
-	// Try cached client first (random order)
 	// #nosec
 	index := rand.Perm(len(nodes))
+
+	// Fast path: try cached client (read lock only).
 	for _, i := range index {
 		node := nodes[i]
 		urlStr := node.URL.String()
@@ -243,7 +207,6 @@ func (c *chain) GetClient() (aptos.AptosRpcClient, error) {
 		cached := c.clientCache[urlStr]
 		c.clientCacheMu.RUnlock()
 		if cached != nil {
-			// Verify chain ID still matches (node could have been reconfigured)
 			chainId, err := cached.GetChainId()
 			if err != nil {
 				c.clientCacheMu.Lock()
@@ -261,20 +224,17 @@ func (c *chain) GetClient() (aptos.AptosRpcClient, error) {
 		}
 	}
 
-	// No valid cached client; create and cache one using our own http.Client
-	// (shared Transport + TLS 1.2 + connection pool) to avoid port exhaustion.
-	var node *config.Node
-	var client *aptos.NodeClient
-	var err error
+	// Slow path: create and cache. Hold lock for entire creation so only one goroutine
+	// creates per URL (avoids race where burst of requests all create, last writer wins).
+	c.clientCacheMu.Lock()
+	defer c.clientCacheMu.Unlock()
 	for _, i := range index {
-		node = nodes[i]
+		node := nodes[i]
 		urlStr := node.URL.String()
-		httpClient, httpErr := c.newHTTPClientForNode()
-		if httpErr != nil {
-			c.lggr.Warnw("failed to create http client for node", "name", node.Name, "err", httpErr)
-			continue
+		if c.clientCache[urlStr] != nil {
+			return c.clientCache[urlStr], nil
 		}
-		client, err = aptos.NewNodeClientWithHttpClient(urlStr, 0, httpClient)
+		client, err := aptos.NewNodeClientWithHttpClient(urlStr, 0, http.DefaultClient)
 		if err != nil {
 			c.lggr.Warnw("failed to create node", "name", node.Name, "aptos-url", node.URL, "err", err)
 			continue
@@ -295,9 +255,7 @@ func (c *chain) GetClient() (aptos.AptosRpcClient, error) {
 			500,            // max requests in-flight
 			30*time.Second, // timeout
 		)
-		c.clientCacheMu.Lock()
 		c.clientCache[urlStr] = rateLimitedClient
-		c.clientCacheMu.Unlock()
 		c.lggr.Debugw("Created and cached client", "name", node.Name, "url", node.URL)
 		return rateLimitedClient, nil
 	}
@@ -323,10 +281,6 @@ func (c *chain) Close() error {
 		c.lggr.Debug("Stopping logPoller")
 		c.lggr.Debug("Stopping balance monitor")
 
-		c.sharedTransportOnce.Do(func() {}) // ensure transport was created if we're about to close it
-		if c.sharedTransport != nil {
-			c.sharedTransport.CloseIdleConnections()
-		}
 		return services.CloseAll(c.txm, c.logPoller, c.balanceMonitor)
 	})
 }
