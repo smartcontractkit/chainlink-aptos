@@ -14,9 +14,24 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
 )
 
-// Config defines the balance monitor configuration.
+// GenericBalanceConfig defines the balance monitor configuration.
+// Pointer fields are used for TOML deserialization — nil means "not set by user".
+// After calling Resolve(), all fields are guaranteed non-nil.
 type GenericBalanceConfig struct {
-	BalancePollPeriod config.Duration
+	BalancePollPeriod *config.Duration `toml:"BalancePollPeriod"`
+}
+
+// DefaultBalanceConfig is the default configuration for the balance monitor.
+var DefaultBalanceConfig = GenericBalanceConfig{
+	BalancePollPeriod: config.MustNewDuration(10 * time.Second),
+}
+
+// Resolve fills nil fields with defaults. After calling Resolve, all fields are guaranteed non-nil.
+func (c *GenericBalanceConfig) Resolve() {
+	if c.BalancePollPeriod == nil {
+		v := *DefaultBalanceConfig.BalancePollPeriod
+		c.BalancePollPeriod = &v
+	}
 }
 
 // GenericBalanceClient defines the interface for getting account balances.

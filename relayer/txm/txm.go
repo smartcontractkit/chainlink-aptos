@@ -66,7 +66,7 @@ func New(lgr logger.Logger, keystore loop.Keystore, config Config, getClient fun
 		transactions:              map[string]*AptosTx{},
 		transactionsLastPruneTime: getTimestampSecs(),
 
-		broadcastChan: make(chan string, config.BroadcastChanSize),
+		broadcastChan: make(chan string, *config.BroadcastChanSize),
 		accountStore:  NewAccountStore(),
 		stop:          make(chan struct{}),
 	}, nil
@@ -255,12 +255,12 @@ func (a *AptosTxm) enqueueTransaction(tx *AptosTx) error {
 
 	a.transactionsLock.Lock()
 	currentTimestamp := tx.Timestamp
-	if (currentTimestamp - a.transactionsLastPruneTime) > a.config.PruneIntervalSecs {
+	if (currentTimestamp - a.transactionsLastPruneTime) > *a.config.PruneIntervalSecs {
 		for txID, existingTx := range a.transactions {
 			if existingTx.Status != commontypes.Finalized && existingTx.Status != commontypes.Failed && existingTx.Status != commontypes.Fatal {
 				continue
 			}
-			if (currentTimestamp - existingTx.Timestamp) < a.config.PruneTxExpirationSecs {
+			if (currentTimestamp - existingTx.Timestamp) < *a.config.PruneTxExpirationSecs {
 				continue
 			}
 			ctxLogger.Debugw("Pruning transaction", "status", existingTx.Status)
@@ -414,7 +414,7 @@ func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, nonce u
 		return nil, fmt.Errorf("failed to fetch ledger timestamp: %w", err)
 	}
 
-	expirationTimestampSecs := ledgerTimestampSecs + a.config.TxExpirationSecs
+	expirationTimestampSecs := ledgerTimestampSecs + *a.config.TxExpirationSecs
 
 	payload := aptos.TransactionPayload{
 		Payload: &aptos.EntryFunction{
@@ -487,16 +487,16 @@ func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, nonce u
 	}
 
 	if rawTx.MaxGasAmount == 0 {
-		rawTx.MaxGasAmount = a.config.DefaultMaxGasAmount
-		ctxLogger.Debugw("using default max gas amount", "maxGasAmount", a.config.DefaultMaxGasAmount)
+		rawTx.MaxGasAmount = *a.config.DefaultMaxGasAmount
+		ctxLogger.Debugw("using default max gas amount", "maxGasAmount", *a.config.DefaultMaxGasAmount)
 	}
 
-	if a.config.GasLimitOverhead > 0 {
+	if *a.config.GasLimitOverhead > 0 {
 		originalGasLimit := rawTx.MaxGasAmount
-		rawTx.MaxGasAmount += a.config.GasLimitOverhead
+		rawTx.MaxGasAmount += *a.config.GasLimitOverhead
 		ctxLogger.Debugw("added gas limit overhead",
 			"original", originalGasLimit,
-			"overhead", a.config.GasLimitOverhead,
+			"overhead", *a.config.GasLimitOverhead,
 			"final", rawTx.MaxGasAmount)
 	}
 
@@ -608,7 +608,7 @@ func (a *AptosTxm) signAndBroadcast(ctx context.Context, tx *AptosTx) {
 	}
 
 	// broadcast with basic retry to try get the tx included in the mempool
-	for attempt := 1; attempt <= int(a.config.MaxSubmitRetryAttempts); attempt++ {
+	for attempt := 1; attempt <= int(*a.config.MaxSubmitRetryAttempts); attempt++ {
 		// build the tx with the nonce and expiration timestamp
 		nonce := txStore.GetNextNonce()
 
@@ -671,7 +671,7 @@ func (a *AptosTxm) signAndBroadcast(ctx context.Context, tx *AptosTx) {
 			}
 
 			ctxLogger.Errorw("failed to submit signed tx, retrying..", "error", httpError)
-			time.Sleep(time.Duration(a.config.SubmitDelayDuration) * time.Second)
+			time.Sleep(time.Duration(*a.config.SubmitDelayDuration) * time.Second)
 
 			httpErrorBody := string(httpError.Body)
 			if strings.Contains(httpErrorBody, "SEQUENCE_NUMBER_TOO_OLD") || strings.Contains(httpErrorBody, "SEQUENCE_NUMBER_TOO_NEW") {
@@ -708,7 +708,7 @@ func (a *AptosTxm) confirmLoop() {
 	ctx, cancel := commonutils.ContextFromChan(a.stop)
 	defer cancel()
 
-	pollDuration := time.Duration(a.config.ConfirmPollSecs) * time.Second
+	pollDuration := time.Duration(*a.config.ConfirmPollSecs) * time.Second
 	tick := time.After(pollDuration)
 
 	a.baseLogger.Debugw("confirmLoop: started")
@@ -869,7 +869,7 @@ func (r RetryReason) String() string {
 func (a *AptosTxm) maybeRetry(ctx context.Context, unconfirmedTx *UnconfirmedTx, retryReason RetryReason) bool {
 	ctxLogger := GetContexedTxLogger(a.baseLogger, unconfirmedTx.Tx.ID, unconfirmedTx.Tx.Metadata)
 	currentAttempt := a.getTransactionAttempt(unconfirmedTx.Tx)
-	if currentAttempt >= a.config.MaxTxRetryAttempts {
+	if currentAttempt >= *a.config.MaxTxRetryAttempts {
 		ctxLogger.Errorw("tx reached max num of retries and will be discarded", "hash", unconfirmedTx.Hash, "retryReason", retryReason)
 		return false
 	}
@@ -968,7 +968,7 @@ func (a *AptosTxm) simulateTransaction(client aptos.AptosRpcClient, rawTx aptos.
 
 	attempt := 1
 	var lastError error
-	for attempt <= int(a.config.MaxSimulateAttempts) {
+	for attempt <= int(*a.config.MaxSimulateAttempts) {
 		// need to fetch latest sequence number on-chain since we could have other in-flight txs which results in an error SEQUENCE_NUMBER_TOO_NEW
 		sequenceNumber, err := a.getSequenceNumber(client, fromAddress)
 		if err != nil {

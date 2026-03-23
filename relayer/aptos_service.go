@@ -219,7 +219,7 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 	s.logger.Infow("SubmitTransaction: enqueued successfully", "txID", txID)
 
 	// TODO: dont use txmgr config, create and use workflow/cre config PLEX-2598
-	maximumWaitTime := time.Duration(s.chain.Config().TransactionManager.TxExpirationSecs) * time.Second
+	maximumWaitTime := time.Duration(*s.chain.Config().TransactionManager.TxExpirationSecs) * time.Second
 	s.logger.Infow("SubmitTransaction: polling for status", "txID", txID, "maximumWaitTime", maximumWaitTime)
 
 	retryCtx, cancel := context.WithTimeout(ctx, maximumWaitTime)

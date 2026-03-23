@@ -50,7 +50,8 @@ type AptosLogPoller struct {
 
 func NewLogPoller(lggr logger.Logger, chainInfo types.ChainInfo, getClient func() (aptos.AptosRpcClient, error), ds sqlutil.DataSource, cfg *Config) (*AptosLogPoller, error) {
 	if cfg == nil {
-		cfg = &DefaultConfigSet
+		tmp := DefaultConfigSet
+		cfg = &tmp
 	}
 
 	dbStore := db.NewDBStore(ds, lggr)
@@ -81,7 +82,7 @@ func (l *AptosLogPoller) Start(ctx context.Context) error {
 			syncEventCtx, l.eventCtxCancel = context.WithCancel(context.Background())
 			go l.startEventPolling(syncEventCtx)
 
-			if l.config.TXPollerDisabled == true {
+			if *l.config.TXPollerDisabled {
 				l.lggr.Info("Skipping transaction polling as TXPollerDisabled is set to true")
 				return nil
 			}
