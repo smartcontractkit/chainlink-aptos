@@ -123,11 +123,11 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 	}
 
 	ch := &chain{
-		id:         cfg.ChainID,
-		cfg:        cfg,
-		lggr:       logger.Named(lggr, "Chain"),
-		ds:         ds,
-		keyStore:   loopKs,
+		id:          cfg.ChainID,
+		cfg:         cfg,
+		lggr:        logger.Named(lggr, "Chain"),
+		ds:          ds,
+		keyStore:    loopKs,
 		clientCache: make(map[string]aptos.AptosRpcClient),
 	}
 
@@ -344,6 +344,12 @@ func (c *chain) LatestHead(ctx context.Context) (types.Head, error) {
 		// Divide by 1000000 to convert to seconds
 		Timestamp: block.BlockTimestamp / 1000000,
 	}, nil
+}
+
+// FinalizedHead returns the latest finalized head for the underlying chain.
+// Aptos has single-shot finality, so the finalized head is the latest head.
+func (c *chain) FinalizedHead(ctx context.Context) (types.Head, error) {
+	return c.LatestHead(ctx)
 }
 
 // ChainService interface

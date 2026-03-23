@@ -177,6 +177,10 @@ func (r *relayer) LatestHead(ctx context.Context) (types.Head, error) {
 	return r.chain.LatestHead(ctx)
 }
 
+func (r *relayer) FinalizedHead(ctx context.Context) (types.Head, error) {
+	return r.chain.FinalizedHead(ctx)
+}
+
 func (r *relayer) GetChainInfo(ctx context.Context) (types.ChainInfo, error) {
 	return r.chain.GetChainInfo(ctx)
 }
