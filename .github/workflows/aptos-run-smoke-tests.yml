@@ -20,7 +20,7 @@ jobs:
       contents: read
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      DEFAULT_CORE_REF: develop
+      DEFAULT_CORE_REF: aptos-init
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
@@ -111,10 +111,7 @@ jobs:
         TEST_LOG_LEVEL: debug
       run: |
         set -e
-        ROOT_DIR=$(pwd)
         cd integration-tests
-        go mod edit -replace github.com/smartcontractkit/chainlink/v2=${ROOT_DIR}/temp/chainlink
-        go mod edit -replace github.com/smartcontractkit/chainlink/core/scripts=${ROOT_DIR}/temp/chainlink/core/scripts
         go mod tidy
         TEST_LOG_LEVEL=${{env.TEST_LOG_LEVEL}} go test -timeout 24h -count=1 -run TestOCR3Keystone ./smoke
 
