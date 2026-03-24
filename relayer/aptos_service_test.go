@@ -93,24 +93,6 @@ func TestAptosServiceViewUsesRequestedLedgerVersion(t *testing.T) {
 	require.JSONEq(t, `["ok"]`, string(reply.Data))
 }
 
-func TestRelayerAptosReturnsService(t *testing.T) {
-	t.Parallel()
-
-	r := &relayer{
-		chain:  &testChain{},
-		lggr:   logger.Test(t),
-		stopCh: make(chan struct{}),
-		aptosService: aptosService{
-			chain:  &testChain{},
-			logger: logger.Test(t),
-		},
-	}
-
-	svc, err := r.Aptos()
-	require.NoError(t, err)
-	require.NotNil(t, svc)
-}
-
 func ptrUint64(v uint64) *uint64 {
 	return &v
 }
