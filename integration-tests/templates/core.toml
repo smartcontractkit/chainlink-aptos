@@ -34,6 +34,8 @@ PublicKey = ""
 [[Aptos.Nodes]]
 Name = 'primary'
 URL = "http://chainlink-aptos.devnet:8080/v1"
+MaxConcurrentRequests = 500
+Timeout = '30s'
 
 [Aptos.BalanceMonitor]
 BalancePollPeriod = '10s'
@@ -53,6 +55,10 @@ PruneTxExpiration = '2h'
 [Aptos.WriteTargetCap]
 ConfirmerPollPeriod = '300ms'
 ConfirmerTimeout = '10s'
+
+[Aptos.AptosService]
+SubmitPollTimeout = '10s'
+SimulateTx = true
 
 [[EVM]]
 ChainID = '1337'

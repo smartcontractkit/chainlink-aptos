@@ -29,6 +29,12 @@ type Config struct {
 
 	// TXPollerDisabled if this is true, the TX poller will not run on log poller start
 	TXPollerDisabled *bool `toml:"TXPollerDisabled"`
+
+	// CacheTTL is the default TTL for cached resources, blocks, and event addresses
+	CacheTTL *config.Duration `toml:"CacheTTL"`
+
+	// CacheCleanupInterval is the interval at which expired cache entries are purged
+	CacheCleanupInterval *config.Duration `toml:"CacheCleanupInterval"`
 }
 
 // DefaultConfigSet is the default configuration for LogPoller
@@ -39,6 +45,8 @@ var DefaultConfigSet = Config{
 	EventBatchSize:       ptr(uint64(100)),
 	TxBatchSize:          ptr(uint64(100)),
 	TXPollerDisabled:     ptr(false),
+	CacheTTL:             config.MustNewDuration(15 * time.Minute),
+	CacheCleanupInterval: config.MustNewDuration(30 * time.Minute),
 }
 
 // Resolve fills nil fields with defaults. After calling Resolve, all fields are guaranteed non-nil.
@@ -63,5 +71,13 @@ func (c *Config) Resolve() {
 	}
 	if c.TXPollerDisabled == nil {
 		c.TXPollerDisabled = ptr(*DefaultConfigSet.TXPollerDisabled)
+	}
+	if c.CacheTTL == nil {
+		v := *DefaultConfigSet.CacheTTL
+		c.CacheTTL = &v
+	}
+	if c.CacheCleanupInterval == nil {
+		v := *DefaultConfigSet.CacheCleanupInterval
+		c.CacheCleanupInterval = &v
 	}
 }

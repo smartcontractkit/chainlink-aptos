@@ -10,7 +10,6 @@ import (
 	aptos_sdk "github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/bcs"
 	"github.com/google/uuid"
-	"github.com/jpillora/backoff"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
@@ -209,7 +208,7 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 		},
 		publicKey,
 		entryFn,
-		true, // simulateTx
+		*s.chain.Config().AptosService.SimulateTx,
 		// TODO: add expected simulation failures to save gas on reported transmissions
 	)
 	if enqueueErr != nil {
@@ -219,19 +218,11 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 	s.logger.Infow("SubmitTransaction: enqueued successfully", "txID", txID)
 
 	pollTimeout := s.chain.Config().AptosService.SubmitPollTimeout.Duration()
-	pollInterval := s.chain.Config().AptosService.SubmitPollInterval.Duration()
-	s.logger.Infow("SubmitTransaction: polling for status", "txID", txID, "pollTimeout", pollTimeout, "pollInterval", pollInterval)
+	s.logger.Infow("SubmitTransaction: polling for status", "txID", txID, "pollTimeout", pollTimeout)
 
 	retryCtx, cancel := context.WithTimeout(ctx, pollTimeout)
 	defer cancel()
-	strategy := &retry.Strategy[commonaptos.TransactionStatus]{
-		Backoff: &backoff.Backoff{
-			Min:    pollInterval,
-			Max:    pollInterval,
-			Factor: 1,
-		},
-	}
-	txStatus, err := strategy.Do(retryCtx, s.logger, func(_ context.Context) (commonaptos.TransactionStatus, error) {
+	txStatus, err := retry.Do(retryCtx, s.logger, func(_ context.Context) (commonaptos.TransactionStatus, error) {
 		txStatus, txStatusErr := s.chain.TxManager().GetStatus(txID)
 		if txStatusErr != nil {
 			s.logger.Errorw("SubmitTransaction: GetStatus error", "txID", txID, "error", txStatusErr)
