@@ -26,6 +26,20 @@ type aptosService struct {
 	logger logger.Logger
 }
 
+func (s *aptosService) LedgerVersion(ctx context.Context) (uint64, error) {
+	client, err := s.chain.GetClient()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	info, err := client.Info()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get latest ledger version: %w", err)
+	}
+
+	return info.LedgerVersion(), nil
+}
+
 func (s *aptosService) AccountAPTBalance(ctx context.Context, req commonaptos.AccountAPTBalanceRequest) (*commonaptos.AccountAPTBalanceReply, error) {
 	client, err := s.chain.GetClient()
 	if err != nil {
@@ -69,7 +83,12 @@ func (s *aptosService) View(ctx context.Context, req commonaptos.ViewRequest) (*
 		Args:     req.Payload.Args,
 	}
 
-	result, err := client.View(sdkPayload)
+	var result []any
+	if req.LedgerVersion != nil {
+		result, err = client.View(sdkPayload, *req.LedgerVersion)
+	} else {
+		result, err = client.View(sdkPayload)
+	}
 	if err != nil {
 		s.logger.Errorw("View: view function call failed", "error", err)
 		return nil, fmt.Errorf("failed to call view function: %w", err)
