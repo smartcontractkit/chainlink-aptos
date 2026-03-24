@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/pelletier/go-toml/v2"
@@ -24,6 +25,7 @@ var DefaultConfigSet = ConfigSet{
 	LogPoller:          logpoller.DefaultConfigSet,
 	BalanceMonitor:     monitor.DefaultBalanceConfig,
 	WriteTargetCap:     write_target.DefaultConfigSet,
+	AptosService:       DefaultAptosServiceConfig,
 }
 
 type ConfigSet struct { //nolint:revive
@@ -31,6 +33,28 @@ type ConfigSet struct { //nolint:revive
 	LogPoller          logpoller.Config
 	BalanceMonitor     monitor.GenericBalanceConfig
 	WriteTargetCap     write_target.Config
+	AptosService       AptosServiceConfig
+}
+
+type AptosServiceConfig struct {
+	SubmitPollTimeout  *config.Duration `toml:"SubmitPollTimeout"`
+	SubmitPollInterval *config.Duration `toml:"SubmitPollInterval"`
+}
+
+var DefaultAptosServiceConfig = AptosServiceConfig{
+	SubmitPollTimeout:  config.MustNewDuration(10 * time.Second),
+	SubmitPollInterval: config.MustNewDuration(500 * time.Millisecond),
+}
+
+func (c *AptosServiceConfig) Resolve() {
+	if c.SubmitPollTimeout == nil {
+		v := *DefaultAptosServiceConfig.SubmitPollTimeout
+		c.SubmitPollTimeout = &v
+	}
+	if c.SubmitPollInterval == nil {
+		v := *DefaultAptosServiceConfig.SubmitPollInterval
+		c.SubmitPollInterval = &v
+	}
 }
 
 type WorkflowConfig struct {
@@ -45,6 +69,7 @@ type Chain struct {
 	BalanceMonitor     *monitor.GenericBalanceConfig `toml:"BalanceMonitor"`
 	WriteTargetCap     *write_target.Config          `toml:"WriteTargetCap"`
 	Workflow           *WorkflowConfig               `toml:"Workflow"`
+	AptosService       *AptosServiceConfig           `toml:"AptosService"`
 }
 
 type Node struct {
@@ -104,6 +129,11 @@ func (cfg *TOMLConfig) applyDefaults() {
 		cfg.WriteTargetCap = &write_target.Config{}
 	}
 	cfg.WriteTargetCap.Resolve()
+
+	if cfg.AptosService == nil {
+		cfg.AptosService = &AptosServiceConfig{}
+	}
+	cfg.AptosService.Resolve()
 
 	// Set network name defaults
 	if cfg.NetworkName == "" {
