@@ -123,11 +123,11 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 	}
 
 	ch := &chain{
-		id:          cfg.ChainID,
-		cfg:         cfg,
-		lggr:        logger.Named(lggr, "Chain"),
-		ds:          ds,
-		keyStore:    loopKs,
+		id:         cfg.ChainID,
+		cfg:        cfg,
+		lggr:       logger.Named(lggr, "Chain"),
+		ds:         ds,
+		keyStore:   loopKs,
 		clientCache: make(map[string]aptos.AptosRpcClient),
 	}
 
