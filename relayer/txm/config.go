@@ -33,8 +33,8 @@ var DefaultConfigSet = Config{
 	BroadcastChanSize:   ptr(uint(100)),
 	ConfirmPollInterval: config.MustNewDuration(2 * time.Second),
 
-	// https://github.com/aptos-labs/aptos-ts-sdk/blob/32d4360740392782c1368647f89ba62e1b6a2cb3/src/utils/const.ts#L21
-	DefaultMaxGasAmount: ptr(uint64(200000)),
+	// https://github.com/aptos-labs/aptos-ts-sdk/blob/bc169793071185f638192efb1a90103db7ab4922/src/utils/const.ts#L27
+	DefaultMaxGasAmount: ptr(uint64(2_000_000)),
 	GasLimitOverhead:    ptr(uint64(0)),
 
 	MaxSimulateAttempts:    ptr(uint(5)),

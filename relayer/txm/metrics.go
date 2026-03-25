@@ -13,50 +13,53 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/metrics"
 )
 
+// Error reason constants for the aptos_txm_tx_error metric.
+const (
+	ErrorReasonSequenceNumber = "sequence_number"
+	ErrorReasonStoreCreate    = "store_create"
+	ErrorReasonSimulation     = "simulation"
+	ErrorReasonSigning        = "signing"
+	ErrorReasonNoHash         = "no_hash"
+	ErrorReasonStoreAdd       = "store_add"
+	ErrorReasonUnknownSubmit  = "unknown_submit"
+	ErrorReasonMaxRetries     = "max_retries"
+	ErrorReasonRevert         = "revert"
+	ErrorReasonTypeAssertion  = "type_assertion"
+	ErrorReasonUnexpectedType = "unexpected_type"
+	ErrorReasonExpiredConfirm = "expired_confirm"
+	ErrorReasonDrop           = "drop"
+)
+
 var (
-	// broadcasted transactions
 	promAptosTxmBroadcastedTxs = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "aptos_txm_tx_broadcasted",
 		Help: "Number of transactions successfully submitted to the mempool",
 	}, []string{"chainID"})
 
-	// successful transactions
 	promAptosTxmSuccessTxs = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "aptos_txm_tx_success",
 		Help: "Number of transactions confirmed successfully on-chain",
 	}, []string{"chainID"})
+
 	promAptosTxmFinalizedTxs = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "aptos_txm_tx_finalized",
 		Help: "Number of transactions that reached finalized status",
 	}, []string{"chainID"})
 
-	// inflight transactions
 	promAptosTxmPendingTxs = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "aptos_txm_tx_pending",
 		Help: "Number of unconfirmed transactions currently in-flight",
 	}, []string{"chainID"})
 
-	// error cases
 	promAptosTxmErrorTxs = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "aptos_txm_tx_error",
-		Help: "Total number of transaction errors across all failure modes",
-	}, []string{"chainID"})
-	promAptosTxmRevertTxs = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "aptos_txm_tx_error_revert",
-		Help: "Number of transactions confirmed but unsuccessful on-chain (e.g. out of gas)",
-	}, []string{"chainID"})
-	promAptosTxmRejectTxs = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "aptos_txm_tx_error_reject",
-		Help: "Number of transactions rejected by the RPC after exhausting submit retries",
-	}, []string{"chainID"})
-	promAptosTxmDropTxs = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "aptos_txm_tx_error_drop",
-		Help: "Number of transactions that expired without being committed on-chain",
-	}, []string{"chainID"})
+		Help: "Transaction errors by reason",
+	}, []string{"chainID", "reason"})
+
 	promAptosTxmRetryTxs = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "aptos_txm_tx_retry",
-		Help: "Number of transaction retries triggered (out-of-gas or expired)",
-	}, []string{"chainID"})
+		Help: "Transaction retries by reason",
+	}, []string{"chainID", "reason"})
 )
 
 type aptosTxmMetrics struct {
@@ -68,9 +71,6 @@ type aptosTxmMetrics struct {
 	finalizedTxs   metric.Int64Counter
 	pendingTxs     metric.Int64Gauge
 	errorTxs       metric.Int64Counter
-	revertTxs      metric.Int64Counter
-	rejectTxs      metric.Int64Counter
-	dropTxs        metric.Int64Counter
 	retryTxs       metric.Int64Counter
 }
 
@@ -102,21 +102,6 @@ func newAptosTxmMetrics(chainID string) (*aptosTxmMetrics, error) {
 		return nil, fmt.Errorf("failed to register error txs counter: %w", err)
 	}
 
-	revertTxs, err := m.Int64Counter("aptos_txm_tx_error_revert")
-	if err != nil {
-		return nil, fmt.Errorf("failed to register revert txs counter: %w", err)
-	}
-
-	rejectTxs, err := m.Int64Counter("aptos_txm_tx_error_reject")
-	if err != nil {
-		return nil, fmt.Errorf("failed to register reject txs counter: %w", err)
-	}
-
-	dropTxs, err := m.Int64Counter("aptos_txm_tx_error_drop")
-	if err != nil {
-		return nil, fmt.Errorf("failed to register drop txs counter: %w", err)
-	}
-
 	retryTxs, err := m.Int64Counter("aptos_txm_tx_retry")
 	if err != nil {
 		return nil, fmt.Errorf("failed to register retry txs counter: %w", err)
@@ -131,9 +116,6 @@ func newAptosTxmMetrics(chainID string) (*aptosTxmMetrics, error) {
 		finalizedTxs:   finalizedTxs,
 		pendingTxs:     pendingTxs,
 		errorTxs:       errorTxs,
-		revertTxs:      revertTxs,
-		rejectTxs:      rejectTxs,
-		dropTxs:        dropTxs,
 		retryTxs:       retryTxs,
 	}, nil
 }
@@ -162,27 +144,14 @@ func (m *aptosTxmMetrics) SetPendingTxs(ctx context.Context, count int) {
 	m.pendingTxs.Record(ctx, int64(count), metric.WithAttributes(m.getOtelAttributes()...))
 }
 
-func (m *aptosTxmMetrics) IncrementErrorTxs(ctx context.Context) {
-	promAptosTxmErrorTxs.WithLabelValues(m.chainID).Add(1)
-	m.errorTxs.Add(ctx, 1, metric.WithAttributes(m.getOtelAttributes()...))
+func (m *aptosTxmMetrics) IncrementErrorTxs(ctx context.Context, reason string) {
+	promAptosTxmErrorTxs.WithLabelValues(m.chainID, reason).Add(1)
+	otelAttrs := append(m.getOtelAttributes(), attribute.String("reason", reason))
+	m.errorTxs.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 }
 
-func (m *aptosTxmMetrics) IncrementRevertTxs(ctx context.Context) {
-	promAptosTxmRevertTxs.WithLabelValues(m.chainID).Add(1)
-	m.revertTxs.Add(ctx, 1, metric.WithAttributes(m.getOtelAttributes()...))
-}
-
-func (m *aptosTxmMetrics) IncrementRejectTxs(ctx context.Context) {
-	promAptosTxmRejectTxs.WithLabelValues(m.chainID).Add(1)
-	m.rejectTxs.Add(ctx, 1, metric.WithAttributes(m.getOtelAttributes()...))
-}
-
-func (m *aptosTxmMetrics) IncrementDropTxs(ctx context.Context) {
-	promAptosTxmDropTxs.WithLabelValues(m.chainID).Add(1)
-	m.dropTxs.Add(ctx, 1, metric.WithAttributes(m.getOtelAttributes()...))
-}
-
-func (m *aptosTxmMetrics) IncrementRetryTxs(ctx context.Context) {
-	promAptosTxmRetryTxs.WithLabelValues(m.chainID).Add(1)
-	m.retryTxs.Add(ctx, 1, metric.WithAttributes(m.getOtelAttributes()...))
+func (m *aptosTxmMetrics) IncrementRetryTxs(ctx context.Context, reason string) {
+	promAptosTxmRetryTxs.WithLabelValues(m.chainID, reason).Add(1)
+	otelAttrs := append(m.getOtelAttributes(), attribute.String("reason", reason))
+	m.retryTxs.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 }
