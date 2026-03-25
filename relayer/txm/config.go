@@ -27,14 +27,14 @@ var DefaultConfigSet = Config{
 	BroadcastChanSize: ptr(uint(100)),
 	ConfirmPollSecs:   ptr(uint(2)),
 
-	// https://github.com/aptos-labs/aptos-ts-sdk/blob/32d4360740392782c1368647f89ba62e1b6a2cb3/src/utils/const.ts#L21
-	DefaultMaxGasAmount: ptr(uint64(200000)),
+	// https://github.com/aptos-labs/aptos-ts-sdk/blob/bc169793071185f638192efb1a90103db7ab4922/src/utils/const.ts#L27
+	DefaultMaxGasAmount: ptr(uint64(2_000_000)),
 	GasLimitOverhead:    ptr(uint64(0)),
 
 	MaxSimulateAttempts:    ptr(uint(5)),
 	MaxSubmitRetryAttempts: ptr(uint(10)),
-	SubmitDelayDuration:    ptr(uint(3)),            // seconds
-	TxExpirationSecs:       ptr(uint64(10)),         // seconds
+	SubmitDelayDuration:    ptr(uint(3)),    // seconds
+	TxExpirationSecs:       ptr(uint64(10)), // seconds
 	MaxTxRetryAttempts:     ptr(uint64(5)),
 	PruneIntervalSecs:      ptr(uint64(60 * 60 * 4)), // 4 hours
 	PruneTxExpirationSecs:  ptr(uint64(60 * 60 * 2)), // 2 hours
