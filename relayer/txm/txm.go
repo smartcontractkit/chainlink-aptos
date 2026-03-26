@@ -255,12 +255,12 @@ func (a *AptosTxm) enqueueTransaction(tx *AptosTx) error {
 
 	a.transactionsLock.Lock()
 	currentTimestamp := tx.Timestamp
-	if (currentTimestamp - a.transactionsLastPruneTime) > *a.config.PruneIntervalSecs {
+	if (currentTimestamp - a.transactionsLastPruneTime) > uint64(a.config.PruneInterval.Duration().Seconds()) {
 		for txID, existingTx := range a.transactions {
 			if existingTx.Status != commontypes.Finalized && existingTx.Status != commontypes.Failed && existingTx.Status != commontypes.Fatal {
 				continue
 			}
-			if (currentTimestamp - existingTx.Timestamp) < *a.config.PruneTxExpirationSecs {
+			if (currentTimestamp - existingTx.Timestamp) < uint64(a.config.PruneTxExpiration.Duration().Seconds()) {
 				continue
 			}
 			ctxLogger.Debugw("Pruning transaction", "status", existingTx.Status)
@@ -414,7 +414,7 @@ func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, nonce u
 		return nil, fmt.Errorf("failed to fetch ledger timestamp: %w", err)
 	}
 
-	expirationTimestampSecs := ledgerTimestampSecs + *a.config.TxExpirationSecs
+	expirationTimestampSecs := ledgerTimestampSecs + uint64(a.config.TxExpirationTimeout.Duration().Seconds())
 
 	payload := aptos.TransactionPayload{
 		Payload: &aptos.EntryFunction{
@@ -671,7 +671,7 @@ func (a *AptosTxm) signAndBroadcast(ctx context.Context, tx *AptosTx) {
 			}
 
 			ctxLogger.Errorw("failed to submit signed tx, retrying..", "error", httpError)
-			time.Sleep(time.Duration(*a.config.SubmitDelayDuration) * time.Second)
+			time.Sleep(a.config.SubmitRetryDelay.Duration())
 
 			httpErrorBody := string(httpError.Body)
 			if strings.Contains(httpErrorBody, "SEQUENCE_NUMBER_TOO_OLD") || strings.Contains(httpErrorBody, "SEQUENCE_NUMBER_TOO_NEW") {
@@ -707,7 +707,7 @@ func (a *AptosTxm) confirmLoop() {
 	ctx, cancel := commonutils.ContextFromChan(a.stop)
 	defer cancel()
 
-	pollDuration := time.Duration(*a.config.ConfirmPollSecs) * time.Second
+	pollDuration := a.config.ConfirmPollInterval.Duration()
 	tick := time.After(pollDuration)
 
 	a.baseLogger.Debugw("confirmLoop: started")

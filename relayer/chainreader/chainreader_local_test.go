@@ -303,7 +303,8 @@ func runGetLatestValueTest(t *testing.T, logger logger.Logger, rpcUrl string, ac
 		Address: accountAddress.String(),
 	}
 
-	logPoller, err := logpoller.NewLogPoller(logger, chainInfo, getClient, nil, nil)
+	lpCfg := logpoller.DefaultConfigSet
+	logPoller, err := logpoller.NewLogPoller(logger, chainInfo, getClient, nil, &lpCfg)
 	require.NoError(t, err)
 
 	chainReader := NewChainReader(logger, rateLimitedClient, config, nil, logPoller)
@@ -590,7 +591,8 @@ func runQueryKeyPersistentTest(t *testing.T, logger logger.Logger, rpcUrl string
 		},
 	}
 
-	logPoller, err := logpoller.NewLogPoller(logger, chainInfo, getClient, db, nil)
+	lpCfg := logpoller.DefaultConfigSet
+	logPoller, err := logpoller.NewLogPoller(logger, chainInfo, getClient, db, &lpCfg)
 	require.NoError(t, err)
 	err = logPoller.Start(context.Background())
 	require.NoError(t, err)
@@ -979,7 +981,8 @@ func TestLoopChainReaderPersistent(t *testing.T) {
 	setupTestDatabase(t, db)
 
 	// Create ChainReader with persistence enabled.
-	logPoller, err := logpoller.NewLogPoller(lg, chainInfo, getClient, db, nil)
+	lpCfg := logpoller.DefaultConfigSet
+	logPoller, err := logpoller.NewLogPoller(lg, chainInfo, getClient, db, &lpCfg)
 	require.NoError(t, err)
 	err = logPoller.Start(context.Background())
 	require.NoError(t, err)

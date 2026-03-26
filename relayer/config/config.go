@@ -4,12 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
-	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/config"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/aptosservice"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
@@ -19,23 +20,9 @@ import (
 // Name of the chain family (e.g., "ethereum", "solana", "aptos")
 const ChainFamilyName = "aptos"
 
-var DefaultConfigSet = ConfigSet{
-	TransactionManager: txm.DefaultConfigSet,
-	LogPoller:          logpoller.DefaultConfigSet,
-	BalanceMonitor:     monitor.DefaultBalanceConfig,
-	WriteTargetCap:     write_target.DefaultConfigSet,
-}
-
-type ConfigSet struct { //nolint:revive
-	TransactionManager txm.Config
-	LogPoller          logpoller.Config
-	BalanceMonitor     monitor.GenericBalanceConfig
-	WriteTargetCap     write_target.Config
-}
-
 type WorkflowConfig struct {
 	ForwarderAddress string
-	// FromAddress      string
+	// FromAddress string
 	PublicKey string
 }
 
@@ -45,11 +32,31 @@ type Chain struct {
 	BalanceMonitor     *monitor.GenericBalanceConfig `toml:"BalanceMonitor"`
 	WriteTargetCap     *write_target.Config          `toml:"WriteTargetCap"`
 	Workflow           *WorkflowConfig               `toml:"Workflow"`
+	AptosService       *aptosservice.Config          `toml:"AptosService"`
+}
+
+func ptr[T any](v T) *T { return &v }
+
+var DefaultNodeConfig = Node{
+	MaxConcurrentRequests: ptr(int64(500)),
+	Timeout:               config.MustNewDuration(30 * time.Second),
 }
 
 type Node struct {
-	Name *string
-	URL  *config.URL
+	Name                  *string          `toml:"Name"`
+	URL                   *config.URL      `toml:"URL"`
+	MaxConcurrentRequests *int64           `toml:"MaxConcurrentRequests"`
+	Timeout               *config.Duration `toml:"Timeout"`
+}
+
+func (n *Node) Resolve() {
+	if n.MaxConcurrentRequests == nil {
+		n.MaxConcurrentRequests = ptr(*DefaultNodeConfig.MaxConcurrentRequests)
+	}
+	if n.Timeout == nil {
+		v := *DefaultNodeConfig.Timeout
+		n.Timeout = &v
+	}
 }
 
 func (n *Node) ValidateConfig() (err error) {
@@ -105,6 +112,15 @@ func (cfg *TOMLConfig) applyDefaults() {
 	}
 	cfg.WriteTargetCap.Resolve()
 
+	if cfg.AptosService == nil {
+		cfg.AptosService = &aptosservice.Config{}
+	}
+	cfg.AptosService.Resolve()
+
+	for _, node := range cfg.Nodes {
+		node.Resolve()
+	}
+
 	// Set network name defaults
 	if cfg.NetworkName == "" {
 		network, err := GetNetworkConfig(cfg.ChainID)
@@ -156,9 +172,7 @@ func (c *TOMLConfig) ValidateConfig() (err error) {
 
 	// If network name is set, ensure it matches a known network if chain ID is known
 	if c.NetworkName != "" {
-		var network aptos.NetworkConfig
-		network, err = GetNetworkConfig(c.ChainID)
-		if err == nil && c.NetworkName != network.Name {
+		if network, lookupErr := GetNetworkConfig(c.ChainID); lookupErr == nil && c.NetworkName != network.Name {
 			err = errors.Join(err, config.ErrInvalid{Name: "NetworkName", Value: c.NetworkName, Msg: fmt.Sprintf("does not match known network (%s) for chain ID", network.Name)})
 		}
 	}
