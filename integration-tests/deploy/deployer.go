@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/smartcontractkit/chainlink-aptos/integration-tests/common"
 	"github.com/smartcontractkit/chainlink-aptos/integration-tests/scripts"
 
 	"github.com/BurntSushi/toml"
@@ -54,7 +53,6 @@ type Deployer struct {
 type Configs struct {
 	TestFolder        string
 	NodesListFilePath string
-	KeystoneWorkflow  string
 }
 
 type CoreClient struct {
@@ -434,27 +432,6 @@ func (d *Deployer) loadCoreToml() (*CoreConfigToml, error) {
 	}
 
 	return &config, nil
-}
-
-func (d *Deployer) SaveWorkflowToml(dataFeedsAddress string, workflowOwner string) error {
-	toml := common.GenerateWorkflowToml(dataFeedsAddress, workflowOwner)
-
-	filePath := fmt.Sprintf("%s/%s", d.Configs.TestFolder, "workflow.toml")
-
-	file, err := os.Create(filePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	_, err = file.WriteString(toml)
-	if err != nil {
-		return err
-	}
-
-	d.Configs.KeystoneWorkflow = filePath
-
-	return nil
 }
 
 func marshalCoreToml(config *CoreConfigToml) (string, error) {
