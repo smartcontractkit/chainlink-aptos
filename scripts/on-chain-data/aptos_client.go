@@ -122,11 +122,93 @@ func fetchTransactionsPageFromAccountWithLimitAndOffset(account string, environm
 	return fetchTransactionsPageFromAccountInternal(url)
 }
 
-func fetchMostRecentTransactionsFromAccountt(account string, environment string) ([]Transaction, error) {
+func fetchAccountSequenceNumber(account string, environment string) (int, error) {
 	baseURL := GetAptosAPIBaseURL(environment)
-	url := fmt.Sprintf("%s/accounts/%s/transactions?limit=100", baseURL, account)
+	url := fmt.Sprintf("%s/accounts/%s", baseURL, account)
 
-	return fetchTransactionsPageFromAccountInternal(url)
+	resp, err := http.Get(url)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch account info: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("unexpected status code %d for account %s", resp.StatusCode, account)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var accountInfo struct {
+		SequenceNumber string `json:"sequence_number"`
+	}
+	if err := json.Unmarshal(body, &accountInfo); err != nil {
+		return 0, fmt.Errorf("failed to unmarshal account info: %w", err)
+	}
+
+	seqNum, err := strconv.Atoi(accountInfo.SequenceNumber)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse sequence number: %w", err)
+	}
+
+	return seqNum, nil
+}
+
+// fetchTransactionsSinceTimestamp paginates backwards from the most recent
+// transaction until it reaches the cutoff timestamp, ensuring complete
+// coverage of the time window regardless of per-account activity rates.
+func fetchTransactionsSinceTimestamp(account string, environment string, sinceTimestampMicros int64) ([]Transaction, error) {
+	seqNum, err := fetchAccountSequenceNumber(account, environment)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get account sequence number: %w", err)
+	}
+
+	log.Printf("Account %s has %d transactions, fetching since timestamp %d\n", account, seqNum, sinceTimestampMicros)
+
+	const pageSize = 100
+	var allTransactions []Transaction
+
+	cursor := seqNum
+	for cursor > 0 {
+		start := cursor - pageSize
+		if start < 0 {
+			start = 0
+		}
+
+		txs, err := fetchTransactionsPageFromAccountWithLimitAndOffset(account, environment, pageSize, start)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch page at offset %d: %w", start, err)
+		}
+
+		if len(txs) == 0 {
+			break
+		}
+
+		reachedCutoff := false
+		for _, tx := range txs {
+			txTs, parseErr := strconv.ParseInt(tx.Timestamp, 10, 64)
+			if parseErr != nil {
+				log.Printf("Warning: could not parse timestamp for tx %s: %v\n", tx.Hash, parseErr)
+				continue
+			}
+			if txTs >= sinceTimestampMicros {
+				allTransactions = append(allTransactions, tx)
+			} else {
+				reachedCutoff = true
+			}
+		}
+
+		if reachedCutoff || start == 0 {
+			break
+		}
+
+		cursor = start
+	}
+
+	log.Printf("Fetched %d transactions from account %s within time window\n", len(allTransactions), account)
+	return allTransactions, nil
 }
 
 func fetchTransactionsPageFromAccountInternal(url string) ([]Transaction, error) {
