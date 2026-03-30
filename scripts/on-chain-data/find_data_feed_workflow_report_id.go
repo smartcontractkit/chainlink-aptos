@@ -19,9 +19,9 @@ type ReportProcessedEvent struct {
 
 func BuildFindFeedUpdateWorkflowReportId() *cobra.Command {
 	var (
-		environmentStr        string
-		reportId              float64
-		includeOnlyMostRecent bool
+		environmentStr string
+		reportId       float64
+		lookbackHours  int
 	)
 
 	cmd := cobra.Command{
@@ -29,7 +29,7 @@ func BuildFindFeedUpdateWorkflowReportId() *cobra.Command {
 		Short: "Find on-chain transaction for a given workflow report ID",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			transactionQueryOptions := TransactionQueryOptions{
-				IncludeOnlyMostRecent: includeOnlyMostRecent,
+				LookbackHours: lookbackHours,
 			}
 			// convert reportId to decimal
 			hexStr := fmt.Sprintf("%.0f", reportId)
@@ -45,7 +45,7 @@ func BuildFindFeedUpdateWorkflowReportId() *cobra.Command {
 
 	cmd.Flags().StringVarP(&environmentStr, "environment", "e", "staging", "Environment")
 	cmd.Flags().Float64VarP(&reportId, "reportId", "r", 0, "Report ID to search")
-	cmd.Flags().BoolVarP(&includeOnlyMostRecent, "includeOnlyMostRecent", "l", false, "Include only most recent transactions")
+	cmd.Flags().IntVarP(&lookbackHours, "lookback", "l", 24, "Lookback period in hours (0 fetches all history)")
 
 	cmd.MarkFlagRequired("reportId")
 	cmd.MarkFlagRequired("environment")
