@@ -16,13 +16,14 @@ var (
 )
 
 type CoreConfigToml struct {
-	Log       CoreLogTomlConfig       `toml:"Log"`
-	Feature   CoreFeatureTomlConfig   `toml:"Feature"`
-	OCR2      CoreOCR2TomlConfig      `toml:"OCR2"`
-	P2P       CoreP2PTomlConfig       `toml:"P2P"`
-	WebServer CoreWebServerTomlConfig `toml:"WebServer"`
-	Aptos     []CoreAptosTomlConfig   `toml:"Aptos"`
-	EVM       []CoreEVMTomlConfig     `toml:"EVM"`
+	Log          CoreLogTomlConfig          `toml:"Log"`
+	Feature      CoreFeatureTomlConfig      `toml:"Feature"`
+	Capabilities CoreCapabilitiesTomlConfig `toml:"Capabilities"`
+	OCR2         CoreOCR2TomlConfig         `toml:"OCR2"`
+	P2P          CoreP2PTomlConfig          `toml:"P2P"`
+	WebServer    CoreWebServerTomlConfig    `toml:"WebServer"`
+	Aptos        []CoreAptosTomlConfig      `toml:"Aptos"`
+	EVM          []CoreEVMTomlConfig        `toml:"EVM"`
 }
 
 type CoreLogTomlConfig struct {
@@ -33,6 +34,19 @@ type CoreFeatureTomlConfig struct {
 	FeedsManager bool `toml:"FeedsManager"`
 	LogPoller    bool `toml:"LogPoller"`
 	UICSAKeys    bool `toml:"UICSAKeys"`
+}
+
+type CoreCapabilitiesTomlConfig struct {
+	Local CoreLocalCapabilitiesTomlConfig `toml:"Local"`
+}
+
+type CoreLocalCapabilitiesTomlConfig struct {
+	Capabilities map[string]CoreCapabilityNodeTomlConfig `toml:"Capabilities"`
+}
+
+type CoreCapabilityNodeTomlConfig struct {
+	BinaryPathOverride string            `toml:"BinaryPathOverride,omitempty"`
+	Config             map[string]string `toml:"Config,omitempty"`
 }
 
 type CoreOCR2TomlConfig struct {
