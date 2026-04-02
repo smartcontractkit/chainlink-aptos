@@ -21,7 +21,7 @@ const (
 	// DefaultDeployMaxGasAmount is the default max gas for package deployment transactions.
 	// The SDK default (100_000) is too low for deploying Move packages which involve
 	// resource account creation + code publishing. Unused gas is not charged on Aptos.
-	DefaultDeployMaxGasAmount = uint64(2_000_000)
+	DefaultDeployMaxGasAmount = uint64(20_000_000)
 )
 
 // withDefaultDeployGas prepends DefaultDeployMaxGasAmount to options if no
