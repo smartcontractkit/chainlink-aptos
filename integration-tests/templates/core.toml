@@ -6,6 +6,9 @@ FeedsManager = true
 LogPoller = true
 UICSAKeys = true
 
+[Capabilities.Local]
+[Capabilities.Local.Capabilities."mock-streams-trigger@1.0.0"]
+
 [OCR2]
 Enabled = true
 
