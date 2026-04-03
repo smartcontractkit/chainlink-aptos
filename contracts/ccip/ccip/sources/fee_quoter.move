@@ -694,7 +694,7 @@ module ccip::fee_quoter {
             };
         let premium_multiplier =
             get_premium_multiplier_wei_per_eth_internal(state, fee_token);
-        premium_fee_usd_wei *=(premium_multiplier as u256); // Apply premium multiplier in wei/eth units
+        premium_fee_usd_wei *= (premium_multiplier as u256); // Apply premium multiplier in wei/eth units
 
         let data_availability_cost_usd_36_decimals =
             if (dest_chain_config.dest_data_availability_multiplier_bps > 0) {
@@ -852,7 +852,7 @@ module ccip::fee_quoter {
             // The messaging accounts needed for CCIP receiver on SVM are:
             // message receiver, offramp PDA signer,
             // plus remaining accounts specified in SVM extraArgs. Each account is 32 bytes.
-            svm_expanded_data_length +=((accounts_length
+            svm_expanded_data_length += ((accounts_length
                 + SVM_MESSAGING_ACCOUNTS_OVERHEAD) * SVM_ACCOUNT_BYTE_SIZE);
         };
 
@@ -891,9 +891,9 @@ module ccip::fee_quoter {
 
             // Pools get CCIP_LOCK_OR_BURN_V1_RET_BYTES by default, but if an override is set we use that instead.
             if (destBytesOverhead > 0) {
-                svm_expanded_data_length +=(destBytesOverhead as u64);
+                svm_expanded_data_length += (destBytesOverhead as u64);
             } else {
-                svm_expanded_data_length +=(CCIP_LOCK_OR_BURN_V1_RET_BYTES as u64);
+                svm_expanded_data_length += (CCIP_LOCK_OR_BURN_V1_RET_BYTES as u64);
             }
         };
 
@@ -1029,7 +1029,7 @@ module ccip::fee_quoter {
                     );
 
                 if (!transfer_fee_config.is_enabled) {
-                    token_transfer_fee_wei +=(
+                    token_transfer_fee_wei += (
                         (dest_chain_config.default_token_fee_usd_cents as u256)
                             * VAL_1E16
                     );

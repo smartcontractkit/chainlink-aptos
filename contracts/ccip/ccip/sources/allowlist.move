@@ -264,7 +264,7 @@ module ccip::allowlist_test {
         added_addresses: vector<address>, state: &allowlist::AllowlistState
     ) {
         let expected =
-            added_addresses.map::<address, AllowlistAdd> (
+            added_addresses.map::<address, AllowlistAdd>(
                 |add| allowlist::new_add_event(add)
             );
         let got =
@@ -286,7 +286,7 @@ module ccip::allowlist_test {
         added_addresses: vector<address>, state: &allowlist::AllowlistState
     ) {
         let expected =
-            added_addresses.map::<address, AllowlistRemove> (
+            added_addresses.map::<address, AllowlistRemove>(
                 |add| allowlist::new_remove_event(add)
             );
         let got =
