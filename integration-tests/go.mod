@@ -7,7 +7,7 @@ require (
 	github.com/aptos-labs/aptos-go-sdk v1.12.1
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-connections v0.6.0
-	github.com/ethereum/go-ethereum v1.17.1
+	github.com/ethereum/go-ethereum v1.17.2
 	github.com/go-resty/resty/v2 v2.17.2
 	github.com/joho/godotenv v1.5.1
 	github.com/moby/term v0.5.2
@@ -126,7 +126,7 @@ require (
 	github.com/cosmos/ledger-cosmos-go v0.14.0 // indirect
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
-	github.com/crate-crypto/go-eth-kzg v1.4.0 // indirect
+	github.com/crate-crypto/go-eth-kzg v1.5.0 // indirect
 	github.com/creachadair/jrpc2 v1.2.0 // indirect
 	github.com/creachadair/mds v0.13.4 // indirect
 	github.com/danieljoos/wincred v1.2.3 // indirect
@@ -273,7 +273,7 @@ require (
 	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/karalabe/hid v1.0.1-0.20240306101548-573246063e52 // indirect
+	github.com/karalabe/hid v1.0.1-0.20260315100226-f5d04adeffeb // indirect
 	github.com/klauspost/compress v1.18.4 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
