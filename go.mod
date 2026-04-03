@@ -1,6 +1,6 @@
 module github.com/smartcontractkit/chainlink-aptos
 
-go 1.25.5
+go 1.25.7
 
 require (
 	github.com/aptos-labs/aptos-go-sdk v1.12.1-0.20260318141106-21b6ef4ed363

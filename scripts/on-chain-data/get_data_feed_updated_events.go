@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -25,13 +26,15 @@ type FeedUpdatedEventData struct {
 }
 
 type TransactionQueryOptions struct {
-	IncludeOnlyMostRecent bool
+	LookbackHours int
+	FeedId        string
 }
 
 func BuildMGetFeedUpdatedEvents() *cobra.Command {
 	var (
-		environmentStr        string
-		includeOnlyMostRecent bool
+		environmentStr string
+		lookbackHours  int
+		feedId         string
 	)
 
 	cmd := cobra.Command{
@@ -39,7 +42,8 @@ func BuildMGetFeedUpdatedEvents() *cobra.Command {
 		Short: "Get FeedUpdated events",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			transactionQueryOptions := TransactionQueryOptions{
-				IncludeOnlyMostRecent: includeOnlyMostRecent,
+				LookbackHours: lookbackHours,
+				FeedId:        feedId,
 			}
 			runGetFeedUpdatedEvents(environmentStr, transactionQueryOptions)
 			return nil
@@ -47,7 +51,8 @@ func BuildMGetFeedUpdatedEvents() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&environmentStr, "environment", "e", "staging", "Environment")
-	cmd.Flags().BoolVarP(&includeOnlyMostRecent, "includeOnlyMostRecent", "l", false, "Include only most recent transactions")
+	cmd.Flags().IntVarP(&lookbackHours, "lookback", "l", 24, "Lookback period in hours (0 fetches all history)")
+	cmd.Flags().StringVarP(&feedId, "feed-id", "f", "", "Filter by feed ID (returns all feeds if not set)")
 
 	cmd.MarkFlagRequired("environment")
 
@@ -57,6 +62,10 @@ func BuildMGetFeedUpdatedEvents() *cobra.Command {
 func runGetFeedUpdatedEvents(env string, transactionQueryOptions TransactionQueryOptions) {
 	accounts := GetAccountsByEnvironment(env)
 	feedsData := getFeedUpdatedEventsFromAccounts(accounts, env, transactionQueryOptions)
+
+	sort.Slice(feedsData, func(i, j int) bool {
+		return feedsData[i].BlockTimestamp < feedsData[j].BlockTimestamp
+	})
 
 	outputFile := fmt.Sprintf("aptos-data-feed-events-%s-%d.csv", env, time.Now().UnixMilli())
 	if err := writeToCSV(outputFile, feedUpdatedEventDataArrayToRawStringArray(feedsData)); err != nil {
@@ -136,6 +145,10 @@ func fetchFeedUpdatedEventsFromAccountTransactions(account string, environment s
 	for _, tx := range transactions {
 		for _, event := range tx.Events {
 			if strings.HasSuffix(event.Type, "::registry::FeedUpdated") {
+				feedId := toString(event.Data["feed_id"])
+				if transactionQueryOptions.FeedId != "" && feedId != transactionQueryOptions.FeedId {
+					continue
+				}
 				record := FeedUpdatedEventData{
 					TransactionSuccess:   tx.Success,
 					TransationVMStatus:   tx.VMStatus,
@@ -143,7 +156,7 @@ func fetchFeedUpdatedEventsFromAccountTransactions(account string, environment s
 					TransactionGasUsed:   tx.GasUsed,
 					BlockTimestamp:       tx.Timestamp,
 					ObservationTimestamp: toString(event.Data["timestamp"]),
-					FeedId:               toString(event.Data["feed_id"]),
+					FeedId:               feedId,
 					Benchmark:            toString(event.Data["benchmark"]),
 				}
 				records = append(records, record)
@@ -158,17 +171,17 @@ func fetchTransactionsFromAccount(account, environment string, transactionQueryO
 	log.Printf("Fetching transactions from account %s in environment %s with options %+v\n", account, environment, transactionQueryOptions)
 
 	var allTransactions []Transaction
-	var fetchFunc func(string, string) ([]Transaction, error)
+	var err error
 
-	if transactionQueryOptions.IncludeOnlyMostRecent {
-		fetchFunc = fetchMostRecentTransactionsFromAccountt
+	if transactionQueryOptions.LookbackHours > 0 {
+		sinceTimestamp := time.Now().Add(-time.Duration(transactionQueryOptions.LookbackHours) * time.Hour)
+		allTransactions, err = fetchTransactionsSinceTimestamp(account, environment, sinceTimestamp.UnixMicro())
 	} else {
-		fetchFunc = fetchAllTransactionsFromAccount
+		allTransactions, err = fetchAllTransactionsFromAccount(account, environment)
 	}
 
-	allTransactions, err := fetchFunc(account, environment)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch paginated transactions: %w", err)
+		return nil, fmt.Errorf("failed to fetch transactions: %w", err)
 	}
 
 	log.Printf("Finished fetching transactions from account %s. Total transactions: %d\n", account, len(allTransactions))
