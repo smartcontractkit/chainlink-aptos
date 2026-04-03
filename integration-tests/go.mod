@@ -16,7 +16,7 @@ require (
 	github.com/smartcontractkit/chainlink-aptos v0.0.0-20260318173523-755cafb24200
 	github.com/smartcontractkit/chainlink-common v0.11.1-0.20260324124718-1e12ff95068b
 	github.com/smartcontractkit/chainlink-deployments-framework v0.86.3
-	github.com/smartcontractkit/chainlink-testing-framework/framework v0.15.5
+	github.com/smartcontractkit/chainlink-testing-framework/framework v0.15.13
 	github.com/smartcontractkit/chainlink/core/scripts v0.0.0-20260217182614-af80ea0f7d31
 	github.com/smartcontractkit/mcms v0.39.0
 	github.com/spf13/cobra v1.10.2
