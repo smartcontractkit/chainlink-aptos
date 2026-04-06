@@ -56,7 +56,7 @@ module mcms::bcs_stream {
             if (((val << shift) >> shift) != val) {
                 abort error::invalid_argument(E_MALFORMED_DATA)
             };
-            res |=(val << shift);
+            res |= (val << shift);
 
             if ((byte & 0x80) == 0) {
                 if (shift > 0 && val == 0) {
