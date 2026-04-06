@@ -41,6 +41,8 @@ type CoreCapabilitiesTomlConfig struct {
 }
 
 type CoreLocalCapabilitiesTomlConfig struct {
+	// Preserve explicit local capability stanzas when we decode and re-encode
+	// core.toml; the mock trigger opt-in is represented by an otherwise-empty table.
 	Capabilities map[string]CoreCapabilityNodeTomlConfig `toml:"Capabilities"`
 }
 
