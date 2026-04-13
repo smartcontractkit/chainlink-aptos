@@ -9,14 +9,18 @@ inputs:
 outputs:
   go_version:
     description: 'The extracted Go version.'
+    value: ${{ steps.extract-go-version.outputs.go_version }}
 
 runs:
   using: 'composite'
   steps:
     - name: Extract go version
+      id: extract-go-version
       shell: bash
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: |
           set -euo pipefail
-          go_version=$(grep -E '^golang [0-9]+\.[0-9]+\.[0-9]+' ${{ inputs.working-directory }}/.tool-versions | awk '{print $2}')
+          go_version=$(grep -E '^golang [0-9]+\.[0-9]+\.[0-9]+' ${WORKING_DIRECTORY}/.tool-versions | awk '{print $2}')
           echo "go_version=${go_version}" >> $GITHUB_ENV
-          echo "::set-output name=go_version::${go_version}"
+          echo "go_version=${go_version}" | tee -a "${GITHUB_OUTPUT}"

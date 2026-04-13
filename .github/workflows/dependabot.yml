@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
@@ -41,14 +41,14 @@ jobs:
       - name: Setup GitHub Token
         if: steps.commit.outputs.has_changes == 'true'
         id: setup-github-token
-        uses: smartcontractkit/.github/actions/setup-github-token@ef78fa97bf3c77de6563db1175422703e9e6674f # setup-github-token@0.2.1
+        uses: smartcontractkit/.github/actions/setup-github-token@setup-github-token/v1
         with:
           aws-role-arn: ${{ secrets.GATI_AWS_ROLE_APTOS_CICD }}
           aws-lambda-url: ${{ secrets.GATI_AWS_LABDA_URL_INTEGRATIONS }}
           aws-region: ${{ secrets.GATI_AWS_REGION }}
       - name: Push signed commits
         if: steps.commit.outputs.has_changes == 'true'
-        uses: asana/push-signed-commits@d615ca88d8e1a946734c24970d1e7a6c56f34897 # v1
+        uses: asana/push-signed-commits@fafa843d9ca76ea7e1a217202973ff566c7fa2a4 # v1.4
         with:
           github-token: ${{ steps.setup-github-token.outputs.access-token }}
           local_branch_name: ${{ github.head_ref }}

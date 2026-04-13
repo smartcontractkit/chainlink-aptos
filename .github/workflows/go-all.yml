@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Linting Go
-        uses: smartcontractkit/.github/actions/ci-lint-go@ci-lint-go/1.0.0
+        uses: smartcontractkit/.github/actions/ci-lint-go@ci-lint-go/v4
         with:
           golangci-lint-version: v2.4.0
           golangci-lint-args: --timeout 5m
@@ -22,10 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install Aptos CLI
-        uses: aptos-labs/actions/install-aptos-cli@ce57287eb852b9819c1d74fecc3be187677559fd # v0.1
+        uses: aptos-labs/actions/install-aptos-cli@528ef7ad9427a8c0720ea3eea790a9190d6e377d # 2026-04-09
         with:
           CLI_VERSION: 9.1.0
       - name: Build and test
-        uses: smartcontractkit/.github/actions/ci-test-go@ci-test-go/1.0.0
+        uses: smartcontractkit/.github/actions/ci-test-go@ci-test-go/v1
         with:
           use-go-cache: true
