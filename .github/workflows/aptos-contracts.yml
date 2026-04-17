@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Check out code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Install Aptos CLI
-      uses: aptos-labs/actions/install-aptos-cli@ce57287eb852b9819c1d74fecc3be187677559fd # v0.1
+      uses: aptos-labs/actions/install-aptos-cli@528ef7ad9427a8c0720ea3eea790a9190d6e377d # 2026-04-09
       with:
         CLI_VERSION: 9.1.0
 

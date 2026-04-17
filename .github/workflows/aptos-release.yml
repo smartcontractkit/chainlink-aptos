@@ -42,33 +42,39 @@ jobs:
     steps:
     - name: Setup GitHub Token
       id: setup-github-token
-      uses: smartcontractkit/.github/actions/setup-github-token@ef78fa97bf3c77de6563db1175422703e9e6674f # setup-github-token@0.2.1
+      uses: smartcontractkit/.github/actions/setup-github-token@setup-github-token/v1
       with:
         aws-role-arn: ${{ secrets.AWS_ROLE_ARN_GATI_CHANGESETS }}
         aws-lambda-url: ${{ secrets.AWS_LAMBDA_URL_GATI }}
         aws-region: ${{ secrets.AWS_REGION }}
 
     - name: Checkout this repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
 
     - name: Compute Docker Tag
       id: compute-docker-tag
+      env:
+        GITHUB_REF: ${{ github.ref }}
+        GITHUB_REF_NAME: ${{ github.ref_name }}
+        GITHUB_EVENT_NAME: ${{ github.event_name }}
+        GITHUB_EVENT_INPUTS_VERSION: ${{ github.event.inputs.version }}
+        NEXT_VERSION: ${{ env.NEXT_VERSION }}
       run: |
-        BRANCH_NAME=${{ github.ref_name }}
+        BRANCH_NAME=${GITHUB_REF_NAME}
         SHORT_HASH=$(git rev-parse --short HEAD)
-        INPUT_VERSION="${{ github.event.inputs.version }}"
+        INPUT_VERSION="${GITHUB_EVENT_INPUTS_VERSION}"
 
         if [[ -n "$INPUT_VERSION" ]]; then
           IMAGE_TAG="${INPUT_VERSION}-aptos"
         elif [[ "$BRANCH_NAME" == "main" ]]; then
-          IMAGE_TAG="${{ env.NEXT_VERSION }}-aptos"
+          IMAGE_TAG="${NEXT_VERSION}-aptos"
         elif [[ "$BRANCH_NAME" == "develop" ]]; then
-          IMAGE_TAG="${{ env.NEXT_VERSION }}-develop-${SHORT_HASH}-aptos"
+          IMAGE_TAG="${NEXT_VERSION}-develop-${SHORT_HASH}-aptos"
         elif [[ "$BRANCH_NAME" == integration/* ]]; then
           INTEGRATION_NAME=${BRANCH_NAME#integration/}
-          IMAGE_TAG="${{ env.NEXT_VERSION }}-${INTEGRATION_NAME}-${SHORT_HASH}-aptos"
+          IMAGE_TAG="${NEXT_VERSION}-${INTEGRATION_NAME}-${SHORT_HASH}-aptos"
         else
           echo "Branch '$BRANCH_NAME' does not match expected patterns"
           exit 0
@@ -79,39 +85,42 @@ jobs:
 
     - name: Determine Chainlink CORE_REF
       id: determine-chainlink-core-ref
+      env:
+        INPUT_CORE_REF: ${{ github.event.inputs.core_ref }}
+        APTOS_CORE_REF: ${{ env.APTOS_CORE_REF }}
       run: |
-        if [ -n "${{ github.event.inputs.core_ref }}" ]; then
-          echo "CORE_REF provided as input: ${{ github.event.inputs.core_ref }}"
-          echo "CORE_REF=${{ github.event.inputs.core_ref }}" >> $GITHUB_ENV
+        if [ -n "${INPUT_CORE_REF}" ]; then
+          echo "CORE_REF provided as input: ${INPUT_CORE_REF}"
+          echo "CORE_REF=${INPUT_CORE_REF}" >> $GITHUB_ENV
         else
-          echo "No core_ref provided as input. Using default: ${{ env.APTOS_CORE_REF }}"
-          echo "CORE_REF=${{ env.APTOS_CORE_REF }}" >> $GITHUB_ENV
+          echo "No core_ref provided as input. Using default: ${APTOS_CORE_REF}"
+          echo "CORE_REF=${APTOS_CORE_REF}" >> $GITHUB_ENV
         fi
 
     - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+      uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
       with:
-        aws-region: ${{ vars.AWS_REGION }}
+        aws-region: ${{ secrets.AWS_REGION }}
         role-to-assume: ${{ secrets.AWS_ROLE_ARN_PROD_PUBLISH_ECR }}
         role-duration-seconds: 3600
         mask-aws-account-id: true
 
     - name: Login to Amazon ECR
       id: login-ecr
-      uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
+      uses: aws-actions/amazon-ecr-login@f2e9fc6c2b355c1890b65e6f6f0e2ac3e6e22f78 # v2.1.2
       with:
         mask-password: "true"
         registries: "${{ secrets.AWS_ACCOUNT_ID_PROD}},${{ secrets.QA_AWS_ACCOUNT_NUMBER }}"
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@0d103c3126aa41d772a8362f6aa67afac040f80c # v3.1.0
+      uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
     # This is not the most efficient way to check if the image exist or not. I was having trouble using aws CLI due to missing permission. We could improve this in a next iteration.
     - name: Check if Aptos image already exists
       id: check-ecr-tag
+      env:
+        IMAGE_URI: ${{ format('{0}.dkr.ecr.{1}.amazonaws.com/chainlink-internal-integrations-aptos:{2}', secrets.AWS_ACCOUNT_ID_PROD, secrets.AWS_REGION, env.IMAGE_TAG) }}
       run: |
-        IMAGE_URI="${{ secrets.AWS_ACCOUNT_ID_PROD }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/chainlink-internal-integrations-aptos:${{ env.IMAGE_TAG }}"
-
         # Try to pull the image
         if docker pull $IMAGE_URI; then
           echo "Image $IMAGE_URI already exists. Skipping image build and push."
@@ -125,7 +134,7 @@ jobs:
 
     - name: Build and Push
       if: steps.check-ecr-tag.outputs.SKIP_IMAGE_BUILD == 'false'
-      uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56 # v5.1.0
+      uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
       id: build-image
       with:
         context: ${{ github.workspace }}
@@ -138,11 +147,14 @@ jobs:
     - name: Determine if Prerelease
       if: steps.check-ecr-tag.outputs.SKIP_IMAGE_BUILD == 'false'
       id: determine-prerelease
+      env:
+        INPUT_PRERELEASE: ${{ github.event.inputs.prerelease }}
+        GITHUB_REF_NAME: ${{ github.ref_name }}
       run: |
-        if [[ -n "${{ github.event.inputs.prerelease }}" ]]; then
-          PRERELEASE=${{ github.event.inputs.prerelease }}
+        if [[ -n "${INPUT_PRERELEASE}" ]]; then
+          PRERELEASE=${INPUT_PRERELEASE}
           echo "Using provided prerelease value: $PRERELEASE"
-        elif [[ "${{ github.ref_name }}" == "main" ]]; then
+        elif [[ "${GITHUB_REF_NAME}" == "main" ]]; then
           PRERELEASE=false
           echo "Branch 'main' detected. Setting prerelease=false"
         else
@@ -154,7 +166,7 @@ jobs:
 
     - name: Create a Release
       if: steps.check-ecr-tag.outputs.SKIP_IMAGE_BUILD == 'false'
-      uses: elgohr/Github-Release-Action@c5ea99036abb741a89f8bf1f2cd7fba845e3313a # v5 https://github.com/elgohr/Github-Release-Action/releases/tag/v5
+      uses: elgohr/Github-Release-Action@3af318c9bb451e43ab8cea7fa17a5598abe94ed2 # 20240816194204
       env:
           GH_ENTERPRISE_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
       with:
