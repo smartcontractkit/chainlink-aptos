@@ -224,3 +224,61 @@ SubmitPollTimeout = "30s"
 	assert.Equal(t, originalNode, DefaultNodeConfig, "Node defaults must not be mutated")
 }
 
+// TestTOMLConfig_Transmitter verifies the [Aptos.Transmitter.Overrides] section
+// decodes, validates, and resolves against a known keystore public key.
+func TestTOMLConfig_Transmitter(t *testing.T) {
+	t.Parallel()
+
+	const (
+		pubKey   = "abababababababababababababababababababababababababababababababab"
+		override = "0x1111111111111111111111111111111111111111111111111111111111111111"
+	)
+
+	t.Run("override resolves to configured address", func(t *testing.T) {
+		t.Parallel()
+		raw := baseTOML + `
+[Transmitter.Overrides]
+"` + pubKey + `" = "` + override + `"
+`
+		cfg, err := NewDecodedTOMLConfig(raw)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Transmitter)
+
+		got, err := cfg.Transmitter.ResolveAddress(pubKey)
+		require.NoError(t, err)
+		assert.Equal(t, "0x1111111111111111111111111111111111111111111111111111111111111111", got.StringLong())
+	})
+
+	t.Run("unlisted pubkey falls back to derivation", func(t *testing.T) {
+		t.Parallel()
+		cfg, err := NewDecodedTOMLConfig(baseTOML)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.Transmitter)
+
+		got, err := cfg.Transmitter.ResolveAddress(pubKey)
+		require.NoError(t, err)
+		// Standard Aptos derivation: SHA3-256(pubkey || 0x00).
+		assert.NotEqual(t, override, got.StringLong())
+	})
+
+	t.Run("malformed address rejected at validation", func(t *testing.T) {
+		t.Parallel()
+		raw := baseTOML + `
+[Transmitter.Overrides]
+"` + pubKey + `" = "not-an-address"
+`
+		_, err := NewDecodedTOMLConfig(raw)
+		require.ErrorContains(t, err, "Transmitter.Overrides")
+	})
+
+	t.Run("malformed public key rejected at validation", func(t *testing.T) {
+		t.Parallel()
+		raw := baseTOML + `
+[Transmitter.Overrides]
+"zz" = "` + override + `"
+`
+		_, err := NewDecodedTOMLConfig(raw)
+		require.ErrorContains(t, err, "Transmitter.Overrides")
+	})
+}
+
