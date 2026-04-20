@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	commonaptos "github.com/smartcontractkit/chainlink-common/pkg/types/chains/aptos"
@@ -218,6 +217,13 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 	}
 	s.logger.Infow("SubmitTransaction: selected account", "publicKey", publicKey)
 
+	fromAddress, err := s.chain.Config().Transmitter.ResolveAddress(publicKey)
+	if err != nil {
+		s.logger.Errorw("SubmitTransaction: failed to resolve sender address", "publicKey", publicKey, "error", err)
+		return nil, fmt.Errorf("failed to resolve sender address: %w", err)
+	}
+	s.logger.Debugw("SubmitTransaction: resolved sender address", "fromAddress", fromAddress.String())
+
 	txID := uuid.New().String()
 	s.logger.Infow("SubmitTransaction: enqueueing to TxManager", "txID", txID)
 	_, enqueueErr := s.chain.TxManager().EnqueueWithEntryFunction(
@@ -226,6 +232,7 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 			GasLimit: gasLimit,
 		},
 		publicKey,
+		fromAddress,
 		entryFn,
 		*s.chain.Config().AptosService.SimulateTx,
 		// TODO: add expected simulation failures to save gas on reported transmissions
@@ -324,9 +331,9 @@ func (s *aptosService) getAccountWithHighestBalance(ctx context.Context, account
 	var foundAny bool
 
 	for _, account := range accounts {
-		addr, err := utils.HexPublicKeyToAddress(account)
+		addr, err := s.chain.Config().Transmitter.ResolveAddress(account)
 		if err != nil {
-			s.logger.Warnw("getAccountWithHighestBalance: failed to convert public key to address, skipping", "account", account, "error", err)
+			s.logger.Warnw("getAccountWithHighestBalance: failed to resolve transmitter address, skipping", "account", account, "error", err)
 			continue
 		}
 
