@@ -128,12 +128,12 @@ func (fc *FakeAptosChain) Execute(_ context.Context, request commonCap.Capabilit
 	return commonCap.CapabilityResponse{}, nil
 }
 
-// safeAccountTransactions wraps client.AccountTransactions to avoid a panic in
+// accountTransactions wraps client.AccountTransactions to avoid a panic in
 // aptos-go-sdk v1.12.1: when start==nil and limit!=nil, the SDK indexes
 // txns[0] without a length check on an empty page. Defaulting start to 0
 // routes the call through the concurrent path, which never dereferences
 // txns[0].
-func safeAccountTransactions(c AptosClient, addr aptos.AccountAddress, start, limit *uint64) ([]*api.CommittedTransaction, error) {
+func accountTransactions(c AptosClient, addr aptos.AccountAddress, start, limit *uint64) ([]*api.CommittedTransaction, error) {
 	if start == nil && limit != nil {
 		zero := uint64(0)
 		start = &zero
@@ -246,7 +246,7 @@ func (fc *FakeAptosChain) AccountTransactions(
 	if err != nil {
 		return nil, caperrors.NewPublicUserError(err, caperrors.InvalidArgument)
 	}
-	committed, err := safeAccountTransactions(fc.client, addr, input.Start, input.Limit)
+	committed, err := accountTransactions(fc.client, addr, input.Start, input.Limit)
 	if err != nil {
 		return nil, caperrors.NewPublicSystemError(fmt.Errorf("aptos account_transactions %s: %w", addr.String(), err), caperrors.Unavailable)
 	}
