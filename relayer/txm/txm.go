@@ -197,8 +197,10 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 	return a.enqueueTransaction(tx)
 }
 
-// EnqueueWithEntryFunction is like Enqueue but accepts a deserialized
-// EntryFunction directly, skipping string parsing and BCS serialisation.
+// EnqueueWithEntryFunction is like Enqueue but accepts a deserialized EntryFunction directly,
+// skipping the string-based function parsing and BCS serialisation of parameters.
+// The EntryFunction already contains the module, function name, type tags, and
+// pre-encoded BCS args.
 // Pass the zero AccountAddress for fromAddress to derive it from publicKey.
 func (a *AptosTxm) EnqueueWithEntryFunction(transactionID string, txMetadata *commontypes.TxMeta, publicKey string, fromAddress aptos.AccountAddress, entryFunction *aptos.EntryFunction, simulateTx bool) (string, error) {
 	if entryFunction == nil {

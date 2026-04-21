@@ -108,13 +108,13 @@ func TestAptosService_GetAccountWithHighestBalance_HonorsTransmitterOverride(t *
 	t.Parallel()
 
 	const (
-		pubKeyA      = "abababababababababababababababababababababababababababababababab"
-		pubKeyB      = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-		overrideAddr = "0x2222222222222222222222222222222222222222222222222222222222222222"
+		pubKeyA          = "abababababababababababababababababababababababababababababababab"
+		pubKeyB          = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+		overrideAcctAddr = "0x2222222222222222222222222222222222222222222222222222222222222222"
 	)
 
 	var overrideB aptos_sdk.AccountAddress
-	require.NoError(t, overrideB.ParseStringRelaxed(overrideAddr))
+	require.NoError(t, overrideB.ParseStringRelaxed(overrideAcctAddr))
 	derivedA, err := aptosutils.HexPublicKeyToAddress(pubKeyA)
 	require.NoError(t, err)
 
@@ -124,7 +124,7 @@ func TestAptosService_GetAccountWithHighestBalance_HonorsTransmitterOverride(t *
 
 	cfg := &chainconfig.TOMLConfig{
 		Chain: chainconfig.Chain{
-			Transmitter: &transmitter.Config{Overrides: map[string]string{pubKeyB: overrideAddr}},
+			Transmitter: &transmitter.Config{Overrides: map[string]string{pubKeyB: overrideAcctAddr}},
 		},
 	}
 	svc := aptosService{
@@ -132,8 +132,10 @@ func TestAptosService_GetAccountWithHighestBalance_HonorsTransmitterOverride(t *
 		logger: logger.Test(t),
 	}
 
-	selected, _ := svc.getAccountWithHighestBalance(context.Background(), []string{pubKeyA, pubKeyB})
+	selected, selectedAddress, err := svc.getAccountWithHighestBalance(context.Background(), []string{pubKeyA, pubKeyB})
+	require.NoError(t, err)
 	require.Equal(t, pubKeyB, selected, "picker must select the key whose resolved address holds the higher balance")
+	require.Equal(t, overrideB, selectedAddress, "picker must return the override address for the selected key")
 }
 
 type testChain struct {
