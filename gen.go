@@ -50,6 +50,8 @@ package aptos
 //go:generate go run ./cmd/bindgen --input ./contracts/platform/sources/forwarder.move --output ./bindings/platform/forwarder
 //go:generate go run ./cmd/bindgen --input ./contracts/platform/sources/storage.move --output ./bindings/platform/storage
 
+//go:generate go run ./cmd/bindgen --input ./contracts/platform_mock/sources/mock_forwarder.move --output ./bindings/platform_mock/mock_forwarder
+
 //go:generate go run ./cmd/bindgen --input ./contracts/platform_secondary/sources/forwarder.move --output ./bindings/platform_secondary/forwarder
 //go:generate go run ./cmd/bindgen --input ./contracts/platform_secondary/sources/storage.move --output ./bindings/platform_secondary/storage
 
