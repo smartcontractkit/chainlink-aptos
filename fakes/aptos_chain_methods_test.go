@@ -190,34 +190,37 @@ func TestFakeAptosChain_AccountTransactions(t *testing.T) {
 	})
 }
 
-// Locks the v1.12.1 empty-page workaround: a runtime.Error from the SDK must
-// surface as an empty result, not propagate. Pair with RePanicsNonRuntime to
-// fence the recover scope.
-func TestSafeAccountTransactions_SwallowsRuntimeError(t *testing.T) {
+// Locks the v1.12.1 empty-page workaround: when start==nil and limit!=nil, the
+// SDK would index txns[0] on an empty page. safeAccountTransactions must
+// default start to 0 so the SDK's concurrent path is taken instead.
+func TestSafeAccountTransactions_DefaultsStartWhenLimitOnly(t *testing.T) {
 	t.Parallel()
 	rpc := mocks.NewAptosRpcClient(t)
+	limit := uint64(10)
+	var gotStart *uint64
 	rpc.EXPECT().AccountTransactions(mock.Anything, mock.Anything, mock.Anything).
-		Run(func(_ aptos.AccountAddress, _ *uint64, _ *uint64) {
-			var s []int
-			_ = s[0]
-		}).
-		Return(nil, nil).Maybe()
-	txs, err := safeAccountTransactions(rpc, aptos.AccountAddress{}, nil, nil)
+		Run(func(_ aptos.AccountAddress, start *uint64, _ *uint64) { gotStart = start }).
+		Return(nil, nil).Once()
+	_, err := safeAccountTransactions(rpc, aptos.AccountAddress{}, nil, &limit)
 	require.NoError(t, err)
-	require.Nil(t, txs)
+	require.NotNil(t, gotStart)
+	require.Equal(t, uint64(0), *gotStart)
 }
 
-func TestSafeAccountTransactions_RePanicsNonRuntime(t *testing.T) {
+// Does not mutate start when caller passes both nil (single-page path, no bug).
+func TestSafeAccountTransactions_PassesThroughBothNil(t *testing.T) {
 	t.Parallel()
 	rpc := mocks.NewAptosRpcClient(t)
+	var gotStart, gotLimit *uint64
 	rpc.EXPECT().AccountTransactions(mock.Anything, mock.Anything, mock.Anything).
-		Run(func(_ aptos.AccountAddress, _ *uint64, _ *uint64) { panic("opaque sdk bug") }).
-		Return(nil, nil).Maybe()
-	defer func() {
-		r := recover()
-		require.NotNil(t, r, "opaque panic must propagate, not be swallowed")
-	}()
-	_, _ = safeAccountTransactions(rpc, aptos.AccountAddress{}, nil, nil)
+		Run(func(_ aptos.AccountAddress, start *uint64, limit *uint64) {
+			gotStart, gotLimit = start, limit
+		}).
+		Return(nil, nil).Once()
+	_, err := safeAccountTransactions(rpc, aptos.AccountAddress{}, nil, nil)
+	require.NoError(t, err)
+	require.Nil(t, gotStart)
+	require.Nil(t, gotLimit)
 }
 
 func TestFakeAptosChain_WriteReport_ValidationErrors(t *testing.T) {
