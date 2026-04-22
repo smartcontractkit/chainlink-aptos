@@ -64,24 +64,56 @@ module platform_mock::mock_forwarder {
 
     #[test_only]
     use platform_mock::mock_test_receiver;
+    #[test_only]
+    use std::bcs;
+
+    // Copy of `platform::forwarder::build_report_with_overrides` so mock
+    // tests exercise the same byte layout real receivers see in prod.
+    #[test_only]
+    fun build_report_with_overrides(
+        version: u8, don_id: u32, config_version: u32, execution_id: vector<u8>,
+    ): vector<u8> {
+        let timestamp: u32 = 1;
+        let workflow_id = x"6d795f6964000000000000000000000000000000000000000000000000000000";
+        let workflow_name = x"000000000000DEADBEEF";
+        let workflow_owner = x"0000000000000000000000000000000000000051";
+        let report_id = x"0001";
+        let mercury_reports = vector[x"010203", x"aabbcc"];
+
+        let report = vector[];
+        vector::push_back(&mut report, version);
+        vector::append(&mut report, execution_id);
+
+        let bytes = bcs::to_bytes(&timestamp);
+        vector::reverse(&mut bytes);
+        vector::append(&mut report, bytes);
+
+        let bytes = bcs::to_bytes(&don_id);
+        vector::reverse(&mut bytes);
+        vector::append(&mut report, bytes);
+
+        let bytes = bcs::to_bytes(&config_version);
+        vector::reverse(&mut bytes);
+        vector::append(&mut report, bytes);
+
+        vector::append(&mut report, workflow_id);
+        vector::append(&mut report, workflow_name);
+        vector::append(&mut report, workflow_owner);
+        vector::append(&mut report, report_id);
+        vector::append(&mut report, bcs::to_bytes(&mercury_reports));
+
+        let report_context = x"a0b000000000000000000000000000000000000000000000000000000000000a0b000000000000000000000000000000000000000000000000000000000000a0b000000000000000000000000000000000000000000000000000000000000000";
+
+        let raw_report = vector[];
+        vector::append(&mut raw_report, report_context);
+        vector::append(&mut raw_report, report);
+        raw_report
+    }
 
     #[test_only]
-    fun make_well_formed_report(): vector<u8> {
-        let ctx = vector::empty<u8>();
-        let i = 0;
-        while (i < 96) { vector::push_back(&mut ctx, 0); i = i + 1; };
-
-        let body = vector::empty<u8>();
-        vector::push_back(&mut body, 1);
-        let i = 0;
-        while (i < 108) { vector::push_back(&mut body, ((i % 256) as u8)); i = i + 1; };
-        vector::push_back(&mut body, 0xDE);
-        vector::push_back(&mut body, 0xAD);
-        vector::push_back(&mut body, 0xBE);
-        vector::push_back(&mut body, 0xEF);
-
-        vector::append(&mut ctx, body);
-        ctx
+    fun default_report(): vector<u8> {
+        let execution_id = x"0101010101010101010101010101010101010101010101010101010101010101";
+        build_report_with_overrides(1, 1, 1, execution_id)
     }
 
     #[test(owner = @platform_mock, publisher = @platform_mock, transmitter = @0xCAFE)]
@@ -92,7 +124,7 @@ module platform_mock::mock_forwarder {
         initialize(owner);
         mock_test_receiver::register(publisher);
 
-        let raw = make_well_formed_report();
+        let raw = default_report();
         let sigs = vector::empty<vector<u8>>();
         report(transmitter, signer::address_of(publisher), raw, sigs);
     }
@@ -104,7 +136,7 @@ module platform_mock::mock_forwarder {
     ) {
         mock_storage::init_module_for_testing(publisher);
         initialize(owner);
-        let raw = make_well_formed_report();
+        let raw = default_report();
         let sigs = vector::empty<vector<u8>>();
         report(transmitter, @0xBEEF, raw, sigs);
     }
@@ -117,12 +149,8 @@ module platform_mock::mock_forwarder {
         mock_storage::init_module_for_testing(publisher);
         initialize(owner);
         mock_test_receiver::register(publisher);
-        let raw = vector::empty<u8>();
-        let i = 0;
-        while (i < 96) { vector::push_back(&mut raw, 0); i = i + 1; };
-        vector::push_back(&mut raw, 9);
-        let i = 0;
-        while (i < 120) { vector::push_back(&mut raw, 0); i = i + 1; };
+        let execution_id = x"0101010101010101010101010101010101010101010101010101010101010101";
+        let raw = build_report_with_overrides(9, 1, 1, execution_id);
         let sigs = vector::empty<vector<u8>>();
         report(transmitter, signer::address_of(publisher), raw, sigs);
     }
@@ -130,7 +158,7 @@ module platform_mock::mock_forwarder {
     #[test(transmitter = @0xCAFE)]
     #[expected_failure(abort_code = E_NOT_INITIALIZED, location = Self)]
     fun test_report_uninitialized_forwarder_aborts(transmitter: &signer) {
-        let raw = make_well_formed_report();
+        let raw = default_report();
         let sigs = vector::empty<vector<u8>>();
         report(transmitter, @0xBEEF, raw, sigs);
     }
