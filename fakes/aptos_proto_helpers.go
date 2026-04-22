@@ -62,10 +62,10 @@ func transactionVariantFromSDK(v api.TransactionVariant) aptoscappb.TransactionV
 const moveAbortInPrefix = "move abort in "
 
 // receiverContractExecutionStatusFromFailedVMStatus returns REVERTED when vmStatus
-// is a Move abort whose module address is not the forwarder. Aborts inside the
-// forwarder itself yield nil. Copy of the helper used by the production Aptos
-// capability — duplicated here to keep this package decoupled.
-func receiverContractExecutionStatusFromFailedVMStatus(vmStatus string, forwarder aptos.AccountAddress) *aptoscappb.ReceiverContractExecutionStatus {
+// is a Move abort outside the forwarder module (address+module name must both
+// match to be classified as forwarder-internal). Aborts inside the forwarder
+// itself yield nil.
+func receiverContractExecutionStatusFromFailedVMStatus(vmStatus string, forwarderAddr aptos.AccountAddress, forwarderModule string) *aptoscappb.ReceiverContractExecutionStatus {
 	lower := strings.ToLower(vmStatus)
 	idx := strings.Index(lower, moveAbortInPrefix)
 	if idx < 0 {
@@ -80,7 +80,11 @@ func receiverContractExecutionStatusFromFailedVMStatus(vmStatus string, forwarde
 	if err != nil {
 		return nil
 	}
-	if *abortModule == forwarder {
+	modTok := strings.TrimSpace(parts[1])
+	if i := strings.IndexAny(modTok, ": \t"); i >= 0 {
+		modTok = modTok[:i]
+	}
+	if *abortModule == forwarderAddr && modTok == forwarderModule {
 		return nil
 	}
 	rev := aptoscappb.ReceiverContractExecutionStatus_RECEIVER_CONTRACT_EXECUTION_STATUS_REVERTED

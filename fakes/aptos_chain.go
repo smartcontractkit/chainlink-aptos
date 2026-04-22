@@ -2,6 +2,7 @@ package fakes
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -20,6 +21,8 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
 	mockfwd "github.com/smartcontractkit/chainlink-aptos/bindings/platform_mock/mock_forwarder"
 )
+
+const mockForwarderModuleName = "mock_forwarder"
 
 // FakeAptosChain implements aptosserver.ClientCapability on top of aptos-go-sdk
 // and a user-published mock_forwarder Move module. Like-for-like with
@@ -194,10 +197,9 @@ func (fc *FakeAptosChain) View(
 	if err != nil {
 		return nil, caperrors.NewPublicSystemError(fmt.Errorf("aptos view %s::%s: %w", payload.Module.Name, payload.Function, err), caperrors.Unavailable)
 	}
-	var data []byte
-	if len(result) > 0 {
-		// Result entries are []any; stringify scalar entries for opaque proto Data.
-		data = []byte(fmt.Sprintf("%v", result[0]))
+	data, mErr := json.Marshal(result)
+	if mErr != nil {
+		return nil, caperrors.NewPublicSystemError(fmt.Errorf("marshal view result: %w", mErr), caperrors.Internal)
 	}
 	fc.eng.Infow("Aptos Chain View Finished", "data", data)
 	return &commonCap.ResponseAndMetadata[*aptoscappb.ViewReply]{
@@ -282,6 +284,12 @@ func (fc *FakeAptosChain) WriteReport(
 	if input.GasConfig == nil {
 		return nil, caperrors.NewPublicUserError(fmt.Errorf("gasConfig must not be nil"), caperrors.InvalidArgument)
 	}
+	if input.GasConfig.MaxGasAmount == 0 {
+		return nil, caperrors.NewPublicUserError(fmt.Errorf("gasConfig.maxGasAmount must be > 0"), caperrors.InvalidArgument)
+	}
+	if input.GasConfig.GasUnitPrice == 0 {
+		return nil, caperrors.NewPublicUserError(fmt.Errorf("gasConfig.gasUnitPrice must be > 0"), caperrors.InvalidArgument)
+	}
 	receiver, err := addressFromBytes(input.Receiver)
 	if err != nil {
 		return nil, caperrors.NewPublicUserError(fmt.Errorf("invalid receiver: %w", err), caperrors.InvalidArgument)
@@ -361,7 +369,7 @@ func (fc *FakeAptosChain) buildWriteReportReply(hash string, fee uint64, success
 	vm := vmStatus
 	r.TxStatus = aptoscappb.TxStatus_TX_STATUS_FATAL
 	r.ErrorMessage = &vm
-	r.ReceiverContractExecutionStatus = receiverContractExecutionStatusFromFailedVMStatus(vmStatus, fc.forwarderAddress)
+	r.ReceiverContractExecutionStatus = receiverContractExecutionStatusFromFailedVMStatus(vmStatus, fc.forwarderAddress, mockForwarderModuleName)
 	return r
 }
 

@@ -9,11 +9,10 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 )
 
-// AptosClient embeds the full aptos.AptosRpcClient contract. It exists as a
-// named interface (not a type alias) so cre-cli can type-assert client
-// instances to a fakes-owned symbol, and so the generated mock_forwarder
-// binding — which requires AptosRpcClient — can share the same value.
-// Any future narrowing of the fake's dependency surface should happen here.
+// AptosClient re-exports the full aptos.AptosRpcClient surface as a named
+// interface (not a type alias) so cre-cli can type-assert client instances to
+// a fakes-owned symbol and so the generated mock_forwarder binding can share
+// the same value.
 type AptosClient interface {
 	aptos.AptosRpcClient
 }

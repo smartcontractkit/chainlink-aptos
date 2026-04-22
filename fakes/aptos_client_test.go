@@ -16,7 +16,7 @@ var (
 )
 
 func TestNewAptosClient_BuildsForValidURL(t *testing.T) {
-	c, err := NewAptosClient("https://fullnode.devnet.aptoslabs.com/v1")
+	c, err := NewAptosClient("http://127.0.0.1:1/v1")
 	require.NoError(t, err)
 	require.NotNil(t, c)
 }

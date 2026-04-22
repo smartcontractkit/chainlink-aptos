@@ -88,7 +88,7 @@ func TestSDKTransactionToProto_NilInner(t *testing.T) {
 
 func TestReceiverStatusFromFailedVMStatus_NotMoveAbort(t *testing.T) {
 	t.Parallel()
-	assert.Nil(t, receiverContractExecutionStatusFromFailedVMStatus("arbitrary error", aptos.AccountAddress{}))
+	assert.Nil(t, receiverContractExecutionStatusFromFailedVMStatus("arbitrary error", aptos.AccountAddress{}, "forwarder"))
 }
 
 func TestReceiverStatusFromFailedVMStatus_ForwarderAbortIsNil(t *testing.T) {
@@ -96,7 +96,19 @@ func TestReceiverStatusFromFailedVMStatus_ForwarderAbortIsNil(t *testing.T) {
 	var fwd aptos.AccountAddress
 	require.NoError(t, fwd.ParseStringRelaxed("0x010203"))
 	status := "Move abort in 0x010203::forwarder: EBadSig"
-	assert.Nil(t, receiverContractExecutionStatusFromFailedVMStatus(status, fwd))
+	assert.Nil(t, receiverContractExecutionStatusFromFailedVMStatus(status, fwd, "forwarder"))
+}
+
+func TestReceiverStatusFromFailedVMStatus_SameAddressDifferentModuleReverts(t *testing.T) {
+	t.Parallel()
+	var fwd aptos.AccountAddress
+	require.NoError(t, fwd.ParseStringRelaxed("0x010203"))
+	status := "Move abort in 0x010203::other_module: ESomething"
+	got := receiverContractExecutionStatusFromFailedVMStatus(status, fwd, "forwarder")
+	require.NotNil(t, got)
+	assert.Equal(t,
+		aptoscappb.ReceiverContractExecutionStatus_RECEIVER_CONTRACT_EXECUTION_STATUS_REVERTED,
+		*got)
 }
 
 func TestReceiverStatusFromFailedVMStatus_ReceiverAbortYieldsReverted(t *testing.T) {
@@ -104,7 +116,7 @@ func TestReceiverStatusFromFailedVMStatus_ReceiverAbortYieldsReverted(t *testing
 	var fwd aptos.AccountAddress
 	require.NoError(t, fwd.ParseStringRelaxed("0x010203"))
 	status := "Move abort in 0xdeadbeef::receiver: EReject"
-	got := receiverContractExecutionStatusFromFailedVMStatus(status, fwd)
+	got := receiverContractExecutionStatusFromFailedVMStatus(status, fwd, "forwarder")
 	require.NotNil(t, got)
 	assert.Equal(t,
 		aptoscappb.ReceiverContractExecutionStatus_RECEIVER_CONTRACT_EXECUTION_STATUS_REVERTED,
@@ -113,7 +125,7 @@ func TestReceiverStatusFromFailedVMStatus_ReceiverAbortYieldsReverted(t *testing
 
 func TestReceiverStatusFromFailedVMStatus_GarbageAfterPrefix(t *testing.T) {
 	t.Parallel()
-	assert.Nil(t, receiverContractExecutionStatusFromFailedVMStatus("move abort in garbage", aptos.AccountAddress{}))
+	assert.Nil(t, receiverContractExecutionStatusFromFailedVMStatus("move abort in garbage", aptos.AccountAddress{}, "forwarder"))
 }
 
 func TestViewPayloadFromProto_Minimal(t *testing.T) {

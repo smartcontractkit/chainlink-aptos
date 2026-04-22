@@ -67,7 +67,7 @@ func TestFakeAptosChain_View(t *testing.T) {
 	t.Run("happy", func(t *testing.T) {
 		t.Parallel()
 		rpc := mocks.NewAptosRpcClient(t)
-		rpc.EXPECT().View(mock.Anything).Return([]any{"42"}, nil).Once()
+		rpc.EXPECT().View(mock.Anything).Return([]any{"42", "x"}, nil).Once()
 		fc := newTestAptosChain(t, rpc, false)
 		reply, capErr := fc.View(ctx, meta, &aptoscappb.ViewRequest{
 			Payload: &aptoscappb.ViewPayload{
@@ -75,7 +75,7 @@ func TestFakeAptosChain_View(t *testing.T) {
 			},
 		})
 		require.Nil(t, capErr)
-		assert.Equal(t, []byte("42"), reply.Response.Data)
+		assert.Equal(t, []byte(`["42","x"]`), reply.Response.Data)
 	})
 
 	t.Run("nil payload", func(t *testing.T) {
