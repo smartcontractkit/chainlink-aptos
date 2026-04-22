@@ -32,9 +32,10 @@ type MockForwarderInterface interface {
 type MockForwarderEncoder interface {
 	Initialize() (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 	Report(receiver aptos.AccountAddress, rawReport []byte, Signatures [][]byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
+	Dispatch(receiver aptos.AccountAddress, metadata []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error)
 }
 
-const FunctionInfo = `[{"package":"platform_mock","module":"mock_forwarder","name":"initialize","parameters":null},{"package":"platform_mock","module":"mock_forwarder","name":"report","parameters":[{"name":"receiver","type":"address"},{"name":"raw_report","type":"vector\u003cu8\u003e"},{"name":"_signatures","type":"vector\u003cvector\u003cu8\u003e\u003e"}]}]`
+const FunctionInfo = `[{"package":"platform_mock","module":"mock_forwarder","name":"dispatch","parameters":[{"name":"receiver","type":"address"},{"name":"metadata","type":"vector\u003cu8\u003e"},{"name":"data","type":"vector\u003cu8\u003e"}]},{"package":"platform_mock","module":"mock_forwarder","name":"initialize","parameters":null},{"package":"platform_mock","module":"mock_forwarder","name":"report","parameters":[{"name":"receiver","type":"address"},{"name":"raw_report","type":"vector\u003cu8\u003e"},{"name":"_signatures","type":"vector\u003cvector\u003cu8\u003e\u003e"}]}]`
 
 func NewMockForwarder(address aptos.AccountAddress, client aptos.AptosRpcClient) MockForwarderInterface {
 	contract := bind.NewBoundContract(address, "platform_mock", "mock_forwarder", client)
@@ -44,11 +45,20 @@ func NewMockForwarder(address aptos.AccountAddress, client aptos.AptosRpcClient)
 	}
 }
 
+// Constants
+const (
+	E_NOT_INITIALIZED            uint64 = 1
+	E_INVALID_REPORT_VERSION     uint64 = 2
+	E_CALLBACK_DATA_NOT_CONSUMED uint64 = 3
+	E_RECEIVER_NOT_REGISTERED    uint64 = 4
+)
+
 // Structs
 
 type ReportProcessed struct {
-	Receiver     aptos.AccountAddress `move:"address"`
-	RawReportLen uint64               `move:"u64"`
+	Receiver            aptos.AccountAddress `move:"address"`
+	WorkflowExecutionId []byte               `move:"vector<u8>"`
+	ReportId            []byte               `move:"vector<u8>"`
 }
 
 type State struct {
@@ -106,5 +116,17 @@ func (c mockForwarderEncoder) Report(receiver aptos.AccountAddress, rawReport []
 		receiver,
 		rawReport,
 		Signatures,
+	})
+}
+
+func (c mockForwarderEncoder) Dispatch(receiver aptos.AccountAddress, metadata []byte, data []byte) (bind.ModuleInformation, string, []aptos.TypeTag, [][]byte, error) {
+	return c.BoundContract.Encode("dispatch", nil, []string{
+		"address",
+		"vector<u8>",
+		"vector<u8>",
+	}, []any{
+		receiver,
+		metadata,
+		data,
 	})
 }
