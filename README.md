@@ -22,4 +22,4 @@ Local development and tests how to
 
 ### Custom images on PRs
 If you want to test the CI with a custom core image you need to specify in the PR body either the commit sha or branch name in the following format `core_ref:<sha>;`, for example `core_ref:develop;`.
-If you do not provide an override, the smoke workflow uses `develop` by default.
+If you do not provide an override, the smoke workflow uses the merged `smartcontractkit/chainlink#21828` commit by default.

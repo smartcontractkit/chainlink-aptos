@@ -20,7 +20,7 @@ jobs:
       contents: read
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      DEFAULT_CORE_REF: develop
+      DEFAULT_CORE_REF: 43a6f2748d47fb6ec96a64505dfa66f1c302100b
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
@@ -28,14 +28,7 @@ jobs:
 
     - name: Get core ref from PR body
       if: github.event_name == 'pull_request'
-      env:
-        PR_BODY: ${{ github.event.pull_request.body }}
-      run: |
-        comment=$(echo "${PR_BODY}")
-        core_ref=$(echo $comment | grep -oP 'core ref: \K\S+' || true)
-        if [ ! -z "$core_ref" ]; then
-          echo "CUSTOM_CORE_REF=${core_ref}" >> "${GITHUB_ENV}"
-        fi
+      uses: ./.github/actions/get-core-ref
 
     - name: Checkout chainlink repo
       uses: actions/checkout@v6
