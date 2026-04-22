@@ -45,12 +45,12 @@ run_test "Simple valid ref" \
          "develop"
 
 run_test "Documented semicolon syntax" \
-         "core_ref: feature/aptos-core-branch;" \
-         "feature/aptos-core-branch"
+         "core_ref: develop;" \
+         "develop"
 
 run_test "Complex valid ref" \
-         "core_ref: feature/abc-123_test" \
-         "feature/abc-123_test"
+         "core_ref: release/abc-123_test" \
+         "release/abc-123_test"
 
 run_test "Multiple colons" \
          "core_ref: abc:def:ghi" \
