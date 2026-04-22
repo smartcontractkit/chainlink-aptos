@@ -17,7 +17,9 @@ import (
 	chainconfig "github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
 	clientmocks "github.com/smartcontractkit/chainlink-aptos/relayer/monitor/mocks"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/transmitter"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
+	aptosutils "github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
 func TestAptosServiceLedgerVersion(t *testing.T) {
@@ -97,9 +99,49 @@ func ptrUint64(v uint64) *uint64 {
 	return &v
 }
 
+// getAccountWithHighestBalance must query each keystore public key at its
+// configured transmitter address. Strict mock expectations encode the
+// contract: derivedA for pubKeyA, overrideB for pubKeyB. If the resolver
+// returned pubKeyB's derived address, the mock would fail on the unexpected
+// call.
+func TestAptosService_GetAccountWithHighestBalance_HonorsTransmitterOverride(t *testing.T) {
+	t.Parallel()
+
+	const (
+		pubKeyA          = "abababababababababababababababababababababababababababababababab"
+		pubKeyB          = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+		overrideAcctAddr = "0x2222222222222222222222222222222222222222222222222222222222222222"
+	)
+
+	var overrideB aptos_sdk.AccountAddress
+	require.NoError(t, overrideB.ParseStringRelaxed(overrideAcctAddr))
+	derivedA, err := aptosutils.HexPublicKeyToAddress(pubKeyA)
+	require.NoError(t, err)
+
+	client := clientmocks.NewAptosRpcClient(t)
+	client.EXPECT().AccountAPTBalance(derivedA).Return(uint64(10), nil).Once()
+	client.EXPECT().AccountAPTBalance(overrideB).Return(uint64(100), nil).Once()
+
+	cfg := &chainconfig.TOMLConfig{
+		Chain: chainconfig.Chain{
+			Transmitter: &transmitter.Config{Overrides: map[string]string{pubKeyB: overrideAcctAddr}},
+		},
+	}
+	svc := aptosService{
+		chain:  &testChain{client: client, config: cfg},
+		logger: logger.Test(t),
+	}
+
+	selected, selectedAddress, err := svc.getAccountWithHighestBalance(context.Background(), []string{pubKeyA, pubKeyB})
+	require.NoError(t, err)
+	require.Equal(t, pubKeyB, selected, "picker must select the key whose resolved address holds the higher balance")
+	require.Equal(t, overrideB, selectedAddress, "picker must return the override address for the selected key")
+}
+
 type testChain struct {
 	commontypes.UnimplementedChainService
 	client aptos_sdk.AptosRpcClient
+	config *chainconfig.TOMLConfig
 }
 
 func (t testChain) Start(context.Context) error {
@@ -127,6 +169,9 @@ func (t testChain) ID() string {
 }
 
 func (t testChain) Config() *chainconfig.TOMLConfig {
+	if t.config != nil {
+		return t.config
+	}
 	return &chainconfig.TOMLConfig{}
 }
 

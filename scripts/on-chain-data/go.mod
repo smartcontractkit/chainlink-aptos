@@ -1,6 +1,6 @@
 module on_chain_data
 
-go 1.25.3
+go 1.25.7
 
 require (
 	github.com/montanaflynn/stats v0.7.1

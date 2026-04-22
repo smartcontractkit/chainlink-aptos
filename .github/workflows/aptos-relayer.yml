@@ -11,7 +11,7 @@ jobs:
   test:
     name: Integration Tests
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:16
@@ -26,24 +26,24 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-    
+
     env:
       TEST_DB_URL: postgres://user:pass@localhost:5432/testdb_test
-    
+
     steps:
     - name: Check out code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Extract Go version
       uses: ./.github/actions/check-go-version
 
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version: ${{ env.go_version }}
 
     - name: Install Aptos CLI
-      uses: aptos-labs/actions/install-aptos-cli@ce57287eb852b9819c1d74fecc3be187677559fd # v0.1
+      uses: aptos-labs/actions/install-aptos-cli@528ef7ad9427a8c0720ea3eea790a9190d6e377d # 2026-04-09
       with:
         CLI_VERSION: 9.1.0
 
@@ -61,10 +61,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+        uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           cache-dependency-path: go.sum
           go-version-file: go.mod
