@@ -40,7 +40,7 @@ func testForwarder(t *testing.T) aptos.AccountAddress {
 	return a
 }
 
-func newTestAptosChain(t *testing.T, client AptosClient, dryRun bool) *FakeAptosChain {
+func newTestAptosChain(t *testing.T, client aptos.AptosRpcClient, dryRun bool) *FakeAptosChain {
 	t.Helper()
 	fc, err := NewFakeAptosChain(logger.Test(t), client, testKey(t),
 		testForwarder(t), testAptosChainSelector, dryRun)
@@ -264,35 +264,32 @@ func TestFakeAptosChain_AccountTransactions(t *testing.T) {
 		_, capErr := fc.AccountTransactions(ctx, meta, &aptoscappb.AccountTransactionsRequest{Address: []byte{1}})
 		require.NotNil(t, capErr)
 	})
-}
 
-func TestAccountTransactions_DefaultsStartWhenLimitOnly(t *testing.T) {
-	t.Parallel()
-	rpc := mocks.NewAptosRpcClient(t)
-	limit := uint64(10)
-	var gotStart *uint64
-	rpc.EXPECT().AccountTransactions(mock.Anything, mock.Anything, mock.Anything).
-		Run(func(_ aptos.AccountAddress, start *uint64, _ *uint64) { gotStart = start }).
-		Return(nil, nil).Once()
-	_, err := accountTransactions(rpc, aptos.AccountAddress{}, nil, &limit)
-	require.NoError(t, err)
-	require.NotNil(t, gotStart)
-	require.Equal(t, uint64(0), *gotStart)
-}
+	t.Run("rejects limit without start", func(t *testing.T) {
+		t.Parallel()
+		limit := uint64(10)
+		fc := newTestAptosChain(t, mocks.NewAptosRpcClient(t), false)
+		_, capErr := fc.AccountTransactions(ctx, meta, &aptoscappb.AccountTransactionsRequest{
+			Address: mkAddr32(3), Limit: &limit,
+		})
+		require.NotNil(t, capErr)
+	})
 
-func TestAccountTransactions_PassesThroughBothNil(t *testing.T) {
-	t.Parallel()
-	rpc := mocks.NewAptosRpcClient(t)
-	var gotStart, gotLimit *uint64
-	rpc.EXPECT().AccountTransactions(mock.Anything, mock.Anything, mock.Anything).
-		Run(func(_ aptos.AccountAddress, start *uint64, limit *uint64) {
-			gotStart, gotLimit = start, limit
-		}).
-		Return(nil, nil).Once()
-	_, err := accountTransactions(rpc, aptos.AccountAddress{}, nil, nil)
-	require.NoError(t, err)
-	require.Nil(t, gotStart)
-	require.Nil(t, gotLimit)
+	t.Run("both nil pagination allowed", func(t *testing.T) {
+		t.Parallel()
+		rpc := mocks.NewAptosRpcClient(t)
+		var gotStart, gotLimit *uint64
+		rpc.EXPECT().AccountTransactions(mock.Anything, mock.Anything, mock.Anything).
+			Run(func(_ aptos.AccountAddress, start *uint64, limit *uint64) {
+				gotStart, gotLimit = start, limit
+			}).
+			Return(nil, nil).Once()
+		fc := newTestAptosChain(t, rpc, false)
+		_, capErr := fc.AccountTransactions(ctx, meta, &aptoscappb.AccountTransactionsRequest{Address: mkAddr32(3)})
+		require.Nil(t, capErr)
+		assert.Nil(t, gotStart)
+		assert.Nil(t, gotLimit)
+	})
 }
 
 func TestFakeAptosChain_WriteReport_ValidationErrors(t *testing.T) {
@@ -346,7 +343,7 @@ func TestFakeAptosChain_WriteReport_Broadcast_Success(t *testing.T) {
 	assert.Equal(t, uint64(15000), *reply.Response.TransactionFee)
 }
 
-func TestFakeAptosChain_WriteReport_Broadcast_FatalVMStatus(t *testing.T) {
+func TestFakeAptosChain_WriteReport_Broadcast_ReceiverReverted(t *testing.T) {
 	t.Parallel()
 	rpc := mocks.NewAptosRpcClient(t)
 	rpc.EXPECT().BuildSignAndSubmitTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
@@ -367,6 +364,26 @@ func TestFakeAptosChain_WriteReport_Broadcast_FatalVMStatus(t *testing.T) {
 	assert.Equal(t,
 		aptoscappb.ReceiverContractExecutionStatus_RECEIVER_CONTRACT_EXECUTION_STATUS_REVERTED,
 		*reply.Response.ReceiverContractExecutionStatus)
+}
+
+func TestFakeAptosChain_WriteReport_Broadcast_ForwarderAbortIsFatal(t *testing.T) {
+	t.Parallel()
+	rpc := mocks.NewAptosRpcClient(t)
+	rpc.EXPECT().BuildSignAndSubmitTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(&api.PendingTransaction{Hash: "0xfeed"}, nil).Once()
+	rpc.EXPECT().WaitForTransaction("0xfeed").Return(&api.UserTransaction{
+		Hash: "0xfeed", Success: false, GasUsed: 1, GasUnitPrice: 1,
+		VmStatus: "Move abort in 0x1234::mock_forwarder: EInternal",
+	}, nil).Once()
+	fc := newTestAptosChain(t, rpc, false)
+	reply, _ := fc.WriteReport(context.Background(), commonCap.RequestMetadata{}, &aptoscappb.WriteReportRequest{
+		Receiver:  mkAddr32(0xBB),
+		GasConfig: &aptoscappb.GasConfig{MaxGasAmount: 10000, GasUnitPrice: 100},
+		Report:    &sdk.ReportResponse{RawReport: []byte("r")},
+	})
+	require.NotNil(t, reply)
+	assert.Equal(t, aptoscappb.TxStatus_TX_STATUS_FATAL, reply.Response.TxStatus)
+	assert.Nil(t, reply.Response.ReceiverContractExecutionStatus)
 }
 
 func TestFakeAptosChain_WriteReport_Broadcast_NilFinal(t *testing.T) {

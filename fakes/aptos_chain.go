@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/api"
@@ -31,7 +32,7 @@ type FakeAptosChain struct {
 	services.Service
 	eng *services.Engine
 
-	client           AptosClient
+	client           aptos.AptosRpcClient
 	privateKey       *crypto.Ed25519PrivateKey
 	account          *aptos.Account
 	mockForwarder    mockfwd.MockForwarderInterface
@@ -51,7 +52,7 @@ var (
 // SimulateTransaction instead of SubmitTransaction.
 func NewFakeAptosChain(
 	lggr logger.Logger,
-	client AptosClient,
+	client aptos.AptosRpcClient,
 	privateKey *crypto.Ed25519PrivateKey,
 	forwarderAddress aptos.AccountAddress,
 	chainSelector uint64,
@@ -107,6 +108,7 @@ func (fc *FakeAptosChain) close() error {
 
 func (fc *FakeAptosChain) ChainSelector() uint64 { return fc.chainSelector }
 func (fc *FakeAptosChain) Description() string   { return fc.CapabilityInfo.Description }
+func (fc *FakeAptosChain) Name() string          { return fc.ID }
 func (fc *FakeAptosChain) Initialise(ctx context.Context, _ core.StandardCapabilitiesDependencies) error {
 	return fc.Start(ctx)
 }
@@ -126,15 +128,16 @@ func (fc *FakeAptosChain) Execute(_ context.Context, request commonCap.Capabilit
 	return commonCap.CapabilityResponse{}, nil
 }
 
-// accountTransactions works around an aptos-go-sdk v1.12.1 panic: start==nil
-// with limit!=nil indexes txns[0] on empty pages. Defaulting start to 0 takes
-// the concurrent path, which is safe.
-func accountTransactions(c AptosClient, addr aptos.AccountAddress, start, limit *uint64) ([]*api.CommittedTransaction, error) {
-	if start == nil && limit != nil {
-		zero := uint64(0)
-		start = &zero
+// isNotFound detects "transaction not found" across aptos-go-sdk error-wrapping
+// variants. Prefers typed check; falls back to status / message substring so
+// wrapped or transport-layer 404s still classify correctly.
+func isNotFound(err error) bool {
+	var httpErr *aptos.HttpError
+	if errors.As(err, &httpErr) && httpErr.StatusCode == 404 {
+		return true
 	}
-	return c.AccountTransactions(addr, start, limit)
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "404") || strings.Contains(msg, "not found")
 }
 
 // addressFromBytes copies a 32-byte slice into an aptos.AccountAddress.
@@ -214,8 +217,7 @@ func (fc *FakeAptosChain) TransactionByHash(
 	}
 	tx, err := fc.client.TransactionByHash(input.Hash)
 	if err != nil {
-		var httpErr *aptos.HttpError
-		if errors.As(err, &httpErr) && httpErr.StatusCode == 404 {
+		if isNotFound(err) {
 			return &commonCap.ResponseAndMetadata[*aptoscappb.TransactionByHashReply]{
 				Response: &aptoscappb.TransactionByHashReply{Transaction: nil},
 			}, nil
@@ -241,19 +243,31 @@ func (fc *FakeAptosChain) AccountTransactions(
 	if err != nil {
 		return nil, caperrors.NewPublicUserError(err, caperrors.InvalidArgument)
 	}
-	committed, err := accountTransactions(fc.client, addr, input.Start, input.Limit)
+
+	if input.Start == nil && input.Limit != nil {
+		return nil, caperrors.NewPublicUserError(fmt.Errorf("accountTransactions: start must be set when limit is set"), caperrors.InvalidArgument)
+	}
+	committed, err := fc.client.AccountTransactions(addr, input.Start, input.Limit)
 	if err != nil {
 		return nil, caperrors.NewPublicSystemError(fmt.Errorf("aptos account_transactions %s: %w", addr.String(), err), caperrors.Unavailable)
 	}
 	out := make([]*aptoscappb.Transaction, 0, len(committed))
+	dropped := 0
 	for _, tx := range committed {
 		if tx == nil {
+			dropped++
 			continue
 		}
 		t := &api.Transaction{Type: tx.Type, Inner: tx.Inner}
-		if mapped := sdkTransactionToProto(t); mapped != nil {
-			out = append(out, mapped)
+		mapped := sdkTransactionToProto(t)
+		if mapped == nil {
+			dropped++
+			continue
 		}
+		out = append(out, mapped)
+	}
+	if dropped > 0 {
+		fc.eng.Warnw("Aptos Chain AccountTransactions dropped items", "dropped", dropped, "kept", len(out))
 	}
 	fc.eng.Infow("Aptos Chain AccountTransactions Finished", "count", len(out))
 	return &commonCap.ResponseAndMetadata[*aptoscappb.AccountTransactionsReply]{
@@ -360,6 +374,9 @@ func (fc *FakeAptosChain) buildWriteReportReply(hash string, fee uint64, success
 		return r
 	}
 	vm := vmStatus
+	// Aptos proto enum lacks TX_STATUS_REVERTED (has FATAL/ABORTED/SUCCESS); EVM has
+	// FATAL/REVERTED/SUCCESS. Receiver-vs-forwarder revert distinction is preserved via
+	// ReceiverContractExecutionStatus only. Upstream proto change needed for top-level parity.
 	r.TxStatus = aptoscappb.TxStatus_TX_STATUS_FATAL
 	r.ErrorMessage = &vm
 	r.ReceiverContractExecutionStatus = receiverContractExecutionStatusFromFailedVMStatus(vmStatus, fc.forwarderAddress, mockForwarderModuleName)
