@@ -6,6 +6,11 @@ FeedsManager = true
 LogPoller = true
 UICSAKeys = true
 
+[Capabilities.Local]
+# This empty stanza opt-ins the smoke nodes to the mock trigger that keeps the
+# legacy workflow-based Aptos smoke path working against core `develop`.
+[Capabilities.Local.Capabilities."mock-streams-trigger@1.0.0"]
+
 [OCR2]
 Enabled = true
 

@@ -1,9 +1,9 @@
 #!/bin/bash
 
-core_ref="develop-plugins"
+core_ref="${DEFAULT_CORE_REF:-develop-plugins}"
 
-# Extract and trim the value after core_ref:, handle multiple spaces
-if [[ $PR_BODY =~ core_ref:[[:space:]]*([^;[:space:]]+)[[:space:]]*$ ]]; then
+# Extract the value after core_ref:, allowing the documented semicolon terminator.
+if [[ $PR_BODY =~ core_ref:[[:space:]]*([^;[:space:]]+) ]]; then
   potential_ref="${BASH_REMATCH[1]}"
   
   # Only allow alphanumeric, dash, underscore, forward slash

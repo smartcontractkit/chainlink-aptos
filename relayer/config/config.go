@@ -13,6 +13,7 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/aptosservice"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/transmitter"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/write_target"
 )
@@ -33,6 +34,7 @@ type Chain struct {
 	WriteTargetCap     *write_target.Config          `toml:"WriteTargetCap"`
 	Workflow           *WorkflowConfig               `toml:"Workflow"`
 	AptosService       *aptosservice.Config          `toml:"AptosService"`
+	Transmitter        *transmitter.Config           `toml:"Transmitter"`
 }
 
 func ptr[T any](v T) *T { return &v }
@@ -117,6 +119,10 @@ func (cfg *TOMLConfig) applyDefaults() {
 	}
 	cfg.AptosService.Resolve()
 
+	if cfg.Transmitter == nil {
+		cfg.Transmitter = &transmitter.Config{}
+	}
+
 	for _, node := range cfg.Nodes {
 		node.Resolve()
 	}
@@ -184,6 +190,8 @@ func (c *TOMLConfig) ValidateConfig() (err error) {
 			err = errors.Join(err, node.ValidateConfig())
 		}
 	}
+
+	err = errors.Join(err, c.Transmitter.ValidateConfig())
 
 	return
 }
