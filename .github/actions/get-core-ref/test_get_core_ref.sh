@@ -16,12 +16,14 @@ run_test() {
     local test_name="$1"
     local pr_body="$2"
     local expected="$3"
+    local default_ref="${4:-develop-plugins}"
 
     echo "Test: $test_name"
     echo "Input: $pr_body"
     
     setup_test_env
     export PR_BODY="$pr_body"
+    export DEFAULT_CORE_REF="$default_ref"
     
     ./get_core_ref.sh
     
@@ -42,9 +44,13 @@ run_test "Simple valid ref" \
          "core_ref: develop" \
          "develop"
 
+run_test "Documented semicolon syntax" \
+         "core_ref: develop;" \
+         "develop"
+
 run_test "Complex valid ref" \
-         "core_ref: feature/abc-123_test" \
-         "feature/abc-123_test"
+         "core_ref: release/abc-123_test" \
+         "release/abc-123_test"
 
 run_test "Multiple colons" \
          "core_ref: abc:def:ghi" \
@@ -66,11 +72,11 @@ run_test "Command injection via backticks" \
 
 run_test "Command injection via semicolon" \
          "core_ref: valid-ref; touch HACKED2" \
-         "develop-plugins"
+         "valid-ref"
 
 run_test "Command injection via pipeline" \
          "core_ref: valid-ref | touch HACKED3" \
-         "develop-plugins"
+         "valid-ref"
 
 run_test "Command injection via subshell" \
          "core_ref: \$(touch HACKED4)" \
@@ -96,6 +102,11 @@ run_test "Missing value" \
 run_test "Extra whitespace" \
          "   core_ref:    spaces-everywhere   " \
          "spaces-everywhere"
+
+run_test "Workflow-specific default override" \
+         "some other text" \
+         "develop" \
+         "develop"
 
 # Final security check
 if ls HACKED* 1>/dev/null 2>&1; then
