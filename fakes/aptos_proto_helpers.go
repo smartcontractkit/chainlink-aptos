@@ -12,9 +12,8 @@ import (
 )
 
 // sdkTransactionToProto maps an aptos-go-sdk transaction to the capability
-// wire proto. Returns nil for a nil input, and also for a non-nil wrapper
-// with nil Inner — api.Transaction.Hash/Version/Success all delegate to
-// Inner via TransactionImpl, so an unset Inner would nil-deref.
+// proto. Returns nil for nil input or nil Inner (accessors delegate to Inner
+// and would nil-deref).
 func sdkTransactionToProto(tx *api.Transaction) *aptoscappb.Transaction {
 	if tx == nil || tx.Inner == nil {
 		return nil
@@ -61,10 +60,8 @@ func transactionVariantFromSDK(v api.TransactionVariant) aptoscappb.TransactionV
 
 const moveAbortInPrefix = "move abort in "
 
-// receiverContractExecutionStatusFromFailedVMStatus returns REVERTED when vmStatus
-// is a Move abort outside the forwarder module (address+module name must both
-// match to be classified as forwarder-internal). Aborts inside the forwarder
-// itself yield nil.
+// receiverContractExecutionStatusFromFailedVMStatus returns REVERTED for Move
+// aborts outside the forwarder module; forwarder-internal aborts yield nil.
 func receiverContractExecutionStatusFromFailedVMStatus(vmStatus string, forwarderAddr aptos.AccountAddress, forwarderModule string) *aptoscappb.ReceiverContractExecutionStatus {
 	lower := strings.ToLower(vmStatus)
 	idx := strings.Index(lower, moveAbortInPrefix)

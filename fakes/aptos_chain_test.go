@@ -74,9 +74,20 @@ func TestFakeAptosChain_Lifecycle(t *testing.T) {
 	assert.NoError(t, fc.Close())
 }
 
-// Covers the four trivial interface shims (Initialise, RegisterToWorkflow,
-// UnregisterFromWorkflow, Execute) so a future non-trivial regression surfaces
-// as a failing test rather than a silent coverage gap.
+func TestFakeAptosChain_InitialiseStartsService(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	fc := newTestAptosChain(t, mocks.NewAptosRpcClient(t), false)
+
+	require.Error(t, fc.Ready(), "service should not be Ready before Initialise")
+
+	require.NoError(t, fc.Initialise(ctx, core.StandardCapabilitiesDependencies{}))
+	require.NoError(t, fc.Ready(), "Initialise must transition service to Started")
+	assert.NoError(t, fc.HealthReport()[fc.Name()])
+
+	require.NoError(t, fc.Close())
+}
+
 func TestFakeAptosChain_InterfaceShims(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

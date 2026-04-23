@@ -1,6 +1,6 @@
-// Package fakes provides an in-process Aptos capability fake for cre-cli
-// workflow simulate. FakeAptosChain satisfies aptosserver.ClientCapability
-// on top of aptos-go-sdk + the local mock_forwarder bindings.
+// Package fakes provides an in-process Aptos capability fake. FakeAptosChain
+// satisfies aptosserver.ClientCapability on top of aptos-go-sdk + the local
+// mock_forwarder bindings.
 package fakes
 
 import (
@@ -9,10 +9,9 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 )
 
-// AptosClient re-exports the full aptos.AptosRpcClient surface as a named
-// interface (not a type alias) so cre-cli can type-assert client instances to
-// a fakes-owned symbol and so the generated mock_forwarder binding can share
-// the same value.
+// AptosClient re-exports aptos.AptosRpcClient as a named interface (not alias)
+// so callers can type-assert on a fakes-owned symbol and the generated
+// mock_forwarder binding shares the same type.
 type AptosClient interface {
 	aptos.AptosRpcClient
 }

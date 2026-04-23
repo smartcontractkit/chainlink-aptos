@@ -24,14 +24,13 @@ import (
 
 const mockForwarderModuleName = "mock_forwarder"
 
-// FakeAptosChain implements aptosserver.ClientCapability on top of aptos-go-sdk
-// and a user-published mock_forwarder Move module. Like-for-like with
-// FakeEVMChain.
+// FakeAptosChain implements aptosserver.ClientCapability via aptos-go-sdk and
+// a user-published mock_forwarder. Counterpart to FakeEVMChain.
 type FakeAptosChain struct {
+	commonCap.CapabilityInfo
 	services.Service
 	eng *services.Engine
 
-	info             commonCap.CapabilityInfo
 	client           AptosClient
 	privateKey       *crypto.Ed25519PrivateKey
 	account          *aptos.Account
@@ -47,9 +46,9 @@ var (
 	_ commonCap.ExecutableCapability = (*FakeAptosChain)(nil)
 )
 
-// NewFakeAptosChain builds a FakeAptosChain wired to `client` and a
-// user-published mock forwarder at `forwarderAddress`. `dryRunWrites = true`
-// routes WriteReport through SimulateTransaction instead of SubmitTransaction.
+// NewFakeAptosChain wires a FakeAptosChain to `client` and the mock forwarder
+// at `forwarderAddress`. `dryRunWrites=true` routes WriteReport through
+// SimulateTransaction instead of SubmitTransaction.
 func NewFakeAptosChain(
 	lggr logger.Logger,
 	client AptosClient,
@@ -67,7 +66,7 @@ func NewFakeAptosChain(
 	info, err := commonCap.NewCapabilityInfo(
 		fmt.Sprintf("aptos:ChainSelector:%d@1.0.0", chainSelector),
 		commonCap.CapabilityTypeCombined,
-		"A fake Aptos chain capability for cre-cli workflow simulate.",
+		"A fake Aptos chain capability",
 	)
 	if err != nil {
 		return nil, fmt.Errorf("new capability info: %w", err)
@@ -79,7 +78,7 @@ func NewFakeAptosChain(
 	fwd := mockfwd.NewMockForwarder(forwarderAddress, client)
 
 	fc := &FakeAptosChain{
-		info:             info,
+		CapabilityInfo:   info,
 		client:           client,
 		privateKey:       privateKey,
 		account:          acct,
@@ -107,13 +106,9 @@ func (fc *FakeAptosChain) close() error {
 }
 
 func (fc *FakeAptosChain) ChainSelector() uint64 { return fc.chainSelector }
-func (fc *FakeAptosChain) Description() string   { return fc.info.Description }
-func (fc *FakeAptosChain) Initialise(_ context.Context, _ core.StandardCapabilitiesDependencies) error {
-	return nil
-}
-
-func (fc *FakeAptosChain) Info(_ context.Context) (commonCap.CapabilityInfo, error) {
-	return fc.info, nil
+func (fc *FakeAptosChain) Description() string   { return fc.CapabilityInfo.Description }
+func (fc *FakeAptosChain) Initialise(ctx context.Context, _ core.StandardCapabilitiesDependencies) error {
+	return fc.Start(ctx)
 }
 
 func (fc *FakeAptosChain) RegisterToWorkflow(_ context.Context, request commonCap.RegisterToWorkflowRequest) error {
@@ -131,11 +126,9 @@ func (fc *FakeAptosChain) Execute(_ context.Context, request commonCap.Capabilit
 	return commonCap.CapabilityResponse{}, nil
 }
 
-// accountTransactions wraps client.AccountTransactions to avoid a panic in
-// aptos-go-sdk v1.12.1: when start==nil and limit!=nil, the SDK indexes
-// txns[0] without a length check on an empty page. Defaulting start to 0
-// routes the call through the concurrent path, which never dereferences
-// txns[0].
+// accountTransactions works around an aptos-go-sdk v1.12.1 panic: start==nil
+// with limit!=nil indexes txns[0] on empty pages. Defaulting start to 0 takes
+// the concurrent path, which is safe.
 func accountTransactions(c AptosClient, addr aptos.AccountAddress, start, limit *uint64) ([]*api.CommittedTransaction, error) {
 	if start == nil && limit != nil {
 		zero := uint64(0)
@@ -352,8 +345,8 @@ func (fc *FakeAptosChain) writeReportReplyFromUserTx(
 	return wrapWriteReportReply(fc.buildWriteReportReply(hash, fee, final.Success, final.VmStatus))
 }
 
-// buildWriteReportReply assembles a WriteReportReply from the fields broadcast
-// and dry-run paths share. hash="" omits TxHash (dry-run path never has one).
+// buildWriteReportReply builds a WriteReportReply for broadcast and dry-run
+// paths. hash="" omits TxHash (dry-run has none).
 func (fc *FakeAptosChain) buildWriteReportReply(hash string, fee uint64, success bool, vmStatus string) *aptoscappb.WriteReportReply {
 	r := &aptoscappb.WriteReportReply{TransactionFee: &fee}
 	if hash != "" {

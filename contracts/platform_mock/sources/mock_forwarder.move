@@ -1,5 +1,5 @@
-/// DEV / TEST ONLY. Permissionless mock of `platform::forwarder` for cre-cli
-/// `simulate`. Skips sig/config validation; dispatch path mirrors prod.
+/// DEV / TEST ONLY. Permissionless mock of `platform::forwarder`. Skips
+/// sig/config validation; dispatch path mirrors prod.
 module platform_mock::mock_forwarder {
     use std::signer;
     use std::vector;
@@ -67,8 +67,7 @@ module platform_mock::mock_forwarder {
     #[test_only]
     use std::bcs;
 
-    // Copy of `platform::forwarder::build_report_with_overrides` so mock
-    // tests exercise the same byte layout real receivers see in prod.
+    // Mirrors prod `platform::forwarder::build_report_with_overrides` byte layout.
     #[test_only]
     fun build_report_with_overrides(
         version: u8, don_id: u32, config_version: u32, execution_id: vector<u8>,

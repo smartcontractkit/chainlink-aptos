@@ -94,7 +94,7 @@ func TestFakeAptosChain_View(t *testing.T) {
 			Payload: &aptoscappb.ViewPayload{Module: &aptoscappb.ModuleID{Address: mkAddr32(1), Name: "m"}, Function: "f"},
 		})
 		require.NotNil(t, capErr)
-		// Op context must localize the failure for the caller.
+		// Error must name the failed op.
 		assert.Contains(t, capErr.Error(), "aptos view")
 		assert.Contains(t, capErr.Error(), "m::f")
 		assert.Contains(t, capErr.Error(), "boom")
@@ -190,9 +190,6 @@ func TestFakeAptosChain_AccountTransactions(t *testing.T) {
 	})
 }
 
-// Locks the v1.12.1 empty-page workaround: when start==nil and limit!=nil, the
-// SDK would index txns[0] on an empty page. accountTransactions must
-// default start to 0 so the SDK's concurrent path is taken instead.
 func TestAccountTransactions_DefaultsStartWhenLimitOnly(t *testing.T) {
 	t.Parallel()
 	rpc := mocks.NewAptosRpcClient(t)
@@ -207,7 +204,6 @@ func TestAccountTransactions_DefaultsStartWhenLimitOnly(t *testing.T) {
 	require.Equal(t, uint64(0), *gotStart)
 }
 
-// Does not mutate start when caller passes both nil (single-page path, no bug).
 func TestAccountTransactions_PassesThroughBothNil(t *testing.T) {
 	t.Parallel()
 	rpc := mocks.NewAptosRpcClient(t)
@@ -352,8 +348,7 @@ func TestFakeAptosChain_WriteReport_DryRun_Success(t *testing.T) {
 	rawTxn := &aptos.RawTransaction{}
 	rpc.EXPECT().BuildTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(rawTxn, nil).Once()
-	// Simulate returns realistic gas accounting — dry-run reply must surface it,
-	// not hard-code zero (that would silently lie about the predicted fee).
+	// Dry-run reply must surface Simulate's gas, not zero.
 	rpc.EXPECT().SimulateTransaction(rawTxn, mock.Anything).
 		Return([]*api.UserTransaction{{Success: true, VmStatus: "Executed", GasUsed: 250, GasUnitPrice: 100}}, nil).Once()
 	fc := newTestAptosChain(t, rpc, true)

@@ -74,9 +74,6 @@ func TestSDKTransactionToProto_Nil(t *testing.T) {
 	assert.Nil(t, sdkTransactionToProto(nil))
 }
 
-// Regression: a non-nil Transaction with nil Inner must not panic. All three
-// accessors (Hash / Version / Success) delegate to Inner via TransactionImpl,
-// and a nil interface value dereferences. Treat this shape as no-data.
 func TestSDKTransactionToProto_NilInner(t *testing.T) {
 	t.Parallel()
 	tx := &api.Transaction{Type: api.TransactionVariantUnknown}
