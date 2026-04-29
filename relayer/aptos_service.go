@@ -259,8 +259,8 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 				s.logger.Errorw("SubmitTransaction: GetTransactionResult failed for finalized tx", "txID", txID, "error", resultErr)
 				return commonaptos.TxFatal, resultErr
 			}
-			s.logger.Infow("SubmitTransaction: finalized result", "txID", txID, "vmStatus", txResult.VmStatus, "txHash", txResult.TxHash)
-			if txResult.VmStatus != "" {
+			s.logger.Infow("SubmitTransaction: finalized result", "txID", txID, "success", txResult.Success, "vmStatus", txResult.VmStatus, "txHash", txResult.TxHash)
+			if !txResult.Success {
 				s.logger.Warnw("SubmitTransaction: finalized but VM reverted", "txID", txID, "vmStatus", txResult.VmStatus)
 				return commonaptos.TxReverted, nil
 			}
