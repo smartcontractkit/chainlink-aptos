@@ -100,7 +100,7 @@ func ptrUint64(v uint64) *uint64 {
 	return &v
 }
 
-func TestAptosServiceAccountTransactionsBoundsLimitOnlyQuery(t *testing.T) {
+func TestAptosServiceAccountTransactionsYoungAccount(t *testing.T) {
 	t.Parallel()
 
 	var addr aptos.AccountAddress
@@ -200,9 +200,10 @@ func TestAptosServiceAccountTransactionsPreservesExplicitStart(t *testing.T) {
 	limit := uint64(10)
 
 	client := clientmocks.NewAptosRpcClient(t)
-	client.EXPECT().AccountTransactions(sdkAddr, &start, &limit).
-		Return([]*api.CommittedTransaction{}, nil).
-		Once()
+	client.EXPECT().AccountTransactions(sdkAddr,
+		mock.MatchedBy(func(s *uint64) bool { return s != nil && *s == start }),
+		mock.MatchedBy(func(l *uint64) bool { return l != nil && *l == limit }),
+	).Return([]*api.CommittedTransaction{}, nil).Once()
 
 	svc := aptosService{
 		chain:  &testChain{client: client},

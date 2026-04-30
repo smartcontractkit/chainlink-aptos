@@ -193,6 +193,10 @@ func (s *aptosService) accountTransactionsWindow(
 		return start, limit, nil
 	}
 
+	// Fetch the sequence number to compute a safe window. A small TOCTOU race
+	// exists: new txns committed between Account() and AccountTransactions() may
+	// not appear in the result. That is acceptable — the caller can re-query.
+	// The goal is to prevent underflow, not to guarantee atomicity.
 	accountInfo, err := client.Account(address)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get account info: %w", err)
@@ -201,6 +205,8 @@ func (s *aptosService) accountTransactionsWindow(
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse account sequence number: %w", err)
 	}
+	// Return (0, 0) as a sentinel signalling "nothing to fetch": the caller
+	// short-circuits to an empty reply without issuing an AccountTransactions RPC.
 	if sequenceNumber == 0 || *limit == 0 {
 		zero := uint64(0)
 		return &zero, &zero, nil
