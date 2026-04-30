@@ -143,7 +143,17 @@ func (s *aptosService) AccountTransactions(ctx context.Context, req commonaptos.
 	}
 
 	sdkAddr := aptos_sdk.AccountAddress(req.Address[:])
-	txns, err := client.AccountTransactions(sdkAddr, req.Start, req.Limit)
+	start, limit, err := s.accountTransactionsWindow(client, sdkAddr, req.Start, req.Limit)
+	if err != nil {
+		s.logger.Errorw("AccountTransactions: failed to resolve transaction window", "address", sdkAddr.String(), "error", err)
+		return nil, err
+	}
+	if limit != nil && *limit == 0 {
+		s.logger.Debugw("AccountTransactions: returning empty result", "address", sdkAddr.String())
+		return &commonaptos.AccountTransactionsReply{}, nil
+	}
+
+	txns, err := client.AccountTransactions(sdkAddr, start, limit)
 	if err != nil {
 		s.logger.Errorw("AccountTransactions: failed to get transactions", "address", sdkAddr.String(), "error", err)
 		return nil, fmt.Errorf("failed to get account transactions: %w", err)
@@ -171,6 +181,47 @@ func (s *aptosService) AccountTransactions(ctx context.Context, req commonaptos.
 
 	s.logger.Infow("AccountTransactions: returning", "address", sdkAddr.String(), "txCount", len(result))
 	return &commonaptos.AccountTransactionsReply{Transactions: result}, nil
+}
+
+func (s *aptosService) accountTransactionsWindow(
+	client aptos_sdk.AptosRpcClient,
+	address aptos_sdk.AccountAddress,
+	start *uint64,
+	limit *uint64,
+) (*uint64, *uint64, error) {
+	if start != nil || limit == nil {
+		return start, limit, nil
+	}
+
+	// Fetch the sequence number to compute a safe window. A small TOCTOU race
+	// exists: new txns committed between Account() and AccountTransactions() may
+	// not appear in the result. That is acceptable — the caller can re-query.
+	// The goal is to prevent underflow, not to guarantee atomicity.
+	accountInfo, err := client.Account(address)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get account info: %w", err)
+	}
+	sequenceNumber, err := accountInfo.SequenceNumber()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse account sequence number: %w", err)
+	}
+	// Return (0, 0) as a sentinel signalling "nothing to fetch": the caller
+	// short-circuits to an empty reply without issuing an AccountTransactions RPC.
+	if sequenceNumber == 0 || *limit == 0 {
+		zero := uint64(0)
+		return &zero, &zero, nil
+	}
+
+	boundedLimit := min(*limit, sequenceNumber)
+	boundedStart := sequenceNumber - boundedLimit
+	s.logger.Debugw("AccountTransactions: resolved latest transaction window",
+		"address", address.String(),
+		"sequenceNumber", sequenceNumber,
+		"requestedLimit", *limit,
+		"start", boundedStart,
+		"limit", boundedLimit,
+	)
+	return &boundedStart, &boundedLimit, nil
 }
 
 func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.SubmitTransactionRequest) (*commonaptos.SubmitTransactionReply, error) {
