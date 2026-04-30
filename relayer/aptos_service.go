@@ -149,7 +149,7 @@ func (s *aptosService) AccountTransactions(ctx context.Context, req commonaptos.
 		return nil, err
 	}
 	if limit != nil && *limit == 0 {
-		s.logger.Infow("AccountTransactions: returning empty result", "address", sdkAddr.String())
+		s.logger.Debugw("AccountTransactions: returning empty result", "address", sdkAddr.String())
 		return &commonaptos.AccountTransactionsReply{}, nil
 	}
 
