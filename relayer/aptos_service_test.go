@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	aptos_sdk "github.com/aptos-labs/aptos-go-sdk"
+	"github.com/aptos-labs/aptos-go-sdk/api"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -95,6 +96,125 @@ func TestAptosServiceViewUsesRequestedLedgerVersion(t *testing.T) {
 
 func ptrUint64(v uint64) *uint64 {
 	return &v
+}
+
+func TestAptosServiceAccountTransactionsYoungAccount(t *testing.T) {
+	t.Parallel()
+
+	var addr aptos.AccountAddress
+	addr[31] = 0xEE
+	sdkAddr := aptos_sdk.AccountAddress(addr[:])
+	requestedLimit := uint64(10)
+
+	client := clientmocks.NewAptosRpcClient(t)
+	client.EXPECT().Account(sdkAddr).Return(aptos_sdk.AccountInfo{SequenceNumberStr: "4"}, nil).Once()
+	client.EXPECT().AccountTransactions(sdkAddr, mock.Anything, mock.Anything).
+		Run(func(_ aptos_sdk.AccountAddress, start *uint64, limit *uint64) {
+			require.NotNil(t, start)
+			require.NotNil(t, limit)
+			require.Equal(t, uint64(0), *start)
+			require.Equal(t, uint64(4), *limit)
+		}).
+		Return([]*api.CommittedTransaction{}, nil).
+		Once()
+
+	svc := aptosService{
+		chain:  &testChain{client: client},
+		logger: logger.Test(t),
+	}
+
+	reply, err := svc.AccountTransactions(context.Background(), aptos.AccountTransactionsRequest{
+		Address: addr,
+		Limit:   &requestedLimit,
+	})
+	require.NoError(t, err)
+	require.Empty(t, reply.Transactions)
+}
+
+func TestAptosServiceAccountTransactionsUsesLatestWindowForLimitOnlyQuery(t *testing.T) {
+	t.Parallel()
+
+	var addr aptos.AccountAddress
+	addr[31] = 0xEE
+	sdkAddr := aptos_sdk.AccountAddress(addr[:])
+	requestedLimit := uint64(10)
+
+	client := clientmocks.NewAptosRpcClient(t)
+	client.EXPECT().Account(sdkAddr).Return(aptos_sdk.AccountInfo{SequenceNumberStr: "25"}, nil).Once()
+	client.EXPECT().AccountTransactions(sdkAddr, mock.Anything, mock.Anything).
+		Run(func(_ aptos_sdk.AccountAddress, start *uint64, limit *uint64) {
+			require.NotNil(t, start)
+			require.NotNil(t, limit)
+			require.Equal(t, uint64(15), *start)
+			require.Equal(t, uint64(10), *limit)
+		}).
+		Return([]*api.CommittedTransaction{}, nil).
+		Once()
+
+	svc := aptosService{
+		chain:  &testChain{client: client},
+		logger: logger.Test(t),
+	}
+
+	reply, err := svc.AccountTransactions(context.Background(), aptos.AccountTransactionsRequest{
+		Address: addr,
+		Limit:   &requestedLimit,
+	})
+	require.NoError(t, err)
+	require.Empty(t, reply.Transactions)
+}
+
+func TestAptosServiceAccountTransactionsReturnsEmptyForZeroSequenceNumber(t *testing.T) {
+	t.Parallel()
+
+	var addr aptos.AccountAddress
+	addr[31] = 0xEE
+	sdkAddr := aptos_sdk.AccountAddress(addr[:])
+	requestedLimit := uint64(10)
+
+	client := clientmocks.NewAptosRpcClient(t)
+	client.EXPECT().Account(sdkAddr).Return(aptos_sdk.AccountInfo{SequenceNumberStr: "0"}, nil).Once()
+
+	svc := aptosService{
+		chain:  &testChain{client: client},
+		logger: logger.Test(t),
+	}
+
+	reply, err := svc.AccountTransactions(context.Background(), aptos.AccountTransactionsRequest{
+		Address: addr,
+		Limit:   &requestedLimit,
+	})
+	require.NoError(t, err)
+	require.Empty(t, reply.Transactions)
+}
+
+func TestAptosServiceAccountTransactionsPreservesExplicitStart(t *testing.T) {
+	t.Parallel()
+
+	var addr aptos.AccountAddress
+	addr[31] = 0xEE
+	sdkAddr := aptos_sdk.AccountAddress(addr[:])
+	start := uint64(3)
+	limit := uint64(10)
+
+	client := clientmocks.NewAptosRpcClient(t)
+	client.EXPECT().AccountTransactions(sdkAddr,
+		mock.MatchedBy(func(s *uint64) bool { return s != nil && *s == start }),
+		mock.MatchedBy(func(l *uint64) bool { return l != nil && *l == limit }),
+	).Return([]*api.CommittedTransaction{}, nil).Once()
+
+	svc := aptosService{
+		chain:  &testChain{client: client},
+		logger: logger.Test(t),
+	}
+
+	reply, err := svc.AccountTransactions(context.Background(), aptos.AccountTransactionsRequest{
+		Address: addr,
+		Start:   &start,
+		Limit:   &limit,
+	})
+	require.NoError(t, err)
+	require.Empty(t, reply.Transactions)
 }
 
 type testChain struct {
