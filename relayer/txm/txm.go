@@ -201,7 +201,8 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 // skipping the string-based function parsing and BCS serialisation of parameters.
 // The EntryFunction already contains the module, function name, type tags, and
 // pre-encoded BCS args.
-func (a *AptosTxm) EnqueueWithEntryFunction(transactionID string, txMetadata *commontypes.TxMeta, publicKey string, entryFunction *aptos.EntryFunction, simulateTx bool) (string, error) {
+// Pass the zero AccountAddress for fromAddress to derive it from publicKey.
+func (a *AptosTxm) EnqueueWithEntryFunction(transactionID string, txMetadata *commontypes.TxMeta, publicKey string, fromAddress aptos.AccountAddress, entryFunction *aptos.EntryFunction, simulateTx bool) (string, error) {
 	if entryFunction == nil {
 		return "", errors.New("entry function is required")
 	}
@@ -222,14 +223,15 @@ func (a *AptosTxm) EnqueueWithEntryFunction(transactionID string, txMetadata *co
 		return "", fmt.Errorf("failed to convert public key: %+w", err)
 	}
 
-	acc := utils.Ed25519PublicKeyToAddress(ed25519PublicKey)
-	fromAccountAddress := aptos.AccountAddress(acc)
+	if (fromAddress == aptos.AccountAddress{}) {
+		fromAddress = utils.Ed25519PublicKeyToAddress(ed25519PublicKey)
+	}
 
 	tx := &AptosTx{
 		ID:              transactionID,
 		Metadata:        txMetadata,
 		Timestamp:       getTimestampSecs(),
-		FromAddress:     fromAccountAddress,
+		FromAddress:     fromAddress,
 		PublicKey:       ed25519PublicKey,
 		ContractAddress: entryFunction.Module.Address,
 		ModuleName:      entryFunction.Module.Name,

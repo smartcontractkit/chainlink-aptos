@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	commonaptos "github.com/smartcontractkit/chainlink-common/pkg/types/chains/aptos"
@@ -144,7 +143,17 @@ func (s *aptosService) AccountTransactions(ctx context.Context, req commonaptos.
 	}
 
 	sdkAddr := aptos_sdk.AccountAddress(req.Address[:])
-	txns, err := client.AccountTransactions(sdkAddr, req.Start, req.Limit)
+	start, limit, err := s.accountTransactionsWindow(client, sdkAddr, req.Start, req.Limit)
+	if err != nil {
+		s.logger.Errorw("AccountTransactions: failed to resolve transaction window", "address", sdkAddr.String(), "error", err)
+		return nil, err
+	}
+	if limit != nil && *limit == 0 {
+		s.logger.Debugw("AccountTransactions: returning empty result", "address", sdkAddr.String())
+		return &commonaptos.AccountTransactionsReply{}, nil
+	}
+
+	txns, err := client.AccountTransactions(sdkAddr, start, limit)
 	if err != nil {
 		s.logger.Errorw("AccountTransactions: failed to get transactions", "address", sdkAddr.String(), "error", err)
 		return nil, fmt.Errorf("failed to get account transactions: %w", err)
@@ -172,6 +181,47 @@ func (s *aptosService) AccountTransactions(ctx context.Context, req commonaptos.
 
 	s.logger.Infow("AccountTransactions: returning", "address", sdkAddr.String(), "txCount", len(result))
 	return &commonaptos.AccountTransactionsReply{Transactions: result}, nil
+}
+
+func (s *aptosService) accountTransactionsWindow(
+	client aptos_sdk.AptosRpcClient,
+	address aptos_sdk.AccountAddress,
+	start *uint64,
+	limit *uint64,
+) (*uint64, *uint64, error) {
+	if start != nil || limit == nil {
+		return start, limit, nil
+	}
+
+	// Fetch the sequence number to compute a safe window. A small TOCTOU race
+	// exists: new txns committed between Account() and AccountTransactions() may
+	// not appear in the result. That is acceptable — the caller can re-query.
+	// The goal is to prevent underflow, not to guarantee atomicity.
+	accountInfo, err := client.Account(address)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get account info: %w", err)
+	}
+	sequenceNumber, err := accountInfo.SequenceNumber()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse account sequence number: %w", err)
+	}
+	// Return (0, 0) as a sentinel signalling "nothing to fetch": the caller
+	// short-circuits to an empty reply without issuing an AccountTransactions RPC.
+	if sequenceNumber == 0 || *limit == 0 {
+		zero := uint64(0)
+		return &zero, &zero, nil
+	}
+
+	boundedLimit := min(*limit, sequenceNumber)
+	boundedStart := sequenceNumber - boundedLimit
+	s.logger.Debugw("AccountTransactions: resolved latest transaction window",
+		"address", address.String(),
+		"sequenceNumber", sequenceNumber,
+		"requestedLimit", *limit,
+		"start", boundedStart,
+		"limit", boundedLimit,
+	)
+	return &boundedStart, &boundedLimit, nil
 }
 
 func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.SubmitTransactionRequest) (*commonaptos.SubmitTransactionReply, error) {
@@ -203,20 +253,20 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 	if req.GasConfig != nil {
 		gasLimit = big.NewInt(int64(req.GasConfig.MaxGasAmount))
 	}
-	accounts, err := s.chain.KeyStore().Accounts(ctx)
+	publicKeys, err := s.chain.KeyStore().Accounts(ctx)
 	if err != nil {
-		s.logger.Errorw("SubmitTransaction: failed to get accounts", "error", err)
-		return nil, fmt.Errorf("failed to get accounts: %w", err)
+		s.logger.Errorw("SubmitTransaction: failed to get public keys", "error", err)
+		return nil, fmt.Errorf("failed to get public keys: %w", err)
 	}
-	s.logger.Infow("SubmitTransaction: accounts retrieved", "numAccounts", len(accounts))
+	s.logger.Infow("SubmitTransaction: public keys retrieved", "numPublicKeys", len(publicKeys))
 
 	// Find account with highest balance
-	publicKey, err := s.getAccountWithHighestBalance(ctx, accounts)
+	publicKey, fromAddress, err := s.getAccountWithHighestBalance(ctx, publicKeys)
 	if err != nil {
 		s.logger.Errorw("SubmitTransaction: failed to get account with highest balance", "error", err)
 		return nil, fmt.Errorf("failed to determine account for SubmitTransaction: %w", err)
 	}
-	s.logger.Infow("SubmitTransaction: selected account", "publicKey", publicKey)
+	s.logger.Infow("SubmitTransaction: selected account", "publicKey", publicKey, "fromAddress", fromAddress.String())
 
 	txID := uuid.New().String()
 	s.logger.Infow("SubmitTransaction: enqueueing to TxManager", "txID", txID)
@@ -226,6 +276,7 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 			GasLimit: gasLimit,
 		},
 		publicKey,
+		fromAddress,
 		entryFn,
 		*s.chain.Config().AptosService.SimulateTx,
 		// TODO: add expected simulation failures to save gas on reported transmissions
@@ -304,56 +355,67 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 	}, nil
 }
 
-// getAccountWithHighestBalance returns the public key of the account with the highest APT balance.
-func (s *aptosService) getAccountWithHighestBalance(ctx context.Context, accounts []string) (string, error) {
-	if len(accounts) == 0 {
-		return "", errors.New("no accounts provided")
+// getAccountWithHighestBalance returns the public key and resolved on-chain
+// address of the account with the highest APT balance.
+func (s *aptosService) getAccountWithHighestBalance(ctx context.Context, publicKeys []string) (string, aptos_sdk.AccountAddress, error) {
+	if len(publicKeys) == 0 {
+		return "", aptos_sdk.AccountAddress{}, errors.New("no accounts provided")
 	}
-	if len(accounts) == 1 {
-		s.logger.Debugw("getAccountWithHighestBalance: only one enabled account for chain", "account", accounts[0])
-		return accounts[0], nil
+	if len(publicKeys) == 1 {
+		s.logger.Debugw("getAccountWithHighestBalance: only one enabled account for chain", "publicKey", publicKeys[0])
+		accountAddress, err := s.chain.Config().Transmitter.ResolveAddress(publicKeys[0])
+		if err != nil {
+			return "", aptos_sdk.AccountAddress{}, fmt.Errorf("failed to resolve transmitter address: %w", err)
+		}
+		return publicKeys[0], accountAddress, nil
 	}
 
 	client, err := s.chain.GetClient()
 	if err != nil {
-		return "", fmt.Errorf("failed to get client: %w", err)
+		return "", aptos_sdk.AccountAddress{}, fmt.Errorf("failed to get client: %w", err)
 	}
 
 	var highestBalance uint64
-	var selectedAccount string
+	var selectedPublicKey string
+	var selectedAddress aptos_sdk.AccountAddress
 	var foundAny bool
 
-	for _, account := range accounts {
-		addr, err := utils.HexPublicKeyToAddress(account)
+	for _, publicKey := range publicKeys {
+		accountAddress, err := s.chain.Config().Transmitter.ResolveAddress(publicKey)
 		if err != nil {
-			s.logger.Warnw("getAccountWithHighestBalance: failed to convert public key to address, skipping", "account", account, "error", err)
+			s.logger.Warnw("getAccountWithHighestBalance: failed to resolve transmitter address, skipping", "publicKey", publicKey, "error", err)
 			continue
 		}
 
-		balance, err := client.AccountAPTBalance(addr)
+		balance, err := client.AccountAPTBalance(accountAddress)
 		if err != nil {
-			s.logger.Warnw("getAccountWithHighestBalance: failed to get balance for account, skipping", "account", account, "error", err)
+			s.logger.Warnw("getAccountWithHighestBalance: failed to get balance for account, skipping", "publicKey", publicKey, "error", err)
 			continue
 		}
 
 		if !foundAny || balance > highestBalance {
 			highestBalance = balance
-			selectedAccount = account
+			selectedPublicKey = publicKey
+			selectedAddress = accountAddress
 			foundAny = true
 		}
 	}
 
 	if !foundAny {
 		// Fallback to first account if all balance queries failed
-		return accounts[0], nil
+		fallbackAddress, err := s.chain.Config().Transmitter.ResolveAddress(publicKeys[0])
+		if err != nil {
+			return "", aptos_sdk.AccountAddress{}, fmt.Errorf("failed to resolve fallback transmitter address: %w", err)
+		}
+		return publicKeys[0], fallbackAddress, nil
 	}
 
 	s.logger.Debugw("getAccountWithHighestBalance: selected account",
-		"account", selectedAccount,
+		"publicKey", selectedPublicKey,
 		"balance", highestBalance,
-		"totalAccounts", len(accounts))
+		"totalAccounts", len(publicKeys))
 
-	return selectedAccount, nil
+	return selectedPublicKey, selectedAddress, nil
 }
 
 // convertTypeTagsToSDK converts common TypeTags to SDK TypeTags.
