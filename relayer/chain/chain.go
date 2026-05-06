@@ -144,11 +144,10 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 	ch.balanceMonitor, err = monitor.NewBalanceMonitor(monitor.BalanceMonitorOpts{
 		ChainInfo: ch.chainInfo(),
 
-		Config:      *cfg.BalanceMonitor,
-		Logger:      lggr,
-		Keystore:    loopKs,
-		Transmitter: cfg.Transmitter,
-		NewClient:   ch.GetClient,
+		Config:    *cfg.BalanceMonitor,
+		Logger:    lggr,
+		Keystore:  loopKs,
+		NewClient: ch.GetClient,
 	})
 	if err != nil {
 		return nil, err

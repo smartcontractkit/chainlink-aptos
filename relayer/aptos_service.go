@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	commonaptos "github.com/smartcontractkit/chainlink-common/pkg/types/chains/aptos"
@@ -253,20 +254,20 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 	if req.GasConfig != nil {
 		gasLimit = big.NewInt(int64(req.GasConfig.MaxGasAmount))
 	}
-	publicKeys, err := s.chain.KeyStore().Accounts(ctx)
+	accounts, err := s.chain.KeyStore().Accounts(ctx)
 	if err != nil {
-		s.logger.Errorw("SubmitTransaction: failed to get public keys", "error", err)
-		return nil, fmt.Errorf("failed to get public keys: %w", err)
+		s.logger.Errorw("SubmitTransaction: failed to get accounts", "error", err)
+		return nil, fmt.Errorf("failed to get accounts: %w", err)
 	}
-	s.logger.Infow("SubmitTransaction: public keys retrieved", "numPublicKeys", len(publicKeys))
+	s.logger.Infow("SubmitTransaction: accounts retrieved", "numAccounts", len(accounts))
 
 	// Find account with highest balance
-	publicKey, fromAddress, err := s.getAccountWithHighestBalance(ctx, publicKeys)
+	publicKey, err := s.getAccountWithHighestBalance(ctx, accounts)
 	if err != nil {
 		s.logger.Errorw("SubmitTransaction: failed to get account with highest balance", "error", err)
 		return nil, fmt.Errorf("failed to determine account for SubmitTransaction: %w", err)
 	}
-	s.logger.Infow("SubmitTransaction: selected account", "publicKey", publicKey, "fromAddress", fromAddress.String())
+	s.logger.Infow("SubmitTransaction: selected account", "publicKey", publicKey)
 
 	txID := uuid.New().String()
 	s.logger.Infow("SubmitTransaction: enqueueing to TxManager", "txID", txID)
@@ -276,7 +277,6 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 			GasLimit: gasLimit,
 		},
 		publicKey,
-		fromAddress,
 		entryFn,
 		*s.chain.Config().AptosService.SimulateTx,
 		// TODO: add expected simulation failures to save gas on reported transmissions
@@ -355,67 +355,56 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 	}, nil
 }
 
-// getAccountWithHighestBalance returns the public key and resolved on-chain
-// address of the account with the highest APT balance.
-func (s *aptosService) getAccountWithHighestBalance(ctx context.Context, publicKeys []string) (string, aptos_sdk.AccountAddress, error) {
-	if len(publicKeys) == 0 {
-		return "", aptos_sdk.AccountAddress{}, errors.New("no accounts provided")
+// getAccountWithHighestBalance returns the public key of the account with the highest APT balance.
+func (s *aptosService) getAccountWithHighestBalance(ctx context.Context, accounts []string) (string, error) {
+	if len(accounts) == 0 {
+		return "", errors.New("no accounts provided")
 	}
-	if len(publicKeys) == 1 {
-		s.logger.Debugw("getAccountWithHighestBalance: only one enabled account for chain", "publicKey", publicKeys[0])
-		accountAddress, err := s.chain.Config().Transmitter.ResolveAddress(publicKeys[0])
-		if err != nil {
-			return "", aptos_sdk.AccountAddress{}, fmt.Errorf("failed to resolve transmitter address: %w", err)
-		}
-		return publicKeys[0], accountAddress, nil
+	if len(accounts) == 1 {
+		s.logger.Debugw("getAccountWithHighestBalance: only one enabled account for chain", "account", accounts[0])
+		return accounts[0], nil
 	}
 
 	client, err := s.chain.GetClient()
 	if err != nil {
-		return "", aptos_sdk.AccountAddress{}, fmt.Errorf("failed to get client: %w", err)
+		return "", fmt.Errorf("failed to get client: %w", err)
 	}
 
 	var highestBalance uint64
-	var selectedPublicKey string
-	var selectedAddress aptos_sdk.AccountAddress
+	var selectedAccount string
 	var foundAny bool
 
-	for _, publicKey := range publicKeys {
-		accountAddress, err := s.chain.Config().Transmitter.ResolveAddress(publicKey)
+	for _, account := range accounts {
+		addr, err := utils.HexPublicKeyToAddress(account)
 		if err != nil {
-			s.logger.Warnw("getAccountWithHighestBalance: failed to resolve transmitter address, skipping", "publicKey", publicKey, "error", err)
+			s.logger.Warnw("getAccountWithHighestBalance: failed to convert public key to address, skipping", "account", account, "error", err)
 			continue
 		}
 
-		balance, err := client.AccountAPTBalance(accountAddress)
+		balance, err := client.AccountAPTBalance(addr)
 		if err != nil {
-			s.logger.Warnw("getAccountWithHighestBalance: failed to get balance for account, skipping", "publicKey", publicKey, "error", err)
+			s.logger.Warnw("getAccountWithHighestBalance: failed to get balance for account, skipping", "account", account, "error", err)
 			continue
 		}
 
 		if !foundAny || balance > highestBalance {
 			highestBalance = balance
-			selectedPublicKey = publicKey
-			selectedAddress = accountAddress
+			selectedAccount = account
 			foundAny = true
 		}
 	}
 
 	if !foundAny {
 		// Fallback to first account if all balance queries failed
-		fallbackAddress, err := s.chain.Config().Transmitter.ResolveAddress(publicKeys[0])
-		if err != nil {
-			return "", aptos_sdk.AccountAddress{}, fmt.Errorf("failed to resolve fallback transmitter address: %w", err)
-		}
-		return publicKeys[0], fallbackAddress, nil
+		return accounts[0], nil
 	}
 
 	s.logger.Debugw("getAccountWithHighestBalance: selected account",
-		"publicKey", selectedPublicKey,
+		"account", selectedAccount,
 		"balance", highestBalance,
-		"totalAccounts", len(publicKeys))
+		"totalAccounts", len(accounts))
 
-	return selectedPublicKey, selectedAddress, nil
+	return selectedAccount, nil
 }
 
 // convertTypeTagsToSDK converts common TypeTags to SDK TypeTags.

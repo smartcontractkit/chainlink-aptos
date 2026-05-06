@@ -10,19 +10,18 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 
-	"github.com/smartcontractkit/chainlink-aptos/relayer/transmitter"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
 
 // BalanceMonitorOpts contains the options for creating a new Aptos account balance monitor.
 type BalanceMonitorOpts struct {
 	ChainInfo types.ChainInfo
 
-	Config      GenericBalanceConfig
-	Logger      logger.Logger
-	Keystore    core.Keystore
-	Transmitter *transmitter.Config
-	NewClient   func() (aptos.AptosRpcClient, error)
+	Config    GenericBalanceConfig
+	Logger    logger.Logger
+	Keystore  core.Keystore
+	NewClient func() (aptos.AptosRpcClient, error)
 }
 
 // NewBalanceMonitor returns a balance monitoring services.Service which reports balance of all Keystore accounts.
@@ -42,11 +41,8 @@ func NewBalanceMonitor(opts BalanceMonitorOpts) (services.Service, error) {
 			return balanceClient{client}, nil
 		},
 		KeyToAccountMapper: func(ctx context.Context, pk string) (string, error) {
-			addr, err := opts.Transmitter.ResolveAddress(pk)
-			if err != nil {
-				return "", err
-			}
-			return addr.String(), nil
+			// We need to convert the Aptos public key to an account address
+			return utils.HexPublicKeyToAddressString(pk)
 		},
 	})
 }
