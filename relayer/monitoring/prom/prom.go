@@ -6,6 +6,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/smartcontractkit/chainlink-framework/metrics"
+
 	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
 )
 
@@ -61,6 +63,12 @@ func SetAccountBalance(chainInfo types.ChainInfo, account string, balance float6
 		chainInfo.ChainID,
 		chainInfo.NetworkName,
 		account,
+	).Set(balance)
+
+	metrics.NodeBalance.WithLabelValues(
+		account,
+		chainInfo.ChainID,
+		chainInfo.ChainFamilyName,
 	).Set(balance)
 }
 
