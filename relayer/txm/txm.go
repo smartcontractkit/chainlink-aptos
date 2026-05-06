@@ -334,6 +334,7 @@ type TransactionResult struct {
 	Status   commontypes.TransactionStatus
 	TxHash   string
 	VmStatus string
+	Success  bool
 }
 
 func (a *AptosTxm) GetTransactionResult(transactionID string) (*TransactionResult, error) {
@@ -352,6 +353,7 @@ func (a *AptosTxm) GetTransactionResult(transactionID string) (*TransactionResul
 		Status:   tx.Status,
 		TxHash:   tx.TxHash,
 		VmStatus: tx.VmStatus,
+		Success:  tx.Success,
 	}, nil
 }
 
@@ -563,6 +565,12 @@ func (a *AptosTxm) updateTransactionVmStatus(tx *AptosTx, vmStatus string) {
 	tx.VmStatus = vmStatus
 }
 
+func (a *AptosTxm) updateTransactionSuccess(tx *AptosTx, success bool) {
+	a.transactionsLock.Lock()
+	defer a.transactionsLock.Unlock()
+	tx.Success = success
+}
+
 func (a *AptosTxm) incrementTransactionAttempt(tx *AptosTx) {
 	a.transactionsLock.Lock()
 	defer a.transactionsLock.Unlock()
@@ -770,6 +778,7 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 					userTx, ok := chainTx.Inner.(*aptosapi.UserTransaction)
 					if ok {
 						a.updateTransactionVmStatus(unconfirmedTx.Tx, userTx.VmStatus)
+						a.updateTransactionSuccess(unconfirmedTx.Tx, userTx.Success)
 
 						if userTx.Success {
 							ctxLogger.Infow("confirmed tx: successful", "hash", hash, "chainTx", chainTx, "chainTx.Type", chainTx.Type)
