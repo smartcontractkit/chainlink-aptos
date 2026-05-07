@@ -15,4 +15,11 @@ AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "
 ChainlinkPlatform = { local = "../platform" }
 ChainlinkPlatformSecondary = { local = "../platform_secondary" }
 
+[dev-addresses]
+cre_canary_receiver = "0x300"
+platform = "0x100"
+owner = "0xcafe"
+platform_secondary = "0x200"
+owner_secondary = "0x22"
+
 [dev-dependencies]
