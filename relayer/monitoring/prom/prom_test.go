@@ -6,6 +6,9 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	clmetrics "github.com/smartcontractkit/chainlink-framework/metrics"
+
 	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
 	"github.com/stretchr/testify/require"
 )
@@ -41,6 +44,10 @@ func TestSetAccountBalance(t *testing.T) {
 	require.Equal(t, "mainnet", labels["networkName"])
 	require.Equal(t, account, labels["account"])
 	require.Equal(t, balance, m.Gauge.GetValue())
+
+	// Verify node_balance (chainlink-framework shared metric) is also set
+	nodeBalanceValue := testutil.ToFloat64(clmetrics.NodeBalance.WithLabelValues(account, chainInfo.ChainID, chainInfo.ChainFamilyName))
+	require.Equal(t, balance, nodeBalanceValue)
 }
 
 func TestSetClientLatency(t *testing.T) {
