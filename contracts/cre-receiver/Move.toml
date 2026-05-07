@@ -1,0 +1,18 @@
+[package]
+name = "ChainlinkCRECanaryReceiver"
+version = "1.0.0"
+authors = []
+
+[addresses]
+cre_canary_receiver = "_"
+platform = "_"
+owner = "_"
+platform_secondary = "_"
+owner_secondary = "_"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
+ChainlinkPlatform = { local = "../platform" }
+ChainlinkPlatformSecondary = { local = "../platform_secondary" }
+
+[dev-dependencies]
