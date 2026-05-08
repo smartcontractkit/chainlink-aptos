@@ -172,7 +172,6 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 			incrementId,
 			getSampleTxMetadata(),
 			publicKeyHex,
-			accountAddress, // exercise non-zero FromAddress override path
 			&aptos.EntryFunction{
 				Module: aptos.ModuleId{
 					Address: accountAddress,
@@ -195,7 +194,6 @@ func runTxmTest(t *testing.T, logger logger.Logger, config Config, rpcURL string
 			incrementMultId,
 			getSampleTxMetadata(),
 			publicKeyHex,
-			accountAddress, // exercise non-zero FromAddress override path
 			&aptos.EntryFunction{
 				Module: aptos.ModuleId{
 					Address: accountAddress,
