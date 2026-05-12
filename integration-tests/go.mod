@@ -7,7 +7,7 @@ require (
 	github.com/aptos-labs/aptos-go-sdk v1.12.1
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-connections v0.7.0
-	github.com/ethereum/go-ethereum v1.17.2
+	github.com/ethereum/go-ethereum v1.17.3
 	github.com/go-resty/resty/v2 v2.17.2
 	github.com/joho/godotenv v1.5.1
 	github.com/moby/term v0.5.2
