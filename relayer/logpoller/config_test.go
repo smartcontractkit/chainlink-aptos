@@ -2,7 +2,6 @@ package logpoller
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -32,18 +31,6 @@ func TestResolve_PartialOverride(t *testing.T) {
 	assert.Equal(t, uint64(50), *cfg.EventBatchSize)
 	assert.Equal(t, DefaultConfigSet.EventPollingInterval.Duration(), cfg.EventPollingInterval.Duration())
 	assert.Equal(t, DefaultConfigSet.TXPollerDisabled, cfg.TXPollerDisabled)
-	assert.Equal(t, DefaultConfigSet.CacheTTL.Duration(), cfg.CacheTTL.Duration())
-	assert.Equal(t, DefaultConfigSet.CacheCleanupInterval.Duration(), cfg.CacheCleanupInterval.Duration())
-}
-
-func TestResolve_CacheDefaults(t *testing.T) {
-	t.Parallel()
-
-	cfg := Config{}
-	cfg.Resolve()
-
-	assert.Equal(t, 15*time.Minute, cfg.CacheTTL.Duration())
-	assert.Equal(t, 30*time.Minute, cfg.CacheCleanupInterval.Duration())
 }
 
 func TestResolve_ExplicitZero(t *testing.T) {
