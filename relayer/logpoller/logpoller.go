@@ -49,10 +49,15 @@ type AptosLogPoller struct {
 }
 
 func NewLogPoller(lggr logger.Logger, chainInfo types.ChainInfo, getClient func() (aptos.AptosRpcClient, error), ds sqlutil.DataSource, cfg *Config) (*AptosLogPoller, error) {
+	if cfg == nil {
+		tmp := DefaultConfigSet
+		cfg = &tmp
+	}
+
 	dbStore := db.NewDBStore(ds, lggr)
 
-	cacheTTL := cfg.CacheTTL.Duration()
-	cacheCleanup := cfg.CacheCleanupInterval.Duration()
+	defaultTTL := 15 * time.Minute
+	cleanupInterval := 30 * time.Minute
 
 	return &AptosLogPoller{
 		lggr:      logger.Named(lggr, "AptosLogPoller"),
@@ -63,10 +68,10 @@ func NewLogPoller(lggr logger.Logger, chainInfo types.ChainInfo, getClient func(
 
 		modules: make(map[string]*moduleInfo),
 
-		resourceCache:            cache.New(cacheTTL, cacheCleanup),
-		blockCache:               cache.New(cacheTTL, cacheCleanup),
-		eventAccountAddressCache: cache.New(cacheTTL, cacheCleanup),
-		cacheCleanupInterval:     cacheCleanup,
+		resourceCache:            cache.New(defaultTTL, cleanupInterval),
+		blockCache:               cache.New(defaultTTL, cleanupInterval),
+		eventAccountAddressCache: cache.New(defaultTTL, cleanupInterval),
+		cacheCleanupInterval:     cleanupInterval,
 	}, nil
 }
 
