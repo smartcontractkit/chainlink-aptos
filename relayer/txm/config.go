@@ -1,37 +1,31 @@
 package txm
 
-import (
-	"time"
-
-	"github.com/smartcontractkit/chainlink-common/pkg/config"
-)
-
 func ptr[T any](v T) *T { return &v }
 
+// TODO: these should be duration, not numbers
 // Config defines the transaction manager configuration.
 // Pointer fields are used for TOML deserialization — nil means "not set by user".
 // After calling Resolve(), all fields are guaranteed non-nil.
 type Config struct {
 	BroadcastChanSize *uint `toml:"BroadcastChanSize"`
-
-	ConfirmPollInterval *config.Duration `toml:"ConfirmPollInterval"`
+	ConfirmPollSecs   *uint `toml:"ConfirmPollSecs"`
 
 	DefaultMaxGasAmount *uint64 `toml:"DefaultMaxGasAmount"`
 	GasLimitOverhead    *uint64 `toml:"GasLimitOverhead"`
 
-	MaxSimulateAttempts    *uint            `toml:"MaxSimulateAttempts"`
-	MaxSubmitRetryAttempts *uint            `toml:"MaxSubmitRetryAttempts"`
-	SubmitRetryDelay       *config.Duration `toml:"SubmitRetryDelay"`
-	TxExpirationTimeout    *config.Duration `toml:"TxExpirationTimeout"`
-	MaxTxRetryAttempts     *uint64          `toml:"MaxTxRetryAttempts"`
-	PruneInterval          *config.Duration `toml:"PruneInterval"`
-	PruneTxExpiration      *config.Duration `toml:"PruneTxExpiration"`
+	MaxSimulateAttempts    *uint   `toml:"MaxSimulateAttempts"`
+	MaxSubmitRetryAttempts *uint   `toml:"MaxSubmitRetryAttempts"`
+	SubmitDelayDuration    *uint   `toml:"SubmitDelayDuration"`
+	TxExpirationSecs       *uint64 `toml:"TxExpirationSecs"`
+	MaxTxRetryAttempts     *uint64 `toml:"MaxTxRetryAttempts"`
+	PruneIntervalSecs      *uint64 `toml:"PruneIntervalSecs"`
+	PruneTxExpirationSecs  *uint64 `toml:"PruneTxExpirationSecs"`
 }
 
 // DefaultConfigSet is the default configuration for the TransactionManager
 var DefaultConfigSet = Config{
-	BroadcastChanSize:   ptr(uint(100)),
-	ConfirmPollInterval: config.MustNewDuration(2 * time.Second),
+	BroadcastChanSize: ptr(uint(100)),
+	ConfirmPollSecs:   ptr(uint(2)),
 
 	// https://github.com/aptos-labs/aptos-ts-sdk/blob/bc169793071185f638192efb1a90103db7ab4922/src/utils/const.ts#L27
 	DefaultMaxGasAmount: ptr(uint64(2_000_000)),
@@ -39,11 +33,11 @@ var DefaultConfigSet = Config{
 
 	MaxSimulateAttempts:    ptr(uint(5)),
 	MaxSubmitRetryAttempts: ptr(uint(10)),
-	SubmitRetryDelay:       config.MustNewDuration(3 * time.Second),
-	TxExpirationTimeout:    config.MustNewDuration(10 * time.Second),
+	SubmitDelayDuration:    ptr(uint(3)),    // seconds
+	TxExpirationSecs:       ptr(uint64(10)), // seconds
 	MaxTxRetryAttempts:     ptr(uint64(5)),
-	PruneInterval:          config.MustNewDuration(4 * time.Hour),
-	PruneTxExpiration:      config.MustNewDuration(2 * time.Hour),
+	PruneIntervalSecs:      ptr(uint64(60 * 60 * 4)), // 4 hours
+	PruneTxExpirationSecs:  ptr(uint64(60 * 60 * 2)), // 2 hours
 }
 
 // Resolve fills nil fields with defaults. After calling Resolve, all fields are guaranteed non-nil.
@@ -51,9 +45,8 @@ func (c *Config) Resolve() {
 	if c.BroadcastChanSize == nil {
 		c.BroadcastChanSize = ptr(*DefaultConfigSet.BroadcastChanSize)
 	}
-	if c.ConfirmPollInterval == nil {
-		v := *DefaultConfigSet.ConfirmPollInterval
-		c.ConfirmPollInterval = &v
+	if c.ConfirmPollSecs == nil {
+		c.ConfirmPollSecs = ptr(*DefaultConfigSet.ConfirmPollSecs)
 	}
 	if c.DefaultMaxGasAmount == nil {
 		c.DefaultMaxGasAmount = ptr(*DefaultConfigSet.DefaultMaxGasAmount)
@@ -67,23 +60,19 @@ func (c *Config) Resolve() {
 	if c.MaxSubmitRetryAttempts == nil {
 		c.MaxSubmitRetryAttempts = ptr(*DefaultConfigSet.MaxSubmitRetryAttempts)
 	}
-	if c.SubmitRetryDelay == nil {
-		v := *DefaultConfigSet.SubmitRetryDelay
-		c.SubmitRetryDelay = &v
+	if c.SubmitDelayDuration == nil {
+		c.SubmitDelayDuration = ptr(*DefaultConfigSet.SubmitDelayDuration)
 	}
-	if c.TxExpirationTimeout == nil {
-		v := *DefaultConfigSet.TxExpirationTimeout
-		c.TxExpirationTimeout = &v
+	if c.TxExpirationSecs == nil {
+		c.TxExpirationSecs = ptr(*DefaultConfigSet.TxExpirationSecs)
 	}
 	if c.MaxTxRetryAttempts == nil {
 		c.MaxTxRetryAttempts = ptr(*DefaultConfigSet.MaxTxRetryAttempts)
 	}
-	if c.PruneInterval == nil {
-		v := *DefaultConfigSet.PruneInterval
-		c.PruneInterval = &v
+	if c.PruneIntervalSecs == nil {
+		c.PruneIntervalSecs = ptr(*DefaultConfigSet.PruneIntervalSecs)
 	}
-	if c.PruneTxExpiration == nil {
-		v := *DefaultConfigSet.PruneTxExpiration
-		c.PruneTxExpiration = &v
+	if c.PruneTxExpirationSecs == nil {
+		c.PruneTxExpirationSecs = ptr(*DefaultConfigSet.PruneTxExpirationSecs)
 	}
 }
