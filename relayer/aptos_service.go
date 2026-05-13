@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	aptos_sdk "github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/bcs"
@@ -278,7 +279,7 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 		},
 		publicKey,
 		entryFn,
-		*s.chain.Config().AptosService.SimulateTx,
+		true, // simulateTx
 		// TODO: add expected simulation failures to save gas on reported transmissions
 	)
 	if enqueueErr != nil {
@@ -287,10 +288,11 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 	}
 	s.logger.Infow("SubmitTransaction: enqueued successfully", "txID", txID)
 
-	pollTimeout := s.chain.Config().AptosService.SubmitPollTimeout.Duration()
-	s.logger.Infow("SubmitTransaction: polling for status", "txID", txID, "pollTimeout", pollTimeout)
+	// TODO: dont use txmgr config, create and use workflow/cre config PLEX-2598
+	maximumWaitTime := time.Duration(*s.chain.Config().TransactionManager.TxExpirationSecs) * time.Second
+	s.logger.Infow("SubmitTransaction: polling for status", "txID", txID, "maximumWaitTime", maximumWaitTime)
 
-	retryCtx, cancel := context.WithTimeout(ctx, pollTimeout)
+	retryCtx, cancel := context.WithTimeout(ctx, maximumWaitTime)
 	defer cancel()
 	txStatus, err := retry.Do(retryCtx, s.logger, func(_ context.Context) (commonaptos.TransactionStatus, error) {
 		txStatus, txStatusErr := s.chain.TxManager().GetStatus(txID)
