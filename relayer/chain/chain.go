@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/pelletier/go-toml/v2"
@@ -252,8 +253,8 @@ func (c *chain) GetClient() (aptos.AptosRpcClient, error) {
 		rateLimitedClient := ratelimit.NewRateLimitedClient(client,
 			chainInfo,
 			urlStr,
-			*node.MaxConcurrentRequests,
-			node.Timeout.Duration(),
+			500,            // max requests in-flight
+			30*time.Second, // timeout
 		)
 		c.clientCache[urlStr] = rateLimitedClient
 		c.lggr.Debugw("Created and cached client", "name", node.Name, "url", node.URL)
