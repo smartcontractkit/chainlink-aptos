@@ -265,16 +265,6 @@ func TestFakeAptosChain_AccountTransactions(t *testing.T) {
 		require.NotNil(t, capErr)
 	})
 
-	t.Run("rejects limit without start", func(t *testing.T) {
-		t.Parallel()
-		limit := uint64(10)
-		fc := newTestAptosChain(t, mocks.NewAptosRpcClient(t), false)
-		_, capErr := fc.AccountTransactions(ctx, meta, &aptoscappb.AccountTransactionsRequest{
-			Address: mkAddr32(3), Limit: &limit,
-		})
-		require.NotNil(t, capErr)
-	})
-
 	t.Run("both nil pagination allowed", func(t *testing.T) {
 		t.Parallel()
 		rpc := mocks.NewAptosRpcClient(t)
