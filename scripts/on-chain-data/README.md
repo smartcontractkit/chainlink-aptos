@@ -108,10 +108,7 @@ This Go script checks whether configured feeds have exceeded their heartbeat bas
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
 | `--input` | `-i` | FeedUpdated events CSV from `get-feed-updated-events` | (required) |
-| `--config` | `-c` | JSON file with `stream_id`, `feed_id`, and `heartbeat` | (none) |
-| `--feed` | | Repeatable `feed_id:heartbeat` override | (none) |
-
-Provide at least one of `--config` or `--feed`.
+| `--config` | `-c` | JSON file with `stream_id`, `feed_id`, and `heartbeat` (seconds) | (required) |
 
 ```bash
 go run . check-heartbeat-misses \
@@ -140,7 +137,7 @@ go run . compute-data-feed-updated-events-metrics \
 
 ### Compute Data Feed Events Metrics from previous step
 
-This Go script computes metrics such as the average, minimum, maximum, p90, p95, p99, and SLA for the overall set of events, as well as split by feed. Additionally, it retrieves statistics on the gas used to process all feeds and identifies slow transactions. You can specify a timeframe with the -l parameter to include only the events that occurred in the last -t seconds.
+This Go script computes metrics such as the average, minimum, maximum, p90, p95, p99, and SLA for the overall set of events, as well as split by feed. Additionally, it retrieves statistics on the gas used to process all feeds and identifies slow transactions. Use `-t` to include only events from the last N seconds.
 
 ```bash
 go run . compute-data-feed-updated-events-metrics -i aptos-data-feed-events-prod-testnet-latest.csv -t 864000

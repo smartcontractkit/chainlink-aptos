@@ -42,14 +42,13 @@ func BuildCheckHeartbeatMisses() *cobra.Command {
 	var (
 		inputFile  string
 		configFile string
-		feedFlags  []string
 	)
 
 	cmd := cobra.Command{
 		Use:   "check-heartbeat-misses",
 		Short: "Check configured feeds for heartbeat misses using FeedUpdated event CSV data",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			feedConfigs, err := loadFeedHeartbeatConfigs(configFile, feedFlags)
+			feedConfigs, err := loadFeedHeartbeatConfigs(configFile)
 			if err != nil {
 				return err
 			}
@@ -59,42 +58,27 @@ func BuildCheckHeartbeatMisses() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&inputFile, "input", "i", "", "FeedUpdated events CSV from get-feed-updated-events")
-	cmd.Flags().StringVarP(&configFile, "config", "c", "", "JSON file listing feed_id, optional stream_id, and heartbeat seconds")
-	cmd.Flags().StringArrayVar(&feedFlags, "feed", nil, "Feed heartbeat override in feed_id:heartbeat form (repeatable)")
+	cmd.Flags().StringVarP(&configFile, "config", "c", "", "JSON file with stream_id, feed_id, and heartbeat (seconds) per feed")
 
 	cmd.MarkFlagRequired("input")
+	cmd.MarkFlagRequired("config")
 
 	return &cmd
 }
 
-func loadFeedHeartbeatConfigs(configFile string, feedFlags []string) ([]FeedHeartbeatConfig, error) {
-	if configFile == "" && len(feedFlags) == 0 {
-		return nil, fmt.Errorf("provide at least one of --config or --feed")
+func loadFeedHeartbeatConfigs(configFile string) ([]FeedHeartbeatConfig, error) {
+	body, err := os.ReadFile(configFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file %s: %w", configFile, err)
 	}
 
-	feedConfigs := make([]FeedHeartbeatConfig, 0)
-
-	if configFile != "" {
-		body, err := os.ReadFile(configFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read config file %s: %w", configFile, err)
-		}
-
-		if err := json.Unmarshal(body, &feedConfigs); err != nil {
-			return nil, fmt.Errorf("failed to parse config file %s: %w", configFile, err)
-		}
-	}
-
-	for _, feedFlag := range feedFlags {
-		feedConfig, err := parseFeedHeartbeatFlag(feedFlag)
-		if err != nil {
-			return nil, err
-		}
-		feedConfigs = append(feedConfigs, feedConfig)
+	var feedConfigs []FeedHeartbeatConfig
+	if err := json.Unmarshal(body, &feedConfigs); err != nil {
+		return nil, fmt.Errorf("failed to parse config file %s: %w", configFile, err)
 	}
 
 	if len(feedConfigs) == 0 {
-		return nil, fmt.Errorf("no feed heartbeat configuration found")
+		return nil, fmt.Errorf("no feed heartbeat configuration found in %s", configFile)
 	}
 
 	for i := range feedConfigs {
@@ -105,23 +89,6 @@ func loadFeedHeartbeatConfigs(configFile string, feedFlags []string) ([]FeedHear
 	}
 
 	return feedConfigs, nil
-}
-
-func parseFeedHeartbeatFlag(feedFlag string) (FeedHeartbeatConfig, error) {
-	parts := strings.Split(feedFlag, ":")
-	if len(parts) != 2 {
-		return FeedHeartbeatConfig{}, fmt.Errorf("invalid --feed value %q, expected feed_id:heartbeat", feedFlag)
-	}
-
-	heartbeat, err := strconv.ParseInt(parts[1], 10, 64)
-	if err != nil {
-		return FeedHeartbeatConfig{}, fmt.Errorf("invalid heartbeat in --feed value %q: %w", feedFlag, err)
-	}
-
-	return FeedHeartbeatConfig{
-		FeedID:    parts[0],
-		Heartbeat: heartbeat,
-	}, nil
 }
 
 func normalizeFeedID(feedID string) string {
