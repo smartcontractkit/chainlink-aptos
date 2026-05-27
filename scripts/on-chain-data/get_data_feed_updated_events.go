@@ -26,8 +26,9 @@ type FeedUpdatedEventData struct {
 }
 
 type TransactionQueryOptions struct {
-	LookbackHours int
-	FeedId        string
+	LookbackHours   int
+	LookbackMinutes int
+	FeedId          string
 }
 
 func BuildMGetFeedUpdatedEvents() *cobra.Command {
@@ -173,7 +174,10 @@ func fetchTransactionsFromAccount(account, environment string, transactionQueryO
 	var allTransactions []Transaction
 	var err error
 
-	if transactionQueryOptions.LookbackHours > 0 {
+	if transactionQueryOptions.LookbackMinutes > 0 {
+		sinceTimestamp := time.Now().Add(-time.Duration(transactionQueryOptions.LookbackMinutes) * time.Minute)
+		allTransactions, err = fetchTransactionsSinceTimestamp(account, environment, sinceTimestamp.UnixMicro())
+	} else if transactionQueryOptions.LookbackHours > 0 {
 		sinceTimestamp := time.Now().Add(-time.Duration(transactionQueryOptions.LookbackHours) * time.Hour)
 		allTransactions, err = fetchTransactionsSinceTimestamp(account, environment, sinceTimestamp.UnixMicro())
 	} else {
