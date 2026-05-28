@@ -29,3 +29,22 @@ jobs:
         uses: smartcontractkit/.github/actions/ci-test-go@ci-test-go/v1
         with:
           use-go-cache: true
+  on-chain-data-test:
+    name: On-chain Data Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Extract Go version
+        uses: ./.github/actions/check-go-version
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.go_version }}
+          cache-dependency-path: scripts/on-chain-data/go.sum
+
+      - name: Run on-chain-data tests
+        working-directory: scripts/on-chain-data
+        run: go test -count=1 ./...
