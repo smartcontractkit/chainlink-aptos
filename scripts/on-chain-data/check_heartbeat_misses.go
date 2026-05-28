@@ -1,3 +1,6 @@
+// check-heartbeat-misses scans a get-feed-updated-events CSV for provable heartbeat
+// breaches. For each configured feed, consecutive observation timestamps are compared;
+// a breach is recorded when gap > heartbeat. No wall-clock time is used.
 package main
 
 import (
@@ -107,6 +110,7 @@ func normalizeFeedID(feedID string) string {
 }
 
 func readObservationsByFeed(input string, feedIDs map[string]struct{}) (map[string][]heartbeatObservation, error) {
+	// Requires get-feed-updated-events CSV columns, not get-feed-gaps output.
 	expectedHeaders := []string{"success", "vm_status", "transaction_hash", "gas_used", "block_timestamp", "observation_timestamp", "feed_id", "benchmark"}
 
 	records, err := readCSVFile(input, expectedHeaders)
@@ -139,6 +143,7 @@ func readObservationsByFeed(input string, feedIDs map[string]struct{}) (map[stri
 		}
 
 		current, exists := dedupedByFeed[feedID][observationTimestamp]
+		// One writer tx batch can emit duplicate rows for the same observation; keep the earliest block.
 		if !exists || blockTimestamp < current.blockTimestamp {
 			dedupedByFeed[feedID][observationTimestamp] = heartbeatObservation{
 				observationTimestamp: observationTimestamp,
@@ -166,6 +171,7 @@ func readObservationsByFeed(input string, feedIDs map[string]struct{}) (map[stri
 }
 
 func findHeartbeatBreaches(feedConfig FeedHeartbeatConfig, observations []heartbeatObservation) ([]heartbeatBreach, feedHeartbeatSummary) {
+	// observations must already be sorted by observation_timestamp ascending.
 	summary := feedHeartbeatSummary{
 		StreamID:  feedConfig.StreamID,
 		FeedID:    feedConfig.FeedID,
@@ -194,6 +200,7 @@ func findHeartbeatBreaches(feedConfig FeedHeartbeatConfig, observations []heartb
 			}
 
 			if gapSeconds > feedConfig.Heartbeat {
+				// Strict greater-than: gap == heartbeat is not a breach.
 				summary.BreachCount++
 				summary.Status = "BREACHED"
 				breaches = append(breaches, heartbeatBreach{

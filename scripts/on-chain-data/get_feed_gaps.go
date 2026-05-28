@@ -1,3 +1,6 @@
+// get-feed-gaps fetches on-chain feed updates for a recent time window and writes a CSV
+// with the observation gap since each feed's previous update. Unlike check-heartbeat-misses,
+// this command fetches live data and does not require a heartbeat config.
 package main
 
 import (
@@ -99,6 +102,7 @@ func runGetFeedGaps(env string, lookbackMinutes int) error {
 }
 
 func buildFeedGapRows(feedEvents []FeedUpdatedEventData, windowStartUnix int64, now time.Time) ([]FeedGapRow, []feedGapSummary) {
+	// now is only used by callers for logging/window bounds; gap math uses observation timestamps.
 	dedupedByFeed := make(map[string]map[int64]feedGapObservation)
 
 	for _, event := range feedEvents {
@@ -120,6 +124,7 @@ func buildFeedGapRows(feedEvents []FeedUpdatedEventData, windowStartUnix int64, 
 		}
 
 		current, exists := dedupedByFeed[feedID][observationTimestamp]
+		// Multiple writer txs for the same observation collapse to the earliest block timestamp.
 		if !exists || blockTimestamp < current.blockTimestamp {
 			dedupedByFeed[feedID][observationTimestamp] = feedGapObservation{
 				feedID:               feedID,
@@ -163,6 +168,7 @@ func buildFeedGapRows(feedEvents []FeedUpdatedEventData, windowStartUnix int64, 
 				gapValue = observation.observationTimestamp - lastObservationTimestamp
 				gapSinceLastUpdate = strconv.FormatInt(gapValue, 10)
 
+				// Count gaps ending inside the window, even when the previous obs was before it.
 				if observation.observationTimestamp >= windowStartUnix {
 					gapSummaries = append(gapSummaries, feedGapSummary{
 						feedID:               feedID,
@@ -177,6 +183,7 @@ func buildFeedGapRows(feedEvents []FeedUpdatedEventData, windowStartUnix int64, 
 			lastObservationTimestamp = observation.observationTimestamp
 			hasLastObservation = true
 
+			// Skip exporting rows before the window; they still contribute gap context above.
 			if observation.observationTimestamp < windowStartUnix {
 				continue
 			}
