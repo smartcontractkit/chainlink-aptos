@@ -32,6 +32,8 @@ jobs:
   on-chain-data-test:
     name: On-chain Data Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Check out code
         uses: actions/checkout@v6
