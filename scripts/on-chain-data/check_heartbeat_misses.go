@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -19,23 +18,31 @@ type FeedHeartbeatConfig struct {
 	Heartbeat int64  `json:"heartbeat"`
 }
 
-type LatestFeedObservation struct {
+type heartbeatObservation struct {
+	observationTimestamp int64
+	blockTimestamp       int64
+	transactionHash      string
+}
+
+type heartbeatBreach struct {
 	StreamID             string
 	FeedID               string
 	Heartbeat            int64
-	ObservationTimestamp int64
-	BlockTimestamp       int64
+	GapSeconds           int64
+	PreviousObsTimestamp int64
+	CurrentObsTimestamp  int64
 	TransactionHash      string
 }
 
-type HeartbeatCheckResult struct {
-	StreamID             string
-	FeedID               string
-	Heartbeat            int64
-	ObservationTimestamp int64
-	AgeSeconds           int64
-	Status               string
-	TransactionHash      string
+type feedHeartbeatSummary struct {
+	StreamID      string
+	FeedID        string
+	Heartbeat     int64
+	UpdateCount   int
+	GapCount      int
+	BreachCount   int
+	MaxGapSeconds int64
+	Status        string
 }
 
 func BuildCheckHeartbeatMisses() *cobra.Command {
@@ -46,7 +53,7 @@ func BuildCheckHeartbeatMisses() *cobra.Command {
 
 	cmd := cobra.Command{
 		Use:   "check-heartbeat-misses",
-		Short: "Check configured feeds for heartbeat misses using FeedUpdated event CSV data",
+		Short: "Find heartbeat breaches in a FeedUpdated events CSV by comparing observation gaps to configured thresholds",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			feedConfigs, err := loadFeedHeartbeatConfigs(configFile)
 			if err != nil {
@@ -99,15 +106,15 @@ func normalizeFeedID(feedID string) string {
 	return strings.ToLower(feedID)
 }
 
-func readLatestObservationsByFeed(input string, feedIDs map[string]struct{}) (map[string]LatestFeedObservation, error) {
+func readObservationsByFeed(input string, feedIDs map[string]struct{}) (map[string][]heartbeatObservation, error) {
 	expectedHeaders := []string{"success", "vm_status", "transaction_hash", "gas_used", "block_timestamp", "observation_timestamp", "feed_id", "benchmark"}
 
 	records, err := readCSVFile(input, expectedHeaders)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read CSV: %w", err)
+		return nil, fmt.Errorf("failed to read CSV (expected output from get-feed-updated-events): %w", err)
 	}
 
-	latestByFeed := make(map[string]LatestFeedObservation)
+	dedupedByFeed := make(map[string]map[int64]heartbeatObservation)
 
 	for _, record := range records {
 		feedID := normalizeFeedID(record[6])
@@ -127,83 +134,136 @@ func readLatestObservationsByFeed(input string, feedIDs map[string]struct{}) (ma
 			continue
 		}
 
-		current, exists := latestByFeed[feedID]
-		if !exists || observationTimestamp > current.ObservationTimestamp {
-			latestByFeed[feedID] = LatestFeedObservation{
-				FeedID:               feedID,
-				ObservationTimestamp: observationTimestamp,
-				BlockTimestamp:       blockTimestamp,
-				TransactionHash:      record[2],
+		if _, ok := dedupedByFeed[feedID]; !ok {
+			dedupedByFeed[feedID] = make(map[int64]heartbeatObservation)
+		}
+
+		current, exists := dedupedByFeed[feedID][observationTimestamp]
+		if !exists || blockTimestamp < current.blockTimestamp {
+			dedupedByFeed[feedID][observationTimestamp] = heartbeatObservation{
+				observationTimestamp: observationTimestamp,
+				blockTimestamp:       blockTimestamp,
+				transactionHash:      record[2],
 			}
 		}
 	}
 
-	return latestByFeed, nil
+	observationsByFeed := make(map[string][]heartbeatObservation, len(dedupedByFeed))
+	for feedID, byTimestamp := range dedupedByFeed {
+		observations := make([]heartbeatObservation, 0, len(byTimestamp))
+		for _, observation := range byTimestamp {
+			observations = append(observations, observation)
+		}
+
+		sort.Slice(observations, func(i, j int) bool {
+			return observations[i].observationTimestamp < observations[j].observationTimestamp
+		})
+
+		observationsByFeed[feedID] = observations
+	}
+
+	return observationsByFeed, nil
+}
+
+func findHeartbeatBreaches(feedConfig FeedHeartbeatConfig, observations []heartbeatObservation) ([]heartbeatBreach, feedHeartbeatSummary) {
+	summary := feedHeartbeatSummary{
+		StreamID:  feedConfig.StreamID,
+		FeedID:    feedConfig.FeedID,
+		Heartbeat: feedConfig.Heartbeat,
+		Status:    "NO_DATA",
+	}
+
+	if len(observations) == 0 {
+		return nil, summary
+	}
+
+	summary.UpdateCount = len(observations)
+	summary.Status = "OK"
+
+	var breaches []heartbeatBreach
+	var lastObservationTimestamp int64
+	hasLastObservation := false
+
+	for _, observation := range observations {
+		if hasLastObservation {
+			gapSeconds := observation.observationTimestamp - lastObservationTimestamp
+			summary.GapCount++
+
+			if gapSeconds > summary.MaxGapSeconds {
+				summary.MaxGapSeconds = gapSeconds
+			}
+
+			if gapSeconds > feedConfig.Heartbeat {
+				summary.BreachCount++
+				summary.Status = "BREACHED"
+				breaches = append(breaches, heartbeatBreach{
+					StreamID:             feedConfig.StreamID,
+					FeedID:               feedConfig.FeedID,
+					Heartbeat:            feedConfig.Heartbeat,
+					GapSeconds:           gapSeconds,
+					PreviousObsTimestamp: lastObservationTimestamp,
+					CurrentObsTimestamp:  observation.observationTimestamp,
+					TransactionHash:      observation.transactionHash,
+				})
+			}
+		}
+
+		lastObservationTimestamp = observation.observationTimestamp
+		hasLastObservation = true
+	}
+
+	return breaches, summary
 }
 
 func runCheckHeartbeatMisses(inputFile string, feedConfigs []FeedHeartbeatConfig) error {
 	feedIDs := make(map[string]struct{}, len(feedConfigs))
-	configByFeedID := make(map[string]FeedHeartbeatConfig, len(feedConfigs))
-
 	for _, feedConfig := range feedConfigs {
 		feedIDs[feedConfig.FeedID] = struct{}{}
-		configByFeedID[feedConfig.FeedID] = feedConfig
 	}
 
-	latestByFeed, err := readLatestObservationsByFeed(inputFile, feedIDs)
+	observationsByFeed, err := readObservationsByFeed(inputFile, feedIDs)
 	if err != nil {
 		return err
 	}
 
-	now := time.Now().UTC()
-	results := make([]HeartbeatCheckResult, 0, len(feedConfigs))
+	var allBreaches []heartbeatBreach
+	summaries := make([]feedHeartbeatSummary, 0, len(feedConfigs))
 
 	for _, feedConfig := range feedConfigs {
-		latest, ok := latestByFeed[feedConfig.FeedID]
-		if !ok {
-			results = append(results, HeartbeatCheckResult{
-				StreamID: feedConfig.StreamID,
-				FeedID:   feedConfig.FeedID,
-				Heartbeat: feedConfig.Heartbeat,
-				Status:   "NO_DATA",
-			})
-			continue
-		}
-
-		ageSeconds := now.Unix() - latest.ObservationTimestamp
-		status := "OK"
-		if ageSeconds > feedConfig.Heartbeat {
-			status = "BREACHED"
-		}
-
-		results = append(results, HeartbeatCheckResult{
-			StreamID:             feedConfig.StreamID,
-			FeedID:               feedConfig.FeedID,
-			Heartbeat:            feedConfig.Heartbeat,
-			ObservationTimestamp: latest.ObservationTimestamp,
-			AgeSeconds:           ageSeconds,
-			Status:               status,
-			TransactionHash:      latest.TransactionHash,
-		})
+		breaches, summary := findHeartbeatBreaches(feedConfig, observationsByFeed[feedConfig.FeedID])
+		allBreaches = append(allBreaches, breaches...)
+		summaries = append(summaries, summary)
 	}
 
-	sort.Slice(results, func(i, j int) bool {
-		if results[i].StreamID != "" && results[j].StreamID != "" {
-			return results[i].StreamID < results[j].StreamID
+	sort.Slice(summaries, func(i, j int) bool {
+		if summaries[i].StreamID != "" && summaries[j].StreamID != "" {
+			return summaries[i].StreamID < summaries[j].StreamID
 		}
-		return results[i].FeedID < results[j].FeedID
+		return summaries[i].FeedID < summaries[j].FeedID
 	})
 
-	printHeartbeatCheckResults(inputFile, now, results)
+	sort.Slice(allBreaches, func(i, j int) bool {
+		if allBreaches[i].GapSeconds != allBreaches[j].GapSeconds {
+			return allBreaches[i].GapSeconds > allBreaches[j].GapSeconds
+		}
+		if allBreaches[i].FeedID != allBreaches[j].FeedID {
+			return allBreaches[i].FeedID < allBreaches[j].FeedID
+		}
+		return allBreaches[i].CurrentObsTimestamp > allBreaches[j].CurrentObsTimestamp
+	})
 
-	breachCount := 0
-	noDataCount := 0
+	printHeartbeatCheckResults(inputFile, summaries, allBreaches)
+
 	okCount := 0
+	breachFeedCount := 0
+	noDataCount := 0
+	totalBreaches := 0
 
-	for _, result := range results {
-		switch result.Status {
+	for _, summary := range summaries {
+		totalBreaches += summary.BreachCount
+		switch summary.Status {
 		case "BREACHED":
-			breachCount++
+			breachFeedCount++
 		case "NO_DATA":
 			noDataCount++
 		case "OK":
@@ -211,56 +271,71 @@ func runCheckHeartbeatMisses(inputFile string, feedConfigs []FeedHeartbeatConfig
 		}
 	}
 
-	log.Printf("Summary: %d OK, %d BREACHED, %d NO_DATA", okCount, breachCount, noDataCount)
+	log.Printf("Summary: %d feeds OK, %d feeds with breaches, %d feeds NO_DATA, %d total breach events",
+		okCount, breachFeedCount, noDataCount, totalBreaches)
 
 	return nil
 }
 
-func printHeartbeatCheckResults(inputFile string, now time.Time, results []HeartbeatCheckResult) {
-	log.Printf("Checking heartbeat misses from file %s", inputFile)
-	log.Printf("Current time (UTC): %s", now.Format(time.RFC3339))
+func printHeartbeatCheckResults(inputFile string, summaries []feedHeartbeatSummary, breaches []heartbeatBreach) {
+	log.Printf("Checking heartbeat breaches in %s", inputFile)
+	log.Printf("A breach is recorded when the gap between consecutive observation timestamps exceeds the configured heartbeat.")
 	log.Println("")
-	log.Printf("%-12s %-68s %10s %-26s %10s %-10s %s", "Stream", "Feed ID", "Heartbeat", "Last Obs (UTC)", "Age (s)", "Status", "Notes")
+	log.Printf("%-12s %-68s %10s %8s %8s %8s %10s %-10s",
+		"Stream", "Feed ID", "Heartbeat", "Updates", "Gaps", "Breaches", "Max Gap", "Status")
 
-	for _, result := range results {
-		streamID := result.StreamID
+	for _, summary := range summaries {
+		streamID := summary.StreamID
 		if streamID == "" {
 			streamID = "-"
 		}
 
-		switch result.Status {
-		case "NO_DATA":
-			log.Printf("%-12s %-68s %10d %-26s %10s %-10s %s",
-				streamID,
-				result.FeedID,
-				result.Heartbeat,
-				"NO EVENTS IN CSV",
-				"-",
-				result.Status,
-				"extend get-feed-updated-events lookback",
-			)
-		case "BREACHED":
-			log.Printf("%-12s %-68s %10d %-26s %10d %-10s over by %ds, tx %s",
-				streamID,
-				result.FeedID,
-				result.Heartbeat,
-				time.Unix(result.ObservationTimestamp, 0).UTC().Format(time.RFC3339),
-				result.AgeSeconds,
-				result.Status,
-				result.AgeSeconds-result.Heartbeat,
-				result.TransactionHash,
-			)
-		default:
-			log.Printf("%-12s %-68s %10d %-26s %10d %-10s margin %ds, tx %s",
-				streamID,
-				result.FeedID,
-				result.Heartbeat,
-				time.Unix(result.ObservationTimestamp, 0).UTC().Format(time.RFC3339),
-				result.AgeSeconds,
-				result.Status,
-				result.Heartbeat-result.AgeSeconds,
-				result.TransactionHash,
-			)
+		maxGap := "-"
+		if summary.GapCount > 0 {
+			maxGap = fmt.Sprintf("%ds", summary.MaxGapSeconds)
 		}
+
+		log.Printf("%-12s %-68s %10d %8d %8d %8d %10s %-10s",
+			streamID,
+			summary.FeedID,
+			summary.Heartbeat,
+			summary.UpdateCount,
+			summary.GapCount,
+			summary.BreachCount,
+			maxGap,
+			summary.Status,
+		)
+	}
+
+	if len(breaches) == 0 {
+		log.Println("")
+		log.Println("No heartbeat breaches found in CSV.")
+		return
+	}
+
+	const topBreachLimit = 20
+	topBreaches := breaches
+	if len(topBreaches) > topBreachLimit {
+		topBreaches = topBreaches[:topBreachLimit]
+	}
+
+	log.Println("")
+	log.Printf("Heartbeat breaches (top %d, %d total):", len(topBreaches), len(breaches))
+	for _, breach := range topBreaches {
+		streamID := breach.StreamID
+		if streamID == "" {
+			streamID = "-"
+		}
+
+		log.Printf("  stream %s | feed %s | gap %ds (HB %ds, over by %ds) | %s -> %s UTC | tx %s",
+			streamID,
+			breach.FeedID,
+			breach.GapSeconds,
+			breach.Heartbeat,
+			breach.GapSeconds-breach.Heartbeat,
+			formatUnixSecondsUTC(breach.PreviousObsTimestamp),
+			formatUnixSecondsUTC(breach.CurrentObsTimestamp),
+			breach.TransactionHash,
+		)
 	}
 }

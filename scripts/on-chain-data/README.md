@@ -13,7 +13,7 @@ go run . <command> [flags]
 |---------|---------|
 | `get-feed-updated-events` | Fetch raw `FeedUpdated` events to CSV |
 | `get-feed-gaps` | Fetch updates and compute observation gaps per feed |
-| `check-heartbeat-misses` | Check configured feeds against heartbeat thresholds |
+| `check-heartbeat-misses` | Find observation gaps in a CSV that exceed configured heartbeats |
 | `compute-data-feed-updated-events-metrics` | Latency/gas metrics from a events CSV |
 | `find-workflow-report-id` | Find which feed contains a report ID |
 | `get-account-balances` | Writer account balances |
@@ -101,9 +101,7 @@ Notes:
 
 ### Check Heartbeat Misses
 
-This Go script checks whether configured feeds have exceeded their heartbeat based on the latest `observation_timestamp` in a FeedUpdated events CSV. A feed is marked `BREACHED` when `now - observation_timestamp > heartbeat`.
-
-**Flags:**
+Scans a `get-feed-updated-events` CSV for **provable** heartbeat breaches. For each configured feed, observations are sorted by `observation_timestamp`, consecutive gaps are computed, and any gap greater than the configured heartbeat is reported. No wall-clock time is used — results depend only on the CSV contents.
 
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
@@ -124,7 +122,7 @@ Example config: `examples/heartbeat-config.mainnet.json`
 # 1. Fetch recent on-chain updates and gap analysis
 go run . get-feed-gaps -e mainnet -m 120
 
-# 2. Check current heartbeat status for configured feeds
+# 2. Find heartbeat breaches in the exported events
 go run . get-feed-updated-events -e mainnet -l 2
 go run . check-heartbeat-misses \
   -i aptos-data-feed-events-mainnet-latest.csv \

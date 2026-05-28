@@ -57,7 +57,7 @@ func readCSVFile(input string, expectedHeaders []string) ([][]string, error) {
 	// Ensure correct header names
 	for i, headerName := range expectedHeaders {
 		if strings.ToLower(header[i]) != headerName {
-			return nil, fmt.Errorf("unexpected header %s formate: %w", header[i], err)
+			return nil, fmt.Errorf("unexpected header %q at column %d, expected %q (is this a get-feed-updated-events CSV?)", header[i], i+1, headerName)
 		}
 	}
 
