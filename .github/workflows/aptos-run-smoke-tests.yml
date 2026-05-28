@@ -49,14 +49,19 @@ jobs:
 
     # Clear up disk space, else we run out below:
     # Unhandled exception. System.IO.IOException: No space left on device : '/home/runner/actions-runner/cached/_diag/Worker_20250801-102100-utc.log'
+    # ubuntu-latest has ~72G on / and a separate ~74G volume on /mnt — write the tar there.
     - name: Flatten chainlink-aptos image
       run: |
         set -e
         df -h
-        docker save chainlink-aptos:latest -o chainlink-aptos.tar
+        # Base image is already in chainlink-aptos layers; drop it before save.
+        docker rmi local_chainlink || true
+        docker builder prune -af || true
+        export TMPDIR=/mnt
+        docker save chainlink-aptos:latest -o /mnt/chainlink-aptos.tar
         docker system prune -a -f
-        docker load -i chainlink-aptos.tar
-        rm -vf chainlink-aptos.tar
+        docker load -i /mnt/chainlink-aptos.tar
+        rm -vf /mnt/chainlink-aptos.tar
         df -h
 
     - name: Extract Go version
