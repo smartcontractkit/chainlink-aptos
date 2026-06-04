@@ -199,6 +199,7 @@ module curse_mcms::curse_mcms {
     const E_UNKNOWN_TARGET: u64 = 54;
     const E_UNKNOWN_CURSE_MCMS_MODULE_FUNCTION: u64 = 55;
     const E_UNKNOWN_CURSE_MCMS_ACCOUNT_FUNCTION: u64 = 56;
+    const E_INVALID_PREDECESSOR_LEN: u64 = 57;
 
     fun init_module(publisher: &signer) {
         let bypasser = create_multisig(publisher, BYPASSER_ROLE);
@@ -1535,6 +1536,7 @@ module curse_mcms::curse_mcms {
     public fun hash_operation_batch(
         calls: vector<Call>, predecessor: vector<u8>, salt: vector<u8>
     ): vector<u8> {
+        assert!(predecessor.length() == 32, E_INVALID_PREDECESSOR_LEN);
         let packed = vector[];
         packed.append(bcs::to_bytes(&calls));
         packed.append(predecessor);

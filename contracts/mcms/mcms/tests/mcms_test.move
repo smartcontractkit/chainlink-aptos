@@ -29,7 +29,7 @@ module mcms::mcms_tests {
     const MIN_DELAY: u64 = 3600; // 1 hour delay
     const TEST_TARGET_ADDRESS: address = @0xabc;
     const TEST_SALT: vector<u8> = x"1234567890abcdef";
-    const TEST_PREDECESSOR: vector<u8> = x"";
+    const TEST_PREDECESSOR: vector<u8> = x"0000000000000000000000000000000000000000000000000000000000000000";
 
     // Proposer signers from the logs (already in ascending order)
     const PROPOSER_ADDR1: vector<u8> = x"5916431f0ea809587757df994233861e1271be55";
@@ -1417,6 +1417,21 @@ module mcms::mcms_tests {
         assert!(min_delay == 0, 0);
     }
 
+    #[test]
+    #[expected_failure(
+        abort_code = mcms::mcms::E_INVALID_PREDECESSOR_LEN, location = mcms::mcms
+    )]
+    public fun test_hash_operation_batch__invalid_predecessor_len() {
+        let calls =
+            mcms::create_calls(
+                vector[@mcms],
+                vector[string::utf8(b"mcms")],
+                vector[string::utf8(b"timelock_update_min_delay")],
+                vector[bcs::to_bytes(&MIN_DELAY)]
+            );
+        let _ = mcms::hash_operation_batch(calls, x"deadbeef", TEST_SALT);
+    }
+
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     public fun test_update_min_delay(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1569,7 +1584,7 @@ module mcms::mcms_tests {
             vector[string::utf8(b"test_module")], // But only 1 module name
             vector[string::utf8(b"test_function")],
             vector[vector[0u8]],
-            vector[],
+            mcms::zero_hash(),
             vector[],
             0
         );
@@ -1591,7 +1606,7 @@ module mcms::mcms_tests {
             vector[string::utf8(b"test_module")],
             vector[string::utf8(b"test_function")],
             vector[vector[0u8]],
-            vector[],
+            mcms::zero_hash(),
             vector[1u8],
             MIN_DELAY - 1
         );
@@ -1612,7 +1627,7 @@ module mcms::mcms_tests {
         let module_names = vector[string::utf8(b"test_module")];
         let function_names = vector[string::utf8(b"test_function")];
         let datas = vector[vector[0u8]];
-        let predecessor = vector[];
+        let predecessor = mcms::zero_hash();
         let salt = vector[1u8];
 
         mcms::test_timelock_schedule_batch(
@@ -1655,7 +1670,7 @@ module mcms::mcms_tests {
             vector[string::utf8(b"test_module")],
             vector[string::utf8(b"test_function")],
             vector[vector[0u8]],
-            vector[],
+            mcms::zero_hash(),
             vector[],
             0
         );
@@ -1672,7 +1687,7 @@ module mcms::mcms_tests {
         let module_names = vector[string::utf8(b"test_module")];
         let function_names = vector[string::utf8(b"test_function")];
         let datas = vector[vector[0u8]];
-        let predecessor = vector[];
+        let predecessor = mcms::zero_hash();
         let salt = vector[1u8];
 
         let delay = 100000;
@@ -1767,7 +1782,7 @@ module mcms::mcms_tests {
         let module_names1 = vector[string::utf8(b"test_module")];
         let function_names1 = vector[string::utf8(b"test_function1")];
         let datas1 = vector[vector[0u8]];
-        let predecessor1 = vector[];
+        let predecessor1 = mcms::zero_hash();
         let salt1 = vector[1u8];
 
         // First, schedule the first batch
@@ -1783,7 +1798,8 @@ module mcms::mcms_tests {
 
         // Generate a unique identifier for the second batch
         let salt2 = vector[2u8];
-        let predecessor2 = x"deadbeef"; // Use a non-existent operation ID as a predecessor
+        let predecessor2 =
+            x"deadbeef00000000000000000000000000000000000000000000000000000000"; // Non-existent operation ID
 
         // Schedule second batch with dependency on non-existent operation
         let targets2 = vector[@mcms];

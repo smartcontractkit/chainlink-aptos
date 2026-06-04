@@ -1,6 +1,7 @@
 #[test_only]
 module curse_mcms::curse_mcms_test {
     use std::signer;
+    use std::string;
     use std::vector;
     use aptos_framework::account;
     use aptos_framework::timestamp;
@@ -603,5 +604,22 @@ module curse_mcms::curse_mcms_test {
         // Verify configs are independent
         let _config_bypasser = curse_mcms::get_config(curse_mcms::bypasser_role());
         let _config_proposer = curse_mcms::get_config(curse_mcms::proposer_role());
+    }
+
+    #[test]
+    #[
+        expected_failure(
+            abort_code = curse_mcms::curse_mcms::E_INVALID_PREDECESSOR_LEN,
+            location = curse_mcms::curse_mcms
+        )
+    ]
+    fun test_hash_operation_batch__invalid_predecessor_len() {
+        let calls = curse_mcms::create_calls(
+            vector[@curse_mcms],
+            vector[string::utf8(b"curse_mcms")],
+            vector[string::utf8(b"timelock_update_min_delay")],
+            vector[vector[0u8]]
+        );
+        let _ = curse_mcms::hash_operation_batch(calls, x"deadbeef", vector[1u8]);
     }
 }
