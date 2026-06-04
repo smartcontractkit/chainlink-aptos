@@ -757,6 +757,13 @@ func ScheduleBatchOperationsAsDeployer(
 }
 
 func HashOperationBatch(targets []aptos.AccountAddress, moduleNames, functionNames []string, datas [][]byte, predecessor, salt []byte) (common.Hash, error) {
+	if len(predecessor) != 32 {
+		return common.Hash{}, fmt.Errorf("predecessor must be 32 bytes, got %d", len(predecessor))
+	}
+	if len(salt) != 32 {
+		return common.Hash{}, fmt.Errorf("salt must be 32 bytes, got %d", len(salt))
+	}
+
 	// Verify all arrays have the same length
 	if len(targets) != len(moduleNames) || len(targets) != len(functionNames) || len(targets) != len(datas) {
 		return common.Hash{}, fmt.Errorf("mismatched array lengths: targets=%d, moduleNames=%d, functionNames=%d, datas=%d",

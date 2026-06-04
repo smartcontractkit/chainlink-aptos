@@ -291,7 +291,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		}
 		// ZERO_HASH (32 bytes of zeros)
 		predecessor := make([]byte, 32)
-		salt := []byte{}
+		salt := make([]byte, 32)
 		delay := uint64(0)
 
 		rootMetadata := RootMetadata{
@@ -465,7 +465,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 			}
 			// ZERO_HASH (32 bytes of zeros)
 			predecessor := make([]byte, 32)
-			salt := []byte{}
+			salt := make([]byte, 32)
 			delay := TEST_DELAY
 
 			rootMetadata := RootMetadata{
@@ -635,7 +635,7 @@ func runMultisigTest(t *testing.T, logger logger.Logger, rpcURL string, keystore
 		}
 		// ZERO_HASH (32 bytes of zeros)
 		predecessor := make([]byte, 32)
-		salt := []byte{}
+		salt := make([]byte, 32)
 		delay := TEST_DELAY
 
 		rootMetadata := RootMetadata{

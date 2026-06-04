@@ -196,6 +196,7 @@ const (
 	E_NOT_TIMELOCK_ROLE                     uint64 = 51
 	E_UNKNOWN_MCMS_MODULE                   uint64 = 52
 	E_INVALID_PREDECESSOR_LEN               uint64 = 53
+	E_INVALID_SALT_LEN                      uint64 = 54
 )
 
 // Structs

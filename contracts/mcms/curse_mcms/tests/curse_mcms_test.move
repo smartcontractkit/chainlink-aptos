@@ -614,12 +614,32 @@ module curse_mcms::curse_mcms_test {
         )
     ]
     fun test_hash_operation_batch__invalid_predecessor_len() {
-        let calls = curse_mcms::create_calls(
-            vector[@curse_mcms],
-            vector[string::utf8(b"curse_mcms")],
-            vector[string::utf8(b"timelock_update_min_delay")],
-            vector[vector[0u8]]
-        );
+        let calls =
+            curse_mcms::create_calls(
+                vector[@curse_mcms],
+                vector[string::utf8(b"curse_mcms")],
+                vector[string::utf8(b"timelock_update_min_delay")],
+                vector[vector[0u8]]
+            );
         let _ = curse_mcms::hash_operation_batch(calls, x"deadbeef", vector[1u8]);
+    }
+
+    #[test]
+    #[
+        expected_failure(
+            abort_code = curse_mcms::curse_mcms::E_INVALID_SALT_LEN,
+            location = curse_mcms::curse_mcms
+        )
+    ]
+    fun test_hash_operation_batch__invalid_salt_len() {
+        let calls =
+            curse_mcms::create_calls(
+                vector[@curse_mcms],
+                vector[string::utf8(b"curse_mcms")],
+                vector[string::utf8(b"timelock_update_min_delay")],
+                vector[vector[0u8]]
+            );
+        let _ =
+            curse_mcms::hash_operation_batch(calls, curse_mcms::zero_hash(), x"deadbeef");
     }
 }

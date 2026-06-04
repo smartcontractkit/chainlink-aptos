@@ -356,7 +356,7 @@ func runDeployMCMSAndCCIPInChunks(t *testing.T, logger logger.Logger, rpcURL str
 
 	// Schedule and execute operations
 	delay := uint64(TEST_DELAY)
-	salt := []byte{} // Empty salt for initial deployment
+	salt := make([]byte, 32) // ZERO_SALT (32 bytes, matches on-chain bytes32 salt)
 	scheduleAndExecuteOperations(t, logger, txm, allOperations, proposerSigners, deployerAddress, deployerPublicKeyHex, role, deployChainIdBig, delay, salt, false)
 
 	// Verify deployment was successful
@@ -441,7 +441,8 @@ func runDeployMCMSAndCCIPInChunks(t *testing.T, logger logger.Logger, rpcURL str
 	allUpgradeOps = append(allUpgradeOps, upgradeOp)
 
 	// Schedule and execute upgrade operations (with unique salt)
-	upgradeSalt := []byte("upgrade") // Use a different salt for the upgrade
+	upgradeSalt := make([]byte, 32)
+	copy(upgradeSalt, []byte("upgrade")) // distinct from zero salt; must be 32 bytes on-chain
 	scheduleAndExecuteOperations(t, logger, txm, allUpgradeOps, proposerSigners,
 		deployerAddress, deployerPublicKeyHex, role, deployChainIdBig, delay, upgradeSalt, false)
 

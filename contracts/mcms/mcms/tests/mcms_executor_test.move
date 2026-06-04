@@ -17,11 +17,11 @@ module mcms::mcms_executor_test {
     const TEST_CHAIN_ID: u256 = 4;
     const TEST_NONCE: u64 = 0;
 
-    const PROPOSER_ADDR1: vector<u8> = x"5916431f0ea809587757df994233861e1271be55";
-    const PROPOSER_ADDR2: vector<u8> = x"8803c3ed076e57d51e28301933418094bd961cc5";
-    const PROPOSER_ADDR3: vector<u8> = x"8950e6c6832c9b0591801418684d27b2853b2c74";
+    const PROPOSER_ADDR1: vector<u8> = x"2b5ad5c4795c026514f8317c7a215e218dccd6cf";
+    const PROPOSER_ADDR2: vector<u8> = x"6813eb9362372eef6200f3b1dbc3f819671cba69";
+    const PROPOSER_ADDR3: vector<u8> = x"7e5f4552091a69125d5dfcb7b8c2659029395bdf";
 
-    const ROOT: vector<u8> = x"f7a8b0f28b2ae826313604377ecd0dd07dd4107e0777db5d251560aa2dbf760d";
+    const ROOT: vector<u8> = x"d65e7d9805d6a2943fd5bdaf9f14285788b8ae7fdcb6424f1b0c1fe0e63d90bc";
 
     const TEST_PROOF: vector<vector<u8>> = vector[
         x"a619565e90c1c564293b59b344ed0e12ed06eafb3c45b70baf6fdf299a046297",

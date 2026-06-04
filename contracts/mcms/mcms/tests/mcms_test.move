@@ -20,6 +20,9 @@ module mcms::mcms_tests {
     use mcms::mcms_registry;
     use std::code::{PackageRegistry};
 
+    // =================== Regenerate test constants ===================
+    // Run: go test ./relayer/txm -run TestRegenMcmsTestConstants -v
+
     // keccak256("MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP_APTOS")
     const MANY_CHAIN_MULTI_SIG_DOMAIN_SEPARATOR_OP: vector<u8> = x"e5a6d1256b00d7ec22512b6b60a3f4d75c559745d2dbf309f77b8b756caabe14";
 
@@ -28,13 +31,17 @@ module mcms::mcms_tests {
 
     const MIN_DELAY: u64 = 3600; // 1 hour delay
     const TEST_TARGET_ADDRESS: address = @0xabc;
-    const TEST_SALT: vector<u8> = x"1234567890abcdef";
+    const TEST_SALT: vector<u8> = x"1234567890abcdef000000000000000000000000000000000000000000000000";
+    const SALT_ONE: vector<u8> = x"0000000000000000000000000000000000000000000000000000000000000001";
+    const SALT_TWO: vector<u8> = x"0000000000000000000000000000000000000000000000000000000000000002";
+    const SALT_ABCD: vector<u8> = x"abcd000000000000000000000000000000000000000000000000000000000000";
+    const SALT_EFAB: vector<u8> = x"efab000000000000000000000000000000000000000000000000000000000000";
     const TEST_PREDECESSOR: vector<u8> = x"0000000000000000000000000000000000000000000000000000000000000000";
 
     // Proposer signers from the logs (already in ascending order)
-    const PROPOSER_ADDR1: vector<u8> = x"5916431f0ea809587757df994233861e1271be55";
-    const PROPOSER_ADDR2: vector<u8> = x"8803c3ed076e57d51e28301933418094bd961cc5";
-    const PROPOSER_ADDR3: vector<u8> = x"8950e6c6832c9b0591801418684d27b2853b2c74";
+    const PROPOSER_ADDR1: vector<u8> = x"2b5ad5c4795c026514f8317c7a215e218dccd6cf";
+    const PROPOSER_ADDR2: vector<u8> = x"6813eb9362372eef6200f3b1dbc3f819671cba69";
+    const PROPOSER_ADDR3: vector<u8> = x"7e5f4552091a69125d5dfcb7b8c2659029395bdf";
 
     // test config: 2-of-3 multisig
     const SIGNER_GROUPS: vector<u8> = vector[0, 0, 0];
@@ -45,11 +52,11 @@ module mcms::mcms_tests {
     const GROUP_PARENTS: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
-    const ROOT: vector<u8> = x"f7a8b0f28b2ae826313604377ecd0dd07dd4107e0777db5d251560aa2dbf760d";
+    const ROOT: vector<u8> = x"d65e7d9805d6a2943fd5bdaf9f14285788b8ae7fdcb6424f1b0c1fe0e63d90bc";
     const POST_OP_COUNT: u64 = 4;
 
     const METADATA_PROOF: vector<vector<u8>> = vector[
-        x"66cf50cb9a50c740313fd0f889b676af60d35ef700711d94df6eeff3f1ba66c2",
+        x"0fff02db76d3a8c1d76a384c90404554d574239dc4e9d5c37c2b6580b6172842",
         x"951f1094081a858642cc6635f0885317828a7fddddd00668391c50f1e9e1bb66",
         x"597116801e22b18150f2abc4ca2ecd63e147bb67e24e4b5f900d49b909e1919f"
     ];
@@ -99,7 +106,7 @@ module mcms::mcms_tests {
     // 		},
     const LEAVES: vector<vector<u8>> = vector[
         x"a619565e90c1c564293b59b344ed0e12ed06eafb3c45b70baf6fdf299a046297", // metadata hash
-        x"66cf50cb9a50c740313fd0f889b676af60d35ef700711d94df6eeff3f1ba66c2", // op1 hash
+        x"0fff02db76d3a8c1d76a384c90404554d574239dc4e9d5c37c2b6580b6172842", // op1 hash
         x"2feec0e3a232c5c847874246203e62c43db473fe85245095122e166be9114e13", // op2 hash
         x"411a4726f8a920fc0a814bd9897a06f3dd0f1c799a047deaa6469f105f5a6705", // op3 hash
         x"cb4dffef33843b197cd33346d3339d8432b14789504167c63fb9f74a73baaea5" // op4 hash
@@ -109,13 +116,13 @@ module mcms::mcms_tests {
     const PRE_OP_COUNT: u64 = 0;
 
     const SIGNATURES: vector<vector<u8>> = vector[
-        x"72398e2f325e707217fa8108a08c126f49f4144c30c7e93896d139c9f1d9468c30424b060c19fa5c7820a17b57badb19375207c787878533834618688a4780581c",
-        x"9bb8ba839f9152cdc61556fcc70b0ebcb4d442654263a3d1c323e1eed85ebc6016e87c8e59f12d850b9d6b789ccafd93f19dcf65eb6fc75fd4351d5970214c1d1c",
-        x"225739c80de11d50f3dca8fbb8288881abad17439690abd8eee32d48ff2f6dd204c48aff2fac4dfe8ce7176fd12d2633d7892bfb3d3f3cfeb00352773fe55c8c1b"
+        x"f7fa9f145088415bad762a9b8a34e9219c5a83b5e32fbcd36d54791070b281270d55578ec3754867f6788c1bb98c34f130ad71b3619234019b75a77552e9e0581b",
+        x"bec2d7b5640661bc84d4c70bb43b9eb3d0b9c16cc67a36429c9393c3406b137619ebcc87dcdfbfa73fa9ba79c0cd10e4add392e2160590d3d2dbbbd2fbddfae51c",
+        x"04d0b81e83d16a344fb9736c359bdc254b9ce6db2e2185c33327b5091ff1f48d6e92b31c17271439e698ffe992c3483a1b8f44552809c0ac5abc1411ae44a77c1b"
     ];
 
     const OP1_NONCE: u64 = 0;
-    const OP1_DATA: vector<u8> = x"01a969156fce9a4f08bcdc07b90f338efc630bff8dfa8340500cb6414aca762a4e010c6d636d735f6163636f756e7401106163636570745f6f776e6572736869700100200000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+    const OP1_DATA: vector<u8> = x"01a969156fce9a4f08bcdc07b90f338efc630bff8dfa8340500cb6414aca762a4e010c6d636d735f6163636f756e7401106163636570745f6f776e65727368697001002000000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000000100000000000000";
 
     #[test_only]
     fun setup(deployer: &signer, owner: &signer, framework: &signer): address {
@@ -236,7 +243,7 @@ module mcms::mcms_tests {
             vector[string::utf8(b"accept_ownership")],
             vector[vector[]],
             mcms::zero_hash(),
-            vector[]
+            mcms::zero_hash()
         );
 
         // Verify new owner is now `@mcms`
@@ -1432,6 +1439,19 @@ module mcms::mcms_tests {
         let _ = mcms::hash_operation_batch(calls, x"deadbeef", TEST_SALT);
     }
 
+    #[test]
+    #[expected_failure(abort_code = mcms::mcms::E_INVALID_SALT_LEN, location = mcms::mcms)]
+    public fun test_hash_operation_batch__invalid_salt_len() {
+        let calls =
+            mcms::create_calls(
+                vector[@mcms],
+                vector[string::utf8(b"mcms")],
+                vector[string::utf8(b"timelock_update_min_delay")],
+                vector[bcs::to_bytes(&MIN_DELAY)]
+            );
+        let _ = mcms::hash_operation_batch(calls, TEST_PREDECESSOR, x"deadbeef");
+    }
+
     #[test(deployer = @mcms, owner = @mcms_owner, framework = @aptos_framework)]
     public fun test_update_min_delay(
         deployer: &signer, owner: &signer, framework: &signer
@@ -1585,7 +1605,7 @@ module mcms::mcms_tests {
             vector[string::utf8(b"test_function")],
             vector[vector[0u8]],
             mcms::zero_hash(),
-            vector[],
+            mcms::zero_hash(),
             0
         );
     }
@@ -1607,7 +1627,7 @@ module mcms::mcms_tests {
             vector[string::utf8(b"test_function")],
             vector[vector[0u8]],
             mcms::zero_hash(),
-            vector[1u8],
+            SALT_ONE,
             MIN_DELAY - 1
         );
     }
@@ -1628,7 +1648,7 @@ module mcms::mcms_tests {
         let function_names = vector[string::utf8(b"test_function")];
         let datas = vector[vector[0u8]];
         let predecessor = mcms::zero_hash();
-        let salt = vector[1u8];
+        let salt = SALT_ONE;
 
         mcms::test_timelock_schedule_batch(
             targets,
@@ -1671,7 +1691,7 @@ module mcms::mcms_tests {
             vector[string::utf8(b"test_function")],
             vector[vector[0u8]],
             mcms::zero_hash(),
-            vector[],
+            mcms::zero_hash(),
             0
         );
     }
@@ -1688,7 +1708,7 @@ module mcms::mcms_tests {
         let function_names = vector[string::utf8(b"test_function")];
         let datas = vector[vector[0u8]];
         let predecessor = mcms::zero_hash();
-        let salt = vector[1u8];
+        let salt = SALT_ONE;
 
         let delay = 100000;
         mcms::test_timelock_update_min_delay(delay);
@@ -1783,7 +1803,7 @@ module mcms::mcms_tests {
         let function_names1 = vector[string::utf8(b"test_function1")];
         let datas1 = vector[vector[0u8]];
         let predecessor1 = mcms::zero_hash();
-        let salt1 = vector[1u8];
+        let salt1 = SALT_ONE;
 
         // First, schedule the first batch
         mcms::test_timelock_schedule_batch(
@@ -1797,7 +1817,7 @@ module mcms::mcms_tests {
         );
 
         // Generate a unique identifier for the second batch
-        let salt2 = vector[2u8];
+        let salt2 = SALT_TWO;
         let predecessor2 =
             x"deadbeef00000000000000000000000000000000000000000000000000000000"; // Non-existent operation ID
 
@@ -1845,7 +1865,7 @@ module mcms::mcms_tests {
         let function_names = vector[string::utf8(b"nonexistent_function")];
         let datas = vector[vector[0u8]];
         let predecessor = mcms::zero_hash();
-        let salt = vector[1u8];
+        let salt = SALT_ONE;
 
         // Schedule the batch with the non-existent function
         mcms::test_timelock_schedule_batch(
@@ -1885,7 +1905,7 @@ module mcms::mcms_tests {
         let function_names = vector[string::utf8(b"timelock_update_min_delay")];
         let datas = vector[bcs::to_bytes(&MIN_DELAY)];
         let predecessor = mcms::zero_hash();
-        let salt = vector[1u8];
+        let salt = SALT_ONE;
 
         // Try to execute without scheduling first - should fail with E_OPERATION_NOT_READY
         mcms::timelock_execute_batch(
@@ -1913,7 +1933,7 @@ module mcms::mcms_tests {
         let data = bcs::to_bytes(&MIN_DELAY);
         let datas = vector[data];
         let predecessor = mcms::zero_hash();
-        let salt = vector[1u8];
+        let salt = SALT_ONE;
 
         mcms::test_timelock_schedule_batch(
             targets,
@@ -1993,7 +2013,7 @@ module mcms::mcms_tests {
         let data = bcs::to_bytes(&MIN_DELAY);
         let datas_1 = vector[data];
         let predecessor_1 = mcms::zero_hash();
-        let salt_1 = x"abcd";
+        let salt_1 = SALT_ABCD;
         let delay = 1; // Small delay for testing
 
         mcms::test_timelock_schedule_batch(
@@ -2024,7 +2044,7 @@ module mcms::mcms_tests {
         let data = bcs::to_bytes(&new_delay);
         let datas_2 = vector[data];
         let predecessor_2 = id_1; // Use first operation as predecessor
-        let salt_2 = x"efab";
+        let salt_2 = SALT_EFAB;
 
         mcms::test_timelock_schedule_batch(
             targets_2,
@@ -2105,7 +2125,7 @@ module mcms::mcms_tests {
         let function_names = vector[string::utf8(b"timelock_update_min_delay")];
         let datas = vector[bcs::to_bytes(&MIN_DELAY)];
         let predecessor = mcms::zero_hash();
-        let salt = vector[1u8];
+        let salt = SALT_ONE;
 
         mcms::test_timelock_schedule_batch(
             targets,
@@ -2290,7 +2310,7 @@ module mcms::mcms_tests {
         let data = bcs::to_bytes(&MIN_DELAY);
         let datas = vector[data];
         let predecessor = mcms::zero_hash();
-        let salt = vector[1u8];
+        let salt = SALT_ONE;
         // Use a delay that is greater than the min_delay to avoid E_INSUFFICIENT_DELAY error
         let delay = 100;
 
@@ -2394,7 +2414,7 @@ module mcms::mcms_tests {
         let function_names = vector[string::utf8(b"set_config")];
         let datas = vector[data];
         let predecessor = mcms::zero_hash();
-        let salt = vector[1u8];
+        let salt = SALT_ONE;
         let delay = 1;
 
         dispatch_timelock_schedule_batch(
@@ -2438,7 +2458,7 @@ module mcms::mcms_tests {
 
         // test_timelock_cancel
         // First schedule the operation for `set_config`
-        let salt = vector[2u8];
+        let salt = SALT_TWO;
         dispatch_timelock_schedule_batch(
             targets,
             module_names,
@@ -2465,7 +2485,7 @@ module mcms::mcms_tests {
             vector[string::utf8(b"timelock_update_min_delay")],
             vector[bcs::to_bytes(&100)],
             mcms::zero_hash(), // predecessor
-            vector[1u8], // salt
+            SALT_ONE, // salt
             delay // delay
         );
         let new_delay = 2;
@@ -2485,7 +2505,7 @@ module mcms::mcms_tests {
             vector[string::utf8(b"timelock_block_function")],
             vector[data],
             mcms::zero_hash(), // predecessor
-            vector[1u8], // salt
+            SALT_ONE, // salt
             new_delay // delay
         );
         mcms::test_timelock_dispatch(
@@ -2501,7 +2521,7 @@ module mcms::mcms_tests {
             vector[string::utf8(b"timelock_unblock_function")],
             vector[data],
             mcms::zero_hash(), // predecessor
-            vector[1u8], // salt
+            SALT_ONE, // salt
             new_delay // delay
         );
         mcms::test_timelock_dispatch(

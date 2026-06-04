@@ -189,6 +189,7 @@ const (
 	E_UNKNOWN_CURSE_MCMS_MODULE_FUNCTION   uint64 = 55
 	E_UNKNOWN_CURSE_MCMS_ACCOUNT_FUNCTION  uint64 = 56
 	E_INVALID_PREDECESSOR_LEN              uint64 = 57
+	E_INVALID_SALT_LEN                     uint64 = 58
 )
 
 // Structs

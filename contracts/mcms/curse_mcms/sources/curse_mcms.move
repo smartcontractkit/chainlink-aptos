@@ -200,6 +200,7 @@ module curse_mcms::curse_mcms {
     const E_UNKNOWN_CURSE_MCMS_MODULE_FUNCTION: u64 = 55;
     const E_UNKNOWN_CURSE_MCMS_ACCOUNT_FUNCTION: u64 = 56;
     const E_INVALID_PREDECESSOR_LEN: u64 = 57;
+    const E_INVALID_SALT_LEN: u64 = 58;
 
     fun init_module(publisher: &signer) {
         let bypasser = create_multisig(publisher, BYPASSER_ROLE);
@@ -1537,6 +1538,8 @@ module curse_mcms::curse_mcms {
         calls: vector<Call>, predecessor: vector<u8>, salt: vector<u8>
     ): vector<u8> {
         assert!(predecessor.length() == 32, E_INVALID_PREDECESSOR_LEN);
+        assert!(salt.length() == 32, E_INVALID_SALT_LEN);
+
         let packed = vector[];
         packed.append(bcs::to_bytes(&calls));
         packed.append(predecessor);
