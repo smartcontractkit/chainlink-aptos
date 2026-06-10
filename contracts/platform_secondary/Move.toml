@@ -1,4 +1,5 @@
 [package]
+# Use "ChainlinkPlatformB" for prod testnet, "ChainlinkPlatformSecondary" for staging and mainnet.
 name = "ChainlinkPlatformSecondary"
 version = "1.0.0"
 authors = []
