@@ -1,4 +1,4 @@
-# CRE Canary Receiver (Primary Only)
+# CRE Canary Receiver (Primary Only - Only used for Prod Testnet)
 
 Simplified Aptos receiver for the CRE Aptos capability canary. Registers only with the primary forwarder (`platform::storage`), unlike `cre-receiver` which registers with both primary and secondary.
 
@@ -14,17 +14,6 @@ export APTOS_PROFILE="<aptos-cli-profile>"
 ## Deploy (Object Address)
 
 This package uses `deploy-object` to publish to a new object address rather than under your EOA.
-
-### First attempt (will fail)
-
-The `owner` named address is intentionally omitted here. This will fail because `ChainlinkPlatform` declares `owner` as a named address and the compiler requires it to be resolved, even though the receiver itself never references `@owner`.
-
-```sh
-aptos move deploy-object \
-  --profile "$APTOS_PROFILE" \
-  --address-name cre_canary_receiver_primary \
-  --named-addresses platform="$PLATFORM_ADDRESS"
-```
 
 ### Working deploy
 
@@ -63,9 +52,7 @@ Expected initial result:
 
 ```json
 {
-  "Result": [
-    "0"
-  ]
+  "Result": ["0"]
 }
 ```
 

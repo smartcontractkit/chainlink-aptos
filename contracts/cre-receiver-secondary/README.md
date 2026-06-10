@@ -1,4 +1,4 @@
-# CRE Canary Receiver (Secondary Only)
+# CRE Canary Receiver (Secondary Only - Only used for Prod Testnet)
 
 Simplified Aptos receiver for the CRE Aptos capability canary. Registers only with the secondary forwarder (`platform_secondary::storage`), unlike `cre-receiver` which registers with both primary and secondary.
 
@@ -9,7 +9,6 @@ On publish, `init_module` registers a single callback with `platform_secondary::
 The dependency name in `Move.toml` must match the on-chain package name:
 
 - **Prod testnet**: Use `ChainlinkPlatformB`
-- **Staging / mainnet**: Use `ChainlinkPlatformSecondary`
 
 ## Required Values
 
@@ -59,9 +58,7 @@ Expected initial result:
 
 ```json
 {
-  "Result": [
-    "0"
-  ]
+  "Result": ["0"]
 }
 ```
 

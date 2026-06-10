@@ -9,7 +9,6 @@ platform_secondary = "_"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
-# Use "ChainlinkPlatformB" for prod testnet, "ChainlinkPlatformSecondary" for staging and mainnet.
 ChainlinkPlatformB = { local = "../platform_secondary" }
 
 [dev-addresses]

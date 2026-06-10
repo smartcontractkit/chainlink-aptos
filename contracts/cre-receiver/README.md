@@ -1,15 +1,8 @@
-# CRE Canary Receiver
+# CRE Canary Receiver (For Mainnet and Staging)
 
 Simple Aptos receiver used by the CRE Aptos capability canary.
 
 The package publishes `cre_canary_receiver::canary_receiver`. On publish, `init_module` registers receiver callbacks with two forwarder storage modules: `platform::storage` and `platform_secondary::storage`. Each forwarded report payload is decoded as UTF-8, emitted in `MessageReceived`, and increments an on-chain counter.
-
-## Move.toml Package Name
-
-The secondary platform dependency name in `Move.toml` must match the on-chain package name:
-
-- **Prod testnet**: Use `ChainlinkPlatformB` (on-chain package name is `ChainlinkPlatformB`)
-- **Staging / mainnet**: Use `ChainlinkPlatformSecondary` (on-chain package name is `ChainlinkPlatformSecondary`)
 
 ## Required Values
 
@@ -65,28 +58,9 @@ Expected initial result:
 
 ```json
 {
-  "Result": [
-    "0"
-  ]
+  "Result": ["0"]
 }
 ```
-
-## Prod Testnet
-
-```sh
-export PLATFORM_ADDRESS="0x516e771e1b4a903afe74c27d057c65849ecc1383782f6642d7ff21425f4f9c99"
-export PLATFORM_OWNER_ADDRESS="0xc10291bb05fe4c3392cabb17fe2945bb530f5902b4c83ecaaceb0c35c7e11182"
-export PLATFORM_SECONDARY_ADDRESS="0xfe335602574abdd34b82f6260bf01b426b902819663fdb801a0c75b2c68f517f"
-export PLATFORM_SECONDARY_OWNER_ADDRESS="0xc10291bb05fe4c3392cabb17fe2945bb530f5902b4c83ecaaceb0c35c7e11182"
-export APTOS_PROFILE="default"
-
-aptos move deploy-object \
-  --profile "$APTOS_PROFILE" \
-  --address-name cre_canary_receiver \
-  --named-addresses platform="$PLATFORM_ADDRESS",owner="$PLATFORM_OWNER_ADDRESS",platform_secondary="$PLATFORM_SECONDARY_ADDRESS",owner_secondary="$PLATFORM_SECONDARY_OWNER_ADDRESS"
-```
-
-> Move.toml must use `ChainlinkPlatformB` for the secondary dependency.
 
 ## Staging Testnet
 
