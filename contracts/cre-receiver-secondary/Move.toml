@@ -1,0 +1,20 @@
+[package]
+name = "ChainlinkCRECanaryReceiverSecondary"
+version = "1.0.0"
+authors = []
+
+[addresses]
+cre_canary_receiver_secondary = "_"
+platform_secondary = "_"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
+# Change to ChainlinkPlatformB when locally compiling for prod testnet zone-b; that forwarder was deployed under that package name.
+ChainlinkPlatformSecondary = { local = "../platform_secondary" }
+
+[dev-addresses]
+cre_canary_receiver_secondary = "0x300"
+platform_secondary = "0x200"
+owner_secondary = "0x22"
+
+[dev-dependencies]

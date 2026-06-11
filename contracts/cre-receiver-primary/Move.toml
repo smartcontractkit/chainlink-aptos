@@ -1,18 +1,19 @@
 [package]
-# Use "ChainlinkPlatformB" for prod testnet, "ChainlinkPlatformSecondary" for staging and mainnet.
-name = "ChainlinkPlatformSecondary"
+name = "ChainlinkCRECanaryReceiverPrimary"
 version = "1.0.0"
 authors = []
 
 [addresses]
-platform_secondary = "_"
-owner_secondary = "_"
-
-[dev-addresses]
-platform_secondary = "0x200"
-owner_secondary = "0x22"
+cre_canary_receiver_primary = "_"
+platform = "_"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
+ChainlinkPlatform = { local = "../platform" }
+
+[dev-addresses]
+cre_canary_receiver_primary = "0x300"
+platform = "0x100"
+owner = "0xcafe"
 
 [dev-dependencies]
