@@ -11,7 +11,6 @@ import (
 
 	"github.com/smartcontractkit/chainlink-aptos/integration-tests/scripts"
 
-	"github.com/docker/go-connections/nat"
 	"github.com/go-resty/resty/v2"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -63,28 +62,28 @@ func (d *Deployer) DeployDevnet() error {
 	}
 
 	ctx := context.Background()
-	externalFaucetPort, err := container.MappedPort(ctx, nat.Port(devnetConfig.Ports[0]))
+	externalFaucetPort, err := container.MappedPort(ctx, tcpPort(devnetConfig.Ports[0]))
 	if err != nil {
 		return err
 	}
 
-	d.lggr.Info().Msgf("%s container running with local faucet exposed port %d", devnetConfig.Name, externalFaucetPort.Int())
+	d.lggr.Info().Msgf("%s container running with local faucet exposed port %d", devnetConfig.Name, externalFaucetPort.Num())
 
-	externalHttpPort, err := container.MappedPort(ctx, nat.Port(devnetConfig.Ports[1]))
+	externalHttpPort, err := container.MappedPort(ctx, tcpPort(devnetConfig.Ports[1]))
 	if err != nil {
 		return err
 	}
 
-	d.lggr.Info().Msgf("%s container running with local http exposed port %d", devnetConfig.Name, externalHttpPort.Int())
+	d.lggr.Info().Msgf("%s container running with local http exposed port %d", devnetConfig.Name, externalHttpPort.Num())
 
 	restyClient := resty.New()
-	restyClient.BaseURL = fmt.Sprintf("http://127.0.0.1:%d", externalHttpPort.Int())
+	restyClient.BaseURL = fmt.Sprintf("http://127.0.0.1:%d", externalHttpPort.Num())
 
 	d.Devnet = &DevnetClient{
 		Client:             &TestContainer{Container: container},
 		Config:             devnetConfig,
-		ExternalFaucetPort: externalFaucetPort.Int(),
-		ExternalHttpPort:   externalHttpPort.Int(),
+		ExternalFaucetPort: int(externalFaucetPort.Num()),
+		ExternalHttpPort:   int(externalHttpPort.Num()),
 		RestyClient:        restyClient,
 	}
 
