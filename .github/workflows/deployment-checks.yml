@@ -18,13 +18,10 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v6
 
-      - name: Extract Go version
-        uses: ./.github/actions/check-go-version
-
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: ${{ env.go_version }}
+          go-version-file: deployment/go.mod
 
       - name: Install Aptos CLI
         uses: aptos-labs/actions/install-aptos-cli@528ef7ad9427a8c0720ea3eea790a9190d6e377d # 2026-04-09
