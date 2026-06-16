@@ -1,4 +1,4 @@
-package ccip_test
+package ccip
 
 import (
 	"testing"
@@ -6,29 +6,18 @@ import (
 
 	cldfproposalutils "github.com/smartcontractkit/chainlink-deployments-framework/engine/cld/mcms/proposalutils"
 
-	chain_selectors "github.com/smartcontractkit/chain-selectors"
 	mcmstypes "github.com/smartcontractkit/mcms/types"
 	"github.com/stretchr/testify/require"
 
-	cldf_chain "github.com/smartcontractkit/chainlink-deployments-framework/chain"
 	aptoscs "github.com/smartcontractkit/chainlink-aptos/deployment/ccip"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/config"
-	"github.com/smartcontractkit/chainlink/deployment/ccip/changeset/testhelpers"
-	commonchangeset "github.com/smartcontractkit/chainlink/deployment/common/changeset"
+	"github.com/smartcontractkit/chainlink-aptos/integration-tests/deployment/testutil"
 )
 
 func TestUpgradeAptosChain_Apply(t *testing.T) {
-	t.Skip("skipping - no need to run these tests in CI")
 	t.Parallel()
-	// Setup environment with contracts deployed
-	deployedEnvironment, _ := testhelpers.NewMemoryEnvironment(
-		t,
-		testhelpers.WithAptosChains(1),
-		testhelpers.WithDONConfigurationSkipped(),
-	)
-	env := deployedEnvironment.Env
 
-	chainSelector := env.BlockChains.ListChainSelectors(cldf_chain.WithFamily(chain_selectors.FamilyAptos))[0]
+	env, chainSelector := newAptosOnlyEnvWithCCIP(t)
 
 	cfg := config.UpgradeAptosChainConfig{
 		ChainSelector: chainSelector,
@@ -43,13 +32,12 @@ func TestUpgradeAptosChain_Apply(t *testing.T) {
 		UpgradeRouter:  true,
 	}
 
-	// Apply the changeset
-	env, out, err := commonchangeset.ApplyChangesets(t, env, []commonchangeset.ConfiguredChangeSet{
-		commonchangeset.Configure(aptoscs.UpgradeAptosChain{}, cfg),
+	env, out, err := testutil.ApplyChangesets(t, env, []testutil.ConfiguredChangeSet{
+		testutil.Configure(aptoscs.UpgradeAptosChain{}, cfg),
 	})
+	require.NoError(t, err)
 
 	proposals := out[0].MCMSTimelockProposals
 	require.Len(t, proposals, 1)
-	require.Len(t, proposals[0].Operations, 7)
-	require.NoError(t, err)
+	require.Len(t, proposals[0].Operations, 8)
 }

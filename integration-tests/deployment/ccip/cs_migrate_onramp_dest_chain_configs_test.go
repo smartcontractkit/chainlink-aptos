@@ -1,40 +1,37 @@
-package ccip_test
+package ccip
 
 import (
 	"testing"
 	"time"
-
-	cldfproposalutils "github.com/smartcontractkit/chainlink-deployments-framework/engine/cld/mcms/proposalutils"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	chain_selectors "github.com/smartcontractkit/chain-selectors"
 	mcmstypes "github.com/smartcontractkit/mcms/types"
 	"github.com/stretchr/testify/require"
 
-	cldf_chain "github.com/smartcontractkit/chainlink-deployments-framework/chain"
+	cldfproposalutils "github.com/smartcontractkit/chainlink-deployments-framework/engine/cld/mcms/proposalutils"
+	"github.com/smartcontractkit/chainlink-deployments-framework/operations"
+
 	aptoscs "github.com/smartcontractkit/chainlink-aptos/deployment/ccip"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/config"
-	"github.com/smartcontractkit/chainlink/deployment/ccip/changeset/testhelpers"
-	commonchangeset "github.com/smartcontractkit/chainlink/deployment/common/changeset"
+	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/operation"
+	"github.com/smartcontractkit/chainlink-aptos/deployment/stateview"
 )
 
 func TestMigrateOnRampDestChainConfigsToV2_Apply(t *testing.T) {
-	t.Skip("skipping - no need to run these tests in CI")
 	t.Parallel()
 
-	deployedEnvironment, _ := testhelpers.NewMemoryEnvironment(
-		t,
-		testhelpers.WithAptosChains(1),
-		testhelpers.WithDONConfigurationSkipped(),
-	)
-	env := deployedEnvironment.Env
+	env, chainSelector := newAptosOnlyEnvWithCCIP(t)
 
-	chainSelector := env.BlockChains.ListChainSelectors(cldf_chain.WithFamily(chain_selectors.FamilyAptos))[0]
+	state, err := stateview.LoadOnchainState(env)
+	require.NoError(t, err)
+	aptosState := state.AptosChains[chainSelector]
 
+	destSelector := chain_selectors.ETHEREUM_MAINNET.Selector
 	cfg := config.MigrateOnRampDestChainConfigsToV2Config{
 		ChainSelector:         chainSelector,
-		DestChainSelectors:    []uint64{chain_selectors.ETHEREUM_MAINNET.Selector},
-		RouterModuleAddresses: []aptos.AccountAddress{{}},
+		DestChainSelectors:    []uint64{destSelector},
+		RouterModuleAddresses: []aptos.AccountAddress{aptosState.CCIPAddress},
 		MCMS: &cldfproposalutils.TimelockConfig{
 			MinDelay:     time.Second,
 			MCMSAction:   mcmstypes.TimelockActionSchedule,
@@ -42,12 +39,15 @@ func TestMigrateOnRampDestChainConfigsToV2_Apply(t *testing.T) {
 		},
 	}
 
-	_, out, err := commonchangeset.ApplyChangesets(t, env, []commonchangeset.ConfiguredChangeSet{
-		commonchangeset.Configure(aptoscs.MigrateOnRampDestChainConfigsToV2{}, cfg),
-	})
+	cs := aptoscs.MigrateOnRampDestChainConfigsToV2{}
+	require.NoError(t, cs.VerifyPreconditions(env, cfg))
 
+	env.OperationsBundle.OperationRegistry = operations.NewOperationRegistry(operation.GetAptosOperations()...)
+
+	out, err := cs.Apply(env, cfg)
 	require.NoError(t, err)
-	proposals := out[0].MCMSTimelockProposals
+
+	proposals := out.MCMSTimelockProposals
 	require.Len(t, proposals, 1)
 	require.Len(t, proposals[0].Operations, 1)
 }

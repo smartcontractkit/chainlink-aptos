@@ -1,4 +1,4 @@
-package ccip_test
+package ccip
 
 import (
 	"crypto/ecdsa"
@@ -24,6 +24,7 @@ import (
 	"github.com/smartcontractkit/chainlink-deployments-framework/engine/test/environment"
 	"github.com/smartcontractkit/chainlink-deployments-framework/engine/test/runtime"
 
+	aptoscs "github.com/smartcontractkit/chainlink-aptos/deployment/ccip"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/config"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/shared"
 	aptosstate "github.com/smartcontractkit/chainlink-aptos/deployment/state"
@@ -225,7 +226,7 @@ func TestDeployAptosChainImp_VerifyPreconditions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			cs := DeployAptosChain{}
+			cs := aptoscs.DeployAptosChain{}
 			err := cs.VerifyPreconditions(tt.env, tt.config)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -277,7 +278,7 @@ func TestDeployAptosChain_Apply(t *testing.T) {
 	}
 
 	err = rt.Exec(
-		runtime.ChangesetTask(DeployAptosChain{}, ccipConfig),
+		runtime.ChangesetTask(aptoscs.DeployAptosChain{}, ccipConfig),
 		runtime.SignAndExecuteProposalsTask([]*ecdsa.PrivateKey{cldftesthelpers.TestXXXMCMSSigner}),
 	)
 	require.NoError(t, err)

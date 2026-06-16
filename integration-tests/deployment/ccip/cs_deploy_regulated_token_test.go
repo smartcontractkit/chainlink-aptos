@@ -1,4 +1,4 @@
-package ccip_test
+package ccip
 
 import (
 	"math/big"
@@ -15,7 +15,7 @@ import (
 
 	aptoscs "github.com/smartcontractkit/chainlink-aptos/deployment/ccip"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/config"
-	commonchangeset "github.com/smartcontractkit/chainlink/deployment/common/changeset"
+	"github.com/smartcontractkit/chainlink-aptos/integration-tests/deployment/testutil"
 )
 
 func TestDeployRegulatedToken_Apply(t *testing.T) {
@@ -43,8 +43,8 @@ func TestDeployRegulatedToken_Apply(t *testing.T) {
 		},
 	}
 
-	_, outputs, err := commonchangeset.ApplyChangesets(t, env, []commonchangeset.ConfiguredChangeSet{
-		commonchangeset.Configure(aptoscs.DeployRegulatedToken{}, cfg),
+	_, outputs, err := testutil.ApplyChangesets(t, env, []testutil.ConfiguredChangeSet{
+		testutil.Configure(aptoscs.DeployRegulatedToken{}, cfg),
 	})
 	require.NoError(t, err)
 	require.Len(t, outputs, 1)

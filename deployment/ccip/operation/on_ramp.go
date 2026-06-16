@@ -15,8 +15,49 @@ import (
 )
 
 var OnRampOperations = []*operations.Operation[any, any, any]{
+	ApplyOnRampDestChainConfigUpdatesV1Op.AsUntypedRelaxed(),
 	UpdateOnRampDestsOp.AsUntypedRelaxed(),
 	MigrateOnRampDestChainConfigsToV2Op.AsUntypedRelaxed(),
+}
+
+// ApplyOnRampDestChainConfigUpdatesV1Input configures legacy V1 OnRamp destination chain entries.
+type ApplyOnRampDestChainConfigUpdatesV1Input struct {
+	DestChainSelectors        []uint64
+	DestChainRouters          []aptos.AccountAddress
+	DestChainAllowlistEnabled []bool
+}
+
+// ApplyOnRampDestChainConfigUpdatesV1Op applies V1 OnRamp destination chain configs.
+var ApplyOnRampDestChainConfigUpdatesV1Op = operations.NewOperation(
+	"apply-onramp-dest-chain-config-updates-v1-op",
+	Version1_0_0,
+	"Applies legacy V1 OnRamp destination chain configurations",
+	applyOnRampDestChainConfigUpdatesV1,
+)
+
+func applyOnRampDestChainConfigUpdatesV1(b operations.Bundle, deps dependency.AptosDeps, in ApplyOnRampDestChainConfigUpdatesV1Input) ([]mcmstypes.Transaction, error) {
+	if len(in.DestChainSelectors) == 0 {
+		return nil, nil
+	}
+
+	aptosState := deps.CCIPOnChainState.AptosChains[deps.AptosChain.Selector]
+	onrampBind := ccip_onramp.Bind(aptosState.CCIPAddress, deps.AptosChain.Client)
+
+	moduleInfo, function, _, args, err := onrampBind.Onramp().Encoder().ApplyDestChainConfigUpdates(
+		in.DestChainSelectors,
+		in.DestChainRouters,
+		in.DestChainAllowlistEnabled,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode ApplyDestChainConfigUpdates for OnRamp: %w", err)
+	}
+
+	tx, err := utils.GenerateMCMSTx(aptosState.CCIPAddress, moduleInfo, function, args)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transaction: %w", err)
+	}
+
+	return []mcmstypes.Transaction{tx}, nil
 }
 
 // UpdateOnRampDestsInput contains configuration for updating OnRamp destinations

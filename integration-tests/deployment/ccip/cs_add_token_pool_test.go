@@ -1,4 +1,4 @@
-package ccip_test
+package ccip
 
 import (
 	"fmt"
@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	chain_selectors "github.com/smartcontractkit/chain-selectors"
 	mcmstypes "github.com/smartcontractkit/mcms/types"
-	"github.com/smartcontractkit/quarantine"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -23,10 +22,9 @@ import (
 
 	aptoscs "github.com/smartcontractkit/chainlink-aptos/deployment/ccip"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/config"
-	"github.com/smartcontractkit/chainlink/deployment/ccip/changeset/testhelpers"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/shared"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/stateview"
-	commonchangeset "github.com/smartcontractkit/chainlink/deployment/common/changeset"
+	"github.com/smartcontractkit/chainlink-aptos/integration-tests/deployment/testutil"
 )
 
 var testTokenTransferFeeConfig = fee_quoter.TokenTransferFeeConfig{
@@ -39,20 +37,9 @@ var testTokenTransferFeeConfig = fee_quoter.TokenTransferFeeConfig{
 }
 
 func TestAddTokenPool_Apply(t *testing.T) {
-	quarantine.Flaky(t, "DX-2088")
 	t.Parallel()
-	// Setup environment and config with 1 Aptos chain
-	deployedEnvironment, _ := testhelpers.NewMemoryEnvironment(
-		t,
-		testhelpers.WithAptosChains(1),
-		testhelpers.WithNodeStartupSkipped(),
-	)
-	env := deployedEnvironment.Env
 
-	// Get chain selectors for Aptos
-	aptosChainSelectors := env.BlockChains.ListChainSelectors(cldf_chain.WithFamily(chain_selectors.FamilyAptos))
-	require.Len(t, aptosChainSelectors, 1, "Expected exactly 1 Aptos chain")
-	aptosSelector := aptosChainSelectors[0]
+	env, aptosSelector := newAptosEVMEnvWithCCIP(t, 2)
 
 	mockEVMPool := "0xbd10ffa3815c010d5cf7d38815a0eaabc959eb84"
 	// Get EVM chain selectors
@@ -110,8 +97,8 @@ func TestAddTokenPool_Apply(t *testing.T) {
 	}
 
 	// Apply the AddTokenPool changeset
-	env, output, err := commonchangeset.ApplyChangesets(t, env, []commonchangeset.ConfiguredChangeSet{
-		commonchangeset.Configure(aptoscs.AddTokenPool{}, cfg),
+	env, output, err := testutil.ApplyChangesets(t, env, []testutil.ConfiguredChangeSet{
+		testutil.Configure(aptoscs.AddTokenPool{}, cfg),
 	})
 	require.NoError(t, err)
 
