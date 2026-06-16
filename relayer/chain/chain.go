@@ -21,6 +21,8 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil"
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 	commonutils "github.com/smartcontractkit/chainlink-common/pkg/utils"
+	frameworkmetrics "github.com/smartcontractkit/chainlink-framework/metrics"
+	"github.com/smartcontractkit/chainlink-framework/multinode"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
@@ -41,6 +43,9 @@ type Chain interface {
 	TxManager() *txm.AptosTxm
 	LogPoller() *logpoller.AptosLogPoller
 	GetClient() (aptos.AptosRpcClient, error)
+	// GetMultiNodeClient returns a healthy RPC node selected by the multinode pool.
+	// Used by the aptos service layer; returns multinode.ErrNodeError when no live node is available.
+	GetMultiNodeClient(ctx context.Context) (ServiceRPCClient, error)
 	KeyStore() loop.Keystore
 }
 
@@ -92,6 +97,7 @@ type chain struct {
 	txm            *txm.AptosTxm
 	logPoller      *logpoller.AptosLogPoller
 	balanceMonitor services.Service
+	multiNode      *multinode.MultiNode[multinode.StringID, *MultiNodeClient]
 }
 
 func NewChain(cfg *config.TOMLConfig, opts ChainOpts) (Chain, error) {
@@ -123,13 +129,20 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 	}
 
 	ch := &chain{
-		id:         cfg.ChainID,
-		cfg:        cfg,
-		lggr:       logger.Named(lggr, "Chain"),
-		ds:         ds,
-		keyStore:   loopKs,
+		id:          cfg.ChainID,
+		cfg:         cfg,
+		lggr:        logger.Named(lggr, "Chain"),
+		ds:          ds,
+		keyStore:    loopKs,
 		clientCache: make(map[string]aptos.AptosRpcClient),
 	}
+
+	cfg.SetMultiNodeDefaults()
+	mn, err := newMultiNode(cfg, lggr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create multinode pool: %w", err)
+	}
+	ch.multiNode = mn
 
 	ch.txm, err = txm.New(lggr, loopKs, *cfg.TransactionManager, ch.GetClient, cfg.ChainID)
 	if err != nil {
@@ -183,6 +196,59 @@ func (c *chain) ChainID() string {
 
 func (c *chain) KeyStore() loop.Keystore {
 	return c.keyStore
+}
+
+// newMultiNode builds the framework multinode pool from the configured RPC nodes. A single-node
+// pool is valid; the pool still provides background health checking and dead-node eviction.
+func newMultiNode(cfg *config.TOMLConfig, lggr logger.Logger) (*multinode.MultiNode[multinode.StringID, *MultiNodeClient], error) {
+	chainID := multinode.StringID(cfg.ChainID)
+
+	mnMetrics, err := frameworkmetrics.NewGenericMultiNodeMetrics(config.ChainFamilyName, cfg.ChainID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create multinode metrics: %w", err)
+	}
+	rpcMetrics, err := frameworkmetrics.NewRPCClientMetrics(frameworkmetrics.RPCClientMetricsConfig{
+		ChainFamily: config.ChainFamilyName,
+		ChainID:     cfg.ChainID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create rpc client metrics: %w", err)
+	}
+
+	primaries := make([]multinode.Node[multinode.StringID, *MultiNodeClient], 0, len(cfg.Nodes))
+	for i, node := range cfg.Nodes {
+		rpc, err := NewMultiNodeClient(node.URL.String(), &cfg.MultiNode, cfg.RequestTimeout.Duration(), lggr, rpcMetrics)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create multinode client for node %s: %w", *node.Name, err)
+		}
+		var order int32
+		if node.Order != nil {
+			order = *node.Order
+		}
+		// NewNode takes (nodeCfg NodeConfig, chainCfg ChainConfig, ...) -- two different
+		// interfaces for node-level vs chain-level config. MultiNodeConfig implements both,
+		// so the same object is passed twice in each role.
+		// The wsuri/httpuri split is an Ethereum-centric design (WS for subscriptions, HTTP
+		// for queries). For HTTP-only chains like Aptos, the single URL goes as wsuri (the
+		// primary endpoint used by the node lifecycle) and httpuri is nil.
+		primaries = append(primaries, multinode.NewNode[multinode.StringID, *Head, *MultiNodeClient](
+			&cfg.MultiNode, &cfg.MultiNode, lggr, mnMetrics,
+			node.URL.URL(), nil,
+			*node.Name, i, chainID, order, rpc, config.ChainFamilyName,
+			false, // isLoadBalancedRPC
+		))
+	}
+
+	return multinode.NewMultiNode[multinode.StringID, *MultiNodeClient](
+		lggr, mnMetrics, cfg.MultiNode.SelectionMode(), cfg.MultiNode.LeaseDuration(),
+		primaries, nil, // no send-only nodes
+		chainID, config.ChainFamilyName, cfg.MultiNode.DeathDeclarationDelay(),
+	), nil
+}
+
+// GetMultiNodeClient returns a healthy RPC node selected by the multinode pool.
+func (c *chain) GetMultiNodeClient(ctx context.Context) (ServiceRPCClient, error) {
+	return c.multiNode.SelectRPC(ctx)
 }
 
 // GetClient returns a client, randomly selecting one from available and valid nodes.
@@ -270,7 +336,7 @@ func (c *chain) Start(ctx context.Context) error {
 		c.lggr.Debug("Starting balance monitor")
 
 		var ms services.MultiStart
-		return ms.Start(ctx, c.txm, c.logPoller, c.balanceMonitor)
+		return ms.Start(ctx, c.multiNode, c.txm, c.logPoller, c.balanceMonitor)
 	})
 }
 
@@ -281,16 +347,17 @@ func (c *chain) Close() error {
 		c.lggr.Debug("Stopping logPoller")
 		c.lggr.Debug("Stopping balance monitor")
 
-		return services.CloseAll(c.txm, c.logPoller, c.balanceMonitor)
+		return services.CloseAll(c.txm, c.logPoller, c.balanceMonitor, c.multiNode)
 	})
 }
 
 func (c *chain) Ready() error {
-	return errors.Join(c.starter.Ready(), c.txm.Ready(), c.logPoller.Ready(), c.balanceMonitor.Ready())
+	return errors.Join(c.starter.Ready(), c.multiNode.Ready(), c.txm.Ready(), c.logPoller.Ready(), c.balanceMonitor.Ready())
 }
 
 func (c *chain) HealthReport() map[string]error {
 	report := map[string]error{c.Name(): c.starter.Healthy()}
+	services.CopyHealth(report, c.multiNode.HealthReport())
 	services.CopyHealth(report, c.txm.HealthReport())
 	services.CopyHealth(report, c.logPoller.HealthReport())
 	services.CopyHealth(report, c.balanceMonitor.HealthReport())

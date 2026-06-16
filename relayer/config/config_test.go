@@ -141,6 +141,56 @@ BalancePollPeriod = "30s"
 	})
 }
 
+func TestSetMultiNodeDefaults(t *testing.T) {
+	t.Parallel()
+
+	t.Run("fills Aptos-appropriate defaults", func(t *testing.T) {
+		t.Parallel()
+
+		cfg, err := NewDecodedTOMLConfig(baseTOML)
+		require.NoError(t, err)
+
+		m := &cfg.MultiNode
+
+		assert.True(t, m.Enabled())
+		assert.Equal(t, uint32(5), m.PollFailureThreshold())
+		assert.Equal(t, 5*time.Second, m.PollInterval())
+		assert.Equal(t, "HighestHead", m.SelectionMode())
+		assert.Equal(t, uint32(5), m.SyncThreshold())
+		assert.False(t, m.NodeIsSyncingEnabled())
+		assert.Equal(t, time.Duration(0), m.LeaseDuration())
+		assert.Equal(t, 2*time.Second, m.NewHeadsPollInterval())
+		assert.Equal(t, 2*time.Second, m.FinalizedBlockPollInterval())
+		assert.False(t, m.EnforceRepeatableRead())
+		assert.Equal(t, 20*time.Second, m.DeathDeclarationDelay())
+		assert.True(t, m.VerifyChainID())
+		assert.Equal(t, 15*time.Second, m.NodeNoNewHeadsThreshold())
+		assert.Equal(t, 15*time.Second, m.NoNewFinalizedHeadsThreshold())
+		assert.False(t, m.FinalityTagEnabled())
+		assert.Equal(t, uint32(0), m.FinalityDepth())
+		assert.Equal(t, uint32(0), m.FinalizedBlockOffset())
+
+		require.NotNil(t, cfg.RequestTimeout)
+		assert.Equal(t, DefaultRequestTimeout, cfg.RequestTimeout.Duration())
+	})
+
+	t.Run("respects explicit overrides", func(t *testing.T) {
+		t.Parallel()
+
+		raw := baseTOML + `
+[MultiNode]
+SelectionMode = "RoundRobin"
+NewHeadsPollInterval = "1s"
+`
+		cfg, err := NewDecodedTOMLConfig(raw)
+		require.NoError(t, err)
+		assert.Equal(t, "RoundRobin", cfg.MultiNode.SelectionMode())
+		assert.Equal(t, 1*time.Second, cfg.MultiNode.NewHeadsPollInterval())
+		// Unset fields still get defaults
+		assert.Equal(t, uint32(5), cfg.MultiNode.PollFailureThreshold())
+	})
+}
+
 // Regression guard: global DefaultConfigSet must never be mutated by config resolution
 func TestNoGlobalMutation(t *testing.T) {
 	t.Parallel()

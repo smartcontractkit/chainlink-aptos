@@ -15,6 +15,7 @@ import (
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/chains/aptos"
 
+	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
 	chainconfig "github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
 	clientmocks "github.com/smartcontractkit/chainlink-aptos/relayer/monitor/mocks"
@@ -263,6 +264,10 @@ func (t testChain) LogPoller() *logpoller.AptosLogPoller {
 }
 
 func (t testChain) GetClient() (aptos_sdk.AptosRpcClient, error) {
+	return t.client, nil
+}
+
+func (t testChain) GetMultiNodeClient(_ context.Context) (chain.ServiceRPCClient, error) {
 	return t.client, nil
 }
 

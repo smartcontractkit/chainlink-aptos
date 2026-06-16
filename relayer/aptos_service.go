@@ -27,7 +27,7 @@ type aptosService struct {
 }
 
 func (s *aptosService) LedgerVersion(ctx context.Context) (uint64, error) {
-	client, err := s.chain.GetClient()
+	client, err := s.chain.GetMultiNodeClient(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get client: %w", err)
 	}
@@ -41,7 +41,7 @@ func (s *aptosService) LedgerVersion(ctx context.Context) (uint64, error) {
 }
 
 func (s *aptosService) AccountAPTBalance(ctx context.Context, req commonaptos.AccountAPTBalanceRequest) (*commonaptos.AccountAPTBalanceReply, error) {
-	client, err := s.chain.GetClient()
+	client, err := s.chain.GetMultiNodeClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get client: %w", err)
 	}
@@ -67,7 +67,7 @@ func (s *aptosService) View(ctx context.Context, req commonaptos.ViewRequest) (*
 		"args", req.Payload.Args,
 	)
 
-	client, err := s.chain.GetClient()
+	client, err := s.chain.GetMultiNodeClient(ctx)
 	if err != nil {
 		s.logger.Errorw("View: failed to get client", "error", err)
 		return nil, fmt.Errorf("failed to get client: %w", err)
@@ -105,7 +105,7 @@ func (s *aptosService) View(ctx context.Context, req commonaptos.ViewRequest) (*
 }
 
 func (s *aptosService) TransactionByHash(ctx context.Context, req commonaptos.TransactionByHashRequest) (*commonaptos.TransactionByHashReply, error) {
-	client, err := s.chain.GetClient()
+	client, err := s.chain.GetMultiNodeClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get client: %w", err)
 	}
@@ -138,7 +138,7 @@ func (s *aptosService) AccountTransactions(ctx context.Context, req commonaptos.
 		"hasLimit", req.Limit != nil,
 	)
 
-	client, err := s.chain.GetClient()
+	client, err := s.chain.GetMultiNodeClient(ctx)
 	if err != nil {
 		s.logger.Errorw("AccountTransactions: failed to get client", "error", err)
 		return nil, fmt.Errorf("failed to get client: %w", err)
@@ -186,7 +186,7 @@ func (s *aptosService) AccountTransactions(ctx context.Context, req commonaptos.
 }
 
 func (s *aptosService) accountTransactionsWindow(
-	client aptos_sdk.AptosRpcClient,
+	client chain.ServiceRPCClient,
 	address aptos_sdk.AccountAddress,
 	start *uint64,
 	limit *uint64,
@@ -367,7 +367,7 @@ func (s *aptosService) getAccountWithHighestBalance(ctx context.Context, account
 		return accounts[0], nil
 	}
 
-	client, err := s.chain.GetClient()
+	client, err := s.chain.GetMultiNodeClient(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to get client: %w", err)
 	}

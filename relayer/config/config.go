@@ -4,11 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/config"
+	mncfg "github.com/smartcontractkit/chainlink-framework/multinode/config"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor"
@@ -50,6 +52,9 @@ type Chain struct {
 type Node struct {
 	Name *string
 	URL  *config.URL
+	// Order is the node priority used as a tiebreak by the multinode selector (lower wins on
+	// equal head). Defaults to 0 when unset.
+	Order *int32 `toml:"Order"`
 }
 
 func (n *Node) ValidateConfig() (err error) {
@@ -79,6 +84,55 @@ type TOMLConfig struct {
 	Chain
 
 	Nodes Nodes
+
+	// MultiNode configures RPC node selection, health checking, and failover. Omitted fields
+	// are filled by SetMultiNodeDefaults. See chainlink-framework/multinode.
+	MultiNode mncfg.MultiNodeConfig `toml:"MultiNode"`
+
+	// RequestTimeout bounds each individual Aptos RPC call (and the underlying HTTP client
+	// timeout). Defaults to DefaultRequestTimeout when unset.
+	RequestTimeout *config.Duration `toml:"RequestTimeout"`
+}
+
+// DefaultRequestTimeout bounds each individual Aptos RPC call when RequestTimeout is unset.
+const DefaultRequestTimeout = 30 * time.Second
+
+// SetMultiNodeDefaults fills any unset MultiNode field with an Aptos-appropriate default. The
+// framework's config accessors dereference these pointers directly, so every field consumed by
+// the node/multinode lifecycle must be non-nil. Tuned to Aptos's ~1-2s block time and its
+// single-finality model (a committed block is final: no reorgs).
+func (c *TOMLConfig) SetMultiNodeDefaults() {
+	m := &c.MultiNode.MultiNode
+	setDefault(&m.Enabled, true)
+	setDefault(&m.PollFailureThreshold, uint32(5))
+	setDefault(&m.PollInterval, *config.MustNewDuration(5*time.Second))
+	setDefault(&m.SelectionMode, "HighestHead")
+	setDefault(&m.SyncThreshold, uint32(5))
+	setDefault(&m.NodeIsSyncingEnabled, false)
+	setDefault(&m.LeaseDuration, *config.MustNewDuration(0))
+	// Poll heads slightly faster than the ~1-2s block time so out-of-sync nodes are detected
+	setDefault(&m.NewHeadsPollInterval, *config.MustNewDuration(2*time.Second))
+	setDefault(&m.FinalizedBlockPollInterval, *config.MustNewDuration(2*time.Second))
+	setDefault(&m.EnforceRepeatableRead, false)
+	setDefault(&m.DeathDeclarationDelay, *config.MustNewDuration(20*time.Second))
+	setDefault(&m.VerifyChainID, true)
+	setDefault(&m.NodeNoNewHeadsThreshold, *config.MustNewDuration(15*time.Second))
+	// NoNewFinalizedHeadsThreshold is read unconditionally by the node lifecycle even though
+	// the finalized-head subscription is disabled (FinalityTagEnabled=false); keep it non-nil.
+	setDefault(&m.NoNewFinalizedHeadsThreshold, *config.MustNewDuration(15*time.Second))
+	// Aptos blocks are final at commit: derive "finalized" as latest (FinalityDepth=0) and
+	// never run the finalized-head subscription (FinalityTagEnabled=false).
+	setDefault(&m.FinalityDepth, uint32(0))
+	setDefault(&m.FinalityTagEnabled, false)
+	setDefault(&m.FinalizedBlockOffset, uint32(0))
+	setDefault(&c.RequestTimeout, *config.MustNewDuration(DefaultRequestTimeout))
+}
+
+func setDefault[T any](p **T, val T) {
+	if *p == nil {
+		v := val
+		*p = &v
+	}
 }
 
 // applyDefaults ensures all component configs are non-nil and fully populated.
@@ -104,6 +158,8 @@ func (cfg *TOMLConfig) applyDefaults() {
 		cfg.WriteTargetCap = &write_target.Config{}
 	}
 	cfg.WriteTargetCap.Resolve()
+
+	cfg.SetMultiNodeDefaults()
 
 	// Set network name defaults
 	if cfg.NetworkName == "" {
