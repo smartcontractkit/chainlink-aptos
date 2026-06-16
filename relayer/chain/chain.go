@@ -334,6 +334,7 @@ func (c *chain) Start(ctx context.Context) error {
 		c.lggr.Debug("Starting txm")
 		c.lggr.Debug("Starting logPoller")
 		c.lggr.Debug("Starting balance monitor")
+		c.lggr.Debug("Starting multinode")
 
 		var ms services.MultiStart
 		return ms.Start(ctx, c.multiNode, c.txm, c.logPoller, c.balanceMonitor)
@@ -346,6 +347,7 @@ func (c *chain) Close() error {
 		c.lggr.Debug("Stopping txm")
 		c.lggr.Debug("Stopping logPoller")
 		c.lggr.Debug("Stopping balance monitor")
+		c.lggr.Debug("Stopping multinode")
 
 		return services.CloseAll(c.txm, c.logPoller, c.balanceMonitor, c.multiNode)
 	})
