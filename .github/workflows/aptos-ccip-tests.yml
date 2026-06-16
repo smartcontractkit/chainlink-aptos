@@ -21,6 +21,7 @@ jobs:
     env:
       DEFAULT_CORE_REF: develop
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DB_URL: postgresql://postgres:postgres@localhost:5432/chainlink_test?sslmode=disable
     steps:
       - name: Free up disk space
         uses: smartcontractkit/.github/actions/free-disk-space@free-disk-space/v1
@@ -73,26 +74,25 @@ jobs:
         run: |
           go build -o chainlink-aptos ./cmd/chainlink-aptos/main.go
 
-      - name: Start PostgreSQL
-        run: |
-          docker run -d \
-            --name postgres \
-            -p 5432:5432 \
-            -e POSTGRES_USER=postgres \
-            -e POSTGRES_PASSWORD=postgres \
-            -e POSTGRES_DB=postgres \
-            postgres:15.2-alpine
+      - name: Setup Postgres
+        uses: smartcontractkit/.github/actions/setup-postgres@setup-postgres/v1
+        with:
+          tmpfs: "true"
+          image-tag: "16-alpine"
 
-      - name: Prepare database
+      - name: Download Go vendor packages
+        run: go mod download
+        working-directory: temp/chainlink
+
+      - name: Setup DB
+        working-directory: temp/chainlink
+        run: go run ./core/store/cmd/preparetest
         env:
-          CL_DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/chainlink_test?sslmode=disable'
-        run: |
-          cd temp/chainlink
-          make testdb
+          CL_DATABASE_URL: ${{ env.DB_URL }}
 
       - name: Run Test
         env:
-          CL_DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/chainlink_test?sslmode=disable'
+          CL_DATABASE_URL: ${{ env.DB_URL }}
           CL_APTOS_CMD: ${{ github.workspace }}/chainlink-aptos
         run: |
           cd temp/chainlink/integration-tests/smoke/ccip
