@@ -29,8 +29,8 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/shared"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/v1_6"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/types"
-	devenv "github.com/smartcontractkit/chainlink-aptos/integration-tests/env"
 	"github.com/smartcontractkit/chainlink-aptos/integration-tests/deployment/testutil"
+	devenv "github.com/smartcontractkit/chainlink-aptos/integration-tests/environment"
 )
 
 const (
