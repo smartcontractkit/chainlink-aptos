@@ -23,7 +23,7 @@ func init() {
 	})
 
 	mcmsRegistry := changesets.GetRegistry()
-	mcmsRegistry.RegisterMCMSReader(chainsel.FamilyAptos, &AptosCurseMCMSReader{})
+	mcmsRegistry.RegisterMCMSReader(chainsel.FamilyAptos, &AptosMCMSReader{})
 
 	deploy.GetRegistry().RegisterDeployer(chainsel.FamilyAptos, v, &AptosAdapter{})
 	lanes.GetLaneAdapterRegistry().RegisterLaneAdapter(chainsel.FamilyAptos, v, &AptosLaneAdapter{})

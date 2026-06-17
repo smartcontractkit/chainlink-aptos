@@ -2,6 +2,9 @@ package ccip
 
 import (
 	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"testing"
@@ -45,6 +48,9 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/deployment/types"
 	"github.com/smartcontractkit/chainlink-aptos/integration-tests/deployment/testutil"
 	devenv "github.com/smartcontractkit/chainlink-aptos/integration-tests/environment"
+
+	ocrtypes "github.com/smartcontractkit/libocr/offchainreporting2/types"
+	ocr3types "github.com/smartcontractkit/libocr/offchainreporting2plus/types"
 )
 
 const (
@@ -189,6 +195,35 @@ func newAptosEVMEnvWithCCIP(t *testing.T, evmChains int) (cldf.Environment, uint
 
 const testNodeOperator = "TestNodeOperator"
 
+// patchJDTestOCRNodeKeys fixes jdtest OCR node keys for Aptos integration tests.
+// jdtest seeds keys from peer IDs, which are not valid Ed25519 public keys and are
+// rejected by Aptos OCR3 on-chain validation. Aptos transmit accounts must also be
+// 32-byte public key hex strings, not EVM 0x addresses (upstream fix: chainlink#22165).
+func patchJDTestOCRNodeKeys(t *testing.T, nodes []*deployment.Node) {
+	t.Helper()
+
+	for _, n := range nodes {
+		onchainPub, _, err := ed25519.GenerateKey(rand.Reader)
+		require.NoError(t, err)
+		offchainPub, _, err := ed25519.GenerateKey(rand.Reader)
+		require.NoError(t, err)
+		configPub, _, err := ed25519.GenerateKey(rand.Reader)
+		require.NoError(t, err)
+
+		for details, cfg := range n.SelToOCRConfig {
+			cfg.OnchainPublicKey = ocrtypes.OnchainPublicKey(onchainPub)
+			cfg.OffchainPublicKey = ocrtypes.OffchainPublicKey(offchainPub)
+			cfg.ConfigEncryptionPublicKey = ocr3types.ConfigEncryptionPublicKey(configPub)
+
+			family, err := chain_selectors.GetSelectorFamily(details.ChainSelector)
+			if err == nil && family == chain_selectors.FamilyAptos {
+				cfg.TransmitAccount = ocrtypes.Account(hex.EncodeToString(onchainPub))
+			}
+			n.SelToOCRConfig[details] = cfg
+		}
+	}
+}
+
 // newAptosEVMEnvWithOCR3HomeChain deploys Aptos CCIP, wires a mock job distributor with
 // EVM home-chain + Aptos OCR node configs, and runs the v1_6 home-chain setup steps
 // required before SetOCR3Config can target Aptos offramps.
@@ -209,6 +244,7 @@ func newAptosEVMEnvWithOCR3HomeChain(t *testing.T) (cldf.Environment, uint64, ui
 		}
 	}
 	nodePtrs := jdtest.NewNodes(t, nodeConfigs)
+	patchJDTestOCRNodeKeys(t, nodePtrs)
 	deploymentNodes := make([]deployment.Node, len(nodePtrs))
 	nodeIDs := make([]string, len(nodePtrs))
 	testP2PIDs := make([][32]byte, len(nodePtrs))
