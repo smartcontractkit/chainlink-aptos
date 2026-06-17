@@ -14,10 +14,9 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/integration-tests/deploy"
 	"github.com/smartcontractkit/chainlink-aptos/integration-tests/scripts"
 
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/archive"
-	"github.com/docker/docker/pkg/jsonmessage"
+	"github.com/moby/go-archive"
+	"github.com/moby/moby/client"
+	"github.com/moby/moby/client/pkg/jsonmessage"
 	"github.com/moby/term"
 	"github.com/rs/zerolog"
 )
@@ -254,7 +253,7 @@ func buildImages(dir string) {
 
 	containerVersion := fmt.Sprintf("core-aptos-%s", coreSha)
 
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	cli, err := client.New(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		log.Fatalf("Could not create Docker client: %v", err)
 	}
@@ -305,7 +304,7 @@ func buildDockerImage(cli *client.Client, contextDir, dockerfilePath, imageName 
 		return fmt.Errorf("failed to create build context: %w", err)
 	}
 
-	options := types.ImageBuildOptions{
+	options := client.ImageBuildOptions{
 		Dockerfile: dockerfilePath,
 		Tags:       []string{imageName},
 		Remove:     true,

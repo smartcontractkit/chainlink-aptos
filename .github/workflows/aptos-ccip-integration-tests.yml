@@ -15,23 +15,25 @@ jobs:
     permissions:
       contents: read
     steps:
-    - name: Check out code
-      uses: actions/checkout@v6
+      - name: Check out code
+        uses: actions/checkout@v6
 
-    - name: Extract Go version
-      uses: ./.github/actions/check-go-version
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: integration-tests/go.mod
 
-    - name: Set up Go
-      uses: actions/setup-go@v6
-      with:
-        go-version: ${{ env.go_version }}
+      - name: Install Aptos CLI
+        uses: aptos-labs/actions/install-aptos-cli@528ef7ad9427a8c0720ea3eea790a9190d6e377d # 2026-04-09
+        with:
+          CLI_VERSION: 9.1.0
 
-    - name: Install Aptos CLI
-      uses: aptos-labs/actions/install-aptos-cli@528ef7ad9427a8c0720ea3eea790a9190d6e377d # 2026-04-09
-      with:
-        CLI_VERSION: 9.1.0
+      - name: Run CCIP smoke tests
+        run: |
+          cd integration-tests
+          go test ./ccip -timeout 10m -v
 
-    - name: Run tests
-      run: |
-        cd integration-tests
-        go test ./ccip -timeout 10m -v
+      - name: Run deployment integration tests
+        run: |
+          cd integration-tests
+          go test -p=1 -timeout=30m ./deployment/...

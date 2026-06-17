@@ -23,54 +23,50 @@ jobs:
       DEFAULT_CORE_REF: 43a6f2748d47fb6ec96a64505dfa66f1c302100b
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
+      - name: Checkout code
+        uses: actions/checkout@v6
 
-    - name: Get core ref from PR body
-      if: github.event_name == 'pull_request'
-      uses: ./.github/actions/get-core-ref
+      - name: Get core ref from PR body
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/get-core-ref
 
-    - name: Checkout chainlink repo
-      uses: actions/checkout@v6
-      with:
-        repository: smartcontractkit/chainlink
-        ref: ${{ env.core_ref || env.DEFAULT_CORE_REF }}
-        path: temp/chainlink
+      - name: Checkout chainlink repo
+        uses: actions/checkout@v6
+        with:
+          repository: smartcontractkit/chainlink
+          ref: ${{ env.core_ref || env.DEFAULT_CORE_REF }}
+          path: temp/chainlink
 
-    - name: Build chainlink image
-      working-directory: temp/chainlink
-      run: |
-        # TODO(gg): is this still needed?
-        docker buildx build --build-arg COMMIT_SHA=$(git rev-parse HEAD) -t local_chainlink -f plugins/chainlink.Dockerfile .
+      - name: Build chainlink image
+        working-directory: temp/chainlink
+        run: |
+          # TODO(gg): is this still needed?
+          docker buildx build --build-arg COMMIT_SHA=$(git rev-parse HEAD) -t local_chainlink -f plugins/chainlink.Dockerfile .
 
-    - name: Build chainlink-aptos image
-      run: |
-        docker buildx build --build-arg BASE_IMAGE=local_chainlink -t chainlink-aptos -f ./Dockerfile .
+      - name: Build chainlink-aptos image
+        run: |
+          docker buildx build --build-arg BASE_IMAGE=local_chainlink -t chainlink-aptos -f ./Dockerfile .
 
-    # Clear up disk space, else we run out below:
-    # Unhandled exception. System.IO.IOException: No space left on device : '/home/runner/actions-runner/cached/_diag/Worker_20250801-102100-utc.log'
-    - name: Flatten chainlink-aptos image
-      run: |
-        set -e
-        df -h
-        docker save chainlink-aptos:latest -o chainlink-aptos.tar
-        docker system prune -a -f
-        docker load -i chainlink-aptos.tar
-        rm -vf chainlink-aptos.tar
-        df -h
+      # Clear up disk space, else we run out below:
+      # Unhandled exception. System.IO.IOException: No space left on device : '/home/runner/actions-runner/cached/_diag/Worker_20250801-102100-utc.log'
+      - name: Flatten chainlink-aptos image
+        run: |
+          set -e
+          df -h
+          docker save chainlink-aptos:latest -o chainlink-aptos.tar
+          docker system prune -a -f
+          docker load -i chainlink-aptos.tar
+          rm -vf chainlink-aptos.tar
+          df -h
 
-    - name: Extract Go version
-      uses: ./.github/actions/check-go-version
-      id: go-version
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: integration-tests/go.mod
 
-    - name: Set up Go
-      uses: actions/setup-go@v6
-      with:
-        go-version: ${{ env.go_version }}
-
-    - name: Create env file
-      working-directory: ./
-      run: |
+      - name: Create env file
+        working-directory: ./
+        run: |
           cat <<EOT >> .env
           # Postgres config
           POSTGRES_IMAGE=postgres:15.2-alpine
@@ -101,43 +97,43 @@ jobs:
           CORE_P2P_PORT=6690
           EOT
 
-    - name: Run Smoke Integration Test
-      env:
-        TEST_LOG_LEVEL: debug
-      run: |
-        set -e
-        cd integration-tests
-        go mod tidy
-        TEST_LOG_LEVEL=${TEST_LOG_LEVEL} go test -timeout 24h -count=1 -run TestOCR3Keystone ./smoke
+      - name: Run Smoke Integration Test
+        env:
+          TEST_LOG_LEVEL: debug
+        run: |
+          set -e
+          cd integration-tests
+          go mod tidy
+          TEST_LOG_LEVEL=${TEST_LOG_LEVEL} go test -timeout 24h -count=1 -run TestOCR3Keystone ./smoke
 
-    - name: Configure AWS Credentials
-      if: success() && github.event.pull_request.user.login != 'dependabot[bot]'
-      uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
-      with:
-        aws-region: ${{ secrets.QA_AWS_REGION }}
-        role-to-assume: ${{ secrets.QA_AWS_ROLE_TO_ASSUME }}
-        role-duration-seconds: 3600
-        mask-aws-account-id: true
+      - name: Configure AWS Credentials
+        if: success() && github.event.pull_request.user.login != 'dependabot[bot]'
+        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
+        with:
+          aws-region: ${{ secrets.QA_AWS_REGION }}
+          role-to-assume: ${{ secrets.QA_AWS_ROLE_TO_ASSUME }}
+          role-duration-seconds: 3600
+          mask-aws-account-id: true
 
-    - name: Login to Amazon ECR
-      if: success() && github.event.pull_request.user.login != 'dependabot[bot]'
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@f2e9fc6c2b355c1890b65e6f6f0e2ac3e6e22f78 # v2.1.2
-      with:
-        mask-password: "true"
+      - name: Login to Amazon ECR
+        if: success() && github.event.pull_request.user.login != 'dependabot[bot]'
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@f2e9fc6c2b355c1890b65e6f6f0e2ac3e6e22f78 # v2.1.2
+        with:
+          mask-password: "true"
 
-    - name: Push Image to ECR
-      if: success() && github.event.pull_request.user.login != 'dependabot[bot]'
-      env:
-        CL_ECR: ${{ env.CL_ECR }}
-        GITHUB_SHA: ${{ github.sha }}
-      run: |
-        docker tag chainlink-aptos ${CL_ECR}:aptos.${GITHUB_SHA}
-        docker push ${CL_ECR}:aptos.${GITHUB_SHA}
+      - name: Push Image to ECR
+        if: success() && github.event.pull_request.user.login != 'dependabot[bot]'
+        env:
+          CL_ECR: ${{ env.CL_ECR }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          docker tag chainlink-aptos ${CL_ECR}:aptos.${GITHUB_SHA}
+          docker push ${CL_ECR}:aptos.${GITHUB_SHA}
 
-    - name: Upload Test Artifacts
-      if: always()
-      uses: actions/upload-artifact@v7
-      with:
-        name: smoke-test-logs
-        path: ./integration-tests/logs/
+      - name: Upload Test Artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-test-logs
+          path: ./integration-tests/logs/

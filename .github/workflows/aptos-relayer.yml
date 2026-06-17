@@ -31,31 +31,31 @@ jobs:
       TEST_DB_URL: postgres://user:pass@localhost:5432/testdb_test
 
     steps:
-    - name: Check out code
-      uses: actions/checkout@v6
+      - name: Check out code
+        uses: actions/checkout@v6
 
-    - name: Extract Go version
-      uses: ./.github/actions/check-go-version
+      - name: Extract Go version
+        uses: ./.github/actions/check-go-version
 
-    - name: Set up Go
-      uses: actions/setup-go@v6
-      with:
-        go-version: ${{ env.go_version }}
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.go_version }}
 
-    - name: Install Aptos CLI
-      uses: aptos-labs/actions/install-aptos-cli@528ef7ad9427a8c0720ea3eea790a9190d6e377d # 2026-04-09
-      with:
-        CLI_VERSION: 9.1.0
+      - name: Install Aptos CLI
+        uses: aptos-labs/actions/install-aptos-cli@528ef7ad9427a8c0720ea3eea790a9190d6e377d # 2026-04-09
+        with:
+          CLI_VERSION: 9.1.0
 
-    - name: Wait for PostgreSQL
-      run: |
-        until pg_isready -h localhost -p 5432 -U user; do
-          echo "Waiting for PostgreSQL..."
-          sleep 2
-        done
+      - name: Wait for PostgreSQL
+        run: |
+          until pg_isready -h localhost -p 5432 -U user; do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
 
-    - name: Run tests
-      run: cd relayer && go test -count=1 -p=1 -tags=integration ./...
+      - name: Run tests
+        run: cd relayer && go test -count=1 -p=1 -tags=integration ./...
 
   check-tidy:
     runs-on: ubuntu-latest
@@ -63,11 +63,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Extract Go version
+        uses: ./.github/actions/check-go-version
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          cache-dependency-path: go.sum
-          go-version-file: go.mod
+          go-version: ${{ env.go_version }}
 
       - name: Ensure modules are tidy
         run: |

@@ -17,7 +17,6 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/integration-tests/scripts"
 
 	"github.com/BurntSushi/toml"
-	"github.com/docker/go-connections/nat"
 	"github.com/go-resty/resty/v2"
 	"github.com/rs/zerolog"
 	"github.com/testcontainers/testcontainers-go"
@@ -92,6 +91,13 @@ type Contracts struct {
 	DataFeedsAddress         string
 }
 
+func tcpPort(port string) string {
+	if strings.Contains(port, "/") {
+		return port
+	}
+	return port + "/tcp"
+}
+
 func New(lggr *zerolog.Logger) *Deployer {
 	testFolder := fmt.Sprintf("%s/%s", scripts.Cache, scripts.GetRandomName(10))
 	os.MkdirAll(testFolder, os.ModePerm)
@@ -146,7 +152,7 @@ func (d *Deployer) DeployPostgres() error {
 
 	}
 	ctx := context.Background()
-	externalPort, err := container.MappedPort(ctx, nat.Port(pgConfig.Ports[0]))
+	externalPort, err := container.MappedPort(ctx, tcpPort(pgConfig.Ports[0]))
 	if err != nil {
 		return err
 
@@ -155,7 +161,7 @@ func (d *Deployer) DeployPostgres() error {
 	d.Postgres = &PostgresClient{
 		Client:       &TestContainer{Container: container},
 		Config:       pgConfig,
-		ExternalPort: externalPort.Int(),
+		ExternalPort: int(externalPort.Num()),
 	}
 
 	return nil
@@ -204,12 +210,12 @@ func (d *Deployer) DeployGeth() error {
 
 	}
 
-	externalHttpPort, err := container.MappedPort(ctx, nat.Port(gethConfig.Ports[1]))
+	externalHttpPort, err := container.MappedPort(ctx, tcpPort(gethConfig.Ports[1]))
 	if err != nil {
 		return err
 	}
 
-	externalWSPort, err := container.MappedPort(ctx, nat.Port(gethConfig.Ports[0]))
+	externalWSPort, err := container.MappedPort(ctx, tcpPort(gethConfig.Ports[0]))
 	if err != nil {
 		return err
 	}
@@ -217,10 +223,10 @@ func (d *Deployer) DeployGeth() error {
 	d.Geth = &GethClient{
 		Client:           &TestContainer{Container: container},
 		Config:           gethConfig,
-		ExternalHttpPort: externalHttpPort.Int(),
-		ExternalWSPort:   externalWSPort.Int(),
+		ExternalHttpPort: int(externalHttpPort.Num()),
+		ExternalWSPort:   int(externalWSPort.Num()),
 	}
-	d.Keystone.GethHttpRPC = fmt.Sprintf("http://127.0.0.1:%d", externalHttpPort.Int())
+	d.Keystone.GethHttpRPC = fmt.Sprintf("http://127.0.0.1:%d", externalHttpPort.Num())
 
 	return nil
 }
@@ -327,12 +333,12 @@ func (d *Deployer) DeployCore() error {
 		name := strings.Replace(cfg.Name, "/", "", 1)
 		tomlString, _ := marshalCoreToml(toml)
 
-		externalPort, err := node.MappedPort(ctx, nat.Port(coreConfig.Ports[0]))
+		externalPort, err := node.MappedPort(ctx, tcpPort(coreConfig.Ports[0]))
 		if err != nil {
 			return err
 		}
 
-		d.lggr.Info().Msgf("%s container running with local exposed port %d", name, externalPort.Int())
+		d.lggr.Info().Msgf("%s container running with local exposed port %d", name, externalPort.Num())
 		d.Core = append(d.Core, &CoreClient{
 			Name: name,
 			Client: &TestContainer{
@@ -340,7 +346,7 @@ func (d *Deployer) DeployCore() error {
 			},
 			Config:       coreConfig,
 			Toml:         tomlString,
-			ExternalPort: externalPort.Int(),
+			ExternalPort: int(externalPort.Num()),
 		})
 	}
 

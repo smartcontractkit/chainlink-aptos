@@ -1,0 +1,37 @@
+name: Aptos - Deployment module checks
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-check:
+    name: Build & Unit Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: deployment/go.mod
+
+      - name: Install Aptos CLI
+        uses: aptos-labs/actions/install-aptos-cli@528ef7ad9427a8c0720ea3eea790a9190d6e377d # 2026-04-09
+        with:
+          CLI_VERSION: 9.1.0
+
+      - name: Run build
+        run: go build -v ./...
+        working-directory: deployment
+
+      - name: Run unit tests
+        run: go test -v -count=1 -p=1 ./...
+        working-directory: deployment
