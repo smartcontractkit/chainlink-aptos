@@ -195,7 +195,6 @@ func (d *Deployer) DeployGeth() error {
 			"--ws.origins=*",
 			"--ws.addr=0.0.0.0",
 			fmt.Sprintf("--ws.port=%s", gethConfig.Ports[0]),
-			"--allow-insecure-unlock",
 			"--rpc.allow-unprotected-txs",
 			"--http.corsdomain=*",
 			"--vmdebug",
