@@ -15,9 +15,6 @@ integration-tests/logs/
 go.work
 go.work.sum
 
-# Local dev patches (not for commit)
-.ccip-deployment-patched/
-
 build
 
 # Tooling caches
