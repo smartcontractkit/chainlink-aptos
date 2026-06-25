@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
+	"github.com/aptos-labs/aptos-go-sdk"
 	chain_selectors "github.com/smartcontractkit/chain-selectors"
 	mcmstypes "github.com/smartcontractkit/mcms/types"
 	"github.com/stretchr/testify/require"
@@ -24,10 +25,9 @@ import (
 	cs_ccip "github.com/smartcontractkit/chainlink-ccip/deployment/utils/changesets"
 
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/shared"
+	_ "github.com/smartcontractkit/chainlink-aptos/deployment/ccip/adapters"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/stateview"
 	"github.com/smartcontractkit/chainlink-aptos/integration-tests/deployment/testutil"
-
-	_ "github.com/smartcontractkit/chainlink-aptos/deployment/ccip/adapters"
 )
 
 func TestUpdateAptosLanes(t *testing.T) {
@@ -137,13 +137,13 @@ func TestUpdateAptosLanes(t *testing.T) {
 
 	_, _, router, routerState, err := aptosOnRamp.Onramp().GetDestChainConfigV2(&bind.CallOpts{}, evmSelector1)
 	require.NoError(t, err)
-	require.NotEqual(t, aptosCCIPAddr, router)
-	require.NotEqual(t, aptosCCIPAddr, routerState)
+	require.NotEqual(t, aptos.AccountAddress{}, router)
+	require.NotEqual(t, aptos.AccountAddress{}, routerState)
 
 	_, _, router2, routerState2, err := aptosOnRamp.Onramp().GetDestChainConfigV2(&bind.CallOpts{}, evmSelector2)
 	require.NoError(t, err)
-	require.NotEqual(t, aptosCCIPAddr, router2)
-	require.NotEqual(t, aptosCCIPAddr, routerState2)
+	require.NotEqual(t, aptos.AccountAddress{}, router2)
+	require.NotEqual(t, aptos.AccountAddress{}, routerState2)
 
 	versions, err := aptosRouter.Router().GetOnRampVersions(&bind.CallOpts{}, []uint64{evmSelector1, evmSelector2})
 	require.NoError(t, err)

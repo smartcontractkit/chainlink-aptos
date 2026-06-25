@@ -25,14 +25,6 @@ func getCCIPAccountBytes(ds datastore.DataStore, chainSelector uint64) ([]byte, 
 	}, chainSelector, accountAddressToBytes)
 }
 
-func getMCMSAccountBytes(ds datastore.DataStore, chainSelector uint64) ([]byte, error) {
-	return datastore_utils.FindAndFormatRef(ds, datastore.AddressRef{
-		ChainSelector: chainSelector,
-		Type:          datastore.ContractType(shared.AptosMCMSType),
-		Version:       &aptosccip.Version1_6_0,
-	}, chainSelector, accountAddressToBytes)
-}
-
 func accountAddressToBytes(ref datastore.AddressRef) ([]byte, error) {
 	var addr aptos.AccountAddress
 	if err := addr.ParseStringRelaxed(ref.Address); err != nil {
@@ -41,11 +33,11 @@ func accountAddressToBytes(ref datastore.AddressRef) ([]byte, error) {
 	return addr[:], nil
 }
 
-func buildAptosDeps(chain cldf_aptos.Chain, chainSelector uint64, ccipBytes, mcmsBytes []byte) dependency.AptosDeps {
+func buildAptosDeps(chain cldf_aptos.Chain, chainSelector uint64, ccipBytes []byte) dependency.AptosDeps {
 	var ccipAddr aptos.AccountAddress
 	copy(ccipAddr[:], ccipBytes)
 
-	deps := dependency.AptosDeps{
+	return dependency.AptosDeps{
 		AptosChain: chain,
 		CCIPOnChainState: stateview.CCIPOnChainState{
 			AptosChains: map[uint64]aptosstate.CCIPChainState{
@@ -53,14 +45,4 @@ func buildAptosDeps(chain cldf_aptos.Chain, chainSelector uint64, ccipBytes, mcm
 			},
 		},
 	}
-
-	if len(mcmsBytes) > 0 {
-		var mcmsAddr aptos.AccountAddress
-		copy(mcmsAddr[:], mcmsBytes)
-		state := deps.CCIPOnChainState.AptosChains[chainSelector]
-		state.MCMSAddress = mcmsAddr
-		deps.CCIPOnChainState.AptosChains[chainSelector] = state
-	}
-
-	return deps
 }

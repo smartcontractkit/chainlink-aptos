@@ -32,11 +32,7 @@ var SetOCR3Config = cldf_ops.NewSequence(
 		if err != nil {
 			return sequences.OnChainOutput{}, fmt.Errorf("get ccip address: %w", err)
 		}
-		mcmsBytes, err := getMCMSAccountBytes(input.Datastore, chainSelector)
-		if err != nil {
-			return sequences.OnChainOutput{}, fmt.Errorf("get mcms address: %w", err)
-		}
-		deps := buildAptosDeps(chain, chainSelector, ccipBytes, mcmsBytes)
+		deps := buildAptosDeps(chain, chainSelector, ccipBytes)
 
 		var result sequences.OnChainOutput
 		for pluginType, cfg := range input.Configs {

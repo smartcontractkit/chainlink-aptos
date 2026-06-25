@@ -9,11 +9,12 @@ import (
 
 	cldf_chain "github.com/smartcontractkit/chainlink-deployments-framework/chain"
 	"github.com/smartcontractkit/chainlink-deployments-framework/datastore"
-	cldf_ops "github.com/smartcontractkit/chainlink-deployments-framework/operations"
 	"github.com/smartcontractkit/chainlink-deployments-framework/operations"
+	cldf_ops "github.com/smartcontractkit/chainlink-deployments-framework/operations"
 
 	aptos_fee_quoter "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/fee_quoter"
 	aptos_router "github.com/smartcontractkit/chainlink-aptos/bindings/ccip_router/router"
+	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/dependency"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/operation"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/v1_6"
 	"github.com/smartcontractkit/chainlink-ccip/deployment/lanes"
@@ -69,6 +70,15 @@ func (a *AptosLaneAdapter) DisableRemoteChain() *cldf_ops.Sequence[lanes.Disable
 	panic("DisableRemoteChain not implemented for Aptos")
 }
 
+func appendApplyAllowedOfframpUpdates(b cldf_ops.Bundle, output *sequences.OnChainOutput, chainSelector uint64, deps dependency.AptosDeps) error {
+	allowedReport, err := cldf_ops.ExecuteOperation(b, operation.ApplyAllowedOfframpUpdatesOp, deps, operations.EmptyInput{})
+	if err != nil {
+		return fmt.Errorf("apply allowed offramp updates: %w", err)
+	}
+	appendBatchOp(output, chainSelector, []mcmstypes.Transaction{allowedReport.Output})
+	return nil
+}
+
 var ConfigureLaneLegAsSource = cldf_ops.NewSequence(
 	"aptos/sequences/ccip/tooling-api/configure-lane-leg-as-source",
 	semver.MustParse("1.6.0"),
@@ -76,7 +86,7 @@ var ConfigureLaneLegAsSource = cldf_ops.NewSequence(
 	func(b cldf_ops.Bundle, chains cldf_chain.BlockChains, input lanes.UpdateLanesInput) (sequences.OnChainOutput, error) {
 		chainSelector := input.Source.Selector
 		chain := chains.AptosChains()[chainSelector]
-		deps := buildAptosDeps(chain, chainSelector, input.Source.OnRamp, nil)
+		deps := buildAptosDeps(chain, chainSelector, input.Source.OnRamp)
 
 		var result sequences.OnChainOutput
 		isEnabled := !input.IsDisabled
@@ -104,6 +114,11 @@ var ConfigureLaneLegAsSource = cldf_ops.NewSequence(
 			return sequences.OnChainOutput{}, fmt.Errorf("update onramp dests: %w", err)
 		}
 		appendBatchOp(&result, chainSelector, onRampReport.Output)
+
+		// Fee quoter price updates require the CCIP owner on the offramp allowlist.
+		if err := appendApplyAllowedOfframpUpdates(b, &result, chainSelector, deps); err != nil {
+			return sequences.OnChainOutput{}, err
+		}
 
 		priceReport, err := cldf_ops.ExecuteOperation(b, operation.UpdateFeeQuoterPricesOp, deps, operation.UpdateFeeQuoterPricesInput{
 			TokenPrices: input.Source.TokenPrices,
@@ -142,7 +157,7 @@ var ConfigureLaneLegAsDest = cldf_ops.NewSequence(
 	func(b cldf_ops.Bundle, chains cldf_chain.BlockChains, input lanes.UpdateLanesInput) (sequences.OnChainOutput, error) {
 		chainSelector := input.Dest.Selector
 		chain := chains.AptosChains()[chainSelector]
-		deps := buildAptosDeps(chain, chainSelector, input.Dest.OffRamp, nil)
+		deps := buildAptosDeps(chain, chainSelector, input.Dest.OffRamp)
 
 		var result sequences.OnChainOutput
 		isEnabled := !input.IsDisabled
@@ -160,12 +175,6 @@ var ConfigureLaneLegAsDest = cldf_ops.NewSequence(
 			return sequences.OnChainOutput{}, fmt.Errorf("update offramp sources: %w", err)
 		}
 		appendBatchOp(&result, chainSelector, offRampReport.Output)
-
-		allowedReport, err := cldf_ops.ExecuteOperation(b, operation.ApplyAllowedOfframpUpdatesOp, deps, operations.EmptyInput{})
-		if err != nil {
-			return sequences.OnChainOutput{}, fmt.Errorf("apply allowed offramp updates: %w", err)
-		}
-		appendBatchOp(&result, chainSelector, []mcmstypes.Transaction{allowedReport.Output})
 
 		return result, nil
 	},
