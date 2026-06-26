@@ -11,7 +11,6 @@ import (
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip"
 	module_fee_quoter "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/fee_quoter"
-	mcmsbind "github.com/smartcontractkit/chainlink-aptos/bindings/mcms"
 	cldf_chain "github.com/smartcontractkit/chainlink-deployments-framework/chain"
 	cldfproposalutils "github.com/smartcontractkit/chainlink-deployments-framework/engine/cld/mcms/proposalutils"
 	"github.com/smartcontractkit/chainlink-deployments-framework/operations"
@@ -107,8 +106,7 @@ func TestDynamicCS_Apply(t *testing.T) {
 	require.NotNil(t, tokenPrice)
 	require.Equal(t, big.NewInt(1000001), tokenPrice.Value, "token price should be updated")
 
-	mcmsBind := mcmsbind.Bind(aptosState.MCMSAddress, aptosChain.Client)
-	ccipOwnerAddress, err := mcmsBind.MCMSRegistry().GetRegisteredOwnerAddress(nil, aptosState.CCIPAddress)
+	ccipOwnerAddress, err := ccipBind.Auth().Owner(nil)
 	require.NoError(t, err)
 
 	allowedOfframps, err := ccipBind.Auth().GetAllowedOfframps(nil)

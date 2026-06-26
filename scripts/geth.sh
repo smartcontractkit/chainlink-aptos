@@ -26,7 +26,6 @@ docker run \
   --ws.origins '*' \
   --ws.addr 0.0.0.0 \
 	--ws.port=8546 \
-  --allow-insecure-unlock \
   --rpc.allow-unprotected-txs \
   --http.corsdomain '*' \
   --vmdebug \

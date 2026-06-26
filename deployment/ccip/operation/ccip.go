@@ -279,16 +279,10 @@ var ApplyAllowedOfframpUpdatesOp = operations.NewOperation(
 )
 
 func applyAllowedOfframpUpdates(b operations.Bundle, deps dependency.AptosDeps, _ operations.EmptyInput) (mcmstypes.Transaction, error) {
-	// Bind CCIP Package
 	ccipAddress := deps.CCIPOnChainState.AptosChains[deps.AptosChain.Selector].CCIPAddress
 	ccipBind := ccip.Bind(ccipAddress, deps.AptosChain.Client)
 
-	// Bind MCMS Package
-	mcmsAddress := deps.CCIPOnChainState.AptosChains[deps.AptosChain.Selector].MCMSAddress
-	mcmsBind := mcmsbind.Bind(mcmsAddress, deps.AptosChain.Client)
-
-	// Add CCIP Owner address to update token prices allow list
-	ccipOwnerAddress, err := mcmsBind.MCMSRegistry().GetRegisteredOwnerAddress(nil, ccipAddress)
+	ccipOwnerAddress, err := ccipBind.Auth().Owner(nil)
 	if err != nil {
 		return mcmstypes.Transaction{}, fmt.Errorf("failed to get CCIP owner address: %w", err)
 	}

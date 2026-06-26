@@ -15,7 +15,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Check out code
+      - name: Check out chainlink-aptos
         uses: actions/checkout@v6
 
       - name: Set up Go

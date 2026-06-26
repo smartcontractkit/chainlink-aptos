@@ -2,7 +2,10 @@ package ccip
 
 import (
 	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -16,21 +19,38 @@ import (
 	mcmstypes "github.com/smartcontractkit/mcms/types"
 
 	cldf "github.com/smartcontractkit/chainlink-deployments-framework/deployment"
+	cldf_chain "github.com/smartcontractkit/chainlink-deployments-framework/chain"
 	cldfproposalutils "github.com/smartcontractkit/chainlink-deployments-framework/engine/cld/mcms/proposalutils"
 	"github.com/smartcontractkit/chainlink-deployments-framework/engine/test/environment"
 	"github.com/smartcontractkit/chainlink-deployments-framework/engine/test/runtime"
 
 	cldflogger "github.com/smartcontractkit/chainlink-common/pkg/logger"
+	"github.com/smartcontractkit/chainlink-common/pkg/types/ccipocr3"
 	cldftesthelpers "github.com/smartcontractkit/chainlink-deployments-framework/engine/cld/mcms/proposalutils/testhelpers"
+
+	"github.com/smartcontractkit/chainlink-ccip/chainconfig"
+	"github.com/smartcontractkit/chainlink-ccip/chains/evm/gobindings/generated/v1_6_0/rmn_home"
+	capabilities_registry "github.com/smartcontractkit/chainlink-evm/gethwrappers/keystone/generated/capabilities_registry_1_1_0"
+
+	"github.com/smartcontractkit/chainlink/deployment"
+	jdtest "github.com/smartcontractkit/chainlink/deployment/environment/test"
+	commonchangeset "github.com/smartcontractkit/chainlink/deployment/common/changeset"
+	"github.com/smartcontractkit/chainlink/deployment/common/proposalutils"
+	commontypes "github.com/smartcontractkit/chainlink/deployment/common/types"
+	"github.com/smartcontractkit/chainlink/deployment/ccip/changeset/v1_6"
+	ccipcaptypes "github.com/smartcontractkit/chainlink/v2/core/capabilities/ccip/types"
 
 	aptosfeequoter "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/fee_quoter"
 	aptoscs "github.com/smartcontractkit/chainlink-aptos/deployment/ccip"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/config"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/shared"
-	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/v1_6"
+	aptosv1_6 "github.com/smartcontractkit/chainlink-aptos/deployment/ccip/v1_6"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/types"
 	"github.com/smartcontractkit/chainlink-aptos/integration-tests/deployment/testutil"
 	devenv "github.com/smartcontractkit/chainlink-aptos/integration-tests/environment"
+
+	ocrtypes "github.com/smartcontractkit/libocr/offchainreporting2/types"
+	ocr3types "github.com/smartcontractkit/libocr/offchainreporting2plus/types"
 )
 
 const (
@@ -173,34 +193,160 @@ func newAptosEVMEnvWithCCIP(t *testing.T, evmChains int) (cldf.Environment, uint
 	return env, selector
 }
 
-func aptosTestDestFeeQuoterConfig(t *testing.T) aptosfeequoter.DestChainConfig {
+const testNodeOperator = "TestNodeOperator"
+
+// patchJDTestOCRNodeKeys fixes jdtest OCR node keys for Aptos integration tests.
+// jdtest seeds keys from peer IDs, which are not valid Ed25519 public keys and are
+// rejected by Aptos OCR3 on-chain validation. Aptos transmit accounts must also be
+// 32-byte public key hex strings, not EVM 0x addresses (upstream fix: chainlink#22165).
+func patchJDTestOCRNodeKeys(t *testing.T, nodes []*deployment.Node) {
 	t.Helper()
-	return aptosfeequoter.DestChainConfig{
-		IsEnabled:                         true,
-		MaxNumberOfTokensPerMsg:           11,
-		MaxDataBytes:                      40_000,
-		MaxPerMsgGasLimit:                 4_000_000,
-		DestGasOverhead:                   300_000,
-		DefaultTokenFeeUsdCents:           30,
-		DestGasPerPayloadByteBase:         16,
-		DestGasPerPayloadByteHigh:         40,
-		DestGasPerPayloadByteThreshold:    3000,
-		DestDataAvailabilityOverheadGas:   700,
-		DestGasPerDataAvailabilityByte:    17,
-		DestDataAvailabilityMultiplierBps: 2,
-		DefaultTokenDestGasOverhead:       100_000,
-		DefaultTxGasLimit:                 100_000,
-		GasMultiplierWeiPerEth:            1e7,
-		NetworkFeeUsdCents:                20,
-		ChainFamilySelector:               hexMustDecode(t, v1_6.AptosFamilySelector),
-		EnforceOutOfOrder:                 false,
-		GasPriceStalenessThreshold:        2,
+
+	for _, n := range nodes {
+		onchainPub, _, err := ed25519.GenerateKey(rand.Reader)
+		require.NoError(t, err)
+		offchainPub, _, err := ed25519.GenerateKey(rand.Reader)
+		require.NoError(t, err)
+		configPub, _, err := ed25519.GenerateKey(rand.Reader)
+		require.NoError(t, err)
+
+		for details, cfg := range n.SelToOCRConfig {
+			cfg.OnchainPublicKey = ocrtypes.OnchainPublicKey(onchainPub)
+			cfg.OffchainPublicKey = ocrtypes.OffchainPublicKey(offchainPub)
+			cfg.ConfigEncryptionPublicKey = ocr3types.ConfigEncryptionPublicKey(configPub)
+
+			family, err := chain_selectors.GetSelectorFamily(details.ChainSelector)
+			if err == nil && family == chain_selectors.FamilyAptos {
+				cfg.TransmitAccount = ocrtypes.Account(hex.EncodeToString(onchainPub))
+			}
+			n.SelToOCRConfig[details] = cfg
+		}
 	}
 }
 
-func hexMustDecode(t *testing.T, s string) []byte {
+// newAptosEVMEnvWithOCR3HomeChain deploys Aptos CCIP, wires a mock job distributor with
+// EVM home-chain + Aptos OCR node configs, and runs the v1_6 home-chain setup steps
+// required before SetOCR3Config can target Aptos offramps.
+func newAptosEVMEnvWithOCR3HomeChain(t *testing.T) (cldf.Environment, uint64, uint64) {
 	t.Helper()
-	b, err := hex.DecodeString(s)
+
+	env, aptosSelector := newAptosEVMEnvWithCCIP(t, 1)
+
+	evmSelectors := env.BlockChains.ListChainSelectors(cldf_chain.WithFamily(chain_selectors.FamilyEVM))
+	require.Len(t, evmSelectors, 1)
+	homeChainSel := evmSelectors[0]
+
+	nodeConfigs := make([]jdtest.NodeConfig, 4)
+	for i := range nodeConfigs {
+		nodeConfigs[i] = jdtest.NodeConfig{
+			Name:           fmt.Sprintf("node-%d", i+1),
+			ChainSelectors: []uint64{homeChainSel, aptosSelector},
+		}
+	}
+	nodePtrs := jdtest.NewNodes(t, nodeConfigs)
+	patchJDTestOCRNodeKeys(t, nodePtrs)
+	deploymentNodes := make([]deployment.Node, len(nodePtrs))
+	nodeIDs := make([]string, len(nodePtrs))
+	testP2PIDs := make([][32]byte, len(nodePtrs))
+	for i, n := range nodePtrs {
+		deploymentNodes[i] = *n
+		nodeIDs[i] = n.NodeID
+		testP2PIDs[i] = n.PeerID
+	}
+
+	env.NodeIDs = nodeIDs
+	env.Offchain = jdtest.NewJDService(deploymentNodes)
+
+	var err error
+	env, _, err = testutil.ApplyChangesets(t, env, []testutil.ConfiguredChangeSet{
+		testutil.Configure(cldf.CreateLegacyChangeSet(v1_6.DeployHomeChainChangeset), v1_6.DeployHomeChainConfig{
+			HomeChainSel: homeChainSel,
+			RMNStaticConfig: rmn_home.RMNHomeStaticConfig{
+				Nodes:          []rmn_home.RMNHomeNode{},
+				OffchainConfig: []byte{},
+			},
+			RMNDynamicConfig: rmn_home.RMNHomeDynamicConfig{
+				SourceChains:   []rmn_home.RMNHomeSourceChain{},
+				OffchainConfig: []byte{},
+			},
+			NodeOperators: []capabilities_registry.CapabilitiesRegistryNodeOperator{
+				{
+					Admin: env.BlockChains.EVMChains()[homeChainSel].DeployerKey.From,
+					Name:  testNodeOperator,
+				},
+			},
+			NodeP2PIDsPerNodeOpAdmin: map[string][][32]byte{
+				testNodeOperator: testP2PIDs,
+			},
+		}),
+		testutil.Configure(cldf.CreateLegacyChangeSet(commonchangeset.DeployMCMSWithTimelockV2), map[uint64]commontypes.MCMSWithTimelockConfigV2{
+			homeChainSel: {
+				Proposer:         proposalutils.SingleGroupMCMSV2(t),
+				Bypasser:         proposalutils.SingleGroupMCMSV2(t),
+				Canceller:        proposalutils.SingleGroupMCMSV2(t),
+				TimelockMinDelay: big.NewInt(0),
+			},
+		}),
+		testutil.Configure(cldf.CreateLegacyChangeSet(v1_6.UpdateChainConfigChangeset), v1_6.UpdateChainConfigConfig{
+			HomeChainSelector: homeChainSel,
+			RemoteChainAdds: map[uint64]v1_6.ChainConfig{
+				aptosSelector: {
+					Readers: testP2PIDs,
+					FChain:  1,
+					EncodableChainConfig: chainconfig.ChainConfig{
+						GasPriceDeviationPPB:    ccipocr3.NewBigIntFromInt64(1000),
+						DAGasPriceDeviationPPB:  ccipocr3.NewBigIntFromInt64(1000),
+						OptimisticConfirmations: 1,
+					},
+				},
+			},
+		}),
+		testutil.Configure(cldf.CreateLegacyChangeSet(v1_6.AddDonAndSetCandidateChangeset), v1_6.AddDonAndSetCandidateChangesetConfig{
+			SetCandidateConfigBase: v1_6.SetCandidateConfigBase{
+				HomeChainSelector: homeChainSel,
+				FeedChainSelector: homeChainSel,
+			},
+			PluginInfo: v1_6.SetCandidatePluginInfo{
+				OCRConfigPerRemoteChainSelector: map[uint64]v1_6.CCIPOCRParams{
+					aptosSelector: v1_6.OcrParamsForTest,
+				},
+				PluginType: ccipcaptypes.PluginTypeCCIPCommit,
+			},
+		}),
+		testutil.Configure(cldf.CreateLegacyChangeSet(v1_6.SetCandidateChangeset), v1_6.SetCandidateChangesetConfig{
+			SetCandidateConfigBase: v1_6.SetCandidateConfigBase{
+				HomeChainSelector: homeChainSel,
+				FeedChainSelector: homeChainSel,
+			},
+			PluginInfo: []v1_6.SetCandidatePluginInfo{
+				{
+					OCRConfigPerRemoteChainSelector: map[uint64]v1_6.CCIPOCRParams{
+						aptosSelector: v1_6.OcrParamsForTest,
+					},
+					PluginType: ccipcaptypes.PluginTypeCCIPExec,
+				},
+			},
+		}),
+		testutil.Configure(cldf.CreateLegacyChangeSet(v1_6.PromoteCandidateChangeset), v1_6.PromoteCandidateChangesetConfig{
+			HomeChainSelector: homeChainSel,
+			PluginInfo: []v1_6.PromoteCandidatePluginInfo{
+				{
+					RemoteChainSelectors: []uint64{aptosSelector},
+					PluginType:           ccipcaptypes.PluginTypeCCIPCommit,
+				},
+				{
+					RemoteChainSelectors: []uint64{aptosSelector},
+					PluginType:           ccipcaptypes.PluginTypeCCIPExec,
+				},
+			},
+		}),
+	})
 	require.NoError(t, err)
-	return b
+
+	return env, aptosSelector, homeChainSel
+}
+
+func aptosTestDestFeeQuoterConfig(t *testing.T) aptosfeequoter.DestChainConfig {
+	t.Helper()
+	return aptosv1_6.ToAptosFeeQuoterDestChainConfig(aptosv1_6.DefaultAptosLaneFeeQuoterDestChainConfig())
 }

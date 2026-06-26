@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/aptos-labs/aptos-go-sdk"
 	aptosmcms "github.com/smartcontractkit/mcms/sdk/aptos"
 	mcmstypes "github.com/smartcontractkit/mcms/types"
 
@@ -16,10 +17,84 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/deployment/state"
 )
 
-// AptosCurseMCMSReader implements changesets.MCMSReader for the Aptos family,
-// targeting the CurseMCMS contract rather than the regular MCMS contract.
-// It is registered for FamilyAptos so that the fastcurse framework's
-// OutputBuilder produces proposals against CurseMCMS.
+// AptosMCMSReader implements changesets.MCMSReader for the Aptos family using the
+// regular CCIP MCMS contract deployed by DeployAptosChain.
+type AptosMCMSReader struct{}
+
+func (r *AptosMCMSReader) GetChainMetadata(e deployment.Environment, chainSelector uint64, input mcms_utils.Input) (mcmstypes.ChainMetadata, error) {
+	chain, ok := e.BlockChains.AptosChains()[chainSelector]
+	if !ok {
+		return mcmstypes.ChainMetadata{}, fmt.Errorf("aptos chain with selector %d not found", chainSelector)
+	}
+
+	mcmsAddr, err := aptosMCMSAddress(e, chainSelector)
+	if err != nil {
+		return mcmstypes.ChainMetadata{}, err
+	}
+
+	role, err := cldfproposalutils.GetAptosRoleFromAction(input.TimelockAction)
+	if err != nil {
+		return mcmstypes.ChainMetadata{}, fmt.Errorf("failed to get role from action: %w", err)
+	}
+	inspector := aptosmcms.NewInspector(chain.Client, role)
+
+	opCount, err := inspector.GetOpCount(e.GetContext(), mcmsAddr.StringLong())
+	if err != nil {
+		return mcmstypes.ChainMetadata{}, fmt.Errorf("failed to get opCount for MCMS at %s on chain %d: %w", mcmsAddr.StringLong(), chainSelector, err)
+	}
+
+	afBytes, err := json.Marshal(aptosmcms.AdditionalFieldsMetadata{Role: role})
+	if err != nil {
+		return mcmstypes.ChainMetadata{}, fmt.Errorf("failed to marshal additional fields metadata: %w", err)
+	}
+
+	return mcmstypes.ChainMetadata{
+		StartingOpCount:  opCount,
+		MCMAddress:       mcmsAddr.StringLong(),
+		AdditionalFields: afBytes,
+	}, nil
+}
+
+func (r *AptosMCMSReader) GetTimelockRef(e deployment.Environment, chainSelector uint64, _ mcms_utils.Input) (datastore.AddressRef, error) {
+	mcmsAddr, err := aptosMCMSAddress(e, chainSelector)
+	if err != nil {
+		return datastore.AddressRef{}, err
+	}
+	return datastore.AddressRef{
+		Address:       mcmsAddr.StringLong(),
+		ChainSelector: chainSelector,
+	}, nil
+}
+
+func (r *AptosMCMSReader) GetMCMSRef(e deployment.Environment, chainSelector uint64, _ mcms_utils.Input) (datastore.AddressRef, error) {
+	mcmsAddr, err := aptosMCMSAddress(e, chainSelector)
+	if err != nil {
+		return datastore.AddressRef{}, err
+	}
+	return datastore.AddressRef{
+		Address:       mcmsAddr.StringLong(),
+		ChainSelector: chainSelector,
+	}, nil
+}
+
+func aptosMCMSAddress(e deployment.Environment, chainSelector uint64) (aptos.AccountAddress, error) {
+	stateMap, err := state.LoadOnchainState(e)
+	if err != nil {
+		return aptos.AccountAddress{}, fmt.Errorf("failed to load aptos onchain state: %w", err)
+	}
+	chainState, ok := stateMap[chainSelector]
+	if !ok {
+		return aptos.AccountAddress{}, fmt.Errorf("aptos chain %d not found in state", chainSelector)
+	}
+	if chainState.MCMSAddress == (aptos.AccountAddress{}) {
+		return aptos.AccountAddress{}, fmt.Errorf("mcms address not set for aptos chain %d", chainSelector)
+	}
+	return chainState.MCMSAddress, nil
+}
+
+// AptosCurseMCMSReader implements changesets.MCMSReader for the Aptos CurseMCMS
+// contract. It is not registered as the family reader; DeployCurseMCMS builds
+// proposals directly. Kept for callers that need curse-MCMS metadata explicitly.
 type AptosCurseMCMSReader struct{}
 
 func (r *AptosCurseMCMSReader) GetChainMetadata(e deployment.Environment, chainSelector uint64, input mcms_utils.Input) (mcmstypes.ChainMetadata, error) {
@@ -32,11 +107,11 @@ func (r *AptosCurseMCMSReader) GetChainMetadata(e deployment.Environment, chainS
 	if err != nil {
 		return mcmstypes.ChainMetadata{}, fmt.Errorf("failed to load aptos onchain state: %w", err)
 	}
-	state, ok := stateMap[chainSelector]
+	chainState, ok := stateMap[chainSelector]
 	if !ok {
 		return mcmstypes.ChainMetadata{}, fmt.Errorf("aptos chain %d not found in state", chainSelector)
 	}
-	curseMCMSAddr := state.CurseMCMSAddress
+	curseMCMSAddr := chainState.CurseMCMSAddress
 
 	role, err := cldfproposalutils.GetAptosRoleFromAction(input.TimelockAction)
 	if err != nil {
@@ -49,10 +124,10 @@ func (r *AptosCurseMCMSReader) GetChainMetadata(e deployment.Environment, chainS
 		return mcmstypes.ChainMetadata{}, fmt.Errorf("failed to get opCount for CurseMCMS at %s on chain %d: %w", curseMCMSAddr.StringLong(), chainSelector, err)
 	}
 
-	afm := aptosmcms.AdditionalFieldsMetadata{
+	afBytes, err := json.Marshal(aptosmcms.AdditionalFieldsMetadata{
+		Role:     role,
 		MCMSType: aptosmcms.MCMSTypeCurse,
-	}
-	afBytes, err := json.Marshal(afm)
+	})
 	if err != nil {
 		return mcmstypes.ChainMetadata{}, fmt.Errorf("failed to marshal additional fields metadata: %w", err)
 	}
@@ -69,27 +144,16 @@ func (r *AptosCurseMCMSReader) GetTimelockRef(e deployment.Environment, chainSel
 	if err != nil {
 		return datastore.AddressRef{}, fmt.Errorf("failed to load aptos onchain state: %w", err)
 	}
-	state, ok := stateMap[chainSelector]
+	chainState, ok := stateMap[chainSelector]
 	if !ok {
 		return datastore.AddressRef{}, fmt.Errorf("aptos chain %d not found in state", chainSelector)
 	}
 	return datastore.AddressRef{
-		Address:       state.CurseMCMSAddress.StringLong(),
+		Address:       chainState.CurseMCMSAddress.StringLong(),
 		ChainSelector: chainSelector,
 	}, nil
 }
 
 func (r *AptosCurseMCMSReader) GetMCMSRef(e deployment.Environment, chainSelector uint64, input mcms_utils.Input) (datastore.AddressRef, error) {
-	stateMap, err := state.LoadOnchainState(e)
-	if err != nil {
-		return datastore.AddressRef{}, fmt.Errorf("failed to load aptos onchain state: %w", err)
-	}
-	state, ok := stateMap[chainSelector]
-	if !ok {
-		return datastore.AddressRef{}, fmt.Errorf("aptos chain %d not found in state", chainSelector)
-	}
-	return datastore.AddressRef{
-		Address:       state.CurseMCMSAddress.StringLong(),
-		ChainSelector: chainSelector,
-	}, nil
+	return r.GetTimelockRef(e, chainSelector, input)
 }
