@@ -15,7 +15,7 @@ require (
 	github.com/ethereum/go-ethereum v1.17.3
 	github.com/mr-tron/base58 v1.2.0
 	github.com/smartcontractkit/chain-selectors v1.0.102
-	github.com/smartcontractkit/chainlink-aptos v0.0.0
+	github.com/smartcontractkit/chainlink-aptos v0.0.0-20260428085939-5c70de12dbfc
 	github.com/smartcontractkit/chainlink-ccip/chains/evm v0.0.0-20260608180601-efa81bfdfda9
 	github.com/smartcontractkit/chainlink-ccip/deployment v0.0.0-20260608180601-efa81bfdfda9
 	github.com/smartcontractkit/chainlink-deployments-framework v0.110.0
