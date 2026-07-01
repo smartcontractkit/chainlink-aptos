@@ -73,7 +73,7 @@ jobs:
 
       - name: Ensure modules are tidy
         run: |
-          go run github.com/jmank88/gomods@v0.1.6 tidy
+          go run github.com/jmank88/gomods@v0.1.7 tidy
           git add --all
           git diff --minimal --cached --exit-code
 
