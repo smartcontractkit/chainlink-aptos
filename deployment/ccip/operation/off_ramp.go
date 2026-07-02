@@ -52,7 +52,7 @@ func updateOffRampSources(b operations.Bundle, deps dependency.AptosDeps, in Upd
 		sourceChainRMNVerificationDisabled = append(sourceChainRMNVerificationDisabled, update.IsRMNVerificationDisabled)
 
 		if len(update.OnRamp) == 0 {
-			return nil, fmt.Errorf("no onramp provided for source chain %d: %w", sourceChainSelector)
+			return nil, fmt.Errorf("no onramp provided for source chain %d", sourceChainSelector)
 		}
 		sourceChainOnRamp = append(sourceChainOnRamp, update.OnRamp)
 	}
