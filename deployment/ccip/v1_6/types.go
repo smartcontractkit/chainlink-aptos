@@ -18,10 +18,10 @@ type ConnectionConfig struct {
 // ChainDefinition defines how a chain should be configured on both remote chains and itself.
 type ChainDefinition struct {
 	ConnectionConfig         `json:"connectionConfig"`
-	Selector                 uint64                                    `json:"selector"`
-	GasPrice                 *big.Int                                  `json:"gasPrice"`
-	TokenPrices              map[common.Address]*big.Int               `json:"tokenPrices"`
-	FeeQuoterDestChainConfig fee_quoter.FeeQuoterDestChainConfig       `json:"feeQuoterDestChainConfig"`
+	Selector                 uint64                              `json:"selector"`
+	GasPrice                 *big.Int                            `json:"gasPrice"`
+	TokenPrices              map[common.Address]*big.Int         `json:"tokenPrices"`
+	FeeQuoterDestChainConfig fee_quoter.FeeQuoterDestChainConfig `json:"feeQuoterDestChainConfig"`
 }
 
 type OnRampDestinationUpdate struct {
@@ -39,11 +39,12 @@ type OffRampSourceUpdate struct {
 	IsEnabled                 bool
 	TestRouter                bool
 	IsRMNVerificationDisabled bool
+	OnRamp                    []byte
 }
 
 type UpdateOffRampSourcesConfig struct {
-	UpdatesByChain map[uint64]map[uint64]OffRampSourceUpdate
-	MCMS           *cldfproposalutils.TimelockConfig
+	UpdatesByChain     map[uint64]map[uint64]OffRampSourceUpdate
+	MCMS               *cldfproposalutils.TimelockConfig
 	SkipOwnershipCheck bool
 }
 

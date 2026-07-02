@@ -7,17 +7,12 @@ import (
 	mcmstypes "github.com/smartcontractkit/mcms/types"
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_offramp"
+	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/dependency"
+	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/internal"
+	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/utils"
+	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/v1_6"
 	aptosutils "github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 	"github.com/smartcontractkit/chainlink-deployments-framework/operations"
-	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/dependency"
-	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/utils"
-	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/internal"
-	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/v1_6"
-)
-
-const (
-	pluginTypeCCIPCommit uint8 = 0
-	pluginTypeCCIPExec   uint8 = 1
 )
 
 var OffRampOperations = []*operations.Operation[any, any, any]{
@@ -56,11 +51,10 @@ func updateOffRampSources(b operations.Bundle, deps dependency.AptosDeps, in Upd
 		sourceChainEnabled = append(sourceChainEnabled, update.IsEnabled)
 		sourceChainRMNVerificationDisabled = append(sourceChainRMNVerificationDisabled, update.IsRMNVerificationDisabled)
 
-		onRampBytes, err := deps.CCIPOnChainState.GetOnRampAddressBytes(sourceChainSelector)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get onRamp address for source chain %d: %w", sourceChainSelector, err)
+		if len(update.OnRamp) == 0 {
+			return nil, fmt.Errorf("no onramp provided for source chain %d: %w", sourceChainSelector)
 		}
-		sourceChainOnRamp = append(sourceChainOnRamp, onRampBytes)
+		sourceChainOnRamp = append(sourceChainOnRamp, update.OnRamp)
 	}
 
 	if len(sourceChainSelectors) == 0 {
