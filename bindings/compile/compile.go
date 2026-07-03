@@ -70,7 +70,12 @@ func CompilePackage(packageName contracts.Package, namedAddresses map[string]apt
 		args = append(args, "--named-addresses", strings.Join(namedAddr, ","))
 	}
 
-	cmd := exec.Command("aptos", args...)
+	aptosBin, err := resolveAptosCLI()
+	if err != nil {
+		return CompiledPackage{}, err
+	}
+
+	cmd := exec.Command(aptosBin, args...)
 	cmd.Dir = packageRoot // Command is run in the temporary destination directory
 	// Buffer stdErr and stdOut
 	stdOut := &bytes.Buffer{}
