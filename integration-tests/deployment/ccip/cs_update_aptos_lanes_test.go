@@ -21,11 +21,11 @@ import (
 	_ "github.com/smartcontractkit/chainlink-ccip/chains/evm/deployment/v1_6_0/sequences"
 	deployops "github.com/smartcontractkit/chainlink-ccip/deployment/deploy"
 	"github.com/smartcontractkit/chainlink-ccip/deployment/lanes"
-	"github.com/smartcontractkit/chainlink-ccip/deployment/utils/mcms"
 	cs_ccip "github.com/smartcontractkit/chainlink-ccip/deployment/utils/changesets"
+	"github.com/smartcontractkit/chainlink-ccip/deployment/utils/mcms"
 
-	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/shared"
 	_ "github.com/smartcontractkit/chainlink-aptos/deployment/ccip/adapters"
+	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/shared"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/stateview"
 	"github.com/smartcontractkit/chainlink-aptos/integration-tests/deployment/testutil"
 )
@@ -134,6 +134,21 @@ func TestUpdateAptosLanes(t *testing.T) {
 	isSupported, err := aptosOnRamp.Onramp().IsChainSupported(&bind.CallOpts{}, evmSelector1)
 	require.NoError(t, err)
 	require.True(t, isSupported)
+
+	evmAdapter, ok := lanesRegistry.GetLaneAdapter(chain_selectors.FamilyEVM, toolingAPIVersion)
+	require.True(t, ok)
+	evmOnRampBytes, err := evmAdapter.GetOnRampAddress(env.DataStore, evmSelector1)
+	require.NoError(t, err)
+	evmOnRampBytes2, err := evmAdapter.GetOnRampAddress(env.DataStore, evmSelector2)
+	require.NoError(t, err)
+
+	srcCfg1, err := aptosOffRamp.Offramp().GetSourceChainConfig(&bind.CallOpts{}, evmSelector1)
+	require.NoError(t, err)
+	require.Equal(t, evmOnRampBytes, srcCfg1.OnRamp)
+
+	srcCfg2, err := aptosOffRamp.Offramp().GetSourceChainConfig(&bind.CallOpts{}, evmSelector2)
+	require.NoError(t, err)
+	require.Equal(t, evmOnRampBytes2, srcCfg2.OnRamp)
 
 	_, _, router, routerState, err := aptosOnRamp.Onramp().GetDestChainConfigV2(&bind.CallOpts{}, evmSelector1)
 	require.NoError(t, err)

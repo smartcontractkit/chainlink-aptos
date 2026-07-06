@@ -168,6 +168,7 @@ var ConfigureLaneLegAsDest = cldf_ops.NewSequence(
 					IsEnabled:                 isEnabled,
 					TestRouter:                input.TestRouter,
 					IsRMNVerificationDisabled: !input.Source.RMNVerificationEnabled,
+					OnRamp:                    input.Source.OnRamp,
 				},
 			},
 		})

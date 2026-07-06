@@ -5,7 +5,6 @@ import (
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	chainselectors "github.com/smartcontractkit/chain-selectors"
-	"github.com/ethereum/go-ethereum/common"
 
 	cldf "github.com/smartcontractkit/chainlink-deployments-framework/deployment"
 
@@ -47,9 +46,6 @@ func (c CCIPOnChainState) GetOnRampAddressBytes(chainSelector uint64) ([]byte, e
 			return nil, fmt.Errorf("no ccip address found in the state for Aptos chain %d", chainSelector)
 		}
 		return ccipAddress[:], nil
-	case chainselectors.FamilyEVM:
-		// For integration tests, EVM onramp bytes may be supplied via mock addresses in config.
-		return common.HexToAddress("0x0BF3dE8c5D3e8A2B34D2BEeB17ABfCeBaf363A59").Bytes(), nil
 	default:
 		return nil, fmt.Errorf("unsupported chain family for onramp lookup: %s", family)
 	}
