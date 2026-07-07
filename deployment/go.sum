@@ -596,6 +596,8 @@ github.com/smartcontractkit/ccip-owner-contracts v0.1.0 h1:GiBDtlx7539o7AKlDV+9L
 github.com/smartcontractkit/ccip-owner-contracts v0.1.0/go.mod h1:NnT6w4Kj42OFFXhSx99LvJZWPpMjmo4+CpDEWfw61xY=
 github.com/smartcontractkit/chain-selectors v1.0.102 h1:qYP4+72HfvogCHR5ymwRFee36WH77514ZBj299SVCBA=
 github.com/smartcontractkit/chain-selectors v1.0.102/go.mod h1:qy7whtgG5g+7z0jt0nRyii9bLND9m15NZTzuQPkMZ5w=
+github.com/smartcontractkit/chainlink-aptos/codec v0.0.0-20260707222328-5036bbcb7832 h1:+WF+HFfbJmhjCl969rrTvvWS+U5cGAcVjSYfzkiPFwc=
+github.com/smartcontractkit/chainlink-aptos/codec v0.0.0-20260707222328-5036bbcb7832/go.mod h1:KuqRwvx4XITdG0x3HzRrYNdBegGA8EjOkF5ThCjQbLQ=
 github.com/smartcontractkit/chainlink-canton v0.0.0-20260615233851-4e78e7c23a58 h1:QT9lFZBf3bFsp7oJWLTQuUXW4FU5QXyJx2a2qZ40G6Q=
 github.com/smartcontractkit/chainlink-canton v0.0.0-20260615233851-4e78e7c23a58/go.mod h1:hDT64O8SNupR2xM10u/t+a9LpArKbecgU8jiY2It6QU=
 github.com/smartcontractkit/chainlink-ccip/chains/evm v0.0.0-20260608180601-efa81bfdfda9 h1:rLU5tQ/1BaQOjnYj9WWNlbqXCqd61oqasOXJ7upaKaM=
