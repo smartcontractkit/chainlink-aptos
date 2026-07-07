@@ -20,6 +20,7 @@ jobs:
         with:
           golangci-lint-version: v2.12.2
           golangci-lint-args: --timeout 5m
+          go-directory: ${{ matrix.modules }}
   test-mod:
     strategy:
       matrix:
@@ -35,6 +36,7 @@ jobs:
         uses: smartcontractkit/.github/actions/ci-test-go@ci-test-go/v1
         with:
           use-go-cache: true
+          go-test-cmd: go -C ${{ matrix.modules }} test ./...
 
   lint:
     name: Lint
