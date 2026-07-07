@@ -8,17 +8,24 @@ on:
   pull_request:
 
 jobs:
-  lint:
-    name: Lint
+  lint-mod:
+    strategy:
+      matrix:
+        modules: ['.','codec']
+    name: Lint (${{ matrix.modules }})
     runs-on: ubuntu-latest
     steps:
       - name: Linting Go
         uses: smartcontractkit/.github/actions/ci-lint-go@ci-lint-go/v4
         with:
-          golangci-lint-version: v2.4.0
+          golangci-lint-version: v2.12.2
           golangci-lint-args: --timeout 5m
-  test:
-    name: Tests
+          go-directory: ${{ matrix.modules }}
+  test-mod:
+    strategy:
+      matrix:
+        modules: ['.','codec']
+    name: Tests (${{ matrix.modules }})
     runs-on: ubuntu-latest
     steps:
       - name: Install Aptos CLI
@@ -29,3 +36,54 @@ jobs:
         uses: smartcontractkit/.github/actions/ci-test-go@ci-test-go/v1
         with:
           use-go-cache: true
+          go-test-cmd: go -C ${{ matrix.modules }} test ./...
+
+  lint:
+    name: Lint
+    if: ${{ always() }}
+    needs: lint-mod
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Lint results
+        env:
+          GOLANGCI_RESULT: ${{ needs.lint-mod.result }}
+        run: |
+          if [[ "${GOLANGCI_RESULT}" == "success" ]]; then
+            echo "All 'Lint' matrix jobs succeeded."
+            exit 0
+          fi
+
+          if [[ "${GOLANGCI_RESULT}" == "cancelled" ]]; then
+            echo "'Lint' jobs were cancelled."
+            exit 1
+          fi
+
+          if [[ "${GOLANGCI_RESULT}" == "failure" ]]; then
+            echo "'Lint' matrix jobs had failures."
+            exit 1
+          fi
+
+  test:
+    name: Tests
+    if: ${{ always() }}
+    needs: test-mod
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Test results
+        env:
+          TEST_RESULT: ${{ needs.test-mod.result }}
+        run: |
+          if [[ "${TEST_RESULT}" == "success" ]]; then
+            echo "All 'Test' matrix jobs succeeded."
+            exit 0
+          fi
+
+          if [[ "${TEST_RESULT}" == "cancelled" ]]; then
+            echo "'Test' jobs were cancelled."
+            exit 1
+          fi
+
+          if [[ "${TEST_RESULT}" == "failure" ]]; then
+            echo "'Test' matrix jobs had failures."
+            exit 1
+          fi
