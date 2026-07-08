@@ -6,15 +6,16 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/smartcontractkit/chainlink-common/pkg/loop"
+	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 )
 
 type TestKeystore struct {
+	core.UnimplementedKeystore
 	t    *testing.T
 	Keys map[string]ed25519.PrivateKey
 }
 
-var _ loop.Keystore = &TestKeystore{}
+var _ core.Keystore = &TestKeystore{}
 
 func NewTestKeystore(t *testing.T) *TestKeystore {
 	return &TestKeystore{t: t, Keys: map[string]ed25519.PrivateKey{}}

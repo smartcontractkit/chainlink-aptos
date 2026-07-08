@@ -25,6 +25,7 @@ var _ types.AptosService = (*relayer)(nil)
 var _ loop.Relayer = (*relayer)(nil)
 
 type relayer struct {
+	types.UnimplementedRelayer
 	chain chain.Chain
 	lggr  logger.Logger
 

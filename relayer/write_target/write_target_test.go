@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
+
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities"
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/consensus/ocr3/types"

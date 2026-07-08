@@ -18,6 +18,8 @@ import (
 // Both `logger` and `cr` parameters must be non-nil.
 //
 // Deprecated: use loop.NewLoopChainReader
+//
+//go:fix inline
 func NewLoopChainReader(logger logger.Logger, cr types.ContractReader) types.ContractReader {
 	return loop.NewLoopChainReader(logger, cr)
 }
