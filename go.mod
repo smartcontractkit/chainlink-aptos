@@ -2,8 +2,6 @@ module github.com/smartcontractkit/chainlink-aptos
 
 go 1.26.1
 
-replace github.com/smartcontractkit/chainlink-aptos/codec => ./codec
-
 require (
 	github.com/aptos-labs/aptos-go-sdk v1.13.0
 	github.com/aptos-labs/tree-sitter-move-on-aptos v0.0.0-20250321090037-c820eb4716e1
@@ -18,7 +16,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/shopspring/decimal v1.4.0
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
-	github.com/smartcontractkit/chainlink-aptos/codec v0.0.0-20260701200714-fe00c9a3936b
+	github.com/smartcontractkit/chainlink-aptos/codec v0.0.0-20260707222328-5036bbcb7832
 	github.com/smartcontractkit/chainlink-common v0.11.2-0.20260406055916-9aa6b6c0ae81
 	github.com/smartcontractkit/chainlink-framework/metrics v0.0.0-20260505202410-b350dca113b4
 	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260326111235-8c09d1a4491f
