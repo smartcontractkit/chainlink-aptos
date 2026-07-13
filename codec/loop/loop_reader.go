@@ -165,7 +165,7 @@ func (a *loopChainReader) QueryKey(ctx context.Context, contract types.BoundCont
 		return nil, fmt.Errorf("failed to re-bind before QueryKey: %w", err)
 	}
 
-	convertedExpressions, err := SerializeExpressions(filter.Expressions)
+	convertedExpressions, err := query.SerializeExpressions(filter.Expressions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize QueryKey expressions: %w", err)
 	}
