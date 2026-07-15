@@ -226,6 +226,28 @@ WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 	return offset, nil
 }
 
+// GetLatestEventMeta returns the next expected event offset (MAX(event_offset)+1),
+// the highest tx_version stored, and whether any events exist for the given handle.
+// found=false when no events have been stored yet.
+func (s *DBStore) GetLatestEventMeta(ctx context.Context, eventAccountAddress, eventHandle, eventFieldName string) (offset, txVersion uint64, found bool, err error) {
+	querySQL := `
+SELECT COALESCE(MAX(event_offset) + 1, 0), COALESCE(MAX(tx_version), 0), COUNT(*) > 0
+FROM aptos.events
+WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
+`
+
+	s.rwMutex.RLock()
+	row := s.ds.QueryRowxContext(ctx, querySQL, eventAccountAddress, eventHandle, eventFieldName)
+	s.rwMutex.RUnlock()
+
+	err = row.Scan(&offset, &txVersion, &found)
+	if err != nil {
+		return 0, 0, false, fmt.Errorf("failed to get latest event meta: %w", err)
+	}
+
+	return offset, txVersion, found, nil
+}
+
 func (s *DBStore) GetTxVersionByID(ctx context.Context, id uint64) (uint64, error) {
 	querySQL := `
 SELECT tx_version FROM aptos.events

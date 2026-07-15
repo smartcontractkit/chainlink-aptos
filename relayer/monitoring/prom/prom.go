@@ -55,6 +55,22 @@ var (
 		Name: "aptos_cr_query_dataset_size",
 		Help: "Measures size of the datasets returned by ChainReader's queries",
 	}, []string{"chainFamily", "chainID", "networkName", "query", "event"})
+
+	promLpPrunedOffsetTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "aptos_log_poller_pruned_offset_total",
+		Help: "Total number of times LogPoller detected a pruned event offset on the Aptos node",
+	}, []string{"chainFamily", "chainID", "networkName", "event"})
+
+	promLpReaderLagSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "aptos_log_poller_reader_lag_seconds",
+		Help:    "Time between event block timestamp and LogPoller insertion time, in seconds",
+		Buckets: []float64{1, 2, 5, 10, 30, 60, 120, 300, 600, 1800, 3600},
+	}, []string{"chainFamily", "chainID", "networkName", "event"})
+
+	promLpEventSequenceGap = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "aptos_log_poller_event_sequence_gap",
+		Help: "Total number of event sequence number gaps detected by LogPoller",
+	}, []string{"chainFamily", "chainID", "networkName", "event"})
 )
 
 func SetAccountBalance(chainInfo types.ChainInfo, account string, balance float64) {
@@ -111,4 +127,34 @@ func RecordQueryResultSize(chainInfo types.ChainInfo, queryType, eventKey string
 		queryType,
 		eventKey,
 	).Set(float64(count))
+}
+
+// ReportPrunedOffset increments the pruned offset counter for the given event.
+func ReportPrunedOffset(chainInfo types.ChainInfo, event string) {
+	promLpPrunedOffsetTotal.WithLabelValues(
+		chainInfo.ChainFamilyName,
+		chainInfo.ChainID,
+		chainInfo.NetworkName,
+		event,
+	).Inc()
+}
+
+// ObserveReaderLag records the lag between an event's block timestamp and now.
+func ObserveReaderLag(chainInfo types.ChainInfo, event string, lagSeconds float64) {
+	promLpReaderLagSeconds.WithLabelValues(
+		chainInfo.ChainFamilyName,
+		chainInfo.ChainID,
+		chainInfo.NetworkName,
+		event,
+	).Observe(lagSeconds)
+}
+
+// ReportEventSequenceGap increments the sequence gap counter by the given gap size.
+func ReportEventSequenceGap(chainInfo types.ChainInfo, event string, gapSize uint64) {
+	promLpEventSequenceGap.WithLabelValues(
+		chainInfo.ChainFamilyName,
+		chainInfo.ChainID,
+		chainInfo.NetworkName,
+		event,
+	).Add(float64(gapSize))
 }

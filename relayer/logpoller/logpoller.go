@@ -20,6 +20,13 @@ import (
 	aptos0 "github.com/smartcontractkit/chainlink-common/pkg/types/aptos"
 )
 
+// eventStore is the narrow DB interface used by syncEvent. The concrete type
+// *db.DBStore satisfies it; unit tests substitute a fake implementation.
+type eventStore interface {
+	GetLatestEventMeta(ctx context.Context, eventAccountAddress, eventHandle, eventFieldName string) (offset, txVersion uint64, found bool, err error)
+	InsertEvents(ctx context.Context, records []db.EventRecord) error
+}
+
 type moduleInfo struct {
 	name         string
 	address      aptos.AccountAddress
@@ -30,6 +37,7 @@ type moduleInfo struct {
 type AptosLogPoller struct {
 	lggr      logger.Logger
 	dbStore   *db.DBStore
+	evStore   eventStore // narrow interface used by syncEvent; set to dbStore by default
 	config    *Config
 	getClient func() (aptos.AptosRpcClient, error)
 	chainInfo types.ChainInfo
@@ -62,6 +70,7 @@ func NewLogPoller(lggr logger.Logger, chainInfo types.ChainInfo, getClient func(
 	return &AptosLogPoller{
 		lggr:      logger.Named(lggr, "AptosLogPoller"),
 		dbStore:   dbStore,
+		evStore:   dbStore,
 		config:    cfg,
 		getClient: getClient,
 		chainInfo: chainInfo,

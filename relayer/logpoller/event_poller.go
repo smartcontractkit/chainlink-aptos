@@ -156,9 +156,9 @@ func (l *AptosLogPoller) syncEvent(ctx context.Context, boundAddress aptos.Accou
 	eventHandle := boundAddress.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
 	eventFieldName := eventConfig.EventHandleFieldName
 
-	latestOffset, err := l.dbStore.GetLatestOffset(ctx, eventAccountAddress.String(), eventHandle, eventFieldName)
+	latestOffset, lastTxVersion, hasStoredEvents, err := l.evStore.GetLatestEventMeta(ctx, eventAccountAddress.String(), eventHandle, eventFieldName)
 	if err != nil {
-		return fmt.Errorf("syncEvent: failed to get latest offset: %w", err)
+		return fmt.Errorf("syncEvent: failed to get latest event meta: %w", err)
 	}
 
 	cacheKey := eventAccountAddress.String() + "::" + eventHandle
@@ -219,12 +219,52 @@ eventLoop:
 		default:
 			events, err := client.EventsByCreationNumber(eventAccountAddress, creationNumber, &latestOffset, &batchSize)
 			if err != nil {
+				class := ClassifyEventsRPCError(err)
+				if class == ErrorClassPruned {
+					l.lggr.Errorw("syncEvent: event offset pruned on Aptos node",
+						"handle", eventHandle,
+						"field", eventFieldName,
+						"offset", latestOffset,
+						"error", err)
+					prom.ReportPrunedOffset(l.chainInfo, eventFieldName)
+					return fmt.Errorf("syncEvent: %w", ErrPrunedOffset)
+				}
 				l.lggr.Errorw("syncEvent: failed to fetch new events", "error", err)
 				return fmt.Errorf("syncEvent: failed to fetch events: %w", err)
 			}
 
 			if len(events) == 0 {
+				// Defensive pruned check: if we have stored events and the highest stored
+				// tx_version is below the node's oldest_ledger_version, the offset falls in
+				// the pruned range even though the API returned 200 + [] rather than 410.
+				// See PRUNED_RPC.md §"Defensive Info() check".
+				if hasStoredEvents {
+					nodeInfo, infoErr := client.Info()
+					if infoErr == nil && lastTxVersion < nodeInfo.OldestLedgerVersion() {
+						l.lggr.Errorw("syncEvent: stored event tx_version below oldest_ledger_version — offset likely pruned",
+							"lastTxVersion", lastTxVersion,
+							"oldestLedgerVersion", nodeInfo.OldestLedgerVersion(),
+							"handle", eventHandle,
+							"field", eventFieldName,
+							"offset", latestOffset)
+						prom.ReportPrunedOffset(l.chainInfo, eventFieldName)
+						return fmt.Errorf("syncEvent: %w", ErrPrunedOffset)
+					}
+				}
 				break eventLoop
+			}
+
+			// Sequence gap check: detect missing events between the stored offset and the
+			// first event in this batch. This is a signal, not a halt.
+			if events[0].SequenceNumber > latestOffset {
+				gapSize := events[0].SequenceNumber - latestOffset
+				l.lggr.Warnw("syncEvent: event sequence gap detected",
+					"expectedOffset", latestOffset,
+					"firstEventOffset", events[0].SequenceNumber,
+					"gapSize", gapSize,
+					"handle", eventHandle,
+					"field", eventFieldName)
+				prom.ReportEventSequenceGap(l.chainInfo, eventFieldName, gapSize)
 			}
 
 			var batchRecords []db.EventRecord
@@ -255,11 +295,23 @@ eventLoop:
 			}
 
 			if len(batchRecords) > 0 {
-				if err := l.dbStore.InsertEvents(ctx, batchRecords); err != nil {
+				if err := l.evStore.InsertEvents(ctx, batchRecords); err != nil {
 					return fmt.Errorf("syncEvent: failed to insert batch of events: %w", err)
 				}
 
 				prom.ReportEventsInserted(l.chainInfo, eventFieldName, false, len(batchRecords))
+
+				// Reader lag: time between block timestamp (seconds) and now.
+				for _, record := range batchRecords {
+					if record.BlockTimestamp > 0 {
+						lagSeconds := float64(time.Now().Unix() - int64(record.BlockTimestamp))
+						prom.ObserveReaderLag(l.chainInfo, eventFieldName, lagSeconds)
+					}
+				}
+
+				// Update defensive-check state for subsequent iterations.
+				lastTxVersion = batchRecords[len(batchRecords)-1].TxVersion
+				hasStoredEvents = true
 
 				totalProcessed += len(batchRecords)
 				l.lggr.Debugw("syncEvent: saved batch of events",
@@ -271,7 +323,7 @@ eventLoop:
 
 			latestOffset = events[len(events)-1].SequenceNumber + 1
 
-			// If we received fewer events than the batch size, we're caught up
+			// If we received fewer events than the batch size, we're caught up.
 			if uint64(len(events)) < batchSize {
 				break eventLoop
 			}
