@@ -22,21 +22,21 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 	commonutils "github.com/smartcontractkit/chainlink-common/pkg/utils"
 
-	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
+	codec0 "github.com/smartcontractkit/chainlink-aptos/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/db"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/loop"
 	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/logpoller"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/prom"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
+	aptos0 "github.com/smartcontractkit/chainlink-common/pkg/types/aptos"
 )
 
 type aptosChainReader struct {
 	types.UnimplementedContractReader
 
 	lggr    logger.Logger
-	config  config.ChainReaderConfig
+	config  aptos0.ContractReaderConfig
 	dbStore *db.DBStore
 
 	starter             commonutils.StartStopOnce
@@ -57,10 +57,10 @@ var _ types.ContractTypeProvider = &aptosChainReader{}
 
 type ExtendedContractReader interface {
 	types.ContractReader
-	QueryKeyWithMetadata(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]config.SequenceWithMetadata, error)
+	QueryKeyWithMetadata(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]aptos0.SequenceWithMetadata, error)
 }
 
-func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config config.ChainReaderConfig, ds sqlutil.DataSource, poller *logpoller.AptosLogPoller) types.ContractReader {
+func NewChainReader(lgr logger.Logger, client aptos.AptosRpcClient, config aptos0.ContractReaderConfig, ds sqlutil.DataSource, poller *logpoller.AptosLogPoller) types.ContractReader {
 	lggr := logger.Named(lgr, "AptosChainReader")
 	reader := &aptosChainReader{
 		lggr:                  lggr,
@@ -186,7 +186,7 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		return fmt.Errorf("no such method: %s", method)
 	}
 
-	argMap := make(map[string]interface{})
+	argMap := make(map[string]any)
 
 	if a.config.IsLoopPlugin {
 		paramBytes, ok := params.(*[]byte)
@@ -324,7 +324,7 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		return nil
 	}
 
-	return codec.DecodeAptosJsonValue(transformedData, returnVal)
+	return codec0.DecodeAptosJsonValue(transformedData, returnVal)
 }
 
 func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request types.BatchGetLatestValuesRequest) (types.BatchGetLatestValuesResult, error) {
@@ -478,7 +478,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 			eventData = &resultBytes
 		} else {
 			decoded := reflect.New(reflect.TypeOf(sequenceDataType).Elem()).Interface()
-			if err := codec.DecodeAptosJsonValue(rec.Data, decoded); err != nil {
+			if err := codec0.DecodeAptosJsonValue(rec.Data, decoded); err != nil {
 				return nil, fmt.Errorf("failed to decode event data: %w", err)
 			}
 
@@ -513,7 +513,7 @@ func (a *aptosChainReader) QueryKey(ctx context.Context, contract types.BoundCon
 	return sequences, nil
 }
 
-func (a *aptosChainReader) QueryKeyWithMetadata(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]config.SequenceWithMetadata, error) {
+func (a *aptosChainReader) QueryKeyWithMetadata(ctx context.Context, contract types.BoundContract, filter query.KeyFilter, limitAndSort query.LimitAndSort, sequenceDataType any) ([]aptos0.SequenceWithMetadata, error) {
 	if sequenceDataType == nil {
 		return nil, errors.New("sequence data type is nil")
 	}
@@ -523,7 +523,7 @@ func (a *aptosChainReader) QueryKeyWithMetadata(ctx context.Context, contract ty
 		return nil, err
 	}
 
-	var enriched []config.SequenceWithMetadata
+	var enriched []aptos0.SequenceWithMetadata
 	for _, seq := range seqs {
 		eventID, err := strconv.ParseUint(seq.Cursor, 10, 64)
 		if err != nil {
@@ -540,7 +540,7 @@ func (a *aptosChainReader) QueryKeyWithMetadata(ctx context.Context, contract ty
 			return nil, fmt.Errorf("failed to get tx details for version %d: %w", txVersion, err)
 		}
 
-		enriched = append(enriched, config.SequenceWithMetadata{
+		enriched = append(enriched, aptos0.SequenceWithMetadata{
 			Sequence:  seq,
 			TxVersion: txVersion,
 			TxHash:    tx.Hash(),
@@ -606,7 +606,7 @@ func (a *aptosChainReader) CreateContractType(readName string, forEncoding bool)
 	return &[]byte{}, nil
 }
 
-func (a *aptosChainReader) computeEventAccountAddress(boundAddress aptos.AccountAddress, eventConfig *config.ChainReaderEvent) (aptos.AccountAddress, error) {
+func (a *aptosChainReader) computeEventAccountAddress(boundAddress aptos.AccountAddress, eventConfig *aptos0.ContractReaderEvent) (aptos.AccountAddress, error) {
 	var eventAccountAddress aptos.AccountAddress
 	if len(eventConfig.EventAccountAddress) == 0 {
 		return boundAddress, nil
@@ -654,7 +654,7 @@ func (a *aptosChainReader) computeEventAccountAddress(boundAddress aptos.Account
 		if err != nil {
 			return eventAccountAddress, fmt.Errorf("failed to call view function: %+w", err)
 		}
-		err = codec.DecodeAptosJsonValue(data[0], &eventAccountAddress)
+		err = codec0.DecodeAptosJsonValue(data[0], &eventAccountAddress)
 		if err != nil {
 			return eventAccountAddress, fmt.Errorf("failed to decode event account address function output: %+w", err)
 		}

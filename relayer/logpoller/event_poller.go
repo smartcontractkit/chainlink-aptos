@@ -3,6 +3,7 @@ package logpoller
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -13,10 +14,11 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
 
-	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
+	aptostypes "github.com/smartcontractkit/chainlink-common/pkg/types/aptos"
+
+	"github.com/smartcontractkit/chainlink-aptos/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/db"
 	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/prom"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
@@ -64,9 +66,7 @@ func (l *AptosLogPoller) SyncAllEvents(ctx context.Context) error {
 	// Avoid locking durring the potentially long operation
 	l.mu.RLock()
 	modulesCopy := make(map[string]*moduleInfo)
-	for k, v := range l.modules {
-		modulesCopy[k] = v
-	}
+	maps.Copy(modulesCopy, l.modules)
 	l.mu.RUnlock()
 
 	successCount := 0
@@ -145,7 +145,7 @@ func (l *AptosLogPoller) SyncEvent(ctx context.Context, moduleKey, eventKey stri
 	return err
 }
 
-func (l *AptosLogPoller) syncEvent(ctx context.Context, boundAddress aptos.AccountAddress, eventConfig *config.ChainReaderEvent, eventModuleName string) error {
+func (l *AptosLogPoller) syncEvent(ctx context.Context, boundAddress aptos.AccountAddress, eventConfig *aptostypes.ContractReaderEvent, eventModuleName string) error {
 	start := time.Now()
 
 	eventAccountAddress, err := l.computeEventAccountAddress(boundAddress, eventConfig)
@@ -297,7 +297,7 @@ eventLoop:
 	return nil
 }
 
-func (l *AptosLogPoller) computeEventAccountAddress(boundAddress aptos.AccountAddress, eventConfig *config.ChainReaderEvent) (aptos.AccountAddress, error) {
+func (l *AptosLogPoller) computeEventAccountAddress(boundAddress aptos.AccountAddress, eventConfig *aptostypes.ContractReaderEvent) (aptos.AccountAddress, error) {
 	var eventAccountAddress aptos.AccountAddress
 	if len(eventConfig.EventAccountAddress) == 0 {
 		return boundAddress, nil

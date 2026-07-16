@@ -11,7 +11,6 @@ import (
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
-	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainwriter"
 	aptosconfig "github.com/smartcontractkit/chainlink-aptos/relayer/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
@@ -21,6 +20,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
+	aptos0 "github.com/smartcontractkit/chainlink-common/pkg/types/aptos"
 )
 
 // contractWriterWrapper wraps the common ContractWriter interface and adds GetTransactionFee method
@@ -66,13 +66,13 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 	}
 
 	// Initialize a reader to check whether a value was already transmitted on chain
-	cr := chainreader.NewChainReader(lggr, client, crconfig.ChainReaderConfig{
-		Modules: map[string]*crconfig.ChainReaderModule{
+	cr := chainreader.NewChainReader(lggr, client, aptos0.ContractReaderConfig{
+		Modules: map[string]*aptos0.ContractReaderModule{
 			"forwarder": {
-				Functions: map[string]*crconfig.ChainReaderFunction{
+				Functions: map[string]*aptos0.ContractReaderFunction{
 					"getTransmissionState": {
 						Name: "get_transmission_state",
-						Params: []crconfig.AptosFunctionParam{
+						Params: []aptos0.FunctionParam{
 							{
 								Name:     "Receiver",
 								Type:     "address",
@@ -92,7 +92,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 					},
 					"getTransmitter": {
 						Name: "get_transmitter",
-						Params: []crconfig.AptosFunctionParam{
+						Params: []aptos0.FunctionParam{
 							{
 								Name:     "Receiver",
 								Type:     "address",
@@ -123,13 +123,13 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 		return nil, err
 	}
 
-	cwConfig := chainwriter.ChainWriterConfig{
-		Modules: map[string]*chainwriter.ChainWriterModule{
+	cwConfig := aptos0.ContractWriterConfig{
+		Modules: map[string]*aptos0.ContractWriterModule{
 			"forwarder": {
-				Functions: map[string]*chainwriter.ChainWriterFunction{
+				Functions: map[string]*aptos0.ContractWriterFunction{
 					"report": {
 						PublicKey: config.Workflow.PublicKey,
-						Params: []crconfig.AptosFunctionParam{
+						Params: []aptos0.FunctionParam{
 							{
 								Name:     "Receiver",
 								Type:     "address",
@@ -150,7 +150,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 				},
 			},
 		},
-		FeeStrategy: chainwriter.DefaultFeeStrategy,
+		FeeStrategy: aptos0.DefaultFeeStrategy,
 	}
 
 	baseCw := chainwriter.NewChainWriter(lggr, client, chain.TxManager(), cwConfig)
@@ -201,7 +201,7 @@ func NewAptosWriteTarget(ctx context.Context, chain chain.Chain, lggr logger.Log
 }
 
 // getTransmitter sources the transmitter address from the CW config
-func getTransmitter(cwConfig chainwriter.ChainWriterConfig) (string, error) {
+func getTransmitter(cwConfig aptos0.ContractWriterConfig) (string, error) {
 	// Try to source the transmitter (e.g., c.cw.config.Functions["forwarder"].FromAddress)
 	moduleConfig, ok := cwConfig.Modules[write_target.ContractName]
 	if !ok {

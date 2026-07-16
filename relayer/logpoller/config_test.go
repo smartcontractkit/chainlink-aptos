@@ -24,7 +24,7 @@ func TestResolve_PartialOverride(t *testing.T) {
 	t.Parallel()
 
 	cfg := Config{
-		EventBatchSize: ptr(uint64(50)),
+		EventBatchSize: new(uint64(50)),
 	}
 	cfg.Resolve()
 
@@ -37,8 +37,8 @@ func TestResolve_ExplicitZero(t *testing.T) {
 	t.Parallel()
 
 	cfg := Config{
-		EventBatchSize:   ptr(uint64(0)),
-		TXPollerDisabled: ptr(false),
+		EventBatchSize:   new(uint64(0)),
+		TXPollerDisabled: new(false),
 	}
 	cfg.Resolve()
 

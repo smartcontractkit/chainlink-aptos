@@ -4,7 +4,7 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
+	"github.com/smartcontractkit/chainlink-aptos/codec"
 )
 
 func GetObjectOwner(

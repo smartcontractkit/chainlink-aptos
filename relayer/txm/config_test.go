@@ -29,7 +29,7 @@ func TestResolve_PartialOverride(t *testing.T) {
 	t.Parallel()
 
 	cfg := Config{
-		BroadcastChanSize: ptr(uint(50)),
+		BroadcastChanSize: new(uint(50)),
 	}
 	cfg.Resolve()
 
@@ -42,8 +42,8 @@ func TestResolve_ExplicitZero(t *testing.T) {
 	t.Parallel()
 
 	cfg := Config{
-		DefaultMaxGasAmount: ptr(uint64(0)),
-		MaxSimulateAttempts: ptr(uint(0)),
+		DefaultMaxGasAmount: new(uint64(0)),
+		MaxSimulateAttempts: new(uint(0)),
 	}
 	cfg.Resolve()
 

@@ -456,7 +456,7 @@ func serializeArg(argVal any, argType aptos.TypeTag, serializer *bcs.Serializer)
 			return err
 		}
 
-		for i := 0; i < length; i++ {
+		for i := range length {
 			if err := serializeArg(rv.Index(i).Interface(), itemType, serializer); err != nil {
 				return err
 			}
@@ -655,28 +655,28 @@ func deserializeArg(argType aptos.TypeTag, deserializer *bcs.Deserializer) (any,
 func getType(typeTag aptos.TypeTag) reflect.Type {
 	switch typeTag.Value.GetType() {
 	case aptos.TypeTagBool:
-		return reflect.TypeOf(false)
+		return reflect.TypeFor[bool]()
 	case aptos.TypeTagU8:
-		return reflect.TypeOf(uint8(0))
+		return reflect.TypeFor[uint8]()
 	case aptos.TypeTagU16:
-		return reflect.TypeOf(uint16(0))
+		return reflect.TypeFor[uint16]()
 	case aptos.TypeTagU32:
-		return reflect.TypeOf(uint32(0))
+		return reflect.TypeFor[uint32]()
 	case aptos.TypeTagU64:
-		return reflect.TypeOf(uint64(0))
+		return reflect.TypeFor[uint64]()
 	case aptos.TypeTagU128:
 		return reflect.TypeOf(big.NewInt(0))
 	case aptos.TypeTagU256:
 		return reflect.TypeOf(big.NewInt(0))
 	case aptos.TypeTagAddress:
-		return reflect.TypeOf(aptos.AccountAddress{})
+		return reflect.TypeFor[aptos.AccountAddress]()
 	case aptos.TypeTagStruct:
 		tag := typeTag.Value.(*aptos.StructTag)
 		// Can't use tag.String() as it would contain type parameters
 		tagName := fmt.Sprintf("%s::%s::%s", tag.Address.String(), tag.Module, tag.Name)
 		switch tagName {
 		case "0x1::string::String":
-			return reflect.TypeOf(string(""))
+			return reflect.TypeFor[string]()
 		case "0x1::option::Option":
 			if len(tag.TypeParams) != 1 {
 				return nil

@@ -138,7 +138,7 @@ func DeserializeExecutionReport(data []byte) (*ExecutionReport, error) {
 	}
 	var tokenAmounts []Any2AptosTokenTransfer
 
-	for i := uint32(0); i < tokenAmountsLen; i++ {
+	for i := range tokenAmountsLen {
 		sourcePoolAddr := deserializer.ReadBytes()
 		if err := deserializer.Error(); err != nil {
 			return nil, fmt.Errorf("failed to deserialize tokenAmounts[%d].sourcePoolAddress: %w", i, err)
@@ -188,7 +188,7 @@ func DeserializeExecutionReport(data []byte) (*ExecutionReport, error) {
 	}
 	var offchainData [][]byte
 
-	for i := uint32(0); i < offchainDataLen; i++ {
+	for i := range offchainDataLen {
 		data := deserializer.ReadBytes()
 		if err := deserializer.Error(); err != nil {
 			return nil, fmt.Errorf("failed to deserialize offchainTokenData[%d]: %w", i, err)
@@ -203,7 +203,7 @@ func DeserializeExecutionReport(data []byte) (*ExecutionReport, error) {
 	}
 	var proofs [][]byte
 
-	for i := uint32(0); i < proofsLen; i++ {
+	for i := range proofsLen {
 		data := deserializer.ReadFixedBytes(32)
 		if err := deserializer.Error(); err != nil {
 			return nil, fmt.Errorf("failed to deserialize proofs[%d]: %w", i, err)

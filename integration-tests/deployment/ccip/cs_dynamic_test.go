@@ -2,6 +2,7 @@ package ccip
 
 import (
 	"math/big"
+	"slices"
 	"testing"
 	"time"
 
@@ -112,13 +113,7 @@ func TestDynamicCS_Apply(t *testing.T) {
 	allowedOfframps, err := ccipBind.Auth().GetAllowedOfframps(nil)
 	require.NoError(t, err)
 
-	found := false
-	for _, addr := range allowedOfframps {
-		if addr == ccipOwnerAddress {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(allowedOfframps, ccipOwnerAddress)
 	require.True(t, found, "CCIP owner should be in the allowlist after ApplyAllowedOfframpUpdatesOp")
 
 	arbU128Selector := new(big.Int).SetUint64(chain_selectors.ETHEREUM_MAINNET_ARBITRUM_1.Selector)

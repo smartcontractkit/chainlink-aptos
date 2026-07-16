@@ -120,7 +120,7 @@ FROM aptos.events
 WHERE event_account_address = $1 AND event_handle = $2 AND event_field_name = $3
 `
 
-	args := []interface{}{eventAccountAddress, eventHandle, eventFieldName}
+	args := []any{eventAccountAddress, eventHandle, eventFieldName}
 	argCount := 4
 
 	s.lggr.Debugw("Building SQL query from expressions",

@@ -375,18 +375,19 @@ func writeTestEventsCSV(t *testing.T, rows [][]string) string {
 
 	// Minimal get-feed-updated-events CSV for unit tests.
 	path := filepath.Join(t.TempDir(), "events.csv")
-	content := "success,vm_status,transaction_hash,gas_used,block_timestamp,observation_timestamp,feed_id,benchmark\n"
+	var content strings.Builder
+	content.WriteString("success,vm_status,transaction_hash,gas_used,block_timestamp,observation_timestamp,feed_id,benchmark\n")
 	for _, row := range rows {
 		for i, field := range row {
 			if i > 0 {
-				content += ","
+				content.WriteString(",")
 			}
-			content += field
+			content.WriteString(field)
 		}
-		content += "\n"
+		content.WriteString("\n")
 	}
 
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content.String()), 0o644); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
 

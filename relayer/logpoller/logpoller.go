@@ -15,15 +15,15 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil"
 	commonutils "github.com/smartcontractkit/chainlink-common/pkg/utils"
 
-	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/db"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
+	aptos0 "github.com/smartcontractkit/chainlink-common/pkg/types/aptos"
 )
 
 type moduleInfo struct {
 	name         string
 	address      aptos.AccountAddress
-	eventConfigs map[string]*config.ChainReaderEvent
+	eventConfigs map[string]*aptos0.ContractReaderEvent
 	refCount     int
 }
 
@@ -110,7 +110,7 @@ func (l *AptosLogPoller) Close() error {
 	})
 }
 
-func (l *AptosLogPoller) RegisterModule(ctx context.Context, moduleKey string, address aptos.AccountAddress, name string, eventConfigs map[string]*config.ChainReaderEvent) error {
+func (l *AptosLogPoller) RegisterModule(ctx context.Context, moduleKey string, address aptos.AccountAddress, name string, eventConfigs map[string]*aptos0.ContractReaderEvent) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -180,7 +180,7 @@ func (l *AptosLogPoller) setEventAccountAddress(cacheKey string, address aptos.A
 	l.lggr.Debugw("Cached event account address", "key", cacheKey, "address", address.String())
 }
 
-func (l *AptosLogPoller) getEventConfig(moduleKey, eventKey string) (aptos.AccountAddress, string, *config.ChainReaderEvent, error) {
+func (l *AptosLogPoller) getEventConfig(moduleKey, eventKey string) (aptos.AccountAddress, string, *aptos0.ContractReaderEvent, error) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 

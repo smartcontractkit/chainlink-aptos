@@ -16,9 +16,9 @@ import (
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader"
-	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainwriter"
 	write_target "github.com/smartcontractkit/chainlink-aptos/relayer/write_target/aptos"
+	"github.com/smartcontractkit/chainlink-common/pkg/types/aptos"
 )
 
 var _ types.AptosService = (*relayer)(nil)
@@ -106,7 +106,7 @@ func (r *relayer) HealthReport() map[string]error {
 }
 
 func (r *relayer) NewContractWriter(ctx context.Context, configBytes []byte) (types.ContractWriter, error) {
-	cfg := chainwriter.ChainWriterConfig{}
+	cfg := aptos.ContractWriterConfig{}
 	if err := json.Unmarshal(configBytes, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshall chain writer config err: %s", err)
 	}
@@ -121,7 +121,7 @@ func (r *relayer) NewContractWriter(ctx context.Context, configBytes []byte) (ty
 }
 
 func (r *relayer) NewContractReader(ctx context.Context, configBytes []byte) (types.ContractReader, error) {
-	cfg := crconfig.ChainReaderConfig{}
+	cfg := aptos.ContractReaderConfig{}
 	if err := json.Unmarshal(configBytes, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshall chain reader config err: %s", err)
 	}

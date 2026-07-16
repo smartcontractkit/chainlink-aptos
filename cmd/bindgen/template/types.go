@@ -145,8 +145,8 @@ func isGenericType(s string, typ string) (innerType string, moveType string, ok 
 	}
 	s = strings.TrimSuffix(s, ">")
 
-	if strings.HasPrefix(s, fmt.Sprintf("%s<", split[len(split)-1])) {
-		innerType = strings.TrimPrefix(s, fmt.Sprintf("%s<", split[len(split)-1]))
+	if after, ok0 := strings.CutPrefix(s, fmt.Sprintf("%s<", split[len(split)-1])); ok0 {
+		innerType = after
 		moveType = fmt.Sprintf("%s<%s>", typ, innerType)
 		return innerType, moveType, true
 	}

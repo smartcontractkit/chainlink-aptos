@@ -41,16 +41,16 @@ type Transaction struct {
 }
 
 type Event struct {
-	SequenceNumber string                 `json:"sequence_number"`
-	Type           string                 `json:"type"`
-	Data           map[string]interface{} `json:"data"`
+	SequenceNumber string         `json:"sequence_number"`
+	Type           string         `json:"type"`
+	Data           map[string]any `json:"data"`
 }
 
 type Payload struct {
-	Type          string        `json:"type"`
-	Function      string        `json:"function"`
-	TypeArguments []string      `json:"type_arguments"`
-	Arguments     []interface{} `json:"arguments"`
+	Type          string   `json:"type"`
+	Function      string   `json:"function"`
+	TypeArguments []string `json:"type_arguments"`
+	Arguments     []any    `json:"arguments"`
 }
 
 type Signature struct {
@@ -172,10 +172,7 @@ func fetchTransactionsSinceTimestamp(account string, environment string, sinceTi
 
 	cursor := seqNum
 	for cursor > 0 {
-		start := cursor - pageSize
-		if start < 0 {
-			start = 0
-		}
+		start := max(cursor-pageSize, 0)
 
 		txs, err := fetchTransactionsPageFromAccountWithLimitAndOffset(account, environment, pageSize, start)
 		if err != nil {

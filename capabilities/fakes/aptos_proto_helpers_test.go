@@ -176,7 +176,6 @@ func TestTypeTagFromProto_AllKinds(t *testing.T) {
 		{"address", aptoscappb.TypeTagKind_TYPE_TAG_KIND_ADDRESS},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			tag, err := typeTagFromProto(&aptoscappb.TypeTag{Kind: tc.kind})

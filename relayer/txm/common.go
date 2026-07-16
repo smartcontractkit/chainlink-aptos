@@ -98,7 +98,7 @@ func WaitForTxmId(t *testing.T, txm *AptosTxm, txId string, duration time.Durati
 
 func GenerateSigners(t *testing.T, count int) []Signer {
 	signers := make([]Signer, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		privateKey, err := crypto.GenerateKey()
 		require.NoError(t, err)
 		signers[i] = Signer{

@@ -162,7 +162,7 @@ func TestDeserializeExecutionReport(t *testing.T) {
 			name: "invalid trailing bytes",
 			data: append(validWith(nil), 0x00, 0x01, 0x02), // Add extra bytes at the end
 			want: nil,
-			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
+			wantErr: func(t assert.TestingT, err error, i ...any) bool {
 				return assert.ErrorContains(t, err, "trailing bytes")
 			},
 		},

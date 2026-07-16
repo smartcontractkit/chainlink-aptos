@@ -44,14 +44,14 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 
 	t.Run("Array of Hex Strings to [][]byte", func(t *testing.T) {
 		var result [][]byte
-		err := DecodeAptosJsonValue([]interface{}{"0x1234", "0x5678"}, &result)
+		err := DecodeAptosJsonValue([]any{"0x1234", "0x5678"}, &result)
 		assert.NoError(t, err)
 		assert.Equal(t, [][]byte{{0x12, 0x34}, {0x56, 0x78}}, result)
 	})
 
 	t.Run("Array of Hex Strings to []*big.Int", func(t *testing.T) {
 		var result []*big.Int
-		err := DecodeAptosJsonValue([]interface{}{"0x1234", "0x5678"}, &result)
+		err := DecodeAptosJsonValue([]any{"0x1234", "0x5678"}, &result)
 		assert.NoError(t, err)
 		expected := []*big.Int{big.NewInt(0x1234), big.NewInt(0x5678)}
 		if !compareBigIntSlices(result, expected) {
@@ -63,7 +63,7 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 	// because u32 is encoded as a JSON number, where u64 is encoded as a JSON string.
 	t.Run("Array of Mixed Types to []uint", func(t *testing.T) {
 		var result []uint
-		err := DecodeAptosJsonValue([]interface{}{42, "99"}, &result)
+		err := DecodeAptosJsonValue([]any{42, "99"}, &result)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint{42, 99}, result)
 	})
@@ -104,10 +104,10 @@ func TestDecodeAptosJsonValue(t *testing.T) {
 	})
 
 	t.Run("Nested Structures", func(t *testing.T) {
-		input := map[string]interface{}{
+		input := map[string]any{
 			"name": "John",
 			"age":  "30",
-			"data": []interface{}{"0x1234", "0x5678"},
+			"data": []any{"0x1234", "0x5678"},
 		}
 		var result struct {
 			Name string

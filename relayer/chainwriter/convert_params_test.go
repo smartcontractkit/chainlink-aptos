@@ -3,26 +3,26 @@ package chainwriter
 import (
 	"testing"
 
-	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
+	"github.com/smartcontractkit/chainlink-common/pkg/types/aptos"
 )
 
 func TestEncodeFunctionParams(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name       string
-		argMap     map[string]interface{}
-		params     []config.AptosFunctionParam
+		argMap     map[string]any
+		params     []aptos.FunctionParam
 		wantTypes  []string
 		wantValues []any
 		wantErr    string
 	}{
 		{
 			name: "All arguments provided",
-			argMap: map[string]interface{}{
+			argMap: map[string]any{
 				"arg1": "value1",
 				"arg2": 42,
 			},
-			params: []config.AptosFunctionParam{
+			params: []aptos.FunctionParam{
 				{Name: "arg1", Type: "string", Required: true},
 				{Name: "arg2", Type: "int", Required: true},
 			},
@@ -31,10 +31,10 @@ func TestEncodeFunctionParams(t *testing.T) {
 		},
 		{
 			name: "Missing required argument",
-			argMap: map[string]interface{}{
+			argMap: map[string]any{
 				"arg1": "value1",
 			},
-			params: []config.AptosFunctionParam{
+			params: []aptos.FunctionParam{
 				{Name: "arg1", Type: "string", Required: true},
 				{Name: "arg2", Type: "int", Required: true},
 			},
@@ -42,10 +42,10 @@ func TestEncodeFunctionParams(t *testing.T) {
 		},
 		{
 			name: "Using default values",
-			argMap: map[string]interface{}{
+			argMap: map[string]any{
 				"arg1": "value1",
 			},
-			params: []config.AptosFunctionParam{
+			params: []aptos.FunctionParam{
 				{Name: "arg1", Type: "string", Required: true},
 				{Name: "arg2", Type: "int", Required: false, DefaultValue: 42},
 			},
@@ -54,11 +54,11 @@ func TestEncodeFunctionParams(t *testing.T) {
 		},
 		{
 			name: "Optional param provided",
-			argMap: map[string]interface{}{
+			argMap: map[string]any{
 				"arg1": "value1",
 				"arg2": 100,
 			},
-			params: []config.AptosFunctionParam{
+			params: []aptos.FunctionParam{
 				{Name: "arg1", Type: "string", Required: true},
 				{Name: "arg2", Type: "int", Required: false, DefaultValue: 42},
 			},

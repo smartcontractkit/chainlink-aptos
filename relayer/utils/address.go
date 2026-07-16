@@ -2,10 +2,9 @@ package utils
 
 import (
 	"crypto/ed25519"
+	"crypto/sha3"
 	"encoding/hex"
 	"fmt"
-
-	"golang.org/x/crypto/sha3"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 )
@@ -26,7 +25,7 @@ func HexPublicKeyToEd25519PublicKey(key string) (ed25519.PublicKey, error) {
 
 // Ed25519PublicKeyToAddress converts an Ed25519 public key to an Aptos account address.
 func Ed25519PublicKeyToAddress(key ed25519.PublicKey) aptos.AccountAddress {
-	authKey := sha3.Sum256(append([]byte(key), 0x00 /* account key prefix */))
+	authKey := sha3.Sum256(append([]byte(key), 0x00))
 	return aptos.AccountAddress(authKey)
 }
 
