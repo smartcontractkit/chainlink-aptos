@@ -88,14 +88,10 @@ func TestAptosServiceViewUsesRequestedLedgerVersion(t *testing.T) {
 			},
 			Function: "balance",
 		},
-		LedgerVersion: ptrUint64(ledgerVersion),
+		LedgerVersion: new(ledgerVersion),
 	})
 	require.NoError(t, err)
 	require.JSONEq(t, `["ok"]`, string(reply.Data))
-}
-
-func ptrUint64(v uint64) *uint64 {
-	return &v
 }
 
 func TestAptosServiceAccountTransactionsYoungAccount(t *testing.T) {

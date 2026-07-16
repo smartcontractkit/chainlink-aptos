@@ -31,9 +31,9 @@ func DecodeAptosJsonArray(from []any, to ...any) error {
 func DecodeAptosJsonValue(from any, to any) error {
 	// If `to` is a pointer to `any`, directly assign the value
 	toValue := reflect.ValueOf(to)
-	if toValue.Kind() == reflect.Ptr && !toValue.IsNil() {
+	if toValue.Kind() == reflect.Pointer && !toValue.IsNil() {
 		toElem := toValue.Elem()
-		if toElem.Kind() == reflect.Interface && toElem.Type() == reflect.TypeOf((*any)(nil)).Elem() {
+		if toElem.Kind() == reflect.Interface && toElem.Type() == reflect.TypeFor[any]() {
 			toElem.Set(reflect.ValueOf(from))
 			return nil
 		}
@@ -66,7 +66,7 @@ func DecodeAptosJsonValue(from any, to any) error {
 	return decoder.Decode(from)
 }
 
-func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
+func hexStringHook(f reflect.Type, t reflect.Type, data any) (any, error) {
 	if f.Kind() != reflect.String {
 		return data, nil
 	}
@@ -133,8 +133,8 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 			return nil, fmt.Errorf("value %d overflows %v", val, t)
 		}
 		return reflect.ValueOf(val).Convert(t).Interface(), nil
-	case reflect.Ptr:
-		if t == reflect.TypeOf((*big.Int)(nil)) {
+	case reflect.Pointer:
+		if t == reflect.TypeFor[*big.Int]() {
 			bi := new(big.Int)
 			_, ok := bi.SetString(str, 16)
 			if !ok {
@@ -142,24 +142,24 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 			}
 			return bi, nil
 		}
-		if t == reflect.TypeOf((*common.Address)(nil)) {
+		if t == reflect.TypeFor[*common.Address]() {
 			addr := common.HexToAddress(str)
 			return &addr, nil
 		}
-		if t == reflect.TypeOf((*common.Hash)(nil)) {
+		if t == reflect.TypeFor[*common.Hash]() {
 			hash := common.HexToHash(str)
 			return &hash, nil
 		}
 	case reflect.Array:
-		if t == reflect.TypeOf(common.Address{}) {
+		if t == reflect.TypeFor[common.Address]() {
 			addr := common.HexToAddress(str)
 			return addr, nil
 		}
-		if t == reflect.TypeOf(common.Hash{}) {
+		if t == reflect.TypeFor[common.Hash]() {
 			addr := common.HexToHash(str)
 			return addr, nil
 		}
-		if t == reflect.TypeOf(aptos.AccountAddress{}) {
+		if t == reflect.TypeFor[aptos.AccountAddress]() {
 			addr := aptos.AccountAddress{}
 			err := addr.ParseStringRelaxed(str)
 			if err != nil {
@@ -194,7 +194,7 @@ func hexStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{
 	return nil, fmt.Errorf("unsupported target type for hex string conversion: %v", t.Kind())
 }
 
-func numericStringHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
+func numericStringHook(f reflect.Type, t reflect.Type, data any) (any, error) {
 	var str string
 	switch v := data.(type) {
 	case string:
@@ -247,8 +247,8 @@ func numericStringHook(f reflect.Type, t reflect.Type, data interface{}) (interf
 			return nil, fmt.Errorf("value %f overflows %v", val, t)
 		}
 		return reflect.ValueOf(val).Convert(t).Interface(), nil
-	case reflect.Ptr:
-		if t == reflect.TypeOf((*big.Int)(nil)) {
+	case reflect.Pointer:
+		if t == reflect.TypeFor[*big.Int]() {
 			bi := new(big.Int)
 			_, ok := bi.SetString(str, 10)
 			if !ok {
@@ -262,7 +262,7 @@ func numericStringHook(f reflect.Type, t reflect.Type, data interface{}) (interf
 	return nil, fmt.Errorf("unsupported target type for numeric string conversion: %v", t.Kind())
 }
 
-func booleanHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
+func booleanHook(f reflect.Type, t reflect.Type, data any) (any, error) {
 	if f.Kind() != reflect.Bool {
 		return data, nil
 	}
@@ -295,8 +295,8 @@ func booleanHook(f reflect.Type, t reflect.Type, data interface{}) (interface{},
 			return reflect.ValueOf(1).Convert(t).Interface(), nil
 		}
 		return reflect.ValueOf(0).Convert(t).Interface(), nil
-	case reflect.Ptr:
-		if t == reflect.TypeOf((*big.Int)(nil)) {
+	case reflect.Pointer:
+		if t == reflect.TypeFor[*big.Int]() {
 			if boolValue {
 				return big.NewInt(1), nil
 			}
@@ -308,7 +308,7 @@ func booleanHook(f reflect.Type, t reflect.Type, data interface{}) (interface{},
 	return nil, fmt.Errorf("unsupported target type for boolean conversion: %v", t.Kind())
 }
 
-func arrayHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
+func arrayHook(f reflect.Type, t reflect.Type, data any) (any, error) {
 	fKind := f.Kind()
 	if fKind != reflect.Slice && fKind != reflect.Array {
 		return data, nil

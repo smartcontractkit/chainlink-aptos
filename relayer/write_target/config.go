@@ -6,8 +6,6 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/config"
 )
 
-func ptr[T any](v T) *T { return &v }
-
 // Config defines the write target component configuration.
 // Pointer fields are used for TOML deserialization — nil means "not set by user".
 // After calling Resolve(), all fields are guaranteed non-nil.
@@ -19,7 +17,7 @@ type Config struct {
 
 // DefaultConfigSet is the default configuration for the write target component.
 var DefaultConfigSet = Config{
-	Tag:                 ptr(""),
+	Tag:                 new(""),
 	ConfirmerPollPeriod: config.MustNewDuration(1 * time.Second),
 	ConfirmerTimeout:    config.MustNewDuration(10 * time.Second),
 }
@@ -27,7 +25,7 @@ var DefaultConfigSet = Config{
 // Resolve fills nil fields with defaults. After calling Resolve, all fields are guaranteed non-nil.
 func (c *Config) Resolve() {
 	if c.Tag == nil {
-		c.Tag = ptr(*DefaultConfigSet.Tag)
+		c.Tag = new(*DefaultConfigSet.Tag)
 	}
 	if c.ConfirmerPollPeriod == nil {
 		v := *DefaultConfigSet.ConfirmerPollPeriod

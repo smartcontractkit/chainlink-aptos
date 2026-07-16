@@ -23,10 +23,7 @@ func CreateChunks(output compile.CompiledPackage, chunkSizeByte uint) ([]Chunked
 
 	// Chunk the metadata
 	for i := 0; i < len(output.Metadata); i += int(chunkSizeByte) {
-		end := i + int(chunkSizeByte)
-		if end > len(output.Metadata) {
-			end = len(output.Metadata)
-		}
+		end := min(i+int(chunkSizeByte), len(output.Metadata))
 		outputChunks = append(outputChunks, ChunkedPayload{
 			Metadata: output.Metadata[i:end],
 		})

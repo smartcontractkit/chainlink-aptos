@@ -149,7 +149,7 @@ func (a *AptosTxm) Enqueue(transactionID string, txMetadata *commontypes.TxMeta,
 
 	bcsValues := [][]byte{}
 
-	for i := 0; i < len(paramTypes); i++ {
+	for i := range paramTypes {
 		typeName := paramTypes[i]
 		typeValue := paramValues[i]
 

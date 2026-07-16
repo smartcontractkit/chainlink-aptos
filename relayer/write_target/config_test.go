@@ -21,7 +21,7 @@ func TestResolve_PartialOverride(t *testing.T) {
 	t.Parallel()
 
 	cfg := Config{
-		Tag: ptr("custom"),
+		Tag: new("custom"),
 	}
 	cfg.Resolve()
 
@@ -34,7 +34,7 @@ func TestResolve_ExplicitZero(t *testing.T) {
 	t.Parallel()
 
 	cfg := Config{
-		Tag: ptr(""),
+		Tag: new(""),
 	}
 	cfg.Resolve()
 

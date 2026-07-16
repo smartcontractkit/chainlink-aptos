@@ -25,7 +25,7 @@ func main() {
 	log.Printf("Generating bindings for %s", *inputFile)
 
 	if *uppercase != "" {
-		for _, w := range strings.Split(*uppercase, ",") {
+		for w := range strings.SplitSeq(*uppercase, ",") {
 			template.UppercaseWords = append(template.UppercaseWords, strings.ToUpper(w))
 		}
 		log.Printf("Capitalizing %v words: %v", len(template.UppercaseWords), strings.Join(template.UppercaseWords, ", "))
@@ -34,7 +34,7 @@ func main() {
 	// Parse external structs
 	var extStructs []parse.ExternalStruct
 	if *externalStructs != "" {
-		for _, s := range strings.Split(*externalStructs, ",") {
+		for s := range strings.SplitSeq(*externalStructs, ",") {
 			// package::module::Struct=github.com/smartcontractkit/chainlink-aptos/bindings/path
 			split := strings.Split(s, "=")
 			if len(split) != 2 {

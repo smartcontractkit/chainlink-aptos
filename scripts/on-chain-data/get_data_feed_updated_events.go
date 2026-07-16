@@ -213,7 +213,7 @@ func feedUpdatedEventDataArrayToRawStringArray(feedUpdatedEvents []FeedUpdatedEv
 	return records
 }
 
-func toString(value interface{}) string {
+func toString(value any) string {
 	if value == nil {
 		return ""
 	}

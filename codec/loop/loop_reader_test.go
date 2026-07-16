@@ -47,14 +47,10 @@ func TestLoopChainReaderConcurrentMapAccess(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < 24; i++ {
-		i := i
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+	for i := range 24 {
+		wg.Go(func() {
 			name := fmt.Sprintf("contract-%d", i%8)
-			for j := 0; j < 250; j++ {
+			for j := range 250 {
 				_ = reader.Bind(ctx, []types.BoundContract{
 					{Name: name, Address: fmt.Sprintf("0x%x", j)},
 				})
@@ -64,7 +60,7 @@ func TestLoopChainReaderConcurrentMapAccess(t *testing.T) {
 
 				_ = reader.Unbind(ctx, []types.BoundContract{{Name: name}})
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

@@ -34,7 +34,7 @@ func TestCreateBcsValue(t *testing.T) {
 			Address []byte `json:"address"`
 		}{Address: byteAddress})
 		require.NoError(t, err)
-		result := make(map[string]interface{})
+		result := make(map[string]any)
 		err = json.Unmarshal(marshaled, &result)
 		require.NoError(t, err)
 		serialized, err = CreateBcsValue(typeTag, result["address"].(string))

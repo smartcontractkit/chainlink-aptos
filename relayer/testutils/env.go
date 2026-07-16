@@ -2,13 +2,13 @@ package testutils
 
 import (
 	"crypto/ed25519"
+	"crypto/sha3"
 	"encoding/hex"
 	"os"
 	"testing"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/sha3"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 

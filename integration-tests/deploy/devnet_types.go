@@ -30,7 +30,7 @@ type TransactionByHash struct {
 type Change struct {
 	Address      string `json:"address,omitempty"`
 	StateKeyHash string `json:"state_key_hash"`
-	Data         Data   `json:"data,omitempty"`
+	Data         Data   `json:"data"`
 	Handle       string `json:"handle,omitempty"`
 	Key          string `json:"key,omitempty"`
 	Value        string `json:"value,omitempty"`
@@ -38,19 +38,19 @@ type Change struct {
 }
 
 type Data struct {
-	Type      string      `json:"type"`
-	Data      interface{} `json:"data"`
-	Key       string      `json:"key,omitempty"`
-	KeyType   string      `json:"key_type,omitempty"`
-	Value     interface{} `json:"value,omitempty"`
-	ValueType string      `json:"value_type,omitempty"`
+	Type      string `json:"type"`
+	Data      any    `json:"data"`
+	Key       string `json:"key,omitempty"`
+	KeyType   string `json:"key_type,omitempty"`
+	Value     any    `json:"value,omitempty"`
+	ValueType string `json:"value_type,omitempty"`
 }
 
 type Payload struct {
-	Function      string        `json:"function"`
-	TypeArguments []interface{} `json:"type_arguments"`
-	Arguments     []interface{} `json:"arguments"`
-	Type          string        `json:"type"`
+	Function      string `json:"function"`
+	TypeArguments []any  `json:"type_arguments"`
+	Arguments     []any  `json:"arguments"`
+	Type          string `json:"type"`
 }
 
 type Signature struct {

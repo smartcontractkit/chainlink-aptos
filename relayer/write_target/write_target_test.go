@@ -280,7 +280,7 @@ func TestWriteTarget_Execute(t *testing.T) {
 			// On the first trigger transaction submission by setting transmitted to `false`, on second call return
 			// true to signal that report is on chain.
 			mockedWT.cr.EXPECT().GetLatestValue(mock.Anything, "-forwarder-getTransmissionState", mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-				func(ctx context.Context, s string, level primitives.ConfidenceLevel, inputs interface{}, rawTransmitted interface{}) error {
+				func(ctx context.Context, s string, level primitives.ConfidenceLevel, inputs any, rawTransmitted any) error {
 					transmitted := rawTransmitted.(*bool)
 					*transmitted = secondCall // return false on the first call to trigger transaction
 					secondCall = true
@@ -288,7 +288,7 @@ func TestWriteTarget_Execute(t *testing.T) {
 				}).Twice()
 			// Returns address of the report transmitter
 			mockedWT.cr.EXPECT().GetLatestValue(mock.Anything, "-forwarder-getTransmitter", mock.Anything, mock.Anything, mock.Anything).RunAndReturn(
-				func(ctx context.Context, s string, level primitives.ConfidenceLevel, inputs interface{}, rawTransmitterAddr interface{}) error {
+				func(ctx context.Context, s string, level primitives.ConfidenceLevel, inputs any, rawTransmitterAddr any) error {
 					transmitterAddr := rawTransmitterAddr.(*struct {
 						Vec []string
 					})

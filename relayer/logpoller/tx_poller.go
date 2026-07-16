@@ -13,9 +13,9 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
+	codec0 "github.com/smartcontractkit/chainlink-aptos/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/db"
 	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/prom"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
 )
@@ -421,7 +421,7 @@ func (l *AptosLogPoller) getTransmitters(ctx context.Context) ([]aptos.AccountAd
 
 	// Decode the config set event to get transmitters
 	var configSet crutils.ConfigSet
-	if err := codec.DecodeAptosJsonValue(events[0].Data, &configSet); err != nil {
+	if err := codec0.DecodeAptosJsonValue(events[0].Data, &configSet); err != nil {
 		l.lggr.Errorw("Failed to decode ConfigSet event", "error", err)
 		return nil, fmt.Errorf("failed to decode ConfigSet event: %w", err)
 	}
@@ -478,7 +478,7 @@ func (l *AptosLogPoller) getSourceChainConfig(ctx context.Context, sourceChainSe
 	}
 
 	var configEvent crutils.SourceChainConfigSet
-	if err := codec.DecodeAptosJsonValue(events[0].Data, &configEvent); err != nil {
+	if err := codec0.DecodeAptosJsonValue(events[0].Data, &configEvent); err != nil {
 		return nil, fmt.Errorf("failed to decode SourceChainConfigSet event: %w", err)
 	}
 

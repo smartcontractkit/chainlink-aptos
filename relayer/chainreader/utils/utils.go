@@ -5,8 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
-
+	"github.com/smartcontractkit/chainlink-common/pkg/types/aptos"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 )
@@ -39,7 +38,7 @@ func ExtractTimestampFilter(expressions []query.Expression) (uint64, bool) {
 	return 0, false
 }
 
-func MaybeRenameFields(jsonValue any, renames map[string]config.RenamedField) error {
+func MaybeRenameFields(jsonValue any, renames map[string]aptos.RenamedField) error {
 	// no renames are provided, we don't put any constraint on jsonValue
 	if len(renames) == 0 {
 		return nil
@@ -66,7 +65,7 @@ func MaybeRenameFields(jsonValue any, renames map[string]config.RenamedField) er
 	return nil
 }
 
-func RenameMapFields(jsonData map[string]any, renames map[string]config.RenamedField) error {
+func RenameMapFields(jsonData map[string]any, renames map[string]aptos.RenamedField) error {
 	for origName, rename := range renames {
 		subValue, ok := jsonData[origName]
 		if !ok {

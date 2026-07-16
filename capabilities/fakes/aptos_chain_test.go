@@ -301,7 +301,6 @@ func TestFakeAptosChain_WriteReport_ValidationErrors(t *testing.T) {
 		},
 	}
 	for name, req := range cases {
-		req := req
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			fc := newTestAptosChain(t, mocks.NewAptosRpcClient(t), false)

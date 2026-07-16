@@ -14,21 +14,21 @@ import (
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/utils"
 
-	crconfig "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
+	aptos0 "github.com/smartcontractkit/chainlink-common/pkg/types/aptos"
 )
 
 type aptosChainWriter struct {
 	logger    logger.Logger
 	txm       *txm.AptosTxm
 	feeClient aptos.AptosRpcClient
-	config    ChainWriterConfig
+	config    aptos0.ContractWriterConfig
 
 	starter utils.StartStopOnce
 }
 
-func NewChainWriter(lgr logger.Logger, feeClient aptos.AptosRpcClient, txm *txm.AptosTxm, config ChainWriterConfig) commontypes.ContractWriter {
+func NewChainWriter(lgr logger.Logger, feeClient aptos.AptosRpcClient, txm *txm.AptosTxm, config aptos0.ContractWriterConfig) commontypes.ContractWriter {
 	return &aptosChainWriter{
 		logger:    logger.Named(lgr, "AptosChainWriter"),
 		txm:       txm,
@@ -63,7 +63,7 @@ func (a *aptosChainWriter) Close() error {
 	})
 }
 
-func convertFunctionParams(argMap map[string]interface{}, params []crconfig.AptosFunctionParam) ([]string, []any, error) {
+func convertFunctionParams(argMap map[string]any, params []aptos0.FunctionParam) ([]string, []any, error) {
 	types := make([]string, len(params))
 	values := make([]any, len(params))
 
@@ -98,7 +98,7 @@ func (a *aptosChainWriter) SubmitTransaction(ctx context.Context, contractName, 
 		return fmt.Errorf("no such method: %s", method)
 	}
 
-	argMap := make(map[string]interface{})
+	argMap := make(map[string]any)
 	err := mapstructure.Decode(args, &argMap)
 	if err != nil {
 		return fmt.Errorf("failed to parse arguments: %+w", err)
@@ -181,11 +181,11 @@ func (a *aptosChainWriter) GetFeeComponents(ctx context.Context) (*commontypes.C
 
 	var fee uint64
 	switch a.config.FeeStrategy {
-	case DeprioritizedFeeStrategy:
+	case aptos0.DeprioritizedFeeStrategy:
 		fee = estimation.DeprioritizedGasEstimate
-	case PrioritizedFeeStrategy:
+	case aptos0.PrioritizedFeeStrategy:
 		fee = estimation.PrioritizedGasEstimate
-	case DefaultFeeStrategy:
+	case aptos0.DefaultFeeStrategy:
 		fee = estimation.GasEstimate
 	default:
 		return nil, fmt.Errorf("invalid fee strategy: %d", a.config.FeeStrategy)
