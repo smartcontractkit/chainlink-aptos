@@ -6,6 +6,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/smartcontractkit/chainlink-framework/metrics"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
@@ -70,6 +71,16 @@ var (
 	promLpEventSequenceGap = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "aptos_log_poller_event_sequence_gap",
 		Help: "Total number of event sequence number gaps detected by LogPoller",
+	}, []string{"chainFamily", "chainID", "networkName", "event"})
+
+	promLpPrunedWarningActive = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "aptos_log_poller_pruned_warning_active",
+		Help: "Set to 1 while a LogPoller event handle is in a pruned/gap warning state (CR stays operational; NOP should act), 0 when recovered. This is the paging signal — wire Prometheus alert rules to fire when this gauge is 1 for > N minutes.",
+	}, []string{"chainFamily", "chainID", "networkName", "event"})
+
+	promLpFatalErrorTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "aptos_log_poller_fatal_error_total",
+		Help: "Total number of fatal (non-transient, non-pruned) RPC errors from EventsByCreationNumber, e.g. 404 misconfiguration. The CR does not halt but these are logged at Error for NOP attention.",
 	}, []string{"chainFamily", "chainID", "networkName", "event"})
 )
 
@@ -157,4 +168,62 @@ func ReportEventSequenceGap(chainInfo types.ChainInfo, event string, gapSize uin
 		chainInfo.NetworkName,
 		event,
 	).Add(float64(gapSize))
+}
+
+// SetPrunedWarning sets the pruned-warning-active gauge for the given event handle.
+// active=true raises the warning (gauge=1, the paging signal for the NOP); active=false
+// clears it (gauge=0, auto-recovery). The CR does NOT halt regardless of the gauge value.
+func SetPrunedWarning(chainInfo types.ChainInfo, event string, active bool) {
+	val := 0.0
+	if active {
+		val = 1.0
+	}
+	promLpPrunedWarningActive.WithLabelValues(
+		chainInfo.ChainFamilyName,
+		chainInfo.ChainID,
+		chainInfo.NetworkName,
+		event,
+	).Set(val)
+}
+
+// ReportFatalError increments the fatal-error counter for the given event.
+func ReportFatalError(chainInfo types.ChainInfo, event string) {
+	promLpFatalErrorTotal.WithLabelValues(
+		chainInfo.ChainFamilyName,
+		chainInfo.ChainID,
+		chainInfo.NetworkName,
+		event,
+	).Inc()
+}
+
+// --- Test helpers (used by logpoller tests to assert metric behavior) ---
+// These read the process-wide promauto-registered metrics. Tests must use unique
+// chainID/networkName/event label values to avoid interference between parallel tests.
+
+// PrunedWarningActiveValue returns the current value of aptos_log_poller_pruned_warning_active
+// for the given labels. For use in tests only.
+func PrunedWarningActiveValue(chainInfo types.ChainInfo, event string) float64 {
+	return testutil.ToFloat64(promLpPrunedWarningActive.WithLabelValues(
+		chainInfo.ChainFamilyName, chainInfo.ChainID, chainInfo.NetworkName, event))
+}
+
+// PrunedOffsetTotalValue returns the current value of aptos_log_poller_pruned_offset_total
+// for the given labels. For use in tests only.
+func PrunedOffsetTotalValue(chainInfo types.ChainInfo, event string) float64 {
+	return testutil.ToFloat64(promLpPrunedOffsetTotal.WithLabelValues(
+		chainInfo.ChainFamilyName, chainInfo.ChainID, chainInfo.NetworkName, event))
+}
+
+// EventSequenceGapValue returns the current value of aptos_log_poller_event_sequence_gap
+// for the given labels. For use in tests only.
+func EventSequenceGapValue(chainInfo types.ChainInfo, event string) float64 {
+	return testutil.ToFloat64(promLpEventSequenceGap.WithLabelValues(
+		chainInfo.ChainFamilyName, chainInfo.ChainID, chainInfo.NetworkName, event))
+}
+
+// FatalErrorTotalValue returns the current value of aptos_log_poller_fatal_error_total
+// for the given labels. For use in tests only.
+func FatalErrorTotalValue(chainInfo types.ChainInfo, event string) float64 {
+	return testutil.ToFloat64(promLpFatalErrorTotal.WithLabelValues(
+		chainInfo.ChainFamilyName, chainInfo.ChainID, chainInfo.NetworkName, event))
 }

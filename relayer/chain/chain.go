@@ -88,6 +88,11 @@ type chain struct {
 	clientCacheMu sync.RWMutex
 	clientCache   map[string]aptos.AptosRpcClient
 
+	// headerRT captures X-APTOS-LEDGER-OLDEST-VERSION from /events/ responses so the
+	// LogPoller can detect pruning on the non-empty events path (HTTP 200 + events whose
+	// tx_version < oldest_ledger_version). Shared across all cached clients.
+	headerRT *HeaderCapturingRoundTripper
+
 	// Sub-services
 	txm            *txm.AptosTxm
 	logPoller      *logpoller.AptosLogPoller
@@ -123,12 +128,13 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 	}
 
 	ch := &chain{
-		id:         cfg.ChainID,
-		cfg:        cfg,
-		lggr:       logger.Named(lggr, "Chain"),
-		ds:         ds,
-		keyStore:   loopKs,
+		id:          cfg.ChainID,
+		cfg:         cfg,
+		lggr:        logger.Named(lggr, "Chain"),
+		ds:          ds,
+		keyStore:    loopKs,
 		clientCache: make(map[string]aptos.AptosRpcClient),
+		headerRT:    NewHeaderCapturingRoundTripper(nil), // wraps http.DefaultTransport
 	}
 
 	ch.txm, err = txm.New(lggr, loopKs, *cfg.TransactionManager, ch.GetClient, cfg.ChainID)
@@ -140,6 +146,9 @@ func newChain(cfg *config.TOMLConfig, loopKs loop.Keystore, lggr logger.Logger, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create log poller: %w", err)
 	}
+	// Wire the header-capture provider so syncEvent can detect pruning on the non-empty
+	// events path via the X-APTOS-LEDGER-OLDEST-VERSION response header.
+	ch.logPoller.SetOldestLedgerVersionProvider(ch.headerRT)
 
 	// Setup accounts balance monitor
 	ch.balanceMonitor, err = monitor.NewBalanceMonitor(monitor.BalanceMonitorOpts{
@@ -234,7 +243,13 @@ func (c *chain) GetClient() (aptos.AptosRpcClient, error) {
 		if c.clientCache[urlStr] != nil {
 			return c.clientCache[urlStr], nil
 		}
-		client, err := aptos.NewNodeClientWithHttpClient(urlStr, 0, http.DefaultClient)
+		// Use a dedicated *http.Client whose Transport is the header-capturing round
+		// tripper (wrapping http.DefaultTransport). This lets the LogPoller read the
+		// X-APTOS-LEDGER-OLDEST-VERSION response header on successful /events/ calls,
+		// which the aptos-go-sdk discards on 2xx responses. The client is per-URL but
+		// shares the single c.headerRT instance so the LogPoller reads a consistent value.
+		httpClient := &http.Client{Transport: c.headerRT}
+		client, err := aptos.NewNodeClientWithHttpClient(urlStr, 0, httpClient)
 		if err != nil {
 			c.lggr.Warnw("failed to create node", "name", node.Name, "aptos-url", node.URL, "err", err)
 			continue

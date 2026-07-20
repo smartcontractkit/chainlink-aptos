@@ -15,6 +15,14 @@ func httpErr(status int, body string) *aptos.HttpError {
 	return &aptos.HttpError{StatusCode: status, Status: fmt.Sprintf("%d", status), Body: []byte(body)}
 }
 
+// httpErrWithHeader builds an HttpError with a response header set (used to test the
+// X-APTOS-LEDGER-OLDEST-VERSION corroborating-signal path).
+func httpErrWithHeader(status int, body, headerKey, headerVal string) *aptos.HttpError {
+	h := http.Header{}
+	h.Set(headerKey, headerVal)
+	return &aptos.HttpError{StatusCode: status, Status: fmt.Sprintf("%d", status), Body: []byte(body), Header: h}
+}
+
 func TestClassifyEventsRPCError(t *testing.T) {
 	t.Parallel()
 
@@ -39,8 +47,23 @@ func TestClassifyEventsRPCError(t *testing.T) {
 			want: ErrorClassPruned,
 		},
 		{
-			name: "body containing gone (lowercase) is pruned",
+			name: "body with structured error_code gone is pruned",
+			err:  httpErr(http.StatusOK, `{"error_code":"gone"}`),
+			want: ErrorClassPruned,
+		},
+		{
+			name: "body with structured error_code pruned is pruned",
+			err:  httpErr(http.StatusOK, `{"error_code":"pruned"}`),
+			want: ErrorClassPruned,
+		},
+		{
+			name: "bare gone substring is NOT pruned (tightened to avoid false positives)",
 			err:  httpErr(http.StatusOK, `{"error":"gone"}`),
+			want: ErrorClassFatal,
+		},
+		{
+			name: "410 with X-APTOS-LEDGER-OLDEST-VERSION header is pruned",
+			err:  httpErrWithHeader(http.StatusNotFound, `{}`, "X-APTOS-LEDGER-OLDEST-VERSION", "500"),
 			want: ErrorClassPruned,
 		},
 		{

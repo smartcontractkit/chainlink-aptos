@@ -18,8 +18,19 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/db"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/monitor/mocks"
+	"github.com/smartcontractkit/chainlink-aptos/relayer/monitoring/prom"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/types"
 )
+
+// fakeOldestLedgerVersionProvider is a test double for OldestLedgerVersionProvider.
+type fakeOldestLedgerVersionProvider struct {
+	value uint64
+	ok    bool
+}
+
+func (f *fakeOldestLedgerVersionProvider) LastOldestLedgerVersion() (uint64, bool) {
+	return f.value, f.ok
+}
 
 // fakeEventStore is a test double for the eventStore interface.
 type fakeEventStore struct {
@@ -242,6 +253,10 @@ func TestSyncEvent_SequenceGap_EventsStillInserted(t *testing.T) {
 		Return(testResource(fieldName), nil).Once()
 	rpc.On("EventsByCreationNumber", addr, "3", &offset, lp.config.EventBatchSize).
 		Return([]*api.Event{testEvent(7, version)}, nil).Once()
+	// checkNonEmptyPruned falls back to Info() when hasStoredEvents=true and no header
+	// provider is wired. Return oldest_ledger_version below the event's version (200) so
+	// the non-empty pruned check does NOT fire — we're testing the gap path, not pruning.
+	rpc.On("Info").Return(aptos.NodeInfo{OldestLedgerVersionStr: "100", LedgerVersionStr: "300"}, nil).Once()
 	rpc.On("BlockByVersion", version, false).Return(blk, nil).Once()
 
 	err := lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
@@ -380,4 +395,228 @@ func TestSyncEvent_PrunedError_NonHttpError(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, IsPrunedOffset(err), "expected ErrPrunedOffset, got: %v", err)
 	assert.Empty(t, store.inserted)
+}
+
+// --- New tests: warning mechanism, detection gaps, auto-recovery, metrics ---
+
+// TestSyncEvent_InfoError_FailsClosed verifies that when Info() errors on the empty-events
+// path with stored events present, syncEvent returns a transient error instead of treating
+// the result as caught-up. This prevents a node outage from masking a pruned offset.
+func TestSyncEvent_InfoError_FailsClosed(t *testing.T) {
+	t.Parallel()
+
+	offset := uint64(5)
+	store := &fakeEventStore{offset: offset, found: true, txVersion: 50}
+	rpc := mocks.NewAptosRpcClient(t)
+	lp := buildPoller(t, rpc, store)
+
+	addr := boundAddr(t, "0x1")
+	fieldName := "info_err_events"
+
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResource(fieldName), nil).Once()
+	rpc.On("EventsByCreationNumber", addr, "3", &offset, lp.config.EventBatchSize).
+		Return([]*api.Event{}, nil).Once()
+	rpc.On("Info").Return(aptos.NodeInfo{}, errors.New("node unreachable")).Once()
+
+	err := lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
+	require.Error(t, err, "Info() failure must not be treated as caught-up")
+	assert.False(t, IsPrunedOffset(err), "should be a transient error, not pruned")
+	assert.Empty(t, store.inserted)
+}
+
+// TestSyncEvent_OldestLedgerVersionZero_FailsClosed verifies that when
+// OldestLedgerVersion() returns 0 (parse failure) but LedgerVersion is valid, syncEvent
+// fails closed rather than assuming caught-up.
+func TestSyncEvent_OldestLedgerVersionZero_FailsClosed(t *testing.T) {
+	t.Parallel()
+
+	offset := uint64(5)
+	store := &fakeEventStore{offset: offset, found: true, txVersion: 50}
+	rpc := mocks.NewAptosRpcClient(t)
+	lp := buildPoller(t, rpc, store)
+
+	addr := boundAddr(t, "0x1")
+	fieldName := "olv_zero_events"
+
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResource(fieldName), nil).Once()
+	rpc.On("EventsByCreationNumber", addr, "3", &offset, lp.config.EventBatchSize).
+		Return([]*api.Event{}, nil).Once()
+	// OldestLedgerVersionStr empty → OldestLedgerVersion() returns 0; LedgerVersionStr valid.
+	rpc.On("Info").Return(aptos.NodeInfo{OldestLedgerVersionStr: "", LedgerVersionStr: "300"}, nil).Once()
+
+	err := lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
+	require.Error(t, err, "unparseable oldest_ledger_version must not be treated as caught-up")
+	assert.False(t, IsPrunedOffset(err))
+	assert.Empty(t, store.inserted)
+}
+
+// TestSyncEvent_NonEmptyPrunedViaHeader_WarnsAndInserts verifies that when a non-empty
+// events response has events whose Version is below the captured oldest_ledger_version
+// header, syncEvent inserts the events, advances the offset, AND raises a warning (gauge=1)
+// rather than halting. This is the spike-proven HTTP 200 + events pruned path.
+func TestSyncEvent_NonEmptyPrunedViaHeader_WarnsAndInserts(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeEventStore{offset: 0, found: true, txVersion: 50}
+	rpc := mocks.NewAptosRpcClient(t)
+	lp := buildPoller(t, rpc, store)
+	// Header says oldest=500; event Version=172 < 500 → pruned.
+	lp.SetOldestLedgerVersionProvider(&fakeOldestLedgerVersionProvider{value: 500, ok: true})
+
+	addr := boundAddr(t, "0x1")
+	fieldName := "nonempty_pruned_events"
+	version := uint64(172)
+	blk := testBlock()
+
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResource(fieldName), nil).Once()
+	rpc.On("EventsByCreationNumber", addr, "3", &store.offset, lp.config.EventBatchSize).
+		Return([]*api.Event{testEvent(0, version)}, nil).Once()
+	rpc.On("BlockByVersion", version, false).Return(blk, nil).Once()
+
+	err := lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
+	require.NoError(t, err, "CR must NOT halt on non-empty pruned — it inserts and warns")
+	require.Len(t, store.inserted, 1, "events should be inserted even when pruned")
+	assert.Equal(t, version, store.inserted[0].TxVersion)
+
+	// Warning gauge should be 1 (paging signal for NOP).
+	assert.Equal(t, 1.0, prom.PrunedWarningActiveValue(lp.chainInfo, fieldName),
+		"pruned warning gauge should be 1 when non-empty pruned detected")
+	// Pruned counter should have incremented.
+	assert.Greater(t, prom.PrunedOffsetTotalValue(lp.chainInfo, fieldName), 0.0)
+}
+
+// TestSyncEvent_SequenceGap_RaisesWarning verifies that a sequence gap raises the warning
+// gauge (paging) while still inserting events and advancing the offset.
+func TestSyncEvent_SequenceGap_RaisesWarning(t *testing.T) {
+	t.Parallel()
+
+	offset := uint64(2)
+	store := &fakeEventStore{offset: offset, found: true, txVersion: 50}
+	rpc := mocks.NewAptosRpcClient(t)
+	lp := buildPoller(t, rpc, store)
+
+	addr := boundAddr(t, "0x1")
+	fieldName := "gap_warn_events"
+	version := uint64(200)
+	blk := testBlock()
+
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResource(fieldName), nil).Once()
+	rpc.On("EventsByCreationNumber", addr, "3", &offset, lp.config.EventBatchSize).
+		Return([]*api.Event{testEvent(7, version)}, nil).Once()
+	// checkNonEmptyPruned falls back to Info() (hasStoredEvents=true, no provider).
+	// oldest=100 < version=200 → not pruned on non-empty path.
+	rpc.On("Info").Return(aptos.NodeInfo{OldestLedgerVersionStr: "100", LedgerVersionStr: "300"}, nil).Once()
+	rpc.On("BlockByVersion", version, false).Return(blk, nil).Once()
+
+	err := lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
+	require.NoError(t, err)
+	require.Len(t, store.inserted, 1)
+	assert.Equal(t, uint64(7), store.inserted[0].EventOffset)
+
+	// Gap counter and warning gauge should reflect the gap.
+	assert.Greater(t, prom.EventSequenceGapValue(lp.chainInfo, fieldName), 0.0)
+	assert.Equal(t, 1.0, prom.PrunedWarningActiveValue(lp.chainInfo, fieldName))
+}
+
+// TestSyncEvent_AutoRecovery_ClearsWarning verifies that after a handle is warned, a
+// subsequent successful sync (no pruned condition) clears the warning gauge to 0.
+func TestSyncEvent_AutoRecovery_ClearsWarning(t *testing.T) {
+	t.Parallel()
+
+	offset := uint64(5)
+	store := &fakeEventStore{offset: offset, found: true, txVersion: 50}
+	rpc := mocks.NewAptosRpcClient(t)
+	lp := buildPoller(t, rpc, store)
+
+	addr := boundAddr(t, "0x1")
+	fieldName := "recovery_events"
+
+	// First sync: empty events + stored txVersion=50 < oldest=100 → pruned warning raised.
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResource(fieldName), nil).Once()
+	rpc.On("EventsByCreationNumber", addr, "3", &offset, lp.config.EventBatchSize).
+		Return([]*api.Event{}, nil).Once()
+	rpc.On("Info").Return(aptos.NodeInfo{OldestLedgerVersionStr: "100"}, nil).Once()
+
+	err := lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
+	require.Error(t, err)
+	assert.True(t, IsPrunedOffset(err))
+	assert.Equal(t, 1.0, prom.PrunedWarningActiveValue(lp.chainInfo, fieldName),
+		"warning gauge should be 1 after pruned detection")
+
+	// Second sync: NOP switched to archive node; now oldest=40 < stored txVersion=50 → not pruned.
+	// syncEvent returns nil (caught up) and auto-recovery clears the warning.
+	rpc.On("EventsByCreationNumber", addr, "3", &offset, lp.config.EventBatchSize).
+		Return([]*api.Event{}, nil).Once()
+	rpc.On("Info").Return(aptos.NodeInfo{OldestLedgerVersionStr: "40"}, nil).Once()
+
+	err = lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
+	require.NoError(t, err, "should be caught-up after NOP fixes the node")
+	assert.Equal(t, 0.0, prom.PrunedWarningActiveValue(lp.chainInfo, fieldName),
+		"warning gauge should be 0 after auto-recovery")
+}
+
+// TestSyncEvent_HealthReportStaysHealthy verifies that after a pruned warning is raised,
+// HealthReport does NOT add per-handle halt keys — the CR stays operational and paging is
+// metric-based (the gauge). HealthReport only contains the lifecycle key (l.Name()).
+func TestSyncEvent_HealthReportStaysHealthy(t *testing.T) {
+	t.Parallel()
+
+	offset := uint64(5)
+	store := &fakeEventStore{offset: offset, found: true, txVersion: 50}
+	rpc := mocks.NewAptosRpcClient(t)
+	lp := buildPoller(t, rpc, store)
+
+	addr := boundAddr(t, "0x1")
+	fieldName := "health_events"
+
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResource(fieldName), nil).Once()
+	rpc.On("EventsByCreationNumber", addr, "3", &offset, lp.config.EventBatchSize).
+		Return([]*api.Event{}, nil).Once()
+	rpc.On("Info").Return(aptos.NodeInfo{OldestLedgerVersionStr: "100"}, nil).Once()
+
+	err := lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
+	require.Error(t, err) // pruned detected
+	assert.True(t, IsPrunedOffset(err))
+
+	// HealthReport must NOT add per-handle halt keys — the CR does NOT halt. It should
+	// contain only the single lifecycle key (l.Name()). The pruned state is surfaced via
+	// the aptos_log_poller_pruned_warning_active gauge, not HealthReport.
+	hr := lp.HealthReport()
+	assert.Len(t, hr, 1, "HealthReport must not add per-handle halt keys")
+	assert.Contains(t, hr, lp.Name(), "must contain the lifecycle key")
+	// The warning gauge is the paging signal, not HealthReport.
+	assert.Equal(t, 1.0, prom.PrunedWarningActiveValue(lp.chainInfo, fieldName))
+}
+
+// TestSyncEvent_FatalError_IncrementsFatalMetric verifies that a fatal (404) RPC error
+// increments the fatal_error_total metric and is logged at Error, without halting.
+func TestSyncEvent_FatalError_IncrementsFatalMetric(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeEventStore{offset: 0, found: false}
+	rpc := mocks.NewAptosRpcClient(t)
+	lp := buildPoller(t, rpc, store)
+
+	addr := boundAddr(t, "0x1")
+	fieldName := "fatal_events"
+
+	fatal := &aptos.HttpError{StatusCode: http.StatusNotFound, Status: "404", Body: []byte(`{"error_code":"not_found"}`)}
+
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResource(fieldName), nil).Once()
+	rpc.On("EventsByCreationNumber", addr, "3", &store.offset, lp.config.EventBatchSize).
+		Return(([]*api.Event)(nil), fatal).Once()
+
+	err := lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
+	require.Error(t, err)
+	assert.False(t, IsPrunedOffset(err), "404 is fatal, not pruned")
+	assert.Empty(t, store.inserted)
+	assert.Greater(t, prom.FatalErrorTotalValue(lp.chainInfo, fieldName), 0.0,
+		"fatal_error_total should increment on 404")
 }

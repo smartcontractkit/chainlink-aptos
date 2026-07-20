@@ -27,6 +27,16 @@ type eventStore interface {
 	InsertEvents(ctx context.Context, records []db.EventRecord) error
 }
 
+// OldestLedgerVersionProvider exposes the most recently captured
+// X-APTOS-LEDGER-OLDEST-VERSION response header. The chain wires a
+// HeaderCapturingRoundTripper into the Aptos node's *http.Client and implements this
+// interface so syncEvent can detect pruning on the non-empty events path (HTTP 200 +
+// events whose tx_version < oldest_ledger_version). Returns (value, true) when a valid
+// header has been captured; (0, false) when unavailable (syncEvent falls back to Info()).
+type OldestLedgerVersionProvider interface {
+	LastOldestLedgerVersion() (uint64, bool)
+}
+
 type moduleInfo struct {
 	name         string
 	address      aptos.AccountAddress
@@ -42,8 +52,21 @@ type AptosLogPoller struct {
 	getClient func() (aptos.AptosRpcClient, error)
 	chainInfo types.ChainInfo
 
+	// oldestLedgerVersionProvider, when set, exposes the X-APTOS-LEDGER-OLDEST-VERSION
+	// response header captured by the chain's HeaderCapturingRoundTripper. Used by
+	// syncEvent to detect pruning on the non-empty events path. Optional: when nil,
+	// syncEvent falls back to an Info() call. Set via SetOldestLedgerVersionProvider.
+	oldestLedgerVersionProvider OldestLedgerVersionProvider
+
 	mu      sync.RWMutex
 	modules map[string]*moduleInfo
+
+	// warned tracks per-handle pruned/gap warning state. Key = handleKey(eventHandle, eventFieldName).
+	// Value = time the warning was first raised. The CR does NOT halt on missing events; this
+	// state drives the aptos_log_poller_pruned_warning_active gauge (paging signal for the NOP)
+	// and rate-limits warning logs. Auto-clears when a subsequent sync succeeds past the pruned
+	// range (see syncEvent auto-recovery). HealthReport stays healthy.
+	warned map[string]time.Time
 
 	// cache
 	resourceCache            *cache.Cache
@@ -54,6 +77,43 @@ type AptosLogPoller struct {
 	starter        commonutils.StartStopOnce
 	eventCtxCancel context.CancelFunc
 	txCtxCancel    context.CancelFunc
+}
+
+// handleKey builds the composite key used to track per-handle warning state.
+func handleKey(eventHandle, eventFieldName string) string {
+	return eventHandle + "::" + eventFieldName
+}
+
+// markWarned records that a handle is in a pruned/gap warning state. Returns true if this
+// is a new warning (first transition into the warned state for this handle), false if the
+// handle was already warned. The first-warned time is preserved across repeated calls so
+// the NOP can see how long the condition has persisted. Caller must hold l.mu.
+func (l *AptosLogPoller) markWarned(key string) bool {
+	if l.warned == nil {
+		l.warned = make(map[string]time.Time)
+	}
+	if _, already := l.warned[key]; already {
+		return false
+	}
+	l.warned[key] = time.Now()
+	return true
+}
+
+// isWarned reports whether a handle is currently in a pruned/gap warning state.
+// Caller must hold l.mu (at least RLock).
+func (l *AptosLogPoller) isWarned(key string) bool {
+	_, ok := l.warned[key]
+	return ok
+}
+
+// clearWarned removes a handle from the warned state (auto-recovery). Returns true if the
+// handle was warned and is now cleared. Caller must hold l.mu.
+func (l *AptosLogPoller) clearWarned(key string) bool {
+	if _, ok := l.warned[key]; ok {
+		delete(l.warned, key)
+		return true
+	}
+	return false
 }
 
 func NewLogPoller(lggr logger.Logger, chainInfo types.ChainInfo, getClient func() (aptos.AptosRpcClient, error), ds sqlutil.DataSource, cfg *Config) (*AptosLogPoller, error) {
@@ -76,6 +136,7 @@ func NewLogPoller(lggr logger.Logger, chainInfo types.ChainInfo, getClient func(
 		chainInfo: chainInfo,
 
 		modules: make(map[string]*moduleInfo),
+		warned:  make(map[string]time.Time),
 
 		resourceCache:            cache.New(defaultTTL, cleanupInterval),
 		blockCache:               cache.New(defaultTTL, cleanupInterval),
@@ -175,6 +236,13 @@ func (l *AptosLogPoller) Ready() error {
 
 func (l *AptosLogPoller) HealthReport() map[string]error {
 	return map[string]error{l.Name(): l.starter.Healthy()}
+}
+
+// SetOldestLedgerVersionProvider wires the X-APTOS-LEDGER-OLDEST-VERSION header provider
+// (backed by the chain's HeaderCapturingRoundTripper). Must be called before Start.
+// When unset, syncEvent falls back to an Info() call for non-empty pruned detection.
+func (l *AptosLogPoller) SetOldestLedgerVersionProvider(p OldestLedgerVersionProvider) {
+	l.oldestLedgerVersionProvider = p
 }
 
 func (l *AptosLogPoller) getEventAccountAddress(cacheKey string) (aptos.AccountAddress, bool) {
