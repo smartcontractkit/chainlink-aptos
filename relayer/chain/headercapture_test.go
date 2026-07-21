@@ -1,5 +1,4 @@
 package chain
-package chain
 
 import (
 	"net/http"
