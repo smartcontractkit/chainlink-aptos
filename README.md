@@ -1,5 +1,5 @@
 # Aptos
-Local development and tests how to
+Local development and tests how tos:
 
 ### Local development
 
