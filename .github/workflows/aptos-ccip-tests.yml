@@ -54,6 +54,7 @@ jobs:
         id: tool_versions
         run: |
           go_version=$(grep -E '^golang ' temp/chainlink/.tool-versions | cut -d' ' -f2)
+          echo "Go version from core .tool-versions: ${go_version}"
           echo "GO_VERSION=${go_version}" >> "${GITHUB_OUTPUT}"
 
       - name: Set up Go
