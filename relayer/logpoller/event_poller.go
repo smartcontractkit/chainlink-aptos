@@ -222,10 +222,11 @@ eventLoop:
 			events, err := client.EventsByCreationNumber(eventAccountAddress, creationNumber, &latestOffset, &batchSize)
 			if err != nil {
 				class := ClassifyEventsRPCError(err)
-				if class == ErrorClassPruned {
+				switch class {
+				case ErrorClassPruned:
 					// Layer 1: RPC error classification (HTTP 410 / "pruned" body / header).
 					// CR does NOT halt: raise a warning so the NOP can act (archive node).
-					prom.ReportPrunedOffset(l.chainInfo, eventFieldName)
+					prom.ReportPrunedOffset(l.chainInfo, eventHandle, eventFieldName)
 					l.raisePrunedWarning(hKey, eventHandle, eventFieldName,
 						"offset", latestOffset,
 						"layer", "rpc-error",
@@ -233,18 +234,18 @@ eventLoop:
 					// Return the error so SyncAllEvents logs it; the next tick retries.
 					// HealthReport stays healthy — paging is metric-based.
 					return fmt.Errorf("syncEvent: %w", ErrPrunedOffset)
-				}
-				if class == ErrorClassFatal {
+				case ErrorClassFatal:
 					// Fatal (e.g. 404 misconfig): log loudly, increment fatal counter.
 					// CR does NOT halt per design; NOP should investigate the config.
-					prom.ReportFatalError(l.chainInfo, eventFieldName)
+					prom.ReportFatalError(l.chainInfo, eventHandle, eventFieldName)
 					l.lggr.Errorw("syncEvent: fatal RPC error fetching events (non-transient, non-pruned)",
 						"handle", eventHandle, "field", eventFieldName, "error", err)
 					return fmt.Errorf("syncEvent: failed to fetch events: %w", err)
+				default:
+					// Transient (5xx/429/network): retry next tick.
+					l.lggr.Warnw("syncEvent: transient error fetching events", "error", err)
+					return fmt.Errorf("syncEvent: failed to fetch events: %w", err)
 				}
-				// Transient (5xx/429/network): retry next tick.
-				l.lggr.Warnw("syncEvent: transient error fetching events", "error", err)
-				return fmt.Errorf("syncEvent: failed to fetch events: %w", err)
 			}
 
 			if len(events) == 0 {
@@ -276,7 +277,7 @@ eventLoop:
 						}
 						// Both zero: node genuinely returning zeros; treat as caught-up.
 					} else if lastTxVersion < oldest {
-						prom.ReportPrunedOffset(l.chainInfo, eventFieldName)
+						prom.ReportPrunedOffset(l.chainInfo, eventHandle, eventFieldName)
 						l.raisePrunedWarning(hKey, eventHandle, eventFieldName,
 							"lastTxVersion", lastTxVersion,
 							"oldestLedgerVersion", oldest,
@@ -294,7 +295,7 @@ eventLoop:
 			// NOT halt: insert the events, advance the offset, but raise a warning so the
 			// NOP can reindex any missing events from an archive node.
 			if pruned, oldest := l.checkNonEmptyPruned(client, events, hasStoredEvents); pruned {
-				prom.ReportPrunedOffset(l.chainInfo, eventFieldName)
+				prom.ReportPrunedOffset(l.chainInfo, eventHandle, eventFieldName)
 				l.raisePrunedWarning(hKey, eventHandle, eventFieldName,
 					"firstEventVersion", events[0].Version,
 					"oldestLedgerVersion", oldest,
@@ -312,11 +313,9 @@ eventLoop:
 			// events from an archive node. The gap is a one-time event we move past.
 			if events[0].SequenceNumber > latestOffset {
 				gapSize := events[0].SequenceNumber - latestOffset
-				prom.ReportEventSequenceGap(l.chainInfo, eventFieldName, gapSize)
+				prom.ReportEventSequenceGap(l.chainInfo, eventHandle, eventFieldName, gapSize)
 				l.raisePrunedWarning(hKey, eventHandle, eventFieldName,
 					"expectedOffset", latestOffset,
-					"firstEventOffset", events[0].SequenceNumber,
-					"gapSize", gapSize,
 					"layer", "sequence-gap")
 				warnedThisTick = true
 			}
@@ -422,7 +421,7 @@ func (l *AptosLogPoller) raisePrunedWarning(handleKey, eventHandle, eventFieldNa
 	firstWarn := l.markWarned(handleKey)
 	l.mu.Unlock()
 
-	prom.SetPrunedWarning(l.chainInfo, eventFieldName, true)
+	prom.SetPrunedWarning(l.chainInfo, eventHandle, eventFieldName, true)
 
 	if firstWarn {
 		// First detection: prominent warning with full context for the NOP.
@@ -447,7 +446,7 @@ func (l *AptosLogPoller) clearPrunedWarning(handleKey, eventHandle, eventFieldNa
 	l.mu.Unlock()
 
 	if cleared {
-		prom.SetPrunedWarning(l.chainInfo, eventFieldName, false)
+		prom.SetPrunedWarning(l.chainInfo, eventHandle, eventFieldName, false)
 		l.lggr.Infow("syncEvent: pruned/gap warning cleared — handle recovered",
 			"handle", eventHandle, "field", eventFieldName)
 	}

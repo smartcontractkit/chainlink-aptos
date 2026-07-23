@@ -125,6 +125,15 @@ func testEventConfig(fieldName string) *config.ChainReaderEvent {
 	}
 }
 
+// testEventHandle returns the eventHandle string that syncEvent builds for the given
+// bound address when called with module "test" and testEventConfig (struct "TestHandle").
+// Tests use this as the eventHandle label for the pruning metrics, matching the composite
+// identity syncEvent passes to prom (eventHandle + eventFieldName together uniquely
+// identify a handle).
+func testEventHandle(addr aptos.AccountAddress) string {
+	return addr.String() + "::test::TestHandle"
+}
+
 // boundAddr returns an AccountAddress from a hex string, failing the test on error.
 func boundAddr(t *testing.T, hex string) aptos.AccountAddress {
 	t.Helper()
@@ -482,10 +491,10 @@ func TestSyncEvent_NonEmptyPrunedViaHeader_WarnsAndInserts(t *testing.T) {
 	assert.Equal(t, version, store.inserted[0].TxVersion)
 
 	// Warning gauge should be 1 (paging signal for NOP).
-	assert.Equal(t, 1.0, prom.PrunedWarningActiveValue(lp.chainInfo, fieldName),
+	assert.Equal(t, 1.0, prom.PrunedWarningActiveValue(lp.chainInfo, testEventHandle(addr), fieldName),
 		"pruned warning gauge should be 1 when non-empty pruned detected")
 	// Pruned counter should have incremented.
-	assert.Greater(t, prom.PrunedOffsetTotalValue(lp.chainInfo, fieldName), 0.0)
+	assert.Greater(t, prom.PrunedOffsetTotalValue(lp.chainInfo, testEventHandle(addr), fieldName), 0.0)
 }
 
 // TestSyncEvent_SequenceGap_RaisesWarning verifies that a sequence gap raises the warning
@@ -518,8 +527,8 @@ func TestSyncEvent_SequenceGap_RaisesWarning(t *testing.T) {
 	assert.Equal(t, uint64(7), store.inserted[0].EventOffset)
 
 	// Gap counter and warning gauge should reflect the gap.
-	assert.Greater(t, prom.EventSequenceGapValue(lp.chainInfo, fieldName), 0.0)
-	assert.Equal(t, 1.0, prom.PrunedWarningActiveValue(lp.chainInfo, fieldName))
+	assert.Greater(t, prom.EventSequenceGapValue(lp.chainInfo, testEventHandle(addr), fieldName), 0.0)
+	assert.Equal(t, 1.0, prom.PrunedWarningActiveValue(lp.chainInfo, testEventHandle(addr), fieldName))
 }
 
 // TestSyncEvent_AutoRecovery_ClearsWarning verifies that after a handle is warned, a
@@ -545,7 +554,7 @@ func TestSyncEvent_AutoRecovery_ClearsWarning(t *testing.T) {
 	err := lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
 	require.Error(t, err)
 	assert.True(t, IsPrunedOffset(err))
-	assert.Equal(t, 1.0, prom.PrunedWarningActiveValue(lp.chainInfo, fieldName),
+	assert.Equal(t, 1.0, prom.PrunedWarningActiveValue(lp.chainInfo, testEventHandle(addr), fieldName),
 		"warning gauge should be 1 after pruned detection")
 
 	// Second sync: NOP switched to archive node; now oldest=40 < stored txVersion=50 → not pruned.
@@ -556,7 +565,7 @@ func TestSyncEvent_AutoRecovery_ClearsWarning(t *testing.T) {
 
 	err = lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
 	require.NoError(t, err, "should be caught-up after NOP fixes the node")
-	assert.Equal(t, 0.0, prom.PrunedWarningActiveValue(lp.chainInfo, fieldName),
+	assert.Equal(t, 0.0, prom.PrunedWarningActiveValue(lp.chainInfo, testEventHandle(addr), fieldName),
 		"warning gauge should be 0 after auto-recovery")
 }
 
@@ -591,7 +600,7 @@ func TestSyncEvent_HealthReportStaysHealthy(t *testing.T) {
 	assert.Len(t, hr, 1, "HealthReport must not add per-handle halt keys")
 	assert.Contains(t, hr, lp.Name(), "must contain the lifecycle key")
 	// The warning gauge is the paging signal, not HealthReport.
-	assert.Equal(t, 1.0, prom.PrunedWarningActiveValue(lp.chainInfo, fieldName))
+	assert.Equal(t, 1.0, prom.PrunedWarningActiveValue(lp.chainInfo, testEventHandle(addr), fieldName))
 }
 
 // TestSyncEvent_FatalError_IncrementsFatalMetric verifies that a fatal (404) RPC error
@@ -617,6 +626,67 @@ func TestSyncEvent_FatalError_IncrementsFatalMetric(t *testing.T) {
 	require.Error(t, err)
 	assert.False(t, IsPrunedOffset(err), "404 is fatal, not pruned")
 	assert.Empty(t, store.inserted)
-	assert.Greater(t, prom.FatalErrorTotalValue(lp.chainInfo, fieldName), 0.0,
+	assert.Greater(t, prom.FatalErrorTotalValue(lp.chainInfo, testEventHandle(addr), fieldName), 0.0,
 		"fatal_error_total should increment on 404")
+}
+
+// TestSyncEvent_TwoHandlesSameField_WarningNotClobbered is a regression test for the
+// warning-key bug: the pruned-warning gauge must be keyed by the composite handle identity
+// (eventHandle + eventFieldName), NOT by eventFieldName alone. Two handles that share an
+// eventFieldName but have different eventHandles must keep independent warning gauges —
+// recovering one must NOT clear the other's paging signal.
+//
+// Before the fix, prom.SetPrunedWarning used eventFieldName only as the label, so handle B
+// recovering (gauge→0) would clobber handle A's gauge even though A was still pruned. This
+// test fails on the old code and passes on the fixed (split-label) code.
+func TestSyncEvent_TwoHandlesSameField_WarningNotClobbered(t *testing.T) {
+	t.Parallel()
+
+	const sharedField = "shared_field_events"
+
+	// Handle A: address 0x1, still pruned (stored txVersion=50 < oldest=100).
+	addrA := boundAddr(t, "0x1")
+	handleA := testEventHandle(addrA) // "0x1...::test::TestHandle"
+	storeA := &fakeEventStore{offset: 5, found: true, txVersion: 50}
+	rpcA := mocks.NewAptosRpcClient(t)
+	lpA := buildPoller(t, rpcA, storeA)
+	rpcA.On("AccountResource", addrA, addrA.String()+"::test::TestHandle").
+		Return(testResource(sharedField), nil).Once()
+	rpcA.On("EventsByCreationNumber", addrA, "3", &storeA.offset, lpA.config.EventBatchSize).
+		Return([]*api.Event{}, nil).Once()
+	rpcA.On("Info").Return(aptos.NodeInfo{OldestLedgerVersionStr: "100"}, nil).Once()
+
+	errA := lpA.syncEvent(context.Background(), addrA, testEventConfig(sharedField), "test")
+	require.Error(t, errA, "handle A should detect pruning")
+	assert.True(t, IsPrunedOffset(errA))
+	assert.Equal(t, 1.0, prom.PrunedWarningActiveValue(lpA.chainInfo, handleA, sharedField),
+		"handle A warning gauge should be 1 after pruned detection")
+
+	// Handle B: address 0x2, SAME field name, different eventHandle, NOT pruned
+	// (stored txVersion=50, oldest=40 → caught up). Its successful sync auto-recovers B.
+	addrB := boundAddr(t, "0x2")
+	handleB := testEventHandle(addrB) // "0x2...::test::TestHandle"
+	require.NotEqual(t, handleA, handleB, "precondition: handles must differ")
+	storeB := &fakeEventStore{offset: 5, found: true, txVersion: 50}
+	rpcB := mocks.NewAptosRpcClient(t)
+	lpB := buildPoller(t, rpcB, storeB)
+	rpcB.On("AccountResource", addrB, addrB.String()+"::test::TestHandle").
+		Return(testResource(sharedField), nil).Once()
+	rpcB.On("EventsByCreationNumber", addrB, "3", &storeB.offset, lpB.config.EventBatchSize).
+		Return([]*api.Event{}, nil).Once()
+	rpcB.On("Info").Return(aptos.NodeInfo{OldestLedgerVersionStr: "40"}, nil).Once()
+
+	errB := lpB.syncEvent(context.Background(), addrB, testEventConfig(sharedField), "test")
+	require.NoError(t, errB, "handle B should be caught-up (not pruned)")
+
+	// B was never warned (no pruned condition), so its gauge is 0.
+	assert.Equal(t, 0.0, prom.PrunedWarningActiveValue(lpB.chainInfo, handleB, sharedField),
+		"handle B gauge should be 0 — it was never pruned")
+
+	// CRITICAL regression assertion: handle A's gauge must STILL be 1. Before the fix,
+	// B's sync would call SetPrunedWarning(..., sharedField, false) on the same label
+	// series as A, clobbering A's paging signal while A was still pruned.
+	assert.Equal(t, 1.0, prom.PrunedWarningActiveValue(lpA.chainInfo, handleA, sharedField),
+		"handle A warning gauge must NOT be clobbered by handle B — they share eventFieldName "+
+			"but have different eventHandles; the paging signal for A must stay raised while A is pruned")
 }

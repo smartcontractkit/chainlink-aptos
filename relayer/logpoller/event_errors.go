@@ -1,6 +1,7 @@
 package logpoller
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -38,13 +39,18 @@ const (
 
 // ClassifyEventsRPCError categorises an error from EventsByCreationNumber.
 //
-// Classification rules (from PRUNED_RPC.md §"aptos-go-sdk v1.13.0"):
+// Classification rules (from PRUNED_RPC.md §"aptos-go-sdk v1.13.0"), checked in order:
 //   - HTTP 410 Gone           → Pruned   (documented; not observed on localnet v1.42.1 but
-//     expected on production nodes)
-//   - X-APTOS-LEDGER-OLDEST-VERSION header present on an error response → Pruned (corroborating)
-//   - body contains "pruned"  → Pruned   (belt-and-suspenders)
-//   - body contains structured Aptos error_code "gone"/"pruned" → Pruned
-//   - HTTP 429 / 5xx          → Transient
+//     expected on production nodes). Cheapest and most reliable signal, checked first.
+//   - HTTP 429 / 5xx           → Transient (checked before the header/body signals so a
+//     transient error is never misclassified as Pruned, regardless of whether the node
+//     attaches X-APTOS-LEDGER-OLDEST-VERSION to every response).
+//   - X-APTOS-LEDGER-OLDEST-VERSION header present on the error response → Pruned
+//     (corroborating signal, available via HttpError.Header on the SDK error path).
+//   - body JSON error_code "gone"/"pruned" → Pruned (decoded via encoding/json so it is
+//     robust to whitespace/formatting variations; preferred over substring matching).
+//   - body contains bare "pruned" substring → Pruned (belt-and-suspenders fallback for
+//     non-JSON bodies).
 //   - other 4xx / parse error → Fatal
 //   - unknown / network error → Transient (safe: lets the poller retry)
 func ClassifyEventsRPCError(err error) EventsRPCErrorClass {
@@ -54,28 +60,41 @@ func ClassifyEventsRPCError(err error) EventsRPCErrorClass {
 
 	var httpErr *aptos.HttpError
 	if errors.As(err, &httpErr) {
+		// Cheapest, most reliable signal first.
 		if httpErr.StatusCode == http.StatusGone { // 410
 			return ErrorClassPruned
 		}
+		// Transient errors must be classified before the header/body pruned signals so
+		// they are never misclassified as Pruned (the X-APTOS-LEDGER-OLDEST-VERSION header
+		// may be present on every response, including 429/5xx).
+		if httpErr.StatusCode == http.StatusTooManyRequests || httpErr.StatusCode >= http.StatusInternalServerError {
+			return ErrorClassTransient
+		}
 		// Corroborating signal: the Aptos node exposes X-APTOS-LEDGER-OLDEST-VERSION on
 		// error responses (available via HttpError.Header on the SDK error path). Its
-		// presence on a non-2xx response is a strong pruned indicator.
+		// presence on a non-transient error response is a strong pruned indicator.
 		if httpErr.Header != nil {
 			if v := httpErr.Header.Get("X-APTOS-LEDGER-OLDEST-VERSION"); v != "" {
 				return ErrorClassPruned
 			}
 		}
-		// Structured Aptos error_code check (preferred over bare substring matching).
-		// Avoids false positives where an unrelated error body happens to contain "gone".
-		body := strings.ToLower(string(httpErr.Body))
-		if strings.Contains(body, `"error_code":"pruned"`) ||
-			strings.Contains(body, `"error_code":"gone"`) ||
-			strings.Contains(body, "pruned") ||
-			strings.Contains(body, "410 gone") {
-			return ErrorClassPruned
+		// Structured Aptos error_code check via JSON decode (robust to whitespace and
+		// formatting variations, unlike literal substring matching). Aptos REST errors
+		// return a JSON body with an "error_code" string field.
+		var parsed struct {
+			ErrorCode string `json:"error_code"`
 		}
-		if httpErr.StatusCode == http.StatusTooManyRequests || httpErr.StatusCode >= http.StatusInternalServerError {
-			return ErrorClassTransient
+		if err := json.Unmarshal(httpErr.Body, &parsed); err == nil {
+			code := strings.ToLower(parsed.ErrorCode)
+			if code == "pruned" || code == "gone" {
+				return ErrorClassPruned
+			}
+		}
+		// Belt-and-suspenders fallback for non-JSON bodies that still mention pruning.
+		// Bare "gone" is intentionally NOT matched to avoid false positives (an unrelated
+		// error body containing the word "gone").
+		if body := strings.ToLower(string(httpErr.Body)); strings.Contains(body, "pruned") || strings.Contains(body, "410 gone") {
+			return ErrorClassPruned
 		}
 		return ErrorClassFatal
 	}

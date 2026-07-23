@@ -24,7 +24,7 @@ obvious:
 | HTTP 410 Gone | Documented; not observed on localnet v1.42.1 | Explicit "data pruned" |
 | HTTP 200 + `[]` (empty) | Yes | Offset beyond tip **or** pruned (ambiguous) |
 | HTTP 200 + non-empty events | Yes (spike Phase 0b) | Events returned even though earlier offsets are pruned |
-| `X-APTOS-LEDGER-OLDEST-VERSION` header | Present on every response | Node-wide oldest ledger version |
+| `X-APTOS-LEDGER-OLDEST-VERSION` header | Present on observed responses (200, 410); may appear on others | Node-wide oldest ledger version |
 
 The spike (`scripts/spike-pruned-rpc.sh`, Phase 0b) proved that a pruned offset can return
 **HTTP 200 + 3 events** with no error. The events are real, but earlier events in the pruned
@@ -36,18 +36,22 @@ The LogPoller uses three layers of defence:
 
 ### Layer 1 — RPC error classification (`event_errors.go`)
 
-`ClassifyEventsRPCError` inspects errors from `EventsByCreationNumber`:
+`ClassifyEventsRPCError` inspects errors from `EventsByCreationNumber`. Checks are applied
+in order so that transient errors are never misclassified as Pruned (the
+`X-APTOS-LEDGER-OLDEST-VERSION` header may be present on every response, including 429/5xx):
 
-- **HTTP 410 Gone** → `ErrorClassPruned`
-- **`X-APTOS-LEDGER-OLDEST-VERSION` header present on an error response** → `ErrorClassPruned` (corroborating signal, available via `HttpError.Header`)
-- **Body contains structured `error_code: "pruned"`/`"gone"`** or the substring `"pruned"`/`"410 gone"` → `ErrorClassPruned`
-- **HTTP 429 / 5xx** → `ErrorClassTransient` (retry next tick)
+- **HTTP 410 Gone** → `ErrorClassPruned` (cheapest, most reliable signal; checked first)
+- **HTTP 429 / 5xx** → `ErrorClassTransient` (retry next tick; checked before the header/body signals)
+- **`X-APTOS-LEDGER-OLDEST-VERSION` header present on the error response** → `ErrorClassPruned` (corroborating signal, available via `HttpError.Header`)
+- **Body JSON `error_code` is `"pruned"`/`"gone"`** (decoded via `encoding/json`, case-insensitive) → `ErrorClassPruned`
+- **Body contains the bare substring `"pruned"` or `"410 gone"`** → `ErrorClassPruned` (belt-and-suspenders fallback for non-JSON bodies)
 - **Other 4xx / parse error** → `ErrorClassFatal` (logged at Error, `fatal_error_total` metric; CR does not halt)
 - **Unknown / network error** → `ErrorClassTransient` (safe: lets the poller retry)
 
-> **Note on "gone" matching:** bare substring `"gone"` was removed to avoid false positives
-> (e.g. an unrelated error body containing the word "gone"). Only structured `error_code`
-> fields, the literal `"410 gone"`, and the `"pruned"` substring are matched.
+> **Note on "gone" matching:** bare substring `"gone"` is intentionally NOT matched to avoid
+> false positives (e.g. an unrelated error body containing the word "gone"). Only the
+> structured JSON `error_code` field (decoded, so robust to whitespace/formatting), the
+> literal `"410 gone"`, and the `"pruned"` substring are matched.
 
 ### Layer 2 — Defensive `Info()` check on empty response (`event_poller.go`)
 

@@ -60,7 +60,7 @@ var (
 	promLpPrunedOffsetTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "aptos_log_poller_pruned_offset_total",
 		Help: "Total number of times LogPoller detected a pruned event offset on the Aptos node",
-	}, []string{"chainFamily", "chainID", "networkName", "event"})
+	}, []string{"chainFamily", "chainID", "networkName", "eventHandle", "eventFieldName"})
 
 	promLpReaderLagSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "aptos_log_poller_reader_lag_seconds",
@@ -71,17 +71,17 @@ var (
 	promLpEventSequenceGap = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "aptos_log_poller_event_sequence_gap",
 		Help: "Total number of event sequence number gaps detected by LogPoller",
-	}, []string{"chainFamily", "chainID", "networkName", "event"})
+	}, []string{"chainFamily", "chainID", "networkName", "eventHandle", "eventFieldName"})
 
 	promLpPrunedWarningActive = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "aptos_log_poller_pruned_warning_active",
 		Help: "Set to 1 while a LogPoller event handle is in a pruned/gap warning state (CR stays operational; NOP should act), 0 when recovered. This is the paging signal — wire Prometheus alert rules to fire when this gauge is 1 for > N minutes.",
-	}, []string{"chainFamily", "chainID", "networkName", "event"})
+	}, []string{"chainFamily", "chainID", "networkName", "eventHandle", "eventFieldName"})
 
 	promLpFatalErrorTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "aptos_log_poller_fatal_error_total",
 		Help: "Total number of fatal (non-transient, non-pruned) RPC errors from EventsByCreationNumber, e.g. 404 misconfiguration. The CR does not halt but these are logged at Error for NOP attention.",
-	}, []string{"chainFamily", "chainID", "networkName", "event"})
+	}, []string{"chainFamily", "chainID", "networkName", "eventHandle", "eventFieldName"})
 )
 
 func SetAccountBalance(chainInfo types.ChainInfo, account string, balance float64) {
@@ -140,13 +140,16 @@ func RecordQueryResultSize(chainInfo types.ChainInfo, queryType, eventKey string
 	).Set(float64(count))
 }
 
-// ReportPrunedOffset increments the pruned offset counter for the given event.
-func ReportPrunedOffset(chainInfo types.ChainInfo, event string) {
+// ReportPrunedOffset increments the pruned offset counter for the given event handle.
+// eventHandle and eventFieldName together uniquely identify a handle — both are required
+// so two handles that share an eventFieldName do not clobber each other's metric series.
+func ReportPrunedOffset(chainInfo types.ChainInfo, eventHandle, eventFieldName string) {
 	promLpPrunedOffsetTotal.WithLabelValues(
 		chainInfo.ChainFamilyName,
 		chainInfo.ChainID,
 		chainInfo.NetworkName,
-		event,
+		eventHandle,
+		eventFieldName,
 	).Inc()
 }
 
@@ -161,19 +164,24 @@ func ObserveReaderLag(chainInfo types.ChainInfo, event string, lagSeconds float6
 }
 
 // ReportEventSequenceGap increments the sequence gap counter by the given gap size.
-func ReportEventSequenceGap(chainInfo types.ChainInfo, event string, gapSize uint64) {
+// eventHandle and eventFieldName together uniquely identify a handle.
+func ReportEventSequenceGap(chainInfo types.ChainInfo, eventHandle, eventFieldName string, gapSize uint64) {
 	promLpEventSequenceGap.WithLabelValues(
 		chainInfo.ChainFamilyName,
 		chainInfo.ChainID,
 		chainInfo.NetworkName,
-		event,
+		eventHandle,
+		eventFieldName,
 	).Add(float64(gapSize))
 }
 
 // SetPrunedWarning sets the pruned-warning-active gauge for the given event handle.
 // active=true raises the warning (gauge=1, the paging signal for the NOP); active=false
 // clears it (gauge=0, auto-recovery). The CR does NOT halt regardless of the gauge value.
-func SetPrunedWarning(chainInfo types.ChainInfo, event string, active bool) {
+// eventHandle and eventFieldName together uniquely identify a handle — both are required
+// so clearing one handle's warning does not clear another handle that shares the same
+// eventFieldName.
+func SetPrunedWarning(chainInfo types.ChainInfo, eventHandle, eventFieldName string, active bool) {
 	val := 0.0
 	if active {
 		val = 1.0
@@ -182,17 +190,20 @@ func SetPrunedWarning(chainInfo types.ChainInfo, event string, active bool) {
 		chainInfo.ChainFamilyName,
 		chainInfo.ChainID,
 		chainInfo.NetworkName,
-		event,
+		eventHandle,
+		eventFieldName,
 	).Set(val)
 }
 
-// ReportFatalError increments the fatal-error counter for the given event.
-func ReportFatalError(chainInfo types.ChainInfo, event string) {
+// ReportFatalError increments the fatal-error counter for the given event handle.
+// eventHandle and eventFieldName together uniquely identify a handle.
+func ReportFatalError(chainInfo types.ChainInfo, eventHandle, eventFieldName string) {
 	promLpFatalErrorTotal.WithLabelValues(
 		chainInfo.ChainFamilyName,
 		chainInfo.ChainID,
 		chainInfo.NetworkName,
-		event,
+		eventHandle,
+		eventFieldName,
 	).Inc()
 }
 
@@ -202,28 +213,28 @@ func ReportFatalError(chainInfo types.ChainInfo, event string) {
 
 // PrunedWarningActiveValue returns the current value of aptos_log_poller_pruned_warning_active
 // for the given labels. For use in tests only.
-func PrunedWarningActiveValue(chainInfo types.ChainInfo, event string) float64 {
+func PrunedWarningActiveValue(chainInfo types.ChainInfo, eventHandle, eventFieldName string) float64 {
 	return testutil.ToFloat64(promLpPrunedWarningActive.WithLabelValues(
-		chainInfo.ChainFamilyName, chainInfo.ChainID, chainInfo.NetworkName, event))
+		chainInfo.ChainFamilyName, chainInfo.ChainID, chainInfo.NetworkName, eventHandle, eventFieldName))
 }
 
 // PrunedOffsetTotalValue returns the current value of aptos_log_poller_pruned_offset_total
 // for the given labels. For use in tests only.
-func PrunedOffsetTotalValue(chainInfo types.ChainInfo, event string) float64 {
+func PrunedOffsetTotalValue(chainInfo types.ChainInfo, eventHandle, eventFieldName string) float64 {
 	return testutil.ToFloat64(promLpPrunedOffsetTotal.WithLabelValues(
-		chainInfo.ChainFamilyName, chainInfo.ChainID, chainInfo.NetworkName, event))
+		chainInfo.ChainFamilyName, chainInfo.ChainID, chainInfo.NetworkName, eventHandle, eventFieldName))
 }
 
 // EventSequenceGapValue returns the current value of aptos_log_poller_event_sequence_gap
 // for the given labels. For use in tests only.
-func EventSequenceGapValue(chainInfo types.ChainInfo, event string) float64 {
+func EventSequenceGapValue(chainInfo types.ChainInfo, eventHandle, eventFieldName string) float64 {
 	return testutil.ToFloat64(promLpEventSequenceGap.WithLabelValues(
-		chainInfo.ChainFamilyName, chainInfo.ChainID, chainInfo.NetworkName, event))
+		chainInfo.ChainFamilyName, chainInfo.ChainID, chainInfo.NetworkName, eventHandle, eventFieldName))
 }
 
 // FatalErrorTotalValue returns the current value of aptos_log_poller_fatal_error_total
 // for the given labels. For use in tests only.
-func FatalErrorTotalValue(chainInfo types.ChainInfo, event string) float64 {
+func FatalErrorTotalValue(chainInfo types.ChainInfo, eventHandle, eventFieldName string) float64 {
 	return testutil.ToFloat64(promLpFatalErrorTotal.WithLabelValues(
-		chainInfo.ChainFamilyName, chainInfo.ChainID, chainInfo.NetworkName, event))
+		chainInfo.ChainFamilyName, chainInfo.ChainID, chainInfo.NetworkName, eventHandle, eventFieldName))
 }

@@ -57,6 +57,26 @@ func TestClassifyEventsRPCError(t *testing.T) {
 			want: ErrorClassPruned,
 		},
 		{
+			name: "structured error_code pruned with whitespace is pruned (JSON decode)",
+			err:  httpErr(http.StatusOK, `{ "error_code" : "pruned" , "message": "x" }`),
+			want: ErrorClassPruned,
+		},
+		{
+			name: "structured error_code gone with newlines is pruned (JSON decode)",
+			err:  httpErr(http.StatusOK, "{\n  \"error_code\": \"gone\"\n}"),
+			want: ErrorClassPruned,
+		},
+		{
+			name: "structured error_code uppercase GONE is pruned (case-insensitive)",
+			err:  httpErr(http.StatusOK, `{"error_code":"GONE"}`),
+			want: ErrorClassPruned,
+		},
+		{
+			name: "structured error_code unrelated value is not pruned",
+			err:  httpErr(http.StatusBadRequest, `{"error_code":"bad_request"}`),
+			want: ErrorClassFatal,
+		},
+		{
 			name: "bare gone substring is NOT pruned (tightened to avoid false positives)",
 			err:  httpErr(http.StatusOK, `{"error":"gone"}`),
 			want: ErrorClassFatal,

@@ -11,7 +11,7 @@ import (
 //
 // Background: the aptos-go-sdk (v1.13.0) discards HTTP response headers on successful
 // (2xx) responses — it only populates HttpError.Header on error (>=400) responses. The
-// spike (Phase 0b) proved a pruned offset can return HTTP 200 + non-empty events, so the
+// pruned event offset can return HTTP 200 + non-empty events with no error, so the
 // LogPoller needs the oldest-ledger-version signal on the success path too. This round
 // tripper intercepts responses to /events/ requests and atomically stores the header value
 // so syncEvent can compare event.Version against it and detect pruning on the non-empty
@@ -57,13 +57,14 @@ func (rt *HeaderCapturingRoundTripper) RoundTrip(req *http.Request) (*http.Respo
 	// Only capture from events API responses (path contains "/events/"). This avoids
 	// attributing headers from unrelated RPC calls (Info, AccountResource, BlockByVersion)
 	// that share the same transport via GetClient's per-URL client cache.
-	if strings.Contains(req.URL.Path, "/events/") {
-		if v := resp.Header.Get("X-APTOS-LEDGER-OLDEST-VERSION"); v != "" {
-			if parsed, perr := parseUint64(v); perr == nil {
-				rt.oldestLedgerVersion.Store(parsed)
-				rt.hasValue.Store(true)
-			}
-		}
+	if !strings.Contains(req.URL.Path, "/events/") {
+		return resp, nil
+	}
+	if v := resp.Header.Get("X-APTOS-LEDGER-OLDEST-VERSION"); v == "" {
+		return resp, nil
+	} else if parsed, perr := parseUint64(v); perr == nil {
+		rt.oldestLedgerVersion.Store(parsed)
+		rt.hasValue.Store(true)
 	}
 
 	return resp, nil
