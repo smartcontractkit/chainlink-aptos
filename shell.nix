@@ -7,8 +7,7 @@
 (pkgs.mkShell.override {stdenv = pkgs.clangStdenv;}) {
   buildInputs = with pkgs;
     [
-      # Go 1.23 + tools
-      go_1_23
+      go_1_26
       gopls
       delve
       # override to lock 1.64 version that is currently used by CI
@@ -40,16 +39,11 @@
       protoc-gen-go
       protolint
 
-      # Atlas + Beholder tools
-      redpanda
-
       # Extra tools
       python3
       postgresql_15
       jq
-    ]
-    ++ lib.optionals stdenv.isLinux [
-      # Notice: currently only available on Linux, needs to be packaged for other platforms (e.g. macOS)
+      git
       (pkgs.callPackage ./aptos.nix {})
     ]
     ++ lib.optionals stdenv.hostPlatform.isDarwin [

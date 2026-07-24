@@ -155,10 +155,11 @@ func (l *AptosLogPoller) syncEvent(ctx context.Context, boundAddress aptos.Accou
 
 	eventHandle := boundAddress.String() + "::" + eventModuleName + "::" + eventConfig.EventHandleStructName
 	eventFieldName := eventConfig.EventHandleFieldName
+	hKey := handleKey(eventHandle, eventFieldName)
 
-	latestOffset, err := l.dbStore.GetLatestOffset(ctx, eventAccountAddress.String(), eventHandle, eventFieldName)
+	latestOffset, lastTxVersion, hasStoredEvents, err := l.evStore.GetLatestEventMeta(ctx, eventAccountAddress.String(), eventHandle, eventFieldName)
 	if err != nil {
-		return fmt.Errorf("syncEvent: failed to get latest offset: %w", err)
+		return fmt.Errorf("syncEvent: failed to get latest event meta: %w", err)
 	}
 
 	cacheKey := eventAccountAddress.String() + "::" + eventHandle
@@ -204,6 +205,7 @@ func (l *AptosLogPoller) syncEvent(ctx context.Context, boundAddress aptos.Accou
 
 	batchSize := *l.config.EventBatchSize
 	var totalProcessed int = 0
+	warnedThisTick := false // set when a pruned/gap warning is raised this tick; blocks auto-recovery
 
 	var client aptos.AptosRpcClient
 	client, err = l.getClient()
@@ -219,12 +221,103 @@ eventLoop:
 		default:
 			events, err := client.EventsByCreationNumber(eventAccountAddress, creationNumber, &latestOffset, &batchSize)
 			if err != nil {
-				l.lggr.Errorw("syncEvent: failed to fetch new events", "error", err)
-				return fmt.Errorf("syncEvent: failed to fetch events: %w", err)
+				class := ClassifyEventsRPCError(err)
+				switch class {
+				case ErrorClassPruned:
+					// Layer 1: RPC error classification (HTTP 410 / "pruned" body / header).
+					// CR does NOT halt: raise a warning so the NOP can act (archive node).
+					prom.ReportPrunedOffset(l.chainInfo, eventHandle, eventFieldName)
+					l.raisePrunedWarning(hKey, eventHandle, eventFieldName,
+						"offset", latestOffset,
+						"layer", "rpc-error",
+						"error", err)
+					// Return the error so SyncAllEvents logs it; the next tick retries.
+					// HealthReport stays healthy — paging is metric-based.
+					return fmt.Errorf("syncEvent: %w", ErrPrunedOffset)
+				case ErrorClassFatal:
+					// Fatal (e.g. 404 misconfig): log loudly, increment fatal counter.
+					// CR does NOT halt per design; NOP should investigate the config.
+					prom.ReportFatalError(l.chainInfo, eventHandle, eventFieldName)
+					l.lggr.Errorw("syncEvent: fatal RPC error fetching events (non-transient, non-pruned)",
+						"handle", eventHandle, "field", eventFieldName, "error", err)
+					return fmt.Errorf("syncEvent: failed to fetch events: %w", err)
+				default:
+					// Transient (5xx/429/network): retry next tick.
+					l.lggr.Warnw("syncEvent: transient error fetching events", "error", err)
+					return fmt.Errorf("syncEvent: failed to fetch events: %w", err)
+				}
 			}
 
 			if len(events) == 0 {
+				// Layer 2: defensive pruned check on empty response. If we have stored
+				// events and the highest stored tx_version is below the node's
+				// oldest_ledger_version, the offset falls in the pruned range even though
+				// the API returned 200 + [] rather than 410. See PRUNED_RPC.md.
+				if hasStoredEvents {
+					nodeInfo, infoErr := client.Info()
+					if infoErr != nil {
+						// Fail closed: if Info() errors we cannot verify pruning, so do NOT
+						// assume caught-up. Return a transient error so the next tick retries.
+						// This prevents a node outage from masking a pruned offset.
+						l.lggr.Warnw("syncEvent: defensive pruned check skipped — Info() failed",
+							"handle", eventHandle, "field", eventFieldName, "error", infoErr)
+						return fmt.Errorf("syncEvent: defensive pruned check unavailable: %w", infoErr)
+					}
+					oldest := nodeInfo.OldestLedgerVersion()
+					if oldest == 0 {
+						// OldestLedgerVersion() returns 0 on parse failure (SDK limitation).
+						// If the node reports a valid ledger_version but an unparseable
+						// oldest_ledger_version, we cannot verify pruning — fail closed.
+						if nodeInfo.LedgerVersionStr != "" {
+							l.lggr.Warnw("syncEvent: oldest_ledger_version unparseable, cannot verify pruning",
+								"handle", eventHandle, "field", eventFieldName,
+								"oldestLedgerVersionStr", nodeInfo.OldestLedgerVersionStr,
+								"ledgerVersionStr", nodeInfo.LedgerVersionStr)
+							return fmt.Errorf("syncEvent: oldest_ledger_version unparseable, cannot verify pruning")
+						}
+						// Both zero: node genuinely returning zeros; treat as caught-up.
+					} else if lastTxVersion < oldest {
+						prom.ReportPrunedOffset(l.chainInfo, eventHandle, eventFieldName)
+						l.raisePrunedWarning(hKey, eventHandle, eventFieldName,
+							"lastTxVersion", lastTxVersion,
+							"oldestLedgerVersion", oldest,
+							"offset", latestOffset,
+							"layer", "empty-info")
+						return fmt.Errorf("syncEvent: %w", ErrPrunedOffset)
+					}
+				}
 				break eventLoop
+			}
+
+			// Non-empty pruned check (Layer 3): the spike proved a pruned offset can return
+			// HTTP 200 + events whose tx_version < oldest_ledger_version. Detect via the
+			// captured X-APTOS-LEDGER-OLDEST-VERSION header (or Info() fallback). CR does
+			// NOT halt: insert the events, advance the offset, but raise a warning so the
+			// NOP can reindex any missing events from an archive node.
+			if pruned, oldest := l.checkNonEmptyPruned(client, events, hasStoredEvents); pruned {
+				prom.ReportPrunedOffset(l.chainInfo, eventHandle, eventFieldName)
+				l.raisePrunedWarning(hKey, eventHandle, eventFieldName,
+					"firstEventVersion", events[0].Version,
+					"oldestLedgerVersion", oldest,
+					"offset", latestOffset,
+					"layer", "nonempty-header")
+				warnedThisTick = true
+				// Fall through: still insert the events we received (they're real) and
+				// advance the offset. The warning tells the NOP that earlier events in the
+				// pruned range may be missing and need archive-node reindex.
+			}
+
+			// Sequence gap check: detect missing events between the stored offset and the
+			// first event in this batch. CR does NOT halt: insert the events we received,
+			// advance past the gap, and raise a warning so the NOP can reindex the missing
+			// events from an archive node. The gap is a one-time event we move past.
+			if events[0].SequenceNumber > latestOffset {
+				gapSize := events[0].SequenceNumber - latestOffset
+				prom.ReportEventSequenceGap(l.chainInfo, eventHandle, eventFieldName, gapSize)
+				l.raisePrunedWarning(hKey, eventHandle, eventFieldName,
+					"expectedOffset", latestOffset,
+					"layer", "sequence-gap")
+				warnedThisTick = true
 			}
 
 			var batchRecords []db.EventRecord
@@ -255,11 +348,23 @@ eventLoop:
 			}
 
 			if len(batchRecords) > 0 {
-				if err := l.dbStore.InsertEvents(ctx, batchRecords); err != nil {
+				if err := l.evStore.InsertEvents(ctx, batchRecords); err != nil {
 					return fmt.Errorf("syncEvent: failed to insert batch of events: %w", err)
 				}
 
 				prom.ReportEventsInserted(l.chainInfo, eventFieldName, false, len(batchRecords))
+
+				// Reader lag: time between block timestamp (seconds) and now.
+				for _, record := range batchRecords {
+					if record.BlockTimestamp > 0 {
+						lagSeconds := float64(time.Now().Unix() - int64(record.BlockTimestamp))
+						prom.ObserveReaderLag(l.chainInfo, eventFieldName, lagSeconds)
+					}
+				}
+
+				// Update defensive-check state for subsequent iterations.
+				lastTxVersion = batchRecords[len(batchRecords)-1].TxVersion
+				hasStoredEvents = true
 
 				totalProcessed += len(batchRecords)
 				l.lggr.Debugw("syncEvent: saved batch of events",
@@ -271,11 +376,19 @@ eventLoop:
 
 			latestOffset = events[len(events)-1].SequenceNumber + 1
 
-			// If we received fewer events than the batch size, we're caught up
+			// If we received fewer events than the batch size, we're caught up.
 			if uint64(len(events)) < batchSize {
 				break eventLoop
 			}
 		}
+	}
+
+	// Auto-recovery: if this handle was previously warned but no pruned/gap condition was
+	// hit this tick, clear the warning. The NOP switching to an archive node → CR syncs the
+	// pruned events → no pruned condition fires → warning clears automatically. We only
+	// clear when warnedThisTick is false so a warning raised during this sync is preserved.
+	if !warnedThisTick && l.isHandleWarned(hKey) {
+		l.clearPrunedWarning(hKey, eventHandle, eventFieldName)
 	}
 
 	elapsed := time.Since(start)
@@ -295,6 +408,101 @@ eventLoop:
 	}
 
 	return nil
+}
+
+// raisePrunedWarning transitions a handle into the pruned/gap warning state. On the first
+// detection (not already warned) it logs at Warn with full context and sets the
+// aptos_log_poller_pruned_warning_active gauge to 1 (the NOP paging signal). On subsequent
+// ticks it logs at Debug to avoid spam. The CR does NOT halt — it stays operational and
+// auto-recovers via clearPrunedWarning once the NOP fixes the node. Returns the first-warn
+// timestamp (zero if already warned).
+func (l *AptosLogPoller) raisePrunedWarning(handleKey, eventHandle, eventFieldName string, fields ...any) {
+	l.mu.Lock()
+	firstWarn := l.markWarned(handleKey)
+	l.mu.Unlock()
+
+	prom.SetPrunedWarning(l.chainInfo, eventHandle, eventFieldName, true)
+
+	if firstWarn {
+		// First detection: prominent warning with full context for the NOP.
+		allFields := append([]any{
+			"handle", eventHandle,
+			"field", eventFieldName,
+			"recoveryAction", "switch to archive node or reindex missing events; CR stays operational and will auto-recover",
+		}, fields...)
+		l.lggr.Warnw("syncEvent: pruned/gap warning raised — CR stays operational, NOP action required", allFields...)
+	} else {
+		// Already warned: quiet log to avoid per-tick spam.
+		l.lggr.Debugw("syncEvent: pruned/gap warning still active", "handle", eventHandle, "field", eventFieldName)
+	}
+}
+
+// clearPrunedWarning removes a handle from the warned state (auto-recovery). Called when a
+// sync succeeds past the pruned range. Sets the gauge to 0 and logs at Info so the NOP can
+// see the recovery. Returns true if the handle was warned and is now cleared.
+func (l *AptosLogPoller) clearPrunedWarning(handleKey, eventHandle, eventFieldName string) bool {
+	l.mu.Lock()
+	cleared := l.clearWarned(handleKey)
+	l.mu.Unlock()
+
+	if cleared {
+		prom.SetPrunedWarning(l.chainInfo, eventHandle, eventFieldName, false)
+		l.lggr.Infow("syncEvent: pruned/gap warning cleared — handle recovered",
+			"handle", eventHandle, "field", eventFieldName)
+	}
+	return cleared
+}
+
+// isHandleWarned reports whether a handle is currently in the pruned/gap warning state.
+func (l *AptosLogPoller) isHandleWarned(handleKey string) bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.isWarned(handleKey)
+}
+
+// checkNonEmptyPruned detects pruning on the non-empty events path. The spike (Phase 0b)
+// proved a pruned offset can return HTTP 200 + events whose tx_version is below the node's
+// oldest_ledger_version. The aptos-go-sdk discards response headers on 2xx, so we read the
+// X-APTOS-LEDGER-OLDEST-VERSION header captured by the chain's HeaderCapturingRoundTripper
+// (l.oldestLedgerVersionProvider). Falls back to an Info() call when the provider is unset
+// or has no captured value. Returns true if the first event's Version is below the oldest
+// ledger version (pruned). The CR does NOT halt in this case — events are still inserted
+// and the offset advances, but a warning is raised so the NOP can reindex missing events.
+func (l *AptosLogPoller) checkNonEmptyPruned(client aptos.AptosRpcClient, events []*api.Event, hasStoredEvents bool) (pruned bool, oldestLedgerVersion uint64) {
+	if len(events) == 0 {
+		return false, 0
+	}
+	firstVersion := events[0].Version
+
+	// Preferred path: read the captured response header (no extra RPC).
+	if l.oldestLedgerVersionProvider != nil {
+		if v, ok := l.oldestLedgerVersionProvider.LastOldestLedgerVersion(); ok {
+			if firstVersion < v {
+				return true, v
+			}
+			return false, v
+		}
+	}
+
+	// Fallback: only call Info() when we have stored events (avoid extra RPC on fresh
+	// handles). This is belt-and-suspenders for when the header is unavailable.
+	if !hasStoredEvents {
+		return false, 0
+	}
+	nodeInfo, infoErr := client.Info()
+	if infoErr != nil {
+		// Can't determine — don't false-positive. The empty-path Info() check handles
+		// the fail-closed semantics; here we just can't corroborate.
+		return false, 0
+	}
+	oldest := nodeInfo.OldestLedgerVersion()
+	if oldest == 0 {
+		return false, 0 // unparseable; can't determine
+	}
+	if firstVersion < oldest {
+		return true, oldest
+	}
+	return false, oldest
 }
 
 func (l *AptosLogPoller) computeEventAccountAddress(boundAddress aptos.AccountAddress, eventConfig *aptostypes.ContractReaderEvent) (aptos.AccountAddress, error) {
