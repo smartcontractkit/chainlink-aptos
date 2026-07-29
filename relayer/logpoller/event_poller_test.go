@@ -3,6 +3,7 @@ package logpoller
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -68,6 +69,24 @@ func testResource(fieldName string) map[string]any {
 	return map[string]any{
 		"data": map[string]any{
 			fieldName: map[string]any{
+				"guid": map[string]any{
+					"id": map[string]any{
+						"creation_num": "3",
+					},
+				},
+			},
+		},
+	}
+}
+
+// testResourceWithCounter returns an AccountResource map like testResource but with the
+// EventHandle 'counter' field set (total events ever emitted, u64 as a JSON string).
+// The counter sits at the same nesting level as 'guid': data -> <fieldName> -> counter.
+func testResourceWithCounter(fieldName string, counter uint64) map[string]any {
+	return map[string]any{
+		"data": map[string]any{
+			fieldName: map[string]any{
+				"counter": fmt.Sprintf("%d", counter),
 				"guid": map[string]any{
 					"id": map[string]any{
 						"creation_num": "3",
@@ -275,12 +294,13 @@ func TestSyncEvent_SequenceGap_EventsStillInserted(t *testing.T) {
 }
 
 // TestSyncEvent_EmptyEvents_DefensivePrunedCheck verifies that when we get an empty
-// event list but have stored events whose tx_version is below the node's
-// oldest_ledger_version, syncEvent returns ErrPrunedOffset.
+// event list, the handle is genuinely behind (nextOffset < counter), AND the stored
+// tx_version is below the node's oldest_ledger_version, syncEvent returns ErrPrunedOffset.
 func TestSyncEvent_EmptyEvents_DefensivePrunedCheck(t *testing.T) {
 	t.Parallel()
 
 	// Stored events have last tx_version = 50; oldest_ledger_version = 100.
+	// counter=10 > nextOffset=5 → there ARE unseen events; lastTxVersion=50 < oldest=100 → pruned.
 	offset := uint64(5)
 	store := &fakeEventStore{offset: offset, found: true, txVersion: 50}
 	rpc := mocks.NewAptosRpcClient(t)
@@ -289,10 +309,13 @@ func TestSyncEvent_EmptyEvents_DefensivePrunedCheck(t *testing.T) {
 	addr := boundAddr(t, "0x1")
 	fieldName := "my_events"
 
+	// First AccountResource: creation_num (cached). Second: fresh fetch for counter.
 	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
 		Return(testResource(fieldName), nil).Once()
 	rpc.On("EventsByCreationNumber", addr, "3", &offset, lp.config.EventBatchSize).
 		Return([]*api.Event{}, nil).Once()
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResourceWithCounter(fieldName, 10), nil).Once()
 	rpc.On("Info").Return(aptos.NodeInfo{OldestLedgerVersionStr: "100"}, nil).Once()
 
 	err := lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
@@ -302,12 +325,14 @@ func TestSyncEvent_EmptyEvents_DefensivePrunedCheck(t *testing.T) {
 }
 
 // TestSyncEvent_EmptyEvents_DefensiveCheck_NotPruned verifies that when we get an
-// empty event list and the stored tx_version is >= oldest_ledger_version, syncEvent
-// treats the result as "caught up" and returns nil.
+// empty event list, the handle is genuinely behind (nextOffset < counter), but the
+// stored tx_version is >= oldest_ledger_version, syncEvent treats the result as
+// "caught up" and returns nil.
 func TestSyncEvent_EmptyEvents_DefensiveCheck_NotPruned(t *testing.T) {
 	t.Parallel()
 
 	// Stored events have last tx_version = 200; oldest_ledger_version = 100 — still valid.
+	// counter=10 > nextOffset=5 → unseen events exist, but they are NOT in the pruned range.
 	offset := uint64(5)
 	store := &fakeEventStore{offset: offset, found: true, txVersion: 200}
 	rpc := mocks.NewAptosRpcClient(t)
@@ -320,10 +345,76 @@ func TestSyncEvent_EmptyEvents_DefensiveCheck_NotPruned(t *testing.T) {
 		Return(testResource(fieldName), nil).Once()
 	rpc.On("EventsByCreationNumber", addr, "3", &offset, lp.config.EventBatchSize).
 		Return([]*api.Event{}, nil).Once()
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResourceWithCounter(fieldName, 10), nil).Once()
 	rpc.On("Info").Return(aptos.NodeInfo{OldestLedgerVersionStr: "100"}, nil).Once()
 
 	err := lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
 	require.NoError(t, err)
+	assert.Empty(t, store.inserted)
+}
+
+// TestSyncEvent_EmptyEvents_QuietHandle_CaughtUp is the false-positive regression test:
+// a quiet handle (no new events in a while) has a stale lastTxVersion below the node's
+// oldest_ledger_version, but nextOffset >= counter means it has consumed every emitted
+// event. The empty page is correct — syncEvent must return nil, raise no warning, and
+// NOT call Info().
+func TestSyncEvent_EmptyEvents_QuietHandle_CaughtUp(t *testing.T) {
+	t.Parallel()
+
+	// Quiet handle: lastTxVersion=50 < oldest=100 (would false-positive on the old
+	// heuristic), but counter=5 == nextOffset=5 → fully caught up.
+	offset := uint64(5)
+	store := &fakeEventStore{offset: offset, found: true, txVersion: 50}
+	rpc := mocks.NewAptosRpcClient(t)
+	lp := buildPoller(t, rpc, store)
+
+	addr := boundAddr(t, "0x1")
+	fieldName := "quiet_events"
+
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResource(fieldName), nil).Once()
+	rpc.On("EventsByCreationNumber", addr, "3", &offset, lp.config.EventBatchSize).
+		Return([]*api.Event{}, nil).Once()
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResourceWithCounter(fieldName, 5), nil).Once()
+	// Info() must NOT be called — the counter gate short-circuits before it.
+
+	err := lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
+	require.NoError(t, err, "quiet caught-up handle must not be flagged as pruned")
+	assert.Empty(t, store.inserted)
+	assert.Equal(t, 0.0, prom.PrunedWarningActiveValue(lp.chainInfo, testEventHandle(addr), fieldName),
+		"no pruned warning should be raised for a caught-up handle")
+}
+
+// TestSyncEvent_EmptyEvents_CounterUnavailable_FallsBackToInfo verifies that when the
+// event counter cannot be extracted from the resource, syncEvent falls back to the
+// Info() oldest_ledger_version heuristic (fail-closed) rather than assuming caught-up.
+func TestSyncEvent_EmptyEvents_CounterUnavailable_FallsBackToInfo(t *testing.T) {
+	t.Parallel()
+
+	// Resource has no 'counter' field → extraction fails → Info() fallback applies.
+	// lastTxVersion=50 < oldest=100 → pruned via the fallback heuristic.
+	offset := uint64(5)
+	store := &fakeEventStore{offset: offset, found: true, txVersion: 50}
+	rpc := mocks.NewAptosRpcClient(t)
+	lp := buildPoller(t, rpc, store)
+
+	addr := boundAddr(t, "0x1")
+	fieldName := "no_counter_events"
+
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResource(fieldName), nil).Once()
+	rpc.On("EventsByCreationNumber", addr, "3", &offset, lp.config.EventBatchSize).
+		Return([]*api.Event{}, nil).Once()
+	// Fresh fetch also returns a resource without 'counter'.
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResource(fieldName), nil).Once()
+	rpc.On("Info").Return(aptos.NodeInfo{OldestLedgerVersionStr: "100"}, nil).Once()
+
+	err := lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
+	require.Error(t, err)
+	assert.True(t, IsPrunedOffset(err), "counter-unavailable fallback should still detect pruning, got: %v", err)
 	assert.Empty(t, store.inserted)
 }
 
@@ -426,6 +517,9 @@ func TestSyncEvent_InfoError_FailsClosed(t *testing.T) {
 		Return(testResource(fieldName), nil).Once()
 	rpc.On("EventsByCreationNumber", addr, "3", &offset, lp.config.EventBatchSize).
 		Return([]*api.Event{}, nil).Once()
+	// Fresh fetch for counter: genuinely behind (counter=10 > nextOffset=5) → Info() consulted.
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResourceWithCounter(fieldName, 10), nil).Once()
 	rpc.On("Info").Return(aptos.NodeInfo{}, errors.New("node unreachable")).Once()
 
 	err := lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
@@ -452,6 +546,9 @@ func TestSyncEvent_OldestLedgerVersionZero_FailsClosed(t *testing.T) {
 		Return(testResource(fieldName), nil).Once()
 	rpc.On("EventsByCreationNumber", addr, "3", &offset, lp.config.EventBatchSize).
 		Return([]*api.Event{}, nil).Once()
+	// Fresh fetch for counter: genuinely behind (counter=10 > nextOffset=5) → Info() consulted.
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResourceWithCounter(fieldName, 10), nil).Once()
 	// OldestLedgerVersionStr empty → OldestLedgerVersion() returns 0; LedgerVersionStr valid.
 	rpc.On("Info").Return(aptos.NodeInfo{OldestLedgerVersionStr: "", LedgerVersionStr: "300"}, nil).Once()
 
@@ -544,11 +641,14 @@ func TestSyncEvent_AutoRecovery_ClearsWarning(t *testing.T) {
 	addr := boundAddr(t, "0x1")
 	fieldName := "recovery_events"
 
-	// First sync: empty events + stored txVersion=50 < oldest=100 → pruned warning raised.
+	// First sync: empty events + genuinely behind (counter=10 > nextOffset=5) +
+	// stored txVersion=50 < oldest=100 → pruned warning raised.
 	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
 		Return(testResource(fieldName), nil).Once()
 	rpc.On("EventsByCreationNumber", addr, "3", &offset, lp.config.EventBatchSize).
 		Return([]*api.Event{}, nil).Once()
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResourceWithCounter(fieldName, 10), nil).Once()
 	rpc.On("Info").Return(aptos.NodeInfo{OldestLedgerVersionStr: "100"}, nil).Once()
 
 	err := lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
@@ -561,6 +661,8 @@ func TestSyncEvent_AutoRecovery_ClearsWarning(t *testing.T) {
 	// syncEvent returns nil (caught up) and auto-recovery clears the warning.
 	rpc.On("EventsByCreationNumber", addr, "3", &offset, lp.config.EventBatchSize).
 		Return([]*api.Event{}, nil).Once()
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResourceWithCounter(fieldName, 10), nil).Once()
 	rpc.On("Info").Return(aptos.NodeInfo{OldestLedgerVersionStr: "40"}, nil).Once()
 
 	err = lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
@@ -587,6 +689,9 @@ func TestSyncEvent_HealthReportStaysHealthy(t *testing.T) {
 		Return(testResource(fieldName), nil).Once()
 	rpc.On("EventsByCreationNumber", addr, "3", &offset, lp.config.EventBatchSize).
 		Return([]*api.Event{}, nil).Once()
+	// Fresh fetch for counter: genuinely behind (counter=10 > nextOffset=5) → Info() consulted.
+	rpc.On("AccountResource", addr, addr.String()+"::test::TestHandle").
+		Return(testResourceWithCounter(fieldName, 10), nil).Once()
 	rpc.On("Info").Return(aptos.NodeInfo{OldestLedgerVersionStr: "100"}, nil).Once()
 
 	err := lp.syncEvent(context.Background(), addr, testEventConfig(fieldName), "test")
@@ -644,7 +749,8 @@ func TestSyncEvent_TwoHandlesSameField_WarningNotClobbered(t *testing.T) {
 
 	const sharedField = "shared_field_events"
 
-	// Handle A: address 0x1, still pruned (stored txVersion=50 < oldest=100).
+	// Handle A: address 0x1, still pruned (genuinely behind: counter=10 > nextOffset=5,
+	// stored txVersion=50 < oldest=100).
 	addrA := boundAddr(t, "0x1")
 	handleA := testEventHandle(addrA) // "0x1...::test::TestHandle"
 	storeA := &fakeEventStore{offset: 5, found: true, txVersion: 50}
@@ -654,6 +760,8 @@ func TestSyncEvent_TwoHandlesSameField_WarningNotClobbered(t *testing.T) {
 		Return(testResource(sharedField), nil).Once()
 	rpcA.On("EventsByCreationNumber", addrA, "3", &storeA.offset, lpA.config.EventBatchSize).
 		Return([]*api.Event{}, nil).Once()
+	rpcA.On("AccountResource", addrA, addrA.String()+"::test::TestHandle").
+		Return(testResourceWithCounter(sharedField, 10), nil).Once()
 	rpcA.On("Info").Return(aptos.NodeInfo{OldestLedgerVersionStr: "100"}, nil).Once()
 
 	errA := lpA.syncEvent(context.Background(), addrA, testEventConfig(sharedField), "test")
@@ -663,7 +771,8 @@ func TestSyncEvent_TwoHandlesSameField_WarningNotClobbered(t *testing.T) {
 		"handle A warning gauge should be 1 after pruned detection")
 
 	// Handle B: address 0x2, SAME field name, different eventHandle, NOT pruned
-	// (stored txVersion=50, oldest=40 → caught up). Its successful sync auto-recovers B.
+	// (genuinely behind: counter=10 > nextOffset=5, but stored txVersion=50 >= oldest=40
+	// → caught up). Its successful sync auto-recovers B.
 	addrB := boundAddr(t, "0x2")
 	handleB := testEventHandle(addrB) // "0x2...::test::TestHandle"
 	require.NotEqual(t, handleA, handleB, "precondition: handles must differ")
@@ -674,6 +783,8 @@ func TestSyncEvent_TwoHandlesSameField_WarningNotClobbered(t *testing.T) {
 		Return(testResource(sharedField), nil).Once()
 	rpcB.On("EventsByCreationNumber", addrB, "3", &storeB.offset, lpB.config.EventBatchSize).
 		Return([]*api.Event{}, nil).Once()
+	rpcB.On("AccountResource", addrB, addrB.String()+"::test::TestHandle").
+		Return(testResourceWithCounter(sharedField, 10), nil).Once()
 	rpcB.On("Info").Return(aptos.NodeInfo{OldestLedgerVersionStr: "40"}, nil).Once()
 
 	errB := lpB.syncEvent(context.Background(), addrB, testEventConfig(sharedField), "test")

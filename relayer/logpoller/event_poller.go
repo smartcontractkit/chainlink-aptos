@@ -71,6 +71,7 @@ func (l *AptosLogPoller) SyncAllEvents(ctx context.Context) error {
 
 	successCount := 0
 	errorCount := 0
+	suppressedCount := 0 // already-warned pruned handles whose repeat errors are logged at Debug
 	var lastErr error
 
 	for moduleKey, moduleInfo := range modulesCopy {
@@ -98,7 +99,18 @@ func (l *AptosLogPoller) SyncAllEvents(ctx context.Context) error {
 				if err != nil {
 					errorCount++
 					lastErr = fmt.Errorf("SyncAllEvents: module %s event %s: %w", moduleKey, eventKey, err)
-					l.lggr.Errorw("SyncAllEvents: error syncing event", "module", moduleKey, "event", eventKey, "error", err)
+					// Dedup: a pruned offset on an already-warned handle is a persistent
+					// condition, not a new event. The first transition already logged a
+					// Warn (raisePrunedWarning) and set the paging gauge; log repeats at
+					// Debug to avoid spamming every poll tick.
+					eventHandle := moduleInfo.address.String() + "::" + moduleInfo.name + "::" + eventConfig.EventHandleStructName
+					if IsPrunedOffset(err) && l.isHandleWarned(handleKey(eventHandle, eventConfig.EventHandleFieldName)) {
+						suppressedCount++
+						l.lggr.Debugw("SyncAllEvents: pruned offset still active (already warned)",
+							"module", moduleKey, "event", eventKey, "error", err)
+					} else {
+						l.lggr.Errorw("SyncAllEvents: error syncing event", "module", moduleKey, "event", eventKey, "error", err)
+					}
 				} else {
 					successCount++
 				}
@@ -108,11 +120,21 @@ func (l *AptosLogPoller) SyncAllEvents(ctx context.Context) error {
 
 	elapsed := time.Since(start)
 	if errorCount > 0 {
-		l.lggr.Errorw("SyncAllEvents: completed with errors",
-			"successCount", successCount,
-			"errorCount", errorCount,
-			"lastError", lastErr,
-			"duration", elapsed)
+		if suppressedCount == errorCount {
+			// Every failure is an already-warned pruned handle — nothing new to page on.
+			l.lggr.Debugw("SyncAllEvents: completed with only already-warned pruned errors",
+				"successCount", successCount,
+				"errorCount", errorCount,
+				"lastError", lastErr,
+				"duration", elapsed)
+		} else {
+			l.lggr.Errorw("SyncAllEvents: completed with errors",
+				"successCount", successCount,
+				"errorCount", errorCount,
+				"suppressedPrunedCount", suppressedCount,
+				"lastError", lastErr,
+				"duration", elapsed)
+		}
 		return lastErr
 	}
 
@@ -249,11 +271,34 @@ eventLoop:
 			}
 
 			if len(events) == 0 {
-				// Layer 2: defensive pruned check on empty response. If we have stored
-				// events and the highest stored tx_version is below the node's
-				// oldest_ledger_version, the offset falls in the pruned range even though
-				// the API returned 200 + [] rather than 410. See PRUNED_RPC.md.
+				// Layer 2: defensive pruned check on empty response. An empty page is
+				// ambiguous: the handle may be caught up (no new events) OR the next offset
+				// may fall in the pruned range. The Aptos EventHandle 'counter' (total
+				// events ever emitted) disambiguates: if nextOffset >= counter there are no
+				// unseen events and the handle is caught up. Only when nextOffset < counter
+				// do we fall back to the Info() oldest_ledger_version check to decide whether
+				// the missing range is pruned. See PRUNED_RPC.md.
 				if hasStoredEvents {
+					// The resource is cached permanently for creation_num (immutable), but
+					// counter changes as events are emitted — re-fetch fresh on this path.
+					// RPC cost is unchanged vs. the previous Info() call on the same path.
+					freshResource, freshErr := client.AccountResource(eventAccountAddress, eventHandle)
+					if freshErr != nil {
+						// Fail closed: cannot verify caught-up vs pruned — retry next tick.
+						l.lggr.Warnw("syncEvent: defensive pruned check skipped — resource fetch failed",
+							"handle", eventHandle, "field", eventFieldName, "error", freshErr)
+						return fmt.Errorf("syncEvent: defensive pruned check unavailable: %w", freshErr)
+					}
+					counter, counterErr := crutils.ExtractEventCounter(freshResource, eventFieldName)
+					if counterErr == nil && latestOffset >= counter {
+						// Caught up: no unseen events. The empty page is correct.
+						break eventLoop
+					}
+					if counterErr != nil {
+						// Cannot read counter — fall back to the Info() heuristic below.
+						l.lggr.Debugw("syncEvent: event counter unavailable, falling back to Info() check",
+							"handle", eventHandle, "field", eventFieldName, "error", counterErr)
+					}
 					nodeInfo, infoErr := client.Info()
 					if infoErr != nil {
 						// Fail closed: if Info() errors we cannot verify pruning, so do NOT
@@ -282,6 +327,7 @@ eventLoop:
 							"lastTxVersion", lastTxVersion,
 							"oldestLedgerVersion", oldest,
 							"offset", latestOffset,
+							"counter", counter,
 							"layer", "empty-info")
 						return fmt.Errorf("syncEvent: %w", ErrPrunedOffset)
 					}

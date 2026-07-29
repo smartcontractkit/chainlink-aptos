@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/types/aptos"
@@ -175,4 +176,40 @@ func ExtractEventCreationNum(resourceData map[string]any, eventFieldPath string)
 	}
 
 	return creationNum, nil
+}
+
+// ExtractEventCounter returns the total number of events emitted to the event stream at
+// the given field path (the Aptos EventHandle 'counter' field, a u64 serialized as a JSON
+// string). It sits at the same nesting level as 'guid': data -> <fieldPath> -> counter.
+// An error is returned if the field is missing or unparseable; callers should treat that
+// as "cannot determine" and fall back to a fail-closed heuristic rather than assuming
+// the handle is caught up.
+func ExtractEventCounter(resourceData map[string]any, eventFieldPath string) (uint64, error) {
+	pathComponents := strings.Split(eventFieldPath, ".")
+
+	current, ok := resourceData["data"].(map[string]any)
+	if !ok {
+		return 0, fmt.Errorf("resource data missing 'data' field or not a map")
+	}
+
+	for i, component := range pathComponents {
+		nextLevel, ok := current[component].(map[string]any)
+		if !ok {
+			return 0, fmt.Errorf("cannot navigate path at component %s (position %d): field missing or not a map",
+				component, i)
+		}
+		current = nextLevel
+	}
+
+	counterStr, ok := current["counter"].(string)
+	if !ok {
+		return 0, fmt.Errorf("event field missing 'counter' value or not a string")
+	}
+
+	counter, err := strconv.ParseUint(counterStr, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("event field 'counter' value %q not a uint64: %w", counterStr, err)
+	}
+
+	return counter, nil
 }
