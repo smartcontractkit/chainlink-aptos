@@ -22,7 +22,7 @@ obvious:
 | Response | Observed? | Meaning |
 |---|---|---|
 | HTTP 410 Gone | Documented; not observed on localnet v1.42.1 | Explicit "data pruned" |
-| HTTP 200 + `[]` (empty) | Yes | Offset beyond tip **or** pruned (ambiguous) |
+| HTTP 200 + `[]` (empty) | Yes | Offset beyond tip (caught-up) **or** pruned; disambiguated by EventHandle `counter` field |
 | HTTP 200 + non-empty events | Yes (spike Phase 0b) | Events returned even though earlier offsets are pruned |
 | `X-APTOS-LEDGER-OLDEST-VERSION` header | Present on observed responses (200, 410); may appear on others | Node-wide oldest ledger version |
 
@@ -53,14 +53,39 @@ in order so that transient errors are never misclassified as Pruned (the
 > structured JSON `error_code` field (decoded, so robust to whitespace/formatting), the
 > literal `"410 gone"`, and the `"pruned"` substring are matched.
 
-### Layer 2 — Defensive `Info()` check on empty response (`event_poller.go`)
+### Layer 2 — Counter-gated empty response check (`event_poller.go`)
 
-When `EventsByCreationNumber` returns `[]` (empty) and the LogPoller has stored events:
+When `EventsByCreationNumber` returns `[]` (empty), an empty page is ambiguous: the handle may be
+caught up (no new events) OR the next offset may fall in the pruned range. The Aptos `EventHandle`
+`counter` field (total events ever emitted, u64) disambiguates:
+
+1. **Fetch the resource fresh** (not from cache) to read the current `counter` value.
+   - The `counter` changes as events are emitted; `creation_num` is immutable and cached.
+   - This adds one `AccountResource` RPC on the empty path only (the same path that previously
+     called `Info()`, so RPC cost is unchanged).
+2. **Compute `nextOffset`** = `MAX(event_offset) + 1` (already available from `GetLatestEventMeta`).
+3. **If `nextOffset >= counter`** → the handle is caught up (no unseen events). Return nil, raise
+   no warning, and do NOT call `Info()`.
+4. **If `nextOffset < counter`** → there ARE unseen events. Fall through to the `Info()` heuristic
+   below to determine whether the missing range is pruned.
+5. **If counter extraction fails** → fall back to the existing `Info()` heuristic (fail-closed):
+   - Extract error is logged at Debug; the poller continues to the Info check below.
+   - If we cannot read the counter, trust the existing `Info()` oldest_ledger_version check
+     rather than assume caught-up.
+
+**Fallback: `Info()` oldest_ledger_version check** (when counter unavailable or nextOffset < counter):
 
 1. Call `client.Info()` to get `oldest_ledger_version`.
 2. If `lastTxVersion < oldest_ledger_version` → the stored offset is in the pruned range → raise warning.
-3. **If `Info()` errors** → fail closed: return a transient error. Do NOT assume caught-up. A node outage must not mask a pruned offset.
-4. **If `oldest_ledger_version` is 0 (parse failure)** but `ledger_version` is valid → fail closed: return a transient error. The SDK's `OldestLedgerVersion()` returns 0 on parse failure without error; we treat this as "cannot verify, do not assume safe."
+3. **If `Info()` errors** → fail closed: return a transient error. Do NOT assume caught-up. A node
+   outage must not mask a pruned offset.
+4. **If `oldest_ledger_version` is 0 (parse failure)** but `ledger_version` is valid → fail closed:
+   return a transient error. The SDK's `OldestLedgerVersion()` returns 0 on parse failure without
+   error; we treat this as "cannot verify, do not assume safe."
+
+**Key improvement**: Quiet handles (no new events in a while) have `lastTxVersion < oldest` even
+when fully caught up. The counter gate eliminates this false positive by checking whether there
+are unseen events (nextOffset < counter) before consulting the Info heuristic.
 
 ### Layer 3 — Non-empty pruned detection via response header (`event_poller.go` + `chain/headercapture.go`)
 
