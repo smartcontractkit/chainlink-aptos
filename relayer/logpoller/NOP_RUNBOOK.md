@@ -98,24 +98,6 @@ In steady state with pruning enabled:
 - `aptos_log_poller_reader_lag_seconds` p99 stays under your threshold.
 - `aptos_log_poller_events_inserted` advances with CCIP traffic.
 
-## Steady-state operation
-
-- **No TOML change required.** The LogPoller defaults are
-  `EventPollingInterval = 12s`, `TxPollingInterval = 12s`, `PollTimeout = 10s`,
-  `EventBatchSize = 100`, `TxBatchSize = 100`.
-- **Short downtime (less than the 30-day window) is self-healing.** When the node comes
-  back, the poller backfills the missed events from the still-retained recent history and
-  catches up automatically. No action needed.
-- **Optional tuning.** To change polling behavior, add an `[Aptos.LogPoller]` section to the
-  Chainlink TOML. Partial sections merge with defaults field-by-field, so you only set the
-  keys you want to override:
-
-  ```toml
-  [Aptos.LogPoller]
-  EventPollingInterval = "12s"
-  EventBatchSize = 100
-  ```
-
 ## Recovery — offline longer than the 30-day window
 
 **Trigger:** you are paged on `aptos_log_poller_pruned_warning_active == 1`, or this WARN
