@@ -6,6 +6,13 @@ node is offline longer than the pruning window.
 
 For how the LogPoller detects pruned offsets, see [`PRUNED_RPC.md`](./PRUNED_RPC.md).
 
+> **⚠️ Read before you bootstrap: fresh node / wiped Chainlink DB.**
+> On a fresh or wiped Chainlink DB the LogPoller starts at offset `0` (genesis), which is
+> already pruned on a pruning-enabled node — it will immediately trip the pruned warning.
+> **Never cold-start a fresh relayer against a pruned node.** Follow
+> [Fresh node / wiped Chainlink DB bootstrap](#fresh-node--wiped-chainlink-db-bootstrap)
+> instead.
+
 ## Upgrade the Chainlink node
 
 Chainlink Node **v2.57** version (which bundles the pruned-offset-aware
@@ -162,12 +169,16 @@ backfill, then switch back.
 
 ## Fresh node / wiped Chainlink DB bootstrap
 
+> **⚠️ Do not skip this section.** Cold-starting a fresh relayer against a pruned node
+> immediately trips the pruned warning and leaves the poller unable to sync. Read this
+> before bootstrapping any new node or after wiping the Chainlink DB.
+
 The LogPoller derives its starting offset from the local Postgres table `aptos.events`. On
 a fresh or wiped Chainlink DB that table is empty, so the poller starts at offset `0`
 (genesis) — already pruned on a pruning-enabled node, which immediately trips the pruned
 warning.
 
-Do not cold-start a fresh relayer against a pruned node. Instead:
+**Do not cold-start a fresh relayer against a pruned node.** Instead:
 
 1. Point the relayer at a node that holds history back to the first CCIP deployment (a
    node restored per the Recovery section above).
