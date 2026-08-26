@@ -1,7 +1,7 @@
 ARG BASE_IMAGE=chainlink:aptos
 
 # Build image: Plugins
-FROM golang:1.26.4-bookworm AS buildplugins
+FROM golang:1.26.8-bookworm AS buildplugins
 RUN go version
 
 WORKDIR /build

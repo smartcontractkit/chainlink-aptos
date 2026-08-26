@@ -1,6 +1,6 @@
 module github.com/smartcontractkit/chainlink-aptos/codec
 
-go 1.26.2
+go 1.26.8
 
 require (
 	github.com/aptos-labs/aptos-go-sdk v1.13.0

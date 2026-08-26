@@ -74,11 +74,13 @@ jobs:
           COMMIT_SHA: ${{ github.event_name == 'push' && github.sha || github.event.pull_request.head.sha }}
         run: |
           cd temp/chainlink
-          find . -name "go.mod" -exec sed -i -E "/.*\/chainlink-aptos \S+/ s/(.*\/chainlink-aptos) \S+/\1 ${COMMIT_SHA}/g" {} \;
+          find . -name "go.mod" -exec sed -i "" -E "/.*\/chainlink-aptos [^[:space:]]+/ s/(.*\/chainlink-aptos) [^[:space:]]+/\1 ${COMMIT_SHA}/g" {} \;
           GIT_PAGER= git diff
           make gomodtidy
 
       - name: Build LOOP plugin
+        env:
+          GOTOOLCHAIN: auto
         run: |
           go build -o chainlink-aptos ./cmd/chainlink-aptos/main.go
 

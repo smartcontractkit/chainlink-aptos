@@ -547,7 +547,7 @@ func SendMessageFromAptos(ctx context.Context, lggr logger.Logger, deployer *apt
 		return "", fmt.Errorf("failed to send ccip message: %w", err)
 	}
 	if !data.Success {
-		return "", fmt.Errorf("transaction %v failed: %w", tx.Hash, data.VmStatus)
+		return "", fmt.Errorf("transaction %v failed: %s", tx.Hash, data.VmStatus)
 	}
 
 	var eventsLog []any
