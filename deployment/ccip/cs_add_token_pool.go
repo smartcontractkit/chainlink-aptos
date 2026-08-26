@@ -10,14 +10,16 @@ import (
 	"github.com/smartcontractkit/mcms"
 	mcmstypes "github.com/smartcontractkit/mcms/types"
 
+	aptosHelpers "github.com/smartcontractkit/chainlink-aptos/bindings/helpers"
 	mcmsbind "github.com/smartcontractkit/chainlink-aptos/bindings/mcms"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/config"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/dependency"
 	seq "github.com/smartcontractkit/chainlink-aptos/deployment/ccip/sequence"
-	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/utils"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/shared"
+	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/utils"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/stateview"
 
+	"github.com/smartcontractkit/chainlink-deployments-framework/datastore"
 	cldf "github.com/smartcontractkit/chainlink-deployments-framework/deployment"
 	"github.com/smartcontractkit/chainlink-deployments-framework/operations"
 )
@@ -46,11 +48,23 @@ func (cs AddTokenPool) VerifyPreconditions(env cldf.Environment, cfg config.AddT
 	if cfg.MCMSConfig == nil {
 		errs = append(errs, errors.New("MCMS config is required for AddTokenPool changeset"))
 	}
-	// Validate config.TokenParams
+	// Validate config.TokenParams. The token symbol is required in both paths because it is
+	// the datastore qualifier for every ref this changeset records (see Qualifier()); the
+	// remaining params only describe a token this changeset would deploy itself.
 	if cfg.TokenCodeObjAddress == (aptos.AccountAddress{}) {
 		err = cfg.TokenParams.Validate()
 		if err != nil {
 			errs = append(errs, fmt.Errorf("invalid token parameters: %w", err))
+		}
+	} else {
+		if cfg.Qualifier() == "" {
+			errs = append(errs, errors.New("TokenParams.Symbol is required: it is the datastore qualifier for the token pool"))
+		}
+		if cfg.TokenAddress == (aptos.AccountAddress{}) {
+			errs = append(errs, errors.New("TokenAddress must be provided when TokenCodeObjAddress is set"))
+		}
+		if err := verifyTokenSymbol(env, cfg, state); err != nil {
+			errs = append(errs, err)
 		}
 	}
 	// Validate config.EVMRemoteConfigs
@@ -59,6 +73,9 @@ func (cs AddTokenPool) VerifyPreconditions(env cldf.Environment, cfg config.AddT
 			errs = append(errs, fmt.Errorf("invalid EVM remote config for chain %d: %w", chainSelector, err))
 		}
 	}
+	// Validate that the datastore keys this changeset will write are free, before any
+	// transaction is signed or staged.
+	errs = append(errs, shared.ValidatePlannedRefs(env, cfg.ReplaceExisting, plannedTokenPoolRefs(cfg)))
 	// Validate if token address is provided if pool address is specified
 	if cfg.TokenCodeObjAddress == (aptos.AccountAddress{}) && cfg.TokenPoolAddress != (aptos.AccountAddress{}) {
 		errs = append(errs, errors.New("token object address must be provided if token pool address is specified"))
@@ -116,6 +133,79 @@ func (cs AddTokenPool) VerifyPreconditions(env cldf.Environment, cfg config.AddT
 	return errors.Join(errs...)
 }
 
+// plannedTokenPoolRefs declares the datastore refs Apply will record, mirroring its
+// conditionals: a caller-supplied token or pool address means that ref is not deployed here
+// and therefore not planned. Every type this changeset records is token-scoped, so all of
+// them are multi-instance and qualified by symbol.
+func plannedTokenPoolRefs(cfg config.AddTokenPoolConfig) []shared.PlannedRef {
+	qualifier := cfg.Qualifier().String()
+	var refs []shared.PlannedRef
+	if cfg.TokenCodeObjAddress == (aptos.AccountAddress{}) {
+		refs = append(refs,
+			shared.PlannedRef{
+				ChainSelector: cfg.ChainSelector,
+				Type:          shared.AptosManagedTokenType,
+				Version:       Version1_6_0,
+				Qualifier:     qualifier,
+				MultiInstance: true,
+			},
+			shared.PlannedRef{
+				ChainSelector: cfg.ChainSelector,
+				Type:          cldf.ContractType(cfg.TokenParams.Symbol),
+				Version:       Version1_6_0,
+				Qualifier:     qualifier,
+				MultiInstance: true,
+			},
+		)
+	}
+	if cfg.TokenPoolAddress == (aptos.AccountAddress{}) {
+		refs = append(refs, shared.PlannedRef{
+			ChainSelector: cfg.ChainSelector,
+			Type:          cfg.PoolType,
+			Version:       Version1_6_0,
+			Qualifier:     qualifier,
+			MultiInstance: true,
+		})
+	}
+
+	return refs
+}
+
+// verifyTokenSymbol checks the configured token symbol against the symbol of the token the
+// pool will serve, so a wrong qualifier cannot reach the datastore. Tokens this repo deployed
+// are recorded by symbol in state (ManagedTokens is keyed by symbol); anything else is read on
+// chain with the same helper the state loader uses. The comparison uses the raw configured
+// symbol the datastore key is derived from it separately, normalized by TokenQualifier.
+func verifyTokenSymbol(env cldf.Environment, cfg config.AddTokenPoolConfig, state stateview.CCIPOnChainState) error {
+	if cfg.TokenParams.Symbol == "" || cfg.TokenAddress == (aptos.AccountAddress{}) {
+		// Both are reported separately; nothing to compare against.
+		return nil
+	}
+	for symbol, codeObjAddress := range state.AptosChains[cfg.ChainSelector].ManagedTokens {
+		if codeObjAddress == cfg.TokenCodeObjAddress {
+			if symbol != cfg.TokenParams.Symbol {
+				return fmt.Errorf("TokenParams.Symbol %q does not match the recorded symbol %q of token object %s",
+					cfg.TokenParams.Symbol, symbol, cfg.TokenCodeObjAddress.StringLong())
+			}
+			return nil
+		}
+	}
+	aptosChain, ok := env.BlockChains.AptosChains()[cfg.ChainSelector]
+	if !ok {
+		// Unsupported chain is reported separately; there is no client to read the token with.
+		return nil
+	}
+	metadata, err := aptosHelpers.GetFungibleAssetMetadata(aptosChain.Client, cfg.TokenAddress)
+	if err != nil {
+		return fmt.Errorf("failed to read fungible asset metadata for token %s: %w", cfg.TokenAddress.StringLong(), err)
+	}
+	if metadata.Symbol != cfg.TokenParams.Symbol.String() {
+		return fmt.Errorf("TokenParams.Symbol %q does not match the on-chain symbol %q of token %s",
+			cfg.TokenParams.Symbol, metadata.Symbol, cfg.TokenAddress.StringLong())
+	}
+	return nil
+}
+
 func (cs AddTokenPool) Apply(env cldf.Environment, cfg config.AddTokenPoolConfig) (cldf.ChangesetOutput, error) {
 	state, err := stateview.LoadOnchainState(env)
 	if err != nil {
@@ -124,6 +214,7 @@ func (cs AddTokenPool) Apply(env cldf.Environment, cfg config.AddTokenPoolConfig
 
 	aptosChain := env.BlockChains.AptosChains()[cfg.ChainSelector]
 	ab := cldf.NewMemoryAddressBook()
+	ds := datastore.NewMemoryDataStore()
 	seqReports := make([]operations.Report[any, any], 0)
 	proposals := make([]mcms.TimelockProposal, 0)
 	var mcmsOperations []mcmstypes.BatchOperation
@@ -167,17 +258,15 @@ func (cs AddTokenPool) Apply(env cldf.Environment, cfg config.AddTokenPoolConfig
 		tokenAddress = deploySeq.Output.TokenAddress
 		seqReports = append(seqReports, deploySeq.ExecutionReports...)
 		mcmsOperations = append(mcmsOperations, deploySeq.Output.MCMSOperations...)
-		// Save token object address in address book
+		// Save token object address token-scoped, qualified by symbol
 		typeAndVersion := cldf.NewTypeAndVersion(shared.AptosManagedTokenType, Version1_6_0)
 		typeAndVersion.AddLabel(string(cfg.TokenParams.Symbol))
-		err = deps.AB.Save(deps.AptosChain.Selector, deploySeq.Output.TokenCodeObjAddress.StringLong(), typeAndVersion)
-		if err != nil {
+		if err := shared.RecordAddress(deps.AB, ds, cfg.ChainSelector, deploySeq.Output.TokenCodeObjAddress.StringLong(), typeAndVersion, cfg.Qualifier().String()); err != nil {
 			return cldf.ChangesetOutput{}, fmt.Errorf("failed to save token object address %s: %w", deploySeq.Output.TokenCodeObjAddress, err)
 		}
-		// Save token address in address book
+		// Save token address — token-scoped, qualified by symbol
 		typeAndVersion = cldf.NewTypeAndVersion(cldf.ContractType(cfg.TokenParams.Symbol), Version1_6_0)
-		err = deps.AB.Save(deps.AptosChain.Selector, deploySeq.Output.TokenAddress.StringLong(), typeAndVersion)
-		if err != nil {
+		if err := shared.RecordAddress(deps.AB, ds, cfg.ChainSelector, deploySeq.Output.TokenAddress.StringLong(), typeAndVersion, cfg.Qualifier().String()); err != nil {
 			return cldf.ChangesetOutput{}, fmt.Errorf("failed to save token address %s: %w", deploySeq.Output.TokenAddress, err)
 		}
 	}
@@ -202,11 +291,11 @@ func (cs AddTokenPool) Apply(env cldf.Environment, cfg config.AddTokenPoolConfig
 		seqReports = append(seqReports, deploySeq.ExecutionReports...)
 		mcmsOperations = append(mcmsOperations, deploySeq.Output.MCMSOps...)
 		tokenPoolAddress = deploySeq.Output.TokenPoolAddress
-		// Save token pool address in address book
+		// Save token pool address token-scoped, qualified by symbol; the label keeps the
+		// token address so the state loader can reconstruct the pool without RPC
 		typeAndVersion := cldf.NewTypeAndVersion(cfg.PoolType, Version1_6_0)
 		typeAndVersion.AddLabel(tokenAddress.StringLong())
-		err = deps.AB.Save(deps.AptosChain.Selector, deploySeq.Output.TokenPoolAddress.StringLong(), typeAndVersion)
-		if err != nil {
+		if err := shared.RecordAddress(deps.AB, ds, cfg.ChainSelector, deploySeq.Output.TokenPoolAddress.StringLong(), typeAndVersion, cfg.Qualifier().String()); err != nil {
 			return cldf.ChangesetOutput{}, fmt.Errorf("failed to save token pool address %s: %w", deploySeq.Output.TokenPoolAddress, err)
 		}
 	}
@@ -239,11 +328,6 @@ func (cs AddTokenPool) Apply(env cldf.Environment, cfg config.AddTokenPoolConfig
 		return cldf.ChangesetOutput{}, fmt.Errorf("failed to generate MCMS proposal for Aptos chain %d: %w", cfg.ChainSelector, err)
 	}
 	proposals = append(proposals, *proposal)
-
-	ds, err := shared.PopulateDataStore(ab)
-	if err != nil {
-		return cldf.ChangesetOutput{}, fmt.Errorf("failed to populate in-memory DataStore: %w", err)
-	}
 
 	return cldf.ChangesetOutput{
 		AddressBook:           ab,

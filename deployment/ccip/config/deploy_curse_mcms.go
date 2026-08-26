@@ -14,6 +14,10 @@ import (
 type DeployCurseMCMSConfig struct {
 	CurseMCMSConfigPerChain    map[uint64]cldfproposalutils.MCMSWithTimelockConfig
 	MCMSTimelockConfigPerChain map[uint64]cldfproposalutils.TimelockConfig
+	// ReplaceExisting allows this changeset to take datastore keys that are already
+	// recorded, as an intentional redeploy of CurseMCMS does. Without it, an occupied key
+	// is an error raised before anything is deployed.
+	ReplaceExisting bool
 }
 
 func (c DeployCurseMCMSConfig) Validate() error {

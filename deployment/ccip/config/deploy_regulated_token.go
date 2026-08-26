@@ -19,6 +19,10 @@ type DeployRegulatedTokenConfig struct {
 	// RegistrarPreregister is passed to DeployMCMSRegistrarToExistingObject (default true).
 	RegistrarPreregister *bool
 	MCMSConfig           *cldfproposalutils.TimelockConfig
+	// ReplaceExisting allows this changeset to take datastore keys that are already
+	// recorded, as an intentional redeploy of this token does. Without it, an occupied key
+	// is an error raised before anything is deployed.
+	ReplaceExisting bool
 }
 
 func (c DeployRegulatedTokenConfig) Validate() error {
