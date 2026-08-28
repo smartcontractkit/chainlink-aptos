@@ -18,15 +18,30 @@ go run . <command> [flags]
 | `find-workflow-report-id` | Find which feed contains a report ID |
 | `get-account-balances` | Writer account balances |
 
+### Environments
+
+All commands take `--environment`/`-e`. Each environment maps to a set of Aptos writer (transmitter) accounts and an Aptos fullnode. Transmitter addresses are sourced from the CRE capability registry (`p2pToTransmitterMap` in `data-feeds-cre-{prod,staging}/state.json`).
+
+| Environment | Aptos network | DON | Nodes | Notes |
+|-------------|---------------|-----|-------|-------|
+| `staging` | testnet | `feeds_chain_capabilities_zone-a` | 4 | |
+| `staging-zone-b` | testnet | `feeds_chain_capabilities_zone-b` | 4 | |
+| `prod-testnet` | testnet | `feeds_chain_capabilities_tnet_1_zone-a` | 4 | |
+| `prod-testnet-zone-b` | testnet | `feeds_chain_capabilities_tnet_1_zone-b` | 4 | |
+| `mainnet` | mainnet | `feeds_chain_capabilities_1_zone-a` | 10 | zone-a writers |
+| `mainnet-zone-b` | mainnet | `feeds_chain_capabilities_1_zone-b` | 10 | zone-b writers |
+
+Both `mainnet` and `mainnet-zone-b` write to the same feeds on the same aptos-mainnet chain; they only differ in which transmitter accounts are queried. To get full coverage across both zones, run a command for each environment and merge the CSVs (events are deduped by feed observation in `get-feed-gaps`, so overlapping reports collapse correctly).
+
 ### Get Data Feeds Events Emitted Across All Environments
 
-This Go script retrieves data feed events emitted across all environments and transmitters. It generates different CSV files based on the specified environment (`staging`, `prod-testnet`, or `mainnet`). The output is sorted by block timestamp. This command also retrieves the timestamp of the most recent transaction.
+This Go script retrieves data feed events emitted across all environments and transmitters. It generates different CSV files based on the specified environment. The output is sorted by block timestamp. This command also retrieves the timestamp of the most recent transaction.
 
 **Flags:**
 
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
-| `--environment` | `-e` | Environment (`staging`, `prod-testnet`, `mainnet`) | `staging` |
+| `--environment` | `-e` | Environment (see [Environments](#environments)) | `staging` |
 | `--lookback` | `-l` | Lookback period in hours. Paginates backwards from the most recent transaction per account to ensure complete time coverage. Use `0` to fetch all history. | `24` |
 | `--feed-id` | `-f` | Filter by a specific feed ID. If omitted, returns events for all feeds. | (all feeds) |
 
@@ -49,7 +64,7 @@ This Go script helps to locate a specific reportID in the FeedUpdated events of 
 
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
-| `--environment` | `-e` | Environment (`staging`, `prod-testnet`, `mainnet`) | `staging` |
+| `--environment` | `-e` | Environment (see [Environments](#environments)) | `staging` |
 | `--reportId` | `-r` | Report ID to search | (required) |
 | `--lookback` | `-l` | Lookback period in hours. Use `0` to fetch all history. | `24` |
 
@@ -69,7 +84,7 @@ Fetches all on-chain feed updates in a lookback window and computes the observat
 
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
-| `--environment` | `-e` | Environment (`staging`, `prod-testnet`, `mainnet`) | `staging` |
+| `--environment` | `-e` | Environment (see [Environments](#environments)) | `staging` |
 | `--minutes` | `-m` | Lookback period in minutes | (required) |
 
 ```bash
@@ -133,6 +148,12 @@ go run . compute-data-feed-updated-events-metrics \
   -i aptos-data-feed-events-mainnet-latest.csv
 ```
 
+To cover both zones on mainnet, repeat the fetch for `mainnet-zone-b` and merge (or run `get-feed-gaps` for each — overlapping observations are deduped):
+
+```bash
+go run . get-feed-updated-events -e mainnet-zone-b -l 2
+```
+
 ### Compute Data Feed Events Metrics from previous step
 
 This Go script computes metrics such as the average, minimum, maximum, p90, p95, p99, and SLA for the overall set of events, as well as split by feed. Additionally, it retrieves statistics on the gas used to process all feeds and identifies slow transactions. Use `-t` to include only events from the last N seconds.
@@ -146,5 +167,6 @@ go run . compute-data-feed-updated-events-metrics -i aptos-data-feed-events-prod
 This Go script retrieves the balance of accounts in a given environment.
 
 ```bash
-go run . get-account-balances -e prod-testnet 
+go run . get-account-balances -e prod-testnet
+go run . get-account-balances -e mainnet-zone-b
 ```
