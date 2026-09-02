@@ -10,7 +10,7 @@ require (
 	github.com/ethereum/go-ethereum v1.17.4
 	github.com/go-resty/resty/v2 v2.17.2
 	github.com/joho/godotenv v1.5.1
-	github.com/moby/go-archive v0.3.0
+	github.com/moby/go-archive v0.3.3
 	github.com/moby/moby/client v0.5.1
 	github.com/moby/term v0.5.2
 	github.com/rs/zerolog v1.35.1
