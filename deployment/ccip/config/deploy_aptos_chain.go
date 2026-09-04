@@ -7,10 +7,10 @@ import (
 
 	"github.com/aptos-labs/aptos-go-sdk"
 
-	cldf "github.com/smartcontractkit/chainlink-deployments-framework/deployment"
-	cldfproposalutils "github.com/smartcontractkit/chainlink-deployments-framework/engine/cld/mcms/proposalutils"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/shared"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/types"
+	cldf "github.com/smartcontractkit/chainlink-deployments-framework/deployment"
+	cldfproposalutils "github.com/smartcontractkit/chainlink-deployments-framework/engine/cld/mcms/proposalutils"
 )
 
 // DeployAptosChainConfig is a configuration for deploying CCIP Package for Aptos chains
@@ -18,6 +18,10 @@ type DeployAptosChainConfig struct {
 	MCMSDeployConfigPerChain   map[uint64]types.MCMSWithTimelockConfigV2
 	MCMSTimelockConfigPerChain map[uint64]cldfproposalutils.TimelockConfig
 	ContractParamsPerChain     map[uint64]ChainContractParams
+	// ReplaceExisting allows this changeset to take datastore keys that are already
+	// recorded, as an intentional redeploy of a chain does. Without it, an occupied key is
+	// an error raised before anything is deployed.
+	ReplaceExisting bool
 }
 
 func (c DeployAptosChainConfig) Validate() error {

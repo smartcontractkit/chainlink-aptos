@@ -6,14 +6,15 @@ import (
 
 	"github.com/smartcontractkit/mcms"
 
-	cldf "github.com/smartcontractkit/chainlink-deployments-framework/deployment"
-	"github.com/smartcontractkit/chainlink-deployments-framework/operations"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/config"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/dependency"
 	seq "github.com/smartcontractkit/chainlink-aptos/deployment/ccip/sequence"
-	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/utils"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/shared"
+	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/utils"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/stateview"
+	"github.com/smartcontractkit/chainlink-deployments-framework/datastore"
+	cldf "github.com/smartcontractkit/chainlink-deployments-framework/deployment"
+	"github.com/smartcontractkit/chainlink-deployments-framework/operations"
 
 	"github.com/aptos-labs/aptos-go-sdk"
 )
@@ -49,6 +50,26 @@ func (cs DeployRegulatedToken) VerifyPreconditions(env cldf.Environment, cfg con
 			errs = append(errs, fmt.Errorf("MCMS is not deployed on Aptos chain %d", cfg.ChainSelector))
 		}
 	}
+	// Validate that the datastore keys this changeset will write are free, before the token is
+	// deployed with the deployer signer.
+	qualifier := shared.TokenQualifier(cfg.TokenParams.Symbol.String())
+	errs = append(errs, shared.ValidatePlannedRefs(env, cfg.ReplaceExisting, []shared.PlannedRef{
+		{
+			ChainSelector: cfg.ChainSelector,
+			Type:          shared.AptosRegulatedTokenType,
+			Version:       Version1_6_0,
+			Qualifier:     qualifier,
+			MultiInstance: true,
+		},
+		{
+			ChainSelector: cfg.ChainSelector,
+			Type:          cldf.ContractType(cfg.TokenParams.Symbol),
+			Version:       Version1_6_0,
+			Qualifier:     qualifier,
+			MultiInstance: true,
+		},
+	}))
+
 	return errors.Join(errs...)
 }
 
@@ -62,6 +83,7 @@ func (cs DeployRegulatedToken) Apply(env cldf.Environment, cfg config.DeployRegu
 	mcmsAddress := state.AptosChains[cfg.ChainSelector].MCMSAddress
 
 	ab := cldf.NewMemoryAddressBook()
+	ds := datastore.NewMemoryDataStore()
 	deps := dependency.AptosDeps{
 		AB:               ab,
 		AptosChain:       aptosChain,
@@ -84,13 +106,15 @@ func (cs DeployRegulatedToken) Apply(env cldf.Environment, cfg config.DeployRegu
 	}
 
 	out := seqReport.Output
+	// Both refs are token-scoped and qualified by the token symbol.
+	qualifier := shared.TokenQualifier(cfg.TokenParams.Symbol.String())
 	typeAndVersion := cldf.NewTypeAndVersion(shared.AptosRegulatedTokenType, Version1_6_0)
 	typeAndVersion.AddLabel(string(cfg.TokenParams.Symbol))
-	if err := ab.Save(aptosChain.Selector, out.TokenCodeObjectAddress.StringLong(), typeAndVersion); err != nil {
+	if err := shared.RecordAddress(ab, ds, aptosChain.Selector, out.TokenCodeObjectAddress.StringLong(), typeAndVersion, qualifier); err != nil {
 		return cldf.ChangesetOutput{}, fmt.Errorf("save regulated token code object: %w", err)
 	}
 	typeAndVersion = cldf.NewTypeAndVersion(cldf.ContractType(cfg.TokenParams.Symbol), Version1_6_0)
-	if err := ab.Save(aptosChain.Selector, out.TokenMetadataAddress.StringLong(), typeAndVersion); err != nil {
+	if err := shared.RecordAddress(ab, ds, aptosChain.Selector, out.TokenMetadataAddress.StringLong(), typeAndVersion, qualifier); err != nil {
 		return cldf.ChangesetOutput{}, fmt.Errorf("save token metadata address: %w", err)
 	}
 
@@ -104,11 +128,6 @@ func (cs DeployRegulatedToken) Apply(env cldf.Environment, cfg config.DeployRegu
 	)
 	if err != nil {
 		return cldf.ChangesetOutput{}, fmt.Errorf("generate MCMS proposal: %w", err)
-	}
-
-	ds, err := shared.PopulateDataStore(ab)
-	if err != nil {
-		return cldf.ChangesetOutput{}, fmt.Errorf("populate datastore: %w", err)
 	}
 
 	return cldf.ChangesetOutput{

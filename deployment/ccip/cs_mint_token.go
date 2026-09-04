@@ -8,14 +8,13 @@ import (
 	"github.com/smartcontractkit/mcms"
 	mcmstypes "github.com/smartcontractkit/mcms/types"
 
-	cldf "github.com/smartcontractkit/chainlink-deployments-framework/deployment"
-	"github.com/smartcontractkit/chainlink-deployments-framework/operations"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/config"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/dependency"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/operation"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/utils"
-	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/shared"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/stateview"
+	cldf "github.com/smartcontractkit/chainlink-deployments-framework/deployment"
+	"github.com/smartcontractkit/chainlink-deployments-framework/operations"
 )
 
 var _ cldf.ChangeSetV2[config.MintTokenInput] = MintToken{}
@@ -92,14 +91,10 @@ func (m MintToken) Apply(env cldf.Environment, cfg config.MintTokenInput) (cldf.
 		return cldf.ChangesetOutput{}, fmt.Errorf("failed to generate MCMS proposal for Aptos chain %d: %w", cfg.ChainSelector, err)
 	}
 
-	ds, err := shared.PopulateDataStore(ab)
-	if err != nil {
-		return cldf.ChangesetOutput{}, fmt.Errorf("failed to populate in-memory DataStore: %w", err)
-	}
-
+	// This changeset records no addresses (it only mints via proposal), so there is no
+	// datastore output.
 	return cldf.ChangesetOutput{
 		AddressBook:           ab,
-		DataStore:             ds,
 		MCMSTimelockProposals: []mcms.TimelockProposal{*proposal},
 		Reports:               []operations.Report[any, any]{report.ToGenericReport()},
 	}, nil

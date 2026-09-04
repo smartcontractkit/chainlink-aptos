@@ -7,14 +7,13 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/smartcontractkit/mcms"
 
-	cldf "github.com/smartcontractkit/chainlink-deployments-framework/deployment"
-	"github.com/smartcontractkit/chainlink-deployments-framework/operations"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/config"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/dependency"
 	seq "github.com/smartcontractkit/chainlink-aptos/deployment/ccip/sequence"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/utils"
-	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/shared"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/stateview"
+	cldf "github.com/smartcontractkit/chainlink-deployments-framework/deployment"
+	"github.com/smartcontractkit/chainlink-deployments-framework/operations"
 )
 
 var _ cldf.ChangeSetV2[config.DeployTokenFaucetInput] = DeployTokenFaucet{}
@@ -79,14 +78,10 @@ func (d DeployTokenFaucet) Apply(env cldf.Environment, cfg config.DeployTokenFau
 		return cldf.ChangesetOutput{}, fmt.Errorf("failed to generate MCMS proposal for Aptos chain %d: %w", cfg.ChainSelector, err)
 	}
 
-	ds, err := shared.PopulateDataStore(ab)
-	if err != nil {
-		return cldf.ChangesetOutput{}, fmt.Errorf("failed to populate in-memory DataStore: %w", err)
-	}
-
+	// This changeset records no addresses (the faucet address is carried in the proposal and
+	// reports), so there is no datastore output.
 	return cldf.ChangesetOutput{
 		AddressBook:           ab,
-		DataStore:             ds,
 		MCMSTimelockProposals: []mcms.TimelockProposal{*proposal},
 		Reports:               []operations.Report[any, any]{report.ToGenericReport()},
 	}, nil

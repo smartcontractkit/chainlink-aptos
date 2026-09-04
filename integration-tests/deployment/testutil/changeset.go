@@ -88,12 +88,17 @@ func ApplyChangesets(t *testing.T, e cldf.Environment, changesetApplications []C
 
 		var ds datastore.DataStore
 		if out.DataStore != nil {
+			// Existing state first, then the changeset output on top: MemoryDataStore.Merge
+			// upserts, so the last writer of a (chain, type, version, qualifier) key wins,
+			// and freshly deployed refs must win over stale ones.
 			ds1 := datastore.NewMemoryDataStore()
+			if currentEnv.DataStore != nil {
+				if err := ds1.Merge(currentEnv.DataStore); err != nil {
+					return e, nil, fmt.Errorf("failed to merge current addresses into datastore: %w", err)
+				}
+			}
 			if err := ds1.Merge(out.DataStore.Seal()); err != nil {
 				return e, nil, fmt.Errorf("failed to merge new addresses into datastore: %w", err)
-			}
-			if err := ds1.Merge(currentEnv.DataStore); err != nil {
-				return e, nil, fmt.Errorf("failed to merge current addresses into datastore: %w", err)
 			}
 			ds = ds1.Seal()
 		} else {

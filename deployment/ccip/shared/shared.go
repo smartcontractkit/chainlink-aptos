@@ -15,6 +15,9 @@ const (
 	APTSymbol  TokenSymbol = "APT"
 
 	AptosAPTAddress = "0xa"
+
+	// CLLCCIPQualifier is the datastore qualifier for the CLL CCIP-operating MCMS deployment
+	CLLCCIPQualifier = "CLLCCIP"
 )
 
 var (
