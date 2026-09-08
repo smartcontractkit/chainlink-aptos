@@ -14,7 +14,7 @@ require (
 	github.com/moby/moby/client v0.5.1
 	github.com/moby/term v0.5.2
 	github.com/rs/zerolog v1.35.1
-	github.com/smartcontractkit/chain-selectors v1.0.102
+	github.com/smartcontractkit/chain-selectors v1.0.109
 	github.com/smartcontractkit/chainlink-aptos v0.0.0
 	github.com/smartcontractkit/chainlink-aptos/deployment v0.0.0
 	github.com/smartcontractkit/chainlink-ccip v0.1.1-solana.0.20260428205619-2db1389501a1
