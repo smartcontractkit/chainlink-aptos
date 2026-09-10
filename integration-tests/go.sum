@@ -1451,8 +1451,8 @@ github.com/smartcontractkit/chainlink-protos/chainlink-ccv/verifier v0.0.0-20251
 github.com/smartcontractkit/chainlink-protos/chainlink-ccv/verifier v0.0.0-20251211142334-5c3421fe2c8d/go.mod h1:5JdppgngCOUS76p61zCinSCgOhPeYQ+OcDUuome5THQ=
 github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260505131349-78e491b80735 h1:5bxDnwI0wuPoC0H5H3H2n9CnQPb5iakR6UmAY4j8KUg=
 github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260505131349-78e491b80735/go.mod h1:Jqt53s27Tr0jDl8mdBXg1xhu6F8Fci8JOuq43tgHOM8=
-github.com/smartcontractkit/chainlink-protos/job-distributor v0.19.0 h1:FC+WdJ8YkRUlL94cN2EgdrA5TcJg04b82dqayq9rQz0=
-github.com/smartcontractkit/chainlink-protos/job-distributor v0.19.0/go.mod h1:2ahgl5bI9+fMCD+dBC785Lak38Tb7ApdTe5I8a09Qp0=
+github.com/smartcontractkit/chainlink-protos/job-distributor v0.20.0 h1:+KOmrq2mAgfKvEvBa89WzzdbX7InVDCZ8HJWix1/5f4=
+github.com/smartcontractkit/chainlink-protos/job-distributor v0.20.0/go.mod h1:2ahgl5bI9+fMCD+dBC785Lak38Tb7ApdTe5I8a09Qp0=
 github.com/smartcontractkit/chainlink-protos/linking-service/go v0.0.0-20251002192024-d2ad9222409b h1:QuI6SmQFK/zyUlVWEf0GMkiUYBPY4lssn26nKSd/bOM=
 github.com/smartcontractkit/chainlink-protos/linking-service/go v0.0.0-20251002192024-d2ad9222409b/go.mod h1:qSTSwX3cBP3FKQwQacdjArqv0g6QnukjV4XuzO6UyoY=
 github.com/smartcontractkit/chainlink-protos/node-platform v0.0.0-20260319180422-b5808c964785 h1:oli+2uLU6jcrJGCuYFqk3475hiwL17SWlITWLv+tx/w=
