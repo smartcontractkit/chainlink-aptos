@@ -14,7 +14,7 @@ require (
 	github.com/moby/moby/client v0.5.1
 	github.com/moby/term v0.5.2
 	github.com/rs/zerolog v1.35.1
-	github.com/smartcontractkit/chain-selectors v1.0.102
+	github.com/smartcontractkit/chain-selectors v1.0.109
 	github.com/smartcontractkit/chainlink-aptos v0.0.0
 	github.com/smartcontractkit/chainlink-aptos/deployment v0.0.0
 	github.com/smartcontractkit/chainlink-ccip v0.1.1-solana.0.20260428205619-2db1389501a1
@@ -504,7 +504,7 @@ require (
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/arch v0.22.0 // indirect
-	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa // indirect
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/net v0.57.0 // indirect
