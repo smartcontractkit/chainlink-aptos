@@ -488,11 +488,10 @@ func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, nonce u
 		}
 	}
 
-	if rawTx.MaxGasAmount == 0 {
-		rawTx.MaxGasAmount = *a.config.DefaultMaxGasAmount
-		ctxLogger.Debugw("using default max gas amount", "maxGasAmount", *a.config.DefaultMaxGasAmount)
-	}
-
+	// The overhead is added before falling back to the default max gas amount, so that
+	// the default only applies when neither the metadata gas limit nor the overhead
+	// produce a non-zero value. This ensures the default never applies to CCIP
+	// messages, which always carry an explicit gas limit (possibly 0).
 	if *a.config.GasLimitOverhead > 0 {
 		originalGasLimit := rawTx.MaxGasAmount
 		rawTx.MaxGasAmount += *a.config.GasLimitOverhead
@@ -500,6 +499,11 @@ func (a *AptosTxm) createRawTx(client aptos.AptosRpcClient, tx *AptosTx, nonce u
 			"original", originalGasLimit,
 			"overhead", *a.config.GasLimitOverhead,
 			"final", rawTx.MaxGasAmount)
+	}
+
+	if rawTx.MaxGasAmount == 0 {
+		rawTx.MaxGasAmount = *a.config.DefaultMaxGasAmount
+		ctxLogger.Debugw("using default max gas amount", "maxGasAmount", *a.config.DefaultMaxGasAmount)
 	}
 
 	return rawTx, nil
