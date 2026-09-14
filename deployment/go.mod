@@ -1,6 +1,6 @@
 module github.com/smartcontractkit/chainlink-aptos/deployment
 
-go 1.26.2
+go 1.26.5
 
 replace github.com/smartcontractkit/chainlink-aptos => ../
 
