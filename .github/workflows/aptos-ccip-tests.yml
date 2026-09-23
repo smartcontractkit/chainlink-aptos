@@ -53,7 +53,7 @@ jobs:
       - name: Read go version from core .tool-versions
         id: tool_versions
         run: |
-          # .tool-versions uses aligned columns with multiple spaces (e.g. "golang        1.26.5"),
+          # .tool-versions uses aligned columns with multiple spaces (e.g. "golang        1.26.7"),
           # so use awk (whitespace-tolerant) instead of `cut -d' ' -f2` which returns empty fields.
           go_version=$(awk '/^golang[[:space:]]+/ {print $2}' temp/chainlink/.tool-versions)
           echo "Go version from core .tool-versions: ${go_version}"

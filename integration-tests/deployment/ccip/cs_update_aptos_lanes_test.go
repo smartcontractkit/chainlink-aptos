@@ -7,23 +7,23 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/aptos-labs/aptos-go-sdk"
-	chain_selectors "github.com/smartcontractkit/chain-selectors"
-	mcmstypes "github.com/smartcontractkit/mcms/types"
 	"github.com/stretchr/testify/require"
+
+	chain_selectors "github.com/smartcontractkit/chain-selectors"
+	_ "github.com/smartcontractkit/chainlink-ccip/chains/evm/deployment/v1_6_0/sequences"
+	"github.com/smartcontractkit/chainlink-ccip/chains/evm/deployment/v2_0_0/testsetup"
+	deployops "github.com/smartcontractkit/chainlink-ccip/deployment/deploy"
+	"github.com/smartcontractkit/chainlink-ccip/deployment/lanes"
+	cs_ccip "github.com/smartcontractkit/chainlink-ccip/deployment/utils/changesets"
+	"github.com/smartcontractkit/chainlink-ccip/deployment/utils/mcms"
+	cldf_chain "github.com/smartcontractkit/chainlink-deployments-framework/chain"
+	mcmstypes "github.com/smartcontractkit/mcms/types"
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_offramp"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_onramp"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_router"
-	cldf_chain "github.com/smartcontractkit/chainlink-deployments-framework/chain"
-
-	_ "github.com/smartcontractkit/chainlink-ccip/chains/evm/deployment/v1_6_0/sequences"
-	deployops "github.com/smartcontractkit/chainlink-ccip/deployment/deploy"
-	"github.com/smartcontractkit/chainlink-ccip/deployment/lanes"
-	cs_ccip "github.com/smartcontractkit/chainlink-ccip/deployment/utils/changesets"
-	"github.com/smartcontractkit/chainlink-ccip/deployment/utils/mcms"
-
 	_ "github.com/smartcontractkit/chainlink-aptos/deployment/ccip/adapters"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/shared"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/stateview"
@@ -42,6 +42,8 @@ func TestUpdateAptosLanes(t *testing.T) {
 
 	toolingAPIVersion := semver.MustParse("1.6.0")
 	dReg := deployops.GetRegistry()
+	var err error
+	env.DataStore, err = testsetup.WithUltraFastCurseMCMS(env.DataStore, evmSelectors...)
 
 	evmChainCfg := deployops.ContractDeploymentConfigPerChain{
 		Version:                                 toolingAPIVersion,
@@ -53,7 +55,7 @@ func TestUpdateAptosLanes(t *testing.T) {
 		GasForCallExactCheck:                    uint16(5000),
 	}
 
-	env, _, err := testutil.ApplyChangesets(t, env, []testutil.ConfiguredChangeSet{
+	env, _, err = testutil.ApplyChangesets(t, env, []testutil.ConfiguredChangeSet{
 		testutil.Configure(deployops.DeployContracts(dReg), deployops.ContractDeploymentConfig{
 			MCMS: mcms.Input{},
 			Chains: map[uint64]deployops.ContractDeploymentConfigPerChain{
@@ -93,7 +95,6 @@ func TestUpdateAptosLanes(t *testing.T) {
 
 	mcmsInput := mcms.Input{
 		ValidUntil:     uint32(time.Now().Add(24 * time.Hour).Unix()),
-		TimelockDelay:  mcmstypes.NewDuration(time.Second),
 		TimelockAction: mcmstypes.TimelockActionSchedule,
 	}
 

@@ -25,6 +25,7 @@ import (
 	cldfproposalutils "github.com/smartcontractkit/chainlink-deployments-framework/engine/cld/mcms/proposalutils"
 	"github.com/smartcontractkit/chainlink-deployments-framework/engine/test/environment"
 	"github.com/smartcontractkit/chainlink-deployments-framework/engine/test/runtime"
+	mcmschangesets "github.com/smartcontractkit/cld-changesets/legacy/mcms/changesets"
 
 	cldflogger "github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/ccipocr3"
@@ -36,9 +37,6 @@ import (
 
 	"github.com/smartcontractkit/chainlink/deployment"
 	"github.com/smartcontractkit/chainlink/deployment/ccip/changeset/v1_6"
-	commonchangeset "github.com/smartcontractkit/chainlink/deployment/common/changeset"
-	"github.com/smartcontractkit/chainlink/deployment/common/proposalutils"
-	commontypes "github.com/smartcontractkit/chainlink/deployment/common/types"
 	jdtest "github.com/smartcontractkit/chainlink/deployment/environment/test"
 	ccipcaptypes "github.com/smartcontractkit/chainlink/v2/core/capabilities/ccip/types"
 
@@ -132,7 +130,7 @@ func getMockMCMSConfig(t *testing.T) types.MCMSWithTimelockConfigV2 {
 		Canceller:        mcmsConfig,
 		Proposer:         mcmsConfig,
 		Bypasser:         mcmsConfig,
-		TimelockMinDelay: big.NewInt(1),
+		TimelockMinDelay: big.NewInt(0),
 	}
 }
 
@@ -295,13 +293,8 @@ func newAptosEVMEnvWithOCR3HomeChain(t *testing.T) (cldf.Environment, uint64, ui
 				testNodeOperator: testP2PIDs,
 			},
 		}),
-		testutil.Configure(cldf.CreateLegacyChangeSet(commonchangeset.DeployMCMSWithTimelockV2), map[uint64]commontypes.MCMSWithTimelockConfigV2{
-			homeChainSel: {
-				Proposer:         proposalutils.SingleGroupMCMSV2(t),
-				Bypasser:         proposalutils.SingleGroupMCMSV2(t),
-				Canceller:        proposalutils.SingleGroupMCMSV2(t),
-				TimelockMinDelay: big.NewInt(0),
-			},
+		testutil.Configure(cldf.CreateLegacyChangeSet(mcmschangesets.DeployMCMSWithTimelockV2), map[uint64]cldfproposalutils.MCMSWithTimelockConfig{
+			homeChainSel: cldftesthelpers.SingleGroupTimelockConfig(t),
 		}),
 		testutil.Configure(cldf.CreateLegacyChangeSet(v1_6.UpdateChainConfigChangeset), v1_6.UpdateChainConfigConfig{
 			HomeChainSelector: homeChainSel,
