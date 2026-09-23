@@ -1,7 +1,6 @@
 package state
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/aptos-labs/aptos-go-sdk"
@@ -12,12 +11,13 @@ import (
 	aptosHelpers "github.com/smartcontractkit/chainlink-aptos/bindings/helpers"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/managed_token"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/regulated_token"
-	cldf_aptos "github.com/smartcontractkit/chainlink-deployments-framework/chain/aptos"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/internal/maputils"
 	aptosview "github.com/smartcontractkit/chainlink-aptos/deployment/view"
+	cldf_aptos "github.com/smartcontractkit/chainlink-deployments-framework/chain/aptos"
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_offramp"
+	ds "github.com/smartcontractkit/chainlink-deployments-framework/datastore"
 	cldf "github.com/smartcontractkit/chainlink-deployments-framework/deployment"
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_token_pools/burn_mint_token_pool"
@@ -45,25 +45,56 @@ type CCIPChainState struct {
 	ReceiverAddress   aptos.AccountAddress
 }
 
-// LoadOnchainState loads chain state for Aptos chains from env
+const supersededLabel = "superseded"
+
+// LoadOnchainState loads Aptos chain state from the environment datastore.
 func LoadOnchainState(env cldf.Environment) (map[uint64]CCIPChainState, error) {
 	aptosChains := make(map[uint64]CCIPChainState)
 	for chainSelector := range env.BlockChains.AptosChains() {
-		addresses, err := env.ExistingAddresses.AddressesForChain(chainSelector)
-		if err != nil {
-			// Chain not found in address book, initialize empty
-			if !errors.Is(err, cldf.ErrChainNotFound) {
-				return aptosChains, err
-			}
-			addresses = make(map[string]cldf.TypeAndVersion)
-		}
-		chainState, err := loadAptosChainStateFromAddresses(addresses, env.BlockChains.AptosChains()[chainSelector].Client)
+		chainState, err := LoadCCIPOnChainStateUsingDataStore(
+			env.DataStore,
+			chainSelector,
+			env.BlockChains.AptosChains()[chainSelector].Client,
+		)
 		if err != nil {
 			return aptosChains, err
 		}
 		aptosChains[chainSelector] = chainState
 	}
 	return aptosChains, nil
+}
+
+// LoadCCIPOnChainStateUsingDataStore loads one Aptos chain's state from datastore refs.
+func LoadCCIPOnChainStateUsingDataStore(dataStore ds.DataStore, chainSelector uint64, client aptos.AptosRpcClient) (CCIPChainState, error) {
+	var refs []ds.AddressRef
+	if dataStore != nil {
+		refs = dataStore.Addresses().Filter(ds.AddressRefByChainSelector(chainSelector))
+	}
+	addresses, err := addressesFromDataStoreRefs(refs, chainSelector)
+	if err != nil {
+		return CCIPChainState{}, err
+	}
+	return loadAptosChainStateFromAddresses(addresses, client)
+}
+
+// addressesFromDataStoreRefs converts datastore refs into the metadata consumed by the state
+// loader. Superseded refs are historical and do not contribute to the current state.
+func addressesFromDataStoreRefs(refs []ds.AddressRef, chainSelector uint64) (map[string]cldf.TypeAndVersion, error) {
+	addresses := make(map[string]cldf.TypeAndVersion, len(refs))
+	for _, ref := range refs {
+		if ref.Labels.Contains(supersededLabel) {
+			continue
+		}
+		if ref.Version == nil {
+			return nil, fmt.Errorf("datastore ref %s for Aptos chain %d has no version", ref.Address, chainSelector)
+		}
+		tv := cldf.NewTypeAndVersion(cldf.ContractType(ref.Type), *ref.Version)
+		for _, label := range ref.Labels.List() {
+			tv.Labels.Add(label)
+		}
+		addresses[ref.Address] = tv
+	}
+	return addresses, nil
 }
 
 func loadAptosChainStateFromAddresses(addresses map[string]cldf.TypeAndVersion, client aptos.AptosRpcClient) (CCIPChainState, error) {

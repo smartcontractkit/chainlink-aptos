@@ -11,10 +11,11 @@ import (
 
 	cldf_chain "github.com/smartcontractkit/chainlink-deployments-framework/chain"
 	cldf_aptos "github.com/smartcontractkit/chainlink-deployments-framework/chain/aptos"
+	cldf_datastore "github.com/smartcontractkit/chainlink-deployments-framework/datastore"
 	cldf "github.com/smartcontractkit/chainlink-deployments-framework/deployment"
 
-	"github.com/smartcontractkit/chainlink-aptos/deployment/subjects"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/shared"
+	"github.com/smartcontractkit/chainlink-aptos/deployment/subjects"
 )
 
 func TestInitializeSetsCCIPAddress(t *testing.T) {
@@ -23,18 +24,18 @@ func TestInitializeSetsCCIPAddress(t *testing.T) {
 	ccipAddr := aptos.AccountAddress{}
 	require.NoError(t, ccipAddr.ParseStringRelaxed(ccipAddrStr))
 
-	ab := stubAddressBook{
-		data: map[uint64]map[string]cldf.TypeAndVersion{
-			selector: {
-				ccipAddrStr: cldf.NewTypeAndVersion(shared.AptosCCIPType, *semver.MustParse("1.0.0")),
-			},
-		},
-	}
+	ds := cldf_datastore.NewMemoryDataStore()
+	require.NoError(t, ds.Addresses().Add(cldf_datastore.AddressRef{
+		ChainSelector: selector,
+		Address:       ccipAddrStr,
+		Type:          cldf_datastore.ContractType(shared.AptosCCIPType),
+		Version:       semver.MustParse("1.0.0"),
+	}))
 
 	chain := cldf_aptos.Chain{Selector: selector}
 	env := cldf.Environment{
-		ExistingAddresses: ab,
-		BlockChains:       cldf_chain.NewBlockChainsFromSlice([]cldf_chain.BlockChain{chain}),
+		DataStore:   ds.Seal(),
+		BlockChains: cldf_chain.NewBlockChainsFromSlice([]cldf_chain.BlockChain{chain}),
 	}
 
 	adapter := &CurseAdapter{}
@@ -52,17 +53,3 @@ func TestSelectorSubjectConversions(t *testing.T) {
 	require.Equal(t, selector, outSelector)
 	require.Equal(t, subjects.FamilyAwareSelectorToSubject(selector, chainsel.FamilyAptos), subject)
 }
-
-type stubAddressBook struct {
-	data map[uint64]map[string]cldf.TypeAndVersion
-}
-
-func (s stubAddressBook) Save(uint64, string, cldf.TypeAndVersion) error { return nil }
-func (s stubAddressBook) Addresses() (map[uint64]map[string]cldf.TypeAndVersion, error) {
-	return s.data, nil
-}
-func (s stubAddressBook) AddressesForChain(chain uint64) (map[string]cldf.TypeAndVersion, error) {
-	return s.data[chain], nil
-}
-func (s stubAddressBook) Merge(cldf.AddressBook) error  { return nil }
-func (s stubAddressBook) Remove(cldf.AddressBook) error { return nil }

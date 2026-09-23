@@ -69,14 +69,14 @@ func TestDeployAptosChainImp_VerifyPreconditions(t *testing.T) {
 			env: cldf.Environment{
 				Name:   "test",
 				Logger: logger.Test(t),
-				ExistingAddresses: getTestAddressBook(
+				DataStore: getTestDataStore(
 					t,
 					map[uint64]map[string]cldf.TypeAndVersion{
 						4457093679053095497: {
-							mockMCMSAddress: {Type: shared.AptosMCMSType},
+							mockMCMSAddress: {Type: shared.AptosMCMSType, Version: aptoscs.Version1_6_0},
 						},
 						743186221051783445: {
-							mockMCMSAddress: {Type: shared.AptosMCMSType},
+							mockMCMSAddress: {Type: shared.AptosMCMSType, Version: aptoscs.Version1_6_0},
 						},
 					},
 				),
@@ -126,14 +126,14 @@ func TestDeployAptosChainImp_VerifyPreconditions(t *testing.T) {
 			env: cldf.Environment{
 				Name:   "test",
 				Logger: logger.Test(t),
-				ExistingAddresses: getTestAddressBook(
+				DataStore: getTestDataStore(
 					t,
 					map[uint64]map[string]cldf.TypeAndVersion{
 						4457093679053095497: {
-							mockMCMSAddress: {Type: shared.AptosMCMSType},
+							mockMCMSAddress: {Type: shared.AptosMCMSType, Version: aptoscs.Version1_6_0},
 						},
 						743186221051783445: {
-							mockMCMSAddress: {Type: shared.AptosMCMSType},
+							mockMCMSAddress: {Type: shared.AptosMCMSType, Version: aptoscs.Version1_6_0},
 						},
 					},
 				),
@@ -171,7 +171,7 @@ func TestDeployAptosChainImp_VerifyPreconditions(t *testing.T) {
 			env: cldf.Environment{
 				Name:   "test",
 				Logger: logger.Test(t),
-				ExistingAddresses: getTestAddressBook(
+				DataStore: getTestDataStore(
 					t,
 					map[uint64]map[string]cldf.TypeAndVersion{
 						4457093679053095497: {}, // No MCMS address in state
@@ -196,11 +196,11 @@ func TestDeployAptosChainImp_VerifyPreconditions(t *testing.T) {
 			env: cldf.Environment{
 				Name:   "test",
 				Logger: logger.Test(t),
-				ExistingAddresses: getTestAddressBook(
+				DataStore: getTestDataStore(
 					t,
 					map[uint64]map[string]cldf.TypeAndVersion{
 						4457093679053095497: {
-							mockMCMSAddress: {Type: shared.AptosMCMSType}, // MCMS already deployed
+							mockMCMSAddress: {Type: shared.AptosMCMSType, Version: aptoscs.Version1_6_0}, // MCMS already deployed
 						},
 					},
 				),

@@ -16,7 +16,7 @@ type CCIPOnChainState struct {
 	AptosChains map[uint64]aptosstate.CCIPChainState
 }
 
-// LoadOnchainState loads Aptos chain state from the environment address book.
+// LoadOnchainState loads Aptos chain state from the environment datastore.
 func LoadOnchainState(env cldf.Environment) (CCIPOnChainState, error) {
 	aptosChains, err := aptosstate.LoadOnchainState(env)
 	if err != nil {

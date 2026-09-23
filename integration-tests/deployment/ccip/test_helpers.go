@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
@@ -18,8 +19,9 @@ import (
 	chain_selectors "github.com/smartcontractkit/chain-selectors"
 	mcmstypes "github.com/smartcontractkit/mcms/types"
 
-	cldf "github.com/smartcontractkit/chainlink-deployments-framework/deployment"
 	cldf_chain "github.com/smartcontractkit/chainlink-deployments-framework/chain"
+	cldf_datastore "github.com/smartcontractkit/chainlink-deployments-framework/datastore"
+	cldf "github.com/smartcontractkit/chainlink-deployments-framework/deployment"
 	cldfproposalutils "github.com/smartcontractkit/chainlink-deployments-framework/engine/cld/mcms/proposalutils"
 	"github.com/smartcontractkit/chainlink-deployments-framework/engine/test/environment"
 	"github.com/smartcontractkit/chainlink-deployments-framework/engine/test/runtime"
@@ -33,11 +35,11 @@ import (
 	capabilities_registry "github.com/smartcontractkit/chainlink-evm/gethwrappers/keystone/generated/capabilities_registry_1_1_0"
 
 	"github.com/smartcontractkit/chainlink/deployment"
-	jdtest "github.com/smartcontractkit/chainlink/deployment/environment/test"
+	"github.com/smartcontractkit/chainlink/deployment/ccip/changeset/v1_6"
 	commonchangeset "github.com/smartcontractkit/chainlink/deployment/common/changeset"
 	"github.com/smartcontractkit/chainlink/deployment/common/proposalutils"
 	commontypes "github.com/smartcontractkit/chainlink/deployment/common/types"
-	"github.com/smartcontractkit/chainlink/deployment/ccip/changeset/v1_6"
+	jdtest "github.com/smartcontractkit/chainlink/deployment/environment/test"
 	ccipcaptypes "github.com/smartcontractkit/chainlink/v2/core/capabilities/ccip/types"
 
 	aptosfeequoter "github.com/smartcontractkit/chainlink-aptos/bindings/ccip/fee_quoter"
@@ -61,15 +63,29 @@ const (
 	sepMockOnRampAddress = "0x0BF3dE8c5D3e8A2B34D2BEeB17ABfCeBaf363A59"
 )
 
-func getTestAddressBook(t *testing.T, addrByChain map[uint64]map[string]cldf.TypeAndVersion) cldf.AddressBook {
-	ab := cldf.NewMemoryAddressBook()
-	for chain, addrTypeAndVersion := range addrByChain {
+// getTestDataStore builds versioned datastore refs for state-loader fixtures.
+func getTestDataStore(t *testing.T, addrByChain map[uint64]map[string]cldf.TypeAndVersion) cldf_datastore.DataStore {
+	t.Helper()
+	ds := cldf_datastore.NewMemoryDataStore()
+	for chainSelector, addrTypeAndVersion := range addrByChain {
 		for addr, typeAndVersion := range addrTypeAndVersion {
-			err := ab.Save(chain, addr, typeAndVersion)
-			require.NoError(t, err)
+			if typeAndVersion.Version == (semver.Version{}) {
+				t.Fatalf("address ref %s on chain %d must have a version", addr, chainSelector)
+			}
+			version := typeAndVersion.Version
+			ref := cldf_datastore.AddressRef{
+				ChainSelector: chainSelector,
+				Address:       addr,
+				Type:          cldf_datastore.ContractType(typeAndVersion.Type),
+				Version:       &version,
+			}
+			if !typeAndVersion.Labels.IsEmpty() {
+				ref.Labels = cldf_datastore.NewLabelSet(typeAndVersion.Labels.List()...)
+			}
+			require.NoError(t, ds.Addresses().Add(ref))
 		}
 	}
-	return ab
+	return ds.Seal()
 }
 
 func MustParseAddress(t *testing.T, addr string) aptos.AccountAddress {
