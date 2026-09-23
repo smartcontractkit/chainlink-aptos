@@ -4,15 +4,15 @@ import (
 	"testing"
 	"time"
 
-	mcmstypes "github.com/smartcontractkit/mcms/types"
 	"github.com/stretchr/testify/require"
 
 	evmdeploy "github.com/smartcontractkit/chainlink-ccip/chains/evm/deployment/deploy"
 	deployops "github.com/smartcontractkit/chainlink-ccip/deployment/deploy"
 	"github.com/smartcontractkit/chainlink-ccip/deployment/utils"
-	"github.com/smartcontractkit/chainlink-ccip/deployment/utils/mcms"
 	cs_ccip "github.com/smartcontractkit/chainlink-ccip/deployment/utils/changesets"
+	"github.com/smartcontractkit/chainlink-ccip/deployment/utils/mcms"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/ccip/types"
+	mcmstypes "github.com/smartcontractkit/mcms/types"
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_offramp"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/stateview"
@@ -37,7 +37,6 @@ func TestSetOCR3Offramp(t *testing.T) {
 			ConfigType:      utils.ConfigTypeActive,
 			MCMS: mcms.Input{
 				ValidUntil:     uint32(time.Now().Add(24 * time.Hour).Unix()),
-				TimelockDelay:  mcmstypes.NewDuration(time.Second),
 				TimelockAction: mcmstypes.TimelockActionSchedule,
 			},
 		}),

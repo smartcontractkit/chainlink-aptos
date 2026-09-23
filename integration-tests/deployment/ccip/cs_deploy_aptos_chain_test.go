@@ -2,20 +2,15 @@ package ccip
 
 import (
 	"crypto/ecdsa"
-	"math/big"
 	"testing"
 	"time"
 
 	"github.com/aptos-labs/aptos-go-sdk"
-	chain_selectors "github.com/smartcontractkit/chain-selectors"
-	mcmstypes "github.com/smartcontractkit/mcms/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip"
-	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_offramp"
+	chain_selectors "github.com/smartcontractkit/chain-selectors"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
-
 	"github.com/smartcontractkit/chainlink-deployments-framework/chain"
 	aptoschain "github.com/smartcontractkit/chainlink-deployments-framework/chain/aptos"
 	cldf "github.com/smartcontractkit/chainlink-deployments-framework/deployment"
@@ -23,7 +18,10 @@ import (
 	cldftesthelpers "github.com/smartcontractkit/chainlink-deployments-framework/engine/cld/mcms/proposalutils/testhelpers"
 	"github.com/smartcontractkit/chainlink-deployments-framework/engine/test/environment"
 	"github.com/smartcontractkit/chainlink-deployments-framework/engine/test/runtime"
+	mcmstypes "github.com/smartcontractkit/mcms/types"
 
+	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip"
+	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_offramp"
 	aptoscs "github.com/smartcontractkit/chainlink-aptos/deployment/ccip"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/config"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/shared"
@@ -261,12 +259,7 @@ func TestDeployAptosChain_Apply(t *testing.T) {
 			selector: mockCCIPParams,
 		},
 		MCMSDeployConfigPerChain: map[uint64]types.MCMSWithTimelockConfigV2{
-			selector: {
-				Canceller:        cldftesthelpers.SingleGroupMCMS(t),
-				Proposer:         cldftesthelpers.SingleGroupMCMS(t),
-				Bypasser:         cldftesthelpers.SingleGroupMCMS(t),
-				TimelockMinDelay: big.NewInt(1),
-			},
+			selector: getMockMCMSConfig(t),
 		},
 		MCMSTimelockConfigPerChain: map[uint64]cldfproposalutils.TimelockConfig{
 			selector: {

@@ -114,7 +114,7 @@ func getMockMCMSConfig(t *testing.T) types.MCMSWithTimelockConfigV2 {
 		Canceller:        mcmsConfig,
 		Proposer:         mcmsConfig,
 		Bypasser:         mcmsConfig,
-		TimelockMinDelay: big.NewInt(1),
+		TimelockMinDelay: big.NewInt(0),
 	}
 }
 
