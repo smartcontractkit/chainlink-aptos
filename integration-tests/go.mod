@@ -13,7 +13,7 @@ require (
 	github.com/smartcontractkit/chainlink-ccip v0.1.1-solana.0.20260819134418-d146894e564d
 	github.com/smartcontractkit/chainlink-ccip/chains/evm v0.0.0-20260821001950-7520b255725e
 	github.com/smartcontractkit/chainlink-ccip/deployment v0.0.0-20260821001950-7520b255725e
-	github.com/smartcontractkit/chainlink-common v0.11.2-0.20260904233717-0a9e358dbb9f
+	github.com/smartcontractkit/chainlink-common v0.11.2-0.20260910195529-801eb99e80b2
 	github.com/smartcontractkit/chainlink-deployments-framework v0.122.2
 	github.com/smartcontractkit/chainlink-evm v0.3.4-0.20260810110946-8174b6bb7fc9
 	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20260713161920-de075095648b
@@ -23,7 +23,7 @@ require (
 	github.com/smartcontractkit/chainlink/v2 v2.64.0
 	github.com/smartcontractkit/cld-changesets v0.8.2
 	github.com/smartcontractkit/libocr v0.0.0-20260810200708-618b5bf7f342
-	github.com/smartcontractkit/mcms v0.55.0
+	github.com/smartcontractkit/mcms v0.55.2
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/zap v1.28.0
@@ -94,7 +94,7 @@ require (
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce // indirect
 	github.com/buger/jsonparser v1.2.0 // indirect
 	github.com/buraksezer/consistent v0.10.0 // indirect
-	github.com/bytecodealliance/wasmtime-go/v48 v48.0.0 // indirect
+	github.com/bytecodealliance/wasmtime-go/v47 v47.0.0 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect
@@ -154,6 +154,7 @@ require (
 	github.com/esote/minmaxheap v1.0.0 // indirect
 	github.com/ethereum/c-kzg-4844/v2 v2.1.8 // indirect
 	github.com/ethereum/go-bigmodexpfix v0.0.0-20250911101455-f9e208c548ab // indirect
+	github.com/ethereum/hid v1.0.1-0.20260421154323-c2ab8d9bf68a // indirect
 	github.com/expr-lang/expr v1.17.8 // indirect
 	github.com/failsafe-go/failsafe-go v0.9.0 // indirect
 	github.com/fatih/color v1.19.0 // indirect
@@ -261,7 +262,6 @@ require (
 	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/karalabe/hid v1.0.1-0.20260315100226-f5d04adeffeb // indirect
 	github.com/klauspost/compress v1.19.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
