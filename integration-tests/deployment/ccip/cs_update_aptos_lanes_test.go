@@ -99,7 +99,7 @@ func TestUpdateAptosLanes(t *testing.T) {
 	}
 
 	env, _, err = testutil.ApplyChangesets(t, env, []testutil.ConfiguredChangeSet{
-		testutil.Configure(lanes.ConnectChains(lanesRegistry, mcmsRegistry), lanes.ConnectChainsConfig{
+		testutil.Configure(lanes.ConnectChains(lanesRegistry, mcmsRegistry, nil), lanes.ConnectChainsConfig{
 			MCMS: mcmsInput,
 			Lanes: []lanes.LaneConfig{
 				{
