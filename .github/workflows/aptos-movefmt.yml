@@ -1,6 +1,8 @@
 name: Aptos - Lint Move formatting
 # This workflow checks that all move packages are correctly formatting using movefmt
 on: [pull_request]
+permissions:
+  contents: read
 jobs:
   movefmt:
     runs-on: ubuntu-latest
