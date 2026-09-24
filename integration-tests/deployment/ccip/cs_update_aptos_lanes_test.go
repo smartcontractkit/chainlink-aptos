@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	chain_selectors "github.com/smartcontractkit/chain-selectors"
+	mcmstypes "github.com/smartcontractkit/mcms/types"
+
 	_ "github.com/smartcontractkit/chainlink-ccip/chains/evm/deployment/v1_6_0/sequences"
 	"github.com/smartcontractkit/chainlink-ccip/chains/evm/deployment/v2_0_0/testsetup"
 	deployops "github.com/smartcontractkit/chainlink-ccip/deployment/deploy"
@@ -17,7 +19,6 @@ import (
 	cs_ccip "github.com/smartcontractkit/chainlink-ccip/deployment/utils/changesets"
 	"github.com/smartcontractkit/chainlink-ccip/deployment/utils/mcms"
 	cldf_chain "github.com/smartcontractkit/chainlink-deployments-framework/chain"
-	mcmstypes "github.com/smartcontractkit/mcms/types"
 
 	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip"
@@ -99,7 +100,7 @@ func TestUpdateAptosLanes(t *testing.T) {
 	}
 
 	env, _, err = testutil.ApplyChangesets(t, env, []testutil.ConfiguredChangeSet{
-		testutil.Configure(lanes.ConnectChains(lanesRegistry, mcmsRegistry), lanes.ConnectChainsConfig{
+		testutil.Configure(lanes.ConnectChains(lanesRegistry, mcmsRegistry, nil), lanes.ConnectChainsConfig{
 			MCMS: mcmsInput,
 			Lanes: []lanes.LaneConfig{
 				{
