@@ -10,20 +10,20 @@ require (
 	github.com/smartcontractkit/chain-selectors v1.0.111
 	github.com/smartcontractkit/chainlink-aptos v0.0.0
 	github.com/smartcontractkit/chainlink-aptos/deployment v0.0.0
-	github.com/smartcontractkit/chainlink-ccip v0.1.1-solana.0.20260916222901-720a003dab50
-	github.com/smartcontractkit/chainlink-ccip/chains/evm v0.0.0-20260916222901-720a003dab50
-	github.com/smartcontractkit/chainlink-ccip/deployment v0.0.0-20260916222901-720a003dab50
+	github.com/smartcontractkit/chainlink-ccip v0.1.1-solana.0.20260923215558-f1ad2f9da0c7
+	github.com/smartcontractkit/chainlink-ccip/chains/evm v0.0.0-20260923215558-f1ad2f9da0c7
+	github.com/smartcontractkit/chainlink-ccip/deployment v0.0.0-20260923215558-f1ad2f9da0c7
 	github.com/smartcontractkit/chainlink-common v0.11.2-0.20260923164324-86cd57d9fdbd
 	github.com/smartcontractkit/chainlink-deployments-framework v0.122.2
 	github.com/smartcontractkit/chainlink-evm v0.3.4-0.20260917132551-2a2b38e8b744
-	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20260713161920-de075095648b
+	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20260915165527-3701875605f4
 	github.com/smartcontractkit/chainlink-protos/job-distributor v0.20.1-0.20260701185448-696c075849ea
 	github.com/smartcontractkit/chainlink-testing-framework/framework v0.16.8
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20260924123859-7fd179e1a24a
 	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260924123859-7fd179e1a24a
 	github.com/smartcontractkit/cld-changesets v0.9.1-0.20260911120037-95e1c8bcb265
 	github.com/smartcontractkit/libocr v0.0.0-20260810200708-618b5bf7f342
-	github.com/smartcontractkit/mcms v0.55.2-0.20260911113758-08ee2754f62a
+	github.com/smartcontractkit/mcms v0.55.2
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/zap v1.28.0
