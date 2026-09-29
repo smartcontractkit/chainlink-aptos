@@ -20,7 +20,7 @@ require (
 	github.com/smartcontractkit/chainlink-protos/job-distributor v0.20.1-0.20260701185448-696c075849ea
 	github.com/smartcontractkit/chainlink-testing-framework/framework v0.16.8
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20260924123859-7fd179e1a24a
-	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260924123859-7fd179e1a24a
+	github.com/smartcontractkit/chainlink/v2 v2.66.0
 	github.com/smartcontractkit/cld-changesets v0.9.1-0.20260911120037-95e1c8bcb265
 	github.com/smartcontractkit/libocr v0.0.0-20260810200708-618b5bf7f342
 	github.com/smartcontractkit/mcms v0.55.2
