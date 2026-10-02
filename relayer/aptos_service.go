@@ -302,7 +302,19 @@ func (s *aptosService) SubmitTransaction(ctx context.Context, req commonaptos.Su
 		}
 		s.logger.Debugw("SubmitTransaction: GetStatus poll", "txID", txID, "status", txStatus)
 		switch txStatus {
-		case commontypes.Fatal, commontypes.Failed:
+		case commontypes.Failed:
+			// A Failed tx may still have committed on-chain and reverted (e.g. the
+			// receiver rejecting a report; the txm marks non-OOG reverts Failed while
+			// retaining the VM result). Preserve the TxReverted distinction for that
+			// case; only genuinely unexecutable txs (out-of-gas after exhausting
+			// retries, or no on-chain result) are TxFatal.
+			if txResult, resultErr := s.chain.TxManager().GetTransactionResult(txID); resultErr == nil && !txResult.Success && txResult.VmStatus != "Out of gas" {
+				s.logger.Warnw("SubmitTransaction: tx committed but VM reverted", "txID", txID, "vmStatus", txResult.VmStatus, "txHash", txResult.TxHash)
+				return commonaptos.TxReverted, nil
+			}
+			s.logger.Infow("SubmitTransaction: terminal failure from TxManager", "txID", txID, "status", txStatus)
+			return commonaptos.TxFatal, nil
+		case commontypes.Fatal:
 			s.logger.Infow("SubmitTransaction: terminal failure from TxManager", "txID", txID, "status", txStatus)
 			return commonaptos.TxFatal, nil
 		case commontypes.Finalized:
