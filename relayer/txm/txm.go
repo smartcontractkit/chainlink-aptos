@@ -806,6 +806,13 @@ func (a *AptosTxm) checkUnconfirmed(ctx context.Context) {
 								}
 								continue
 							}
+							// A non-OOG revert (e.g. the receiver rejecting the report) is a
+							// deterministic failure: the tx committed on-chain but the Move call
+							// aborted. Surface it as Failed rather than Finalized so downstream
+							// readers (e.g. the write target's confirmation) don't mistake it for
+							// a successful transmission.
+							a.updateTransactionStatus(unconfirmedTx.Tx, commontypes.Failed)
+							continue
 						}
 					} else {
 						// NOTE: Type assertion failed on UserTransaction.
