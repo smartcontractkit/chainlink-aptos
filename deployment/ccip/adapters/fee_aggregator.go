@@ -89,6 +89,9 @@ func (a *FeeAggregatorAdapter) SetFeeAggregator(e cldf.Environment) *cldf_ops.Se
 			if err := feeAggregator.ParseStringRelaxed(input.FeeAggregator); err != nil {
 				return result, fmt.Errorf("invalid fee aggregator address %q: %w", input.FeeAggregator, err)
 			}
+			if feeAggregator == (aptos.AccountAddress{}) {
+				return result, fmt.Errorf("fee aggregator address must not be zero on chain %d", input.ChainSelector)
+			}
 
 			ccipAddr, err := resolveAptosCCIPAddress(e, input.ChainSelector, input.Contracts)
 			if err != nil {

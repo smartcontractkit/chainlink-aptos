@@ -91,6 +91,19 @@ func TestSetFeeAggregatorPreservesAllowlistAdmin(t *testing.T) {
 	require.Equal(t, admin[:], data[32:64])
 }
 
+func TestSetFeeAggregatorRejectsZeroAddress(t *testing.T) {
+	defer stubReader(module_onramp.DynamicConfig{FeeAggregator: mustAddr(t, "0x01d"), AllowlistAdmin: mustAddr(t, "0xdead")}, nil)()
+
+	env := adapterEnv(t, 1)
+	seq := (&FeeAggregatorAdapter{}).SetFeeAggregator(env)
+	_, err := cldf_ops.ExecuteSequence(newBundle(), seq, env.BlockChains, fees.FeeAggregatorForChain{
+		ChainSelector: 1,
+		FeeAggregator: "0x0", // zero address
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must not be zero")
+}
+
 func TestWithdrawFeeTokensErrorsWhenAggregatorUnset(t *testing.T) {
 	defer stubReader(module_onramp.DynamicConfig{}, nil)() // zero fee aggregator
 

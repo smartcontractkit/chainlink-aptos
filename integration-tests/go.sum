@@ -1361,8 +1361,8 @@ github.com/smartcontractkit/chainlink-ccv v0.13.1-0.20260918171034-c93b0d2ef3c0 
 github.com/smartcontractkit/chainlink-ccv v0.13.1-0.20260918171034-c93b0d2ef3c0/go.mod h1:gX7FJzSnGQx4RAlsn2rRW8IQBlEFZYiXFXEEB5jnQgA=
 github.com/smartcontractkit/chainlink-common v0.11.2-0.20260923164324-86cd57d9fdbd h1:wgNJN/ckcPDDjR9+CophZTEhuTvZec15ETr1vcyBlYI=
 github.com/smartcontractkit/chainlink-common v0.11.2-0.20260923164324-86cd57d9fdbd/go.mod h1:BniOJQOh52lgDDNyfOQJEmQUVQ68txTSeT0Qxwt0zQI=
-github.com/smartcontractkit/chainlink-common/keystore v1.3.1-0.20260903141829-ef07b52a737d h1:M9xuiIvdiHtim4nlxCVajyC/Mk63tAg9ESWb/biAhNA=
-github.com/smartcontractkit/chainlink-common/keystore v1.3.1-0.20260903141829-ef07b52a737d/go.mod h1:rI2njmTlyTvh+xhmORmK6qX3+V1ycDAqGJLu8LS8WpU=
+github.com/smartcontractkit/chainlink-common/keystore v1.3.1-0.20261006175240-29594528f464 h1:yIuBLR5GmB5MQe9+Pm7jLH4O+9766nEEeywbz0+crjc=
+github.com/smartcontractkit/chainlink-common/keystore v1.3.1-0.20261006175240-29594528f464/go.mod h1:r8u2d+ZpMweYchIytSRmkRFR+aKQ5c7/HoNv2hzuoTY=
 github.com/smartcontractkit/chainlink-common/pkg/chipingress v0.0.11-0.20260915184316-2730f1867c92 h1:Z1OIGukDhJD+Gknr5G07Vtml24E7BwKaIQoWzV/SdqA=
 github.com/smartcontractkit/chainlink-common/pkg/chipingress v0.0.11-0.20260915184316-2730f1867c92/go.mod h1:Scyk7O80fde5rJF3Ty3fEE3xiS6j84eWbu8/2gl3pIY=
 github.com/smartcontractkit/chainlink-data-streams v1.1.1 h1:WcNIy7fy/HVnjHKOm21pLwD7aMa0H6IY8mB3aJHKU4c=
