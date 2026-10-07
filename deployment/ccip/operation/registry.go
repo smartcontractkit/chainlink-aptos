@@ -1,8 +1,8 @@
 package operation
 
 import (
-	cld_ops "github.com/smartcontractkit/chainlink-deployments-framework/operations"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/operation/rmn"
+	cld_ops "github.com/smartcontractkit/chainlink-deployments-framework/operations"
 )
 
 func GetAptosOperations() []*cld_ops.Operation[any, any, any] {
@@ -17,6 +17,7 @@ func GetAptosOperations() []*cld_ops.Operation[any, any, any] {
 	var operations []*cld_ops.Operation[any, any, any]
 
 	operations = append(operations, CCIPOperations...)
+	operations = append(operations, FeeAggregatorOperations...)
 	operations = append(operations, FeeQuoterOperations...)
 	operations = append(operations, MCMSOperations...)
 	operations = append(operations, OffRampOperations...)
