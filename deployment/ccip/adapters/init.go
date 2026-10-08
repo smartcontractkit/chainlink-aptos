@@ -5,6 +5,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-ccip/deployment/deploy"
 	"github.com/smartcontractkit/chainlink-ccip/deployment/fastcurse"
+	"github.com/smartcontractkit/chainlink-ccip/deployment/fees"
 	"github.com/smartcontractkit/chainlink-ccip/deployment/lanes"
 	"github.com/smartcontractkit/chainlink-ccip/deployment/utils/changesets"
 
@@ -27,4 +28,6 @@ func init() {
 
 	deploy.GetRegistry().RegisterDeployer(chainsel.FamilyAptos, v, &AptosAdapter{})
 	lanes.GetLaneAdapterRegistry().RegisterLaneAdapter(chainsel.FamilyAptos, v, &AptosLaneAdapter{})
+
+	fees.GetFeeAggregatorRegistry().RegisterFeeAggregatorAdapter(chainsel.FamilyAptos, v, &FeeAggregatorAdapter{})
 }
