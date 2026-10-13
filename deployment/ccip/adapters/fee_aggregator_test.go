@@ -2,9 +2,11 @@ package adapters
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"testing"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/stretchr/testify/require"
 
@@ -19,6 +21,8 @@ import (
 
 	module_onramp "github.com/smartcontractkit/chainlink-aptos/bindings/ccip_onramp/onramp"
 	aptosccip "github.com/smartcontractkit/chainlink-aptos/deployment/ccip"
+	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/dependency"
+	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/operation"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/shared"
 )
 
@@ -118,8 +122,26 @@ func TestWithdrawFeeTokensErrorsWhenAggregatorUnset(t *testing.T) {
 	require.Contains(t, err.Error(), "fee aggregator is not set")
 }
 
-func TestWithdrawFeeTokensIgnoresAmountAndSweepsAll(t *testing.T) {
+// stubWithdrawOp replaces the direct-tx withdraw op, recording what it was called with.
+func stubWithdrawOp(t *testing.T, gotCCIP *aptos.AccountAddress, gotTokens *[]aptos.AccountAddress) func() {
+	t.Helper()
+	prev := withdrawFeeTokensOp
+	withdrawFeeTokensOp = cldf_ops.NewOperation(
+		"withdraw-fee-tokens-op-stub", semver.MustParse("1.0.0"), "stub",
+		func(_ cldf_ops.Bundle, deps dependency.AptosDeps, in operation.WithdrawFeeTokensInput) (string, error) {
+			*gotCCIP = deps.CCIPOnChainState.AptosChains[deps.AptosChain.Selector].CCIPAddress
+			*gotTokens = in.FeeTokens
+			return "0xhash", nil
+		},
+	)
+	return func() { withdrawFeeTokensOp = prev }
+}
+
+func TestWithdrawFeeTokensSubmitsDirectlyWithoutProposal(t *testing.T) {
 	defer stubReader(module_onramp.DynamicConfig{FeeAggregator: mustAddr(t, "0xfee")}, nil)()
+	var gotCCIP aptos.AccountAddress
+	var gotTokens []aptos.AccountAddress
+	defer stubWithdrawOp(t, &gotCCIP, &gotTokens)()
 
 	env := adapterEnv(t, 1)
 	t1 := mustAddr(t, "0xa1")
@@ -133,13 +155,28 @@ func TestWithdrawFeeTokensIgnoresAmountAndSweepsAll(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	require.Len(t, report.Output.BatchOps, 1)
-	require.Len(t, report.Output.BatchOps[0].Transactions, 1)
+	require.Empty(t, report.Output.BatchOps, "withdraw must not produce an MCMS proposal")
+	require.Equal(t, mustAddr(t, testCCIPAddress), gotCCIP)
+	require.Equal(t, []aptos.AccountAddress{t1, t2}, gotTokens)
+}
 
-	// Data = BCS(vector<address>{t1, t2}): length 2 ++ two 32-byte addresses.
-	data := report.Output.BatchOps[0].Transactions[0].Data
-	require.Len(t, data, 1+64)
-	require.Equal(t, byte(2), data[0])
-	require.Equal(t, t1[:], data[1:33])
-	require.Equal(t, t2[:], data[33:65])
+func TestWithdrawFeeTokensPropagatesSubmitError(t *testing.T) {
+	defer stubReader(module_onramp.DynamicConfig{FeeAggregator: mustAddr(t, "0xfee")}, nil)()
+	prev := withdrawFeeTokensOp
+	withdrawFeeTokensOp = cldf_ops.NewOperation(
+		"withdraw-fee-tokens-op-stub-err", semver.MustParse("1.0.0"), "stub",
+		func(_ cldf_ops.Bundle, _ dependency.AptosDeps, _ operation.WithdrawFeeTokensInput) (string, error) {
+			return "", errors.New("boom")
+		},
+	)
+	defer func() { withdrawFeeTokensOp = prev }()
+
+	env := adapterEnv(t, 1)
+	token := mustAddr(t, "0xa1")
+	seq := (&FeeAggregatorAdapter{}).WithdrawFeeTokens(env)
+	_, err := cldf_ops.ExecuteSequence(newBundle(), seq, env.BlockChains, fees.WithdrawFeeTokensForChain{
+		ChainSelector: 1,
+		FeeTokens:     []fees.FeeTokenWithdrawal{{Token: token.StringLong()}},
+	})
+	require.ErrorContains(t, err, "boom")
 }

@@ -8,16 +8,16 @@ import (
 
 	"github.com/smartcontractkit/chainlink-deployments-framework/operations"
 
+	"github.com/smartcontractkit/chainlink-aptos/bindings/bind"
 	"github.com/smartcontractkit/chainlink-aptos/bindings/ccip_onramp"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/dependency"
 	"github.com/smartcontractkit/chainlink-aptos/deployment/ccip/utils"
 )
 
-// FeeAggregatorOperations exposes the OnRamp fee-aggregator operations to the dynamic
-// sequence registry (GetAptosOperations). Both return []mcmstypes.Transaction.
+// FeeAggregatorOperations exposes the MCMS-compatible OnRamp fee-aggregator operations to
+// the dynamic sequence registry. WithdrawFeeTokensOp is excluded: it sends a direct tx.
 var FeeAggregatorOperations = []*operations.Operation[any, any, any]{
 	SetOnRampDynamicConfigOp.AsUntypedRelaxed(),
-	WithdrawFeeTokensOp.AsUntypedRelaxed(),
 }
 
 // SetOnRampDynamicConfigInput carries both fields of the OnRamp DynamicConfig. The Move
@@ -59,25 +59,28 @@ type WithdrawFeeTokensInput struct {
 	FeeTokens []aptos.AccountAddress
 }
 
+// WithdrawFeeTokensOp submits withdraw_fee_tokens directly with the deployer key and
+// returns the confirmed tx hash. It cannot go through MCMS: the function is permissionless
+// and onramp::mcms_entrypoint does not dispatch it (aborts with E_UNKNOWN_FUNCTION).
 var WithdrawFeeTokensOp = operations.NewOperation(
 	"withdraw-fee-tokens-op",
 	Version1_0_0,
-	"Withdraws accumulated fee token balances to the OnRamp fee aggregator",
+	"Withdraws accumulated fee token balances to the OnRamp fee aggregator (direct tx)",
 	withdrawFeeTokens,
 )
 
-func withdrawFeeTokens(b operations.Bundle, deps dependency.AptosDeps, in WithdrawFeeTokensInput) ([]mcmstypes.Transaction, error) {
-	aptosState := deps.CCIPOnChainState.AptosChains[deps.AptosChain.Selector]
-	ccipAddress := aptosState.CCIPAddress
+func withdrawFeeTokens(b operations.Bundle, deps dependency.AptosDeps, in WithdrawFeeTokensInput) (string, error) {
+	ccipAddress := deps.CCIPOnChainState.AptosChains[deps.AptosChain.Selector].CCIPAddress
 	onrampBind := ccip_onramp.Bind(ccipAddress, deps.AptosChain.Client)
 
-	moduleInfo, function, _, args, err := onrampBind.Onramp().Encoder().WithdrawFeeTokens(in.FeeTokens)
+	opts := &bind.TransactOpts{Signer: deps.AptosChain.DeployerSigner}
+	tx, err := onrampBind.Onramp().WithdrawFeeTokens(opts, in.FeeTokens)
 	if err != nil {
-		return nil, fmt.Errorf("failed to encode WithdrawFeeTokens for OnRamp: %w", err)
+		return "", fmt.Errorf("failed to submit WithdrawFeeTokens on OnRamp: %w", err)
 	}
-	tx, err := utils.GenerateMCMSTx(ccipAddress, moduleInfo, function, args)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create transaction: %w", err)
+	if err := deps.AptosChain.Confirm(tx.Hash); err != nil {
+		return "", fmt.Errorf("failed to confirm WithdrawFeeTokens tx %s: %w", tx.Hash, err)
 	}
-	return []mcmstypes.Transaction{tx}, nil
+	b.Logger.Infow("Withdrew OnRamp fee tokens", "chain", deps.AptosChain.Selector, "txHash", tx.Hash, "feeTokens", in.FeeTokens)
+	return tx.Hash, nil
 }
