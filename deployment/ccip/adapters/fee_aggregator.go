@@ -32,6 +32,9 @@ var onrampDynamicConfigReader = func(ccipAddress aptos.AccountAddress, client ap
 	return ccip_onramp.Bind(ccipAddress, client).Onramp().GetDynamicConfig(nil)
 }
 
+// withdrawFeeTokensOp is a package var so tests can swap out the on-chain submission.
+var withdrawFeeTokensOp = operation.WithdrawFeeTokensOp
+
 // resolveAptosCCIPAddress returns the Aptos CCIP module account address for the chain.
 // Aptos uses a single module account for OnRamp/OffRamp/Router/FeeQuoter, so by default
 // it is resolved from the datastore; an explicit single contract ref overrides it.
@@ -122,7 +125,7 @@ func (a *FeeAggregatorAdapter) WithdrawFeeTokens(e cldf.Environment) *cldf_ops.S
 	return cldf_ops.NewSequence(
 		"aptos/sequences/ccip/tooling-api/withdraw-fee-tokens",
 		semver.MustParse("1.6.0"),
-		"Withdraws accumulated fee token balances to the fee aggregator on the Aptos CCIP 1.6.0 OnRamp",
+		"Withdraws accumulated fee token balances to the fee aggregator on the Aptos CCIP 1.6.0 OnRamp via a direct deployer-key tx",
 		func(b cldf_ops.Bundle, chains cldf_chain.BlockChains, input fees.WithdrawFeeTokensForChain) (sequences.OnChainOutput, error) {
 			var result sequences.OnChainOutput
 
@@ -159,14 +162,13 @@ func (a *FeeAggregatorAdapter) WithdrawFeeTokens(e cldf.Environment) *cldf_ops.S
 				return result, fmt.Errorf("fee aggregator is not set on OnRamp (chain %d); set it before withdrawing fee tokens", input.ChainSelector)
 			}
 
+			// Direct tx with the deployer key; no BatchOps, so no MCMS proposal is built.
 			deps := buildAptosDeps(chain, input.ChainSelector, ccipAddr[:])
-			report, err := cldf_ops.ExecuteOperation(b, operation.WithdrawFeeTokensOp, deps, operation.WithdrawFeeTokensInput{
+			if _, err := cldf_ops.ExecuteOperation(b, withdrawFeeTokensOp, deps, operation.WithdrawFeeTokensInput{
 				FeeTokens: feeTokens,
-			})
-			if err != nil {
+			}); err != nil {
 				return result, fmt.Errorf("failed to withdraw fee tokens on chain %d: %w", input.ChainSelector, err)
 			}
-			appendBatchOp(&result, input.ChainSelector, report.Output)
 			return result, nil
 		},
 	)
