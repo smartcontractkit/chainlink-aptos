@@ -23,7 +23,7 @@ require (
 	github.com/smartcontractkit/chainlink-deployments-framework v0.124.1
 	github.com/smartcontractkit/mcms v0.55.3-0.20260924131108-702d781252f8
 	github.com/stretchr/testify v1.12.1
-	golang.org/x/sync v0.23.0
+	golang.org/x/sync v0.24.0
 )
 
 require (
