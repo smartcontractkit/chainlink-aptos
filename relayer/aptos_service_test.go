@@ -2,12 +2,16 @@ package relayer
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"testing"
 
 	aptos_sdk "github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/api"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/loop"
@@ -62,6 +66,44 @@ func TestAptosServiceViewUsesLatestWhenLedgerVersionIsNil(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.JSONEq(t, `["ok"]`, string(reply.Data))
+}
+
+func TestAptosServiceViewErrorCodes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		statusCode int
+		wantCode   codes.Code
+	}{
+		{name: "bad request is invalid argument", statusCode: http.StatusBadRequest, wantCode: codes.InvalidArgument},
+		{name: "rate limited is unknown", statusCode: http.StatusTooManyRequests, wantCode: codes.Unknown},
+		{name: "server error is unknown", statusCode: http.StatusInternalServerError, wantCode: codes.Unknown},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			httpErr := &aptos_sdk.HttpError{StatusCode: tt.statusCode, Status: http.StatusText(tt.statusCode)}
+			client := clientmocks.NewAptosRpcClient(t)
+			client.EXPECT().View(mock.Anything).Return(nil, fmt.Errorf("view function api err: %w", httpErr)).Once()
+
+			svc := aptosService{
+				chain:  &testChain{client: client},
+				logger: logger.Test(t),
+			}
+
+			_, err := svc.View(context.Background(), aptos.ViewRequest{
+				Payload: &aptos.ViewPayload{
+					Module:   aptos.ModuleID{Address: aptos.AccountAddress{1}, Name: "registry"},
+					Function: "get_feeds",
+				},
+			})
+			require.Error(t, err)
+			require.Equal(t, tt.wantCode, status.Code(err))
+		})
+	}
 }
 
 func TestAptosServiceViewUsesRequestedLedgerVersion(t *testing.T) {
