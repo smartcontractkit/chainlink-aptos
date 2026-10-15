@@ -6,11 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
 	"time"
 
 	aptos_sdk "github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/bcs"
 	"github.com/google/uuid"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chain"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
@@ -91,6 +94,11 @@ func (s *aptosService) View(ctx context.Context, req commonaptos.ViewRequest) (*
 	}
 	if err != nil {
 		s.logger.Errorw("View: view function call failed", "error", err)
+		// A 400 means the node rejected the request itself (e.g. module or function doesn't exist),
+		// so surface it as InvalidArgument for callers across the gRPC boundary to treat as a user error.
+		if httpErr, ok := errors.AsType[*aptos_sdk.HttpError](err); ok && httpErr.StatusCode == http.StatusBadRequest {
+			return nil, status.Errorf(codes.InvalidArgument, "failed to call view function: %v", err)
+		}
 		return nil, fmt.Errorf("failed to call view function: %w", err)
 	}
 
