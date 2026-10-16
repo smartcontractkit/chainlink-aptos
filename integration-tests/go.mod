@@ -16,12 +16,12 @@ require (
 	github.com/smartcontractkit/chainlink-common v0.11.2-0.20260929093916-bc9452cf0a49
 	github.com/smartcontractkit/chainlink-deployments-framework v0.124.1
 	github.com/smartcontractkit/chainlink-evm v0.3.4-0.20260929161505-cc645fce4250
-	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20260915165527-3701875605f4
+	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20261005112317-b723176adfe8
 	github.com/smartcontractkit/chainlink-protos/job-distributor v0.20.1-0.20260701185448-696c075849ea
 	github.com/smartcontractkit/chainlink-testing-framework/framework v0.16.9
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20260924123859-7fd179e1a24a
 	github.com/smartcontractkit/chainlink/v2 v2.67.2-rc.0
-	github.com/smartcontractkit/cld-changesets v0.9.1-0.20260911120037-95e1c8bcb265
+	github.com/smartcontractkit/cld-changesets v0.9.1
 	github.com/smartcontractkit/libocr v0.0.0-20260810200708-618b5bf7f342
 	github.com/smartcontractkit/mcms v0.55.3-0.20260924131108-702d781252f8
 	github.com/spf13/cobra v1.10.2
