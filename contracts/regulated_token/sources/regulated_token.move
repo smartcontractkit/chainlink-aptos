@@ -664,6 +664,16 @@ module regulated_token::regulated_token {
         event::emit(AccountUnfrozen { unfreezer: caller_addr, account });
     }
 
+    // The token registers no balance hook, so this equals the dispatched balance. Reading it through
+    // `dispatchable_fungible_asset` would abort under an MCMS dispatch, which holds that module's lock.
+    fun raw_balance(owner: address, metadata: Object<Metadata>): u64 {
+        if (primary_fungible_store::primary_store_exists(owner, metadata)) {
+            fungible_asset::balance(
+                primary_fungible_store::primary_store(owner, metadata)
+            )
+        } else { 0 }
+    }
+
     fun burn_frozen_funds_internal(
         burner: address,
         account: address,
@@ -673,7 +683,7 @@ module regulated_token::regulated_token {
         is_bridge_burner: bool
     ) {
         if (is_frozen) {
-            let balance = primary_fungible_store::balance(account, token_metadata);
+            let balance = raw_balance(account, token_metadata);
             if (balance > 0) {
                 primary_fungible_store::burn(burn_ref, account, balance);
                 if (is_bridge_burner) {
@@ -697,7 +707,7 @@ module regulated_token::regulated_token {
             E_ACCOUNT_MUST_BE_FROZEN_FOR_RECOVERY
         );
 
-        let balance = primary_fungible_store::balance(from, token_state.token);
+        let balance = raw_balance(from, token_state.token);
         if (balance > 0) {
             primary_fungible_store::transfer_with_ref(transfer_ref, from, to, balance);
             event::emit(
@@ -995,7 +1005,7 @@ module regulated_token::regulated_token {
         transfer_ref: &TransferRef
     ) {
         let token_metadata = fungible_asset::transfer_ref_metadata(transfer_ref);
-        let balance = primary_fungible_store::balance(from, token_metadata);
+        let balance = raw_balance(from, token_metadata);
         if (balance > 0) {
             primary_fungible_store::transfer_with_ref(transfer_ref, from, to, balance);
             event::emit(
