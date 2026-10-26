@@ -206,4 +206,9 @@ module regulated_token::mcms_regulated_token_registrar {
     public fun init_module_for_testing(publisher: &signer) {
         init_module(publisher);
     }
+
+    #[test_only]
+    public fun test_register_mcms_entrypoint(publisher: &signer) {
+        register_mcms_entrypoint(publisher);
+    }
 }
