@@ -104,7 +104,7 @@ func SetClientLatency(chainInfo types.ChainInfo, d time.Duration, request, url s
 		chainInfo.ChainFamilyName,
 		chainInfo.ChainID,
 		chainInfo.NetworkName,
-		url,
+		metrics.SanitizeRPCURL(url),
 		strconv.FormatBool(err == nil), // is successful
 		request,                        // rpc call name
 	).Observe(float64(d.Milliseconds()))

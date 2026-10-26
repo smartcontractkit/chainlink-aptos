@@ -18,7 +18,7 @@ require (
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	github.com/smartcontractkit/chainlink-aptos/codec v0.0.0-20260707222328-5036bbcb7832
 	github.com/smartcontractkit/chainlink-common v0.11.2-0.20260923164324-86cd57d9fdbd
-	github.com/smartcontractkit/chainlink-framework/metrics v0.0.0-20260505202410-b350dca113b4
+	github.com/smartcontractkit/chainlink-framework/metrics v0.0.0-20261009212658-df7dcfcb7a77
 	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260804191526-b7a850ae7648
 	github.com/stretchr/testify v1.12.1
 	github.com/valyala/fastjson v1.6.10
