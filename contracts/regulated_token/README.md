@@ -436,6 +436,40 @@ aptos move view \
   --args address:<ACCOUNT_ADDRESS>
 ```
 
+An account freeze flags the account's primary store and blocks every store whose root owner is
+the frozen account. A store under an object that changes hands escapes that check, so the
+freezer can also flag stores one by one. The flag lives on the store and follows it:
+
+```bash
+# Freeze specific stores (requires FREEZER_ROLE)
+aptos move run \
+  --function-id <REGULATED_TOKEN_ADDRESS>::regulated_token::freeze_stores \
+  --args 'address:["<STORE_ADDRESS>"]' \
+  --profile freezer
+
+# Unfreeze specific stores (requires UNFREEZER_ROLE)
+aptos move run \
+  --function-id <REGULATED_TOKEN_ADDRESS>::regulated_token::unfreeze_stores \
+  --args 'address:["<STORE_ADDRESS>"]' \
+  --profile freezer
+
+# Check if a store is frozen
+aptos move view \
+  --function-id <REGULATED_TOKEN_ADDRESS>::regulated_token::is_store_frozen \
+  --args address:<STORE_ADDRESS>
+
+# Burn or recover the full balance of frozen stores
+# (BURNER_ROLE or BRIDGE_MINTER_OR_BURNER_ROLE, and RECOVERY_ROLE)
+aptos move run \
+  --function-id <REGULATED_TOKEN_ADDRESS>::regulated_token::burn_frozen_stores \
+  --args 'address:["<STORE_ADDRESS>"]' \
+  --profile burner
+aptos move run \
+  --function-id <REGULATED_TOKEN_ADDRESS>::regulated_token::recover_frozen_stores \
+  --args 'address:["<STORE_ADDRESS>"]' address:<RECIPIENT> \
+  --profile recovery
+```
+
 #### Pausing and Administrative Functions
 
 Accounts with `PAUSER_ROLE` and `UNPAUSER_ROLE` can pause and unpause the contract:

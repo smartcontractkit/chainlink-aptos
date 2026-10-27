@@ -4,6 +4,7 @@ module regulated_token::regulated_token {
         Self,
         BurnRef,
         FungibleAsset,
+        FungibleStore,
         Metadata,
         MintRef,
         TransferRef,
@@ -150,6 +151,18 @@ module regulated_token::regulated_token {
     }
 
     #[event]
+    struct StoreFrozen has drop, store {
+        freezer: address,
+        store: address
+    }
+
+    #[event]
+    struct StoreUnfrozen has drop, store {
+        unfreezer: address,
+        store: address
+    }
+
+    #[event]
     struct TokensRecovered has drop, store {
         caller: address,
         token_metadata: Object<Metadata>,
@@ -190,6 +203,9 @@ module regulated_token::regulated_token {
     const E_TOKEN_STATE_DEPLOYMENT_ALREADY_INITIALIZED: u64 = 13;
     /// Account msut be frozen for recovery
     const E_ACCOUNT_MUST_BE_FROZEN_FOR_RECOVERY: u64 = 14;
+
+    /// Store must carry the frozen flag for recovery
+    const E_STORE_MUST_BE_FROZEN_FOR_RECOVERY: u64 = 16;
 
     #[view]
     public fun type_and_version(): String {
@@ -335,6 +351,13 @@ module regulated_token::regulated_token {
     }
 
     #[view]
+    /// Whether the framework frozen flag is set on this store. Set by `freeze_account` on the
+    /// account's primary store and by `freeze_stores` on any store.
+    public fun is_store_frozen(store: address): bool {
+        fungible_asset::is_frozen(object::address_to_object<FungibleStore>(store))
+    }
+
+    #[view]
     /// Get frozen accounts paginated using a start key and limit.
     /// Caller should call this on a certain block to ensure you the same state for every call.
     ///
@@ -391,7 +414,7 @@ module regulated_token::regulated_token {
         let token_state = &TokenState[object::object_address(&state_obj)];
 
         assert_not_paused(token_state);
-        assert_not_frozen(object::owner(store), token_state);
+        assert_not_frozen(object::root_owner(store), token_state);
         assert_correct_asset(transfer_ref, token_metadata, store);
 
         fungible_asset::deposit_with_ref(transfer_ref, store, fa);
@@ -405,7 +428,7 @@ module regulated_token::regulated_token {
         let token_state = &TokenState[object::object_address(&state_obj)];
 
         assert_not_paused(token_state);
-        assert_not_frozen(object::owner(store), token_state);
+        assert_not_frozen(object::root_owner(store), token_state);
         assert_correct_asset(transfer_ref, token_metadata, store);
 
         fungible_asset::withdraw_with_ref(transfer_ref, store, amount)
@@ -815,6 +838,40 @@ module regulated_token::regulated_token {
         );
     }
 
+    /// Sets the framework frozen flag on each store, so the framework rejects deposits and
+    /// withdrawals before the dispatch hooks run. The flag lives on the store, so it holds when
+    /// the object that owns the store changes hands. Use it for stores an account does not own
+    /// directly, such as a vault or position object; `freeze_account` covers primary stores.
+    public entry fun freeze_stores(
+        caller: &signer, stores: vector<address>
+    ) acquires TokenMetadataRefs, TokenState {
+        assert_freezer(caller, token_state_object_internal());
+
+        let caller_addr = signer::address_of(caller);
+        let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
+        for (i in 0..stores.length()) {
+            let store = object::address_to_object<FungibleStore>(stores[i]);
+            fungible_asset::set_frozen_flag(transfer_ref, store, true);
+            event::emit(StoreFrozen { freezer: caller_addr, store: stores[i] });
+        };
+    }
+
+    /// Clears the frozen flag set by `freeze_stores`. A frozen account's stores stay blocked
+    /// by the root owner check until `unfreeze_account` runs.
+    public entry fun unfreeze_stores(
+        caller: &signer, stores: vector<address>
+    ) acquires TokenMetadataRefs, TokenState {
+        assert_unfreezer(caller, token_state_object_internal());
+
+        let caller_addr = signer::address_of(caller);
+        let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
+        for (i in 0..stores.length()) {
+            let store = object::address_to_object<FungibleStore>(stores[i]);
+            fungible_asset::set_frozen_flag(transfer_ref, store, false);
+            event::emit(StoreUnfrozen { unfreezer: caller_addr, store: stores[i] });
+        };
+    }
+
     /// Batch revoke and grant roles by role number
     /// `batch_revoke_role` and `batch_grant_role` assert that the caller is the admin
     public entry fun apply_role_updates(
@@ -949,6 +1006,72 @@ module regulated_token::regulated_token {
                 transfer_ref,
                 token_state
             );
+        };
+    }
+
+    /// Burns the full balance of each given store that carries the frozen flag. Stores that are
+    /// not frozen are skipped, as in `batch_burn_frozen_funds`. The burn events name the store
+    /// as `from`.
+    public entry fun burn_frozen_stores(
+        caller: &signer, stores: vector<address>
+    ) acquires TokenMetadataRefs, TokenState {
+        let state_obj = token_state_object_internal();
+        assert_not_paused(&TokenState[object::object_address(&state_obj)]);
+
+        let burner = signer::address_of(caller);
+        let (is_bridge_burner, _) = assert_burner_and_get_type(burner, state_obj);
+        let refs = borrow_token_metadata_refs();
+
+        for (i in 0..stores.length()) {
+            let store = object::address_to_object<FungibleStore>(stores[i]);
+            if (!fungible_asset::is_frozen(store)) {
+                continue
+            };
+            let amount = fungible_asset::balance(store);
+            if (amount == 0) {
+                continue
+            };
+
+            let fa = fungible_asset::withdraw_with_ref(&refs.transfer_ref, store, amount);
+            fungible_asset::burn(&refs.burn_ref, fa);
+            if (is_bridge_burner) {
+                event::emit(BridgeBurn { burner, from: stores[i], amount });
+            } else {
+                event::emit(NativeBurn { burner, from: stores[i], amount });
+            };
+        };
+    }
+
+    /// Moves the full balance of each given frozen store to the primary store of `to`.
+    /// Only callable by accounts with RECOVERY_ROLE. Every store must carry the frozen flag.
+    public entry fun recover_frozen_stores(
+        caller: &signer, stores: vector<address>, to: address
+    ) acquires TokenMetadataRefs, TokenState {
+        let caller_addr = signer::address_of(caller);
+        let (transfer_ref, token_state) = validate_recovery_procedure(caller, to);
+        let to_store =
+            primary_fungible_store::ensure_primary_store_exists(to, token_state.token);
+
+        for (i in 0..stores.length()) {
+            let store = object::address_to_object<FungibleStore>(stores[i]);
+            assert!(
+                fungible_asset::is_frozen(store),
+                E_STORE_MUST_BE_FROZEN_FOR_RECOVERY
+            );
+
+            let amount = fungible_asset::balance(store);
+            if (amount > 0) {
+                fungible_asset::transfer_with_ref(transfer_ref, store, to_store, amount);
+                event::emit(
+                    TokensRecovered {
+                        caller: caller_addr,
+                        token_metadata: token_state.token,
+                        from: stores[i],
+                        to,
+                        amount
+                    }
+                );
+            };
         };
     }
 
