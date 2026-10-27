@@ -1281,6 +1281,8 @@ module regulated_token::regulated_token {
 
         let root = object::root_owner(store);
         assert_not_frozen(root, token_state);
+        // Freezing the holding object alone must block the store, as before the root check.
+        assert_not_frozen(object::owner(store), token_state);
 
         let store_addr = object::object_address(&store);
         let pins_resource = &mut StoreOwnerPins[state_addr];
@@ -1315,6 +1317,8 @@ module regulated_token::regulated_token {
     ) {
         let root = object::root_owner(store);
         assert_not_frozen(root, token_state);
+        // Freezing the holding object alone must block the store, as before the root check.
+        assert_not_frozen(object::owner(store), token_state);
 
         if (fungible_asset::balance(store) == 0) { return };
 

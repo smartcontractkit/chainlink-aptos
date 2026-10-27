@@ -339,4 +339,46 @@ module regulated_token::store_owner_pin_test {
         let fa = dispatchable_fungible_asset::withdraw(&holder, store, 0);
         dispatchable_fungible_asset::deposit(store, fa);
     }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::regulated_token::E_ACCOUNT_FROZEN,
+            location = regulated_token::regulated_token
+        )
+    ]
+    /// Freezing the holding object blocks withdrawal from its store, as before the root check.
+    fun test_withdraw_aborts_when_parent_object_frozen(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let holder = account::create_signer_for_test(HOLDER);
+        let (holding, store) = new_nested_store(HOLDER);
+        stage(&holder, store, STAGED);
+
+        regulated_token::freeze_account(admin, object::object_address(&holding));
+
+        drain_to_outside(&holder, store, STAGED);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::regulated_token::E_ACCOUNT_FROZEN,
+            location = regulated_token::regulated_token
+        )
+    ]
+    /// Freezing the holding object blocks deposits into its store too.
+    fun test_deposit_aborts_when_parent_object_frozen(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let holder = account::create_signer_for_test(HOLDER);
+        let (holding, store) = new_nested_store(HOLDER);
+        stage(&holder, store, STAGED);
+
+        regulated_token::freeze_account(admin, object::object_address(&holding));
+
+        stage(&holder, store, 100);
+    }
 }
