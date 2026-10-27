@@ -3,6 +3,7 @@ package utils
 import (
 	"math"
 	"math/big"
+	"runtime"
 	"testing"
 
 	"github.com/aptos-labs/aptos-go-sdk"
@@ -12,51 +13,52 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDeserializeExecutionReport(t *testing.T) {
-	// Returns a valid report with optional modifications applied by the modifier function.
-	validWith := func(modifier func(report *rawSerializedReport)) []byte {
-		report := &rawSerializedReport{
-			sourceChainSelector:       1,
-			messageId:                 common.HexToHash("0x2"),
-			headerSourceChainSelector: 1,
-			headerDestChainSelector:   3,
-			headerSequenceNumber:      4,
-			headerNonce:               5,
-			senderLength:              1,
-			sender:                    []byte{0x45},
-			dataLength:                1,
-			data:                      []byte{0x67},
-			receiver:                  common.HexToHash("0x8"),
-			gasLimit:                  big.NewInt(1),
-			tokenAmountsLength:        1,
-			tokenAmounts: []rawTokenAmount{{
-				sourcePoolAddressLength: 2,
-				sourcePoolAddress:       []byte{0x11, 0x22},
-				destToken:               common.HexToHash("0x7777"),
-				destGas:                 0,
-				extraDataLength:         0,
-				extraData:               nil,
-				amount:                  big.NewInt(99999),
-			}},
-			offchainTokenDataLength: 2,
-			offchainTokenData: []rawVec8{
-				{
-					dataLength: 0,
-					data:       []byte{},
-				}, {
-					dataLength: 2,
-					data:       []byte{0x33, 0x44},
-				},
+// validWith returns the serialized bytes of a valid report with optional modifications
+// applied by the modifier function.
+func validWith(modifier func(report *rawSerializedReport)) []byte {
+	report := &rawSerializedReport{
+		sourceChainSelector:       1,
+		messageId:                 common.HexToHash("0x2"),
+		headerSourceChainSelector: 1,
+		headerDestChainSelector:   3,
+		headerSequenceNumber:      4,
+		headerNonce:               5,
+		senderLength:              1,
+		sender:                    []byte{0x45},
+		dataLength:                1,
+		data:                      []byte{0x67},
+		receiver:                  common.HexToHash("0x8"),
+		gasLimit:                  big.NewInt(1),
+		tokenAmountsLength:        1,
+		tokenAmounts: []rawTokenAmount{{
+			sourcePoolAddressLength: 2,
+			sourcePoolAddress:       []byte{0x11, 0x22},
+			destToken:               common.HexToHash("0x7777"),
+			destGas:                 0,
+			extraDataLength:         0,
+			extraData:               nil,
+			amount:                  big.NewInt(99999),
+		}},
+		offchainTokenDataLength: 2,
+		offchainTokenData: []rawVec8{
+			{
+				dataLength: 0,
+				data:       []byte{},
+			}, {
+				dataLength: 2,
+				data:       []byte{0x33, 0x44},
 			},
-			proofsLength: 1,
-			proofs:       [][]byte{common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef").Bytes()},
-		}
-		if modifier != nil {
-			modifier(report)
-		}
-		return serializeUnchecked(*report)
+		},
+		proofsLength: 1,
+		proofs:       [][]byte{common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef").Bytes()},
 	}
+	if modifier != nil {
+		modifier(report)
+	}
+	return serializeUnchecked(*report)
+}
 
+func TestDeserializeExecutionReport(t *testing.T) {
 	tests := []struct {
 		name    string
 		data    []byte
@@ -175,6 +177,100 @@ func TestDeserializeExecutionReport(t *testing.T) {
 				return
 			}
 			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// measureAllocGrowth runs fn and returns the total number of bytes allocated while it ran.
+// TotalAlloc is cumulative and unaffected by GC, so a large transient allocation shows up
+// in full even if it is unreachable by the time fn returns.
+func measureAllocGrowth(t *testing.T, fn func()) uint64 {
+	t.Helper()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	fn()
+	runtime.ReadMemStats(&after)
+	return after.TotalAlloc - before.TotalAlloc
+}
+
+func TestReadBoundedBytes(t *testing.T) {
+	t.Run("reads a vector that fits the input", func(t *testing.T) {
+		d := bcs.NewDeserializer([]byte{0x02, 0xAA, 0xBB})
+		got, err := readBoundedBytes(d, "field")
+		require.NoError(t, err)
+		assert.Equal(t, []byte{0xAA, 0xBB}, got)
+		require.NoError(t, d.Error())
+	})
+
+	t.Run("rejects a length the input cannot satisfy", func(t *testing.T) {
+		d := bcs.NewDeserializer([]byte{0x03, 0xAA, 0xBB})
+		_, err := readBoundedBytes(d, "field")
+		require.ErrorContains(t, err, "declared length 3 exceeds 2 remaining bytes")
+	})
+
+	t.Run("rejects a huge length without allocating it", func(t *testing.T) {
+		// ULEB128 encoding of math.MaxUint32, with nothing behind it.
+		d := bcs.NewDeserializer([]byte{0xFF, 0xFF, 0xFF, 0xFF, 0x0F})
+		var err error
+		growth := measureAllocGrowth(t, func() {
+			_, err = readBoundedBytes(d, "field")
+		})
+		require.ErrorContains(t, err, "declared length 4294967295 exceeds 0 remaining bytes")
+		assert.Less(t, growth, uint64(1<<20), "forged length must be rejected before allocating")
+	})
+}
+
+func TestDeserializeExecutionReport_ForgedLengthsDoNotAllocate(t *testing.T) {
+	tests := []struct {
+		name    string
+		forge   func(report *rawSerializedReport)
+		wantErr string
+	}{
+		{
+			name: "sender",
+			forge: func(report *rawSerializedReport) {
+				report.senderLength = math.MaxUint32
+			},
+			wantErr: "failed to deserialize sender: declared length 4294967295 exceeds",
+		}, {
+			name: "data",
+			forge: func(report *rawSerializedReport) {
+				report.dataLength = math.MaxUint32
+			},
+			wantErr: "failed to deserialize data: declared length 4294967295 exceeds",
+		}, {
+			name: "tokenAmounts[0].sourcePoolAddress",
+			forge: func(report *rawSerializedReport) {
+				report.tokenAmounts[0].sourcePoolAddressLength = math.MaxUint32
+			},
+			wantErr: "failed to deserialize tokenAmounts[0].sourcePoolAddress: declared length 4294967295 exceeds",
+		}, {
+			name: "tokenAmounts[0].extraData",
+			forge: func(report *rawSerializedReport) {
+				report.tokenAmounts[0].extraDataLength = math.MaxUint32
+			},
+			wantErr: "failed to deserialize tokenAmounts[0].extraData: declared length 4294967295 exceeds",
+		}, {
+			name: "offchainTokenData[1]",
+			forge: func(report *rawSerializedReport) {
+				report.offchainTokenData[1].dataLength = math.MaxUint32
+			},
+			wantErr: "failed to deserialize offchainTokenData[1]: declared length 4294967295 exceeds",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := validWith(tt.forge)
+			var got *ExecutionReport
+			var err error
+			growth := measureAllocGrowth(t, func() {
+				got, err = DeserializeExecutionReport(data)
+			})
+			require.ErrorContains(t, err, tt.wantErr)
+			assert.Nil(t, got)
+			// A declared length of MaxUint32 is a ~4 GiB request the input cannot
+			// satisfy; it must be refused before the bytes are allocated.
+			assert.Less(t, growth, uint64(1<<20), "forged length must be rejected before allocating")
 		})
 	}
 }

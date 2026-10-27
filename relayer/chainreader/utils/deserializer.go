@@ -61,6 +61,27 @@ type SourceChainConfig struct {
 	OnRamp                    []byte
 }
 
+// readBoundedBytes reads a ULEB128 length-prefixed byte vector, refusing a declared
+// length the input cannot satisfy before allocating.
+// It mirrors the bound mcms::bcs_stream applies on chain.
+func readBoundedBytes(deserializer *bcs.Deserializer, field string) ([]byte, error) {
+	length := deserializer.Uleb128()
+	if err := deserializer.Error(); err != nil {
+		return nil, fmt.Errorf("failed to deserialize %s length: %w", field, err)
+	}
+	// Uleb128 returns uint32 and Remaining returns int, so compare in uint64: casting the
+	// length to int directly would overflow on 32-bit platforms for large lengths.
+	if uint64(length) > uint64(deserializer.Remaining()) {
+		return nil, fmt.Errorf("failed to deserialize %s: declared length %d exceeds %d remaining bytes", field, length, deserializer.Remaining())
+	}
+	// The bound check guarantees length fits in int on all platforms.
+	data := deserializer.ReadFixedBytes(int(length))
+	if err := deserializer.Error(); err != nil {
+		return nil, fmt.Errorf("failed to deserialize %s: %w", field, err)
+	}
+	return data, nil
+}
+
 func DeserializeExecutionReport(data []byte) (*ExecutionReport, error) {
 	deserializer := bcs.NewDeserializer(data)
 
@@ -107,15 +128,15 @@ func DeserializeExecutionReport(data []byte) (*ExecutionReport, error) {
 	}
 
 	// 3. Read sender (vector<u8>)
-	sender := deserializer.ReadBytes()
-	if err := deserializer.Error(); err != nil {
-		return nil, fmt.Errorf("failed to deserialize sender: %w", err)
+	sender, err := readBoundedBytes(deserializer, "sender")
+	if err != nil {
+		return nil, err
 	}
 
 	// 4. Read data (vector<u8>)
-	msgData := deserializer.ReadBytes()
-	if err := deserializer.Error(); err != nil {
-		return nil, fmt.Errorf("failed to deserialize data: %w", err)
+	msgData, err := readBoundedBytes(deserializer, "data")
+	if err != nil {
+		return nil, err
 	}
 
 	// 5. Read receiver (address)
@@ -139,9 +160,9 @@ func DeserializeExecutionReport(data []byte) (*ExecutionReport, error) {
 	var tokenAmounts []Any2AptosTokenTransfer
 
 	for i := range tokenAmountsLen {
-		sourcePoolAddr := deserializer.ReadBytes()
-		if err := deserializer.Error(); err != nil {
-			return nil, fmt.Errorf("failed to deserialize tokenAmounts[%d].sourcePoolAddress: %w", i, err)
+		sourcePoolAddr, err := readBoundedBytes(deserializer, fmt.Sprintf("tokenAmounts[%d].sourcePoolAddress", i))
+		if err != nil {
+			return nil, err
 		}
 
 		destToken := aptos.AccountAddress{}
@@ -154,9 +175,9 @@ func DeserializeExecutionReport(data []byte) (*ExecutionReport, error) {
 		if err := deserializer.Error(); err != nil {
 			return nil, fmt.Errorf("failed to deserialize tokenAmounts[%d].destGas: %w", i, err)
 		}
-		extraData := deserializer.ReadBytes()
-		if err := deserializer.Error(); err != nil {
-			return nil, fmt.Errorf("failed to deserialize tokenAmounts[%d].extraData: %w", i, err)
+		extraData, err := readBoundedBytes(deserializer, fmt.Sprintf("tokenAmounts[%d].extraData", i))
+		if err != nil {
+			return nil, err
 		}
 		amount := deserializer.U256()
 		if err := deserializer.Error(); err != nil {
@@ -189,9 +210,9 @@ func DeserializeExecutionReport(data []byte) (*ExecutionReport, error) {
 	var offchainData [][]byte
 
 	for i := range offchainDataLen {
-		data := deserializer.ReadBytes()
-		if err := deserializer.Error(); err != nil {
-			return nil, fmt.Errorf("failed to deserialize offchainTokenData[%d]: %w", i, err)
+		data, err := readBoundedBytes(deserializer, fmt.Sprintf("offchainTokenData[%d]", i))
+		if err != nil {
+			return nil, err
 		}
 		offchainData = append(offchainData, data)
 	}
