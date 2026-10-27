@@ -23,7 +23,7 @@ require (
 	github.com/smartcontractkit/chainlink/v2 v2.67.2-rc.0
 	github.com/smartcontractkit/cld-changesets v0.9.1-0.20260911120037-95e1c8bcb265
 	github.com/smartcontractkit/libocr v0.0.0-20260810200708-618b5bf7f342
-	github.com/smartcontractkit/mcms v0.55.3-0.20260924131108-702d781252f8
+	github.com/smartcontractkit/mcms v0.56.1
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/zap v1.28.0
