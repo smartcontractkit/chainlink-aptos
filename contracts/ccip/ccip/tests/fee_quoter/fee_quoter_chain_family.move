@@ -90,6 +90,123 @@ module ccip::fee_quoter_chain_family {
         assert!(fee > 0);
     }
 
+    /// Quotes a fee for an SVM-destined message carrying `num_accounts` accounts.
+    fun quote_svm_fee_with_accounts(
+        aptos_framework: &signer,
+        ccip: &signer,
+        owner: &signer,
+        num_accounts: u64,
+        account_is_writable_bitmap: u64
+    ): u64 {
+        let (_owner_addr, token_obj) =
+            fee_quoter_setup::setup(aptos_framework, ccip, owner);
+        let token_addr = object::object_address(&token_obj);
+
+        let svm_dest_chain_selector = 55555;
+
+        fee_quoter::apply_dest_chain_config_updates(
+            owner,
+            svm_dest_chain_selector, // dest_chain_selector
+            true, // is_enabled
+            1, // max_number_of_tokens_per_msg
+            10000, // max_data_bytes
+            7000000, // max_per_msg_gas_limit
+            0, // dest_gas_overhead
+            0, // dest_gas_per_payload_byte_base
+            0, // dest_gas_per_payload_byte_high
+            0, // dest_gas_per_payload_byte_threshold
+            0, // dest_data_availability_overhead_gas
+            0, // dest_gas_per_data_availability_byte
+            0, // dest_data_availability_multiplier_bps
+            fee_quoter_setup::get_chain_family_selector_svm(), // chain_family_selector
+            false, // enforce_out_of_order
+            0, // default_token_fee_usd_cents
+            0, // default_token_dest_gas_overhead
+            1000000, // default_tx_gas_limit
+            1, // gas_multiplier_wei_per_eth
+            10000000, // gas_price_staleness_threshold
+            0 // network_fee_usd_cents
+        );
+
+        fee_quoter::update_prices(
+            owner,
+            vector[token_addr], // source_tokens
+            vector[1000], // source_usd_per_token
+            vector[svm_dest_chain_selector], // gas_dest_chain_selectors
+            vector[1000000] // gas price for SVM chain
+        );
+
+        let svm_address =
+            x"7e5f4552091a69125d5dfcb7b8c2659029395bdf9c45bb0f8a496b606328c3ef";
+        let accounts = vector[];
+        for (_i in 0..num_accounts) {
+            accounts.push_back(svm_address);
+        };
+
+        let svm_extra_args =
+            client::encode_svm_extra_args_v1(
+                200000, // compute_units
+                account_is_writable_bitmap,
+                true, // allow_out_of_order_execution
+                svm_address, // token_receiver
+                accounts
+            );
+
+        fee_quoter::get_validated_fee(
+            svm_dest_chain_selector,
+            svm_address, // receiver
+            b"test data", // data
+            vector[], // token addresses (empty for message-only)
+            vector[], // token amounts
+            vector[], // token store addresses
+            token_addr, // fee token
+            @0x0, // fee token store (not used in test)
+            svm_extra_args
+        )
+    }
+
+    // 64 is SVM_EXTRA_ARGS_MAX_ACCOUNTS: the bitmap shift is skipped, so a valid bitmap quotes a fee.
+    #[test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms)]
+    fun test_svm_extra_args_max_accounts(
+        aptos_framework: &signer, ccip: &signer, owner: &signer
+    ) {
+        let fee = quote_svm_fee_with_accounts(aptos_framework, ccip, owner, 64, 0);
+        assert!(fee > 0);
+    }
+
+    // At 64 accounts every bitmap bit maps to a supplied account, so a full bitmap is valid too.
+    #[test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms)]
+    fun test_svm_extra_args_max_accounts_full_bitmap(
+        aptos_framework: &signer, ccip: &signer, owner: &signer
+    ) {
+        let fee =
+            quote_svm_fee_with_accounts(
+                aptos_framework, ccip, owner, 64, 18446744073709551615
+            );
+        assert!(fee > 0);
+    }
+
+    #[
+        test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms),
+        expected_failure(abort_code = 65569, location = ccip::fee_quoter) // E_INVALID_SVM_EXTRA_ARGS_WRITABLE_BITMAP
+    ]
+    fun test_svm_extra_args_bit_above_account_count(
+        aptos_framework: &signer, ccip: &signer, owner: &signer
+    ) {
+        // Bit 63 set with only 63 accounts (valid indices 0..62).
+        quote_svm_fee_with_accounts(aptos_framework, ccip, owner, 63, 1 << 63);
+    }
+
+    #[
+        test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms),
+        expected_failure(abort_code = 65568, location = ccip::fee_quoter) // E_TOO_MANY_SVM_EXTRA_ARGS_ACCOUNTS
+    ]
+    fun test_svm_extra_args_too_many_accounts(
+        aptos_framework: &signer, ccip: &signer, owner: &signer
+    ) {
+        quote_svm_fee_with_accounts(aptos_framework, ccip, owner, 65, 0);
+    }
+
     #[test(aptos_framework = @aptos_framework, ccip = @ccip, owner = @mcms)]
     fun test_aptos_chain_support(
         aptos_framework: &signer, ccip: &signer, owner: &signer
