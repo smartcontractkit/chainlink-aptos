@@ -642,8 +642,8 @@ github.com/smartcontractkit/chainlink-common/pkg/chipingress v0.0.11-0.202609151
 github.com/smartcontractkit/chainlink-common/pkg/chipingress v0.0.11-0.20260915184316-2730f1867c92/go.mod h1:Scyk7O80fde5rJF3Ty3fEE3xiS6j84eWbu8/2gl3pIY=
 github.com/smartcontractkit/chainlink-deployments-framework v0.124.1 h1:/D4e7dgvyjqgrHjk4pCe54XabG6eoEf+KfIGeotl7bI=
 github.com/smartcontractkit/chainlink-deployments-framework v0.124.1/go.mod h1:2oU0PpZy+GMcUrCha5HvJznPG7ny2H/ldz7GzC/fnsE=
-github.com/smartcontractkit/chainlink-framework/metrics v0.0.0-20260723212800-b2f21d31b1d2 h1:N1Q6NHuH+T2b6cst43LD2pnykNJSymP/szJJ7rrYY8I=
-github.com/smartcontractkit/chainlink-framework/metrics v0.0.0-20260723212800-b2f21d31b1d2/go.mod h1:HG/aei0MgBOpsyRLexdKGtOUO8yjSJO3iUu0Uu8KBm4=
+github.com/smartcontractkit/chainlink-framework/metrics v0.0.0-20261009212658-df7dcfcb7a77 h1:woYyErzpHddf3LZud+Qcd646Ku+Ft4KlHcgMhURpNqk=
+github.com/smartcontractkit/chainlink-framework/metrics v0.0.0-20261009212658-df7dcfcb7a77/go.mod h1:TJtLydKfLSIFok44jlFIbsnUbJl+hqNhYB4U+JmRpaM=
 github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260916140808-f5d22b3cb3ee h1:drewC9gPerS+FDeaaSfG7YL1Zzt/0Jr6YQ1YvHXzz04=
 github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260916140808-f5d22b3cb3ee/go.mod h1:/i8hjTPFdVWHiY+QjeSiVS2Z3GB3WAZznGgXHstC02E=
 github.com/smartcontractkit/chainlink-protos/job-distributor v0.20.1-0.20260701185448-696c075849ea h1:gdA7tZgcRYMq3ryi7uNopYgn6s26g04Haw9SdmLRHzE=
