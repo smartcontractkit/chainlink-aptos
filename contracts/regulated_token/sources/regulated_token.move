@@ -1085,7 +1085,7 @@ module regulated_token::regulated_token {
             let store = object::address_to_object<FungibleStore>(stores[i]);
             assert!(
                 fungible_asset::is_frozen(store),
-                E_STORE_MUST_BE_FROZEN_FOR_RECOVERY
+                error::invalid_state(E_STORE_MUST_BE_FROZEN_FOR_RECOVERY)
             );
 
             let amount = fungible_asset::balance(store);

@@ -229,12 +229,8 @@ module regulated_token::store_freeze_test {
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
-    #[
-        expected_failure(
-            abort_code = regulated_token::regulated_token::E_STORE_MUST_BE_FROZEN_FOR_RECOVERY,
-            location = regulated_token::regulated_token
-        )
-    ]
+    #[expected_failure(abort_code = 0x30010, location = regulated_token::regulated_token)]
+    // invalid_state(E_STORE_MUST_BE_FROZEN_FOR_RECOVERY)
     /// Recovery refuses a store that is not frozen.
     fun test_recover_frozen_stores_requires_frozen(
         admin: &signer, regulated_token: &signer
