@@ -181,7 +181,11 @@ module ccip::fee_quoter_chain_family {
     ) {
         let fee =
             quote_svm_fee_with_accounts(
-                aptos_framework, ccip, owner, 64, 18446744073709551615
+                aptos_framework,
+                ccip,
+                owner,
+                64,
+                18446744073709551615
             );
         assert!(fee > 0);
     }
