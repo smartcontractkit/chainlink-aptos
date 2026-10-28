@@ -18,6 +18,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/sqlutil"
 	"github.com/smartcontractkit/chainlink-common/pkg/types"
+	ccipconsts "github.com/smartcontractkit/chainlink-common/pkg/types/ccip/consts"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 	commonutils "github.com/smartcontractkit/chainlink-common/pkg/utils"
@@ -31,6 +32,9 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/relayer/txm"
 	aptos0 "github.com/smartcontractkit/chainlink-common/pkg/types/aptos"
 )
+
+// Aptos routers have no wrapped-native getter; APT is the native fee token.
+const aptNativeTokenAddress = "0x000000000000000000000000000000000000000000000000000000000000000a"
 
 type aptosChainReader struct {
 	types.UnimplementedContractReader
@@ -172,6 +176,10 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		return fmt.Errorf("bound address %s for module %s does not match read address %s", address, contractName, _address)
 	}
 
+	if contractName == ccipconsts.ContractNameRouter && method == ccipconsts.MethodNameRouterGetWrappedNative {
+		return a.writeResult(aptNativeTokenAddress, returnVal)
+	}
+
 	moduleConfig, ok := a.config.Modules[contractName]
 	if !ok {
 		return fmt.Errorf("no such contract: %s", contractName)
@@ -308,10 +316,14 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		transformedData = unwrapped
 	}
 
+	return a.writeResult(transformedData, returnVal)
+}
+
+func (a *aptosChainReader) writeResult(data any, returnVal any) error {
 	if a.config.IsLoopPlugin {
 		// immediately remarshal the data
 		// TODO: update aptos-go-sdk to allow returning the string directly
-		resultBytes, err := json.Marshal(transformedData)
+		resultBytes, err := json.Marshal(data)
 		if err != nil {
 			return fmt.Errorf("failed to re-marshal data: %+w", err)
 		}
@@ -324,7 +336,7 @@ func (a *aptosChainReader) GetLatestValue(ctx context.Context, readIdentifier st
 		return nil
 	}
 
-	return codec0.DecodeAptosJsonValue(transformedData, returnVal)
+	return codec0.DecodeAptosJsonValue(data, returnVal)
 }
 
 func (a *aptosChainReader) BatchGetLatestValues(ctx context.Context, request types.BatchGetLatestValuesRequest) (types.BatchGetLatestValuesResult, error) {
