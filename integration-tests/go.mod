@@ -13,7 +13,7 @@ require (
 	github.com/smartcontractkit/chainlink-ccip v0.1.1-solana.0.20260923215558-f1ad2f9da0c7
 	github.com/smartcontractkit/chainlink-ccip/chains/evm v0.0.0-20261006134909-78952e954465
 	github.com/smartcontractkit/chainlink-ccip/deployment v0.0.0-20261006134909-78952e954465
-	github.com/smartcontractkit/chainlink-common v0.11.2-0.20260929093916-bc9452cf0a49
+	github.com/smartcontractkit/chainlink-common v0.11.2-ccip2.58.1
 	github.com/smartcontractkit/chainlink-deployments-framework v0.124.1
 	github.com/smartcontractkit/chainlink-evm v0.3.4-0.20260929161505-cc645fce4250
 	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20260915165527-3701875605f4
@@ -143,6 +143,7 @@ require (
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-connections v0.7.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
+	github.com/dominikbraun/graph v0.23.0 // indirect
 	github.com/doyensec/safeurl v0.2.5 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/dvsekhvalnov/jose2go v1.7.0 // indirect
