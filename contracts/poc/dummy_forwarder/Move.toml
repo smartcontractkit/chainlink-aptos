@@ -1,0 +1,17 @@
+[package]
+name = "DummyForwarder"
+version = "1.0.0"
+authors = []
+
+[addresses]
+dummy_forwarder = "_"
+owner = "_"
+
+[dev-addresses]
+dummy_forwarder = "0x100"
+owner = "0xcafe"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "16beac69835f3a71564c96164a606a23f259099a", subdir = "aptos-move/framework/aptos-framework" }
+
+[dev-dependencies]

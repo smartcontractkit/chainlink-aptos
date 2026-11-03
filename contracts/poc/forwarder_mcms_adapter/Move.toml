@@ -1,0 +1,24 @@
+[package]
+name = "ForwarderMcmsAdapter"
+version = "1.0.0"
+authors = []
+
+[addresses]
+forwarder_mcms_adapter = "_"
+mcms = "_"
+mcms_owner = "0x0"
+dummy_forwarder = "_"
+owner = "_"
+
+[dev-addresses]
+forwarder_mcms_adapter = "0x500"
+mcms = "0x4000"
+dummy_forwarder = "0x100"
+owner = "0xcafe"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "16beac69835f3a71564c96164a606a23f259099a", subdir = "aptos-move/framework/aptos-framework" }
+ChainlinkManyChainMultisig = { local = "../../mcms/mcms" }
+DummyForwarder = { local = "../dummy_forwarder" }
+
+[dev-dependencies]

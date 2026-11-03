@@ -46,3 +46,6 @@ dockercfg
 env
 credentials.env
 gcr_creds.env
+
+# forwarder MCMS PoC state (contains testnet MCMS signer key)
+poc-state.json

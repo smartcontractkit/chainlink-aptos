@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 )
 
-//go:embed ccip large_packages mcms vendored data-feeds platform platform_secondary managed_token mcms_registrars managed_token_faucet regulated_token test_token
+//go:embed ccip large_packages mcms vendored data-feeds platform platform_secondary managed_token mcms_registrars managed_token_faucet regulated_token test_token poc
 var Embed embed.FS
 
 type Package string
@@ -40,6 +40,10 @@ const (
 	CurseMCMS = Package("curse_mcms")
 
 	LargePackages = Package("large_packages")
+
+	// PoC: MCMS controlling a non-MCMS forwarder via an adapter package
+	DummyForwarder       = Package("dummy_forwarder")
+	ForwarderMcmsAdapter = Package("forwarder_mcms_adapter")
 
 	TestToken             = Package("test_token")
 	TestTokenBnMRegistrar = Package("bnm_registrar")
@@ -76,6 +80,9 @@ var Contracts map[Package]string = map[Package]string{
 	CurseMCMS: filepath.Join("mcms", "curse_mcms"),
 
 	LargePackages: "large_packages",
+
+	DummyForwarder:       filepath.Join("poc", "dummy_forwarder"),
+	ForwarderMcmsAdapter: filepath.Join("poc", "forwarder_mcms_adapter"),
 
 	TestToken:             filepath.Join("test_token", "test_token"),
 	TestTokenBnMRegistrar: filepath.Join("test_token", "bnm_registrar"),
