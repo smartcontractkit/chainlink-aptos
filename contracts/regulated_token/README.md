@@ -149,6 +149,27 @@ aptos move view \
 - Only the admin can grant/revoke roles
 - Roles must be explicitly granted by the admin
 
+### Upgrading an Existing Deployment
+
+Account freezes now apply to the root owner of a store, and each store is pinned to the root owner it had when it was empty.
+A store that already held a balance before the upgrade has no pin:
+
+- An account's own primary store keeps working. Its owner can never change, so it needs no pin.
+- Any other funded store, such as one in a vault or position object, rejects deposits and withdrawals
+  with `E_STORE_NOT_PINNED` until it is recovered.
+
+The pin check cannot tell a deleted object from an account. If an account owns an object with a funded,
+unpinned primary store, it can delete that object and its store then passes as an account's primary store.
+A freeze on that account no longer reaches the store.
+
+So right after the upgrade, in the same batch if you can:
+
+1. List every funded store whose owner is an object, including object primary stores.
+2. Call `freeze_stores` on all of them. The frozen flag lives on the store, so it still holds after the object is deleted.
+3. Move the funds out with `recover_frozen_stores` (or `burn_frozen_stores`), then `unfreeze_stores` if the store should be used again.
+
+These stores are locked by `E_STORE_NOT_PINNED` anyway, so freezing them costs their holders nothing.
+
 ## Deployment and Usage
 
 ### Prerequisites
@@ -353,6 +374,9 @@ aptos move view \
 2. **Recipient account is frozen**: Recipient must be unfrozen to receive tokens
 3. **Contract is paused**: No transfers allowed when contract is paused
 4. **Insufficient balance**: Sender must have enough tokens
+5. **Store pin missing or stale** (stores held under an object): a funded store is pinned to the root owner
+   it had when it was last empty. A funded store with no pin aborts `E_STORE_NOT_PINNED`, and one whose root
+   owner has changed since aborts `E_STORE_OWNERSHIP_CHANGED`. An empty store rebinds on its next credit.
 
 ```bash
 # Pre-transfer checks
@@ -437,8 +461,15 @@ aptos move view \
 ```
 
 An account freeze flags the account's primary store and blocks every store whose root owner is
-the frozen account. A store under an object that changes hands escapes that check, so the
-freezer can also flag stores one by one. The flag lives on the store and follows it:
+the frozen account. Handing off the object that holds a funded store does not escape it: the
+store is pinned (see below) and locks. The freezer can also flag stores one by one, for two cases:
+
+- A store an account freeze does not reach. If the object holding a store is deleted before the
+  store is funded, the store's root owner is the deleted object's address, which no account freeze names.
+- A nested store that `burn_frozen_stores` or `recover_frozen_stores` should act on. Burn skips a store
+  without the flag, and recovery aborts on one (`E_STORE_MUST_BE_FROZEN_FOR_RECOVERY`).
+
+The flag lives on the store and follows it:
 
 ```bash
 # Freeze specific stores (requires FREEZER_ROLE)
@@ -469,6 +500,12 @@ aptos move run \
   --args 'address:["<STORE_ADDRESS>"]' address:<RECIPIENT> \
   --profile recovery
 ```
+
+A funded store stays pinned to the root owner it had when it was last empty. If the object that
+holds it changes hands, the store rejects deposits and withdrawals with `E_STORE_OWNERSHIP_CHANGED`.
+Deposits need no signer from the owner, so anyone can cause this: sending 1 unit to an empty object
+store pins it to its current root owner. To release such a store, call `freeze_stores` and then
+`recover_frozen_stores`. Once it is empty and unfrozen, it rebinds to its new root owner on the next credit.
 
 #### Pausing and Administrative Functions
 

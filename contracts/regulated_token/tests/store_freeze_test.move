@@ -1,15 +1,21 @@
 #[test_only]
 module regulated_token::store_freeze_test {
     use std::account;
-    use std::dispatchable_fungible_asset;
-    use std::fungible_asset::{Self, FungibleStore};
-    use std::object::{Self, Object, ObjectCore};
+    use std::event;
+    use std::fungible_asset;
+    use std::object;
     use std::option;
     use std::primary_fungible_store;
-    use std::string;
 
     use regulated_token::regulated_token;
+    use regulated_token::store_test_helpers::{
+        setup,
+        new_nested_store,
+        stage,
+        drain_to_outside
+    };
 
+    // The accounts and amounts `store_test_helpers::setup` uses.
     const ADMIN: address = @admin;
     const HOLDER: address = @0x1000;
     const OUTSIDE: address = @0x2000;
@@ -18,65 +24,7 @@ module regulated_token::store_freeze_test {
     const MINTED: u64 = 1_000_000;
     const STAGED: u64 = 600_000;
 
-    const FREEZER_ROLE: u8 = 2;
-    const UNFREEZER_ROLE: u8 = 3;
-    const MINTER_ROLE: u8 = 4;
-    const BURNER_ROLE: u8 = 5;
-    const RECOVERY_ROLE: u8 = 7;
-
-    fun setup(admin: &signer, regulated_token: &signer) {
-        let constructor_ref = object::create_named_object(admin, b"regulated_token");
-        account::create_account_if_does_not_exist(
-            object::address_from_constructor_ref(&constructor_ref)
-        );
-        regulated_token::init_module_for_testing(regulated_token);
-        regulated_token::initialize(
-            admin,
-            option::none(),
-            string::utf8(b"Regulated Token"),
-            string::utf8(b"RT"),
-            6,
-            string::utf8(
-                b"https://regulatedtoken.com/images/pic.png"
-            ),
-            string::utf8(b"https://regulatedtoken.com")
-        );
-        regulated_token::grant_role(admin, FREEZER_ROLE, ADMIN);
-        regulated_token::grant_role(admin, UNFREEZER_ROLE, ADMIN);
-        regulated_token::grant_role(admin, MINTER_ROLE, ADMIN);
-        regulated_token::grant_role(admin, BURNER_ROLE, ADMIN);
-        regulated_token::grant_role(admin, RECOVERY_ROLE, ADMIN);
-        account::create_account_for_test(HOLDER);
-        account::create_account_for_test(OUTSIDE);
-        account::create_account_for_test(RECIPIENT);
-        regulated_token::mint(admin, HOLDER, MINTED);
-    }
-
-    /// root -> holding object -> store, the shape of a vault or position object a user owns.
-    fun new_nested_store(root: address): (Object<ObjectCore>, Object<FungibleStore>) {
-        let holding_ref = object::create_object(root);
-        let holding = object::object_from_constructor_ref<ObjectCore>(&holding_ref);
-        let store_ref =
-            object::create_object(object::address_from_constructor_ref(&holding_ref));
-        let store =
-            fungible_asset::create_store(&store_ref, regulated_token::token_metadata());
-        (holding, store)
-    }
-
-    fun stage(holder: &signer, store: Object<FungibleStore>, amount: u64) {
-        let fa =
-            primary_fungible_store::withdraw(
-                holder, regulated_token::token_metadata(), amount
-            );
-        dispatchable_fungible_asset::deposit(store, fa);
-    }
-
-    fun drain_to_outside(
-        signer_: &signer, store: Object<FungibleStore>, amount: u64
-    ) {
-        let fa = dispatchable_fungible_asset::withdraw(signer_, store, amount);
-        primary_fungible_store::deposit(OUTSIDE, fa);
-    }
+    const PAUSER_ROLE: u8 = 0;
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
     #[expected_failure(abort_code = 0x50003, location = std::fungible_asset)]
@@ -150,6 +98,14 @@ module regulated_token::store_freeze_test {
 
         regulated_token::unfreeze_stores(admin, vector[store_addr]);
         assert!(!regulated_token::is_store_frozen(store_addr));
+        assert!(
+            event::emitted_events<regulated_token::StoreFrozen>()
+                == vector[regulated_token::store_frozen_event(ADMIN, store_addr)]
+        );
+        assert!(
+            event::emitted_events<regulated_token::StoreUnfrozen>()
+                == vector[regulated_token::store_unfrozen_event(ADMIN, store_addr)]
+        );
 
         drain_to_outside(&holder, store, STAGED);
         assert!(primary_fungible_store::balance(OUTSIDE, metadata) == STAGED);
@@ -176,6 +132,34 @@ module regulated_token::store_freeze_test {
         assert!(!regulated_token::is_store_frozen(object::object_address(&store)));
 
         drain_to_outside(&holder, store, STAGED);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::regulated_token::E_ACCOUNT_FROZEN,
+            location = regulated_token::regulated_token
+        )
+    ]
+    /// An account freeze also stops anyone paying into the frozen account's nested store.
+    fun test_account_freeze_blocks_deposit_into_nested_store(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let holder = account::create_signer_for_test(HOLDER);
+        let outside = account::create_signer_for_test(OUTSIDE);
+        let (_, store) = new_nested_store(HOLDER);
+        stage(&holder, store, STAGED);
+        primary_fungible_store::transfer(
+            &holder,
+            regulated_token::token_metadata(),
+            OUTSIDE,
+            100
+        );
+
+        regulated_token::freeze_account(admin, HOLDER);
+
+        stage(&outside, store, 100);
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
@@ -206,6 +190,36 @@ module regulated_token::store_freeze_test {
             fungible_asset::supply(metadata)
                 == option::some(*supply_before.borrow() - (STAGED as u128))
         );
+        // A native burner's burn names the store as `from`, and the skipped store emits nothing.
+        assert!(
+            event::emitted_events<regulated_token::NativeBurn>()
+                == vector[
+                    regulated_token::native_burn_event(
+                        ADMIN, object::object_address(&frozen), STAGED
+                    )
+                ]
+        );
+        assert!(
+            event::emitted_events<regulated_token::BridgeBurn>().length() == 0
+        );
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    /// A frozen store holding one unit is burned, not skipped as empty.
+    fun test_burn_frozen_stores_burns_one_unit(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let holder = account::create_signer_for_test(HOLDER);
+        let (_, store) = new_nested_store(HOLDER);
+        stage(&holder, store, 1);
+
+        regulated_token::freeze_stores(admin, vector[object::object_address(&store)]);
+        regulated_token::burn_frozen_stores(
+            admin, vector[object::object_address(&store)]
+        );
+
+        assert!(fungible_asset::balance(store) == 0);
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
@@ -226,6 +240,38 @@ module regulated_token::store_freeze_test {
 
         assert!(fungible_asset::balance(store) == 0);
         assert!(primary_fungible_store::balance(RECIPIENT, metadata) == STAGED);
+        assert!(
+            event::emitted_events<regulated_token::TokensRecovered>()
+                == vector[
+                    regulated_token::tokens_recovered_event(
+                        ADMIN,
+                        metadata,
+                        object::object_address(&store),
+                        RECIPIENT,
+                        STAGED
+                    )
+                ]
+        );
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    /// A frozen store holding one unit is recovered, not skipped as empty.
+    fun test_recover_frozen_stores_moves_one_unit(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let holder = account::create_signer_for_test(HOLDER);
+        let metadata = regulated_token::token_metadata();
+        let (_, store) = new_nested_store(HOLDER);
+        stage(&holder, store, 1);
+
+        regulated_token::freeze_stores(admin, vector[object::object_address(&store)]);
+        regulated_token::recover_frozen_stores(
+            admin, vector[object::object_address(&store)], RECIPIENT
+        );
+
+        assert!(fungible_asset::balance(store) == 0);
+        assert!(primary_fungible_store::balance(RECIPIENT, metadata) == 1);
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
@@ -302,6 +348,30 @@ module regulated_token::store_freeze_test {
 
         regulated_token::burn_frozen_stores(
             &holder, vector[object::object_address(&store)]
+        );
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[
+        expected_failure(
+            abort_code = regulated_token::regulated_token::E_PAUSED,
+            location = regulated_token::regulated_token
+        )
+    ]
+    /// Burning frozen stores is refused while the token is paused.
+    fun test_burn_frozen_stores_paused(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let holder = account::create_signer_for_test(HOLDER);
+        let (_, store) = new_nested_store(HOLDER);
+        stage(&holder, store, STAGED);
+        regulated_token::freeze_stores(admin, vector[object::object_address(&store)]);
+        regulated_token::grant_role(admin, PAUSER_ROLE, ADMIN);
+        regulated_token::pause(admin);
+
+        regulated_token::burn_frozen_stores(
+            admin, vector[object::object_address(&store)]
         );
     }
 

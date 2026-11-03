@@ -2,81 +2,26 @@
 module regulated_token::store_owner_pin_test {
     use std::account;
     use std::dispatchable_fungible_asset;
-    use std::fungible_asset::{Self, FungibleStore};
-    use std::object::{Self, Object, ObjectCore};
-    use std::option;
+    use std::event;
+    use std::fungible_asset;
+    use std::object::{Self, ObjectCore};
     use std::primary_fungible_store;
-    use std::string;
 
     use regulated_token::regulated_token;
+    use regulated_token::store_test_helpers::{
+        setup,
+        new_nested_store,
+        stage,
+        drain_to_outside
+    };
 
-    const ADMIN: address = @admin;
+    // The accounts and amounts `store_test_helpers::setup` uses.
     const HOLDER: address = @0x1000;
     const OUTSIDE: address = @0x2000;
     const RECIPIENT: address = @0x3000;
 
     const MINTED: u64 = 1_000_000;
     const STAGED: u64 = 600_000;
-
-    const FREEZER_ROLE: u8 = 2;
-    const UNFREEZER_ROLE: u8 = 3;
-    const MINTER_ROLE: u8 = 4;
-    const BURNER_ROLE: u8 = 5;
-    const RECOVERY_ROLE: u8 = 7;
-
-    fun setup(admin: &signer, regulated_token: &signer) {
-        let constructor_ref = object::create_named_object(admin, b"regulated_token");
-        account::create_account_if_does_not_exist(
-            object::address_from_constructor_ref(&constructor_ref)
-        );
-        regulated_token::init_module_for_testing(regulated_token);
-        regulated_token::initialize(
-            admin,
-            option::none(),
-            string::utf8(b"Regulated Token"),
-            string::utf8(b"RT"),
-            6,
-            string::utf8(
-                b"https://regulatedtoken.com/images/pic.png"
-            ),
-            string::utf8(b"https://regulatedtoken.com")
-        );
-        regulated_token::grant_role(admin, FREEZER_ROLE, ADMIN);
-        regulated_token::grant_role(admin, UNFREEZER_ROLE, ADMIN);
-        regulated_token::grant_role(admin, MINTER_ROLE, ADMIN);
-        regulated_token::grant_role(admin, BURNER_ROLE, ADMIN);
-        regulated_token::grant_role(admin, RECOVERY_ROLE, ADMIN);
-        account::create_account_for_test(HOLDER);
-        account::create_account_for_test(OUTSIDE);
-        account::create_account_for_test(RECIPIENT);
-        regulated_token::mint(admin, HOLDER, MINTED);
-    }
-
-    /// root -> holding object -> store, the shape of a vault or position object a user owns.
-    fun new_nested_store(root: address): (Object<ObjectCore>, Object<FungibleStore>) {
-        let holding_ref = object::create_object(root);
-        let holding = object::object_from_constructor_ref<ObjectCore>(&holding_ref);
-        let store_ref =
-            object::create_object(object::address_from_constructor_ref(&holding_ref));
-        let store =
-            fungible_asset::create_store(&store_ref, regulated_token::token_metadata());
-        (holding, store)
-    }
-
-    fun stage(holder: &signer, store: Object<FungibleStore>, amount: u64) {
-        let fa =
-            primary_fungible_store::withdraw(
-                holder, regulated_token::token_metadata(), amount
-            );
-        dispatchable_fungible_asset::deposit(store, fa);
-    }
-
-    fun drain_to_outside(
-        signer_: &signer, store: Object<FungibleStore>, amount: u64
-    ) {
-        let fa = dispatchable_fungible_asset::withdraw(signer_, store, amount);
-        primary_fungible_store::deposit(OUTSIDE, fa);
-    }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
     /// A nested store works end to end while its ownership is unchanged.
@@ -188,6 +133,130 @@ module regulated_token::store_owner_pin_test {
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
+    /// A pin write emits one module event naming the store and its root owner, a credit that
+    /// keeps the pin emits none, and a rebind names the new root owner.
+    fun test_pin_emits_module_event(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let holder = account::create_signer_for_test(HOLDER);
+        let outside = account::create_signer_for_test(OUTSIDE);
+        let (holding, store) = new_nested_store(HOLDER);
+        let store_addr = object::object_address(&store);
+        assert!(
+            event::emitted_events<regulated_token::StoreOwnershipPinned>().length()
+                == 0
+        );
+
+        stage(&holder, store, STAGED);
+        assert!(
+            event::emitted_events<regulated_token::StoreOwnershipPinned>()
+                == vector[
+                    regulated_token::store_ownership_pinned_event(store_addr, HOLDER)
+                ]
+        );
+
+        stage(&holder, store, 100);
+        assert!(
+            event::emitted_events<regulated_token::StoreOwnershipPinned>().length()
+                == 1
+        );
+
+        drain_to_outside(&holder, store, STAGED + 100);
+        object::transfer(&holder, holding, OUTSIDE);
+        stage(&outside, store, 100);
+        assert!(
+            event::emitted_events<regulated_token::StoreOwnershipPinned>()
+                == vector[
+                    regulated_token::store_ownership_pinned_event(store_addr, HOLDER),
+                    regulated_token::store_ownership_pinned_event(store_addr, OUTSIDE)
+                ]
+        );
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[expected_failure(abort_code = 0x30011, location = regulated_token::regulated_token)]
+    // invalid_state(E_STORE_OWNERSHIP_CHANGED)
+    /// One unit is a balance: a reparented store holding it rejects deposits.
+    fun test_one_unit_store_rejects_deposit_after_reparenting(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let holder = account::create_signer_for_test(HOLDER);
+        let outside = account::create_signer_for_test(OUTSIDE);
+        let metadata = regulated_token::token_metadata();
+        let (holding, store) = new_nested_store(HOLDER);
+        stage(&holder, store, 1);
+        primary_fungible_store::transfer(&holder, metadata, OUTSIDE, 1);
+
+        object::transfer(&holder, holding, OUTSIDE);
+
+        stage(&outside, store, 1);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[expected_failure(abort_code = 0x30011, location = regulated_token::regulated_token)]
+    // invalid_state(E_STORE_OWNERSHIP_CHANGED)
+    /// One unit is a balance: a reparented store holding it rejects withdrawals.
+    fun test_one_unit_store_rejects_withdraw_after_reparenting(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let holder = account::create_signer_for_test(HOLDER);
+        let outside = account::create_signer_for_test(OUTSIDE);
+        let (holding, store) = new_nested_store(HOLDER);
+        stage(&holder, store, 1);
+
+        object::transfer(&holder, holding, OUTSIDE);
+
+        drain_to_outside(&outside, store, 1);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[expected_failure(abort_code = 0x30011, location = regulated_token::regulated_token)]
+    // invalid_state(E_STORE_OWNERSHIP_CHANGED)
+    /// Known cost: anyone can pin an empty object store by sending it 1 unit, and after the
+    /// holding object changes hands the new owner's deposit aborts until store recovery.
+    fun test_one_unit_deposit_pins_empty_store_before_handoff(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let holder = account::create_signer_for_test(HOLDER);
+        let outside = account::create_signer_for_test(OUTSIDE);
+        let recipient = account::create_signer_for_test(RECIPIENT);
+        let metadata = regulated_token::token_metadata();
+        let (holding, store) = new_nested_store(HOLDER);
+        primary_fungible_store::transfer(&holder, metadata, OUTSIDE, 1);
+        primary_fungible_store::transfer(&holder, metadata, RECIPIENT, 100);
+
+        stage(&outside, store, 1);
+        object::transfer(&holder, holding, RECIPIENT);
+
+        stage(&recipient, store, 100);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    /// `recover_frozen_funds` pins an object destination's empty store, so the object spends
+    /// the recovered funds right away.
+    fun test_recover_frozen_funds_to_object_is_spendable(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let metadata = regulated_token::token_metadata();
+        let dest_ref = object::create_object(RECIPIENT);
+        let dest_addr = object::address_from_constructor_ref(&dest_ref);
+        let dest_extend_ref = object::generate_extend_ref(&dest_ref);
+        regulated_token::freeze_account(admin, HOLDER);
+
+        regulated_token::recover_frozen_funds(admin, HOLDER, dest_addr);
+        assert!(primary_fungible_store::balance(dest_addr, metadata) == MINTED);
+
+        let dest = object::generate_signer_for_extending(&dest_extend_ref);
+        primary_fungible_store::transfer(&dest, metadata, OUTSIDE, MINTED);
+        assert!(primary_fungible_store::balance(OUTSIDE, metadata) == MINTED);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
     /// Minted balances are pinned at mint time and stay spendable.
     fun test_minted_balance_is_spendable(
         admin: &signer, regulated_token: &signer
@@ -255,8 +324,7 @@ module regulated_token::store_owner_pin_test {
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
-    /// An unpinned funded store is drained by store freeze plus recovery, and the
-    /// recovered funds stay spendable at the destination.
+    /// Store freeze plus recovery drains an unpinned funded store; the funds stay spendable.
     fun test_unpinned_store_recovery_works(
         admin: &signer, regulated_token: &signer
     ) {
@@ -380,5 +448,118 @@ module regulated_token::store_owner_pin_test {
         regulated_token::freeze_account(admin, object::object_address(&holding));
 
         stage(&holder, store, 100);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    /// After an in-place upgrade no pins exist, yet an account's funded primary store still
+    /// sends and receives: its owner can never change, so it needs no pin.
+    fun test_unpinned_primary_store_sends_and_receives_after_upgrade(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let holder = account::create_signer_for_test(HOLDER);
+        let outside = account::create_signer_for_test(OUTSIDE);
+        let metadata = regulated_token::token_metadata();
+        regulated_token::remove_store_owner_pins_for_testing();
+
+        primary_fungible_store::transfer(&holder, metadata, OUTSIDE, 100);
+        primary_fungible_store::transfer(&outside, metadata, HOLDER, 40);
+        regulated_token::mint(admin, HOLDER, 1);
+
+        assert!(
+            primary_fungible_store::balance(HOLDER, metadata) == MINTED - 59
+        );
+        assert!(primary_fungible_store::balance(OUTSIDE, metadata) == 60);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    /// Minting into an account's funded primary store works with no pins at all.
+    fun test_unpinned_primary_store_accepts_mint_after_upgrade(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        regulated_token::remove_store_owner_pins_for_testing();
+
+        regulated_token::mint(admin, HOLDER, 1);
+
+        assert!(
+            primary_fungible_store::balance(HOLDER, regulated_token::token_metadata())
+                == MINTED + 1
+        );
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[expected_failure(abort_code = 0x30012, location = regulated_token::regulated_token)]
+    // invalid_state(E_STORE_NOT_PINNED)
+    /// A funded nested store stays locked after an in-place upgrade: its owner can change.
+    fun test_unpinned_nested_store_rejects_withdraw_after_upgrade(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let holder = account::create_signer_for_test(HOLDER);
+        let (_holding, store) = new_nested_store(HOLDER);
+        stage(&holder, store, STAGED);
+        regulated_token::remove_store_owner_pins_for_testing();
+
+        drain_to_outside(&holder, store, STAGED);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[expected_failure(abort_code = 0x30011, location = regulated_token::regulated_token)]
+    // invalid_state(E_STORE_OWNERSHIP_CHANGED)
+    /// A frozen account cannot delete its object to free the object's pinned primary store.
+    fun test_deleted_object_primary_store_keeps_pin(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let holding_ref = object::create_object(HOLDER);
+        let holding_addr = object::address_from_constructor_ref(&holding_ref);
+        let extend_ref = object::generate_extend_ref(&holding_ref);
+        let delete_ref = object::generate_delete_ref(&holding_ref);
+        regulated_token::mint(admin, holding_addr, 500);
+        regulated_token::freeze_account(admin, HOLDER);
+
+        object::delete(delete_ref);
+
+        let holding = object::generate_signer_for_extending(&extend_ref);
+        primary_fungible_store::transfer(
+            &holding,
+            regulated_token::token_metadata(),
+            OUTSIDE,
+            500
+        );
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[expected_failure(abort_code = 0x50003, location = aptos_framework::fungible_asset)]
+    // permission_denied(ESTORE_IS_FROZEN)
+    /// An object's funded primary store with no pin, frozen after the upgrade as the README asks,
+    /// stays locked when its frozen owner deletes the object.
+    fun test_unpinned_deleted_object_primary_store_stays_frozen(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let holding_ref = object::create_object(HOLDER);
+        let holding_addr = object::address_from_constructor_ref(&holding_ref);
+        let extend_ref = object::generate_extend_ref(&holding_ref);
+        let delete_ref = object::generate_delete_ref(&holding_ref);
+        regulated_token::mint(admin, holding_addr, 500);
+        regulated_token::remove_store_owner_pins_for_testing();
+        let store =
+            primary_fungible_store::primary_store(
+                holding_addr, regulated_token::token_metadata()
+            );
+        regulated_token::freeze_stores(admin, vector[object::object_address(&store)]);
+        regulated_token::freeze_account(admin, HOLDER);
+
+        object::delete(delete_ref);
+
+        let holding = object::generate_signer_for_extending(&extend_ref);
+        primary_fungible_store::transfer(
+            &holding,
+            regulated_token::token_metadata(),
+            OUTSIDE,
+            500
+        );
     }
 }
