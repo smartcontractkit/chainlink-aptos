@@ -17,11 +17,18 @@ import (
 	"github.com/smartcontractkit/chainlink-aptos/deployment/state"
 )
 
+// curseMCMSQualifier selects the RMN curse MCMS. The ccip domain defines the same value.
+const curseMCMSQualifier = "RMNMCMS"
+
 // AptosMCMSReader implements changesets.MCMSReader for the Aptos family using the
 // regular CCIP MCMS contract deployed by DeployAptosChain.
 type AptosMCMSReader struct{}
 
 func (r *AptosMCMSReader) GetChainMetadata(e deployment.Environment, chainSelector uint64, input mcms_utils.Input) (mcmstypes.ChainMetadata, error) {
+	if input.Qualifier == curseMCMSQualifier {
+		return (&AptosCurseMCMSReader{}).GetChainMetadata(e, chainSelector, input)
+	}
+
 	chain, ok := e.BlockChains.AptosChains()[chainSelector]
 	if !ok {
 		return mcmstypes.ChainMetadata{}, fmt.Errorf("aptos chain with selector %d not found", chainSelector)
@@ -55,7 +62,11 @@ func (r *AptosMCMSReader) GetChainMetadata(e deployment.Environment, chainSelect
 	}, nil
 }
 
-func (r *AptosMCMSReader) GetTimelockRef(e deployment.Environment, chainSelector uint64, _ mcms_utils.Input) (datastore.AddressRef, error) {
+func (r *AptosMCMSReader) GetTimelockRef(e deployment.Environment, chainSelector uint64, input mcms_utils.Input) (datastore.AddressRef, error) {
+	if input.Qualifier == curseMCMSQualifier {
+		return (&AptosCurseMCMSReader{}).GetTimelockRef(e, chainSelector, input)
+	}
+
 	mcmsAddr, err := aptosMCMSAddress(e, chainSelector)
 	if err != nil {
 		return datastore.AddressRef{}, err
@@ -66,7 +77,11 @@ func (r *AptosMCMSReader) GetTimelockRef(e deployment.Environment, chainSelector
 	}, nil
 }
 
-func (r *AptosMCMSReader) GetMCMSRef(e deployment.Environment, chainSelector uint64, _ mcms_utils.Input) (datastore.AddressRef, error) {
+func (r *AptosMCMSReader) GetMCMSRef(e deployment.Environment, chainSelector uint64, input mcms_utils.Input) (datastore.AddressRef, error) {
+	if input.Qualifier == curseMCMSQualifier {
+		return (&AptosCurseMCMSReader{}).GetMCMSRef(e, chainSelector, input)
+	}
+
 	mcmsAddr, err := aptosMCMSAddress(e, chainSelector)
 	if err != nil {
 		return datastore.AddressRef{}, err
