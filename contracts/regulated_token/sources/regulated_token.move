@@ -1,9 +1,11 @@
 module regulated_token::regulated_token {
+    use std::error;
     use std::event;
     use std::fungible_asset::{
         Self,
         BurnRef,
         FungibleAsset,
+        FungibleStore,
         Metadata,
         MintRef,
         TransferRef,
@@ -81,6 +83,12 @@ module regulated_token::regulated_token {
         mutate_metadata_ref: MutateMetadataRef
     }
 
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+    /// Separate resource so existing TokenState layouts stay upgrade-compatible.
+    struct StoreOwnerPins has key {
+        pins: BigOrderedMap<address, address>
+    }
+
     #[event]
     struct InitializeToken has drop, store {
         publisher: address,
@@ -150,6 +158,24 @@ module regulated_token::regulated_token {
     }
 
     #[event]
+    struct StoreFrozen has drop, store {
+        freezer: address,
+        store: address
+    }
+
+    #[event]
+    struct StoreUnfrozen has drop, store {
+        unfreezer: address,
+        store: address
+    }
+
+    #[event]
+    struct StoreOwnershipPinned has drop, store {
+        store: address,
+        root_owner: address
+    }
+
+    #[event]
     struct TokensRecovered has drop, store {
         caller: address,
         token_metadata: Object<Metadata>,
@@ -158,6 +184,7 @@ module regulated_token::regulated_token {
         amount: u64
     }
 
+    // Append-only: a shipped ordinal is never renumbered or reused.
     /// The caller is not the signer of this contract
     const E_NOT_PUBLISHER: u64 = 1;
     /// TokenState has not been initialized yet
@@ -190,6 +217,13 @@ module regulated_token::regulated_token {
     const E_TOKEN_STATE_DEPLOYMENT_ALREADY_INITIALIZED: u64 = 13;
     /// Account msut be frozen for recovery
     const E_ACCOUNT_MUST_BE_FROZEN_FOR_RECOVERY: u64 = 14;
+
+    /// Store must carry the frozen flag for recovery
+    const E_STORE_MUST_BE_FROZEN_FOR_RECOVERY: u64 = 16;
+    /// Store's root owner changed after it was pinned
+    const E_STORE_OWNERSHIP_CHANGED: u64 = 17;
+    /// Store holds a balance but has no recorded owner pin
+    const E_STORE_NOT_PINNED: u64 = 18;
 
     #[view]
     public fun type_and_version(): String {
@@ -335,6 +369,16 @@ module regulated_token::regulated_token {
     }
 
     #[view]
+    /// Whether the framework frozen flag is set on this store. Set by `freeze_account` on the
+    /// account's primary store and by `freeze_stores` on any store.
+    ///
+    /// #### Aborts
+    /// - `EOBJECT_DOES_NOT_EXIST` or `ERESOURCE_DOES_NOT_EXIST` (in `object`) if `store` is not a store.
+    public fun is_store_frozen(store: address): bool {
+        fungible_asset::is_frozen(object::address_to_object<FungibleStore>(store))
+    }
+
+    #[view]
     /// Get frozen accounts paginated using a start key and limit.
     /// Caller should call this on a certain block to ensure you the same state for every call.
     ///
@@ -383,30 +427,36 @@ module regulated_token::regulated_token {
         access_control::has_role(token_state_object_internal(), account, get_role(role))
     }
 
+    /// Deposit hook. Aborts if the store's root owner or direct owner is frozen. A funded store
+    /// must have a pin matching its root owner; an empty store repins to it. An account's own
+    /// primary store needs no pin.
     public fun deposit<T: key>(
         store: Object<T>, fa: FungibleAsset, transfer_ref: &TransferRef
-    ) acquires TokenState {
+    ) {
         let state_obj = token_state_object_internal();
         let token_metadata = token_metadata_from_state_obj(state_obj);
         let token_state = &TokenState[object::object_address(&state_obj)];
 
         assert_not_paused(token_state);
-        assert_not_frozen(object::owner(store), token_state);
         assert_correct_asset(transfer_ref, token_metadata, store);
+        assert_credit_allowed(store, token_state);
 
         fungible_asset::deposit_with_ref(transfer_ref, store, fa);
     }
 
+    /// Withdraw hook. Aborts if the store's root owner or direct owner is frozen. A funded store
+    /// must have a pin matching its root owner; an empty store and an account's own primary
+    /// store need none.
     public fun withdraw<T: key>(
         store: Object<T>, amount: u64, transfer_ref: &TransferRef
-    ): FungibleAsset acquires TokenState {
+    ): FungibleAsset {
         let state_obj = token_state_object_internal();
         let token_metadata = token_metadata_from_state_obj(state_obj);
         let token_state = &TokenState[object::object_address(&state_obj)];
 
         assert_not_paused(token_state);
-        assert_not_frozen(object::owner(store), token_state);
         assert_correct_asset(transfer_ref, token_metadata, store);
+        assert_debit_allowed(store, token_state);
 
         fungible_asset::withdraw_with_ref(transfer_ref, store, amount)
     }
@@ -543,14 +593,13 @@ module regulated_token::regulated_token {
         );
     }
 
-    public entry fun mint(
-        caller: &signer, to: address, amount: u64
-    ) acquires TokenMetadataRefs, TokenState {
+    /// Aborts `E_STORE_NOT_PINNED` or `E_STORE_OWNERSHIP_CHANGED` if `to` is an object whose
+    /// funded primary store has no pin matching its root owner.
+    public entry fun mint(caller: &signer, to: address, amount: u64) {
         let state_obj = token_state_object_internal();
         let token_state = &TokenState[object::object_address(&state_obj)];
 
         assert_not_paused(token_state);
-        assert_not_frozen(to, token_state);
 
         let minter = signer::address_of(caller);
         let is_bridge_minter =
@@ -559,7 +608,13 @@ module regulated_token::regulated_token {
 
         assert!(is_bridge_minter || is_native_minter, E_ONLY_MINTER_OR_BRIDGE);
 
-        primary_fungible_store::mint(&borrow_token_metadata_refs().mint_ref, to, amount);
+        // Minting bypasses the dispatch hooks, so the destination pin check runs here.
+        let to_store =
+            primary_fungible_store::ensure_primary_store_exists(to, token_state.token);
+        assert_credit_allowed(to_store, token_state);
+        fungible_asset::mint_to(
+            &borrow_token_metadata_refs().mint_ref, to_store, amount
+        );
 
         if (is_bridge_minter) {
             event::emit(BridgeMint { minter, to, amount });
@@ -699,6 +754,12 @@ module regulated_token::regulated_token {
 
         let balance = primary_fungible_store::balance(from, token_state.token);
         if (balance > 0) {
+            let to_store =
+                primary_fungible_store::ensure_primary_store_exists(
+                    to, token_state.token
+                );
+            assert_credit_allowed(to_store, token_state);
+
             primary_fungible_store::transfer_with_ref(transfer_ref, from, to, balance);
             event::emit(
                 TokensRecovered {
@@ -815,6 +876,52 @@ module regulated_token::regulated_token {
         );
     }
 
+    /// Sets the framework frozen flag on each store, so the framework rejects deposits and
+    /// withdrawals before the dispatch hooks run. The flag lives on the store, so it holds when
+    /// the object that owns the store changes hands. A funded store whose holding object changes
+    /// hands already locks on its pin, so use this for two other cases:
+    /// - a store an account freeze does not reach, such as one whose holding object was deleted
+    ///   before the store was funded, so its root owner is the deleted object's address;
+    /// - a nested store that `burn_frozen_stores` or `recover_frozen_stores` should act on.
+    /// `freeze_account` covers an account's primary store and every store it is the root owner of.
+    ///
+    /// #### Aborts
+    /// - `E_MISSING_ROLE` (in `access_control`) if the caller lacks FREEZER_ROLE.
+    /// - `EOBJECT_DOES_NOT_EXIST` or `ERESOURCE_DOES_NOT_EXIST` (in `object`) if an address is not a store.
+    public entry fun freeze_stores(
+        caller: &signer, stores: vector<address>
+    ) acquires TokenMetadataRefs, TokenState {
+        assert_freezer(caller, token_state_object_internal());
+
+        let caller_addr = signer::address_of(caller);
+        let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
+        for (i in 0..stores.length()) {
+            let store = object::address_to_object<FungibleStore>(stores[i]);
+            fungible_asset::set_frozen_flag(transfer_ref, store, true);
+            event::emit(StoreFrozen { freezer: caller_addr, store: stores[i] });
+        };
+    }
+
+    /// Clears the frozen flag set by `freeze_stores`. A frozen account's stores stay blocked
+    /// by the root owner check until `unfreeze_account` runs.
+    ///
+    /// #### Aborts
+    /// - `E_MISSING_ROLE` (in `access_control`) if the caller lacks UNFREEZER_ROLE.
+    /// - `EOBJECT_DOES_NOT_EXIST` or `ERESOURCE_DOES_NOT_EXIST` (in `object`) if an address is not a store.
+    public entry fun unfreeze_stores(
+        caller: &signer, stores: vector<address>
+    ) acquires TokenMetadataRefs, TokenState {
+        assert_unfreezer(caller, token_state_object_internal());
+
+        let caller_addr = signer::address_of(caller);
+        let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
+        for (i in 0..stores.length()) {
+            let store = object::address_to_object<FungibleStore>(stores[i]);
+            fungible_asset::set_frozen_flag(transfer_ref, store, false);
+            event::emit(StoreUnfrozen { unfreezer: caller_addr, store: stores[i] });
+        };
+    }
+
     /// Batch revoke and grant roles by role number
     /// `batch_revoke_role` and `batch_grant_role` assert that the caller is the admin
     public entry fun apply_role_updates(
@@ -920,9 +1027,11 @@ module regulated_token::regulated_token {
 
     /// Recovers funds from frozen accounts by transferring them to a specified account.
     /// Only callable by accounts with RECOVERY_ROLE.
+    /// Aborts `E_STORE_NOT_PINNED` or `E_STORE_OWNERSHIP_CHANGED` if `to` is an object whose
+    /// funded primary store has no pin matching its root owner.
     public entry fun recover_frozen_funds(
         caller: &signer, from: address, to: address
-    ) acquires TokenMetadataRefs, TokenState {
+    ) {
         let (transfer_ref, token_state) = validate_recovery_procedure(caller, to);
         recover_frozen_funds_internal(
             signer::address_of(caller),
@@ -934,10 +1043,10 @@ module regulated_token::regulated_token {
     }
 
     /// Batch version of recover_frozen_funds for processing multiple frozen accounts.
-    /// Only callable by accounts with RECOVERY_ROLE.
+    /// Only callable by accounts with RECOVERY_ROLE. Same pin aborts as `recover_frozen_funds`.
     public entry fun batch_recover_frozen_funds(
         caller: &signer, accounts: vector<address>, to: address
-    ) acquires TokenMetadataRefs, TokenState {
+    ) {
         let caller_addr = signer::address_of(caller);
         let (transfer_ref, token_state) = validate_recovery_procedure(caller, to);
 
@@ -949,6 +1058,81 @@ module regulated_token::regulated_token {
                 transfer_ref,
                 token_state
             );
+        };
+    }
+
+    /// Burns the full balance of each given store that carries the frozen flag. Stores that are
+    /// not frozen are skipped, as in `batch_burn_frozen_funds`. The burn events name the store
+    /// as `from`.
+    ///
+    /// #### Aborts
+    /// - `E_PAUSED` if the token is paused.
+    /// - `E_ONLY_BURNER_OR_BRIDGE` if the caller has neither BURNER_ROLE nor BRIDGE_MINTER_OR_BURNER_ROLE.
+    /// - `EOBJECT_DOES_NOT_EXIST` or `ERESOURCE_DOES_NOT_EXIST` (in `object`) if an address is not a store.
+    public entry fun burn_frozen_stores(
+        caller: &signer, stores: vector<address>
+    ) acquires TokenMetadataRefs, TokenState {
+        let (
+            burner, burn_ref, _, _, is_bridge_burner
+        ) = validate_burn_frozen_funds(caller);
+        let transfer_ref = &borrow_token_metadata_refs().transfer_ref;
+
+        for (i in 0..stores.length()) {
+            let store = object::address_to_object<FungibleStore>(stores[i]);
+            let amount = fungible_asset::balance(store);
+            if (fungible_asset::is_frozen(store) && amount > 0) {
+                let fa = fungible_asset::withdraw_with_ref(transfer_ref, store, amount);
+                fungible_asset::burn(burn_ref, fa);
+                if (is_bridge_burner) {
+                    event::emit(BridgeBurn { burner, from: stores[i], amount });
+                } else {
+                    event::emit(NativeBurn { burner, from: stores[i], amount });
+                };
+            };
+        };
+    }
+
+    /// Moves the full balance of each given frozen store to the primary store of `to`.
+    /// Only callable by accounts with RECOVERY_ROLE. Every store must carry the frozen flag.
+    ///
+    /// #### Aborts
+    /// - `E_PAUSED` if the token is paused.
+    /// - `E_MISSING_ROLE` (in `access_control`) if the caller lacks RECOVERY_ROLE.
+    /// - `E_ZERO_ADDRESS_NOT_ALLOWED`, `E_CANNOT_TRANSFER_TO_REGULATED_TOKEN` or `E_ACCOUNT_FROZEN`
+    ///   if `to` is not a valid recipient.
+    /// - `E_STORE_NOT_PINNED` or `E_STORE_OWNERSHIP_CHANGED` if `to` is an object whose funded
+    ///   primary store has no pin matching its root owner.
+    /// - `E_STORE_MUST_BE_FROZEN_FOR_RECOVERY` if a store does not carry the frozen flag.
+    /// - `EOBJECT_DOES_NOT_EXIST` or `ERESOURCE_DOES_NOT_EXIST` (in `object`) if an address is not a store.
+    public entry fun recover_frozen_stores(
+        caller: &signer, stores: vector<address>, to: address
+    ) {
+        let caller_addr = signer::address_of(caller);
+        let (transfer_ref, token_state) = validate_recovery_procedure(caller, to);
+        let to_store =
+            primary_fungible_store::ensure_primary_store_exists(to, token_state.token);
+        assert_credit_allowed(to_store, token_state);
+
+        for (i in 0..stores.length()) {
+            let store = object::address_to_object<FungibleStore>(stores[i]);
+            assert!(
+                fungible_asset::is_frozen(store),
+                error::invalid_state(E_STORE_MUST_BE_FROZEN_FOR_RECOVERY)
+            );
+
+            let amount = fungible_asset::balance(store);
+            if (amount > 0) {
+                fungible_asset::transfer_with_ref(transfer_ref, store, to_store, amount);
+                event::emit(
+                    TokensRecovered {
+                        caller: caller_addr,
+                        token_metadata: token_state.token,
+                        from: stores[i],
+                        to,
+                        amount
+                    }
+                );
+            };
         };
     }
 
@@ -992,11 +1176,15 @@ module regulated_token::regulated_token {
         caller_addr: address,
         from: address,
         to: address,
-        transfer_ref: &TransferRef
+        transfer_ref: &TransferRef,
+        token_state: &TokenState
     ) {
         let token_metadata = fungible_asset::transfer_ref_metadata(transfer_ref);
         let balance = primary_fungible_store::balance(from, token_metadata);
         if (balance > 0) {
+            let to_store =
+                primary_fungible_store::ensure_primary_store_exists(to, token_metadata);
+            assert_credit_allowed(to_store, token_state);
             primary_fungible_store::transfer_with_ref(transfer_ref, from, to, balance);
             event::emit(
                 TokensRecovered {
@@ -1012,10 +1200,9 @@ module regulated_token::regulated_token {
 
     /// In case regulated tokens get stuck in the contract or token state, this function can be used to recover them
     /// This function can only be called by the recovery role
-    public entry fun recover_tokens(
-        caller: &signer, to: address
-    ) acquires TokenMetadataRefs, TokenState {
-        let (transfer_ref, _token_state) = validate_recovery_procedure(caller, to);
+    /// Same pin aborts as `recover_frozen_funds`.
+    public entry fun recover_tokens(caller: &signer, to: address) {
+        let (transfer_ref, token_state) = validate_recovery_procedure(caller, to);
         let caller_addr = signer::address_of(caller);
 
         // Recover regulated tokens sent to contract
@@ -1023,7 +1210,8 @@ module regulated_token::regulated_token {
             caller_addr,
             @regulated_token,
             to,
-            transfer_ref
+            transfer_ref,
+            token_state
         );
 
         // Recover regulated tokens sent to token state address
@@ -1031,7 +1219,8 @@ module regulated_token::regulated_token {
             caller_addr,
             token_state_address_internal(),
             to,
-            transfer_ref
+            transfer_ref,
+            token_state
         );
     }
 
@@ -1103,6 +1292,98 @@ module regulated_token::regulated_token {
 
     fun assert_not_frozen(account: address, token_state: &TokenState) {
         assert!(!token_state.frozen_accounts.contains(&account), E_ACCOUNT_FROZEN);
+    }
+
+    /// Credits only land in a store whose root owner matches its pin;
+    /// An empty store repins to the current root. Mint and recovery bypass the hooks, so they call this too.
+    fun assert_credit_allowed<T: key>(
+        store: Object<T>, token_state: &TokenState
+    ) {
+        let state_addr = token_state_address_internal();
+        if (!exists<StoreOwnerPins>(state_addr)) {
+            let state_signer =
+                &object::generate_signer_for_extending(&token_state.extend_ref);
+            move_to(
+                state_signer,
+                StoreOwnerPins {
+                    pins: big_ordered_map::new_with_config(0, 0, false)
+                }
+            );
+        };
+
+        let root = object::root_owner(store);
+        assert_not_frozen(root, token_state);
+        // Freezing the holding object alone must block the store, as before the root check.
+        assert_not_frozen(object::owner(store), token_state);
+
+        let store_addr = object::object_address(&store);
+        let pins_resource = &mut StoreOwnerPins[state_addr];
+        let pin = pins_resource.pins.get(&store_addr);
+        // A pin the store already has still holds: a deleted object's primary store looks
+        // like an account's.
+        if (pin.is_none() && is_fixed_primary_store(store, root, token_state)) { return };
+
+        if (fungible_asset::balance(store) == 0) {
+            // Zero balance; the store rebinds to its current root.
+            if (pin != option::some(root)) {
+                pins_resource.pins.upsert(store_addr, root);
+                // Module event, like every other event here, so one indexer path sees them all.
+                event::emit(StoreOwnershipPinned { store: store_addr, root_owner: root });
+            };
+        } else {
+            // A balance is never pinned after the fact: missing or mismatched pin aborts.
+            assert!(pin.is_some(), error::invalid_state(E_STORE_NOT_PINNED));
+            assert!(
+                pin.destroy_some() == root,
+                error::invalid_state(E_STORE_OWNERSHIP_CHANGED)
+            );
+        };
+    }
+
+    /// Debits need a pin matching the current root owner;
+    /// A funded store with no pin (predating this state) stays locked until operator recovery,
+    /// unless it is an account's own primary store.
+    /// An empty store needs no pin: nothing can leave it, and zero-amount debits must keep working.
+    fun assert_debit_allowed<T: key>(
+        store: Object<T>, token_state: &TokenState
+    ) {
+        let root = object::root_owner(store);
+        assert_not_frozen(root, token_state);
+        // Freezing the holding object alone must block the store, as before the root check.
+        assert_not_frozen(object::owner(store), token_state);
+
+        if (fungible_asset::balance(store) == 0) { return };
+
+        let store_addr = object::object_address(&store);
+        let state_addr = token_state_address_internal();
+        let pin =
+            if (exists<StoreOwnerPins>(state_addr)) {
+                StoreOwnerPins[state_addr].pins.get(&store_addr)
+            } else {
+                option::none()
+            };
+        // A pin the store already has still holds: a deleted object's primary store looks
+        // like an account's.
+        if (pin.is_none() && is_fixed_primary_store(store, root, token_state)) { return };
+
+        assert!(pin.is_some(), error::invalid_state(E_STORE_NOT_PINNED));
+        assert!(
+            pin.destroy_some() == root,
+            error::invalid_state(E_STORE_OWNERSHIP_CHANGED)
+        );
+    }
+
+    /// A plain account's primary store can never change owner, so a pin adds nothing there.
+    /// A deleted object's unpinned primary store also passes; the README upgrade notes cover it.
+    fun is_fixed_primary_store<T: key>(
+        store: Object<T>, root: address, token_state: &TokenState
+    ): bool {
+        // `primary_fungible_store::primary_store_address`, inlined: the hooks run while that
+        // module is on the call stack, so calling it here aborts as reentrancy.
+        !object::is_object(root)
+            && object::create_user_derived_object_address(
+                root, object::object_address(&token_state.token)
+            ) == object::object_address(&store)
     }
 
     fun assert_correct_asset<T: key>(
@@ -1220,7 +1501,7 @@ module regulated_token::regulated_token {
 
     public entry fun execute_ownership_transfer(
         caller: &signer, to: address
-    ) acquires TokenState {
+    ) {
         let state = &mut TokenState[token_state_address_internal()];
         ownable::execute_ownership_transfer(caller, &mut state.ownable_state, to)
     }
@@ -1228,5 +1509,61 @@ module regulated_token::regulated_token {
     #[test_only]
     public fun init_module_for_testing(publisher: &signer) {
         init_module(publisher);
+    }
+
+    #[test_only]
+    /// Simulates a store funded before StoreOwnerPins existed.
+    public fun remove_store_pin_for_testing(store: address) {
+        let state_addr = token_state_address_internal();
+        if (exists<StoreOwnerPins>(state_addr)) {
+            let pins = &mut StoreOwnerPins[state_addr].pins;
+            if (pins.contains(&store)) {
+                pins.remove(&store);
+            };
+        };
+    }
+
+    #[test_only]
+    /// Simulates the state right after an in-place upgrade: no `StoreOwnerPins` at all.
+    public fun remove_store_owner_pins_for_testing() {
+        let StoreOwnerPins { pins } =
+            move_from<StoreOwnerPins>(token_state_address_internal());
+        pins.destroy(|_root| {});
+    }
+
+    // Event constructors, so tests can compare `event::emitted_events<T>()` field by field.
+    #[test_only]
+    public fun store_frozen_event(freezer: address, store: address): StoreFrozen {
+        StoreFrozen { freezer, store }
+    }
+
+    #[test_only]
+    public fun store_unfrozen_event(unfreezer: address, store: address): StoreUnfrozen {
+        StoreUnfrozen { unfreezer, store }
+    }
+
+    #[test_only]
+    public fun store_ownership_pinned_event(
+        store: address, root_owner: address
+    ): StoreOwnershipPinned {
+        StoreOwnershipPinned { store, root_owner }
+    }
+
+    #[test_only]
+    public fun native_burn_event(
+        burner: address, from: address, amount: u64
+    ): NativeBurn {
+        NativeBurn { burner, from, amount }
+    }
+
+    #[test_only]
+    public fun tokens_recovered_event(
+        caller: address,
+        token_metadata: Object<Metadata>,
+        from: address,
+        to: address,
+        amount: u64
+    ): TokensRecovered {
+        TokensRecovered { caller, token_metadata, from, to, amount }
     }
 }
