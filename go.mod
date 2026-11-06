@@ -14,7 +14,7 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/prometheus/client_golang v1.24.1
-	github.com/shopspring/decimal v1.4.0
+	github.com/shopspring/decimal v1.6.0
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	github.com/smartcontractkit/chainlink-aptos/codec v0.0.0-20260707222328-5036bbcb7832
 	github.com/smartcontractkit/chainlink-common v0.11.2-0.20260923164324-86cd57d9fdbd
