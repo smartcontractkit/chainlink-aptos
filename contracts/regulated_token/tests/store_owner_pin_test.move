@@ -3,8 +3,8 @@ module regulated_token::store_owner_pin_test {
     use std::account;
     use std::dispatchable_fungible_asset;
     use std::event;
-    use std::fungible_asset;
-    use std::object::{Self, ObjectCore};
+    use std::fungible_asset::{Self, FungibleStore};
+    use std::object::{Self, Object, ObjectCore};
     use std::primary_fungible_store;
 
     use regulated_token::regulated_token;
@@ -321,6 +321,49 @@ module regulated_token::store_owner_pin_test {
         regulated_token::remove_store_pin_for_testing(object::object_address(&store));
 
         stage(&holder, store, 100);
+    }
+
+    /// A store an account owns directly, created with `object::create_object`, not its primary store.
+    fun new_account_owned_store(): Object<FungibleStore> {
+        let store_ref = object::create_object(HOLDER);
+        fungible_asset::create_store(&store_ref, regulated_token::token_metadata())
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    #[expected_failure(abort_code = 0x30012, location = regulated_token::regulated_token)]
+    // invalid_state(E_STORE_NOT_PINNED)
+    /// A secondary store owned directly by an account gets no primary store exemption.
+    fun test_unpinned_account_owned_store_rejects_withdraw(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let holder = account::create_signer_for_test(HOLDER);
+        let store = new_account_owned_store();
+        stage(&holder, store, STAGED);
+        regulated_token::remove_store_pin_for_testing(object::object_address(&store));
+
+        drain_to_outside(&holder, store, STAGED);
+    }
+
+    #[test(admin = @admin, regulated_token = @regulated_token)]
+    /// The README runbook frees a secondary store owned directly by an account.
+    fun test_unpinned_account_owned_store_recovery_works(
+        admin: &signer, regulated_token: &signer
+    ) {
+        setup(admin, regulated_token);
+        let holder = account::create_signer_for_test(HOLDER);
+        let metadata = regulated_token::token_metadata();
+        let store = new_account_owned_store();
+        stage(&holder, store, STAGED);
+        regulated_token::remove_store_pin_for_testing(object::object_address(&store));
+
+        regulated_token::freeze_stores(admin, vector[object::object_address(&store)]);
+        regulated_token::recover_frozen_stores(
+            admin, vector[object::object_address(&store)], RECIPIENT
+        );
+
+        assert!(fungible_asset::balance(store) == 0);
+        assert!(primary_fungible_store::balance(RECIPIENT, metadata) == STAGED);
     }
 
     #[test(admin = @admin, regulated_token = @regulated_token)]
