@@ -164,7 +164,7 @@ A freeze on that account no longer reaches the store.
 
 So right after the upgrade, in the same batch if you can:
 
-1. List every funded store whose owner is an object, including object primary stores.
+1. List every funded store that is not an account's own primary store: stores under objects, object primary stores, and secondary stores an account owns directly.
 2. Call `freeze_stores` on all of them. The frozen flag lives on the store, so it still holds after the object is deleted.
 3. Move the funds out with `recover_frozen_stores` (or `burn_frozen_stores`), then `unfreeze_stores` if the store should be used again.
 

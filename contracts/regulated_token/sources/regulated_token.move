@@ -719,6 +719,19 @@ module regulated_token::regulated_token {
         event::emit(AccountUnfrozen { unfreezer: caller_addr, account });
     }
 
+    /// `primary_fungible_store::balance` calls into `dispatchable_fungible_asset`, which aborts
+    /// 4037 under the MCMS dispatch. This token registers no derived balance, so the plain read
+    /// returns the same value.
+    fun primary_store_balance(
+        account: address, token_metadata: Object<Metadata>
+    ): u64 {
+        if (primary_fungible_store::primary_store_exists(account, token_metadata)) {
+            fungible_asset::balance(
+                primary_fungible_store::primary_store(account, token_metadata)
+            )
+        } else { 0 }
+    }
+
     fun burn_frozen_funds_internal(
         burner: address,
         account: address,
@@ -728,7 +741,7 @@ module regulated_token::regulated_token {
         is_bridge_burner: bool
     ) {
         if (is_frozen) {
-            let balance = primary_fungible_store::balance(account, token_metadata);
+            let balance = primary_store_balance(account, token_metadata);
             if (balance > 0) {
                 primary_fungible_store::burn(burn_ref, account, balance);
                 if (is_bridge_burner) {
@@ -752,7 +765,7 @@ module regulated_token::regulated_token {
             E_ACCOUNT_MUST_BE_FROZEN_FOR_RECOVERY
         );
 
-        let balance = primary_fungible_store::balance(from, token_state.token);
+        let balance = primary_store_balance(from, token_state.token);
         if (balance > 0) {
             let to_store =
                 primary_fungible_store::ensure_primary_store_exists(
@@ -1180,7 +1193,7 @@ module regulated_token::regulated_token {
         token_state: &TokenState
     ) {
         let token_metadata = fungible_asset::transfer_ref_metadata(transfer_ref);
-        let balance = primary_fungible_store::balance(from, token_metadata);
+        let balance = primary_store_balance(from, token_metadata);
         if (balance > 0) {
             let to_store =
                 primary_fungible_store::ensure_primary_store_exists(to, token_metadata);
