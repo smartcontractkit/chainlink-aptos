@@ -8,7 +8,7 @@ cre_canary_receiver_primary = "_"
 platform = "_"
 
 [dependencies]
-AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "34025227eb5367c449bf9dae3cd226fe5c187904", subdir = "aptos-move/framework/aptos-framework" }
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "16beac69835f3a71564c96164a606a23f259099a", subdir = "aptos-move/framework/aptos-framework" }
 ChainlinkPlatform = { local = "../platform" }
 
 [dev-addresses]
