@@ -48,7 +48,7 @@ jobs:
           aws-region: ${{ secrets.GATI_AWS_REGION }}
       - name: Push signed commits
         if: steps.commit.outputs.has_changes == 'true'
-        uses: asana/push-signed-commits@fafa843d9ca76ea7e1a217202973ff566c7fa2a4 # v1.4
+        uses: asana/push-signed-commits@418a702ed822d75f534f2913c5b60e4e5242dd57 # v1.4
         with:
           github-token: ${{ steps.setup-github-token.outputs.access-token }}
           local_branch_name: ${{ github.head_ref }}
