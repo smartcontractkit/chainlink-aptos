@@ -9,16 +9,21 @@ mcms = "_"
 mcms_owner = "0x0"
 dummy_forwarder = "_"
 owner = "_"
+dummy_forwarder_secondary = "_"
+owner_secondary = "_"
 
 [dev-addresses]
 forwarder_mcms_adapter = "0x500"
 mcms = "0x4000"
 dummy_forwarder = "0x100"
 owner = "0xcafe"
+dummy_forwarder_secondary = "0x200"
+owner_secondary = "0x22"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "16beac69835f3a71564c96164a606a23f259099a", subdir = "aptos-move/framework/aptos-framework" }
 ChainlinkManyChainMultisig = { local = "../../mcms/mcms" }
 DummyForwarder = { local = "../dummy_forwarder" }
+DummyForwarderSecondary = { local = "../dummy_forwarder_secondary" }
 
 [dev-dependencies]

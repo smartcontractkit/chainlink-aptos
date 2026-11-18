@@ -42,8 +42,9 @@ const (
 	LargePackages = Package("large_packages")
 
 	// PoC: MCMS controlling a non-MCMS forwarder via an adapter package
-	DummyForwarder       = Package("dummy_forwarder")
-	ForwarderMcmsAdapter = Package("forwarder_mcms_adapter")
+	DummyForwarder          = Package("dummy_forwarder")
+	DummyForwarderSecondary = Package("dummy_forwarder_secondary")
+	ForwarderMcmsAdapter    = Package("forwarder_mcms_adapter")
 
 	TestToken             = Package("test_token")
 	TestTokenBnMRegistrar = Package("bnm_registrar")
@@ -81,8 +82,9 @@ var Contracts map[Package]string = map[Package]string{
 
 	LargePackages: "large_packages",
 
-	DummyForwarder:       filepath.Join("poc", "dummy_forwarder"),
-	ForwarderMcmsAdapter: filepath.Join("poc", "forwarder_mcms_adapter"),
+	DummyForwarder:          filepath.Join("poc", "dummy_forwarder"),
+	DummyForwarderSecondary: filepath.Join("poc", "dummy_forwarder_secondary"),
+	ForwarderMcmsAdapter:    filepath.Join("poc", "forwarder_mcms_adapter"),
 
 	TestToken:             filepath.Join("test_token", "test_token"),
 	TestTokenBnMRegistrar: filepath.Join("test_token", "bnm_registrar"),
