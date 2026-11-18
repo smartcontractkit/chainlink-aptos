@@ -33,6 +33,11 @@ jobs:
           cd integration-tests
           go test ./ccip -timeout 10m -v
 
+      - name: Run forwarder MCMS adapter integration test
+        run: |
+          cd integration-tests
+          go test ./forwarder -timeout 10m -v
+
       - name: Run deployment integration tests
         run: |
           cd integration-tests
