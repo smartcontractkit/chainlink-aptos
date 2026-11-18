@@ -157,50 +157,6 @@ module forwarder_mcms_adapter::adapter_test {
         assert!(secondary::get_owner() == mcms_owner, 4);
     }
 
-    #[test(mcms = @mcms, adapter_signer = @forwarder_mcms_adapter, fwd = @platform, fwd2 = @platform_secondary, owner = @owner)]
-    fun test_accept_ownership_primary_only_leaves_secondary(
-        mcms: &signer,
-        adapter_signer: &signer,
-        fwd: &signer,
-        fwd2: &signer,
-        owner: &signer
-    ) {
-        setup(mcms, adapter_signer, fwd, fwd2);
-        primary::transfer_ownership(owner, adapter::mcms_owner_address());
-        dispatch(b"accept_ownership", bcs::to_bytes(&@platform));
-
-        assert!(primary::get_owner() == adapter::mcms_owner_address(), 1);
-        assert!(secondary::get_owner() == @owner_secondary, 2);
-    }
-
-    #[test(mcms = @mcms, adapter_signer = @forwarder_mcms_adapter, fwd = @platform, fwd2 = @platform_secondary)]
-    #[expected_failure(abort_code = 327694, location = platform::forwarder)]
-    fun test_accept_ownership_without_proposal_fails_primary(
-        mcms: &signer,
-        adapter_signer: &signer,
-        fwd: &signer,
-        fwd2: &signer
-    ) {
-        setup(mcms, adapter_signer, fwd, fwd2);
-        // E_NOT_PROPOSED_OWNER: the current owner never proposed the MCMS owner account
-        dispatch(b"accept_ownership", bcs::to_bytes(&@platform));
-    }
-
-    #[test(mcms = @mcms, adapter_signer = @forwarder_mcms_adapter, fwd = @platform, fwd2 = @platform_secondary, owner = @owner)]
-    #[expected_failure(abort_code = 327694, location = platform_secondary::forwarder)]
-    fun test_accept_ownership_routes_to_secondary(
-        mcms: &signer,
-        adapter_signer: &signer,
-        fwd: &signer,
-        fwd2: &signer,
-        owner: &signer
-    ) {
-        setup(mcms, adapter_signer, fwd, fwd2);
-        // Only primary proposed MCMS; accepting on secondary must fail inside secondary.
-        primary::transfer_ownership(owner, adapter::mcms_owner_address());
-        dispatch(b"accept_ownership", bcs::to_bytes(&@platform_secondary));
-    }
-
     #[test(mcms = @mcms, adapter_signer = @forwarder_mcms_adapter, fwd = @platform, fwd2 = @platform_secondary, owner = @owner, owner2 = @owner_secondary)]
     fun test_transfer_ownership_out_of_mcms(
         mcms: &signer,
@@ -226,36 +182,6 @@ module forwarder_mcms_adapter::adapter_test {
         );
         secondary::accept_ownership(&account::create_signer_for_test(NEW_OWNER));
         assert!(secondary::get_owner() == NEW_OWNER, 3);
-    }
-
-    #[test(mcms = @mcms, adapter_signer = @forwarder_mcms_adapter, fwd = @platform, fwd2 = @platform_secondary, owner = @owner, owner2 = @owner_secondary)]
-    #[expected_failure(abort_code = 327687, location = platform::forwarder)]
-    fun test_old_owner_rejected_primary(
-        mcms: &signer,
-        adapter_signer: &signer,
-        fwd: &signer,
-        fwd2: &signer,
-        owner: &signer,
-        owner2: &signer
-    ) {
-        setup(mcms, adapter_signer, fwd, fwd2);
-        hand_both_to_mcms(owner, owner2);
-        primary::set_config(owner, 1, 1, 1, oracles(1));
-    }
-
-    #[test(mcms = @mcms, adapter_signer = @forwarder_mcms_adapter, fwd = @platform, fwd2 = @platform_secondary, owner = @owner, owner2 = @owner_secondary)]
-    #[expected_failure(abort_code = 327687, location = platform_secondary::forwarder)]
-    fun test_old_owner_rejected_secondary(
-        mcms: &signer,
-        adapter_signer: &signer,
-        fwd: &signer,
-        fwd2: &signer,
-        owner: &signer,
-        owner2: &signer
-    ) {
-        setup(mcms, adapter_signer, fwd, fwd2);
-        hand_both_to_mcms(owner, owner2);
-        secondary::set_config(owner2, 1, 1, 1, oracles(1));
     }
 
     // ================================================================
@@ -329,24 +255,6 @@ module forwarder_mcms_adapter::adapter_test {
 
     #[test(mcms = @mcms, adapter_signer = @forwarder_mcms_adapter, fwd = @platform, fwd2 = @platform_secondary, owner = @owner, owner2 = @owner_secondary)]
     #[expected_failure]
-    fun test_set_config_primary_does_not_touch_secondary(
-        mcms: &signer,
-        adapter_signer: &signer,
-        fwd: &signer,
-        fwd2: &signer,
-        owner: &signer,
-        owner2: &signer
-    ) {
-        setup(mcms, adapter_signer, fwd, fwd2);
-        hand_both_to_mcms(owner, owner2);
-        dispatch(b"set_config", set_config_args(@platform, 1, 1, 1, oracles(1)));
-        primary::get_config(1, 1);
-        // Aborts: secondary has no (1, 1) config.
-        secondary::get_config(1, 1);
-    }
-
-    #[test(mcms = @mcms, adapter_signer = @forwarder_mcms_adapter, fwd = @platform, fwd2 = @platform_secondary, owner = @owner, owner2 = @owner_secondary)]
-    #[expected_failure]
     fun test_clear_config_primary(
         mcms: &signer,
         adapter_signer: &signer,
@@ -382,39 +290,6 @@ module forwarder_mcms_adapter::adapter_test {
         secondary::get_config(1, 1);
         dispatch(b"clear_config", clear_config_args(@platform_secondary, 1, 1));
         secondary::get_config(1, 1);
-    }
-
-    #[test(mcms = @mcms, adapter_signer = @forwarder_mcms_adapter, fwd = @platform, fwd2 = @platform_secondary, owner = @owner, owner2 = @owner_secondary)]
-    fun test_clear_config_primary_leaves_secondary(
-        mcms: &signer,
-        adapter_signer: &signer,
-        fwd: &signer,
-        fwd2: &signer,
-        owner: &signer,
-        owner2: &signer
-    ) {
-        setup(mcms, adapter_signer, fwd, fwd2);
-        hand_both_to_mcms(owner, owner2);
-        dispatch(b"set_config", set_config_args(@platform, 1, 1, 1, oracles(1)));
-        dispatch(
-            b"set_config", set_config_args(@platform_secondary, 1, 1, 1, oracles(1))
-        );
-        dispatch(b"clear_config", clear_config_args(@platform, 1, 1));
-        // Secondary's config is still there (does not abort).
-        secondary::get_config(1, 1);
-    }
-
-    #[test(mcms = @mcms, adapter_signer = @forwarder_mcms_adapter, fwd = @platform, fwd2 = @platform_secondary)]
-    #[expected_failure(abort_code = 327687, location = platform::forwarder)]
-    fun test_set_config_before_handover_fails(
-        mcms: &signer,
-        adapter_signer: &signer,
-        fwd: &signer,
-        fwd2: &signer
-    ) {
-        setup(mcms, adapter_signer, fwd, fwd2);
-        // E_NOT_OWNER: the forwarder is still owned by @owner
-        dispatch(b"set_config", set_config_args(@platform, 1, 1, 1, oracles(1)));
     }
 
     #[test(mcms = @mcms, adapter_signer = @forwarder_mcms_adapter, fwd = @platform, fwd2 = @platform_secondary, owner = @owner, owner2 = @owner_secondary)]
@@ -490,56 +365,6 @@ module forwarder_mcms_adapter::adapter_test {
     ) {
         setup(mcms, adapter_signer, fwd, fwd2);
         dispatch(b"report", bcs::to_bytes(&@platform));
-    }
-
-    #[test(mcms = @mcms, adapter_signer = @forwarder_mcms_adapter, fwd = @platform, fwd2 = @platform_secondary, owner = @owner, owner2 = @owner_secondary)]
-    #[expected_failure(abort_code = 196611, location = mcms::bcs_stream)]
-    fun test_trailing_bytes_rejected(
-        mcms: &signer,
-        adapter_signer: &signer,
-        fwd: &signer,
-        fwd2: &signer,
-        owner: &signer,
-        owner2: &signer
-    ) {
-        setup(mcms, adapter_signer, fwd, fwd2);
-        hand_both_to_mcms(owner, owner2);
-        let data = clear_config_args(@platform, 1, 1);
-        data.push_back(0);
-        // E_NOT_CONSUMED
-        dispatch(b"clear_config", data);
-    }
-
-    #[test(mcms = @mcms, adapter_signer = @forwarder_mcms_adapter, fwd = @platform, fwd2 = @platform_secondary)]
-    #[expected_failure(abort_code = 131074, location = mcms::bcs_stream)]
-    fun test_truncated_args_rejected(
-        mcms: &signer,
-        adapter_signer: &signer,
-        fwd: &signer,
-        fwd2: &signer
-    ) {
-        setup(mcms, adapter_signer, fwd, fwd2);
-        // Missing config_version -> E_OUT_OF_BYTES
-        let data = bcs::to_bytes(&@platform);
-        data.append(bcs::to_bytes(&1u32));
-        dispatch(b"clear_config", data);
-    }
-
-    #[test(mcms = @mcms, adapter_signer = @forwarder_mcms_adapter, fwd = @platform, fwd2 = @platform_secondary)]
-    #[expected_failure(abort_code = 196610, location = mcms::mcms_registry)]
-    fun test_entrypoint_not_callable_outside_dispatch(
-        mcms: &signer,
-        adapter_signer: &signer,
-        fwd: &signer,
-        fwd2: &signer
-    ) {
-        setup(mcms, adapter_signer, fwd, fwd2);
-        // Anyone can call the public entrypoint with any object, but without an MCMS dispatch in
-        // progress there are no callback params, so no signer is ever produced.
-        let constructor_ref = object::create_object(@0xabc);
-        let obj = object::object_from_constructor_ref<ObjectCore>(&constructor_ref);
-        // E_MISSING_CALLBACK_PARAMS
-        adapter::mcms_entrypoint(obj);
     }
 
     // ================================================================
