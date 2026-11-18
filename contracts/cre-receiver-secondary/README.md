@@ -8,8 +8,6 @@ On publish, `init_module` registers a single callback with `platform_secondary::
 
 The dependency name in `Move.toml` must match the on-chain package name:
 
-- **Prod testnet**: Use `ChainlinkPlatformB`
-
 ## Required Values
 
 ```sh
@@ -75,10 +73,9 @@ aptos move deploy-object \
   --named-addresses platform_secondary="$PLATFORM_SECONDARY_ADDRESS",owner_secondary="$PLATFORM_SECONDARY_OWNER_ADDRESS"
 ```
 
-> Move.toml must use `ChainlinkPlatformB` for the dependency.
 
 ## Notes
 
 - Uses `aptos move deploy-object` instead of `aptos move publish`. The package lives at its own object address, separate from the deployer's EOA.
-- The `owner_secondary` named address is required by the `ChainlinkPlatformB` dependency (used in `forwarder::init_module` to set the initial owner). It must match the value used when the platform secondary package was originally deployed, or bytecode won't match and you'll get `EPACKAGE_DEP_MISSING`.
+- The `owner_secondary` named address is required by the `ChainlinkPlatformSecondary` dependency (used in `forwarder::init_module` to set the initial owner). It must match the value used when the platform secondary package was originally deployed, or bytecode won't match and you'll get `EPACKAGE_DEP_MISSING`.
 - Only the secondary platform forwarder is used. For the primary forwarder, see `cre-receiver-primary`.
