@@ -14,44 +14,28 @@ import (
 )
 
 // adapterCall is one call into forwarder_mcms_adapter::adapter::mcms_entrypoint.
-// data is the concatenated BCS encoding of the function's args.
+// data is the concatenated BCS encoding of the function's args; for every adapter function the
+// first arg is the target forwarder address.
 type adapterCall struct {
 	function string
 	data     []byte
 }
 
-// executeAdapterCalls builds a bypasser timelock proposal with the given adapter calls, signs it with
-// the 1-of-1 MCMS signer, sets the root and executes each operation.
+// executeAdapterCalls runs the given adapter calls as one MCMS proposal (one op per call).
 //
 // On-chain path per op:
 //
 //	mcms::execute -> timelock_bypasser_execute_batch -> timelock_dispatch
 //	  -> mcms_registry::start_dispatch + dispatchable_fungible_asset::derived_supply
-//	  -> adapter::mcms_entrypoint -> dummy_forwarder::forwarder::<fn>(&adapter_owner_signer, ...)
+//	  -> adapter::mcms_entrypoint -> <target forwarder>::<fn>(&adapter_owner_signer, ...)
 func (e *env) executeAdapterCalls(description string, calls ...adapterCall) error {
 	adapterAddr, err := e.addr("adapter", e.st.Adapter)
 	if err != nil {
 		return err
 	}
-	if e.st.MCMS == "" {
-		return fmt.Errorf("mcms address not in state file; run deploy-mcms first")
-	}
-
-	inspector := aptossdk.NewInspector(e.client, aptossdk.TimelockRoleBypasser)
-	startingOpCount, err := inspector.GetOpCount(e.ctx, e.st.MCMS)
-	if err != nil {
-		return fmt.Errorf("get op count: %w", err)
-	}
-
-	metadataFields, err := json.Marshal(aptossdk.AdditionalFieldsMetadata{Role: aptossdk.TimelockRoleBypasser})
-	if err != nil {
-		return err
-	}
-
-	bop := mcmstypes.BatchOperation{ChainSelector: e.chainSelector}
+	ops := make([]mcmstypes.Operation, 0, len(calls))
 	for _, c := range calls {
-		// The proposal validator rejects nil Data ("required"), but accepts an empty slice,
-		// which is what no-arg functions like accept_ownership need.
+		// The proposal validator rejects nil Data ("required"), but accepts an empty slice.
 		if c.data == nil {
 			c.data = []byte{}
 		}
@@ -67,22 +51,54 @@ func (e *env) executeAdapterCalls(description string, calls ...adapterCall) erro
 		if err != nil {
 			return err
 		}
-		bop.Transactions = append(bop.Transactions, tx)
+		ops = append(ops, mcmstypes.Operation{ChainSelector: e.chainSelector, Transaction: tx})
+	}
+	return e.executeProposal(description, ops)
+}
+
+// executeProposal builds a bypasser timelock proposal with one batch operation per op, signs it
+// with the 1-of-1 MCMS signer, sets the root and executes every operation in order. Each op is
+// its own batch (and so its own Aptos tx), which keeps staged code chunks under tx size limits.
+func (e *env) executeProposal(description string, ops []mcmstypes.Operation) error {
+	if e.st.MCMS == "" {
+		return fmt.Errorf("mcms address not in state file; run deploy-mcms first")
 	}
 
-	timelockProposal, err := mcmslib.NewTimelockProposalBuilder().
+	inspector := aptossdk.NewInspector(e.client, aptossdk.TimelockRoleBypasser)
+	startingOpCount, err := inspector.GetOpCount(e.ctx, e.st.MCMS)
+	if err != nil {
+		return fmt.Errorf("get op count: %w", err)
+	}
+
+	metadataFields, err := json.Marshal(aptossdk.AdditionalFieldsMetadata{Role: aptossdk.TimelockRoleBypasser})
+	if err != nil {
+		return err
+	}
+
+	builder := mcmslib.NewTimelockProposalBuilder().
 		SetVersion("v1").
 		SetValidUntil(uint32(time.Now().Add(time.Hour).Unix())).
 		SetDescription(description).
+		// A failed op (e.g. mcms-bad-target) leaves the previous root with pending ops;
+		// overriding lets the next proposal proceed. Fine for a PoC.
+		SetOverridePreviousRoot(true).
 		AddTimelockAddress(e.chainSelector, e.st.MCMS).
 		AddChainMetadata(e.chainSelector, mcmstypes.ChainMetadata{
 			StartingOpCount:  startingOpCount,
 			MCMAddress:       e.st.MCMS,
 			AdditionalFields: metadataFields,
 		}).
-		SetAction(mcmstypes.TimelockActionBypass).
-		AddOperation(bop).
-		Build()
+		SetAction(mcmstypes.TimelockActionBypass)
+	for _, op := range ops {
+		if op.Transaction.Data == nil {
+			op.Transaction.Data = []byte{}
+		}
+		builder = builder.AddOperation(mcmstypes.BatchOperation{
+			ChainSelector: e.chainSelector,
+			Transactions:  []mcmstypes.Transaction{op.Transaction},
+		})
+	}
+	timelockProposal, err := builder.Build()
 	if err != nil {
 		return fmt.Errorf("build proposal: %w", err)
 	}

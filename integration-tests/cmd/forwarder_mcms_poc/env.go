@@ -25,15 +25,19 @@ type envFlags struct {
 	mcmsSignerKey string
 	stateFile     string
 	deployMaxGas  uint64
+	target        string
+	adapterSeed   string
 }
 
 // state is persisted between steps.
 type state struct {
-	Forwarder     string `json:"forwarder,omitempty"`
-	MCMS          string `json:"mcms,omitempty"`
-	Adapter       string `json:"adapter,omitempty"`
-	AdapterOwner  string `json:"adapter_mcms_owner,omitempty"`
-	MCMSSignerKey string `json:"mcms_signer_key,omitempty"` // testnet PoC only
+	Forwarder          string `json:"forwarder,omitempty"`
+	ForwarderSecondary string `json:"forwarder_secondary,omitempty"`
+	MCMS               string `json:"mcms,omitempty"`
+	Adapter            string `json:"adapter,omitempty"`
+	AdapterSeed        string `json:"adapter_seed,omitempty"`
+	AdapterOwner       string `json:"adapter_mcms_owner,omitempty"`
+	MCMSSignerKey      string `json:"mcms_signer_key,omitempty"` // testnet PoC only
 }
 
 type env struct {
