@@ -1,6 +1,7 @@
 package forwarder
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"testing"
@@ -23,8 +24,18 @@ func Test_ForwarderMcmsAdapter(t *testing.T) {
 	lggr := logger.Test(t)
 	ctx := t.Context()
 
-	b, err := blockchain.NewBlockchainNetwork(&blockchain.Input{Type: blockchain.TypeAptos})
+	// CI runs this after the CCIP smoke test in the same job, and that test's localnet container
+	// still holds the default host ports 8080/8081. Use our own host ports and clean up after.
+	b, err := blockchain.NewBlockchainNetwork(&blockchain.Input{
+		Type:        blockchain.TypeAptos,
+		CustomPorts: []string{"18080:" + blockchain.DefaultAptosAPIPort, "18081:" + blockchain.DefaultAptosFaucetPort},
+	})
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		if b.Container != nil {
+			_ = b.Container.Terminate(context.Background())
+		}
+	})
 	rpcURL := b.Nodes[0].ExternalHTTPUrl + "/v1"
 	lggr.Infof("Started Aptos localnet at %s", rpcURL)
 

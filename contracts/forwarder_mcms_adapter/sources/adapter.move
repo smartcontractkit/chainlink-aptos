@@ -173,7 +173,6 @@ module forwarder_mcms_adapter::adapter {
     }
 
     // ========================== TEST ONLY ==========================
-
     #[test_only]
     /// Registers the entrypoint WITHOUT the published-by-MCMS check: unit tests cannot publish a
     /// real code object through mcms_deployer. The check itself is exercised by
