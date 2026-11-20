@@ -874,10 +874,13 @@ module ccip::fee_quoter {
             accounts_length <= SVM_EXTRA_ARGS_MAX_ACCOUNTS,
             error::invalid_argument(E_TOO_MANY_SVM_EXTRA_ARGS_ACCOUNTS)
         );
-        assert!(
-            (account_is_writable_bitmap >> (accounts_length as u8)) == 0,
-            error::invalid_argument(E_INVALID_SVM_EXTRA_ARGS_WRITABLE_BITMAP)
-        );
+        // Move aborts on u64 >> 64; at the max account count every bitmap bit is already in use.
+        if (accounts_length < SVM_EXTRA_ARGS_MAX_ACCOUNTS) {
+            assert!(
+                (account_is_writable_bitmap >> (accounts_length as u8)) == 0,
+                error::invalid_argument(E_INVALID_SVM_EXTRA_ARGS_WRITABLE_BITMAP)
+            );
+        };
 
         svm_expanded_data_length += tokens_len * SVM_TOKEN_TRANSFER_DATA_OVERHEAD;
 
