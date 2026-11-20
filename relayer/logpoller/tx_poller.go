@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 
+	module_offramp "github.com/smartcontractkit/chainlink-aptos/bindings/ccip_offramp/offramp"
 	codec0 "github.com/smartcontractkit/chainlink-aptos/codec"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/db"
 	crutils "github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/utils"
@@ -180,9 +182,10 @@ func (l *AptosLogPoller) syncTransmitterTxs(ctx context.Context, transmitter apt
 	boundAddress := parts[0]
 	moduleName := parts[1]
 	expectedFunction := fmt.Sprintf("%s::%s::execute", boundAddress, moduleName)
-	// if the vmStatus of the failed tx contains the following,
-	// we ignore the tx because it was reverted before the receiver
-	ignoredVmError := fmt.Sprintf("%s::%s", boundAddress, moduleName)
+	var offRampAddress aptos.AccountAddress
+	if err := offRampAddress.ParseStringRelaxed(boundAddress); err != nil {
+		return 0, fmt.Errorf("parse offramp address %s: %w", boundAddress, err)
+	}
 
 	select {
 	case <-ctx.Done():
@@ -243,8 +246,9 @@ func (l *AptosLogPoller) syncTransmitterTxs(ctx context.Context, transmitter apt
 				continue
 			}
 
-			// Skip if error is from the module itself
-			if strings.Contains(userTxn.VmStatus, ignoredVmError) {
+			// Skip only a Move abort the VM placed in the offramp at one of the
+			// codes asserted before the receiver runs. See preDispatchAbort.
+			if preDispatchAbort(userTxn.VmStatus, offRampAddress, moduleName) {
 				l.lggr.Debugw("Skipping non-receiver originated transaction", "transmitter", transmitter.String(),
 					"sequenceNumber", userTxn.SequenceNumber, "vmStatus", userTxn.VmStatus)
 				continue
@@ -483,4 +487,77 @@ func (l *AptosLogPoller) getSourceChainConfig(ctx context.Context, sourceChainSe
 	}
 
 	return &configEvent.SourceChainConfig, nil
+}
+
+// moveAbortPrefix opens the status a fullnode reports for a Move abort, as in
+// "Move abort in 0xa1::offramp: E_SOURCE_CHAIN_NOT_ENABLED(0x5000b)". Runtime
+// failures open with "Execution failed in " and name no abort code.
+const moveAbortPrefix = "Move abort in "
+
+// preDispatchAbort reports whether vmStatus is a Move abort the VM placed in the
+// bound offramp at one of the four codes asserted before the receiver runs. A
+// receiver re-entering the module can raise any other abort there.
+func preDispatchAbort(vmStatus string, offRamp aptos.AccountAddress, module string) bool {
+	rest, ok := strings.CutPrefix(vmStatus, moveAbortPrefix)
+	if !ok {
+		return false
+	}
+	location, codeText, ok := strings.Cut(rest, ": ")
+	if !ok {
+		return false
+	}
+	// The location is "0xADDR::module" or "0xADDR::module::function".
+	segments := strings.Split(location, "::")
+	if len(segments) < 2 {
+		return false
+	}
+	var address aptos.AccountAddress
+	if err := address.ParseStringRelaxed(segments[0]); err != nil {
+		return false
+	}
+	if address != offRamp || segments[1] != module {
+		return false
+	}
+	code, ok := abortCode(codeText)
+	if !ok {
+		return false
+	}
+	// A canonical abort code is (category << 16) + reason, where the reason is
+	// the module constant and the category is the std::error constructor it is
+	// raised under. invalid_argument is 0x1 and permission_denied is 0x5.
+	const (
+		invalidArgument  uint64 = 0x1 << 16
+		permissionDenied uint64 = 0x5 << 16
+	)
+	switch code {
+	case invalidArgument + module_offramp.E_UNKNOWN_SOURCE_CHAIN_SELECTOR,
+		invalidArgument + module_offramp.E_TOKEN_DATA_MISMATCH,
+		invalidArgument + module_offramp.E_ROOT_NOT_COMMITTED,
+		permissionDenied + module_offramp.E_SOURCE_CHAIN_NOT_ENABLED:
+		return true
+	}
+	return false
+}
+
+// abortCode reads the abort code out of the text that follows a Move abort's
+// location, as in "E_ROOT_NOT_COMMITTED(0x10009) at code offset 12".
+func abortCode(codeText string) (uint64, bool) {
+	open := strings.IndexByte(codeText, '(')
+	if open < 0 {
+		return 0, false
+	}
+	afterOpen := codeText[open+1:]
+	end := strings.IndexByte(afterOpen, ')')
+	if end < 0 {
+		return 0, false
+	}
+	digits, ok := strings.CutPrefix(afterOpen[:end], "0x")
+	if !ok {
+		return 0, false
+	}
+	code, err := strconv.ParseUint(digits, 16, 64)
+	if err != nil {
+		return 0, false
+	}
+	return code, true
 }
