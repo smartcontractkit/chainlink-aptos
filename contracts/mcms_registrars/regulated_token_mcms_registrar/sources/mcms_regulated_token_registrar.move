@@ -142,6 +142,39 @@ module regulated_token::mcms_regulated_token_registrar {
             bcs_stream::assert_is_consumed(&stream);
 
             regulated_token::batch_burn_frozen_funds(&caller, accounts)
+        } else if (function_bytes == b"freeze_stores") {
+            let stores =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+
+            regulated_token::freeze_stores(&caller, stores)
+        } else if (function_bytes == b"unfreeze_stores") {
+            let stores =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+
+            regulated_token::unfreeze_stores(&caller, stores)
+        } else if (function_bytes == b"burn_frozen_stores") {
+            let stores =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
+                );
+            bcs_stream::assert_is_consumed(&stream);
+
+            regulated_token::burn_frozen_stores(&caller, stores)
+        } else if (function_bytes == b"recover_frozen_stores") {
+            let stores =
+                bcs_stream::deserialize_vector(
+                    &mut stream, |stream| bcs_stream::deserialize_address(stream)
+                );
+            let to = bcs_stream::deserialize_address(&mut stream);
+            bcs_stream::assert_is_consumed(&stream);
+
+            regulated_token::recover_frozen_stores(&caller, stores, to)
         } else if (function_bytes == b"transfer_admin") {
             let new_admin = bcs_stream::deserialize_address(&mut stream);
             bcs_stream::assert_is_consumed(&stream);
