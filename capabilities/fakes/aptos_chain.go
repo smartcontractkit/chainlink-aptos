@@ -244,16 +244,12 @@ func (fc *FakeAptosChain) AccountTransactions(
 		return nil, caperrors.NewPublicUserError(err, caperrors.InvalidArgument)
 	}
 
-	start, limit, capErr := fc.accountTransactionsWindow(addr, input.Start, input.Limit)
-	if capErr != nil {
-		return nil, capErr
-	}
-	if limit != nil && *limit == 0 {
+	if input.Limit != nil && *input.Limit == 0 {
 		return &commonCap.ResponseAndMetadata[*aptoscappb.AccountTransactionsReply]{
 			Response: &aptoscappb.AccountTransactionsReply{},
 		}, nil
 	}
-	committed, err := fc.client.AccountTransactions(addr, start, limit)
+	committed, err := fc.client.AccountTransactions(addr, input.Start, input.Limit)
 	if err != nil {
 		return nil, caperrors.NewPublicSystemError(fmt.Errorf("aptos account_transactions %s: %w", addr.String(), err), caperrors.Unavailable)
 	}
@@ -279,40 +275,6 @@ func (fc *FakeAptosChain) AccountTransactions(
 	return &commonCap.ResponseAndMetadata[*aptoscappb.AccountTransactionsReply]{
 		Response: &aptoscappb.AccountTransactionsReply{Transactions: out},
 	}, nil
-}
-
-func (fc *FakeAptosChain) accountTransactionsWindow(
-	address aptos.AccountAddress,
-	start *uint64,
-	limit *uint64,
-) (*uint64, *uint64, caperrors.Error) {
-	if start != nil || limit == nil {
-		return start, limit, nil
-	}
-
-	accountInfo, err := fc.client.Account(address)
-	if err != nil {
-		return nil, nil, caperrors.NewPublicSystemError(fmt.Errorf("failed to get account info: %w", err), caperrors.Unavailable)
-	}
-	sequenceNumber, err := accountInfo.SequenceNumber()
-	if err != nil {
-		return nil, nil, caperrors.NewPublicSystemError(fmt.Errorf("failed to parse account sequence number: %w", err), caperrors.Unavailable)
-	}
-	if sequenceNumber == 0 || *limit == 0 {
-		zero := uint64(0)
-		return &zero, &zero, nil
-	}
-
-	boundedLimit := min(*limit, sequenceNumber)
-	boundedStart := sequenceNumber - boundedLimit
-	fc.eng.Debugw("AccountTransactions: resolved latest transaction window",
-		"address", address.String(),
-		"sequenceNumber", sequenceNumber,
-		"requestedLimit", *limit,
-		"start", boundedStart,
-		"limit", boundedLimit,
-	)
-	return &boundedStart, &boundedLimit, nil
 }
 
 func (fc *FakeAptosChain) WriteReport(
