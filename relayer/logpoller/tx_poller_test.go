@@ -41,6 +41,21 @@ func TestPreDispatchAbort(t *testing.T) {
 			want:     true,
 		},
 		{
+			name:     "Move abort in 0xa1::offramp: E_UNSUPPORTED_TOKEN(0x30011)",
+			vmStatus: "Move abort in 0xa1::offramp: E_UNSUPPORTED_TOKEN(0x30011)",
+			want:     true,
+		},
+		{
+			name:     "Move abort in 0xa1::offramp: E_FUNGIBLE_ASSET_TYPE_MISMATCH(0x30014)",
+			vmStatus: "Move abort in 0xa1::offramp: E_FUNGIBLE_ASSET_TYPE_MISMATCH(0x30014)",
+			want:     true,
+		},
+		{
+			name:     "Move abort in 0xa1::offramp: E_FUNGIBLE_ASSET_AMOUNT_MISMATCH(0x30015)",
+			vmStatus: "Move abort in 0xa1::offramp: E_FUNGIBLE_ASSET_AMOUNT_MISMATCH(0x30015)",
+			want:     true,
+		},
+		{
 			name:     "zero padded offramp address still places the abort",
 			vmStatus: "Move abort in " + zeroPaddedOffRamp + "::offramp: E_ROOT_NOT_COMMITTED(0x10009)",
 			want:     true,
@@ -83,6 +98,16 @@ func TestPreDispatchAbort(t *testing.T) {
 		{
 			name:     "abort without a code is a failure",
 			vmStatus: "Move abort in 0xa1::offramp",
+			want:     false,
+		},
+		{
+			name:     "bare hex code without error metadata is pre-dispatch",
+			vmStatus: "Move abort in 0xa1::offramp: 0x10009",
+			want:     true,
+		},
+		{
+			name:     "bare hex code at a non-skip code is a failure",
+			vmStatus: "Move abort in 0xa1::offramp: 0x1001a",
 			want:     false,
 		},
 		{

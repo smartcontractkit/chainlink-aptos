@@ -495,7 +495,7 @@ func (l *AptosLogPoller) getSourceChainConfig(ctx context.Context, sourceChainSe
 const moveAbortPrefix = "Move abort in "
 
 // preDispatchAbort reports whether vmStatus is a Move abort the VM placed in the
-// bound offramp at one of the four codes asserted before the receiver runs. A
+// bound offramp at one of the seven codes asserted before the receiver runs. A
 // receiver re-entering the module can raise any other abort there.
 func preDispatchAbort(vmStatus string, offRamp aptos.AccountAddress, module string) bool {
 	rest, ok := strings.CutPrefix(vmStatus, moveAbortPrefix)
@@ -527,13 +527,17 @@ func preDispatchAbort(vmStatus string, offRamp aptos.AccountAddress, module stri
 	// raised under. invalid_argument is 0x1 and permission_denied is 0x5.
 	const (
 		invalidArgument  uint64 = 0x1 << 16
+		invalidState     uint64 = 0x3 << 16
 		permissionDenied uint64 = 0x5 << 16
 	)
 	switch code {
 	case invalidArgument + module_offramp.E_UNKNOWN_SOURCE_CHAIN_SELECTOR,
 		invalidArgument + module_offramp.E_TOKEN_DATA_MISMATCH,
 		invalidArgument + module_offramp.E_ROOT_NOT_COMMITTED,
-		permissionDenied + module_offramp.E_SOURCE_CHAIN_NOT_ENABLED:
+		permissionDenied + module_offramp.E_SOURCE_CHAIN_NOT_ENABLED,
+		invalidState + module_offramp.E_UNSUPPORTED_TOKEN,
+		invalidState + module_offramp.E_FUNGIBLE_ASSET_TYPE_MISMATCH,
+		invalidState + module_offramp.E_FUNGIBLE_ASSET_AMOUNT_MISMATCH:
 		return true
 	}
 	return false
@@ -541,10 +545,23 @@ func preDispatchAbort(vmStatus string, offRamp aptos.AccountAddress, module stri
 
 // abortCode reads the abort code out of the text that follows a Move abort's
 // location, as in "E_ROOT_NOT_COMMITTED(0x10009) at code offset 12".
+// A module published without embedded error metadata renders no constant
+// name and no parentheses, just the bare code, as in "0x10009".
 func abortCode(codeText string) (uint64, bool) {
 	open := strings.IndexByte(codeText, '(')
 	if open < 0 {
-		return 0, false
+		digits, ok := strings.CutPrefix(codeText, "0x")
+		if !ok {
+			return 0, false
+		}
+		if end := strings.IndexAny(digits, " \t"); end >= 0 {
+			digits = digits[:end]
+		}
+		code, err := strconv.ParseUint(digits, 16, 64)
+		if err != nil {
+			return 0, false
+		}
+		return code, true
 	}
 	afterOpen := codeText[open+1:]
 	end := strings.IndexByte(afterOpen, ')')
