@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 )
 
-//go:embed ccip large_packages mcms vendored data-feeds platform platform_secondary managed_token mcms_registrars managed_token_faucet regulated_token test_token
+//go:embed ccip large_packages mcms vendored data-feeds platform platform_secondary forwarder_mcms_adapter managed_token mcms_registrars managed_token_faucet regulated_token test_token
 var Embed embed.FS
 
 type Package string
@@ -31,9 +31,10 @@ const (
 	ManagedTokenMCMSRegistrar   = Package("managed_token_mcms_registrar")
 	RegulatedTokenMCMSRegistrar = Package("regulated_token_mcms_registrar")
 
-	DataFeeds         = Package("data_feeds")
-	Platform          = Package("platform")
-	PlatformSecondary = Package("platform_secondary")
+	DataFeeds            = Package("data_feeds")
+	Platform             = Package("platform")
+	PlatformSecondary    = Package("platform_secondary")
+	ForwarderMcmsAdapter = Package("forwarder_mcms_adapter")
 
 	MCMS      = Package("mcms")
 	MCMSTest  = Package("mcms_test")
@@ -63,6 +64,7 @@ var Contracts map[Package]string = map[Package]string{
 	DataFeeds:              "data-feeds",
 	Platform:               "platform",
 	PlatformSecondary:      "platform_secondary",
+	ForwarderMcmsAdapter:   "forwarder_mcms_adapter",
 
 	ManagedToken:       filepath.Join("managed_token"),
 	RegulatedToken:     filepath.Join("regulated_token"),
